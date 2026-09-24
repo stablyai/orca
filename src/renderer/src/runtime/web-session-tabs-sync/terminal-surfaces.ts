@@ -84,9 +84,8 @@ export function buildMirroredAgentTabs(
       currentUnifiedTabs.find(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
-          (candidate.structuredSessionId === tab.replacesSessionId ||
-            (candidate.contentType === 'agent-session' &&
-              candidate.entityId === tab.replacesSessionId))
+          candidate.contentType === 'agent-session' &&
+          candidate.entityId === tab.replacesSessionId
       )
     if (existing) {
       replacementTabs.set(tab.sessionId, existing)

@@ -9,8 +9,9 @@ import {
 } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
-import { readShellSession, type BridgeShellSession } from './bridge-client-session'
-import { createBridgeInitHandshake } from './bridge-client-init-handshake'
+import { createBridgeClientShellSession } from './bridge-client-shell-session'
+import type { BridgeShellSession } from './bridge-client-session'
+import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
@@ -23,14 +24,17 @@ import {
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
+import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import { createPageBackConsumers, type PageBackConsumer } from './page-back-consumers'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
+import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
-  type BridgeHostMessage
+  type BridgeInitRoute
 } from './bridge-envelope'
 
 export type { BridgeShellSession } from './bridge-client-session'
@@ -60,6 +64,19 @@ export type BridgeRpcClientOptions = {
 export type BridgeRpcClient = RpcClient & {
   /** Fires once `init` has landed, immediately if it already has. Mount no screen before it. */
   onReady: (listener: () => void) => () => void
+  /**
+   * Fires each time the shell rewrites a param of the screen this page is already on, which is a
+   * second `init` for the session it already holds. Never for the first one, and never for a
+   * re-sent `init` whose route is the one the page already holds — a re-asked `ready` is answered
+   * with that route and is not a request.
+   *
+   * One delivery per tap rather than one per distinct value: the shell clears the param after each
+   * delivery, so a notification tap for the pane already showing arrives as a real move and a
+   * listener that deduplicated by value would lose exactly that one.
+   */
+  onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
+  /** Fires when an `init` moved the safe-area insets; the value itself is on `getShellSession`. */
+  onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   getShellSession: () => BridgeShellSession | null
   /**
    * Asks the shell to open a screen this page does not render. False when the shell granted no
@@ -88,6 +105,21 @@ export type BridgeRpcClient = RpcClient & {
    * runtime, so it has no `RpcOperation` and no entry in the desktop's method catalog.
    */
   callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
+  /**
+   * Tells the shell this document has a frame on screen, which is the only thing that does: the
+   * shell sees a document commit and a page say `ready`, and neither of those is a painted tree.
+   * Declared in `ready.reports`, so a shell waiting for it is one this page will answer.
+   */
+  notifyPagePainted: () => void
+  /**
+   * Claims the device Back key for this document until the dispose is called.
+   *
+   * The shell owns the key and only hands a press over while something here is holding it, so a
+   * claim is what turns Android Back from "leave this screen" into "close what is on top of it".
+   * Consumers answer newest first and a `false` falls through, exactly as a native `BackHandler`
+   * listener does; a press nothing takes is handed back to the shell to pop with.
+   */
+  claimBack: (consumer: PageBackConsumer) => () => void
   /** Writes one allowlisted key into the app's store. False when the shell granted no `storage`. */
   notifyStorageWrite: (key: string, value: string | null) => boolean
   /**
@@ -104,6 +136,16 @@ export type BridgeRpcClient = RpcClient & {
    * once will not say itself on a retry, and the shell's own load state is the other way it finds out.
    */
   notifyPageFault: (error: unknown) => boolean
+  /**
+   * Erases a one-shot route param the shell handed this page, naming the value the page applied
+   * (ruling 34). The reader erases: the shell tracks no delivery, so a request stays on the route
+   * and keeps arriving until the page that applied it says so.
+   *
+   * False when this shell never declared it takes one, which is every shell older than the field.
+   * Nothing is owed the caller either way — a clear that did not leave is repaired by the request
+   * arriving again, which is the same path a lost frame takes.
+   */
+  clearRouteParam: (param: BridgeClearableRouteParam, value: string) => boolean
 }
 
 /**
@@ -125,8 +167,6 @@ export type BridgeRpcClient = RpcClient & {
 export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRpcClient {
   const requests = new BridgeClientRequests()
   const cache = new BridgeConnectionCache()
-  const readyListeners = new Set<() => void>()
-  let session: BridgeShellSession | null = null
   let closed = false
   let idCounter = 0
 
@@ -184,7 +224,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   })
 
   const handshake = createBridgeInitHandshake(() => {
-    sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'ready' })
+    sendFrame(createPageReadyFrame())
   })
 
   /**
@@ -194,7 +234,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
    * means for its own return type.
    */
   function requireSession(): void {
-    if (session === null && !closed) {
+    if (shellSession.current() === null && !closed) {
       throw new BridgeClientNotReadyError()
     }
   }
@@ -208,22 +248,27 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     return held
   }
 
-  /** A second `init` is ordinary: the shell answers every `ready`, and a page that re-asked hears
-   *  its own session again. A different id is not, and nothing the page held survives it. */
-  function acceptInit(message: Extract<BridgeHostMessage, { type: 'init' }>): void {
-    handshake.stop()
-    if (session !== null && session.sessionId !== message.sessionId) {
+  /**
+   * A second `init` is ordinary: the shell answers every `ready`, and a page that re-asked hears
+   * its own session again. A different id is not, and nothing the page held survives it.
+   *
+   * For the same id it is a route update and nothing else (ruling 33.1). The screen is the one
+   * already mounted, so every request in flight, every subscription, the storage snapshot the page
+   * booted from and the generation stay exactly as they are, and only `route` moves — which is how
+   * a notification tap for another pane of this session reaches a page that is already on it. The
+   * session object is rebuilt only when the id changes, so the identity of what the page holds is
+   * itself the assertion that nothing was replaced.
+   */
+  const shellSession = createBridgeClientShellSession({
+    onReplaced: () => {
       const replaced = new BridgeShellReplacedError()
       requests.closeAll(replaced)
       subscriptions.failAll(replaced.message)
+    },
+    prime: (connection) => {
+      cache.prime(connection)
     }
-    session = readShellSession(message)
-    cache.prime(message.connection)
-    for (const listener of readyListeners) {
-      listener()
-    }
-    readyListeners.clear()
-  }
+  })
 
   /** A shell rebuilt under the page: what the cache holds is for a client that is already gone. */
   function acceptState(snapshotFromShell: BridgeConnectionSnapshot): void {
@@ -234,18 +279,44 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     handshake.restart()
   }
 
+  const back = createPageBackConsumers({
+    publishClaim: (claimed) => notifications.notifyBackClaim(claimed),
+    onUnclaimed: () => {
+      report({ kind: 'back-unclaimed' })
+      notifications.notifyNavigateBack()
+    }
+  })
+
   const readInboundFrame = createBridgeInboundFrameReader({
     requests,
     subscriptions,
     report,
-    acceptInit,
-    acceptState
+    // Declared here rather than beside the others: the re-assert has to run after the session has
+    // taken this frame, so the claim's own gate reads this `init`'s `accepts` and a shell that
+    // never named it still hears nothing.
+    acceptInit: (message) => {
+      handshake.stop()
+      shellSession.accept(message)
+      back.reassert()
+    },
+    acceptState,
+    acceptBack: back.press
   })
 
   /** After `close` the page is not the document the shell is answering any more. */
   function receive(json: string): void {
-    if (!closed) {
+    if (closed) {
+      return
+    }
+    try {
       readInboundFrame(json)
+    } catch (error) {
+      // The delivery is the channel's and the handling is the page's (ruling 34 addendum). This is
+      // the one place that separates them: on iOS the host's post is `callAsyncJavaScript`, so a
+      // listener throwing here would reject a post for a frame the page already had, and the shell
+      // would read that as a frame that never arrived. Reported and not rethrown, and not retried
+      // either — the same listener would throw on the same frame again.
+      report({ kind: 'inbound-listener-threw', error })
     }
   }
 
@@ -328,12 +399,12 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
     closed = true
     handshake.stop()
+    back.clear()
     subscriptions.closeAll()
     sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
     requests.closeAll()
     cache.close()
-    session = null
-    readyListeners.clear()
+    shellSession.close()
     unsubscribeFromMessages()
   }
 
@@ -341,7 +412,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     send: posted,
     requireSession,
     isClosed: () => closed,
-    hasGrant: (name) => session?.grants.native.includes(name) === true
+    hasGrant: (name) => shellSession.current()?.grants.native.includes(name) === true,
+    shellAccepts: (name) => shellSession.current()?.accepts.includes(name) === true
   })
 
   const unsubscribeFromMessages = options.onMessage(receive)
@@ -387,17 +459,21 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyStorageWrite: notifications.notifyStorageWrite,
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
+    notifyPagePainted: notifications.notifyPagePainted,
+    claimBack: back.claim,
     close,
-    onReady: (listener) => {
-      if (session !== null) {
-        listener()
-        return () => undefined
-      }
-      readyListeners.add(listener)
-      return () => {
-        readyListeners.delete(listener)
-      }
-    },
-    getShellSession: () => session
+    onReady: shellSession.onReady,
+    onRouteUpdate: shellSession.onRouteUpdate,
+    onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
+    getShellSession: shellSession.current,
+    clearRouteParam: (param, value) =>
+      shellSession.current()?.accepts.includes(BRIDGE_ROUTE_PARAM_CLEAR) === true &&
+      posted({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: BRIDGE_ROUTE_PARAM_CLEAR,
+        param,
+        value
+      })
   }
 }

@@ -7,6 +7,11 @@ import {
   BRIDGE_MAX_SUBSCRIPTIONS
 } from './bridge/bridge-caps'
 import { BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
+import { routeViewOf } from './page-route-policy'
 
 describe('init and state', () => {
   it('answers ready with the getters, the caps it enforces, and the grants it honours', () => {
@@ -24,6 +29,13 @@ describe('init and state', () => {
       type: 'init',
       sessionId: 'session-a',
       buildId: 'build-a',
+      // What this shell takes from the page, which is the page's own check before it posts one.
+      accepts: [
+        BRIDGE_ROUTE_PARAM_CLEAR,
+        BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
+        BRIDGE_PAGE_PAINTED,
+        BRIDGE_BACK_CLAIM_NOTIFY
+      ],
       connection: {
         state: 'reconnecting',
         reconnectAttempt: 3,
@@ -44,6 +56,7 @@ describe('init and state', () => {
           'externalLink',
           'screencastBinary',
           'haptics',
+          'externalNavigation',
           'native.clipboard.write',
           'native.clipboard.read',
           'native.media.pick',
@@ -51,8 +64,7 @@ describe('init and state', () => {
           'native.media.release',
           'native.audio.start',
           'native.audio.read',
-          'native.audio.stop',
-          'native.wakelock.set'
+          'native.audio.stop'
         ]
       },
       route: ROUTE,
@@ -82,6 +94,71 @@ describe('init and state', () => {
     // Every pattern the page is told it may keep has an entry saying what keeping it costs.
     expect((init.pageRouteGrants ?? []).map((entry) => entry.pathname)).toEqual([...PAGE_ROUTES])
     expect(init.pageRouteGrants).toEqual(PAGE_ROUTE_GRANTS)
+  })
+
+  /**
+   * The publish path end to end, because each half of it looks correct alone.
+   *
+   * The phone reads a manifest route loosely and this schema is `.strict()`, so an entry carrying a
+   * field a newer desktop wrote refuses the pairs -- and the refusal is not the field being dropped,
+   * it is `createBridgeHost` refusing the route and the page never getting an `init` at all. Driven
+   * through `routeViewOf` rather than by handing the harness a pair, because the publish is the
+   * thing under test and a hand-built pair proves nothing about it.
+   */
+  it('answers init for a route entry carrying a manifest field this build does not read', () => {
+    // A field no build here reads, which is the shape every later desktop field has.
+    const declared = [
+      {
+        pathname: '/h/[hostId]',
+        grants: ['navigate', 'storage', 'haptics'],
+        renderer: 'someLaterDesktopsField'
+      }
+    ]
+    const bridge = harness({
+      pageRouteGrants: routeViewOf(declared, ROUTE.pathname).pageRouteGrants
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.routeRefusals).toEqual([])
+    const init = bridge.last()
+    if (init.type !== 'init') {
+      throw new Error('expected an init frame')
+    }
+    // The pairs still cross, so the page keeps the handoff rule it was built with rather than
+    // falling back to "nobody told me" and handing every hop to the shell.
+    expect(init.pageRouteGrants).toEqual([
+      { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }
+    ])
+  })
+
+  /**
+   * One object for the measure and the measured, read off one `init`.
+   *
+   * `grants.native` is what this session may do and each pair is what the page compares a hop
+   * against (`route-handoff.web.ts`). Both come from `routeViewOf`, so the pair for the pattern the
+   * session was opened on must be the same list `grants.native` carries minus the protocol's own
+   * grant. Two computations here is how a hop is kept local whose target then runs without the
+   * capability it asked for.
+   */
+  it("grants a session exactly what it publishes as that pattern's pair", () => {
+    const declared = [
+      {
+        pathname: '/h/[hostId]',
+        grants: ['navigate', 'storage', 'haptics'],
+        optionalGrants: ['screencastBinary']
+      }
+    ]
+    const view = routeViewOf(declared, ROUTE.pathname)
+    const bridge = harness({ routeGrants: view.routeGrants, pageRouteGrants: view.pageRouteGrants })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    if (init.type !== 'init') {
+      throw new Error('expected an init frame')
+    }
+    expect(init.grants.native).toEqual([BRIDGE_FAULT_GRANT, ...view.routeGrants])
+    const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
+    expect(pair?.grants).toEqual(view.routeGrants)
+    // The optional name is in both, so the case is the lane and not two equal required lists.
+    expect(init.grants.native).toContain('screencastBinary')
   })
 
   it('refuses a grant name the manifest grammar refuses, naming the field it came from', () => {
@@ -144,6 +221,68 @@ describe('init and state', () => {
         pathname
       ).toEqual(['route-refused'])
     }
+  })
+
+  it('answers a ready for a refused route with nothing at all', async () => {
+    // The page is still told it was heard, which is a different fact: a refused route has no
+    // honest `init` behind it, so the ask is answered with no frame rather than with an empty one.
+    // Unreachable from the session switch, which parses the route before it mounts the shell.
+    const bridge = harness({ route: { pathname: '/h/a b' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    await Promise.resolve()
+    expect(bridge.posted).toEqual([])
+    expect(bridge.pageReadyCount()).toBe(1)
+  })
+
+  it('reports a frame the view would not take, and waits for the next ask (ruling 34)', async () => {
+    const bridge = harness({
+      route: { pathname: '/h/host-a' },
+      post: () => Promise.reject(new Error('the view is gone'))
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    for (let turn = 0; turn < 4; turn += 1) {
+      await Promise.resolve()
+    }
+    expect(bridge.diagnostics.map((diagnostic) => diagnostic.kind)).toContain('post-failed')
+    // Nothing is retried and nothing is held: the page's own backoff asks again, and that ask is
+    // answered with the route the shell holds then.
+    expect(bridge.posted).toHaveLength(1)
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.posted).toHaveLength(2)
+  })
+
+  /**
+   * The repair path, pinned rather than described (ruling 34 addendum).
+   *
+   * A post is refused only when no document holds the view, and every one of those is followed by
+   * a fresh document's `ready`. What makes that a repair is the held route advancing on `hold` as
+   * well as on `send`: the tap arrives while the page cannot be sent one, and the next document is
+   * answered with the route the tap wrote rather than the one the shell opened on.
+   */
+  it('answers the next document with the route a tap wrote while the view was gone', async () => {
+    const view = { gone: true }
+    const bridge = harness({
+      route: { pathname: '/h/host-a/session/wt-1' },
+      post: () => (view.gone ? Promise.reject(new Error('the view is gone')) : Promise.resolve())
+    })
+    // A page that declares nothing is never sent a second `init`, so the tap can only be held.
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.publishRoute({
+      pathname: '/h/host-a/session/wt-1',
+      params: { paneKey: 'pane-1' }
+    })
+    for (let turn = 0; turn < 4; turn += 1) {
+      await Promise.resolve()
+    }
+    expect(bridge.posted).toHaveLength(1)
+    // The next document over the same host: a reload, or the view coming back.
+    view.gone = false
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    expect(init.type === 'init' && init.route).toEqual({
+      pathname: '/h/host-a/session/wt-1',
+      params: { paneKey: 'pane-1' }
+    })
   })
 
   it('opens a session for the routes a screen actually produces', () => {
@@ -250,9 +389,41 @@ describe('init and state', () => {
     expect(bridge.diagnostics).toEqual([{ kind: 'storage-refused', key: 'orca:pins:other-host' }])
   })
 
+  /**
+   * The rollout half of ruling 33.6 (pullfrog).
+   *
+   * The page's own refusal only exists in a page built with it; a document served from an older
+   * desktop bundle ignores `storageOversize` and writes the key anyway, which is the clobber the
+   * ruling is about. The shell holds the same list on the `init` path, so it refuses there too and
+   * an old page is refused as well.
+   */
+  it('refuses a write for a key it could not hand the page, whatever the page believes', () => {
+    const journal = 'orca:mobileStructuredSendOperations:v1'
+    const bridge = harness({
+      readStorage: () => ({
+        storage: { 'orca:pins:host-a': '["one"]' },
+        storageOversize: [journal]
+      })
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'storage', key: journal, value: '{"v":1,"entries":[]}' })
+    )
+    // Nothing reaches native storage, so the entries the device holds survive the page.
+    expect(bridge.storageWrites).toEqual([])
+    expect(bridge.diagnostics).toEqual([{ kind: 'storage-refused', key: journal }])
+    // And a key it did hand over is still writable, so the refusal is the size and not the path.
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'storage', key: 'orca:pins:host-a', value: '["two"]' })
+    )
+    expect(bridge.storageWrites).toEqual([{ key: 'orca:pins:host-a', value: '["two"]' }])
+  })
+
   it('reads the keys again for each init, rather than replaying what it started with', () => {
     let pins = '["one"]'
-    const bridge = harness({ readStorage: () => ({ 'orca:pins:host-a': pins }) })
+    const bridge = harness({
+      readStorage: () => ({ storage: { 'orca:pins:host-a': pins }, storageOversize: [] })
+    })
     bridge.host.receive(clientFrame({ type: 'ready' }))
     pins = '["one","two"]'
     // The document that reloads inside one mount asks again, and has to be primed from after its

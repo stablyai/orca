@@ -57,9 +57,14 @@ jobs:
       GATE_OVERRIDE_REASON: ${{ inputs.gate-override-reason }}
       GATE_OVERRIDE_CONFIRMATION: ${{ inputs.gate-override-confirmation }}
       OUTPUT_DIRECTORY: ${{ github.workspace }}/relay-monitor-evidence
-      # ~800 controls over 2 min is ~7 re-dials/s per cell, well under the director's
-      # 5 x 80 in-flight assign cap. A cell on an older image ignores it and drains at once.
-      DRAIN_PACE_WINDOW_MS: '120000'
+      # Each drained host re-dials /v1/assign and is re-placed through the director's
+      # single-slot sticky lane, which clears roughly 8 hosts/s fleet-wide. A 2,100-host
+      # cell over 2 min (~18/s) overran it on 2026-09-23 and browned out assign for every
+      # region for ~5 min. 5 min is the cell's maximum window (DRAIN_PACE_WINDOW_MAX_MS); a
+      # ~2,700-host cell still arrives at ~9/s, so expect a short tail, not zero rejects.
+      # The transition wait below is the 15-min migration lease plus this window. A cell on
+      # an older image drains at once.
+      DRAIN_PACE_WINDOW_MS: '300000'
     steps:
       - name: Require exact reusable-workflow configuration
         working-directory: .
@@ -273,7 +278,7 @@ jobs:
               EXPECTED_REGION=us-central1
               EXPECTED_DATABASE_POOL_MAX=
               ;;
-            c27|c28|c29)
+            c27|c28|c29|c30)
               EXPECTED_HARD_CAP=3000
               EXPECTED_REGION=asia-east2
               EXPECTED_DATABASE_POOL_MAX=16
@@ -574,7 +579,7 @@ jobs:
             --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" \
             --heartbeat either --admission migration-only --draining required \
             --activity restart-safe --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}" \
-            --timeout-ms 1020000
+            --timeout-ms 1200000
 
       - id: capacity-auth
         if: ${{ inputs.mode != 'verify' }}
@@ -598,16 +603,15 @@ jobs:
           # Zero resource changes prove the prior run's apply completed and no
           # restart will follow, keeping the incarnation check honest. Root
           # outputs may lag a targeted apply, so judge resource_changes only.
-          # The backend service is targeted too, so its reviewed drain timeout
-          # and request logging can be the only thing left here; neither
-          # restarts an instance, so the validator below clears that on its
-          # own, without the template-and-MIG pair.
+          # The cell backend service is deliberately not targeted: the capacity role has no
+          # compute.backendServices.update, so naming it fails the apply after the MIG has
+          # rolled. Its drain and log_config settings ship in a root apply by a principal
+          # that holds the permission.
           terraform -chdir=infra/terraform plan \
             -var-file=environments/production.tfvars \
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
-            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
           if ! terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap-resume.tfplan" \
@@ -644,21 +648,7 @@ jobs:
                 --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
                 "${POOL_ARGUMENTS[@]}")"
             echo "${RESUME_REVIEW}"
-            jq -e '.changes == 2
-                or (.changes == 0 and ((.backendUpdate // []) | length) > 0)' \
-              <<< "${RESUME_REVIEW}" >/dev/null
-            # changes == 0 here means the template and MIG are converged and this cell's
-            # reviewed backend update is the only thing left, so the resume is not complete:
-            # apply it, or the cell silently keeps the 300-second drain and no request
-            # logging and the operator reads that as a finished roll. The plan holds nothing
-            # else (the validator bounded it to this cell's backend, and the template and MIG
-            # are no-ops in it), and neither attribute restarts an instance, so the
-            # incarnation check downstream stays honest. Template-and-MIG drift still applies
-            # nothing, which is what a resume means.
-            if test "$(jq -er '.changes' <<< "${RESUME_REVIEW}")" = 0; then
-              terraform -chdir=infra/terraform apply -auto-approve \
-                "${RUNNER_TEMP}/relay-same-cap-resume.tfplan"
-            fi
+            jq -e '.changes == 2' <<< "${RESUME_REVIEW}" >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
             --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --timeout 900
@@ -681,7 +671,6 @@ jobs:
             -var-file="${RUNNER_TEMP}/relay-same-cap.tfvars.json" \
             "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
-            "-target=google_compute_backend_service.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
             -out="${RUNNER_TEMP}/relay-same-cap.tfplan"
           PLAN_REVIEW="$(terraform -chdir=infra/terraform show -json \
             "${RUNNER_TEMP}/relay-same-cap.tfplan" \

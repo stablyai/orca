@@ -12,7 +12,14 @@ const engine = vi.hoisted(() => ({
   listeners: new Map<string, (event: { data: unknown }) => void>(),
   calls: new Array<string>(),
   /** Set by a case that wants the JSI binding to fail the way a device can. */
-  throwOn: new Set<string>()
+  throwOn: new Set<string>(),
+  /** Set by a case that wants an engine that will not come up. */
+  openFails: false,
+  /** The screen lock, apart from the engine's own calls: it is queued behind a microtask, so
+   *  interleaving it with the synchronous ones would pin an order nothing depends on. */
+  screen: new Array<string>(),
+  /** Every tag the lock named. One capture holds one tag, so this is a set of size one. */
+  screenTags: new Set<string>()
 }))
 
 vi.mock('@orca/expo-two-way-audio', () => ({
@@ -26,7 +33,7 @@ vi.mock('@orca/expo-two-way-audio', () => ({
   },
   initialize: () => {
     engine.calls.push('initialize')
-    return Promise.resolve(true)
+    return Promise.resolve(!engine.openFails)
   },
   requestMicrophonePermissionsAsync: () => {
     engine.calls.push('permission')
@@ -48,22 +55,36 @@ vi.mock('@orca/expo-two-way-audio', () => ({
 }))
 vi.mock('expo-keep-awake', () => ({
   activateKeepAwakeAsync: (tag: string) => {
-    engine.calls.push(`+${tag}`)
+    engine.screen.push('+')
+    engine.screenTags.add(tag)
     return Promise.resolve()
   },
   deactivateKeepAwake: (tag: string) => {
-    engine.calls.push(`-${tag}`)
+    engine.screen.push('-')
+    engine.screenTags.add(tag)
     return Promise.resolve()
   }
 }))
 
 import { useDictationCapture } from './dictation-capture'
 
-beforeEach(() => {
+beforeEach(async () => {
+  // The capture is a module const, so its lock carries between cases: give the screen back and let
+  // the queue drain before the next case reads it.
+  useDictationCapture().release()
+  await flushScreen()
   engine.listeners.clear()
   engine.calls.length = 0
   engine.throwOn.clear()
+  engine.openFails = false
+  engine.screen.length = 0
+  engine.screenTags.clear()
 })
+
+/** The lock's device calls are queued behind a microtask; a case reads them after they have run. */
+async function flushScreen(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
 
 describe('which interruptions end a native capture', () => {
   it('ends on the two the OS means by it, and not on the one it does not', () => {
@@ -112,12 +133,50 @@ describe('the calls the native half makes', () => {
     engine.listeners.get('onMicrophoneData')?.({ data: bytes })
     expect(chunks).toEqual([{ data: bytes, droppedBytes: 0 }])
   })
+})
 
-  it('takes the wake tag through expo-keep-awake', async () => {
+describe('the screen the native microphone holds awake', () => {
+  it('takes the screen when the capture opens and gives it back when it closes', async () => {
     const capture = useDictationCapture()
-    await capture.keepAwake.activate('orca-a')
-    await capture.keepAwake.deactivate('orca-a')
-    expect(engine.calls).toEqual(['+orca-a', '-orca-a'])
+    await capture.open()
+    await flushScreen()
+    expect(engine.screen).toEqual(['+'])
+    await capture.end()
+    await flushScreen()
+    expect(engine.screen).toEqual(['+', '-'])
+    // One tag, and it is the module's own: nothing above the seam mints or names it.
+    expect(engine.screenTags.size).toBe(1)
+  })
+
+  it('gives it back when the screen goes away with a capture still open', async () => {
+    const capture = useDictationCapture()
+    await capture.open()
+    capture.release()
+    await flushScreen()
+    expect(engine.screen).toEqual(['+', '-'])
+  })
+
+  it('holds nothing for an engine that would not open', async () => {
+    engine.openFails = true
+    const capture = useDictationCapture()
+    await expect(useDictationCapture().open()).resolves.toEqual({
+      ok: false,
+      reason: 'unavailable'
+    })
+    await flushScreen()
+    expect(engine.screen).toEqual([])
+    // And the release that follows a failed open asks the device for nothing either.
+    capture.release()
+    await flushScreen()
+    expect(engine.screen).toEqual([])
+  })
+
+  it('does not take it twice when a second open follows the first', async () => {
+    const capture = useDictationCapture()
+    await capture.open()
+    await capture.open()
+    await flushScreen()
+    expect(engine.screen).toEqual(['+'])
   })
 })
 

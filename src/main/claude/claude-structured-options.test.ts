@@ -20,8 +20,8 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
       supportedModels: async (): Promise<unknown[]> => []
     } as ClaudeSession['connection'],
     providerSessionId: 'provider-session',
-    claudeConfigDir: '/accounts/claude',
     leafUuid: null,
+    turnEndLeafUuid: null,
     fence: 1,
     acquisitionGeneration: 'generation-1',
     prompts: {} as ClaudeSession['prompts'],

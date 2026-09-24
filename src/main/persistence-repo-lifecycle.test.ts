@@ -15,6 +15,12 @@ import {
   makeWorktreeLineage
 } from './persistence-test-harness'
 import {
+  advanceSshConnectionGeneration,
+  assertSshMutationExpectation,
+  resetSshConnectionGenerations
+} from './ssh/ssh-connection-generation'
+import { getRuntimeOwnedSshTargetId } from './ssh/ssh-connection-store'
+import {
   _getLocalWorktreeScanGenerationCacheSize,
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
@@ -697,6 +703,39 @@ describe('Store', () => {
 
     expect(store.getRepo('only')).toBeUndefined()
     expect(store.getWorktreeMeta('only::/repo/wt')).toBeUndefined()
+  })
+
+  it('removing and recreating a runtime-owned SSH target fences the old incarnation', async () => {
+    resetSshConnectionGenerations(3)
+    try {
+      const store = await createStore()
+      const targetId = getRuntimeOwnedSshTargetId('vm-1')
+      const target = {
+        id: targetId,
+        label: 'ephemeral vm',
+        host: 'vm-old.example.com',
+        port: 22,
+        username: 'dev',
+        source: 'manual' as const,
+        owner: { type: 'on-demand-runtime' as const, runtimeId: 'vm-1' }
+      }
+      store.addSshTarget(target)
+      const staleGeneration = advanceSshConnectionGeneration(targetId)
+
+      store.removeSshTarget(targetId)
+      store.addSshTarget({ ...target, host: 'vm-new.example.com' })
+      const replacementGeneration = advanceSshConnectionGeneration(targetId)
+
+      // A delayed write from the discarded VM must not pass the replacement's fence.
+      expect(() => assertSshMutationExpectation(targetId, targetId, staleGeneration)).toThrow(
+        'SSH connection changed; refresh and try again'
+      )
+      expect(() =>
+        assertSshMutationExpectation(targetId, targetId, replacementGeneration)
+      ).not.toThrow()
+    } finally {
+      resetSshConnectionGenerations()
+    }
   })
 
   // ── 6c. reassignSshTargetId re-adopts orphaned workspaces ─────────────

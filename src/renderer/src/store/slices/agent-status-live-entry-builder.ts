@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import {
   AGENT_STATE_HISTORY_MAX,
   agentSubagentsEqual,
@@ -217,6 +218,7 @@ export function buildAgentStatusLiveEntry(
       : undefined) ??
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
+  const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -261,6 +263,7 @@ export function buildAgentStatusLiveEntry(
     subagents: agentSubagentsEqual(existing?.subagents, payload.subagents)
       ? existing?.subagents
       : payload.subagents,
+    ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

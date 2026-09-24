@@ -11,8 +11,9 @@ export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
   init: ClaudeInitObservation
   initialization?: unknown
-  claudeConfigDir: string
   leafUuid: string | null
+  /** The launch's stored leaf: a frame seen before publication is not a completed turn. */
+  turnEndLeafUuid: string | null
   fence: number
   acquisitionGeneration: string
   resumed: boolean
@@ -51,8 +52,8 @@ export function createClaudeSessionPublication(input: {
     session: {
       connection: input.connection,
       providerSessionId: input.init.providerSessionId,
-      claudeConfigDir: input.claudeConfigDir,
       leafUuid: input.leafUuid,
+      turnEndLeafUuid: input.turnEndLeafUuid,
       fence: input.fence,
       acquisitionGeneration: input.acquisitionGeneration,
       prompts: input.prompts,

@@ -559,7 +559,7 @@ describe('spending a marker', () => {
     )
 
     expect(outcomes).toEqual([
-      { sessionId: SESSION, outcome: 'refused', reason: 'agent_session_resume_consumed' }
+      { sessionId: SESSION, outcome: 'refused', reason: 'agent_session_resume_not_eligible' }
     ])
     expect(resume).toHaveBeenCalledOnce()
   })

@@ -43,6 +43,7 @@ function goalJournal(
   const rows = new Map<string, AgentJournalRenderItem>()
   const writes: string[] = []
   const deferred = createDeferredStructuredAgentSessionEventSink(options)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a fake journal exposing only the members the goal translator and deferred sink call.
   const journal = {
     get epoch() {
       return `epoch-${epochNumber}`
@@ -68,11 +69,11 @@ function goalJournal(
       items: [...rows.values()].sort((left, right) => left.sequence - right.sequence),
       submissions: []
     }),
-    visitItems: (visit: (itemId: string, sequence: number) => void) => {
+    visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) => {
       visits += 1
       for (const item of rows.values()) {
         visitedItems += 1
-        visit(item.itemId, item.sequence)
+        visit(item.itemId, item.sequence, item.body)
       }
     }
   } as unknown as StructuredAgentSessionEventTarget['journal']
@@ -354,12 +355,22 @@ describe('codex goal lifecycle resume', () => {
         prefix === 'Goal cleared' ? prefix : `${prefix}: Keep the current scratch directory tidy.`
       )
     )
-    expect(journal.writes).toHaveLength(writesBeforeResume)
-    expect(journal.publishes()).toBe(publishesBeforeResume)
+    // A resumed goal's fresh accounting revises the row it already has: no new
+    // row, and the text a reader sees is unchanged. A cleared goal has no accounting.
+    const cleared = scenario.resumed.method === 'thread/goal/cleared'
+    expect(journal.writes).toHaveLength(writesBeforeResume + (cleared ? 0 : 1))
+    expect(journal.publishes()).toBe(publishesBeforeResume + (cleared ? 0 : 1))
     expect(journal.writes.at(-1)).toBe(acceptedOccurrence)
-    expect(journal.rows().find((row) => row.itemId === acceptedOccurrence)?.body).toEqual(
-      acceptedBody
-    )
+    const revised = journal.rows().find((row) => row.itemId === acceptedOccurrence)
+    if (cleared) {
+      expect(revised?.body).toEqual(acceptedBody)
+    } else {
+      expect(revised?.revision).toBe(2)
+      expect(revised?.body).toMatchObject({
+        text: acceptedBody?.kind === 'status' ? acceptedBody.text : undefined,
+        threadGoal: { goal: { tokensUsed: 12_345, timeUsedSeconds: 42 } }
+      })
+    }
     resumed.dispose()
   })
 })

@@ -61,6 +61,8 @@ export type RuntimePtyController = {
     /** Windows shell to spawn AS this PTY, instead of the host default. */
     shellOverride?: string
     isNewSession?: boolean
+    /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
+    initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
     expectedSourceBinding?: PtyBindingSourceExpectation
     terminalKittyKeyboardProtocol?: boolean

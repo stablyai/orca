@@ -1,4 +1,4 @@
-// Which claimed teardown witnesses still describe resumable work.
+// Which durable teardown witnesses still describe resumable work.
 //
 // Every clause here exists to refuse, and the bias is deliberate: a session resumed that should not
 // have been spends the user's tokens and can make an agent redo destructive work it already
@@ -20,6 +20,7 @@ import {
 } from '../../../shared/agent-session-provider-handle'
 import {
   isExpiredAgentSessionResumeMarker,
+  type AgentSessionResumeFailureOutcome,
   type AgentSessionResumeMarker,
   type AgentSessionResumeTrigger,
   type AgentSessionResumeWork
@@ -44,6 +45,18 @@ export type StructuredAgentSessionResumeCandidate = {
   /** Model in force, read from the record's acknowledged options exactly as the status feed does.
    *  Absent until the host has read them. */
   model?: string
+}
+
+/** An offer that was acted on and did not end with the agent carrying on. Same row shape as the
+ *  candidate so one surface renders both, plus what went wrong and when. */
+export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCandidate & {
+  failedAt: number
+  outcome: AgentSessionResumeFailureOutcome
+  /** The host's or provider's refusal code, verbatim, so it can be quoted in a report. */
+  reason: string
+  /** Whether naming it in an action would run it again. A continuation the chat already holds, or
+   *  work that has since finished, makes a retry a no-op no matter what the reason says. */
+  retryable: boolean
 }
 
 export type StructuredAgentSessionResumeSetInput = {

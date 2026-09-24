@@ -62,7 +62,8 @@ const PAGE_SERVED_SCREENS = [
   {
     pathname: '/h/[hostId]/review/[worktreeId]',
     screen: 'src/components/MobileDiffReviewHeader.tsx'
-  }
+  },
+  { pathname: '/h/[hostId]/session/[worktreeId]', screen: 'src/session/MobileSessionHeader.tsx' }
 ]
 
 /** The rule reads whole trees, so a Back added beside a screen is ruled as well as the screen's. */

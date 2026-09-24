@@ -51,6 +51,12 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupAgent?: TuiAgent
   startupLaunchPreferences?: AgentLaunchPreferences
   startupPrompt?: string
+  /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
+  startupAgentArgs?: string | null
+  startupCwd?: string
+  startupLaunchSource?: string
+  /** A caller-minted `tabId:leafId` for the startup terminal's pane. */
+  startupPaneKey?: string
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance

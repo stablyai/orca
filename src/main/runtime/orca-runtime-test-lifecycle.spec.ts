@@ -7,7 +7,8 @@ const { addGitHubPRReviewCommentReplyMock, addGitLabIssueCommentMock, addGitLabM
 const { addGitLabMRInlineCommentMock, addSparseWorktree, addWorktree, advertisedUrlWatcher } = mocks
 const { afterEach, applyAgentStatusHooksEnabledMock, assertWorktreeCleanForRemoval, beforeEach } =
   mocks
-const { clearConfiguredWorktreeSharedDirectoriesCacheForTests, closeGitLabMRMock } = mocks
+const { cancelLegacyWorkerTerminalRecoveryRetriesForTests, closeGitLabMRMock } = mocks
+const { clearConfiguredWorktreeSharedDirectoriesCacheForTests } = mocks
 const { closeLocalWatcherForWorktreePathMock, closeRemoteWatcherForWorktreePathMock } = mocks
 const { computeWorktreePathMock, countGitHubWorkItemsMock, createGitHubIssueMock } = mocks
 const { createGitLabIssueMock, createHostedReviewMock, createSetupRunnerScript } = mocks
@@ -82,6 +83,9 @@ function resetRuntimeTestMocks(): void {
     getPath: () => electronMocks.app.getPath(),
     isPackaged: () => electronMocks.app.isPackaged
   })
+  // Why: a worker-recovery retry re-arms itself for as long as a deferred worker exists, so one
+  // left armed keeps rescanning worktrees through the shared git stubs for the rest of the run.
+  cancelLegacyWorkerTerminalRecoveryRetriesForTests()
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
   _resetTerminalViewAttributesForTest()
   advertisedUrlWatcher.clear()

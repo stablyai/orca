@@ -3,18 +3,32 @@ import { Pressable, Switch, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { LayoutTemplate } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
-import { loadMobileWebShellEnabled, saveMobileWebShellEnabled } from '../storage/preferences'
+import {
+  loadMobileWebShellEnabled,
+  mobileShellBuildKind,
+  saveMobileWebShellEnabled
+} from '../storage/preferences'
 import { colors } from '../theme/mobile-theme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 
 /**
- * Development-only: the one caller of `saveMobileWebShellEnabled`, and the one way into the hybrid
- * shell route that is not a deep link.
+ * The one caller of `saveMobileWebShellEnabled`, and the one way into the hybrid shell route that
+ * is not a deep link.
  *
- * `app/troubleshoot.tsx` mounts it behind `__DEV__`, exactly as it mounts A5's probe row, so a
- * shipped build never renders the toggle and the flag it guards can only stay off. The route itself
- * reads the flag again rather than trusting this screen, because a deep link arrives without it.
+ * `app/troubleshoot.tsx` mounts it wherever the flag can be on at all: a development build, or a
+ * release built with `EXPO_PUBLIC_MOBILE_SHELL=ota`. A native store build never renders the toggle
+ * and the flag it guards can only stay off there. The route itself reads the flag again rather
+ * than trusting this screen, because a deep link arrives without it.
+ *
+ * The label names the build kind rather than saying "dev", because in an OTA build this row is the
+ * only way back to the native screens and calling it a developer switch would misdescribe it.
  */
+/** What this build is, not what the row is for: an OTA build is the page's own release binary. */
+const HYBRID_SHELL_LABELS = {
+  native: 'Hybrid shell (development build)',
+  ota: 'Hybrid shell (OTA build)'
+} as const
+
 export function MobileWebShellDevRow() {
   const router = useRouter()
   const [enabled, setEnabled] = useState<boolean | null>(null)
@@ -40,7 +54,9 @@ export function MobileWebShellDevRow() {
   return (
     <View>
       <View style={styles.checkRow}>
-        <Text style={styles.checkLabel}>Hybrid shell (dev)</Text>
+        <Text style={styles.checkLabel} testID="mobile-web-shell-label">
+          {HYBRID_SHELL_LABELS[mobileShellBuildKind()]}
+        </Text>
         <Switch
           testID="mobile-web-shell-flag"
           value={enabled === true}

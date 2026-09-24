@@ -101,3 +101,33 @@ describe('MessageRow control visibility', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 })
+
+describe('MessageRow send mode', () => {
+  function renderUser(sentAs?: NativeChatMessage['sentAs']) {
+    return render(
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'user',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Ship the parser' }],
+          ...(sentAs ? { sentAs } : {})
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
+    )
+  }
+
+  it('marks a user message that was sent as a goal', () => {
+    renderUser('goal')
+    expect(screen.getByText('Ship the parser')).toBeInTheDocument()
+    expect(screen.getByText('Sent as goal')).toBeInTheDocument()
+  })
+
+  it('leaves an ordinary user message unmarked', () => {
+    renderUser()
+    expect(screen.queryByText('Sent as goal')).not.toBeInTheDocument()
+  })
+})

@@ -3,6 +3,20 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { eraseRpcMethods, type RpcContext } from '../../../core'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
+
+type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }
+
+function isWorkerStartResult(value: unknown): value is { state: 'ready'; dispatchId: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'state' in value &&
+    value.state === 'ready' &&
+    'dispatchId' in value &&
+    typeof value.dispatchId === 'string'
+  )
+}
 
 export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -16,11 +30,11 @@ export type OrchestrationWorkerReleaseHarness = {
   setup: () => void
   cleanup: () => void
   call: (name: string, params: Record<string, unknown>) => Promise<unknown>
-  startWorker: (options?: { terminal?: string }) => Promise<{ taskId: string; dispatchId: string }>
+  startWorker: (options?: WorkerStartOptions) => Promise<{ taskId: string; dispatchId: string }>
   settle: (taskId: string, dispatchId: string, outcome: 'succeeded' | 'failed') => void
   startSettledWorker: (
     outcome?: 'succeeded' | 'failed',
-    options?: { terminal?: string }
+    options?: WorkerStartOptions
   ) => Promise<{ taskId: string; dispatchId: string }>
   deferred: typeof deferred
   coordinatorPaneKey: string
@@ -143,17 +157,19 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     return method.handler(parsed, ctx)
   }
 
-  async function startWorker(options: { terminal?: string } = {}): Promise<{
+  async function startWorker(options: WorkerStartOptions = {}): Promise<{
     taskId: string
     dispatchId: string
   }> {
     const task = db.createTask({ spec: 'release fixture task', runId: activeRunId })
-    const result = (await call('orchestration.workerStart', {
+    const result = await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
-      ...(options.terminal ? { terminal: options.terminal } : { agent: 'codex' })
-    })) as { dispatchId: string; state: string }
-    expect(result.state).toBe('ready')
+      ...(options.terminal ? { terminal: options.terminal } : { agent: options.agent ?? 'codex' })
+    })
+    if (!isWorkerStartResult(result)) {
+      throw new Error('Expected worker-start to return a ready dispatch')
+    }
     return { taskId: task.id, dispatchId: result.dispatchId }
   }
 
@@ -169,7 +185,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
 
   async function startSettledWorker(
     outcome: 'succeeded' | 'failed' = 'succeeded',
-    options: { terminal?: string } = {}
+    options: WorkerStartOptions = {}
   ): Promise<{ taskId: string; dispatchId: string }> {
     const worker = await startWorker(options)
     settle(worker.taskId, worker.dispatchId, outcome)

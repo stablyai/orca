@@ -1,6 +1,7 @@
 // One pane builder for every suite that replays a captured agent transcript through the runtime.
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const TRANSCRIPT_PANE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const TRANSCRIPT_PANE_TAB_ID = 'tab-1'
@@ -11,6 +12,7 @@ export type TranscriptPaneOptions = {
   paneTitle: string
   foregroundProcess: string | null
   data: string
+  launchAgent?: TuiAgent
   /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
   /** Simulates a PTY controller whose foreground probe never settles. */
@@ -71,6 +73,14 @@ export async function createTranscriptPane(
       }
     ]
   })
+  if (options.launchAgent) {
+    runtime.registerPty(TRANSCRIPT_PANE_PTY_ID, TRANSCRIPT_PANE_WORKTREE_ID, null, {
+      tabId: TRANSCRIPT_PANE_TAB_ID,
+      leafId: TRANSCRIPT_PANE_LEAF_ID,
+      incarnationId: 'inc-1',
+      agentLaunchAuthority: { launchToken: 'transcript-launch', launchAgent: options.launchAgent }
+    })
+  }
   // Why the guard: a restore seed is only applied to a never-written record, so the restore
   // cases must not write an empty chunk first.
   if (options.data.length > 0) {

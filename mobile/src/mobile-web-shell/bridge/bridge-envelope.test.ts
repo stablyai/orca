@@ -34,6 +34,8 @@ import {
   type BridgeHostMessage,
   type BridgeReplyPayload
 } from './bridge-envelope'
+import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge-page-back'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA'
 const CONNECTION = {
@@ -87,6 +89,20 @@ function client(fields: Record<string, unknown>): Record<string, unknown> {
 describe('client messages', () => {
   const accepted = [
     ['ready', { type: 'ready' }],
+    ['ready naming what it reports', { type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }],
+    // A shell with no row for the name reads a report it will never wait on, which is what an
+    // additive field has to look like in the older direction.
+    [
+      'ready naming a report this shell does not implement',
+      { type: 'ready', reports: ['weather'] }
+    ],
+    ['a page painted notify', { type: 'notify', name: BRIDGE_PAGE_PAINTED }],
+    ['a back claim', { type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: true }],
+    [
+      'a back claim being let go',
+      { type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed: false }
+    ],
+    ['ready naming what it takes', { type: 'ready', accepts: [BRIDGE_BACK_FRAME] }],
     ['request without params', { type: 'request', id: ID, method: 'status.get' }],
     ['request with params', { type: 'request', id: ID, method: 'status.get', params: { a: 1 } }],
     [
@@ -302,6 +318,7 @@ describe('host messages', () => {
       }
     ],
     ['state', { type: 'state', connection: CONNECTION }],
+    ['a back press handed to the page', { type: 'back' }],
     ['a whole reply', { type: 'reply', id: ID, payload: SUCCESS_PAYLOAD }],
     [
       'a failure reply, which is data and not a rejection',

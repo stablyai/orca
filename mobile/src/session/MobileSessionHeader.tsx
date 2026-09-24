@@ -65,6 +65,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={requestLeaveSession}
           hitSlop={8}
+          accessibilityRole="button"
           accessibilityLabel="Back to worktrees"
         >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
@@ -78,7 +79,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             style={styles.sessionMetaRow}
             disabled={!showConnectionRetry}
             onPress={() => {
-              if (hostId) {
+              if (hostId && forceReconnectHost) {
                 void forceReconnectHost(hostId)
               }
             }}

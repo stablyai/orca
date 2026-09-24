@@ -16,7 +16,6 @@
     "src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts",
     "src/main/agent-hooks/managed-agent-hook-controls.ts",
     "src/main/claude-accounts/keychain.ts",
-    "src/mobile-web/src/bootstrap.ts",
     "src/renderer/src/main.tsx",
     "src/renderer/src/popout.tsx",
     "src/renderer/src/web/main.tsx",

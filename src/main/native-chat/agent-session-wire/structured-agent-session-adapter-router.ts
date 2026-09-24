@@ -86,6 +86,17 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 
+  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) => {
+    const change = this.owner(input.sessionId).changeThreadGoal
+    if (!change) {
+      return Promise.resolve({ ok: false, rejected: 'Goals are unavailable for this provider.' })
+    }
+    return change(input)
+  }
+
+  supportsThreadGoal = (sessionId: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.supportsThreadGoal?.(sessionId) ?? false
+
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
   ) => {

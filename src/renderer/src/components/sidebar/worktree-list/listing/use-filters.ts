@@ -25,7 +25,8 @@ import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import {
   getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs
+  getVisibleWorktreeTerminalActivityTabs,
+  getWorktreeIdsWithStructuredChat
 } from '../../visible-worktree-activity-inputs'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
@@ -133,7 +134,8 @@ export function useSidebarWorktreeFilters() {
           tabsByWorktree,
           state.ptyIdsByTabId,
           browserTabsByWorktree,
-          liveAgentWorktrees
+          liveAgentWorktrees,
+          getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree)
         )
       ) {
         state.setShowSleepingWorkspaces(true)

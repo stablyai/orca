@@ -1,10 +1,6 @@
 import { createCodexProviderActivityReader } from '../native-chat/agent-session-wire/provider-frame-activity'
-import {
-  CODEX_TOKEN_USAGE_METHOD,
-  readCodexNotificationThreadItem
-} from './codex-subagent-activity'
+import { CODEX_TOKEN_USAGE_METHOD } from './codex-subagent-activity'
 import { CodexSubagentRoster } from './codex-subagent-roster'
-import { readCodexThreadItem } from './codex-structured-item-translation'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
 import { CodexJournalCompactions } from './codex-structured-journal-compactions'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
@@ -22,6 +18,8 @@ import { restoreCodexJournalThread } from './codex-structured-journal-translatio
 import { CodexJournalTurnBoundaries } from './codex-structured-journal-translation-turn-boundaries'
 import { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { publishCodexTurnLifecycle } from './codex-structured-journal-translation-turns'
+import { readCodexProviderVerdict } from './codex-structured-journal-provider-verdicts'
+import { createCodexThreadItemRouter } from './codex-structured-journal-thread-item-routing'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
@@ -89,6 +87,23 @@ export function createCodexJournalTranslator(
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
     ...(deps.now ? { now: deps.now } : {})
+  })
+  let primaryThreadStoppedRunning = false
+  const reportPrimaryThreadStoppedRunning = (): void => {
+    const primaryThreadId = deps.primaryThreadId?.() ?? null
+    if (!primaryThreadStoppedRunning || !primaryThreadId || activeTurns.current(primaryThreadId)) {
+      return
+    }
+    primaryThreadStoppedRunning = false
+    deps.onPrimaryThreadStoppedRunning?.()
+  }
+  const routeThreadItem = createCodexThreadItemRouter({
+    deps,
+    subagents,
+    items,
+    activeTurns,
+    turnBoundaries,
+    genericFrames
   })
   const publishActivity = (
     event: Extract<CodexStructuredSessionEvent, { type: 'notification' }>,
@@ -220,9 +235,14 @@ export function createCodexJournalTranslator(
         if (!childAdmission.accepted) {
           return childAdmission
         }
-        return event.method === 'turn/started'
-          ? turnBoundaries.start(event)
-          : turnBoundaries.complete(event)
+        const admission =
+          event.method === 'turn/started'
+            ? turnBoundaries.start(event)
+            : turnBoundaries.complete(event)
+        if (admission.accepted) {
+          reportPrimaryThreadStoppedRunning()
+        }
+        return admission
       }
       const compaction = compactions.handle(event)
       if (compaction) {
@@ -241,54 +261,36 @@ export function createCodexJournalTranslator(
         }
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
-        const subagentItem = readCodexNotificationThreadItem(event.params, readCodexThreadItem)
-        // Null means the roster did not claim it; fall through to normal item
-        // handling. Returning here unconditionally swallows every other item.
-        const subagentAdmission = subagentItem
-          ? subagents.handleItem({
-              threadId: event.threadId,
-              turnId: readCodexTurnId(event.params) ?? activeTurns.current(event.threadId),
-              item: subagentItem
-            })
-          : null
-        if (subagentAdmission) {
-          // Not a bare return: the roster claiming the item must not skip the
-          // turn-tail arm, which is the only publisher of its activity copy.
-          return publishActivity(event, subagentAdmission)
+        const routed = routeThreadItem(event)
+        // Not a bare return: a claimed item must not skip the turn-tail arm,
+        // which is the only publisher of its activity copy.
+        if (routed) {
+          return publishActivity(event, routed)
         }
-        const translated = items.handle(event)
-        if (translated.handled && translated.dispatchEcho) {
-          const { clientMessageId, providerIdentity } = translated.dispatchEcho
-          const requestOrigin = deps.dispatchRequestOrigin?.(clientMessageId) ?? null
-          if (requestOrigin !== null && providerIdentity.provider === 'codex') {
-            const attribution = turnBoundaries.attributeRequest({
-              sessionId: event.sessionId,
-              clientMessageId,
-              threadId: providerIdentity.threadId,
-              turnId: providerIdentity.turnId,
-              requestOrigin
-            })
-            if (!attribution.accepted) {
-              return attribution
-            }
-          }
-          deps.onUserMessageEcho?.(clientMessageId, providerIdentity)
-        }
-        return publishActivity(
-          event,
-          translated.handled
-            ? translated.admission
-            : genericFrames.appendUnhandled(
-                `notification:${event.method}`,
-                event.params,
-                event.threadId
-              )
-        )
       }
-      return publishActivity(
-        event,
-        genericFrames.appendUnhandled(`notification:${event.method}`, event.params, event.threadId)
+      const verdict = readCodexProviderVerdict(event.method, event.params)
+      if (
+        verdict === 'thread-stopped-running' &&
+        event.threadId === (deps.primaryThreadId?.() ?? null)
+      ) {
+        primaryThreadStoppedRunning = true
+        reportPrimaryThreadStoppedRunning()
+      }
+      // The row carries the provider's sentence and is written first, so it lands
+      // inside the turn this same frame is about to end.
+      const unhandled = genericFrames.appendUnhandled(
+        `notification:${event.method}`,
+        event.params,
+        event.threadId
       )
+      if (unhandled.accepted && verdict === 'turn-failed') {
+        const failed = turnBoundaries.fail(event)
+        if (!failed.accepted) {
+          return failed
+        }
+        reportPrimaryThreadStoppedRunning()
+      }
+      return publishActivity(event, unhandled)
     },
     cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),
     resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),

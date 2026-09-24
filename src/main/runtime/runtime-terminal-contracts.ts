@@ -47,6 +47,14 @@ export type TerminalCreateOptions = {
    * the prompt silently dropped. Post-start delivery belongs to whoever owns the live PTY.
    */
   startupPrompt?: string
+  /**
+   * Replaces the Settings launch arguments for this `startupAgent` only; `null` means none at all.
+   *
+   * Not part of `callerSuppliedLaunch`: that guard refuses a caller that brought its own *command*,
+   * which would contradict the agent the runtime is resolving. Arguments are an input to the plan
+   * the runtime still builds, so overriding them does not take the launch away from it.
+   */
+  agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
@@ -61,6 +69,8 @@ export type TerminalCreateOptions = {
   surfaceOwner?: false
   tabId?: string
   leafId?: string
+  /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
+  requireFreshPane?: boolean
   sessionId?: string
   isNewSession?: boolean
   preAllocatedHandle?: string

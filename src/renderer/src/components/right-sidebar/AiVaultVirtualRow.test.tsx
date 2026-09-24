@@ -50,6 +50,7 @@ function renderSession(session: AiVaultSession) {
         vaultScope="all"
         buildResumeStartup={buildResumeStartup}
         getOriginalPaneTarget={() => null}
+        isStructuredSessionOpen={() => false}
         getSessionLiveState={() => null}
         getWorktreeInfo={() => null}
         getSessionResumeState={() => ({

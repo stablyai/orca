@@ -71,6 +71,7 @@ import { initStatsPath } from '../stats/collector'
 import { initClaudeUsagePath } from '../claude-usage/store'
 import { initCodexUsagePath } from '../codex-usage/store'
 import { initOpenCodeUsagePath } from '../opencode-usage/store'
+import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-protocol'
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
 import { CrashReportStore } from '../crash-reporting/crash-report-store'
@@ -286,6 +287,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  initMuseUsagePath()
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
   registerDocPreviewSchemePrivileges()

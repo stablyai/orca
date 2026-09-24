@@ -111,6 +111,9 @@ export function createRelayServer(
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
     regionalRehomeCohortPercent: config.regionCorrectionCohortPercent ?? 0,
+    // The director runs in the database's region; only its rehome readers use this.
+    regionalRehomeDirectorRegion:
+      config.role === 'director' ? (config.region ?? RELAY_DEFAULT_REGION) : undefined,
     recordControlRenewal: (durationMs, outcome) =>
       observability.recordControlRenewal?.(durationMs, outcome)
   })

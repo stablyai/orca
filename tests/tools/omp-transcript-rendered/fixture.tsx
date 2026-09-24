@@ -28,7 +28,7 @@ createRoot(root).render(
           messages: transcript.messages,
           hasMore: false,
           loadingEarlier: false,
-          loadEarlier: () => {},
+          loadEarlier: () => Promise.resolve('exhausted' as const),
           readPhase: 'ready'
         }}
         isWorking={false}

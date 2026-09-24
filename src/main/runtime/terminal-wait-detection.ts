@@ -5,11 +5,8 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import {
-  isTerminalWaitWhitespace,
-  startOfLastLines,
-  startOfLastNonBlankLines
-} from './terminal-wait-tail-window'
+import { findAntigravityReadyPromptIndex } from './antigravity-terminal-readiness'
+import { startOfLastLines, startOfLastNonBlankLines } from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -50,20 +47,23 @@ export function isKnownReadyPromptPreview(preview: string): boolean {
   if (readyIndex === null) {
     return false
   }
-  const antigravityReadyIndex = findAntigravityReadyPromptIndex(normalized)
-  const modelPickerIndex = findActiveAntigravityModelPickerIndex(normalized)
-  if (
-    antigravityReadyIndex !== null &&
-    modelPickerIndex !== null &&
-    modelPickerIndex > antigravityReadyIndex
-  ) {
-    return false
-  }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
   if (blockedSignal !== null && blockedSignal.index > readyIndex) {
     return false
   }
   return true
+}
+
+// Why separate from isKnownReadyPromptPreview: that one settles tier 1 immediately, while
+// a Muse ready screen only proves the TUI is up — the ranking holds it to quiescence.
+export function isMuseReadyPromptPreview(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  const readyIndex = findMuseReadyPromptIndex(normalized)
+  if (readyIndex === null) {
+    return false
+  }
+  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+  return blockedSignal === null || blockedSignal.index <= readyIndex
 }
 
 export function detectTerminalWaitBlockedReason(
@@ -92,7 +92,8 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
-    findCursorActivePromptIndex(normalized)
+    findCursorActivePromptIndex(normalized),
+    findMuseReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
 }
@@ -126,6 +127,19 @@ function findCursorReadyPromptIndex(normalized: string): number | null {
   return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
 }
 
+// Why: Muse titles its OSC with the bare cwd and never updates it, so only the body can
+// prove the TUI is up. The voice-input composer is present even without loaded skills.
+function findMuseReadyPromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('muse code')
+  if (headerIndex === -1) {
+    return null
+  }
+  const segment = normalized.slice(headerIndex)
+  return segment.includes('voice') && segment.includes('input') && segment.includes('❯')
+    ? headerIndex
+    : null
+}
+
 function findCodexReadyPromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('openai codex')
   if (headerIndex === -1) {
@@ -134,59 +148,6 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   const readySegment = normalized.slice(headerIndex)
   // Why: Codex prints permissions only in YOLO mode; the stable ready header is OpenAI Codex + model + directory.
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
-}
-
-function findAntigravityReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('antigravity cli')
-  if (headerIndex === -1) {
-    return null
-  }
-  let lineStart = headerIndex
-  let promptIndex: number | null = null
-  let previousNonEmpty: { start: number; end: number } | null = null
-
-  // Why: a column-0 caret is ready; an indented `>` under `> draft` is a wrap, not an empty box.
-  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
-    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
-      continue
-    }
-    let trimmedStart = lineStart
-    let trimmedEnd = cursor
-    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
-      trimmedStart += 1
-    }
-    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
-      trimmedEnd -= 1
-    }
-    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62 &&
-        trimmedStart === lineStart &&
-        !(
-          previousNonEmpty !== null &&
-          normalized.charCodeAt(previousNonEmpty.start) === 62 &&
-          previousNonEmpty.end - previousNonEmpty.start > 1
-        )
-      ) {
-        promptIndex = trimmedStart
-      }
-      previousNonEmpty = { start: trimmedStart, end: trimmedEnd }
-    }
-    lineStart = cursor + 1
-  }
-
-  return promptIndex
-}
-
-// Why: the model picker keeps the ready composer's bare caret in scrollback while its selected row
-// is labeled, so that stale caret must not satisfy tui-idle until the picker emits its exit marker.
-function findActiveAntigravityModelPickerIndex(normalized: string): number | null {
-  const pickerIndex = normalized.lastIndexOf('switch model')
-  if (pickerIndex === -1 || normalized.lastIndexOf('antigravity cli') > pickerIndex) {
-    return null
-  }
-  return normalized.lastIndexOf('exited /model command') > pickerIndex ? null : pickerIndex
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =

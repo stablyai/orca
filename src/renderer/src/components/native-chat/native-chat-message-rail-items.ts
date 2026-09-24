@@ -1,12 +1,12 @@
-// The rail's tick set: one entry per user message the transcript actually draws.
+// The rail's tick set: one entry per user message in the conversation.
 //
-// Built from slots rather than messages because the rail's whole job is to point
-// at a row, and a message that takes no slot has no row to point at. Slot indexes
-// are also what the virtualizer counts, so an entry can be compared against a
-// virtual item without a second lookup table.
+// Loaded messages come from slots rather than messages because the rail's whole
+// job is to point at a row, and a message that takes no slot has no row to point
+// at. Slot indexes are also what the virtualizer counts, so an entry can be
+// compared against a virtual item without a second lookup table. Messages older
+// than the loaded window come from the host's outline and have no slot yet.
 
-import { deriveNativeChatRowContent } from './native-chat-row-content'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import { nativeChatUserMessagePreview } from '../../../../shared/agent-session-conversation-outline'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** Ticks past this are sampled away: a taller rail than the viewport cannot be
@@ -18,14 +18,20 @@ export const NATIVE_CHAT_RAIL_MIN_ITEMS = 3
 
 export type NativeChatRailItem = {
   id: string
-  /** Index into the slot list, i.e. the virtualizer's own index. */
-  slotIndex: number
+  /** Index into the slot list, i.e. the virtualizer's own index. Null while the
+   *  message is known only from the outline: older history that is not loaded. */
+  slotIndex: number | null
   /** Preview prose, whitespace collapsed. Empty when the message is images only. */
   text: string
   hasImages: boolean
 }
 
-const previews = new WeakMap<readonly NativeChatBlock[], { text: string; hasImages: boolean }>()
+/** A user message older than the loaded window, oldest first. */
+export type NativeChatRailOutlineEntry = {
+  id: string
+  text: string
+  hasImages: boolean
+}
 
 export function buildNativeChatRailItems(
   slots: readonly NativeChatTranscriptSlot[],
@@ -36,29 +42,40 @@ export function buildNativeChatRailItems(
     if (slot.message.role !== 'user') {
       continue
     }
-    let preview = previews.get(slot.message.blocks)
-    if (!preview) {
-      const content = deriveNativeChatRowContent(slot.message.blocks)
-      preview = { text: content.markdown.replace(/\s+/g, ' ').trim(), hasImages: content.hasImages }
-      previews.set(slot.message.blocks, preview)
-    }
+    const preview = nativeChatUserMessagePreview(slot.message.blocks)
+    const hasImages = preview.imageCount > 0
     const prior = previous[items.length]
     items.push(
       prior?.id === slot.message.id &&
         prior.slotIndex === slotIndex &&
         prior.text === preview.text &&
-        prior.hasImages === preview.hasImages
+        prior.hasImages === hasImages
         ? prior
-        : {
-            id: slot.message.id,
-            slotIndex,
-            ...preview
-          }
+        : { id: slot.message.id, slotIndex, text: preview.text, hasImages }
     )
   }
   return items.length === previous.length && items.every((item, index) => item === previous[index])
     ? previous
     : items
+}
+
+/** Outline entries first, then the loaded items, so the rail maps the whole thread.
+ *  A loaded item replaces its outline entry: it carries the slot a jump needs. */
+export function mergeNativeChatRailOutline(
+  outline: readonly NativeChatRailOutlineEntry[] | null,
+  loaded: readonly NativeChatRailItem[]
+): readonly NativeChatRailItem[] {
+  if (!outline || outline.length === 0) {
+    return loaded
+  }
+  const loadedIds = new Set(loaded.map((item) => item.id))
+  const unloaded: NativeChatRailItem[] = []
+  for (const entry of outline) {
+    if (!loadedIds.has(entry.id)) {
+      unloaded.push({ ...entry, slotIndex: null })
+    }
+  }
+  return unloaded.length === 0 ? loaded : [...unloaded, ...loaded]
 }
 
 /** Evenly spaced ticks across the whole thread, always including both ends and

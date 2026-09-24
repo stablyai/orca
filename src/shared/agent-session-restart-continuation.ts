@@ -5,9 +5,11 @@
 // would make the two lanes behave differently — and the wording is the part that tells an agent to
 // VERIFY its last action before repeating it. Both reasons point the same way.
 //
-// Sending this is ALWAYS a deliberate user action. Reconnecting never sends it, and the automatic
-// path never reaches this module: see `structured-agent-session-restart-resume-host`, where the
-// resume surface contains no send at all.
+// Sending this needs the user's OPT-IN, not their presence: the restart prompt's resume sends it,
+// and so does a launch the user ticked "resume automatically" for. That is acceptable because the
+// work being continued is the user's own, the wording above tells the agent to VERIFY its last
+// action before repeating it, and the launch reports what it did. Reattaching without a send
+// remains a separate operation that never comes here.
 
 export const AGENT_SESSION_RESTART_CONTINUATION_MESSAGE =
   "Orca restarted, so your previous reply was cut off partway through. Before continuing, check whether your most recent action completed — don't repeat it if it did. Then carry on."
@@ -24,3 +26,15 @@ export const AGENT_SESSION_RESTART_CONTINUATION_MESSAGE =
  */
 export const AGENT_SESSION_RESTART_CONTINUATION_NOTE =
   'Orca asked this agent to continue after a restart. Your own prompt was not re-sent.'
+
+/** Host-authored notes left in a chat the continuation did not carry on, so the chat itself says
+ *  what happened and what to do. The next message the user sends is the manual continuation. */
+export const AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE =
+  "Orca couldn't continue this chat after the restart. Send a message to continue it."
+export const AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE =
+  "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message."
+
+/** For a chat Orca could not get hold of. Why decides the fix, which the restart list gives; advice
+ *  to send a message would meet the same refusal. */
+export const AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE =
+  "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue."

@@ -9,7 +9,8 @@ import {
   shellScreenRouteKey
 } from '../../../../../src/mobile-web-shell/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { useMobileWebShellEnabled } from '../../../../../src/mobile-web-shell/use-mobile-web-shell-enabled'
+import { ShellSwitchPendingScreen } from '../../../../../src/mobile-web-shell/ShellSwitchPendingScreen'
+import { useShellSwitchDecision } from '../../../../../src/mobile-web-shell/shell-switch-decision'
 
 /**
  * The file preview, from the desktop's bundle or from this app.
@@ -41,7 +42,6 @@ export default function MobileFilePreviewRoute() {
     worktreeName?: string | string[]
   }>()
   const route = normalizeMobileFilePreviewRouteParams(params)
-  const enabled = useMobileWebShellEnabled()
   const native = <MobileFilePreviewScreen route={route} />
 
   const shellRoute = route.ok
@@ -53,7 +53,14 @@ export default function MobileFilePreviewRoute() {
       })
     : null
 
-  if (enabled !== true || !route.ok || shellRoute === null) {
+  const decision = useShellSwitchDecision(shellRoute)
+
+  if (decision.kind === 'pending') {
+    return <ShellSwitchPendingScreen />
+  }
+  // `route.ok` again for the compiler: `shellRoute` is built only on the ok branch, so a `shell`
+  // decision already implies it.
+  if (decision.kind === 'native' || !route.ok) {
     return native
   }
   // Keyed on the whole route, params included, for two reasons. A host captures the grants its
@@ -63,9 +70,9 @@ export default function MobileFilePreviewRoute() {
   // was opened on, with nothing to tell it otherwise.
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey(shellRoute)}
+      key={shellScreenRouteKey(decision.route)}
       hostId={route.params.hostId}
-      route={shellRoute}
+      route={decision.route}
       fallback={native}
     />
   )

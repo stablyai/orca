@@ -3,14 +3,26 @@ import { fileURLToPath } from 'node:url'
 
 const BOOT_IMAGE = 'https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-21'
 const SHAPES = {
-  staging: { project: 'onorca-cloud-staging', cells: { 'staging-gce-c4': 'asia-east2-a' } },
+  staging: {
+    project: 'onorca-cloud-staging',
+    databasePoolMax: 10,
+    cells: { 'staging-gce-c4': 'asia-east2-a' },
+    waves: [['staging-gce-c4']]
+  },
   production: {
     project: 'onorca-cloud',
+    databasePoolMax: 16,
     cells: {
       'production-gce-c27': 'asia-east2-a',
       'production-gce-c28': 'asia-east2-b',
-      'production-gce-c29': 'asia-east2-c'
-    }
+      'production-gce-c29': 'asia-east2-c',
+      'production-gce-c30': 'asia-east2-a'
+    },
+    // The launch set, then each later additive cell; a plan targets one wave, never live cells.
+    waves: [
+      ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
+      ['production-gce-c30']
+    ]
   }
 }
 
@@ -46,8 +58,10 @@ export function prepareRelayAsiaTopologyInput({
   const shape = SHAPES[environment]
   if (!shape) throw new Error('invalid environment')
   const requested = cellIds.split(',').map((value) => value.trim()).filter(Boolean).sort()
-  const expected = Object.keys(shape.cells).sort()
-  if (new Set(requested).size !== requested.length || JSON.stringify(requested) !== JSON.stringify(expected)) {
+  const expected = shape.waves
+    .map((wave) => [...wave].sort())
+    .find((wave) => JSON.stringify(wave) === JSON.stringify(requested))
+  if (new Set(requested).size !== requested.length || !expected) {
     throw new Error('cell IDs do not match the reviewed Asia topology')
   }
   const prefix = `us-central1-docker.pkg.dev/${shape.project}/orca-cloud/relay@sha256:`
@@ -76,7 +90,7 @@ export function prepareRelayAsiaTopologyInput({
       boot_disk_gb: 30,
       boot_image: BOOT_IMAGE,
       capacity_requests: 6_000,
-      database_pool_max: 10,
+      database_pool_max: shape.databasePoolMax,
       image,
       initially_enabled: false,
       connection_hard_cap: 3_000,

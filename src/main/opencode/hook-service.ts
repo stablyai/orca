@@ -51,8 +51,13 @@ function toSafeDirName(id: string): string {
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
+// Both major versions install as `opencode`; let the loader choose server() or setup().
 export function getOpenCodePluginSource(): string {
-  return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
+  return getOpenCodeFamilyPluginSource('/hook/opencode', {
+    emitSessionStart: true,
+    emitNextEvents: true,
+    expectedAgent: 'opencode'
+  })
 }
 
 export function getOpenCode2PluginSource(): string {
@@ -64,7 +69,11 @@ export function getOpenCode2PluginSource(): string {
 
 export function getOpenCodeFamilyPluginSource(
   hookPathname: string,
-  options: { emitSessionStart: boolean; emitNextEvents?: boolean }
+  options: {
+    emitSessionStart: boolean
+    emitNextEvents?: boolean
+    expectedAgent?: 'opencode' | 'opencode2'
+  }
 ): string {
   // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [

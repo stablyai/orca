@@ -182,6 +182,7 @@ Fonctionne avec **n'importe quel agent CLI** — s'il tourne dans un terminal, i
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" alt="Logo Grok" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://cursor.com/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=cursor.com&sz=64" alt="Logo Cursor" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
   <a href="https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" alt="Logo GitHub Copilot" width="16" valign="middle" /> GitHub Copilot</kbd></a> &nbsp;
+  <a href="https://dev.meta.ai/docs/muse-code"><kbd><img src="../../src/shared/agent-icons/muse.png" alt="Logo Muse" width="16" valign="middle" /> Muse</kbd></a> &nbsp;
   <a href="https://opencode.ai/docs/cli/"><kbd><img src="https://www.google.com/s2/favicons?domain=opencode.ai&sz=64" alt="Logo OpenCode" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
   <a href="https://mimo.xiaomi.com/coder"><kbd><img src="https://www.google.com/s2/favicons?domain=mimo.xiaomi.com&sz=64" alt="Logo MiMo Code" width="16" valign="middle" /> MiMo Code</kbd></a> &nbsp;
   <a href="https://ampcode.com/manual#install"><kbd><img src="https://www.google.com/s2/favicons?domain=ampcode.com&sz=64" alt="Logo Amp" width="16" valign="middle" /> Amp</kbd></a> &nbsp;
@@ -243,9 +244,9 @@ Associez-la à l'app de bureau pour surveiller et piloter vos agents depuis votr
 
 - **Discord :** Rejoignez la communauté sur **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X :** Suivez **[@orca_build](https://x.com/orca_build)** pour les news et annonces.
-- **WeChat :** Scannez pour rejoindre le groupe WeChat 9 de la communauté Orca.
+- **WeChat :** Scannez pour rejoindre le groupe WeChat 10 de la communauté Orca.
 
-  <img src="../assets/wechat-qr-group9.jpg" alt="QR code WeChat groupe 9 de la communauté Orca" width="160" />
+  <img src="../assets/wechat-qr-group10.jpg" alt="QR code WeChat groupe 10 de la communauté Orca" width="160" />
 
 - **Feedback &amp; idées :** On ship vite. Il manque quelque chose ? [Demandez une feature](https://github.com/stablyai/orca/issues).
 - **Confidentialité :** Voir la [doc confidentialité &amp; télémétrie](https://www.onorca.dev/docs/telemetry) pour ce qu'Orca collecte en anonyme et comment désactiver la télémétrie.

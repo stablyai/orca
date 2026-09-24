@@ -60,8 +60,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   supportsLocation = supportsClaudeStructuredLocation
 
-  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = () =>
-    this.deps.readTranscriptLeaf ? { supported: true } : { supported: false, reason: 'unsupported' }
+  // Orca's marker-based rewind proof can never pass on the real binary; rewind returns via a fork.
+  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = () => ({
+    supported: false,
+    reason: 'unsupported'
+  })
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireClaudeSession({
@@ -133,9 +136,14 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         settleClaudeExitedSession(exit.session)
         return
       }
-      // Persist the transcript-derived cursor before publishing the lifecycle
+      // Persist the last completed turn before publishing the lifecycle
       // event that lets the host release and reacquire this exact child.
-      await persistClaudeSessionHandle(sessionId, exit.session, this.deps).catch(() => undefined)
+      await persistClaudeSessionHandle(sessionId, exit.session, this.deps).catch(
+        (error: unknown) => {
+          // Recovery still publishes: the record keeps its last durable point, and the loss is logged.
+          console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
+        }
+      )
       if (this.exits.get(sessionId) !== exit) {
         settleClaudeExitedSession(exit.session)
         return
@@ -280,7 +288,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       ...(this.deps.persistHandle ? { persistHandle: this.deps.persistHandle } : {}),
-      ...(this.deps.readTranscriptLeaf ? { readTranscriptLeaf: this.deps.readTranscriptLeaf } : {}),
       ...(this.deps.onBackgroundTasksChanged
         ? { onBackgroundTasksChanged: this.deps.onBackgroundTasksChanged }
         : {}),

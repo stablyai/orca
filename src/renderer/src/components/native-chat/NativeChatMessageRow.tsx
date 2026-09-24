@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef } from 'react'
+import { Goal } from 'lucide-react'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
@@ -8,7 +9,7 @@ import type {
   NativeChatMessage,
   NativeChatToolCallBlock
 } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from './native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
@@ -33,12 +34,13 @@ export const MessageRow = memo(function MessageRow({
   revealedDiff,
   expandSignal,
   activeTurnIsWorking,
+  trailingRun,
   onScrollMessageToTop,
   onLinkClick,
   allowFileUriLinks = false,
   deliveryFailed = false,
-  activityExpandOverride,
   structuredActivityUi = true,
+  folded = false,
   runtimeContext
 }: {
   message: NativeChatMessage
@@ -47,13 +49,16 @@ export const MessageRow = memo(function MessageRow({
   revealedDiff?: NativeChatDiffReveal
   expandSignal: boolean
   activeTurnIsWorking?: boolean
+  /** This row's tool run is the turn's last, so it is the one still live. */
+  trailingRun?: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   deliveryFailed?: boolean
-  activityExpandOverride?: boolean
   structuredActivityUi?: boolean
+  /** Behind a folded turn: the row keeps only what outlives the turn. */
+  folded?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
@@ -82,6 +87,12 @@ export const MessageRow = memo(function MessageRow({
     subagentGroups.length === 0 &&
     backgroundTasks.length === 0
   ) {
+    return null
+  }
+
+  // Behind a folded turn this row is the work, not the answer. Rows that outlive
+  // their turn never reach here — the fold leaves them out.
+  if (folded) {
     return null
   }
 
@@ -141,6 +152,12 @@ export const MessageRow = memo(function MessageRow({
             />
           )}
         </div>
+        {message.sentAs === 'goal' ? (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Goal className="size-3" aria-hidden />
+            <span>{translate('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
+          </div>
+        ) : null}
         <NativeChatMessageTimestamp
           timestamp={message.timestamp}
           focusable
@@ -199,8 +216,8 @@ export const MessageRow = memo(function MessageRow({
           subagentGroups={subagentGroups}
           backgroundTasks={backgroundTasks}
           expandSignal={expandSignal}
-          expandOverride={activityExpandOverride}
           activeTurnIsWorking={activeTurnIsWorking}
+          trailing={trailingRun}
           structuredActivityUi={structuredActivityUi}
           disclosureId={message.id}
         />

@@ -15,7 +15,7 @@ import {
 } from '../../../../shared/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
+import { NATIVE_CHAT_INITIAL_LIMIT, type NativeChatOlderPageResult } from './native-chat-pagination'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
 export type StructuredAgentSessionReadSnapshot = {
@@ -28,7 +28,7 @@ export type StructuredAgentSessionReadOwner = {
   activate: () => () => void
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
-  loadOlder: () => Promise<void>
+  loadOlder: () => Promise<NativeChatOlderPageResult>
   subscribe: (listener: () => void) => () => void
 }
 
@@ -166,6 +166,55 @@ function createReadOwner(
     }
   }
 
+  let olderPage: { shouldStop: () => boolean; promise: Promise<NativeChatOlderPageResult> } | null =
+    null
+  const readOlderPage = async (shouldStop: () => boolean): Promise<NativeChatOlderPageResult> => {
+    try {
+      // A live batch can head-trim past the anchor mid-read, and the reducer drops
+      // that page rather than leave a hole in the transcript. Re-anchor and retry.
+      for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
+        const cursor = oldestStructuredAgentSessionCursor(snapshot.state)
+        if (shouldStop()) {
+          return 'superseded'
+        }
+        if (!cursor) {
+          return 'exhausted'
+        }
+        const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
+          target,
+          'agentSession.history',
+          { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
+        )
+        if (shouldStop()) {
+          return 'superseded'
+        }
+        if (!result.ok) {
+          return 'failed'
+        }
+        // The reducer drops a page whose anchor slid, so only an intact anchor lands.
+        if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence === cursor.sequence) {
+          apply({ type: 'older-page', requestedCursor: cursor, page: result.page })
+          if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence !== cursor.sequence) {
+            return 'applied'
+          }
+          return snapshot.state.hasOlder ? 'unchanged' : 'exhausted'
+        }
+      }
+      return 'unchanged'
+    } catch (error) {
+      if (shouldStop()) {
+        return 'superseded'
+      }
+      // An unattached session is the live transport's subject, not this page's: it re-asks and
+      // decides. A page that refused that way must not put the pane in an error state the
+      // transport is about to clear.
+      if (!isUnattachedAgentSessionReadRefusal(error)) {
+        apply({ type: 'error', message: String(error) })
+      }
+      return 'failed'
+    }
+  }
+
   const start = (): void => {
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
@@ -214,53 +263,32 @@ function createReadOwner(
       stopActiveRun?.()
     },
     getSnapshot: () => snapshot,
-    loadOlder: async () => {
+    loadOlder: () => {
+      // Concurrent callers (scroll-to-top, the button, a rail jump) share one page
+      // and its result rather than reading a refusal as "no progress".
+      if (olderPage && !olderPage.shouldStop()) {
+        return olderPage.promise
+      }
       const shouldStop = captureActiveHistoryReadGuard()
       if (shouldStop()) {
-        return
+        return Promise.resolve('superseded')
       }
-      if (
-        !oldestStructuredAgentSessionCursor(snapshot.state) ||
-        !snapshot.state.hasOlder ||
-        snapshot.loadingOlder
-      ) {
-        return
+      if (!oldestStructuredAgentSessionCursor(snapshot.state) || !snapshot.state.hasOlder) {
+        return Promise.resolve('exhausted')
       }
       setSnapshot({ ...snapshot, loadingOlder: true })
-      try {
-        // A live batch can head-trim past the anchor mid-read, and the reducer drops
-        // that page rather than leave a hole in the transcript. Re-anchor and retry.
-        for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
-          const cursor = oldestStructuredAgentSessionCursor(snapshot.state)
-          if (!cursor || shouldStop()) {
-            return
-          }
-          const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
-            target,
-            'agentSession.history',
-            { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
-          )
-          if (shouldStop() || !result.ok) {
-            return
-          }
-          // The reducer drops a page whose anchor slid, so only an intact anchor lands.
-          if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence === cursor.sequence) {
-            apply({ type: 'older-page', requestedCursor: cursor, page: result.page })
-            return
-          }
+      const page = { shouldStop, promise: readOlderPage(shouldStop) }
+      olderPage = page
+      void page.promise.finally(() => {
+        if (olderPage !== page) {
+          return
         }
-      } catch (error) {
-        // An unattached session is the live transport's subject, not this page's: it re-asks and
-        // decides. A page that refused that way must not put the pane in an error state the
-        // transport is about to clear.
-        if (!shouldStop() && !isUnattachedAgentSessionReadRefusal(error)) {
-          apply({ type: 'error', message: String(error) })
-        }
-      } finally {
+        olderPage = null
         if (!shouldStop()) {
           clearLoadingOlder()
         }
-      }
+      })
+      return page.promise
     },
     subscribe: (listener) => {
       listeners.add(listener)

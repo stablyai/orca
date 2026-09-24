@@ -24,6 +24,7 @@ import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-sessi
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
@@ -40,6 +41,7 @@ import {
   paramsFor,
   resetOperationIds,
   REWIND_METHOD,
+  CONVERSATION_OUTLINE_METHOD,
   STATUS_FEED_METHOD,
   sendParams,
   SESSION,
@@ -275,6 +277,11 @@ describe('cross-version structured agent sessions', () => {
         expect(build.capabilities.includes(AGENT_SESSION_REWIND_RUNTIME_CAPABILITY)).toBe(
           build.methodNames.includes(REWIND_METHOD)
         )
+        // The message rail probes this before asking, so an older host leaves it on loaded
+        // messages instead of answering method_not_found.
+        expect(
+          build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
+        ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
       }
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.

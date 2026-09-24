@@ -10,12 +10,20 @@ function createSessionScope(): number {
 }
 
 let sessionGenerationBase = 0
+// Why: a removed target's id can come back (runtime-owned VM targets derive it from the runtime id); its
+// replacement must start above every generation the prior incarnation handed out, or a delayed
+// mutation from the old VM passes the stale-host fence. One scope-wide floor keeps that O(1).
+let forgottenGenerationFloor = 0
 let sessionInitialized = false
 const connectionGenerationByTarget = new Map<string, number>()
 const usedSessionScopes = new Set<number>()
 
-/** Permanent target removal makes its reconnect fence unreachable; release its key. */
+/** Permanent target removal makes its reconnect fence unreachable; release its key but keep its floor. */
 export function forgetSshConnectionGeneration(targetId: string): void {
+  const generation = connectionGenerationByTarget.get(targetId)
+  if (generation !== undefined && generation > forgottenGenerationFloor) {
+    forgottenGenerationFloor = generation
+  }
   connectionGenerationByTarget.delete(targetId)
 }
 
@@ -24,12 +32,16 @@ export function getSshConnectionGenerationEntryCountForTests(): number {
   return connectionGenerationByTarget.size
 }
 
+export function isSshConnectionGenerationInCurrentSession(generation: number): boolean {
+  return (
+    Number.isSafeInteger(generation) &&
+    generation >= sessionGenerationBase &&
+    generation - sessionGenerationBase < SESSION_COUNTER_STRIDE
+  )
+}
+
 function assertGenerationInCurrentSession(generation: number): void {
-  if (
-    !Number.isSafeInteger(generation) ||
-    generation < sessionGenerationBase ||
-    generation - sessionGenerationBase >= SESSION_COUNTER_STRIDE
-  ) {
+  if (!isSshConnectionGenerationInCurrentSession(generation)) {
     throw new Error('SSH connection generation exhausted for this runtime session')
   }
 }
@@ -45,12 +57,13 @@ export function initializeSshConnectionGenerationSession(): void {
   const sessionScope = createSessionScope()
   // Why: randomize the process scope so a replacement HUB does not predictably reuse the prior target/counter token.
   sessionGenerationBase = sessionScope * SESSION_COUNTER_STRIDE
+  forgottenGenerationFloor = sessionGenerationBase
   usedSessionScopes.add(sessionScope)
   sessionInitialized = true
 }
 
 export function advanceSshConnectionGeneration(targetId: string): number {
-  let next = getSshConnectionGeneration(targetId) + 1
+  let next = Math.max(getSshConnectionGeneration(targetId), forgottenGenerationFloor) + 1
   if (next - sessionGenerationBase >= SESSION_COUNTER_STRIDE) {
     let nextSessionScope =
       (sessionGenerationBase / SESSION_COUNTER_STRIDE + 1) % (MAX_SESSION_SCOPE + 1)
@@ -59,6 +72,7 @@ export function advanceSshConnectionGeneration(targetId: string): number {
     }
     usedSessionScopes.add(nextSessionScope)
     sessionGenerationBase = nextSessionScope * SESSION_COUNTER_STRIDE
+    forgottenGenerationFloor = sessionGenerationBase
     // Why: changing the scope must revoke tokens for every target, not only the target that exhausted its counter.
     connectionGenerationByTarget.clear()
     next = sessionGenerationBase + 1
@@ -78,6 +92,7 @@ export function resetSshConnectionGenerations(sessionScope = 0): void {
     throw new Error('Invalid SSH connection generation session scope')
   }
   sessionGenerationBase = sessionScope * SESSION_COUNTER_STRIDE
+  forgottenGenerationFloor = sessionGenerationBase
   sessionInitialized = true
   connectionGenerationByTarget.clear()
   usedSessionScopes.clear()

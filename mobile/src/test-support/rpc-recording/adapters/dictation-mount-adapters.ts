@@ -1,27 +1,9 @@
-import type { MountAdapter, MountContext } from '../recording-scenario'
+import type { MountAdapter } from '../recording-scenario'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const DICTATION_ID = 'dictation-1'
 const MODEL_ID = 'whisper-small'
-
-/** The keep-awake owner the desktop-start flow serializes against; acquire/release are observed. */
-function keepAwakeOwner(effect: MountContext['effect']) {
-  return {
-    acquire: (id: string) => {
-      effect('keep-awake-acquire', { id })
-      return Promise.resolve()
-    },
-    release: (id?: string) => {
-      effect('keep-awake-release', { id: id ?? null })
-      return Promise.resolve()
-    },
-    reacquire: (id: string) => {
-      effect('keep-awake-reacquire', { id })
-      return Promise.resolve()
-    }
-  }
-}
 
 /**
  * The dictation setup sheet's four senders, the desktop session handshake, one audio chunk, and
@@ -95,10 +77,6 @@ export function dictationMountAdapters(
             setIdle: () => {
               idle = true
             },
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the owner members the start flow calls.
-            keepAwakeOwner: keepAwakeOwner(effect) as unknown as Parameters<
-              typeof start
-            >[0]['keepAwakeOwner'],
             commitRecordingStart: () => args.recording !== false,
             rollbackRecordingStart: () => effect('rollback-recording', {})
           }).then((value: unknown) => {

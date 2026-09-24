@@ -60,23 +60,25 @@ export class StructuredAgentSessionHolds {
     // Unconditional, not only on the first-holder edge: a second surface arriving during the grace
     // window must cancel the pending release too.
     this.clock.cancel(sessionId)
-    if (options.resume === false || this.deps.hasProviderChild(sessionId)) {
+    if (options.resume === false) {
       return
     }
-    try {
-      await this.deps.resume(sessionId)
-      if (!this.deps.hasProviderChild(sessionId)) {
-        throw new Error('agent_session_ownership_unknown')
+    if (!this.deps.hasProviderChild(sessionId)) {
+      try {
+        await this.deps.resume(sessionId)
+        if (!this.deps.hasProviderChild(sessionId)) {
+          throw new Error('agent_session_ownership_unknown')
+        }
+        // The last surface can disconnect before acquisition makes a child available to release.
+        if (!this.disposed && !this.holders.isHeld(sessionId)) {
+          this.clock.arm(sessionId)
+        }
+      } catch (error) {
+        if (!alreadyHeld && incarnation !== undefined) {
+          this.release(sessionId, holderId, incarnation)
+        }
+        throw error
       }
-      // The last surface can disconnect before acquisition makes a child available to release.
-      if (!this.disposed && !this.holders.isHeld(sessionId)) {
-        this.clock.arm(sessionId)
-      }
-    } catch (error) {
-      if (!alreadyHeld && incarnation !== undefined) {
-        this.release(sessionId, holderId, incarnation)
-      }
-      throw error
     }
   }
 

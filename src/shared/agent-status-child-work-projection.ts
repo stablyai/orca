@@ -1,5 +1,6 @@
 import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
 import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
+import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
 import type {
   AgentChildWorkKind,
   AgentChildWorkMembership,
@@ -56,12 +57,34 @@ function legacySubagentState(
   return null
 }
 
+/** A host-published background task as a projection candidate: the wire row already
+ *  speaks the child-work vocabulary, and a published task is live by definition. */
+export function agentChildWorkProjectionCandidateFromBackgroundTask(
+  task: AgentSessionBackgroundTask
+): AgentChildWorkLegacyProjectionCandidate {
+  return {
+    providerId: task.id,
+    child: {
+      kind: task.kind,
+      ...(task.state !== undefined ? { state: task.state } : {}),
+      membership: 'live',
+      firstObservedAt: task.startedAt ?? 0,
+      // Truthy, not present: an empty label carries no identity and would beat the
+      // `description ?? agentType ?? 'unknown'` fallbacks every child-row reader relies on.
+      ...(task.name ? { name: task.name, agentType: task.name } : {}),
+      ...(task.description ? { description: task.description } : {}),
+      ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
+      stoppable: task.stoppable ?? true
+    }
+  }
+}
+
 export function projectAgentChildWorkLegacySubagents(
   candidates: readonly AgentChildWorkLegacyProjectionCandidate[]
 ): AgentSubagentSnapshot[] | undefined {
   const projected: AgentSubagentSnapshot[] = []
   for (const candidate of candidates) {
-    if (candidate.child.kind !== 'agent') {
+    if (!isAgentChildWorkKind(candidate.child.kind)) {
       continue
     }
     const id = legacyProviderId(candidate.providerId)

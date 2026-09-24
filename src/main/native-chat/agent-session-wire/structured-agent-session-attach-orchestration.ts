@@ -1,4 +1,3 @@
-import type { StructuredAgentSessionAcquireInput } from './structured-agent-session-adapter'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 import { recoverInterruptedCompaction } from './structured-compaction-recovery'
 // The host's attach, lifted out of the host class.
@@ -39,8 +38,7 @@ export function attachStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
   params: AgentSessionAttachParams,
-  admitRecoveryTicket?: () => boolean,
-  rewind?: StructuredAgentSessionAcquireInput['rewind']
+  admitRecoveryTicket?: () => boolean
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   const run = (recordPhase?: AgentSessionCreatePhaseRecorder) =>
@@ -82,7 +80,6 @@ export function attachStructuredAgentSession(
         context.runtimeState.probeOwner(sessionId)
       )
       const attached = await performAttach({
-        rewind,
         store: context.deps.store,
         adapter: context.deps.adapter,
         journalRoot: context.deps.journalRoot,
@@ -155,16 +152,14 @@ export function attachStructuredAgentSession(
             hasProviderChild: true,
             acquisitionGeneration: acquisitionGeneration ?? previous?.acquisitionGeneration ?? null
           })
-          if (!rewind) {
-            await recoverStructuredRewind(
-              context.deps.store,
-              sessionId,
-              attached.journal,
-              fence,
-              context.deps.adapter,
-              context.now
-            )
-          }
+          await recoverStructuredRewind(
+            context.deps.store,
+            sessionId,
+            attached.journal,
+            fence,
+            context.deps.adapter,
+            context.now
+          )
           await recoverInterruptedCompaction(context.deps.store, sessionId, attached.journal, fence)
           if (attached.recovery) {
             context.subscribers.reset(sessionId, attached.journal, attached.recovery.reset, fence)

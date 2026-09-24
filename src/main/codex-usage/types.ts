@@ -1,5 +1,13 @@
 import type { CodexUsageRawUsage } from './codex-usage-token-delta'
 
+/** Tokens from requests whose prompt exceeded LONG_CONTEXT_THRESHOLD_TOKENS — a subset of the
+ *  matching totals beside them. Kept as counts so a pricing edit reprices history without a rescan. */
+export type CodexLongContextTokens = {
+  longContextInputTokens: number
+  longContextCachedInputTokens: number
+  longContextOutputTokens: number
+}
+
 export type CodexUsageProcessedFile = {
   path: string
   mtimeMs: number
@@ -41,7 +49,7 @@ export type CodexUsageLocationBreakdown = {
   reasoningOutputTokens: number
   totalTokens: number
   hasInferredPricing: boolean
-}
+} & CodexLongContextTokens
 
 export type CodexUsageModelBreakdown = {
   modelKey: string
@@ -53,7 +61,7 @@ export type CodexUsageModelBreakdown = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
-}
+} & CodexLongContextTokens
 
 export type CodexUsageLocationModelBreakdown = {
   locationKey: string
@@ -68,7 +76,7 @@ export type CodexUsageLocationModelBreakdown = {
   reasoningOutputTokens: number
   totalTokens: number
   hasInferredPricing: boolean
-}
+} & CodexLongContextTokens
 
 export type CodexUsageSession = {
   sessionId: string
@@ -90,7 +98,7 @@ export type CodexUsageSession = {
   locationBreakdown: CodexUsageLocationBreakdown[]
   modelBreakdown: CodexUsageModelBreakdown[]
   locationModelBreakdown: CodexUsageLocationModelBreakdown[]
-}
+} & CodexLongContextTokens
 
 export type CodexUsageDailyAggregate = {
   day: string
@@ -106,7 +114,7 @@ export type CodexUsageDailyAggregate = {
   reasoningOutputTokens: number
   totalTokens: number
   hasInferredPricing: boolean
-}
+} & CodexLongContextTokens
 
 export type CodexUsagePersistedFile = CodexUsageProcessedFile & {
   sessions: CodexUsageSession[]
@@ -153,7 +161,7 @@ export type CodexUsageParsedEvent = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
-}
+} & CodexLongContextTokens
 
 export type CodexUsageAttributedEvent = CodexUsageParsedEvent & {
   day: string

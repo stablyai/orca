@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
+  mainAgentStatusEqual,
   agentSubagentsEqual,
   isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
@@ -705,5 +706,58 @@ describe('WellKnownAgentType', () => {
   it('keeps AgentType open to custom agent names', () => {
     const custom: AgentType = 'some-in-house-agent'
     expect(custom).toBe('some-in-house-agent')
+  })
+})
+
+describe('the main agent field on a status payload', () => {
+  it('admits a well-formed main agent with its verdict only while the main agent is done', () => {
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"working","mainAgent":{"state":"done","outcome":"cancellation","stateStartedAt":5}}'
+      )?.mainAgent
+    ).toEqual({ state: 'done', outcome: 'cancellation', stateStartedAt: 5 })
+    // A verdict belongs to a finished turn; one riding on a live main agent state is stale.
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"working","mainAgent":{"state":"working","outcome":"failure","stateStartedAt":5}}'
+      )?.mainAgent
+    ).toEqual({ state: 'working', stateStartedAt: 5 })
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"done","mainAgent":{"state":"done","outcome":"maybe","stateStartedAt":5}}'
+      )?.mainAgent
+    ).toEqual({ state: 'done', stateStartedAt: 5 })
+  })
+
+  it('drops a malformed main agent but never the row it rides on', () => {
+    for (const mainAgent of [
+      '"done"',
+      '{"state":"running","stateStartedAt":5}',
+      '{"state":"done"}',
+      '{"state":"done","stateStartedAt":"5"}',
+      '{"stateStartedAt":5}',
+      'null'
+    ]) {
+      const parsed = parseAgentStatusPayload(
+        `{"state":"working","prompt":"keep me","mainAgent":${mainAgent}}`
+      )
+      expect(parsed, mainAgent).toMatchObject({ state: 'working', prompt: 'keep me' })
+      expect(parsed?.mainAgent, mainAgent).toBeUndefined()
+    }
+  })
+
+  it('is carried by the client-visible projection and compared structurally', () => {
+    const mainAgent = { state: 'done' as const, stateStartedAt: 7 }
+    expect(
+      pickParsedAgentStatusPayload({ state: 'working', prompt: '', mainAgent }).mainAgent
+    ).toEqual(mainAgent)
+    expect(pickParsedAgentStatusPayload({ state: 'working', prompt: '' })).not.toHaveProperty(
+      'mainAgent'
+    )
+    expect(mainAgentStatusEqual(mainAgent, { ...mainAgent })).toBe(true)
+    expect(mainAgentStatusEqual(mainAgent, { ...mainAgent, outcome: 'failure' })).toBe(false)
+    expect(mainAgentStatusEqual(mainAgent, { ...mainAgent, stateStartedAt: 8 })).toBe(false)
+    expect(mainAgentStatusEqual(undefined, undefined)).toBe(true)
+    expect(mainAgentStatusEqual(mainAgent, undefined)).toBe(false)
   })
 })

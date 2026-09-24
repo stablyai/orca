@@ -506,6 +506,20 @@ describe('runtime file client', () => {
     })
   })
 
+  it('sends the Explorer name filter to local listings only', async () => {
+    fsListFiles.mockResolvedValue([])
+    const local = { settings: {}, worktreeId: 'wt-1', worktreePath: '/repo' }
+
+    await listRuntimeFiles(local, { rootPath: '/repo', nameFilter: 'AppDelegate' })
+    await listRuntimeFiles(
+      { ...local, connectionId: 'ssh-1' },
+      { rootPath: '/repo', nameFilter: 'AppDelegate' }
+    )
+
+    expect(fsListFiles.mock.calls[0][0]).toMatchObject({ nameFilter: 'AppDelegate' })
+    expect(fsListFiles.mock.calls[1][0]).not.toHaveProperty('nameFilter')
+  })
+
   it('cancelRuntimeFileList aborts the IPC listing but not environment listings (#7721)', () => {
     cancelRuntimeFileList(
       {

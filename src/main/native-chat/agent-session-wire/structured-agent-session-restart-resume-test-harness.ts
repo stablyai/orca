@@ -1,6 +1,6 @@
 // Fixtures shared by the restart-resume suites: one durable record, one journal, one marker.
 //
-// Kept in one place so the predicate suite and the claim suite cannot drift into disagreeing about
+// Kept in one place so the predicate suite and the host suite cannot drift into disagreeing about
 // what a resumable session looks like — a divergence there would let one suite pass on a shape the
 // other rejects.
 

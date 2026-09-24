@@ -18,6 +18,7 @@ describe('RateLimitState', () => {
       grok: null,
       minimaxCookieConfigured: false,
       minimaxApiKeyConfigured: false,
+      opencodeGoApiKeyConfigured: false,
       grokAuthConfigured: false,
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },

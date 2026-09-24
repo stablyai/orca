@@ -6,6 +6,10 @@ import {
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge/bridge-envelope'
+import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge/bridge-page-client-identity'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
+import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
 import {
   BRIDGE_HAPTICS_GRANT,
   BRIDGE_HAPTICS_KINDS,
@@ -411,5 +415,98 @@ describe('haptics', () => {
     const init = bridge.last()
     expect(init.type === 'init' && init.grants.native).toContain(BRIDGE_HAPTICS_GRANT)
     expect(init.type === 'init' && init.grants.native).not.toContain(BRIDGE_HAPTICS_NOTIFY)
+  })
+})
+
+describe('the page erasing a one-shot route param', () => {
+  /**
+   * The reader erasing its own request (ruling 34). One page-to-shell frame, carried up to
+   * whoever holds the param; the comparison is theirs, so the host forwards both values as sent.
+   */
+  it('carries a page clear up with the param and the value it named', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({
+        type: 'notify',
+        name: BRIDGE_ROUTE_PARAM_CLEAR,
+        param: 'paneKey',
+        value: 'p-1'
+      })
+    )
+    expect(bridge.routeParamClears()).toEqual([{ param: 'paneKey', value: 'p-1' }])
+  })
+
+  it('carries no clear up from a page that has not asked for a session', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(
+      clientFrame({
+        type: 'notify',
+        name: BRIDGE_ROUTE_PARAM_CLEAR,
+        param: 'paneKey',
+        value: 'p-1'
+      })
+    )
+    expect(bridge.routeParamClears()).toEqual([])
+    expect(bridge.diagnostics).toEqual([
+      { kind: 'notify-refused', name: BRIDGE_ROUTE_PARAM_CLEAR, why: 'before-ready' }
+    ])
+  })
+
+  it('refuses a clear for a param the page may not erase', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: BRIDGE_ROUTE_PARAM_CLEAR, param: 'name', value: 'x' })
+    )
+    expect(bridge.routeParamClears()).toEqual([])
+    expect(bridge.diagnostics).toEqual([{ kind: 'refused', refusal: 'unrecognised-message' }])
+  })
+
+  it('tells the page it takes a clear, so a page built for an older shell does not post one', () => {
+    const bridge = harness({ route: { pathname: '/h/host-a/session/wt-1' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const init = bridge.last()
+    // Written out rather than compared against `BRIDGE_SHELL_ACCEPTS`: a list that pins itself
+    // pins nothing, and this is the frame an older page reads to decide what it may post.
+    expect(init.type === 'init' && init.accepts).toEqual([
+      BRIDGE_ROUTE_PARAM_CLEAR,
+      BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT,
+      BRIDGE_PAGE_PAINTED,
+      BRIDGE_BACK_CLAIM_NOTIFY
+    ])
+  })
+})
+
+/**
+ * The page's word about its own document, which is the only thing that says the view is worth
+ * uncovering: a document commit is the WebView's, and `ready` is posted before a tree is built.
+ */
+describe('the page reporting its first frame', () => {
+  it('hands the report to the session and asks the client for nothing', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }))
+    bridge.host.receive(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(bridge.pagePaintCount()).toBe(1)
+    expect(bridge.client.requests).toHaveLength(0)
+    expect(bridge.client.foregroundCalls).toHaveLength(0)
+  })
+
+  it('forwards what each ready declared, including a name this shell does not implement', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED, 'weather'] }))
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    expect(bridge.pageReports()).toEqual([[BRIDGE_PAGE_PAINTED, 'weather'], []])
+  })
+
+  it('refuses a report from a document nothing has answered', () => {
+    const bridge = harness()
+    bridge.host.receive(clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }))
+    expect(bridge.pagePaintCount()).toBe(0)
+    expect(bridge.diagnostics).toContainEqual({
+      kind: 'notify-refused',
+      name: BRIDGE_PAGE_PAINTED,
+      why: 'before-ready'
+    })
   })
 })

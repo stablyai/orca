@@ -1,13 +1,15 @@
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity
+  AgentJournalItemIdentity,
+  AgentJournalProducerLinkage
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
+import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
 
 export type StructuredAgentSessionSinkAdmission =
@@ -23,7 +25,9 @@ export type StructuredAgentSessionSinkState = {
 
 export type StructuredAgentSessionSinkBarrier = { ok: true } | { ok: false; error: unknown }
 
-export type StructuredAgentSessionAppendOptions = {
+/** Linkage a producer stamps on the rows it writes. Absent on every append the
+ *  session's own agent makes, which is what makes absence mean root. */
+export type StructuredAgentSessionAppendOptions = AgentJournalProducerLinkage & {
   /** Pending checkpoints with this key replace one another before they run. */
   coalescingKey?: string
   /** Marks a critical lifecycle operation for lifecycle barriers and diagnostics. */
@@ -175,6 +179,7 @@ export function createDeferredStructuredAgentSessionEventSink(
           bound.journal.appendLifecycleBatch({
             settlementId,
             mutations,
+            // Linkage is deliberately not forwarded: see the batch row builder.
             fence: bound.fence
           })
       },
@@ -201,10 +206,11 @@ export function createDeferredStructuredAgentSessionEventSink(
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
             run: (bound) =>
-              bound.journal.appendItem(identity, body, {
-                fence: bound.fence,
-                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
-              })
+              bound.journal.appendItem(
+                identity,
+                body,
+                structuredAgentSessionJournalAppendOptions(bound.fence, options)
+              )
           },
           options
         )
@@ -215,10 +221,11 @@ export function createDeferredStructuredAgentSessionEventSink(
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
             run: (bound) =>
-              bound.journal.appendItem(identity, body, {
-                fence: bound.fence,
-                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
-              })
+              bound.journal.appendItem(
+                identity,
+                body,
+                structuredAgentSessionJournalAppendOptions(bound.fence, options)
+              )
           },
           options
         ),

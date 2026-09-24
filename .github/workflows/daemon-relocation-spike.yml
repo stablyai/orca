@@ -57,10 +57,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dist/win-unpacked
-          # mobile/ is in the key because beforePack requires out/mobile-web, whose bytes come from
-          # the mobile install and, once Phase C flips the bundle, from the page trees below; a
-          # mobile-only change must miss this cache, not reuse a stale installer. src/** and
-          # config/** already cover src/mobile-web and the two bundle builders.
+          # mobile/ is in the key because beforePack requires out/mobile-web, whose bytes are the
+          # page built from the mobile install and the page trees below; a mobile-only change must
+          # miss this cache, not reuse a stale installer. config/** already covers the builder, the
+          # verifier and the manifest writer.
           key: >-
             win-unpacked-${{ hashFiles(
               'src/**',

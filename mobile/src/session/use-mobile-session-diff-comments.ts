@@ -60,7 +60,10 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
   )
 
   useEffect(() => {
-    void loadDiffComments()
+    // Caught here and not in the loader: a *rejected* `worktree.show` would otherwise be an
+    // unhandled rejection on every mount, and the loader's own promise is awaited by the recording
+    // adapter, which a swallowed rejection inside it would hide.
+    void loadDiffComments().catch(() => undefined)
   }, [loadDiffComments])
 
   const addDiffCommentForFile = useCallback(

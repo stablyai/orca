@@ -96,14 +96,13 @@ export type ClaudeStructuredSessionAdapterDeps = {
     leafUuid: string | null
     fence: number
   }) => Promise<void>
-  /** Read the durable transcript branch after a child has flushed its final rows. */
-  readTranscriptLeaf?: (input: {
+  /** Advance the durable resume point in place at a turn end; bookkeeping, never a turn failure. */
+  persistResumePoint?: (input: {
+    sessionId: string
     providerSessionId: string
-    previousLeafUuid: string | null
-    intentionalRewindUuid?: string
-    /** Account-scoped Claude config root that owns this provider session. */
-    claudeConfigDir: string
-  }) => Promise<string | null>
+    leafUuid: string
+    fence: number
+  }) => Promise<void>
 }
 
 export type ClaudeDispatchWaiter = {
@@ -128,9 +127,10 @@ export type ClaudeDispatchWaiter = {
 export type ClaudeSession = {
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
-  /** Durable transcript files live under this account's `projects` directory. */
-  claudeConfigDir: string
+  /** Latest main-chain message seen on the live stream, mid-turn included. */
   leafUuid: string | null
+  /** `leafUuid` at the last completed turn; the only leaf close and exit persist. */
+  turnEndLeafUuid: string | null
   fence: number
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
@@ -160,6 +160,8 @@ export type ClaudeSession = {
   dispatchSequence: number
   /** Fences overlapping option writes so a late completion cannot restore stale state. */
   optionMutationSequence: number
+  /** Latest resume point written at a turn end; close and exit persist after it settles. */
+  resumePointWrite?: { leafUuid: string; settled: Promise<void> }
   /** Shared durable-close write; a failed write clears this for a retry. */
   closePersistence?: Promise<void>
   /** Shared full close/finalization operation; a failed operation clears this for a retry. */

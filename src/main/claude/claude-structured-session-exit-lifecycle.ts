@@ -1,4 +1,4 @@
-import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
+import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import type {
   ClaudeSession,
   ClaudeSessionExit,
@@ -30,27 +30,13 @@ export async function drainClaudeObservedExits(
 export async function persistClaudeSessionHandle(
   sessionId: string,
   session: ClaudeSession,
-  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'readTranscriptLeaf' | 'persistHandle'>
+  deps: Pick<ClaudeStructuredSessionAdapterDeps, 'persistHandle'>
 ): Promise<void> {
-  try {
-    const transcriptLeaf = deps.readTranscriptLeaf
-      ? await readClaudeTranscriptLeafWithReproof({
-          readTranscriptLeaf: deps.readTranscriptLeaf,
-          providerSessionId: session.providerSessionId,
-          previousLeafUuid: session.leafUuid,
-          claudeConfigDir: session.claudeConfigDir
-        })
-      : null
-    if (transcriptLeaf) {
-      session.leafUuid = transcriptLeaf
-    }
-  } catch {
-    // An unavailable tail must not overwrite the last observed leaf.
-  }
+  const leafUuid = await settledClaudeTurnEndLeaf(session)
   await deps.persistHandle?.({
     sessionId,
     providerSessionId: session.providerSessionId,
-    leafUuid: session.leafUuid,
+    leafUuid,
     fence: session.fence
   })
 }

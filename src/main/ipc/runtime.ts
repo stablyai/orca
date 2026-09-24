@@ -52,7 +52,10 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.handle('runtime:getStatus', (): RuntimeStatus => {
+  ipcMain.handle('runtime:getStatus', async (): Promise<RuntimeStatus> => {
+    // Why: same capped wait as `status.get`, so the renderer caption sees the friendly name unless
+    // the lookup is still running; it refetches status and picks the name up on the next read.
+    await runtime.machineNameReady()
     return runtime.getStatus()
   })
 

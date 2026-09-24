@@ -25,7 +25,16 @@ const SONNET_LONG_CONTEXT_PRICING = {
 } satisfies Partial<ClaudeModelPricing>
 
 const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
+  // Why: Fable 5.1 keeps Fable 5's rates except cache reads, which drop to $0.25.
+  'claude-fable-5-1': {
+    input: 10,
+    output: 50,
+    cacheRead: 0.25,
+    cacheWrite: 12.5,
+    cacheWrite1h: 20
+  },
   'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, cacheWrite1h: 20 },
+  'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5, cacheWrite1h: 8 },
   'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
   // Why: Sonnet 5 bills its full 1M window at flat rates, so no long-context tier here.
   // Why: $2/$10 needs no date dimension — it launched as introductory pricing through
@@ -105,8 +114,16 @@ function normalizeModelForPricing(model: string | null): string | null {
     return alias
   }
   const normalized = lower.replace(/\./g, '-')
+  // Why: point releases must match before their major, whose pattern also accepts `-5-1`/`-5-5`;
+  // a trailing letter (e.g. `-1m`) is not a point release.
+  if (/fable-5-1(?:$|[^0-9a-z])/.test(normalized)) {
+    return 'claude-fable-5-1'
+  }
   if (/fable-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-fable-5'
+  }
+  if (/opus-5-5(?:$|[^0-9a-z])/.test(normalized)) {
+    return 'claude-opus-5-5'
   }
   if (/opus-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-5'

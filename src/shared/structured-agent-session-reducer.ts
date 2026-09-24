@@ -119,6 +119,26 @@ function mergeItems(
   return [...byId.values()].sort((left, right) => left.sequence - right.sequence)
 }
 
+/**
+ * Live rows the loaded window can take. The window is a contiguous suffix of the
+ * journal, and its oldest row is the load-older anchor. A revision of a row older
+ * than the window keeps that row's original sequence, so admitting it would move
+ * the anchor below the window and paging `before` it would skip every row between.
+ * The journal keeps the revision; the page reader serves it once the window
+ * reaches the row. With nothing older on the host the window is the whole journal
+ * and a row below the head (a revived tombstone) leaves no hole, so it is admitted.
+ */
+function liveItemsWithinWindow(
+  state: StructuredAgentSessionState,
+  incoming: readonly AgentJournalRenderItem[]
+): readonly AgentJournalRenderItem[] {
+  const head = state.items[0]
+  if (!head || !state.hasOlder) {
+    return incoming
+  }
+  return incoming.filter((item) => item.sequence >= head.sequence)
+}
+
 function trimRetainedItems(
   items: AgentJournalRenderItem[],
   limit: number
@@ -220,8 +240,9 @@ export function reduceStructuredAgentSession(
   const backgroundTasks =
     event.backgroundTasks !== undefined ? event.backgroundTasks : state.backgroundTasks
   const activity = event.activity !== undefined ? event.activity : state.activity
+  const liveItems = liveItemsWithinWindow(state, event.batch.items)
   const journalUnchanged =
-    event.batch.items.length === 0 &&
+    liveItems.length === 0 &&
     event.batch.removedItemIds.length === 0 &&
     event.batch.submissions.length === 0
   if (
@@ -240,7 +261,7 @@ export function reduceStructuredAgentSession(
   }
   const merged = journalUnchanged
     ? state.items
-    : mergeItems(state.items, event.batch.items, event.batch.removedItemIds)
+    : mergeItems(state.items, liveItems, event.batch.removedItemIds)
   const items = trimRetainedItems(merged, state.retainedItemLimit)
   return {
     ...state,

@@ -240,6 +240,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
     // Why: agent-browser's CDP printToPDF hangs in Electron webviews — use the native webContents.printToPDF().
+    // Printing lays the page out afresh, so it works on an undrawn page and needs no paint hold.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {

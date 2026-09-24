@@ -31,6 +31,14 @@ import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
 } from '../../../../shared/new-workspace/worktree-create-collision'
+import {
+  AgentLaunchPaneAlreadyLiveError,
+  AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE
+} from '../../../../shared/agent-launch-pane-already-live'
+import {
+  AgentLaunchSessionAlreadyExistsError,
+  AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
+} from '../../../../shared/agent-launch-session-already-exists'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
@@ -87,7 +95,13 @@ async function agentLaunchIntent(
     target: await agentLaunchTarget(params, runtime),
     ...(params.prompt ? { prompt: params.prompt } : {}),
     ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),
-    ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {})
+    ...(params.reuseTerminal ? { reuseTerminal: params.reuseTerminal } : {}),
+    // `null` means "no arguments" and must survive; only absence falls back to the settings default.
+    ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {}),
+    ...(params.cwd ? { cwd: params.cwd } : {}),
+    ...(params.launchSource ? { launchSource: params.launchSource } : {}),
+    ...(params.paneKey ? { paneKey: params.paneKey } : {}),
+    ...(params.sessionId ? { sessionId: params.sessionId } : {})
   }
 }
 
@@ -188,6 +202,27 @@ function agentLaunchFailureCode(error: unknown): string {
   return code.length > 0 ? code.slice(0, LAUNCH_FAILURE_CODE_MAX_LENGTH) : 'agent_launch_failed'
 }
 
+/**
+ * Only a typed refusal raised before anything was created proves the claimed launch had no effects.
+ * A live reserved pane or an existing reserved session proves it only for an existing workspace; on
+ * create-worktree the workspace already exists by the time the surface is refused.
+ */
+function launchFailureWithoutEffectsCode(
+  error: unknown,
+  targetKind: AgentLaunchTarget['kind']
+): string | null {
+  if (error instanceof WorktreeCreateCollisionError) {
+    return WORKTREE_CREATE_COLLISION_CODE
+  }
+  if (error instanceof AgentLaunchPaneAlreadyLiveError && targetKind === 'existing') {
+    return AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE
+  }
+  if (error instanceof AgentLaunchSessionAlreadyExistsError && targetKind === 'existing') {
+    return AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
+  }
+  return null
+}
+
 type ActiveAgentLaunch = {
   fingerprint: string
   promise: Promise<AgentLaunchResult>
@@ -233,13 +268,13 @@ async function executeReplaySafeAgentLaunch(
     await settleQuietly(admission.fail(agentLaunchFailureCode(error)))
     throw error
   }
-  // Only a typed pre-creation collision proves that the claimed launch had no effects.
   let result: AgentLaunchResult
   try {
     result = await runAgentLaunch(intent, context, admission.attachOperationId, admission.callerKey)
   } catch (error) {
-    if (error instanceof WorktreeCreateCollisionError) {
-      await settleQuietly(admission.fail(WORKTREE_CREATE_COLLISION_CODE))
+    const failedWithoutEffects = launchFailureWithoutEffectsCode(error, intent.target.kind)
+    if (failedWithoutEffects) {
+      await settleQuietly(admission.fail(failedWithoutEffects))
     }
     throw new AgentLaunchExecutionError(error)
   }
@@ -291,6 +326,9 @@ export const AGENT_LAUNCH_METHODS = [
             throw Object.assign(new Error(error.cause.message, { cause: error.cause }), {
               code: WORKTREE_CREATE_COLLISION_CODE
             })
+          }
+          if (launchFailureWithoutEffectsCode(error.cause, params.target.kind)) {
+            throw error.cause
           }
           throw new Error('agent_session_operation_unknown', { cause: error.cause })
         }

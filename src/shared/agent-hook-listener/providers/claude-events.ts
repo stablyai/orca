@@ -17,8 +17,10 @@ import {
   normalizeClaudeSubagentLifecycleEvent
 } from './claude-lifecycle-events'
 import {
+  claudeMainAgentTurnInterrupted,
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
+  setClaudeMainAgentTurnState,
   updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
@@ -62,7 +64,8 @@ export function normalizeClaudeEvent(
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-    state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done' })
+    // Why: a new session's main agent starts its own clock, not the old session's last Stop.
+    setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: 'done',
       updateToolSnapshot: true,
@@ -75,8 +78,18 @@ export function normalizeClaudeEvent(
   const interrupted =
     isTurnBoundary &&
     ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
-      previousLead?.interrupted === true)
+      claudeMainAgentTurnInterrupted(previousLead))
       ? true
+      : undefined
+  // Why: absent means unknown — a plain Stop never becomes `success`, so a cancel can never read as a
+  // success. Current Claude sends NO hook on a cancel and no `is_interrupt` on Stop, so the
+  // cancellation normally arrives through Orca's own inferred interrupt
+  // (`markClaudeLeadTurnInterrupted`) and is carried forward here; `is_interrupt` on a turn
+  // boundary is kept as the secondary source for builds that do send it.
+  const outcome = interrupted
+    ? ('cancellation' as const)
+    : isTurnBoundary && eventName === 'StopFailure'
+      ? ('failure' as const)
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
   const sessionCrons = hookPayload['session_crons']
@@ -185,12 +198,15 @@ export function normalizeClaudeEvent(
     }
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
-    const restored = lead.stateBeforeWait ?? { state: 'working' as const }
-    state.claudeLeadStateByPaneKey.set(paneKey, restored)
+    const restored = setClaudeMainAgentTurnState(
+      state,
+      paneKey,
+      lead.stateBeforeWait ?? { state: 'working' as const }
+    )
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       ...resolveClaudePaneStatus(state, paneKey, restored),
       updateToolSnapshot: true,
-      interrupted: restored.interrupted,
+      interrupted: claudeMainAgentTurnInterrupted(restored),
       turnCompletedAt: restored.turnCompletedAt
     })
   }
@@ -223,7 +239,10 @@ export function normalizeClaudeEvent(
         ? previousLead.stateBeforeWait
         : {
             state: previousLead.state,
-            ...(previousLead.interrupted ? { interrupted: true as const } : {}),
+            // Why: the verdict and the main agent's own clock are that turn's facts; a child's permission
+            // pause after a cancelled turn must not erase them when the wait clears.
+            ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
+            stateStartedAt: previousLead.stateStartedAt,
             // Why: a child's permission pause displaces an already-finished lead; keep the end time so the later drain is still that turn's tail.
             ...(previousLead.turnCompletedAt !== undefined
               ? { turnCompletedAt: previousLead.turnCompletedAt }
@@ -255,7 +274,7 @@ export function normalizeClaudeEvent(
 
   const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
     state: reportedStateName,
-    interrupted
+    outcome
   })
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
@@ -270,9 +289,9 @@ export function normalizeClaudeEvent(
       ? Date.now()
       : undefined
 
-  state.claudeLeadStateByPaneKey.set(paneKey, {
+  setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
-    ...(interrupted ? { interrupted } : {}),
+    ...(outcome ? { outcome } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),

@@ -6,14 +6,17 @@ import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
+import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type {
   CachedGeneration,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
   MobileWebShellSession,
+  MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
+import type { MobileWebShellUpdateFailureCause } from './mobile-web-shell-update-failure'
 
 export function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebShellGates {
   return {
@@ -30,21 +33,86 @@ export function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebSh
 export const ROUTE = '/h/host-1'
 export const PAGE_ROUTES = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
 
-export const MANIFEST: MobileWebShellManifestFacts = {
-  buildId: 'b'.repeat(64),
+/** The manifest as the host sends it. Every facts object below is projected from one of these, so a
+ *  test that edits the routes cannot leave the projection and the manifest it came from disagreeing
+ *  — which is exactly what a same-build persist would then write. */
+export const MANIFEST_WIRE: MobileWebBundleManifestRead = {
   schemaVersion: 1,
-  runtimeProtocolVersion: 5,
+  buildId: 'b'.repeat(64),
   minCompatibleRuntimeProtocolVersion: 2,
+  runtimeProtocolVersion: 5,
+  entrypoint: 'index.html',
   totalBytes: 4096,
-  totalAssets: 4,
+  assets: [
+    {
+      path: 'assets/app.js',
+      sha256: '1'.repeat(64),
+      byteLength: 1024,
+      contentType: 'text/javascript'
+    },
+    { path: 'assets/app.css', sha256: '2'.repeat(64), byteLength: 1024, contentType: 'text/css' },
+    {
+      path: 'assets/logo.svg',
+      sha256: '3'.repeat(64),
+      byteLength: 1024,
+      contentType: 'image/svg+xml'
+    },
+    { path: 'index.html', sha256: '4'.repeat(64), byteLength: 1024, contentType: 'text/html' }
+  ],
   routes: PAGE_ROUTES
 }
+
+/** A refusal of the bytes that arrived, and a link that went: the two sides a failed read lands on. */
+export const BUNDLE_REFUSED: MobileWebShellUpdateFailureCause = {
+  reason: 'asset-checksum-mismatch',
+  hostCode: null
+}
+export const LINK_LOST: MobileWebShellUpdateFailureCause = {
+  reason: 'connection-lost',
+  hostCode: null
+}
+
+/** The effects a decision owes, without the record every failed read also writes: the record has
+ *  its own suite, and these assertions are about what the decision does to screen and disk. */
+export function withoutRecord(
+  effects: readonly MobileWebShellSessionEffect[]
+): MobileWebShellSessionEffect[] {
+  return effects.filter((effect) => effect.kind !== 'record-update-failure')
+}
+
+export function manifestFacts(wire: MobileWebBundleManifestRead): MobileWebShellManifestFacts {
+  return {
+    buildId: wire.buildId,
+    schemaVersion: wire.schemaVersion,
+    runtimeProtocolVersion: wire.runtimeProtocolVersion,
+    minCompatibleRuntimeProtocolVersion: wire.minCompatibleRuntimeProtocolVersion,
+    totalBytes: wire.totalBytes,
+    totalAssets: wire.assets.length,
+    routes: wire.routes,
+    wire
+  }
+}
+
+export const MANIFEST: MobileWebShellManifestFacts = manifestFacts(MANIFEST_WIRE)
 
 export const CACHED: CachedGeneration = {
   buildId: MANIFEST.buildId,
   directory: '/cache/mobile-web/host/generations/b',
   totalBytes: 4096,
-  routes: PAGE_ROUTES
+  routes: PAGE_ROUTES,
+  compat: {
+    schemaVersion: MANIFEST.schemaVersion,
+    runtimeProtocolVersion: MANIFEST.runtimeProtocolVersion,
+    minCompatibleRuntimeProtocolVersion: MANIFEST.minCompatibleRuntimeProtocolVersion
+  }
+}
+
+/** The same generation on disk, declaring something the host it is about to be judged against no
+ *  longer accepts. `gates()` answers `minCompatibleMobileVersion: 1`, so a bundle runtime of 0 is
+ *  below the floor this host states — which is the usual reason an update exists at all. */
+export const CACHED_BELOW_HOST_FLOOR: CachedGeneration = {
+  ...CACHED,
+  compat: { ...CACHED.compat, runtimeProtocolVersion: 0 }
 }
 
 /** An event as a test writes it. An effect result is stamped with the flow the session is on, which
@@ -58,8 +126,11 @@ export function stamp(flow: number, event: PendingEvent): MobileWebShellSessionE
     case 'gates-changed':
     case 'shell-failed':
     case 'retry-pressed':
+    case 'document-started':
     case 'document-loaded':
     case 'page-ready':
+    case 'page-painted':
+    case 'page-back-claim':
       return event
     case 'cache-read':
     case 'manifest-read':

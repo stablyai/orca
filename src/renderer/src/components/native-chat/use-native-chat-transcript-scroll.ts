@@ -21,6 +21,7 @@ import {
   type UIEventHandler
 } from 'react'
 import {
+  distanceFromBottom,
   nextFollowingEnd,
   shouldLoadEarlier,
   shouldShowJumpToLatest,
@@ -84,6 +85,7 @@ export function useNativeChatTranscriptScroll({
   const isVisibleRef = useRef(isVisible)
   const previousIsVisibleRef = useRef(isVisible)
   const previousScrollTopRef = useRef(0)
+  const previousDistanceFromEndRef = useRef(Number.POSITIVE_INFINITY)
   const loadEarlierRequestedAtRef = useRef<number | null>(null)
 
   const syncScrollState = useCallback(
@@ -99,7 +101,8 @@ export function useNativeChatTranscriptScroll({
         const following = nextFollowingEnd({
           following: followingRef.current,
           programmatic,
-          geometry
+          geometry,
+          previousDistanceFromEnd: previousDistanceFromEndRef.current
         })
         followingRef.current = following
         if (!programmatic) {
@@ -124,6 +127,7 @@ export function useNativeChatTranscriptScroll({
       }
       const previousScrollTop = previousScrollTopRef.current
       previousScrollTopRef.current = geometry.scrollTop
+      previousDistanceFromEndRef.current = distanceFromBottom(geometry)
       if (
         shouldLoadEarlier({
           geometry,

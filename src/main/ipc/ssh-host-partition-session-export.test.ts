@@ -194,7 +194,7 @@ function createStrandedStore(): InstanceType<typeof Store> {
 }
 
 async function publishToConnectedTarget(store: InstanceType<typeof Store>): Promise<void> {
-  registerRemoteWorkspaceHandlers(store, () => null)
+  registerRemoteWorkspaceHandlers(store, () => null, { readMachineName: () => 'Build server' })
   const get = ipcHandlers.get('remoteWorkspace:get')
   const set = ipcHandlers.get('remoteWorkspace:setForConnectedTargets')
   if (!get || !set) {

@@ -4,6 +4,7 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
   MOBILE_WEB_APP_SHIMS,
   bundleMobileWebApp,
@@ -22,6 +23,9 @@ import {
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
+  MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD,
+  MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN,
+  MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP,
   MOBILE_WEB_APP_SOURCE_DIRS,
   assertAssetCeilingFitsShell,
   mobileWebAppBundleMaxAssets,
@@ -32,14 +36,15 @@ import {
 import {
   BINARY_SOURCE_EXTENSIONS,
   assertNoCarriageReturnsInSource
-} from './verify-mobile-web-bundle.mjs'
+} from './mobile-web-source-line-endings.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 import {
   hashedAsset,
   readDesktopVersion,
   readProtocolWindow,
   sha256Hex,
   writeMobileWebBundleTree
-} from './build-mobile-web-bundle.mjs'
+} from './mobile-web-bundle-manifest.mjs'
 import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_ASSETS
@@ -319,18 +324,6 @@ describeBundling('the app bundle', () => {
     expect(MOBILE_WEB_APP_SHIMS.filter((shim) => shim.appliesTo(stripped))).toEqual([])
   })
 
-  it('keeps the shims out of the shipped Phase A bootstrap builder', async () => {
-    const shipped = await readFile(
-      join(projectDir, 'config', 'scripts', 'build-mobile-web-bundle.mjs'),
-      'utf8'
-    )
-    for (const { name } of MOBILE_WEB_APP_SHIMS) {
-      expect(shipped, `the Phase A bootstrap builder mentions ${name}`).not.toContain(name)
-    }
-    expect(shipped).not.toContain('react-native-web')
-    expect(shipped).not.toContain('lucide')
-  })
-
   it('ships no haptic that reaches for the DOM', async () => {
     // expo-haptics' web build fakes an iOS haptic by appending a hidden
     // `<label><input type="checkbox" switch>` to document.head, clicking it, and removing it —
@@ -343,6 +336,18 @@ describeBundling('the app bundle', () => {
       expect(source).not.toContain('ariaHidden')
       expect(source).not.toContain('pointer: coarse')
       expect(source).not.toContain('setAttribute("switch"')
+    }
+  }, 120_000)
+
+  it("ships react-native-web's hairline at one device pixel, whichever of its builds resolves", async () => {
+    const sources = allScriptSource(await bundleMobileWebApp())
+    // Minified, so the assignment reads `<name>.hairlineWidth=`; RNW's own value is the literal 1.
+    const assignments = sources.flatMap(
+      (source) => source.match(/\.hairlineWidth=[^;]{0,120}/g) ?? []
+    )
+    expect(assignments.length).toBeGreaterThan(0)
+    for (const assignment of assignments) {
+      expect(assignment).toContain('devicePixelRatio')
     }
   }, 120_000)
 
@@ -376,12 +381,41 @@ describeBundling('the app bundle', () => {
     })
   }, 120_000)
 
+  it('declares an icon, so no browser asks the shell for one', async () => {
+    await withScratch(async (scratch) => {
+      const outDir = join(scratch, 'icon')
+      const { manifest } = await buildMobileWebAppBundle({ outDir })
+      const html = await readFile(join(outDir, 'index.html'), 'utf8')
+      // Undeclared, a browser asks the origin for /favicon.ico on its own, and the shell's asset
+      // server answers 403 because the path is in no manifest — repeatedly, on the emulator run.
+      expect(html).toContain('<link rel="icon" href="data:," />')
+      // And the empty URI rather than an asset: the bundle carries no icon, so a declaration
+      // naming one would point at a route image whose name changes with its bytes.
+      expect(manifest.assets.map((asset) => asset.path)).not.toContain('favicon.ico')
+    })
+  }, 120_000)
+
+  it('declares no viewport-fit, because the shell owns the safe area', async () => {
+    await withScratch(async (scratch) => {
+      const outDir = join(scratch, 'viewport')
+      await buildMobileWebAppBundle({ outDir })
+      const html = await readFile(join(outDir, 'index.html'), 'utf8')
+      // The shell pads the WebView out of the system bars, so the page has nothing to extend
+      // under; asking to would invite a second pad from every page-side SafeAreaView.
+      expect(html).toContain(
+        '<meta name="viewport" content="width=device-width, initial-scale=1" />'
+      )
+      expect(html).not.toContain('viewport-fit')
+    })
+  }, 120_000)
+
   it('carries the root reset, so the mounted tree has a height to be 1 of', async () => {
     await withScratch(async (scratch) => {
       const outDir = join(scratch, 'root-reset')
       await buildMobileWebAppBundle({ outDir })
       const html = await readFile(join(outDir, 'index.html'), 'utf8')
       expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
+      expect(html).toContain(MOBILE_WEB_APP_NATIVE_PARITY_STYLE)
       // Literals rather than substrings taken off the constant, which would read it back against
       // itself and follow any rule dropped from it. Every rule, because the chain is only as
       // definite as its weakest link: a height on #root alone resolves against a body that has
@@ -431,6 +465,12 @@ describe('the Phase C budget', () => {
         mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
       )
       expect(chunkCount).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(routeKeys.length))
+      // The other side of the same fence: an envelope further than the margin above the build is
+      // one nobody re-derived, so it fails here rather than surviving as headroom for a bump.
+      expect(
+        mobileWebAppBundleMaxChunks(routeKeys.length) - chunkCount,
+        'the chunk envelope is looser than this build; re-measure MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP'
+      ).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN)
       expect(entryStaticBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)
     },
     120_000
@@ -441,9 +481,11 @@ describe('the Phase C budget', () => {
       join(projectDir, 'config', 'scripts', 'verify-mobile-web-app-bundle.mjs'),
       'utf8'
     )
-    // The bound reads like a per-route escape hatch and is not one: 5 of the 14 routes break it
-    // on their own. What keeps it survivable is that expo-router wants a synchronous export off
-    // layout nodes only, so the note has to name the layout and the export that drives it.
+    // The bound reads like a per-route escape hatch and is not one: of the fourteen routes in the
+    // tree, session breaks it outright at 3.32 MiB and five more spend most of it, so the hatch is
+    // one route away from unusable rather than free. What keeps it survivable is that expo-router
+    // wants a synchronous export off layout nodes only, so the note has to name the layout and the
+    // export that drives it.
     const doc = source.slice(
       0,
       source.indexOf('export const MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES')
@@ -451,6 +493,22 @@ describe('the Phase C budget', () => {
     const note = doc.slice(doc.lastIndexOf('/**'))
     expect(note).toContain('h/_layout.tsx')
     expect(note).toContain('unstable_settings')
+  })
+
+  /** The one count above that must follow the tree, spelled so the census reads it. The sweep is
+   *  a row per route plus `_layout.tsx` and `h/_layout.tsx`, which are no screens, so it is that
+   *  length less two. */
+  it('spells the route count off the sweep it is a count of', async () => {
+    const source = await readFile(
+      join(projectDir, 'config', 'scripts', 'build-mobile-web-app-bundle.test.mjs'),
+      'utf8'
+    )
+    const rows = [
+      { precedes: 'routes in the tree', counted: MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length - 2 }
+    ]
+    for (const { precedes, spelled, counts } of spelledCountsAgainstTables(source, rows)) {
+      expect(spelled, precedes).toEqual(counts)
+    }
   })
 
   it('budgets what loads first well under what the whole page weighs', () => {
@@ -461,55 +519,67 @@ describe('the Phase C budget', () => {
     )
   })
 
-  it('derives the chunk ceiling from the route count, not from a measured number', async () => {
-    // A chunk is emitted per distinct set of importers, so the count is not a function of the
-    // route count alone. Re-measured on this head, by copying the route tree and dropping routes
-    // from the end of the sorted key list -- both siblings of each, because deleting a .web.tsx
-    // alone leaves the native file for the builder to resolve and measures a different closure.
-    // The 14-route reading is the real tree and includes the one script the deferred mermaid
-    // artifact costs.
-    for (const [routes, measured] of [
-      [8, 32],
-      [10, 43],
-      [12, 61],
-      [14, 69]
-    ]) {
-      expect(mobileWebAppBundleMaxChunks(routes), `${String(routes)} routes`).toBeGreaterThan(
-        measured
+  itBundling('sweeps the tree the envelope is anchored on', async () => {
+    // The sweep is the fence's only input, so it has to be about this tree: a route added anywhere
+    // in the sorted list fails here, which is the re-measure the plan asks for instead of a bump.
+    expect(MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([key]) => key)).toEqual(
+      await collectMobileWebAppRouteKeys(join(projectDir, 'mobile', 'app'))
+    )
+  })
+
+  it('bounds every prefix the sweep measured, and the spread it reports', () => {
+    // An upper envelope of the measurement, not a fit: the count rises with the prefix, so the
+    // number above its top row is above all fifteen.
+    for (const [key, measured] of MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP) {
+      expect(
+        mobileWebAppBundleMaxChunks(MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length),
+        key
+      ).toBeGreaterThanOrEqual(measured)
+    }
+    // 1 to 9 per route, which is why four per route was a bound rather than a fit and why the
+    // envelope cannot be a line through the measurement either.
+    expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(9)
+  })
+
+  it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
+    const swept = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.length
+    const measured = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.at(-1)[1]
+    expect(mobileWebAppBundleMaxChunks(swept)).toBe(measured + MOBILE_WEB_APP_BUNDLE_SCRIPT_MARGIN)
+    // Past the swept tree each route is allowed the worst the sweep saw, so the next route breaches
+    // this only by costing more than any route measured.
+    for (const beyond of [1, 2, 9]) {
+      expect(mobileWebAppBundleMaxChunks(swept + beyond) - mobileWebAppBundleMaxChunks(swept)).toBe(
+        Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD) * beyond
       )
     }
-    expect(mobileWebAppBundleMaxChunks(14)).toBe(72)
-    expect(mobileWebAppBundleMaxChunks(15) - mobileWebAppBundleMaxChunks(14)).toBe(4)
-    // Between four and nine more per route above, so the ceiling is a bound and not a fit -- and
-    // at 14 routes it is a close one. 69 measured against 72, with the last two routes having cost
-    // the 8 the ceiling grants for two: the next route that shares less than its neighbours fails
-    // here, which is what this is for.
-    expect(mobileWebAppBundleMaxChunks(14) - mobileWebAppBundleMaxChunks(12)).toBe(8)
+    // Flat below it: the fence is only ever asked about the real tree, and a shorter prefix is
+    // already under the top row it is anchored on.
+    expect(mobileWebAppBundleMaxChunks(swept - 1)).toBe(mobileWebAppBundleMaxChunks(swept))
   })
 
   it('refuses an engine chunked along its own lazy boundaries, and passes one artifact', () => {
-    // The two builds this ceiling has to tell apart, both measured at 14 routes.
+    // The two builds the ceiling must tell apart: mermaid through one pre-bundled artifact
+    // emitted 69 scripts, importing the package emitted 172, esbuild splitting along the diagram
+    // types mermaid lazily imports. Both frozen at the head that measured them, because this case
+    // pins the discrimination and not either build's size.
     //
-    // The page reaches mermaid through one pre-bundled artifact and the bundle emits 69 scripts
-    // (68 of them the page's own split, one the deferred engine). Importing the package instead
-    // emitted 172: mermaid lazily imports each of its own diagram types and esbuild splits along
-    // those boundaries, all of it inside the generation the phone has already downloaded. The
-    // route term is the only term precisely so that the second of those fails here -- a ceiling
-    // raised to admit 172 would have admitted any split at all.
+    // 69 now sits just under the envelope: a sweep that falls further means re-measure, not raise.
     const ROUTES = 14
     const WITH_ONE_ARTIFACT = 69
     const CHUNKED_ALONG_THE_ENGINE = 172
     expect(WITH_ONE_ARTIFACT).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(ROUTES))
     expect(CHUNKED_ALONG_THE_ENGINE).toBeGreaterThan(mobileWebAppBundleMaxChunks(ROUTES))
-    // And the assets that came with it: 215 against 112, of the 256 the shell will load.
+    // And the assets that came with it: 215 against the 113 this head's envelope allows, of the
+    // 256 the shell will load.
     expect(mobileWebAppBundleMaxAssets(ROUTES, 42)).toBeLessThan(CHUNKED_ALONG_THE_ENGINE + 42 + 1)
   })
 
   it('derives the asset ceiling so the chunk ceiling is always the one that trips first', () => {
     // A bundle's assets are its chunks, its images and the document. Asserting one constant under
-    // another did not say that: with 42 images, 4 * 18 + 16 chunks plus 42 plus the document is
-    // 131 assets, over the flat 128 the ceiling used to be, so from 18 routes on the asset count
-    // failed first and named the wrong thing.
+    // another did not say that: with 42 images, the 98 chunks 18 routes are allowed plus 42 plus
+    // the document is 141 assets, over the flat 128 the ceiling used to be, so from 18 routes on
+    // the asset count failed first and named the wrong thing.
     for (const routeCount of [14, 18, 24, 40]) {
       for (const imageCount of [0, 42, 120]) {
         const chunks = mobileWebAppBundleMaxChunks(routeCount)
@@ -542,13 +612,14 @@ describe('the Phase C budget', () => {
 
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
     // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
-    // that ships a green build no device can open. At the 42 images the tree carries, 4r + 16 +
-    // 42 + 1 crosses 256 at 50 routes, which Phase C reaches. A deferred engine kept to one
-    // artifact leaves that where it is; the 103-script version of it moved the crossing to 24.
+    // that ships a green build no device can open. At the 42 images the tree carries, the envelope
+    // plus 42 plus the document crosses 256 at 32 routes, which Phase C reaches. The crossing came
+    // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
+    // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(49, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(255)
-    expect(() => assertAssetCeilingFitsShell(50, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /259 .*256/
+    expect(assertAssetCeilingFitsShell(31, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(251)
+    expect(() => assertAssetCeilingFitsShell(32, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /260 .*256/
     )
   })
 })
@@ -558,7 +629,7 @@ describe('the verifier', () => {
     'accepts a bundle it has just built',
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         await buildMobileWebAppBundle({ outDir })
         await expect(verifyMobileWebAppBundle({ bundleDir: outDir })).resolves.toBeDefined()
       })
@@ -570,7 +641,7 @@ describe('the verifier', () => {
     "rejects a buildId the manifest's own asset list does not derive",
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         await buildMobileWebAppBundle({ outDir })
         const manifestPath = join(outDir, 'manifest.json')
         const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
@@ -588,7 +659,7 @@ describe('the verifier', () => {
     'rejects a self-consistent bundle a fresh build does not reproduce',
     async () => {
       await withScratch(async (scratch) => {
-        const outDir = join(scratch, 'mobile-web-app')
+        const outDir = join(scratch, 'mobile-web')
         const { manifest } = await buildMobileWebAppBundle({ outDir })
         // What a stale out/ actually looks like: every digest agrees with its bytes and the
         // buildId derives from the asset list, but the source has moved on. Only the two fresh

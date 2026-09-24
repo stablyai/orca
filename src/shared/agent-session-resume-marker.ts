@@ -18,6 +18,12 @@ export type AgentSessionResumeTrigger = (typeof AGENT_SESSION_RESUME_TRIGGERS)[n
  *  the user has long since forgotten, and an obligation with no expiry strands forever. */
 export const AGENT_SESSION_RESUME_MARKER_TTL_MS = 24 * 60 * 60 * 1000
 
+/** How an acted-on offer ended without the agent carrying on. `refused` is a definite no from the
+ *  host or provider; `unconfirmed` means the continuation may have gone out and nothing proved it. */
+export const AGENT_SESSION_RESUME_FAILURE_OUTCOMES = ['refused', 'unconfirmed'] as const
+export type AgentSessionResumeFailureOutcome =
+  (typeof AGENT_SESSION_RESUME_FAILURE_OUTCOMES)[number]
+
 /**
  * WHAT the session was working on, in whichever identity that work actually had.
  *

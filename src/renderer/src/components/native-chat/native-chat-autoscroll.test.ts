@@ -58,8 +58,13 @@ describe('shouldShowJumpToLatest', () => {
 // The browser reports application writes as ordinary scroll events. Explicit
 // marks distinguish their delayed echoes from reader movement after growth.
 describe('nextFollowingEnd', () => {
-  const following = { following: true, programmatic: false, geometry: parkedAbove(0) }
   const wellAway = parkedAbove(400)
+  const following = {
+    following: true,
+    programmatic: false,
+    geometry: parkedAbove(0),
+    previousDistanceFromEnd: 400
+  }
 
   it('follows when the reader reaches the end', () => {
     expect(nextFollowingEnd(following)).toBe(true)
@@ -80,7 +85,12 @@ describe('nextFollowingEnd', () => {
     'does not reattach a detached reader from an application write %i px from the end',
     (distance) => {
       expect(
-        nextFollowingEnd({ following: false, programmatic: true, geometry: parkedAbove(distance) })
+        nextFollowingEnd({
+          following: false,
+          programmatic: true,
+          geometry: parkedAbove(distance),
+          previousDistanceFromEnd: 400
+        })
       ).toBe(false)
     }
   )
@@ -95,13 +105,37 @@ describe('nextFollowingEnd', () => {
   })
 
   it('re-arms at the band and not one pixel past it', () => {
-    const detached = { following: false, programmatic: false }
+    const detached = {
+      following: false,
+      programmatic: false,
+      previousDistanceFromEnd: 400
+    }
     expect(
       nextFollowingEnd({ ...detached, geometry: parkedAbove(NATIVE_CHAT_FOLLOW_REARM_PX) })
     ).toBe(true)
     expect(
       nextFollowingEnd({ ...detached, geometry: parkedAbove(NATIVE_CHAT_FOLLOW_REARM_PX + 1) })
     ).toBe(false)
+  })
+
+  // A smooth scroll marks only where it lands. Leaving the end, its first frames
+  // move a pixel or two and are unmarked: read as the reader arriving, they
+  // re-armed follow and the next frame rebased the view, cancelling the scroll.
+  it('does not reattach a detached reader who is moving away from the end', () => {
+    const leaving = { following: false, programmatic: false, previousDistanceFromEnd: 0 }
+    expect(nextFollowingEnd({ ...leaving, geometry: parkedAbove(0.3) })).toBe(false)
+    expect(nextFollowingEnd({ ...leaving, geometry: parkedAbove(2) })).toBe(false)
+    // Arriving from above still reattaches, and standing still at the end does too.
+    expect(
+      nextFollowingEnd({ ...leaving, previousDistanceFromEnd: 52, geometry: parkedAbove(2) })
+    ).toBe(true)
+    expect(nextFollowingEnd({ ...leaving, geometry: parkedAbove(0) })).toBe(true)
+  })
+
+  it('keeps a following reader through a small move up inside the band', () => {
+    expect(
+      nextFollowingEnd({ ...following, previousDistanceFromEnd: 0, geometry: parkedAbove(2) })
+    ).toBe(true)
   })
 
   // Sub-pixel and zoom rounding put the true end a fraction short of exact.

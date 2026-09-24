@@ -2,16 +2,15 @@ import { z } from 'zod'
 import { MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES } from '../../hooks/mobile-dictation-pending-audio-budget'
 
 /**
- * The wire shapes of `native.audio.start`, `native.audio.read`, `native.audio.stop` and
- * `native.wakelock.set`.
+ * The wire shapes of `native.audio.start`, `native.audio.read` and `native.audio.stop`.
  *
  * Dictation is the page's, and the microphone is the shell's. The page holds the state machine the
  * composer renders and speaks `speech.dictation.*` to the desktop, so the only thing that has to
- * cross is the capability: raw PCM, and the wake tag that keeps the screen alive while it is
- * captured. That is why audio is pulled rather than pushed. The `request`/`reply` table is the only
- * page-facing seam the shell has, the one shell-to-page push there is belongs to an RPC
- * `subscribe`, and a push lane for bytes the page immediately hands back would be a new frame kind
- * for no gain.
+ * cross is the capability: raw PCM. The screen the microphone holds awake does not cross at all —
+ * it is a property of the capture, taken and given back on the device side. That is why audio is
+ * pulled rather than pushed. The `request`/`reply` table is the only page-facing seam the shell
+ * has, the one shell-to-page push there is belongs to an RPC `subscribe`, and a push lane for bytes
+ * the page immediately hands back would be a new frame kind for no gain.
  *
  * So the shell rings what the microphone produces and the page drains it. The ring is exactly the
  * page's own pending-audio budget: the page already refuses to hold more unsent audio than that,
@@ -87,11 +86,6 @@ export function bridgeAudioInterruptionEndsCapture(kind: string): boolean {
   return kind === 'began' || kind === 'blocked'
 }
 
-/** The longest wake tag the shell will hold. The dictation tag is the owner id and the dictation id
- *  joined, both minted from a clock and a random suffix, so this is roughly twice the longest one
- *  this build can produce and short enough that a page cannot park text in the shell's tag set. */
-export const BRIDGE_WAKELOCK_TAG_MAX_CHARS = 160
-
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 const sampleRateSchema = z
@@ -147,16 +141,24 @@ export type BridgeAudioChunk = z.infer<typeof audioReadResultSchema>
 /** No params: there is one capture per page session, so there is nothing to name. */
 export const audioStopParamsSchema = z.strictObject({})
 
-/** False for a session that was not capturing, which is not a fault: a page that stops twice, or
- *  stops after an interruption already ended the capture, asked for the state it already has. */
-export const audioStopResultSchema = z.strictObject({ stopped: z.boolean() })
-
-export const wakelockSetParamsSchema = z.strictObject({
-  active: z.boolean(),
-  tag: z.string().min(1).max(BRIDGE_WAKELOCK_TAG_MAX_CHARS)
+/**
+ * The stop, and the tail it takes with it.
+ *
+ * `stopped` is false for a session that was not capturing, which is not a fault: a page that stops
+ * twice, or stops after an interruption already ended the capture, asked for the state it already
+ * has.
+ *
+ * The bytes are whatever the ring still held — up to one drain interval of what the user was still
+ * saying as they lifted the button, which no timer is coming for. Carried by the stop rather than
+ * fetched by a last read, because a page that has to read before it stops has an ordering to get
+ * right and a re-entry to guard; a reply that brings the tail with it has neither.
+ *
+ * Both tail fields default rather than being required. The page updates over the air and the shell
+ * does not, so a page this new can be talking to a shell that answers `stopped` alone: absent, that
+ * dictation loses its tail, where a required field would have lost it the stop itself.
+ */
+export const audioStopResultSchema = z.strictObject({
+  stopped: z.boolean(),
+  base64: z.string().max(BRIDGE_AUDIO_READ_MAX_BASE64_CHARS).regex(BASE64_PATTERN).default(''),
+  droppedBytes: z.number().int().nonnegative().default(0)
 })
-
-/** Whether the tag is held after the call, which is what was asked for unless the device refused.
- *  Answered rather than assumed so the page's tag bookkeeping tracks the device and not its own
- *  intent — the same thing `activateKeepAwakeAsync` resolving tells the native owner. */
-export const wakelockSetResultSchema = z.strictObject({ active: z.boolean() })

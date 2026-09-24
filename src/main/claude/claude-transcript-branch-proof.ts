@@ -32,7 +32,8 @@ export type ClaudeTranscriptBranchAncestry = {
   chain: string[]
 }
 
-type AncestryInput = BranchProofInput & {
+/** Replay always proves from the file tail, so a caller-supplied tip has no meaning here. */
+type AncestryInput = Omit<BranchProofInput, 'tip'> & {
   /** The ancestry walk stops here; the proof is what established it is reachable. */
   ancestryAnchorUuid: string
   /** The FIRST record carrying each chain uuid, in file order. */
@@ -150,10 +151,11 @@ export async function proveClaudeTranscriptBranch(
 }
 
 /**
- * Prove the branch, then replay the anchor..leaf records off the SAME pinned
- * bytes. Two bounded passes instead of one whole-file string: the graph pass
- * retains uuid/parentUuid only, and the replay pass hands each chain record to
- * the caller once and keeps nothing, so neither pass holds the transcript.
+ * Prove the branch from the file's last transcript row back to the anchor, then
+ * replay the anchor..tail records off the SAME pinned bytes. Two bounded passes
+ * instead of one whole-file string: the graph pass retains uuid/parentUuid only,
+ * and the replay pass hands each chain record to the caller once and keeps
+ * nothing, so neither pass holds the transcript.
  *
  * The replay runs only after `finish()` succeeds, so a growth retry can never
  * emit a record twice.
@@ -165,7 +167,7 @@ export async function replayClaudeTranscriptBranchAncestry(
     input.transcriptPath,
     input.maxRecordBytes,
     async (readLines) => {
-      const builder = createBranchProof(input)
+      const builder = createBranchProof({ ...input, tip: 'file-tail' })
       let index = 0
       for await (const record of readLines()) {
         builder.add(record.line, index++, record.terminated)
@@ -187,7 +189,7 @@ export async function replayClaudeTranscriptBranchAncestry(
 export function replayClaudeTranscriptBranchAncestryFromJsonl(
   input: AncestryInput & { contents: string }
 ): ClaudeTranscriptBranchAncestry {
-  const builder = createBranchProof(input)
+  const builder = createBranchProof({ ...input, tip: 'file-tail' })
   const lines = input.contents.split('\n')
   for (const [index, line] of lines.entries()) {
     builder.add(line, index, index < lines.length - 1)
@@ -199,38 +201,4 @@ export function replayClaudeTranscriptBranchAncestryFromJsonl(
     replay(line)
   }
   return { proof, chain }
-}
-
-/** Re-run a durable branch proof from the transcript root when a sampled cursor is stale. */
-export async function readClaudeTranscriptLeafWithReproof(input: {
-  readTranscriptLeaf: (input: {
-    providerSessionId: string
-    previousLeafUuid: string | null
-    claudeConfigDir: string
-  }) => Promise<string | null>
-  claudeConfigDir: string
-  providerSessionId: string
-  previousLeafUuid: string | null
-}): Promise<string | null> {
-  try {
-    return await input.readTranscriptLeaf({
-      providerSessionId: input.providerSessionId,
-      previousLeafUuid: input.previousLeafUuid,
-      claudeConfigDir: input.claudeConfigDir
-    })
-  } catch (error) {
-    // A missing cursor can be stale after compaction and is safe to re-prove from the root. A torn
-    // tail is still being written; dropping the cursor would make a later sibling look admissible.
-    if (
-      input.previousLeafUuid === null ||
-      !(error instanceof ClaudeTranscriptPreviousCursorMissingError)
-    ) {
-      throw error
-    }
-    return input.readTranscriptLeaf({
-      providerSessionId: input.providerSessionId,
-      previousLeafUuid: null,
-      claudeConfigDir: input.claudeConfigDir
-    })
-  }
 }

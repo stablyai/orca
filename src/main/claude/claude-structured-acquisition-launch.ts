@@ -4,7 +4,6 @@ import {
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
-import type { ClaudeRewindAttempt } from './claude-structured-rewind'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 import {
   cancelClaudeAcquisitionAttempt,
@@ -29,9 +28,8 @@ export async function resolveClaudeAcquisitionLaunch(args: {
   callbacks: ClaudeAcquireCallbacks
   previous: ClaudeAcquisitionAttempt | undefined
   attempt: ClaudeAcquisitionAttempt
-  rewind: ClaudeRewindAttempt
 }): Promise<ClaudeStructuredLaunch> {
-  const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt, rewind } = args
+  const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId
   return withAgentSessionCreatePhase('auth_settle', input.recordPhase, async () => {
     if (previous && !(await cancelClaudeAcquisitionAttempt(previous))) {
@@ -65,7 +63,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
           providerHandle: {
             kind: 'claude' as const,
             sessionId: resumeSession.providerSessionId,
-            leafUuid: resumeSession.leafUuid
+            leafUuid: resumeSession.turnEndLeafUuid
           }
         }
       : input.identity
@@ -76,7 +74,6 @@ export async function resolveClaudeAcquisitionLaunch(args: {
           ? error
           : new AgentSessionPreSpawnError(error)
       })
-    rewind.applyLaunch(launch, deps)
     acquisitions.assertCurrent(sessionId, attempt)
     return launch
   })

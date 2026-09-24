@@ -1,6 +1,7 @@
 import { BRIDGE_MAX_SUBSCRIPTIONS } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
+import { substituteBridgePageClientIdentity } from './bridge/bridge-page-client-identity'
 import { bridgeBinaryLaneVerdict } from './bridge/bridge-screencast-grant'
 import { BridgeCapExceededError, BridgeNativeVerbRefusedError } from './bridge-host-errors'
 import type { BridgeHostDiagnostic } from './bridge-host-contract'
@@ -34,9 +35,11 @@ export function createBridgeHostStreamFrames(deps: {
   sendError: (id: string, error: unknown) => void
   /** The session's resolved grants, which decide whether the binary screencast lane is served. */
   granted: readonly string[]
+  /** This device's identity to the host, swapped in for the page's placeholder. */
+  readClientIdentity: () => string | null
   report: (diagnostic: BridgeHostDiagnostic) => void
 }): BridgeHostStreamFrames {
-  const { requests, subscriptions, sendError, granted, report } = deps
+  const { requests, subscriptions, sendError, granted, readClientIdentity, report } = deps
   return {
     open: (message) => {
       const { id } = message
@@ -68,7 +71,14 @@ export function createBridgeHostStreamFrames(deps: {
         report({ kind: 'binary-lane-refused', id })
       }
       try {
-        subscriptions.start(id, message.method, message.params, lane === 'serve')
+        // The other door, which is the one `terminal.subscribe` goes through. A placeholder the
+        // shell cannot resolve throws here and is refused the way an ungranted method is.
+        subscriptions.start(
+          id,
+          message.method,
+          substituteBridgePageClientIdentity(message.params, readClientIdentity()),
+          lane === 'serve'
+        )
       } catch (error) {
         sendError(id, error)
       }

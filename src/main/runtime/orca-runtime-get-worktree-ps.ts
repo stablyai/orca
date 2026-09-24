@@ -20,10 +20,10 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
+import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
 import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
-import { hostname } from 'node:os'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
@@ -152,6 +152,8 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
       resolveClaudeLaunchEnv: () =>
         resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+      resolveShellEnvironmentPolicy: () =>
+        nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       // Re-read per acquisition, like the auth policy above it: the Agent Permissions setting is
@@ -177,8 +179,13 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
   }
 
   protected createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport {
+    const machineName = this.machineName
     return {
-      hostLabel: hostname(),
+      // Why a getter: "Agent is open in terminal on X" must name this host the way paired devices
+      // see it, including a Settings rename after the transport was built.
+      get hostLabel() {
+        return machineName.read()
+      },
       launchTui: this.createStructuredAgentSessionLaunchTuiCallback(),
       waitForTuiExit: async (owner) => {
         await this.waitForStructuredTuiOwnerExit(owner)

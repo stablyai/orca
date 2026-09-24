@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildMobileWebBundle } from './build-mobile-web-bundle.mjs'
+import { writeMobileWebBundleFixtureTree } from './mobile-web-bundle-fixture-tree.mjs'
 
 const require = createRequire(import.meta.url)
 const {
@@ -17,7 +17,7 @@ async function withBundle(run) {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-guard-'))
   const bundleDir = join(scratch, 'mobile-web')
   try {
-    const { manifest } = await buildMobileWebBundle({ outDir: bundleDir })
+    const { manifest } = await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
     await run({ bundleDir, manifest })
   } finally {
     await rm(scratch, { recursive: true, force: true })
@@ -174,11 +174,10 @@ describe('assertMobileWebBundleBuilt', () => {
 })
 
 describe('electron-builder packaging wiring', () => {
-  it('excludes the mobile-web source tree from app.asar', () => {
-    expect(electronBuilderConfig.files).toContain('!src/mobile-web{,/**/*}')
-    // The source tree lives under src/, which is excluded wholesale; the explicit entry above
-    // only survives as a marker, so assert the broad rule is still what does the work.
+  it('excludes every repo source tree from app.asar', () => {
+    // The page is built from mobile/, which this excludes wholesale; out/mobile-web is what ships.
     expect(electronBuilderConfig.files).toContain('!src{,/**/*}')
+    expect(electronBuilderConfig.files).toContain('!mobile{,/**/*}')
   })
 
   it('does not exclude the built bundle, so out/mobile-web ships like out/web', () => {

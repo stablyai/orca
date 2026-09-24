@@ -23,7 +23,6 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import * as esbuild from 'esbuild'
-import { PNG } from 'pngjs'
 import { chromium, webkit } from 'playwright-core'
 import { lucideBarrelPlugin } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
@@ -32,22 +31,15 @@ import {
   readShellCsp,
   readShellDocumentHeaders
 } from './mobile-web-app-render-harness.mjs'
-import { createCspReportSink, reportedDirectives } from './mobile-web-app-preview-csp-reports.mjs'
-import { recordRequestsTo } from './mobile-web-app-preview-request-log.mjs'
+import { createCspReportSink } from './mobile-web-app-preview-csp-reports.mjs'
 import { startArtifactAssetServer } from './mobile-web-app-preview-asset-server.mjs'
-import { watchImageEvidence } from './mobile-web-app-preview-image-evidence.mjs'
+import { openPreviewArm } from './mobile-web-app-preview-arm-driver.mjs'
 import {
   ARTIFACT_RGB,
   ENTRY_SOURCE,
-  artifact,
   artifactScript
 } from './mobile-web-app-preview-artifact-fixture.mjs'
-import {
-  previewFrame,
-  settleAfterMount,
-  waitForLoadedFrame,
-  waitForRecordedNavigation
-} from './mobile-web-app-preview-frame-readiness.mjs'
+import { waitForRecordedNavigation } from './mobile-web-app-preview-frame-readiness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 
@@ -74,8 +66,6 @@ let foreign = null
  * exercises the same directive any other https host would.
  */
 let assetServer = null
-
-let nonceCounter = 0
 
 const bundles = mobileWebAppDependenciesPresent()
 const describeRender = bundles ? describe : describe.skip
@@ -128,11 +118,15 @@ beforeAll(async () => {
   })
   await new Promise((resolve) => foreign.listen(0, '127.0.0.1', resolve))
   foreignOrigin = `http://127.0.0.1:${String(foreign.address().port)}`
+  // Onto the rig as well: the driver reads it from there, and the binding above is assigned after
+  // this module's top level has already built the object.
+  rig.foreignOrigin = foreignOrigin
 
   await mkdir(join(mobileDir, '.tmp'), { recursive: true })
   scratch = await mkdtemp(join(mobileDir, '.tmp', 'html-preview-render-'))
   // Before any page exists, which is the point of it being a listener.
   assetServer = await startArtifactAssetServer(scratch)
+  rig.assetServer = assetServer
   outDir = join(scratch, 'bundle')
   await mkdir(outDir, { recursive: true })
   await esbuild.build({
@@ -215,267 +209,19 @@ afterAll(async () => {
   }
 })
 
-/**
- * Mounts the preview with one artifact and reports everything a case can assert on.
- *
- * `csp: null` is the control arm. The foreign origin's hit list is reset per open, so what it holds
- * is this artifact's doing.
- */
-async function open(
-  browser,
-  {
-    extra = {},
-    csp = 'shipped',
-    sandbox,
-    act,
-    expectNavigation = null,
-    frameReady = 'artifact',
-    assets,
-    reportReady = null,
-    signal
-  } = {}
-) {
-  const origin = origins[csp === 'shipped' ? 'shipped' : csp === 'leaky' ? 'leaky' : 'none']
-  nonceCounter += 1
-  const nonce = `n${String(nonceCounter)}`
-  // Read here and carried as a string: asked for at the abort it lost its race with teardown and
-  // printed "browser unknown" in the CI log this diagnostic exists for.
-  const browserVersion = browser.version()
-  // An explicit context, so an arm that aborts mid-read can hand back everything it holds. The
-  // arms share one browser per engine; only the context is theirs.
-  // The asset listener's certificate is generated per run and trusted by nothing, which is what
-  // this flag is for; the page's own origin is still plain http from the bundle server.
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    ignoreHTTPSErrors: true
-  })
-  const page = await context.newPage()
-  // Subscribed before the first navigation, so a request made during load is in the log. Cheap
-  // while an arm passes: it fills arrays, and only an abort asks them to speak.
-  const requestLog = await recordRequestsTo(page, assetServer.origin)
-  // Asked only when an arm has aborted, so the fresh-image probe and its wait cost a failing run
-  // and never a passing one.
-  const describeRequests = watchImageEvidence(page, assetServer.origin, requestLog, assetServer.saw)
-  try {
-    const navigations = []
-    const popups = []
-    let servedCsp = null
-    page.on('response', (response) => {
-      if (response.url().startsWith(`${origin}/preview`)) {
-        servedCsp = response.headers()['content-security-policy'] ?? null
-      }
-    })
-    page.on('popup', (popup) => {
-      popups.push(popup.url())
-      void popup.close().catch(() => {})
-    })
-    // The record is the page's own event, not the route handler's. Interception is per target and
-    // attaches late on a Chrome that isolates the sandboxed frame, which is what left the CI log
-    // saying `recorded []`; `page.on('request')` is one subscription over every frame the page has.
-    // Armed after the rig's own `goto`, exactly where the route used to be registered: the initial
-    // navigation is a main-frame navigation to this origin and would otherwise count as one the
-    // artifact asked for.
-    let recordingNavigations = false
-    page.on('request', (request) => {
-      if (!recordingNavigations || !request.isNavigationRequest()) {
-        return
-      }
-      const url = request.url()
-      if (!url.startsWith(foreignOrigin) && !url.startsWith(origin)) {
-        return
-      }
-      navigations.push({
-        url,
-        foreign: url.startsWith(foreignOrigin),
-        main: request.frame() === page.mainFrame()
-      })
-    })
-    // The route stays for what only a route can do: refuse the navigation. Playwright is not the
-    // shell, so a top-frame navigation is aborted here the way the shell's delegate would refuse
-    // it, and a frame navigating itself is left alone -- aborting that would make "the frame stayed
-    // on the artifact" true by the rig's own doing.
-    const record = (route) => {
-      const request = route.request()
-      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
-        return void route.abort()
-      }
-      return void route.continue()
-    }
-    await page.route(`${foreignOrigin}/**`, record)
-    // The shell page's violations, and only those: an artifact's own listener would have to run, and
-    // the fence under test is that nothing in the artifact runs.
-    await page.addInitScript(() => {
-      // When this ran, in every frame it ran in. The collector below can only report what it was
-      // present for, so its own moment is a reading rather than an assumption.
-      window.__initAt = `${String(Math.round(performance.now()))} ${document.readyState}`
-      window.__violations = []
-      document.addEventListener('securitypolicyviolation', (event) => {
-        window.__violations.push(`${event.violatedDirective} ${event.blockedURI || 'inline'}`)
-      })
-    })
-    // The nonce in the document's own URL: the policy this response carries names a report endpoint
-    // with the same nonce, which is how a report from a `srcdoc` frame with no URL of its own is
-    // attributed to the arm that caused it.
-    await page.goto(`${origin}/preview?n=${nonce}`, { waitUntil: 'load' })
-    recordingNavigations = true
-    // Registered after the page's own load, not before it: this handler aborts main-frame navigations
-    // and the initial `goto` is one. `href="/"` and `href=""` inside an artifact resolve against the
-    // embedder's base, so a tap on either asks to navigate the top frame to the shell's own document.
-    // The rig has no shell, so what this pins is the request the shell is handed; refusing it is
-    // `MobileWebShellDroppedNavigationTest`'s "refuses every navigation to the document that the shell
-    // did not ask for" and its `checkNavigationVerdict` twin on iOS.
-    await page.route(`${origin}/**`, record)
-    // `sandbox` undefined is the product's own token, which is what every non-control case runs.
-    await page.evaluate(
-      ([html, override]) => window.__mount(html, override),
-      [
-        artifact({ links: foreignOrigin, assets: assets ?? foreignOrigin, extra, nonce }),
-        sandbox ?? null
-      ]
-    )
-    // Named in every diagnostic, because the log shows the case and not which of its arms spoke.
-    const arm =
-      `arm csp=${csp} sandbox=${sandbox ?? 'product'} frameReady=${frameReady} ` +
-      `reportReady=${reportReady ?? 'none'} nonce=${nonce}`
-    // One reader for the wait and for the reading: an arm that waits on one list and asserts on
-    // another proves nothing about the list it asserts on.
-    const readImageHits = () => assetServer.hitsFor(nonce)
-    const artifactFrame = await waitForLoadedFrame(page, {
-      frameReady,
-      reportReady,
-      signal,
-      browserVersion,
-      arm,
-      sink: cspReports,
-      nonce,
-      readImageHits,
-      describeRequests
-    })
-    // Sampled before the action as well as after: a case that taps a link is asking what the tap
-    // produced, and by then the top frame is mid-navigation and the iframe has blanked to its own
-    // background. So the precondition "there was a rendered artifact to tap" is this reading, and the
-    // one below is only meaningful for a case that did nothing.
-    const pixelBefore = await probePixel(page)
-    const readToggles = async () =>
-      await page
-        .evaluate(() =>
-          [...document.querySelectorAll('[role="tab"]')].map((one) => ({
-            label: one.getAttribute('aria-label'),
-            selected: one.getAttribute('aria-selected')
-          }))
-        )
-        .catch(() => null)
-    // Sampled before the action as well, because the toggle's whole claim is that it changes.
-    const togglesBefore = await readToggles()
-    let actError = null
-    if (act) {
-      // Recorded, never swallowed: a click that never landed and a click that produced no
-      // navigation are the same empty counter, and only one of them is the product's doing.
-      await act({ page, frame: previewFrame(page) }).catch((error) => {
-        actError = String(error).split('\n')[0]
-      })
-    }
-    // Every arm settles, acting or not: an artifact can start a navigation with no tap behind it --
-    // `<meta http-equiv="refresh">` is one -- and the arms that pin zero were reading their counters
-    // while that was still in flight.
-    await settleAfterMount(page, navigations, expectNavigation, signal, {
-      frame: artifactFrame,
-      browserVersion,
-      arm,
-      describeRequests
-    })
-    const result = {
-      page,
-      pixelBefore,
-      pixel: await probePixel(page),
-      declaredSandbox: await page.evaluate(() => window.__sandbox),
-      // What the toolbar emits into the DOM, not what the component was handed: react-native-web
-      // forwards `aria-*` and drops `accessibilityState` on the floor, so a selected state that reads
-      // fine in the test renderer can reach a screen reader as nothing at all.
-      togglesBefore,
-      toggles: await readToggles(),
-      // The attribute on the element the component actually rendered, not the constant it exports: a
-      // literal in the JSX would leave the constant correct and the frame unsealed, which is what the
-      // control run for this file did before this reading existed.
-      mountedSandbox: await page
-        .evaluate(() => document.querySelector('iframe')?.getAttribute('sandbox') ?? null)
-        .catch(() => null),
-      frameCount: page.frames().length - 1,
-      // Reported so a pixel that read the page instead of the frame names the layout rather than
-      // looking like a frame that refused to load.
-      frameBox: await page
-        .evaluate(() => {
-          const frame = document.querySelector('iframe')
-          if (!frame) {
-            return null
-          }
-          const box = frame.getBoundingClientRect()
-          return { x: box.x, y: box.y, width: box.width, height: box.height }
-        })
-        .catch(() => null),
-      // Reported, never asserted on: a `srcdoc` frame's URL reads `about:srcdoc` here and empty on
-      // CI's browser, so nothing may be decided by it.
-      frameUrl: previewFrame(page)?.url() ?? null,
-      // The element's own attributes, which is where "the artifact is parsed inside the frame rather
-      // than fetched into it" actually lives.
-      mountedSrcDoc: await page
-        .evaluate(() => document.querySelector('iframe')?.getAttribute('srcdoc') ?? null)
-        .catch(() => null),
-      mountedSrc: await page
-        .evaluate(() => document.querySelector('iframe')?.getAttribute('src') ?? null)
-        .catch(() => null),
-      inside: await (previewFrame(page)
-        ?.evaluate(() => ({
-          marker: document.getElementById('marker')?.textContent ?? null,
-          title: document.title,
-          ran: document.documentElement.dataset.ran === '1' ? 1 : 0,
-          threw: document.documentElement.dataset.threw ?? null,
-          // The two moments the late-listener question turns on: when the page's init script ran in
-          // this frame, and when the artifact's own script did.
-          initAt: window.__initAt ?? null,
-          artifactAt: document.documentElement.dataset.artifactAt ?? null,
-          // The frame's own list, not the embedder's: `securitypolicyviolation` does not cross frames,
-          // and the page's init script installs the same collector in every one.
-          violations: window.__violations ?? null
-        }))
-        .catch(() => null) ?? Promise.resolve(null)),
-      // What this document was actually served, so "the shipped policy, plus a report endpoint and
-      // nothing else" is asserted rather than intended.
-      servedCsp,
-      // Every refusal the browser reported for this arm, which is the evidence an in-frame listener
-      // cannot be relied on to have collected.
-      reported: reportedDirectives(cspReports, nonce),
-      // Null on every arm that acted successfully, and on every arm that did not act at all.
-      actError,
-      topNavigations: navigations.filter((one) => one.main && one.foreign).length,
-      ownOriginTopNavigations: navigations.filter((one) => one.main && !one.foreign).length,
-      // What the frame asked for itself at the embedder's origin, which is a different escape from a
-      // top-frame request and is refused by a different line of the policy.
-      ownOriginFrameNavigations: navigations.filter((one) => !one.main && !one.foreign).length,
-      popups: popups.length,
-      // This arm's fetches only, by nonce: the paths, with the nonce stripped, so a case reads the
-      // subresource rather than the bookkeeping.
-      foreignHits: foreignHits
-        .filter((one) => one.includes(`n=${nonce}`))
-        .map((one) => one.split('?')[0]),
-      // Same shape as `foreignHits` and read the same way: this arm's requests only, by nonce, as
-      // paths. Absolute URLs go in, so the origin is stripped along with the query.
-      secureHits: readImageHits(),
-      // What each admitted request carried, this arm's only, so an absence is this artifact's.
-      // Read off the header the listener received rather than off a request object handed to a
-      // route: the header on the wire is what the shell's `Referrer-Policy` is about.
-      secureReferers: assetServer.referersFor(nonce),
-      violations: await page.evaluate(() => window.__violations),
-      body: await page.evaluate(() => document.body.innerText)
-    }
-    return result
-  } finally {
-    // The context and not just the page: an arm whose wait aborted still owns one, and the case
-    // after it runs on the same browser. On the happy path this is the close that always ran.
-    await page.close().catch(() => {})
-    await context.close().catch(() => {})
-  }
+/** The rig's own state, handed to the driver: one object rather than a module of loose bindings. */
+const rig = {
+  origins,
+  foreignHits,
+  cspReports,
+  clip: FRAME_PROBE,
+  nonce: 0,
+  foreignOrigin: null,
+  assetServer: null
 }
+
+/** Mounts the preview with one artifact and reports everything a case can assert on. */
+const open = async (browser, options) => await openPreviewArm(rig, browser, options)
 
 for (const engine of ['chromium', 'webkit']) {
   describeRender(
@@ -680,6 +426,217 @@ for (const engine of ['chromium', 'webkit']) {
         expect(empty.topNavigations).toBe(0)
       }, 180_000)
 
+      /**
+       * The hide path C8.1 exists for (ruling 37.2), against the same rig that measures the open one.
+       *
+       * A shell built before the cancelled-navigation event drops a tapped link in silence, so the
+       * page asks first and renders the artifact's links as text when the answer is no. The ruling
+       * names three readings and all three are taken: no underline, no pointer cursor, no anchor a
+       * tap does nothing on. The granted arm is each one's presence precondition -- without it,
+       * "no underline" is also what a frame that never rendered reports.
+       *
+       * Every verdict here is a reading the frame itself publishes: the anchors its document holds,
+       * the style the engine computed for one, whether focus lands on it, and whether the tap this
+       * arm made landed at all. None of them waits for a record that may never arrive.
+       *
+       * That is the round-1 fix, and it is why this case has two arms rather than three. It had a
+       * third that tapped the granted link and waited for the top-frame navigation through
+       * `expectNavigation: 'main-frame'`, and `waitForRecordedNavigation` has no bound but the
+       * case's own timeout: on CI's Chrome the click missed its 2 s actionability window under load,
+       * no navigation was ever recorded, and the arm sat in that wait for the whole 240 s
+       * (`Test timed out in 240000ms`, recorded `[]`, with the frame attached only at 38.9 s). Three
+       * arms sharing one budget is what made this case the one to find it.
+       *
+       * Nothing is lost by dropping it. The tap's outcome on a granted shell is the next case,
+       * `hands a user's tap on a link to the top frame, exactly once`, on these same counters from
+       * this same rig and with a budget of its own -- so the zero below still has a presence
+       * precondition, and it is the one this file uses elsewhere for exactly this reason.
+       */
+      it('renders an artifact link as text against a shell that cannot open one', async (ctx) => {
+        const hidden = await open(browser(), {
+          signal: ctx.signal,
+          grants: ['navigate', 'storage'],
+          act: async ({ frame }) => {
+            // The tap the next case makes on a granted shell. It is expected to produce nothing, so
+            // the arm takes the bounded settle rather than waiting for a record that is not coming.
+            await frame?.click('#toplink', { timeout: 2000 })
+          }
+        })
+        // The artifact is there and painted, so what follows is a hidden affordance on a complete
+        // screen rather than a frame that failed to load.
+        expect(hidden.grants).not.toContain('externalNavigation')
+        expect(hidden.pixelBefore).toBe(ARTIFACT_RGB)
+        expect(hidden.frameCount).toBe(1)
+        expect(hidden.inside?.marker).toBe('ARTIFACT_RENDERED')
+        // The toggle is still a toggle: this is the whole of "the screen that remains is complete".
+        expect(hidden.toggles?.map((one) => one.selected)).toEqual(['true', 'false'])
+        // No anchor left at all: the elements and their text survive, the links do not. The
+        // fragment link is in that count too -- inside this frame a fragment resolves against the
+        // embedder's base URL, so activating it navigates rather than scrolls (round 3).
+        expect(hidden.links?.linked).toBe(0)
+        expect(hidden.links?.anchors).toBe(5)
+        expect(hidden.links?.text).toBe('tap')
+        // No underline, as the browser resolves it, and not in the tab order either.
+        expect(hidden.links?.decoration).toBe('none')
+        expect(hidden.links?.focusable).toBe(false)
+        // And the tap does nothing, which is the behaviour the affordance was advertising. The
+        // click landing is asserted first, because a click that never reached its target and a tap
+        // that did nothing are the same three zeros and only one of them is the product's doing.
+        expect(hidden.actError).toBeNull()
+        expect(hidden.topNavigations).toBe(0)
+        expect(hidden.ownOriginTopNavigations).toBe(0)
+        expect(hidden.popups).toBe(0)
+        // The second fence: the browsing context cannot navigate the top frame either, so a link
+        // this pass somehow missed is refused by the sandbox as well.
+        expect(hidden.mountedSandbox).toBe('')
+
+        // Every reading above against the granted arm, which is the shipped screen. It does not tap,
+        // and that is not only about the wait: a tap costs the readings, because the top frame goes
+        // mid-navigation and the computed style of an element in a blanking frame reads as the
+        // initial value -- which is what this arm measured before it was split. The same split the
+        // `pixelBefore` sampling above exists for.
+        const shown = await open(browser(), { signal: ctx.signal })
+        expect(shown.grants).toContain('externalNavigation')
+        expect(shown.pixel).toBe(ARTIFACT_RGB)
+        expect(shown.links?.linked).toBe(5)
+        expect(shown.links?.anchors).toBe(5)
+        expect(shown.links?.text).toBe('tap')
+        expect(shown.links?.decoration).toBe('underline')
+        expect(shown.links?.focusable).toBe(true)
+        /**
+         * The pointer cursor, asserted only on the engine that reports one.
+         *
+         * Measured here: WebKit computes `cursor: auto` for an `<a href>` as well as for an anchor
+         * without one -- it resolves the link cursor at hit test rather than into the computed
+         * style -- so on that engine the reading cannot tell the two apart. Asserting "not pointer"
+         * on the hidden arm there would be a zero with no presence precondition behind it, so this
+         * pins the discrimination where it exists and pins the blindness where it does not. The
+         * underline, the missing anchor, the lost focusability and the tap that did nothing carry
+         * the case on WebKit.
+         */
+        if (engine === 'chromium') {
+          expect(shown.links?.cursor).toBe('pointer')
+          expect(hidden.links?.cursor).not.toBe('pointer')
+        } else {
+          expect(shown.links?.cursor).toBe(hidden.links?.cursor)
+        }
+        expect(shown.mountedSandbox).toBe('allow-top-navigation-by-user-activation')
+      }, 240_000)
+
+      /**
+       * What the hidden-link path must NOT change (C8.1 round 2).
+       *
+       * The pass parses the artifact and serialises it again, and a round trip is not free of the
+       * artifact's rendering by default. Three things were measured lossy and compensated in
+       * `html-preview-inert-links.ts`; this is the arm that reads what an engine actually did with
+       * the result, because the unit suite runs in happy-dom and happy-dom's parser does not drop
+       * the newline a browser drops or resolve a rendering mode at all.
+       *
+       * The granted arm is every reading's presence precondition: it takes the artifact untouched,
+       * so it is what the hidden arm has to match.
+       */
+      it('changes nothing an engine renders except that links are not links', async (ctx) => {
+        // A doctype with a public identifier and no system identifier, which is quirks. The bare
+        // name is not, so a pass that rewrote one as the other moves the whole artifact between
+        // layout modes -- which is what this arm exists to catch.
+        const quirks = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">'
+        const shown = await open(browser(), { signal: ctx.signal, doctype: quirks })
+        const hidden = await open(browser(), {
+          signal: ctx.signal,
+          doctype: quirks,
+          grants: ['navigate', 'storage']
+        })
+        // Both painted, so every comparison below is between two rendered documents.
+        expect(shown.pixel).toBe(ARTIFACT_RGB)
+        expect(hidden.pixel).toBe(ARTIFACT_RGB)
+        expect(shown.grants).toContain('externalNavigation')
+        expect(hidden.grants).not.toContain('externalNavigation')
+
+        /**
+         * The rendering mode, pinned as the reading it is rather than the one it looks like.
+         *
+         * A quirks doctype does not put this frame in quirks mode, and nothing could: measured on
+         * both engines, a `srcdoc` document takes its mode from its embedder, and that doctype, the
+         * bare name and no doctype at all all read `CSS1Compat` inside the frame. So `compatMode`
+         * cannot tell a preserved doctype from a rewritten one here -- it is asserted equal across
+         * the arms, and pinned to the embedder's mode so that an engine which ever stopped
+         * inheriting reds this rather than going quietly green.
+         */
+        expect(shown.inside?.compatMode).toBe('CSS1Compat')
+        expect(hidden.inside?.compatMode).toBe(shown.inside?.compatMode)
+        // The reading that does discriminate: the doctype the frame's own document reports. Without
+        // the identifiers carried through, the hidden arm reports an empty public id here.
+        expect(shown.inside?.doctypePublicId).toBe('-//W3C//DTD HTML 4.01 Transitional//EN')
+        expect(hidden.inside?.doctypePublicId).toBe(shown.inside?.doctypePublicId)
+        expect(hidden.inside?.doctypeSystemId).toBe(shown.inside?.doctypeSystemId)
+        // Not vacuous: an arm handed the bare name reports no identifier on the same reading.
+        const bare = await open(browser(), { signal: ctx.signal, grants: ['navigate', 'storage'] })
+        expect(bare.inside?.doctypePublicId).toBe('')
+
+        // The blank line a preformatted block starts with, which the serialiser drops and the pass
+        // writes back. The fixture's block opens with one, so this is a presence either way.
+        expect(shown.inside?.preText).toBe('\nkept')
+        expect(hidden.inside?.preText).toBe(shown.inside?.preText)
+
+        // The fragment link, which the granted arm keeps and the hidden arm does not. Round 3
+        // measured why that is the right way round: a fragment is a frame navigation here, not a
+        // scroll, so there was no working affordance to preserve. The case below taps one.
+        expect(shown.inside?.fragmentHref).toBe('#fragtarget')
+        expect(hidden.inside?.fragmentHref).toBeNull()
+        expect(hidden.links?.linked).toBe(0)
+        expect(shown.links?.linked).toBe(5)
+      }, 240_000)
+
+      /**
+       * A tap on a table-of-contents link, which is not the scroll it looks like (round 3).
+       *
+       * The frame's document URL is `about:srcdoc` and its base URL is inherited from the embedder,
+       * so `#fragtarget` resolves against the shell's own URL: the destination differs from the
+       * document's by more than a fragment, which makes activating it a frame navigation and the
+       * shipped `frame-src \'none\'` refuses it. Nothing scrolls on either engine, and on Chromium
+       * the frame is replaced by an error page, so the artifact is gone.
+       *
+       * The granted arm is the presence precondition and it is also a bug: the pass does not run
+       * there, so the artifact keeps its fragment links and the same tap does the same damage. That
+       * has been true since the preview shipped and is not this change\'s to fix -- it is recorded
+       * in `followup-html-preview-fragment-links.md`. What it buys here is that the counters can
+       * see the navigation at all, so the hidden arm\'s silence is the missing href and not a rig
+       * that cannot watch.
+       */
+      it('taps a fragment link, which navigates this frame rather than scrolling it', async (ctx) => {
+        // Something to scroll, so "did not scroll" is a reading rather than a document that had
+        // nowhere to go.
+        const tall = { body: '<div style="height:1600px">spacer</div>' }
+        const tapFragment = async ({ frame }) => {
+          await frame?.click('#fraglink', { timeout: 2000 })
+        }
+
+        const shown = await open(browser(), { signal: ctx.signal, extra: tall, act: tapFragment })
+        // The precondition the whole case rests on: the base URL is the embedder's, which is what
+        // makes a fragment resolve off-document here.
+        expect(shown.inside?.baseUri ?? shown.mountedSrcDoc).toBeTruthy()
+        // The navigation the shipped policy refused, which is what the hidden arm must not produce.
+        expect(shown.reported).toContain('frame-src')
+
+        const hidden = await open(browser(), {
+          signal: ctx.signal,
+          extra: tall,
+          grants: ['navigate', 'storage'],
+          act: tapFragment
+        })
+        // The tap landed on the element and produced nothing at all.
+        expect(hidden.actError).toBeNull()
+        expect(hidden.reported).not.toContain('frame-src')
+        // The artifact is still the frame's document, which is the damage this avoids.
+        expect(hidden.inside?.marker).toBe('ARTIFACT_RENDERED')
+        expect(hidden.inside?.fragmentHref).toBeNull()
+        // And it did not scroll either, because there is nothing left to activate.
+        expect(hidden.inside?.scrollY).toBe(0)
+        // Nothing went to the top frame or a new window on the way, either.
+        expect(hidden.topNavigations).toBe(0)
+        expect(hidden.popups).toBe(0)
+      }, 240_000)
+
       it("hands a user's tap on a link to the top frame, exactly once", async (ctx) => {
         const read = await open(browser(), {
           signal: ctx.signal,
@@ -804,7 +761,7 @@ for (const engine of ['chromium', 'webkit']) {
           () => false,
           stop.signal,
           { arm: 'arm sampling-probe', browserVersion: browser().version() },
-          25
+          { sampleEveryMs: 25 }
         )
         clearTimeout(timer)
         spy.mockRestore()
@@ -813,6 +770,36 @@ for (const engine of ['chromium', 'webkit']) {
         expect(printed[0]).toContain('arm sampling-probe')
         // Not the placeholder: this string is only there if the sampling branch produced a reading.
         expect(printed[0]).toContain('frames [')
+      }, 60_000)
+
+      // The bound, driven once. An arm whose click misses its actionability window waits here for a
+      // record nobody will write, and before the bound existed it spent the case's whole budget and
+      // failed as a bare timeout. What this pins is the reason it fails with instead.
+      it('gives up on a navigation that is not coming, and names why', async (ctx) => {
+        void ctx
+        const page = await browser().newPage()
+        try {
+          const failed = await waitForRecordedNavigation(
+            page,
+            [],
+            () => false,
+            null,
+            {
+              arm: 'arm bound-probe',
+              browserVersion: browser().version(),
+              actError: 'locator.click: Timeout 2000ms exceeded'
+            },
+            { boundMs: 50 }
+          ).catch((error) => String(error))
+          // Which arm, how long it waited, what its click did, and what the frame last read -- the
+          // four a CI log has nothing else to go on for.
+          expect(failed).toContain('arm bound-probe')
+          expect(failed).toMatch(/waited \d+ms for the navigation it expects/)
+          expect(failed).toContain('Timeout 2000ms exceeded')
+          expect(failed).toContain('frames [')
+        } finally {
+          await page.close()
+        }
       }, 60_000)
 
       it('keeps the Preview/Source toggle, and Source shows the source', async (ctx) => {
@@ -867,11 +854,6 @@ describe('the HTML preview needs no policy change', () => {
 })
 
 /** One pixel of the frame's own fill, which is what says the artifact parsed and painted. */
-async function probePixel(page) {
-  const png = PNG.sync.read(await page.screenshot({ clip: FRAME_PROBE }))
-  return `${png.data[0]},${png.data[1]},${png.data[2]}`
-}
-
 async function readFileText(relativePath) {
   const { readFile } = await import('node:fs/promises')
   return await readFile(join(mobileDir, '..', relativePath), 'utf8')

@@ -4,6 +4,9 @@ import {
   MOBILE_WEB_BUNDLE_ERROR_CODES
 } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
+  computeMobileWebBundleId,
+  MobileWebBundleAssetSchema,
+  MobileWebBundleRouteSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
@@ -17,10 +20,12 @@ import {
   readMobileWebBundleErrorCode
 } from './mobile-web-bundle-operations'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
-import { MobileWebBundleManifestReplySchema } from './mobile-web-bundle-reply-schemas'
+import {
+  MobileWebBundleManifestReadSchema,
+  MobileWebBundleManifestReplySchema
+} from './mobile-web-bundle-reply-schemas'
 import type { RpcReadResult } from './rpc-operation-contract'
 
-const BUILD_ID = 'a'.repeat(64)
 const ASSET_SHA = 'b'.repeat(64)
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
 
@@ -34,19 +39,29 @@ function asset(overrides: Record<string, unknown> = {}) {
   }
 }
 
+/** The id the host would publish this asset list under, since the reader now checks that. Read off
+ *  the list each fixture ends up with, so a test that changes the assets does not fail on the id it
+ *  did not set out to change; one that names a `buildId` itself keeps it. */
+function contentIdOf(assets: unknown): string {
+  const parsed = MobileWebBundleAssetSchema.array().safeParse(assets)
+  return parsed.success ? computeMobileWebBundleId(parsed.data) : 'a'.repeat(64)
+}
+
+const BUILD_ID = contentIdOf([asset()])
+
 function manifestReply(overrides: Record<string, unknown> = {}) {
+  const manifest = {
+    schemaVersion: 1,
+    desktopVersion: '1.4.200',
+    minCompatibleRuntimeProtocolVersion: 2,
+    runtimeProtocolVersion: 2,
+    entrypoint: 'index.html',
+    totalBytes: 12,
+    assets: [asset()],
+    ...overrides
+  }
   return {
-    manifest: {
-      schemaVersion: 1,
-      buildId: BUILD_ID,
-      desktopVersion: '1.4.200',
-      minCompatibleRuntimeProtocolVersion: 2,
-      runtimeProtocolVersion: 2,
-      entrypoint: 'index.html',
-      totalBytes: 12,
-      assets: [asset()],
-      ...overrides
-    },
+    manifest: { buildId: contentIdOf(manifest.assets), ...manifest },
     chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES
   }
 }
@@ -91,6 +106,49 @@ describe('mobile web bundle manifest reply reader', () => {
       chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
       manifest: { contentEncoding: 'br', buildId: BUILD_ID }
     })
+  })
+
+  it('refuses a manifest whose build id is not the digest of the assets it names', () => {
+    // The id is a cache key and a claim about content at once. The host pins the two together on
+    // its own strict schema; without the same refine here, a stale or forged id reaches the shell,
+    // which treats an id it already holds as the same bytes and opens the generation on disk.
+    const forged = { ...manifestReply().manifest, buildId: 'f'.repeat(64) }
+
+    const parsed = MobileWebBundleManifestReadSchema.safeParse(forged)
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.map((issue) => issue.path)).toEqual([['buildId']])
+    expect(readManifest({ ...manifestReply(), manifest: forged }).compatible).toBe(false)
+  })
+
+  it('accepts the manifest whose id is that digest, members and all', () => {
+    const manifest = manifestReply().manifest
+
+    expect(manifest.buildId).toBe(computeMobileWebBundleId([asset()]))
+    expect(MobileWebBundleManifestReadSchema.safeParse(manifest).success).toBe(true)
+    // An unknown member is still read through, and it is outside the digest: the id is computed
+    // from the four asset fields the contract serializes, so a field a newer desktop adds anywhere
+    // cannot turn a cached bundle into a redownload.
+    expect(
+      MobileWebBundleManifestReadSchema.safeParse({ ...manifest, contentEncoding: 'br' }).success
+    ).toBe(true)
+  })
+
+  it('reads a route pattern with a trailing rest segment, which no field has to change for', () => {
+    // Forward compatibility for a desktop that later ships a catch-all screen: `page-route-policy`
+    // matches such a pattern, and it only ever sees one the reader let through. Pinned on the
+    // phone's loose reader and on the host's strict one, since the pathname rule lives there.
+    const pathname = '/h/[hostId]/[...page]'
+    const manifest = manifestReply({
+      routes: [{ pathname, grants: ['navigate'] }]
+    }).manifest
+    const parsed = MobileWebBundleManifestReadSchema.safeParse(manifest)
+
+    expect(parsed.success).toBe(true)
+    expect(parsed.data?.routes?.[0]?.pathname).toBe(pathname)
+    expect(MobileWebBundleRouteSchema.safeParse({ pathname, grants: ['navigate'] }).success).toBe(
+      true
+    )
   })
 
   it('accepts a host that shrank chunkBytes and refuses one that grew it', () => {

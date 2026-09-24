@@ -88,6 +88,33 @@
       "mr": "MR",
       "port": "ポート",
       "pr": "PR"
+    },
+    "filter": {
+      "emptyTitle": "有効なフィルターに一致する結果がありません",
+      "emptySubtitle": "上のフィルターをクリアするか、より多くのホストとプロジェクトに広げてください。",
+      "tabKey": "Tab",
+      "label": "フィルター",
+      "activeCount": "{{value0}} 件アクティブ",
+      "removeChip": "フィルター {{value0}} を削除",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "すべてクリア",
+      "hosts": "ホスト",
+      "projects": "プロジェクト",
+      "trigger": "結果をフィルター",
+      "search": "ホストまたはプロジェクトで絞り込む…",
+      "searchHosts": "ホストを絞り込む…",
+      "searchProjects": "プロジェクトを絞り込む…",
+      "noOptions": "一致するホストまたはプロジェクトがありません",
+      "noHosts": "一致するホストがありません",
+      "noProjects": "一致するプロジェクトがありません",
+      "moreOptions": "他 {{value0}} 件 — 入力を続けて絞り込む",
+      "selectAllMatching": "一致するものをすべて選択 ({{value0}})",
+      "selectedCollapsed": "{{value0}} 件選択中 — チップまたはクリアで解除",
+      "clearHosts": "ホストをクリア",
+      "clearProjects": "プロジェクトをクリア",
+      "back": "戻る",
+      "ariaActive": "フィルター: {{value0}} 件アクティブ。",
+      "scopedTo": "スコープ:"
     }
   },
   "auto": {
@@ -355,7 +382,8 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "muse_label": "Muse"
         },
         "skill": {
           "cli": {
@@ -768,7 +796,7 @@
         "94a5afe910": "SSH ホスト",
         "40d80bad8a": "ベータ",
         "de0c2907a1": "リモート Orca サーバー",
-        "b351014180": "Orca の統計に加え、Claude、Codex、OpenCode のトークン分析と Grok サブスクリプション使用状況。",
+        "b351014180": "Orca の統計に加え、Claude、Codex、OpenCode、Muse のトークン分析と Grok サブスクリプション使用状況。",
         "d72a58b5b9": "統計と使用状況",
         "dcd0d9b74f": "よく使う操作のキーボードショートカット。",
         "94295ebfb3": "ショートカット",
@@ -3739,7 +3767,6 @@
           "444585cb41": "データ付き",
           "ecb0cd8a4c": "有効 -",
           "33f7b043d2": "プロバイダー",
-          "60002bb22f": "ローカルの Claude、Codex、OpenCode の使用状況はまだ見つかりません。次の Agent セッションがトークンログを書き込むと、概要に反映されます。",
           "70f36452d4": "キャッシュシェア",
           "327603fe8b": "アクティブ日数",
           "0eaf937335": "推定コスト",
@@ -3752,7 +3779,9 @@
           "ca6bc5fded": "更新",
           "e06d1baf5c": "リフレッシュの使用法の概要",
           "c760c481c5": "使用方法の概要",
-          "55c910f4f1": "- 一部のモデルの価格は利用できません"
+          "55c910f4f1": "- 一部のモデルの価格は利用できません",
+          "enableMuse": "Muse を有効にする",
+          "noLocalUsageYet": "ローカルの Claude、Codex、OpenCode、Muse の使用状況はまだ見つかりません。次の Agent セッションがトークンログを書き込むと、概要に反映されます。"
         },
         "share": {
           "card": {
@@ -3783,13 +3812,14 @@
             "0bba8ca244": "統計",
             "0e2a0b6431": "使用法",
             "372debfac0": "統計",
-            "26bb901fcd": "Orca の統計に加え、Claude、Codex、OpenCode のトークン分析と Grok サブスクリプション使用状況。",
+            "26bb901fcd": "Orca の統計に加え、Claude、Codex、OpenCode、Muse のトークン分析と Grok サブスクリプション使用状況。",
             "cb2430ae6a": "統計と使用状況",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "サブスクリプション",
             "d6e9f0a1b2": "クレジット",
             "a3b6c7d8e9": "grok の使用状況",
-            "9f2a3b4c5d": "xai"
+            "9f2a3b4c5d": "xai",
+            "museKeyword": "muse"
           }
         },
         "usage": {
@@ -3807,7 +3837,6 @@
               "1dd166c920": "少ない",
               "52d9221dc0": "最近のトークンアクティビティのヒートマップ",
               "c424eb3f8e": "最高：",
-              "f28ff1f852": "最近の Claude、Codex、および OpenCode トークンアクティビティの組み合わせ。",
               "69e2b50427": "毎日の強度",
               "3a795542fa": "組み合わせたトークンミックス",
               "e65084cb4b": "推論",
@@ -3820,7 +3849,8 @@
               "6762f6a682": "トークン",
               "a7f937fb29": "{{value0}} セッション - {{value1}} {{value2}}",
               "c8f3a2d1e0b4": "ターン",
-              "d9a4b3e2f1c5": "イベント"
+              "d9a4b3e2f1c5": "イベント",
+              "recentCombinedActivity": "最近の Claude、Codex、OpenCode、Muse のトークンアクティビティの組み合わせ。"
             }
           }
         },
@@ -3850,6 +3880,17 @@
           "e5a6b7c8d9": "使用済み週次クレジット",
           "f6b7c8d9e0": "請求期間のリセット",
           "a7b8c9d0e1": "Grok アカウント設定"
+        },
+        "MuseUsagePane": {
+          "title": "Muse 使用状況のトラッキング",
+          "enableLabel": "Muse の使用状況分析を有効にする",
+          "disabledDescription": "ローカルの Muse セッションログを読み取り、トークン、モデル、セッションの統計を表示します。",
+          "scopeAll": "ローカルの Muse 使用状況すべて",
+          "optionsLabel": "Muse 使用状況のオプション",
+          "refreshAriaLabel": "Muse の使用状況を更新",
+          "emptyMessage": "このスコープではローカルの Muse 使用状況がまだ見つかりません。",
+          "noCostNote": "Muse のセッションログにはトークンは記録されますがコストは記録されないため、コストの見積もりは表示されません。",
+          "recentSessionsDescription": "このスコープ内の最新のローカル Muse セッション。"
         }
       },
       "sparse": {
@@ -4668,6 +4709,7 @@
           "76865d827f": "グループに移動",
           "503ec0f8e6": "プロジェクトからの新規グループ",
           "3350101edb": "パスのコピー",
+          "copyWorktreeName": "ワークツリー名をコピー",
           "f4475537d8": "削除",
           "f5ac91531d": "Orca からプロジェクトを削除",
           "b42391d8bf": "削除中…",
@@ -5284,8 +5326,6 @@
           "01af244097": "キャンセル",
           "28c8e53176": "これにより、すべてのワークスペースで実行中のすべてのターミナルペインが強制終了されます。これらのセッションで保存されていない作業内容は失われます。デーモン自体は実行を継続し、新規ターミナルをすぐに開くことができます。これを元に戻すことはできません。",
           "1bbea41a77": "すべてのターミナルセッションを強制終了しますか?",
-          "01d6b7c64e": "実行中のすべてのターミナルペインを強制終了し、デーモンプロセスを再起動します。ペインには「プロセスが終了しました」と表示され、すぐに再度開くことができます。以前のアプリバージョンのレガシープロトコルセッションは保持されます。これを元に戻すことはできません。",
-          "922548bc66": "ターミナルデーモンを再起動しますか?",
           "2b4efdc162": "セッションを強制終了できませんでした。",
           "d18f3005c2": "{{value0}} セッション{{value1}} は終了を拒否しました。",
           "baad8cd651": "実行中のセッションはありません。",
@@ -5955,7 +5995,16 @@
             "defaultCopy": "対応 Agent の新規ターミナルタブを開く方法を選択します。",
             "defaultViewLabel": "デフォルトの Chat UI ビュー",
             "defaultViewTerminal": "ターミナルチャット",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "シェルから渡す変数",
+            "shellEnvNamePlaceholder": "変数名",
+            "shellEnvNameAdd": "追加",
+            "shellEnvNameRemove": "{{value0}} を削除",
+            "shellEnvNamesEmpty": "まだ変数は追加されていません。",
+            "shellEnvNamesAlwaysPassed": "PATH、ロケール、SSH_AUTH_SOCK は常に渡されます。次にチャットを開始または再開したときに適用されます。",
+            "shellEnvTitle": "シェル環境を使用する",
+            "shellEnvCopy": "Codex と Claude のチャットは、ターミナルと同じく、ログインシェルがエクスポートするすべての変数を引き継いで開始します。オフにすると、渡す変数を選択できます。",
+            "shellEnvToggleLabel": "シェル環境の使用の切り替え"
           },
           "agentDashboard": {
             "title": "Agent ダッシュボード",
@@ -7040,7 +7089,7 @@
           "b5ee17826b": "リモートの Orca ランタイムとペアリングすると、セッションの永続化、リモート状態の拡充、Web やモバイルへの引き継ぎができます。",
           "7686cb5c36": "このブラウザを保存された Orca サーバーに接続します。",
           "bd0181eeca": "リモート Orca サーバー",
-          "8acf3f22e0": "Orca の統計に加え、Claude、Codex、OpenCode のトークン分析と Grok サブスクリプション使用状況。",
+          "8acf3f22e0": "Orca の統計に加え、Claude、Codex、OpenCode、Muse のトークン分析と Grok サブスクリプション使用状況。",
           "954a8f5aef": "統計と使用状況",
           "a737a4bb22": "よく使う操作のキーボードショートカット。",
           "23bf7a1ad4": "ショートカット",
@@ -8582,6 +8631,20 @@
             }
           }
         },
+        "machine": {
+          "name": {
+            "search": {
+              "title": "マシン名",
+              "description": "他のデバイスやホストでこのコンピューターを表示する名前を選びます。",
+              "machineName": "マシン名",
+              "machine": "マシン",
+              "hostname": "ホスト名",
+              "computer": "コンピューター",
+              "rename": "名前変更",
+              "name": "名前"
+            }
+          }
+        },
         "mobile": {
           "emulator": {
             "search": {
@@ -9860,6 +9923,12 @@
           "step2LocalDescription": "スマートフォンが Tailscale または Wi‑Fi でこのアドレスに到達できる必要があります。",
           "step2RelayDescription": "任意。近く（同じ Wi‑Fi または Tailscale）にいるときにスマホが使うアドレスを選びます。通常は Relay より高速です。外出中は引き続き Relay が使われます。",
           "step2RelayDisclosure": "より速いローカル経路も使う"
+        },
+        "MachineNameField": {
+          "label": "マシン名",
+          "description": "他のデバイスやホストには「{{name}}」と表示されます。空欄にするとコンピューター自身の名前を使います。",
+          "pending": "他のデバイスやホストにはこの名前が表示されます。空欄にすると検出されたコンピューター名を使います。",
+          "placeholder": "自動検出"
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay ベータについて",
@@ -11376,7 +11445,6 @@
             "localWorkspacesOnly": "履歴からの再開はローカルワークスペースでのみ利用できます。",
             "agentSessionQueued": "{{value0}} 件のセッションが順番待ち",
             "sessionHistory": "Agent セッション履歴",
-            "shownRecent": "{{value0}}表示 · {{value1}}最近",
             "resumePastSessions": "過去のセッションを再開",
             "refreshSessionHistory": "セッション履歴を更新",
             "searchSessions": "セッションを検索",
@@ -11389,7 +11457,6 @@
             "sessionId": "セッション ID",
             "logPath": "ログパス",
             "agents": "Agent",
-            "sessionsShownCompact": "{{value0}} 件表示",
             "originalPaneUnavailable": "元のペインは利用できなくなりました。",
             "worktreeUnavailable": "ワークツリーは利用できなくなりました。",
             "openSupportedWorkspace": "セッションを再開する前に、ワークスペースを開いてください。",
@@ -11415,7 +11482,6 @@
             "agents": "Agent",
             "selectAllAgents": "すべて選択",
             "clearAgents": "クリア",
-            "sort": "並べ替え",
             "lastUpdated": "最終更新",
             "created": "作成日時",
             "group": "グループ",
@@ -12955,8 +13021,6 @@
           "10ed04a685": "ノートブックセルは、ノートブックフォルダーからこのマシン上のローカル Python を実行します。信頼できるファイルのセルのみを実行してください。",
           "9e06ae5d36": "ノートブックのコードを実行しますか?",
           "d6f37a640b": "空のノート",
-          "8c3b21369a": "nbformat",
-          "329764e9fc": "ベータ",
           "15ec40a735": "ノートブックの保存",
           "07e7d96612": "細胞",
           "c1601b23b2": "ノートブックをレンダリングできません",
@@ -12970,9 +13034,7 @@
           "fd8ac707bc": "セルを上に移動",
           "3e4cbf15ea": "生",
           "1833dbbc43": "Markdown",
-          "7005960d73": "コード",
-          "59b6cd874b": "コード",
-          "ba149053d5": "markdown"
+          "7005960d73": "コード"
         },
         "MarkdownPreview": {
           "e4683f70c4": "キャンセル",

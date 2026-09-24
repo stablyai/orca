@@ -75,6 +75,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     minimaxApiKeyConfigured: false,
+    opencodeGoApiKeyConfigured: false,
     grokAuthConfigured: false,
     ...overrides
   }
@@ -125,6 +126,16 @@ describe('hasUsageProviderSettings', () => {
     ).toBe(true)
     // Antigravity uses its own CLI-backed usage source.
     expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
+    // Why: an OPENCODE_API_KEY or a key OpenCode saved on /connect is invisible
+    // to the renderer, so main's presence flag is the only durable signal.
+    expect(hasUsageProviderSettings(usageSettings({ opencodeGoApiKeyConfigured: true }))).toBe(true)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'opencode-go',
+        usageSettings({ opencodeGoApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('opencode-go', usageSettings())).toBe(false)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)

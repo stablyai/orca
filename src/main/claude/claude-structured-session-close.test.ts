@@ -62,7 +62,6 @@ describe('Claude published session close lifecycle', () => {
       events,
       [],
       undefined,
-      undefined,
       persistHandle,
       (_sessionId, state) => backgroundStates.push(state)
     )

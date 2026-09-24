@@ -37,6 +37,8 @@ const dependencies = vi.hoisted((): Dependencies => {
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  BackHandler: { addEventListener: () => ({ remove: () => {} }) },
+  Keyboard: { addListener: () => ({ remove: () => {} }) },
   Linking: { openURL: vi.fn() },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -90,6 +92,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     }
   }
 }))
+// The notice banner above a served page draws one icon; nothing here measures it.
+vi.mock('lucide-react-native', () => ({ X: 'Icon' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
 }))
@@ -102,7 +106,8 @@ vi.mock('expo-router', () => ({
     back: vi.fn(),
     canGoBack: () => false
   }),
-  usePathname: () => '/h/host-1'
+  usePathname: () => '/h/host-1',
+  useNavigation: () => ({ setOptions: vi.fn() })
 }))
 vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
   const React = await import('react')
@@ -118,7 +123,7 @@ vi.mock('./use-page-host-snapshot', () => ({
   usePageHostSnapshot: () => ({
     snapshot: SNAPSHOT,
     unreadable: false,
-    readStorage: () => ({}),
+    readStorage: () => ({ storage: {}, storageOversize: [] }),
     refreshStorage: () => {},
     writeStorage: () => {}
   })
@@ -130,6 +135,7 @@ vi.mock('./use-mobile-web-shell-session', () => ({
     pageRoutes: [],
     pageRouteGrants: [],
     routeGrants: [],
+    updateNotice: null,
     retry: vi.fn(),
     reportShellFailure: vi.fn(),
     reportDocumentLoaded: vi.fn(),

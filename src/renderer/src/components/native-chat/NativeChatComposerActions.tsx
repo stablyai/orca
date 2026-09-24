@@ -7,6 +7,7 @@ import type {
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerActionsProps = {
@@ -25,6 +26,8 @@ export type NativeChatComposerActionsProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  /** Present while the composer is in goal mode; the chip calls it to leave. */
+  onExitGoalMode?: () => void
 }
 
 export function NativeChatComposerActions({
@@ -42,7 +45,8 @@ export function NativeChatComposerActions({
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  sessionOptionsPickerRequest,
+  onExitGoalMode
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
@@ -80,6 +84,7 @@ export function NativeChatComposerActions({
             {translate('components.native-chat.composer.attach', 'Attach file')}
           </TooltipContent>
         </Tooltip>
+        {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-1.5">
         {/* Why: keep session controls beside the actions they affect; the

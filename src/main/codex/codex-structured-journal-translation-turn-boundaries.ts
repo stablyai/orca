@@ -185,6 +185,67 @@ export class CodexJournalTurnBoundaries {
     return admission
   }
 
+  /**
+   * Settles the turn a terminal `error` names.
+   *
+   * Codex reports a fault that ended a turn as an `error` notification carrying
+   * that turn's id, and `turn/completed` may never follow it — the app server
+   * marks the thread not-running off the error alone. Without this the running
+   * lifecycle row is a latch nothing re-derives, and the chat reads "Working"
+   * for the life of the session. A retrying stream error is NOT a turn end and
+   * never reaches here.
+   */
+  fail(event: TurnBoundaryEvent): CodexJournalTranslationAdmission {
+    const suppressionAdmission = this.deps.flushSuppression()
+    if (!suppressionAdmission.accepted) {
+      return suppressionAdmission
+    }
+    const turnId = readCodexTurnId(event.params) ?? this.deps.activeTurns.current(event.threadId)
+    // An error naming an already-settled turn is not a second end: its terminal
+    // row holds the start and duration this one could not reconstruct.
+    if (!turnId || !this.deps.activeTurns.isActive(event.threadId, turnId)) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    const turnLifecycle =
+      event.threadId === this.deps.primaryThreadId()
+        ? this.settled(event.threadId, turnId, {
+            state: 'completed',
+            outcome: 'failure',
+            completedAt: this.receiptTime(event)
+          })
+        : null
+    const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
+    const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
+      event.threadId,
+      turnId
+    )
+    const admission = settleCodexJournalTurn({
+      sink: this.deps.sink,
+      sessionId: event.sessionId,
+      threadId: event.threadId,
+      turnId,
+      turnLifecycle,
+      streams: this.deps.items.streams,
+      activeItems: this.deps.items.activeItems,
+      pendingPrompts: this.deps.pendingPrompts,
+      ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {})
+    })
+    if (admission.accepted) {
+      if (turnLifecycle) {
+        this.recentTurns.remember(
+          event.threadId,
+          turnLifecycle,
+          requestOrigin,
+          latestDispatchSequence
+        )
+      }
+      this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
+      this.deps.activeTurns.forget(event.threadId, turnId)
+      this.deps.resetActivity(event.threadId)
+    }
+    return admission
+  }
+
   /** Terminal lifecycle for a remembered turn; `startedAt` is absent when the start was never seen.
    *  The verdict travels as one record so a caller cannot supply the state and drop the outcome. */
   settled(

@@ -69,6 +69,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           queueMicrotask(() =>
             cb({
               type: 'ready',
+              pid: 12345,
               startedAtMs: 1_000_000,
               linuxStartTicks: '4242',
               bootId: 'boot-a'
@@ -129,7 +130,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
         if (event === 'message') {
-          queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+          queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_000_000 }))
         }
         return this
       },
@@ -185,7 +186,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       on(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
         if (event === 'message') {
-          queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
+          queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_000_000 }))
         }
         return this
       },
@@ -222,7 +223,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
         if (event === 'message') {
-          queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_700_000_123_456 }))
+          queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_700_000_123_456 }))
         }
         return this
       },

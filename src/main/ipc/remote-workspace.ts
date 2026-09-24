@@ -18,7 +18,7 @@ import {
 } from './remote-workspace-target-session-export'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
-import { CLIENT_ID } from './remote-workspace-client-identity'
+import { CLIENT_ID, type RemoteWorkspaceClientNameSource } from './remote-workspace-client-identity'
 import { listRemoteWorkspaceConnectedClients } from './remote-workspace-connected-clients'
 import {
   clearRemoteWorkspacePatchTails,
@@ -159,7 +159,8 @@ export function handleRemoteWorkspaceNotification(
 
 export function registerRemoteWorkspaceHandlers(
   store: Store,
-  getMainWindow: () => BrowserWindow | null
+  getMainWindow: () => BrowserWindow | null,
+  clientNameSource: RemoteWorkspaceClientNameSource
 ): void {
   mainWindowGetter = getMainWindow
   unregisterRemoteWorkspaceNotifications?.()
@@ -279,7 +280,8 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:listConnectedClients',
-    async (_event, args?: { targetIds?: string[] }) => listRemoteWorkspaceConnectedClients(args)
+    async (_event, args?: { targetIds?: string[] }) =>
+      listRemoteWorkspaceConnectedClients(args, clientNameSource)
   )
 
   ipcMain.handle('remoteWorkspace:clientId', () => CLIENT_ID)

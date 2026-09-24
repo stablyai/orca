@@ -3,16 +3,110 @@
   "family": "mobileWeb.bundle-fetch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
-  "scenarioSha256": "cec3f6a9dd09a2527f150626d15e3040b741bbf83a823f1656e0f3449c6ed80e",
+  "scenarioSha256": "e3044fe513a5fc1fb10c5c00422d965dd760eeea37cfcebc79b4597141f4baa1",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "0ec8dc44128d": {
+      "name": "mobileWeb.bundle.chunk#2",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.chunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "offset": 16,
+            "path": "index.html"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "assetByteLength": 26,
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "dataBase64": "cD5vcmNhPC9wPg==",
+            "eof": true,
+            "offset": 16,
+            "path": "index.html",
+            "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
+          }
+        }
+      }
+    },
+    "0fed70367a30": {
+      "name": "mobileWeb.bundle.chunk#3",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"assets/app.js\",\"offset\":0}}"
+    },
+    "1432380f161f": {
+      "name": "mobileWeb.bundle.chunk#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"index.html\",\"offset\":0}}"
+    },
+    "1e1466cc72ac": {
+      "name": "mobileWeb.bundle.chunk#3",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.chunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "offset": 0,
+            "path": "assets/app.js"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "assetByteLength": 11,
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "dataBase64": "b3JjYS5ib290KCk=",
+            "eof": true,
+            "offset": 0,
+            "path": "assets/app.js",
+            "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d"
+          }
+        }
+      }
+    },
     "23871e324a00": {
       "name": "mobileWeb.bundle.manifest#1",
       "ordinal": 1,
@@ -70,98 +164,7 @@
         }
       }
     },
-    "2988ade7daff": {
-      "name": "mobileWeb.bundle.chunk#2",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"index.html\",\"offset\":0}}"
-    },
-    "2bfa7c81f55f": {
-      "name": "mobileWeb.bundle.chunk#3",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"index.html\",\"offset\":16}}"
-    },
-    "2ff2addcb1f6": {
-      "name": "bundle-progress",
-      "ordinal": 10,
-      "value": {
-        "completedAssets": 2,
-        "receivedBytes": 37,
-        "totalAssets": 2
-      }
-    },
-    "573943fdb37d": {
-      "assets": {
-        "assets/app.js": "orca.boot()",
-        "index.html": "<!doctype html><p>orca</p>"
-      },
-      "outcome": {
-        "assetCount": 2,
-        "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-        "totalBytes": 37
-      }
-    },
-    "76ca82e57d04": {
-      "name": "mobileWeb.bundle.chunk#2",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "mobileWeb.bundle.chunk"
-        },
-        {
-          "name": "params",
-          "value": {
-            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "offset": 0,
-            "path": "index.html"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "undefined"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "assetByteLength": 26,
-            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "dataBase64": "PCFkb2N0eXBlIGh0bWw+PA==",
-            "eof": false,
-            "offset": 0,
-            "path": "index.html",
-            "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
-          }
-        }
-      }
-    },
-    "775bfa42070b": {
-      "name": "mobileWeb.bundle.manifest#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
-    },
-    "782d48c615ad": {
-      "name": "bundle-progress",
-      "ordinal": 7,
-      "value": {
-        "completedAssets": 1,
-        "receivedBytes": 11,
-        "totalAssets": 2
-      }
-    },
-    "a0c050b31ee2": {
-      "name": "mobileWeb.bundle.chunk#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"assets/app.js\",\"offset\":0}}"
-    },
-    "ae7f1100e6e5": {
+    "32f2527d4016": {
       "name": "mobileWeb.bundle.chunk#1",
       "ordinal": 3,
       "args": [
@@ -174,7 +177,7 @@
           "value": {
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
             "offset": 0,
-            "path": "assets/app.js"
+            "path": "index.html"
           }
         },
         {
@@ -192,15 +195,49 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "assetByteLength": 11,
+            "assetByteLength": 26,
             "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "dataBase64": "b3JjYS5ib290KCk=",
-            "eof": true,
+            "dataBase64": "PCFkb2N0eXBlIGh0bWw+PA==",
+            "eof": false,
             "offset": 0,
-            "path": "assets/app.js",
-            "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d"
+            "path": "index.html",
+            "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
           }
         }
+      }
+    },
+    "573943fdb37d": {
+      "assets": {
+        "assets/app.js": "orca.boot()",
+        "index.html": "<!doctype html><p>orca</p>"
+      },
+      "outcome": {
+        "assetCount": 2,
+        "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+        "totalBytes": 37
+      }
+    },
+    "775bfa42070b": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
+    },
+    "823559d1d4b0": {
+      "name": "bundle-progress",
+      "ordinal": 11,
+      "value": {
+        "completedAssets": 2,
+        "receivedBytes": 37,
+        "totalAssets": 2
+      }
+    },
+    "a8fc2e3f9314": {
+      "name": "bundle-progress",
+      "ordinal": 9,
+      "value": {
+        "completedAssets": 0,
+        "receivedBytes": 16,
+        "totalAssets": 2
       }
     },
     "c319ae866f13": {
@@ -213,47 +250,19 @@
         "totalBytes": 37
       }
     },
-    "ce7abd9f93bb": {
-      "name": "mobileWeb.bundle.chunk#3",
-      "ordinal": 8,
-      "args": [
-        {
-          "name": "method",
-          "value": "mobileWeb.bundle.chunk"
-        },
-        {
-          "name": "params",
-          "value": {
-            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "offset": 16,
-            "path": "index.html"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "undefined"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "assetByteLength": 26,
-            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "dataBase64": "cD5vcmNhPC9wPg==",
-            "eof": true,
-            "offset": 16,
-            "path": "index.html",
-            "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
-          }
-        }
+    "c37e890da8f5": {
+      "name": "bundle-progress",
+      "ordinal": 10,
+      "value": {
+        "completedAssets": 1,
+        "receivedBytes": 26,
+        "totalAssets": 2
       }
+    },
+    "f09d3e39d35e": {
+      "name": "mobileWeb.bundle.chunk#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"index.html\",\"offset\":16}}"
     }
   },
   "recording": {
@@ -262,13 +271,13 @@
       {
         "id": "bundle-fetched",
         "observation": {
-          "sender": ["23871e324a00", "ae7f1100e6e5", "76ca82e57d04", "ce7abd9f93bb"],
-          "payloads": ["775bfa42070b", "a0c050b31ee2", "2988ade7daff", "2bfa7c81f55f"],
+          "sender": ["23871e324a00", "32f2527d4016", "0ec8dc44128d", "1e1466cc72ac"],
+          "payloads": ["775bfa42070b", "1432380f161f", "f09d3e39d35e", "0fed70367a30"],
           "settlements": {
             "fetch": "c319ae866f13"
           },
           "state": "573943fdb37d",
-          "effects": ["782d48c615ad", "2ff2addcb1f6"]
+          "effects": ["a8fc2e3f9314", "c37e890da8f5", "823559d1d4b0"]
         }
       }
     ]

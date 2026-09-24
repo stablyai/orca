@@ -37,6 +37,7 @@ export function useStructuredAgentSessionOptions(args: {
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
+    threadGoal: AgentSessionOptionsResult['threadGoal']
   } | null>(null)
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent)
@@ -76,7 +77,11 @@ export function useStructuredAgentSessionOptions(args: {
     })
       .then((result) => {
         if (!stale && optionMutationGeneration.current === readGeneration) {
-          setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
+          setConversationSupport({
+            sessionId,
+            commands: result.conversationCommands ?? [],
+            threadGoal: result.threadGoal
+          })
           updateOptionState((current) =>
             current.record === activeOptionRecordRef.current
               ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
@@ -197,6 +202,11 @@ export function useStructuredAgentSessionOptions(args: {
       transportEnabled && conversationSupport?.sessionId === sessionId
         ? conversationSupport.commands
         : [],
+    /** Absent unless this host and session can change the goal. */
+    threadGoal:
+      transportEnabled && conversationSupport?.sessionId === sessionId
+        ? conversationSupport.threadGoal
+        : undefined,
     optionSnapshot: visibleOptionSnapshot,
     optionSurface,
     setStructuredOption

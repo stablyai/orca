@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { AiVaultSearchSort } from '../../../../shared/ai-vault-types'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
@@ -235,7 +236,7 @@ it('searches every computer at once and keeps each hit on the computer that owns
     ]
   })
   const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all')
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', 'relevance')
   )
   await debounce()
   expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
@@ -249,6 +250,28 @@ it('searches every computer at once and keeps each hit on the computer that owns
   unmount()
 })
 
+it('sends the sort only when it is not the host default', async () => {
+  const initialProps: { sort: AiVaultSearchSort } = { sort: 'relevance' }
+  const { rerender, unmount } = renderHook(
+    ({ sort }) => useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', sort),
+    { initialProps }
+  )
+  await debounce()
+  expect(searchSessions.mock.calls[0]?.[0]).toEqual({
+    query: 'needle',
+    filters: { agents: ALL_AGENTS },
+    cursor: undefined
+  })
+  rerender({ sort: 'newest' })
+  await debounce()
+  expect(searchSessions.mock.calls[1]?.[0]).toEqual({
+    query: 'needle',
+    filters: { agents: ALL_AGENTS, sort: 'newest' },
+    cursor: undefined
+  })
+  unmount()
+})
+
 it('restarts page one under the all scope when the merged cursor goes stale', async () => {
   searchSessions.mockResolvedValueOnce({
     ...searchResults(),
@@ -256,7 +279,7 @@ it('restarts page one under the all scope when the merged cursor goes stale', as
     page: { cursor: 'merged', hasMore: true }
   })
   const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all')
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'all', 'relevance')
   )
   await debounce()
   searchSessions
@@ -272,7 +295,7 @@ it('restarts page one under the all scope when the merged cursor goes stale', as
 
 it('leaves the box as the legacy title filter while local indexing consent is pending', async () => {
   const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local')
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local', 'relevance')
   )
   await debounce()
   expect(searchSessions).not.toHaveBeenCalled()
@@ -287,7 +310,7 @@ it('leaves the box as the legacy title filter while local indexing consent is pe
 it('searches the local index with the same query once consent is on', async () => {
   mockSettings.aiVaultSearch = { enabled: true }
   const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local')
+    useAiVaultPanelSearch('needle', ALL_AGENTS, undefined, 'local', 'relevance')
   )
   await debounce()
   expect(searchSessions).toHaveBeenCalledExactlyOnceWith(
@@ -302,7 +325,7 @@ it('searches the local index with the same query once consent is on', async () =
 
 it('is neither searching nor holding a query for a blank box', async () => {
   const { result, unmount } = renderHook(() =>
-    useAiVaultPanelSearch('   ', ALL_AGENTS, undefined, 'local')
+    useAiVaultPanelSearch('   ', ALL_AGENTS, undefined, 'local', 'relevance')
   )
   await debounce()
   expect(searchSessions).not.toHaveBeenCalled()

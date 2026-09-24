@@ -33,6 +33,12 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   }
 }))
 
+vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  StyleSheet: { create: (styles: unknown) => styles },
+  View: 'View'
+}))
+
 vi.mock('expo-router', () => ({ useLocalSearchParams: () => dependencies.params }))
 
 vi.mock('./PageRouteUnavailableScreen', () => ({
@@ -43,14 +49,17 @@ vi.mock('./PageRouteUnavailableScreen', () => ({
 }))
 
 vi.mock('./MobileWebShellScreen', () => ({
-  MobileWebShellScreen: (props: { route: { pathname: string } }) => {
+  MobileWebShellScreen: (props: {
+    route: { pathname: string; params?: Record<string, string> }
+  }) => {
     dependencies.routes.push(props.route)
     return null
   }
 }))
 
-import { BRIDGE_ROUTE_PATHNAME_PATTERN } from './bridge/bridge-caps'
+import { BRIDGE_MAX_ROUTE_PARAMS, BRIDGE_ROUTE_PATHNAME_PATTERN } from './bridge/bridge-caps'
 import { grantsForRoute, pageRendersRoute, routeViewOf } from './page-route-policy'
+import { shellScreenRouteKey } from './shell-screen-route'
 import MobileWebPageCatchAllScreen from './catch-all-page-route'
 
 async function render(): Promise<void> {
@@ -106,6 +115,85 @@ describe('the catch-all switch', () => {
 
   it('refuses while the flag read is still settling', async () => {
     dependencies.storage.clear()
+    await render()
+    expect(dependencies.routes).toEqual([])
+    expect(dependencies.refusals.length).toBeGreaterThan(0)
+  })
+
+  it("carries the deep link's query through to the route it mounts the shell on", async () => {
+    dependencies.params = { hostId: 'host-1', page: ['session', 'wt-1'], tab: 'files' }
+    await render()
+    expect(dependencies.routes).toEqual([
+      { pathname: '/h/host-1/session/wt-1', params: { tab: 'files' } }
+    ])
+  })
+
+  it('omits the params key when the deep link carried no query', async () => {
+    // Omitted rather than `{}`, as every named switch omits its own: `shellScreenRouteKey` reads
+    // the absence as "no query" and the page writes no `?` into its history.
+    dependencies.params = { hostId: 'host-1', page: ['settings'] }
+    await render()
+    expect(dependencies.routes[0]).not.toHaveProperty('params')
+  })
+
+  it('keeps a key the deep link gave no value, which is not the same as no key', async () => {
+    // A named switch drops its own empty value because it knows what its screen makes of one. This
+    // one knows no screen, so dropping would be inventing a meaning for somebody else's param.
+    dependencies.params = { hostId: 'host-1', page: ['settings'], tab: '' }
+    await render()
+    expect(dependencies.routes[0]?.params).toEqual({ tab: '' })
+  })
+
+  it('takes the first value of a repeated query key, not the joined array', async () => {
+    // `init.route.params` is one value per name, so an array would cross as `a,b` — the same
+    // defect `firstParam` exists for on the segment side.
+    dependencies.params = { hostId: 'host-1', page: ['settings'], tab: ['files', 'diff'] }
+    await render()
+    expect(dependencies.routes[0]?.params).toEqual({ tab: 'files' })
+  })
+
+  it('carries a value needing encoding decoded, and re-encodes it into the page url', async () => {
+    dependencies.params = { hostId: 'host-1', page: ['files'], q: 'a b&c=d/e' }
+    await render()
+    const route = dependencies.routes[0]
+    expect(route?.params).toEqual({ q: 'a b&c=d/e' })
+    // The key the shell screen remounts on is the href the page writes, so the encoding is read
+    // where it is actually used rather than asserted as a second spelling here.
+    expect(route && shellScreenRouteKey(route)).toBe('/h/host-1/files?q=a+b%26c%3Dd%2Fe')
+  })
+
+  it('drops the fragment expo-router parks under `#`, which is not a query', async () => {
+    // `parseQueryParams` seeds `params['#']` from the hash before it reads the search string, so
+    // `/h/x/session/y#files` arrives here with a key no query ever had.
+    dependencies.params = { hostId: 'host-1', page: ['session', 'wt-1'], '#': 'files' }
+    await render()
+    expect(dependencies.routes[0]).not.toHaveProperty('params')
+  })
+
+  it('keeps the rest of the query when a fragment rides along with it', async () => {
+    dependencies.params = { hostId: 'host-1', page: ['session', 'wt-1'], '#': 'files', tab: 'diff' }
+    await render()
+    expect(dependencies.routes[0]?.params).toEqual({ tab: 'diff' })
+  })
+
+  it('never carries its own segments back as query params', async () => {
+    // `useLocalSearchParams` merges the route params into the search params, and both of these are
+    // already in the pathname above.
+    dependencies.params = { hostId: 'host-1', page: ['settings'] }
+    await render()
+    expect(dependencies.routes[0]).not.toHaveProperty('params')
+  })
+
+  it('refuses a deep link carrying more params than the bridge will take', async () => {
+    // The schema bounds them, so `shellScreenRoute` answers null and the switch refuses. Dropping
+    // the overflow instead would open the page on a screen missing the state it was asked for.
+    dependencies.params = {
+      hostId: 'host-1',
+      page: ['settings'],
+      ...Object.fromEntries(
+        Array.from({ length: BRIDGE_MAX_ROUTE_PARAMS + 1 }, (_, index) => [`k${index}`, 'v'])
+      )
+    }
     await render()
     expect(dependencies.routes).toEqual([])
     expect(dependencies.refusals.length).toBeGreaterThan(0)

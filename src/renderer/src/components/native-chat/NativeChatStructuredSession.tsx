@@ -23,6 +23,7 @@ import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-a
 import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { NativeChatDeliveryRetry } from './NativeChatDeliveryRetry'
+import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -85,7 +86,7 @@ export function NativeChatStructuredSession(
       ...(controller.error ? { error: controller.error } : {}),
       hasMore: controller.hasOlder,
       loadingEarlier: controller.loadingOlder,
-      loadEarlier: () => void controller.loadOlder(),
+      loadEarlier: controller.loadOlder,
       readPhase:
         controller.status === 'loading'
           ? 'loading'
@@ -152,8 +153,12 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
-  const structuredTransport = useMemo(
-    () => ({
+  const structuredTransport = useMemo(() => {
+    const threadGoal = controller.threadGoal
+    const setThreadGoalObjective = threadGoal
+      ? (objective: string) => threadGoal.change({ kind: 'set', objective })
+      : null
+    return {
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
         controller.send(
           text,
@@ -172,8 +177,10 @@ export function NativeChatStructuredSession(
           },
           setOption: controller.setStructuredOption,
           conversationCommands: controller.conversationCommands,
-          runConversationCommand: controller.runConversationCommand
+          runConversationCommand: controller.runConversationCommand,
+          ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
         }),
+      ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       optionSnapshot: controller.optionSnapshot,
@@ -185,16 +192,15 @@ export function NativeChatStructuredSession(
       sessionId: props.sessionId,
       runtimeEnvironmentId:
         props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
-    }),
-    [
-      controller,
-      fileLinkContext?.worktreeId,
-      optionPickerRequest,
-      props.agent,
-      props.sessionId,
-      props.target
-    ]
-  )
+    }
+  }, [
+    controller,
+    fileLinkContext?.worktreeId,
+    optionPickerRequest,
+    props.agent,
+    props.sessionId,
+    props.target
+  ])
 
   return (
     <div
@@ -224,6 +230,7 @@ export function NativeChatStructuredSession(
           <NativeChatMessageList
             session={session}
             journalItems={controller.journalItems}
+            railOutline={controller.railOutline}
             isVisible={props.isVisible}
             isWorking={controller.isWorking}
             expandSignal={false}
@@ -317,6 +324,18 @@ export function NativeChatStructuredSession(
         backgroundTasks={controller.backgroundTasks}
         stopBackgroundTask={controller.stopBackgroundTask}
       />
+      {!prompt && controller.threadGoal?.goal ? (
+        <NativeChatThreadGoalBanner
+          key={props.sessionId}
+          goal={controller.threadGoal.goal}
+          pending={controller.threadGoal.pending}
+          isVisible={props.isVisible}
+          runningTurn={
+            controller.turnId === null ? null : { startedAt: controller.workingStartedAt ?? null }
+          }
+          onChange={(change) => void controller.threadGoal?.change(change)}
+        />
+      ) : null}
       {prompt ? null : (
         <NativeChatComposer
           ref={composerRef}

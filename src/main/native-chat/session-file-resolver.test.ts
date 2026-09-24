@@ -1,12 +1,9 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import {
-  ClaudeTranscriptTailIncompleteError,
-  readClaudeTranscriptLeafWithReproof
-} from '../claude/claude-transcript-branch-proof'
+import { ClaudeTranscriptTailIncompleteError } from '../claude/claude-transcript-branch-proof'
 import { readClaudeTranscriptLeafUuid, resolveSessionFilePath } from './session-file-resolver'
 
 let tempRoots: string[] = []
@@ -334,69 +331,6 @@ describe('resolveSessionFilePath', () => {
     await expect(readClaudeTranscriptLeafUuid(transcript, 'session-1', 'previous')).rejects.toThrow(
       'parent row follows descendant'
     )
-  })
-
-  it('does not re-prove a divergent sibling after the sampled cursor rejects', async () => {
-    const root = await makeRoot('orca-native-chat-resolve-claude-sibling-reproof-')
-    const transcript = join(root, 'transcript.jsonl')
-    await writeFile(
-      transcript,
-      [
-        { type: 'user', uuid: 'root', parentUuid: null, sessionId: 'session-1' },
-        { type: 'assistant', uuid: 'old', parentUuid: 'root', sessionId: 'session-1' },
-        { type: 'assistant', uuid: 'new', parentUuid: 'root', sessionId: 'session-1' },
-        { type: 'last-prompt', leafUuid: 'new', sessionId: 'session-1' }
-      ]
-        .map((record) => JSON.stringify(record))
-        .join('\n'),
-      'utf8'
-    )
-    const calls: (string | null)[] = []
-    const readTranscriptLeaf = async ({
-      previousLeafUuid
-    }: {
-      previousLeafUuid: string | null
-    }) => {
-      calls.push(previousLeafUuid)
-      return readClaudeTranscriptLeafUuid(transcript, 'session-1', previousLeafUuid)
-    }
-
-    await expect(readClaudeTranscriptLeafUuid(transcript, 'session-1', 'old')).rejects.toThrow(
-      'sibling branch'
-    )
-
-    await expect(
-      readClaudeTranscriptLeafWithReproof({
-        readTranscriptLeaf,
-        claudeConfigDir: '/accounts/claude',
-        providerSessionId: 'session-1',
-        previousLeafUuid: 'old'
-      })
-    ).rejects.toThrow('sibling branch')
-    expect(calls).toEqual(['old'])
-  })
-
-  it('does not accept a divergent sibling after a truncated-tail reproof', async () => {
-    const calls: (string | null)[] = []
-    const readTranscriptLeaf = vi.fn(
-      async ({ previousLeafUuid }: { previousLeafUuid: string | null }) => {
-        calls.push(previousLeafUuid)
-        if (calls.length === 1) {
-          throw new ClaudeTranscriptTailIncompleteError()
-        }
-        return 'divergent-sibling'
-      }
-    )
-
-    await expect(
-      readClaudeTranscriptLeafWithReproof({
-        readTranscriptLeaf,
-        claudeConfigDir: '/accounts/claude',
-        providerSessionId: 'session-1',
-        previousLeafUuid: 'old'
-      })
-    ).rejects.toBeInstanceOf(ClaudeTranscriptTailIncompleteError)
-    expect(calls).toEqual(['old'])
   })
 
   it('globs Claude project subdirs for <sessionId>.jsonl', async () => {

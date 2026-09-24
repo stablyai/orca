@@ -14,6 +14,7 @@ it.each([false, true])(
     let identityReads = 0
     let indexedRows = 0
     const instrument = (delegate: RelayDatabase): RelayDatabase => ({
+      dialect: delegate.dialect,
       query: (sql, params) => delegate.query(sql, params),
       queryLocked: async (sql, params, options) => {
         const rows = await delegate.queryLocked(sql, params, options)

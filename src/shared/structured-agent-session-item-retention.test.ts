@@ -71,6 +71,26 @@ function streamItems(
   )
 }
 
+function streamRevision(
+  state: StructuredAgentSessionState,
+  row: AgentJournalRenderItem,
+  cursorSequence: number
+): StructuredAgentSessionState {
+  return reduceStructuredAgentSession(state, {
+    type: 'event',
+    event: {
+      type: 'batch',
+      sessionId: 'session-a',
+      batch: {
+        cursor: { epoch: 'epoch-a', sequence: cursorSequence },
+        items: [row],
+        removedItemIds: [],
+        submissions: []
+      }
+    }
+  })
+}
+
 describe('structured agent session item retention', () => {
   it('bounds retained items on a long live session', () => {
     const streamed = streamItems(
@@ -170,6 +190,74 @@ describe('structured agent session item retention', () => {
 
     expect(merged.items).toHaveLength(CAP + 200)
     expect(merged.items[0]?.sequence).toBe((anchor?.sequence ?? 0) - 200)
+  })
+
+  it('keeps the anchor on the oldest loaded row when a live batch revises a row older than the window', () => {
+    // Tail snapshot of a long session: rows 200..239 loaded, 199 rows older on the host.
+    const hydrated = hydrate(
+      Array.from({ length: 40 }, (_, index) => item(index + 200)),
+      true
+    )
+    expect(oldestStructuredAgentSessionCursor(hydrated)?.sequence).toBe(200)
+
+    // The host revises row 50 in place; the revision keeps its original sequence.
+    const revised = reduceStructuredAgentSession(hydrated, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 240 },
+          items: [{ ...item(50), revision: 2 }, item(240)],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+
+    // Anchoring on row 50 would page `before: 50` and never load rows 51..199.
+    expect(oldestStructuredAgentSessionCursor(revised)?.sequence).toBe(200)
+    expect(revised.items.some((entry) => entry.sequence === 50)).toBe(false)
+    expect(revised.items.at(-1)?.sequence).toBe(240)
+    expect(revised.cursor?.sequence).toBe(240)
+    expect(revised.hasOlder).toBe(true)
+
+    // The page reader serves the row at its current revision once the window reaches it.
+    const older = reduceStructuredAgentSession(revised, {
+      type: 'older-page',
+      requestedCursor: { epoch: 'epoch-a', sequence: 200 },
+      page: page(
+        [{ ...item(50), revision: 2 }, ...Array.from({ length: 149 }, (_, i) => item(i + 51))],
+        false
+      )
+    })
+    expect(older.items.find((entry) => entry.sequence === 50)?.revision).toBe(2)
+    expect(oldestStructuredAgentSessionCursor(older)?.sequence).toBe(50)
+    expect(older.hasOlder).toBe(false)
+  })
+
+  it('applies a live revision of a row the window holds, including its oldest row', () => {
+    const hydrated = hydrate(
+      Array.from({ length: 3 }, (_, index) => item(index + 200)),
+      true
+    )
+    const revised = streamRevision(hydrated, { ...item(200), revision: 2 }, 203)
+
+    expect(revised.items.find((entry) => entry.sequence === 200)?.revision).toBe(2)
+    expect(oldestStructuredAgentSessionCursor(revised)?.sequence).toBe(200)
+  })
+
+  it('admits a live row below the head when nothing older is left on the host', () => {
+    // Row 1 was tombstoned before this client attached, so the window starts at 2 and
+    // covers the whole journal; a revival of row 1 leaves no hole to skip.
+    const hydrated = hydrate(
+      Array.from({ length: 3 }, (_, index) => item(index + 2)),
+      false
+    )
+    const revived = streamRevision(hydrated, { ...item(1), revision: 2 }, 5)
+
+    expect(oldestStructuredAgentSessionCursor(revived)?.sequence).toBe(1)
+    expect(revived.hasOlder).toBe(false)
   })
 
   it('keeps item identity stable when a batch carries no journal change', () => {

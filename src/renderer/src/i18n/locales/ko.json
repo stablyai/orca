@@ -88,6 +88,33 @@
       "mr": "MR",
       "port": "포트",
       "pr": "PR"
+    },
+    "filter": {
+      "emptyTitle": "활성 필터와 일치하는 결과가 없습니다",
+      "emptySubtitle": "위의 필터를 지우거나 더 많은 호스트와 프로젝트로 범위를 넓히세요.",
+      "tabKey": "Tab",
+      "label": "필터",
+      "activeCount": "{{value0}}개 활성",
+      "removeChip": "{{value0}} 필터 제거",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "모두 지우기",
+      "hosts": "호스트",
+      "projects": "프로젝트",
+      "trigger": "결과 필터",
+      "search": "호스트 또는 프로젝트로 필터...",
+      "searchHosts": "호스트 필터...",
+      "searchProjects": "프로젝트 필터...",
+      "noOptions": "일치하는 호스트 또는 프로젝트가 없습니다",
+      "noHosts": "일치하는 호스트가 없습니다",
+      "noProjects": "일치하는 프로젝트가 없습니다",
+      "moreOptions": "{{value0}}개 더 — 계속 입력하여 범위 좁히기",
+      "selectAllMatching": "일치하는 항목 모두 선택 ({{value0}})",
+      "selectedCollapsed": "{{value0}}개 선택됨 — 칩 또는 지우기로 제거",
+      "clearHosts": "호스트 지우기",
+      "clearProjects": "프로젝트 지우기",
+      "back": "뒤로",
+      "ariaActive": "필터: {{value0}}개 활성.",
+      "scopedTo": "범위:"
     }
   },
   "auto": {
@@ -358,7 +385,8 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "muse_label": "Muse"
         },
         "skill": {
           "cli": {
@@ -771,7 +799,7 @@
         "94a5afe910": "SSH 호스트",
         "40d80bad8a": "베타",
         "de0c2907a1": "원격 Orca 서버",
-        "b351014180": "Orca 통계와 Claude, Codex, OpenCode 토큰 분석 및 Grok 구독 사용량.",
+        "b351014180": "Orca 통계와 Claude, Codex, OpenCode, Muse 토큰 분석 및 Grok 구독 사용량.",
         "d72a58b5b9": "통계 및 사용량",
         "dcd0d9b74f": "일반 작업에 대한 키보드 단축키입니다.",
         "94295ebfb3": "단축키",
@@ -3744,7 +3772,6 @@
           "444585cb41": "데이터 있음",
           "ecb0cd8a4c": "활성화됨 -",
           "33f7b043d2": "공급자",
-          "60002bb22f": "아직 로컬 Claude, Codex 또는 OpenCode 사용을 찾을 수 없습니다. 개요는 다음 agent 세션에서 토큰 로그를 작성한 후에 채워집니다.",
           "70f36452d4": "캐시 공유",
           "327603fe8b": "활성 일수",
           "0eaf937335": "예상 비용",
@@ -3757,7 +3784,9 @@
           "ca6bc5fded": "새로고침",
           "e06d1baf5c": "사용량 개요 새로고침",
           "c760c481c5": "사용량 개요",
-          "55c910f4f1": "- 일부 모델 가격 확인 불가"
+          "55c910f4f1": "- 일부 모델 가격 확인 불가",
+          "enableMuse": "Muse 사용",
+          "noLocalUsageYet": "아직 로컬 Claude, Codex, OpenCode 또는 Muse 사용량을 찾지 못했습니다. 다음 에이전트 세션이 토큰 로그를 기록하면 개요가 채워집니다."
         },
         "share": {
           "card": {
@@ -3788,13 +3817,14 @@
             "0bba8ca244": "통계",
             "0e2a0b6431": "사용량",
             "372debfac0": "통계",
-            "26bb901fcd": "Orca 통계와 Claude, Codex, OpenCode 토큰 분석 및 Grok 구독 사용량.",
+            "26bb901fcd": "Orca 통계와 Claude, Codex, OpenCode, Muse 토큰 분석 및 Grok 구독 사용량.",
             "cb2430ae6a": "통계 및 사용량",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "구독",
             "d6e9f0a1b2": "크레딧",
             "a3b6c7d8e9": "grok 사용량",
-            "9f2a3b4c5d": "xai"
+            "9f2a3b4c5d": "xai",
+            "museKeyword": "muse"
           }
         },
         "usage": {
@@ -3812,7 +3842,6 @@
               "1dd166c920": "적음",
               "52d9221dc0": "최근 토큰 활동 히트맵",
               "c424eb3f8e": "최고:",
-              "f28ff1f852": "최근 Claude, Codex 및 OpenCode 토큰 결합 활동.",
               "69e2b50427": "일일 강도",
               "3a795542fa": "통합 토큰 구성",
               "e65084cb4b": "추론",
@@ -3825,7 +3854,8 @@
               "6762f6a682": "토큰",
               "a7f937fb29": "{{value0}}개 세션 - {{value1}} {{value2}}",
               "c8f3a2d1e0b4": "턴",
-              "d9a4b3e2f1c5": "이벤트"
+              "d9a4b3e2f1c5": "이벤트",
+              "recentCombinedActivity": "최근 Claude, Codex, OpenCode, Muse의 통합 토큰 활동입니다."
             }
           }
         },
@@ -3855,6 +3885,17 @@
           "e5a6b7c8d9": "사용한 주간 크레딧",
           "f6b7c8d9e0": "결제 기간 재설정",
           "a7b8c9d0e1": "Grok 계정 설정"
+        },
+        "MuseUsagePane": {
+          "title": "Muse 사용량 추적",
+          "enableLabel": "Muse 사용량 분석 사용",
+          "disabledDescription": "로컬 Muse 세션 로그를 읽어 토큰, 모델, 세션 통계를 표시합니다.",
+          "scopeAll": "모든 로컬 Muse 사용량",
+          "optionsLabel": "Muse 사용량 옵션",
+          "refreshAriaLabel": "Muse 사용량 새로 고침",
+          "emptyMessage": "이 범위에서 아직 로컬 Muse 사용량을 찾지 못했습니다.",
+          "noCostNote": "Muse 세션 로그에는 토큰만 기록되고 비용은 기록되지 않으므로 비용 추정치를 표시하지 않습니다.",
+          "recentSessionsDescription": "이 범위에서 가장 최근의 로컬 Muse 세션입니다."
         }
       },
       "sparse": {
@@ -4673,6 +4714,7 @@
           "76865d827f": "그룹으로 이동",
           "503ec0f8e6": "프로젝트의 새 그룹",
           "3350101edb": "경로 복사",
+          "copyWorktreeName": "워크트리 이름 복사",
           "f4475537d8": "삭제",
           "f5ac91531d": "Orca에서 프로젝트 제거",
           "b42391d8bf": "삭제 중…",
@@ -5289,8 +5331,6 @@
           "01af244097": "취소",
           "28c8e53176": "그러면 모든 워크스페이스에서 실행 중인 모든 terminals 패널이 강제 종료됩니다. 해당 세션에서 저장하지 않은 작업은 모두 손실됩니다. 데몬 자체는 계속 실행되며 새 terminals을 즉시 열 수 있습니다. 이 작업은 취소할 수 없습니다.",
           "1bbea41a77": "모든 terminal 세션을 종료하시겠습니까?",
-          "01d6b7c64e": "실행 중인 모든 terminal 패널을 종료하고 데몬 프로세스를 다시 시작합니다. 패널에는 \"프로세스 종료됨\"이 표시되며 즉시 다시 열 수 있습니다. 이전 앱 버전의 레거시 프로토콜 세션은 보존됩니다. 이 작업은 취소할 수 없습니다.",
-          "922548bc66": "terminal 데몬을 다시 시작하시겠습니까?",
           "2b4efdc162": "세션을 종료할 수 없습니다.",
           "d18f3005c2": "세션 {{value0}}개{{value1}}이(가) 종료를 거부했습니다.",
           "baad8cd651": "실행 중인 세션이 없습니다.",
@@ -5960,7 +6000,16 @@
             "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
             "defaultViewLabel": "기본 Chat UI 보기",
             "defaultViewTerminal": "Terminal 채팅",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "셸에서 전달할 변수",
+            "shellEnvNamePlaceholder": "변수 이름",
+            "shellEnvNameAdd": "추가",
+            "shellEnvNameRemove": "{{value0}} 제거",
+            "shellEnvNamesEmpty": "아직 추가된 변수가 없습니다.",
+            "shellEnvNamesAlwaysPassed": "PATH, 로캘, SSH_AUTH_SOCK은 항상 전달됩니다. 다음에 채팅을 시작하거나 재개할 때 적용됩니다.",
+            "shellEnvTitle": "셸 환경 사용",
+            "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
+            "shellEnvToggleLabel": "셸 환경 사용 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",
@@ -7008,7 +7057,7 @@
           "b5ee17826b": "지속 세션, 더 풍부한 원격 상태, 웹 또는 모바일 핸드오프를 위해 원격 Orca 런타임을 페어링합니다.",
           "7686cb5c36": "이 브라우저를 저장된 Orca 서버에 연결하세요.",
           "bd0181eeca": "원격 Orca 서버",
-          "8acf3f22e0": "Orca 통계와 Claude, Codex, OpenCode 토큰 분석 및 Grok 구독 사용량.",
+          "8acf3f22e0": "Orca 통계와 Claude, Codex, OpenCode, Muse 토큰 분석 및 Grok 구독 사용량.",
           "954a8f5aef": "통계 및 사용량",
           "a737a4bb22": "일반 작업에 대한 키보드 단축키입니다.",
           "23bf7a1ad4": "단축키",
@@ -8550,6 +8599,20 @@
             }
           }
         },
+        "machine": {
+          "name": {
+            "search": {
+              "title": "머신 이름",
+              "description": "다른 장치와 호스트에서 이 컴퓨터를 표시할 이름을 선택합니다.",
+              "machineName": "머신 이름",
+              "machine": "머신",
+              "hostname": "호스트 이름",
+              "computer": "컴퓨터",
+              "rename": "이름 변경",
+              "name": "이름"
+            }
+          }
+        },
         "mobile": {
           "emulator": {
             "search": {
@@ -9865,6 +9928,12 @@
           "step2LocalDescription": "휴대폰이 Tailscale 또는 Wi‑Fi를 통해 이 주소에 접근할 수 있어야 합니다.",
           "step2RelayDescription": "선택 사항. 근처에 있을 때(같은 Wi‑Fi 또는 Tailscale) 휴대폰이 사용할 주소를 고르세요. 보통 Relay보다 빠릅니다. 외부에 있을 때는 여전히 Relay를 사용합니다.",
           "step2RelayDisclosure": "더 빠른 로컬 경로도 사용"
+        },
+        "MachineNameField": {
+          "label": "머신 이름",
+          "description": "다른 장치와 호스트에는 “{{name}}”(으)로 표시됩니다. 비워 두면 컴퓨터 자체의 이름을 사용합니다.",
+          "pending": "다른 장치와 호스트에는 이 이름이 표시됩니다. 비워 두면 감지된 컴퓨터 이름을 사용합니다.",
+          "placeholder": "자동으로 감지됨"
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay 베타 정보",
@@ -11418,7 +11487,6 @@
             "localWorkspacesOnly": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다.",
             "agentSessionQueued": "{{value0}} 세션이 대기열에 추가됨",
             "sessionHistory": "Agent 세션 기록",
-            "shownRecent": "{{value0}}개 표시 · 최근 {{value1}}개",
             "resumePastSessions": "이전 세션 재개",
             "refreshSessionHistory": "세션 기록 새로고침",
             "searchSessions": "세션 검색",
@@ -11431,7 +11499,6 @@
             "sessionId": "세션 ID",
             "logPath": "로그 경로",
             "agents": "에이전트",
-            "sessionsShownCompact": "{{value0}} 표시됨",
             "originalPaneUnavailable": "원래 창은 더 이상 사용할 수 없습니다.",
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
             "openSupportedWorkspace": "세션을 재개하기 전에 워크스페이스를 여세요.",
@@ -11457,7 +11524,6 @@
             "agents": "에이전트",
             "selectAllAgents": "모두 선택",
             "clearAgents": "모두 해제",
-            "sort": "정렬",
             "lastUpdated": "마지막 업데이트",
             "created": "생성됨",
             "group": "그룹",
@@ -13021,8 +13087,6 @@
           "10ed04a685": "노트북 셀은 노트북 폴더에서 이 컴퓨터의 로컬 Python을 실행합니다. 신뢰하는 파일의 셀만 실행하세요.",
           "9e06ae5d36": "노트북 코드를 실행하시겠습니까?",
           "d6f37a640b": "빈 노트북",
-          "8c3b21369a": "nbformat",
-          "329764e9fc": "베타",
           "15ec40a735": "노트북 저장",
           "07e7d96612": "셀",
           "c1601b23b2": "노트북을 렌더링할 수 없습니다.",
@@ -13036,9 +13100,7 @@
           "fd8ac707bc": "셀을 위로 이동",
           "3e4cbf15ea": "원시",
           "1833dbbc43": "Markdown",
-          "7005960d73": "코드",
-          "59b6cd874b": "코드",
-          "ba149053d5": "markdown"
+          "7005960d73": "코드"
         },
         "MarkdownPreview": {
           "e4683f70c4": "취소",

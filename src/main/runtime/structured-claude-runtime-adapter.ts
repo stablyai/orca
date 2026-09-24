@@ -1,8 +1,6 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import { proveClaudeTranscriptBranch } from '../claude/claude-transcript-branch-proof'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
-import { join } from 'node:path'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createClaudeStructuredLaunchResolver } from '../claude/claude-structured-launch-resolution'
@@ -13,10 +11,9 @@ import {
 import { claudeProviderHandleLink } from '../claude/claude-structured-owner-identity'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
-  readClaudeTranscriptLeafUuid,
-  resolveSessionFilePath
-} from '../native-chat/session-file-resolver'
-import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
+  recordAgentSessionProviderHandle,
+  reviseAgentSessionClaudeResumePoint
+} from './agent-session-provider-handle-transition'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 
@@ -25,6 +22,8 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveClaudeCommand?: () => string
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
+  /** The env a Claude child inherits before auth stripping; absent inherits Orca's own. */
+  resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
   /** Managed-account auth state for a Claude launch, mirroring the terminal preflight.
    *  Required: an absent policy is what silently under-strips. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
@@ -51,6 +50,9 @@ export function createStructuredClaudeRuntimeAdapter(
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
+      ...(deps.resolveClaudeInheritedEnv
+        ? { resolveInheritedEnv: deps.resolveClaudeInheritedEnv }
+        : {}),
       resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
       ...(deps.resolveClaudePermissionMode
         ? { resolvePermissionMode: deps.resolveClaudePermissionMode }
@@ -77,28 +79,16 @@ export function createStructuredClaudeRuntimeAdapter(
         })
       )
     },
-    readTranscriptLeaf: async ({
-      providerSessionId,
-      previousLeafUuid,
-      intentionalRewindUuid,
-      claudeConfigDir
-    }) => {
-      const transcriptPath = await resolveSessionFilePath('claude', providerSessionId, {
-        claudeProjectsDir: join(claudeConfigDir, 'projects')
-      })
-      if (transcriptPath && intentionalRewindUuid !== undefined) {
-        return (
-          await proveClaudeTranscriptBranch({
-            transcriptPath,
-            providerSessionId,
-            previousLeafUuid,
-            intentionalRewindUuid
-          })
-        ).leafUuid
-      }
-      return transcriptPath
-        ? await readClaudeTranscriptLeafUuid(transcriptPath, providerSessionId, previousLeafUuid)
-        : null
+    persistResumePoint: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
+      await store.transitionHandoff(sessionId, (record: AgentSessionRecord) =>
+        reviseAgentSessionClaudeResumePoint({
+          record,
+          fence,
+          providerSessionId,
+          leafUuid,
+          now: Date.now()
+        })
+      )
     },
     onEvent: (event) => {
       if (

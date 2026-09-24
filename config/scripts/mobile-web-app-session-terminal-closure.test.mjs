@@ -5,6 +5,11 @@ import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { mobileWebAppRouteChunkClosure } from './mobile-web-app-route-chunk-closure.mjs'
 import {
+  editableHostFontSizeOffenders,
+  editableHostsIn,
+  unresolvedEditableHostStyles
+} from './mobile-web-app-editable-host-font-size.mjs'
+import {
   textInputFontSizeOffenders,
   unresolvedTextInputStyles
 } from './mobile-web-app-text-input-font-size-seam.mjs'
@@ -140,11 +145,12 @@ const GAINED_OUTSIDE_THE_DOCUMENT = [
   'src/terminal/terminal-webview-html.web.ts',
   'src/terminal/terminal-webview-html/document-markup.ts',
   'src/terminal/terminal-webview-html/document-style.ts',
-  // The page's half of the stylesheet: the document-level rules are dropped and the rest is held
-  // under the host, so what the page injects can only reach what the terminal owns.
-  'src/terminal/terminal-webview-html/document-style-scoping.ts',
   'src/terminal/terminal-webview-ready-promises.ts',
-  'src/terminal/use-terminal-webview-controller.ts'
+  'src/terminal/use-terminal-webview-controller.ts',
+  // The page's half of the stylesheet: the document-level rules are dropped and the rest is held
+  // under the host, so what the page injects can only reach what the terminal owns. It sits
+  // outside `src/terminal/` because the rich Markdown editor's mount reads the same rewrite.
+  'src/style-scoping/document-style-scoping.ts'
 ]
 
 const XTERM_PACKAGES = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
@@ -177,14 +183,279 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  * `src/mobile-web-shell/bridge/bridge-audio-verbs.ts` — and eight vendored ones leave, because the
  * capture seam is what stops the page importing a microphone it does not have. Five are
  * `@orca/expo-two-way-audio` (its web module, `core`, `events`, `hooks` and the index) and three
- * are `expo-keep-awake`; the page asks the shell for both over `native.audio.start|read|stop` and
- * `native.wakelock.set` instead. The native halves of the seam resolve out of this closure
- * entirely, which is the -8 + 3.
+ * are `expo-keep-awake`; the page asks the shell for the microphone over
+ * `native.audio.start|read|stop` instead, and never asks about the screen at all — an open mic
+ * holds it on the device side. The native halves of the seam resolve out of this closure entirely,
+ * which is the -8 + 3.
  *
  * Measured, not derived: `mobile-web-app-session-dictation-capture.test.mjs` moves the web file
  * aside and walks the closure again, which puts those eight back.
+ *
+ * C7.7 registers the route and adds one more: the walk now enters through
+ * `app/h/[hostId]/session/[worktreeId].web.tsx` rather than the native switch, and reaches
+ * `src/session/MobileSessionRouteScreen.tsx` under it — the route file is one input either way and
+ * the component is the one that is new.
+ *
+ * The number below is re-measured rather than summed, which is what the reading above kept having
+ * to do: C7.7 measured 4,328 -> 4,329 against `23207bfde2` and item D measured 4,328 -> 4,323
+ * against a different base, and neither side's arithmetic survives the other. The merge with main
+ * read 4,324 modules and 982 local — one more than the 4,323 / 981 item D pinned, and that one is
+ * C7.7's route body, read out of `ROUTE_ENTRY` below by name rather than inferred.
+ *
+ * Round 1 re-measured it at 4,326 / 984. The two were named rather than counted:
+ * `notification-pane-tab.ts`, which both siblings of the pane hook read (a `.web.ts` cannot import
+ * its native neighbour by the plain path — the bundler answers with itself), and
+ * `bridge-init-route.ts`, the route half of `init` split out of an envelope that was at its line
+ * cap. The pane hook's own web sibling replaces the native file rather than joining it, so it
+ * costs nothing.
+ *
+ * Ruling 34 measures 4,330 / 988, and the four are named the same way. `bridge-frame-fields.ts`
+ * and `bridge-notify-envelope.ts` are the two halves an envelope back at its line cap was split
+ * into; the page-to-shell union in the second names the param the page may erase, which is
+ * declared beside the route-update accept, so `bridge-route-update.ts` and the
+ * `shell-screen-route.ts` it reads a route key from now enter through the envelope as well. All
+ * four are schema and string constants: the closure grew, the download did not gain a package.
+ *
+ * Main measures 4,333 at `3cfb070294`: #21924 (`2739246058`) turned `agent-session-wire.ts`'s
+ * type-only import of `agent-session-record` into a value import, so `src/shared/agent-session-record.ts`
+ * and the two it reaches, `agent-session-conversation-name.ts` and `surrogate-safe-text-slice.ts`,
+ * entered the page bundle between C7.7's measurement on `f07bf8544c` and its merge. Named by
+ * diffing the closure at `f07bf8544c` against `2739246058`; nothing on the C7.7 side moved.
+ *
+ * Then C7.10 item C put the rich Markdown editor on the page, and the list moved again. Its own
+ * reading, both sides measured with `mobileWebAppRouteClosure(SESSION_ROUTE)` at base `9267423f22`
+ * with all five postinstall generators run first:
+ *
+ *   modules        4333 -> 4360   (+27)
+ *   local modules   991 -> 1018   (+27)
+ *
+ * Every one of the 27 is local and none is vendored, because the editor is the app's own code
+ * rather than a library: the document's 24 modules under `src/components/rich-markdown/` — which
+ * C7.6's plain field did not reach at all — plus the page's mount, the toolbar both siblings render,
+ * and the controller and keyboard-inset module the native component already had. Nothing leaves:
+ * the web sibling replaces its own native file, which was never in this closure. Named by diffing
+ * the two `local` lists rather than inferred from the total.
+ *
+ * `style-scoping/document-style-scoping.ts` is in the reading on both sides and costs
+ * nothing: the terminal's own mount already brings it, and the editor's mount imports the second
+ * export it grew rather than a module of its own.
+ *
+ * What the generation weighs, measured the same way on both sides: 8,028,418 -> 8,056,166 bytes
+ * (+27,748) across 109 assets, against the 9 MiB ceiling in `verify-mobile-web-app-bundle.mjs` —
+ * 85.1% of it before and 85.4% after. The script count does not move at all (67, against the
+ * 76 the chunk fence allows for 15 routes) and neither does the entry's static closure
+ * (1,612,052 bytes against a 3 MiB bound): the editor is code the session route already reached
+ * for, not a new chunk boundary.
+ *
+ * Main's own paragraph for the same pin, kept because the two provenances are independent: ruling
+ * 36 gave the screen to the microphone and two local modules left,
+ * `src/hooks/mobile-dictation-keep-awake.ts` and
+ * `src/hooks/mobile-dictation-foreground-keep-awake.ts`, the page's wake-tag owner and its Android
+ * foreground re-acquire. Both are deleted rather than moved — the device module that opens the
+ * microphone takes the screen and gives it back — so the page has nothing left to own.
+ *
+ *   modules        4333 -> 4331   (-2)
+ *   local modules   991 ->  989   (-2)
+ *
+ * Then the two other table parsers gave up their own row splitters and read the editor's
+ * `src/components/rich-markdown/markdown-table-rows.ts` instead, which the session page reaches
+ * through the PR comment renderer. It is the one module that joins, and the only one it can be: it
+ * imports nothing, and no other file under `rich-markdown/` is in the closure beside it.
+ *
+ *   modules        4331 -> 4332   (+1)
+ *   local modules   989 ->  990   (+1)
+ *
+ * Then #18790 (`0677271709`) taught the agent icon table a new agent, and its icon
+ * `src/shared/agent-icons/freebuff.png` entered through `mobile-agent-icon-assets.ts`, which the
+ * session page reaches as it reaches every other icon there. An image asset, not a package, and
+ * the one line that differs between the closure at `226f4a0775` and at `059ee59a48`; it landed
+ * between #22114's measurement and its merge, so main read one short.
+ *
+ *   modules        4332 -> 4333   (+1)
+ *   local modules   990 ->  991   (+1)
+ *
+ * C7.10 item C then put the whole of that directory on the page, and the merge of the two is
+ * measured rather than summed — which is what this reading keeps having to do. The arithmetic of
+ * 4,358 on this branch and 4,332 on main double-counts `markdown-table-rows.ts`: main reached it
+ * first through the comment renderer, and it is also one of the 27 the editor brings. Measured on
+ * the merged head with every generator run first:
+ *
+ *   modules        4333 -> 4359   (+26)
+ *   local modules   991 -> 1017   (+26)
+ *
+ * and the two local lists diffed against main's, which names the difference module by module: the
+ * editor's own 26, with `markdown-table-rows.ts` already on both sides and the dictation pair
+ * already gone from both. 26 rather than 27 for exactly that reason — main reached the row splitter
+ * first, so it is not this branch's to add twice.
+ *
+ * The 4,333 the merge is measured against is main's corrected reading, not the 4,332 it pinned at
+ * `059ee59a48`: that census failed, `expected [ …(4333) ] to have a length of 4332`, because the
+ * icon above joined beside the row splitter and was not counted. #22119 (`197550c952`) repinned
+ * main to 4,333 with the paragraph above, and folding it here moves nothing — the icon was already
+ * on both sides of the +26, so the pin below is this merge's own measurement, unchanged.
+ *
+ * Then #21705 (`eb92222e7f`) taught the agent option catalog Antigravity, and
+ * `src/shared/agent-session-option-catalog-antigravity.ts` entered through the catalog the session
+ * page already reaches. One module, string constants, no package; the one line that differs between
+ * the closure at `841d06a969` and at `eb92222e7f`. It landed beside C2's merge, so main read one
+ * short again.
+ *
+ *   modules        4359 -> 4360   (+1)
+ *   local modules  1017 -> 1018   (+1)
+ *
+ * C8.1 then gave the HTML preview a capability to ask about, and three local modules join. Both
+ * sides measured with `mobileWebAppRouteClosure(SESSION_ROUTE)` at base `841d06a969` with all five
+ * postinstall generators run first, and the two `local` lists diffed rather than the total inferred:
+ *
+ *   modules        4359 -> 4362   (+3)
+ *   local modules  1017 -> 1020   (+3)
+ *
+ * Named, and all three local: `src/components/use-html-preview-link-grant.web.ts`, the page's read
+ * of `init.grants.native`; `src/components/html-preview-inert-links.ts`, the pass that turns the
+ * artifact's links back into text without it; and
+ * `src/mobile-web-shell/cancelled-navigation-target.ts`, which declares the grant token beside the
+ * rule that acts on it and is reached both by that hook and by `page-route-policy.ts`. The
+ * `bridge-caps.ts` it imports was already in this closure, and the hook's native sibling is
+ * replaced rather than joined. Nothing vendored: three source modules, no package.
+ *
+ * The merge of the two is measured rather than summed, which is what this reading keeps having to
+ * do. It agrees with the arithmetic this once, and only because the two additions are disjoint:
+ * main's one module is the option catalog and this branch's three are the preview's, so neither
+ * side counts the other's. Measured on the merged head with all five generators run first:
+ *
+ *   modules        4360 -> 4363   (+3, and 4359 -> 4363 from the shared base)
+ *   local modules  1018 -> 1021   (+3)
+ *
+ * The C6.5 follow-up then aliased `zod` in the builder, so the four `src/shared` modules this route
+ * reaches stop pulling the root's second copy in. The only reading here that has ever fallen: both
+ * lists diffed, 94 gone and every one of them vendored `zod@4.5.4`, none added.
+ *
+ *   modules        4363 -> 4269   (-94)
+ *   local modules  1021 -> 1021   (unchanged)
+ *
+ * The live-input seam then adds one: the two hooks that write the terminal's hidden field now go
+ * through `src/terminal/terminal-live-input-text-write.ts`, and the page resolves its `.web.ts`.
+ * One module, not two — the sibling replaces the native file, and both hooks were already here.
+ *
+ *   modules        4269 -> 4270   (+1)
+ *   local modules  1021 -> 1022   (+1)
+ *
+ * The page's client identity joins beside it:
+ * `src/mobile-web-shell/bridge/bridge-page-client-identity.ts` declares the placeholder
+ * `client-context.web.tsx` claims, so the provider every screen reads imports it. One local module,
+ * nothing vendored. Measured on this merged head rather than summed, all five generators run first:
+ *
+ *   modules        4270 -> 4271   (+1)
+ *   local modules  1022 -> 1023   (+1)
+ *
+ * Cutting `expo-notifications` out of the page takes 62 vendored modules with it: 55 of its own,
+ * and behind it expo-application 3, abort-controller 2, badgin 1, event-target-shim 1. The three
+ * `.web` siblings replace their native files, so the local +1 is `host-app-version.ts` alone.
+ *
+ *   modules        4271 -> 4210   (-61)
+ *   local modules  1023 -> 1024   (+1)
+ *
+ * The page's paint report joins beside that one, for the same reason:
+ * `src/mobile-web-shell/bridge/bridge-page-painted.ts` holds the name the page posts and the name
+ * it declares in `ready`, so `bridge-client-notifications.ts` — which every screen's client is
+ * built from — imports it. One local module, nothing vendored; the seam that schedules the report
+ * is the web entry's and does not enter a route closure. Re-measured on this merged head rather
+ * than carried over from before the cut, with all five generators run first.
+ *
+ *   modules        4210 -> 4211   (+1)
+ *   local modules  1024 -> 1025   (+1)
+ *
+ * The terminal fields' submit seam joins next, onto the 4,207 #22283 left, and both of its modules
+ * are local. react-native-web withholds `onSubmitEditing` whenever the Enter keydown reports an
+ * open composition, which is a soft keyboard's normal state mid-word, so both of the dock's fields
+ * bind the browser's own line-break signal as well.
+ * `src/terminal/use-terminal-text-field-submit-binding.ts` is the callback ref they take, and
+ * `src/terminal/terminal-text-field-submit-binding.web.ts` is the binding it resolves to here; the
+ * native sibling stays out of this closure, which is what the pair is for. Measured on this merged
+ * head with all five generators run first, and the two joiners read off the closure list itself
+ * rather than inferred from the delta.
+ *
+ *   modules        4207 -> 4209   (+2)
+ *   local modules  1021 -> 1023   (+2)
+ *
+ * The page's claim on the device Back key joins beside those (#22300 landed first, so this is measured on the merged head). Two local
+ * modules, nothing vendored, each named rather than left inside the total:
+ * `src/navigation/use-back-claim.web.ts`, the seam every sheet and the handoff take, which enters
+ * through `route-handoff.web.ts`; and `src/mobile-web-shell/bridge/bridge-page-back.ts`, the two
+ * names the lane is negotiated under, which the envelope this route already reads imports.
+ * `page-back-consumers.ts` is not a third: it hangs off `bridge-rpc-client.ts`, and no route
+ * closure carries that — the page's client is built by the entry. Re-measured on the merged head
+ * with all five generators run first.
+ *
+ *   modules        4209 -> 4211   (+2)
+ *   local modules  1023 -> 1025   (+2)
+ *
+ * One joiner from outside `mobile/`: #22299 (9ece273056) added
+ * `src/shared/agent-session-journal-producer.ts`, and three shared modules this route already
+ * carries import it (`structured-agent-session-live-turn.ts`, `structured-agent-session-projection.ts`,
+ * `native-chat-turn-activity.ts`). That PR changed no file under `mobile/`, so the mobile job never
+ * ran and main landed one over this pin. Re-pinned here, on the head that merged it, by measuring
+ * the closure on 9ece273056 against the previous head and diffing the two lists.
+ *
+ *   modules        4211 -> 4212   (+1)
+ *   local modules  1025 -> 1026   (+1)
+ *
+ * The page's Retry decision joins after those: `src/transport/connection-retry-action.ts` says
+ * whether a failed screen's Retry re-dials, re-reads or is not offered, and the session route
+ * reaches it through the explorer, source control and git history it docks. One local module.
+ *
+ *   modules        4212 -> 4213   (+1)
+ *   local modules  1026 -> 1027   (+1)
+ *
+ * Muse then joined the mobile agent catalog with its bundled icon, one more local input to the
+ * shared agent picker.
+ *
+ *   modules        4213 -> 4214   (+1)
+ *   local modules  1027 -> 1028   (+1)
+ *
+ * Muse's worker launch preferences then added `src/shared/agent-session-option-catalog-muse.ts`,
+ * which the option catalog this route already reaches imports. One local module, measured.
+ *
+ *   modules        4214 -> 4215   (+1)
+ *   local modules  1028 -> 1029   (+1)
+ *
+ * The structured tool line then added `src/shared/structured-agent-session-tool-call-block.ts`,
+ * which the projection and live turn this route already reaches import. One local module,
+ * measured; the change was src/shared-only, so its own CI never ran this suite.
+ *
+ *   modules        4215 -> 4216   (+1)
+ *   local modules  1029 -> 1030   (+1)
+ *
+ * The page then took over its own safe area: the bridge client reaches
+ * `bridge/bridge-safe-area-insets.ts`, and the closure gained the page's root layout
+ * (`app/_layout.web.tsx`), which wraps every route. Two local modules, measured.
+ *
+ *   modules        4216 -> 4218   (+2)
+ *   local modules  1030 -> 1032   (+2)
+ *
+ * #22452 (`80f5aae0f9`) then added `src/shared/main-agent-status.ts` and
+ * `src/shared/agent-turn-outcome.ts`, which `agent-status-types.ts` on this route imports. Two local
+ * modules; the change was src/shared-only, so its own CI never ran this suite and main read two over.
+ *
+ *   modules        4218 -> 4220   (+2)
+ *   local modules  1032 -> 1034   (+2)
+ *
+ * Reverting #18790 then took `src/shared/agent-icons/freebuff.png` back out of
+ * `mobile-agent-icon-assets.ts`, undoing the one module #22119 pinned for it. Measured on the revert.
+ *
+ *   modules        4220 -> 4219   (-1)
+ *   local modules  1034 -> 1033   (-1)
  */
-const SESSION_ROUTE_MODULES = 4323
+const SESSION_ROUTE_MODULES = 4219
+
+/** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
+const ROUTE_ENTRY = [
+  'app/h/[hostId]/session/[worktreeId].web.tsx',
+  'src/session/MobileSessionRouteScreen.tsx',
+  // Round 1's two, named for the reading above rather than left inside the total.
+  'src/session/notification-pane-tab.ts',
+  'src/mobile-web-shell/bridge/bridge-init-route.ts'
+]
 
 const artifactModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PAGE_ENGINE))
 const packageModules = (inputs) => inputs.filter((input) => input.includes(MERMAID_PACKAGE))
@@ -222,6 +493,18 @@ describeClosure(
       expect(local).not.toContain('src/terminal/terminal-webview-document-script.generated.ts')
     }, 300_000)
 
+    it('enters through the web sibling and the route body, not the switch', async () => {
+      const { local } = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      for (const entry of ROUTE_ENTRY) {
+        expect(local, `${entry} is not in the closure`).toContain(entry)
+      }
+      // The switch itself is what the shell renders natively, and it reaches
+      // `MobileWebShellScreen`, whose module calls `requireNativeViewManager` at import. A closure
+      // that carried it would be a bundle that throws when the manifest imports this route.
+      expect(local).not.toContain('app/h/[hostId]/session/[worktreeId].tsx')
+      expect(local).not.toContain('src/mobile-web-shell/MobileWebShellScreen.tsx')
+    }, 300_000)
+
     it('reaches the engine as one deferred module and never as part of the download', async () => {
       const { modules } = await mobileWebAppRouteClosure(SESSION_ROUTE)
       // The engine is here, as the one artifact the loader imports.
@@ -250,6 +533,19 @@ describeClosure(
       expect(closure.local).toContain('src/platform/text-input-font-size.web.ts')
       expect(unresolvedTextInputStyles(mobileDir, closure)).toEqual([])
       expect(textInputFontSizeOffenders(mobileDir, closure)).toHaveLength(EXPECTED_OFFENDERS)
+    }, 300_000)
+
+    it('holds the editables the TextInput census cannot see to the same floor', async () => {
+      const closure = await mobileWebAppRouteClosure(SESSION_ROUTE)
+      // The rich Markdown editor's surface is a `contenteditable` in a markup string, sized by a
+      // rule in a stylesheet: `modulesDeclaringTextInput` matches JSX tags and never sees it, so it
+      // shipped at 14 px and was measured at 14 px in both engines. The same floor, read by a rule
+      // that starts from the markup instead of from a prop.
+      expect(editableHostsIn(mobileDir, closure)).toEqual([
+        { file: 'src/components/rich-markdown/document-markup.ts', id: 'editor' }
+      ])
+      expect(unresolvedEditableHostStyles(mobileDir, closure)).toEqual([])
+      expect(editableHostFontSizeOffenders(mobileDir, closure)).toEqual([])
     }, 300_000)
   },
   900_000

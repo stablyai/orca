@@ -41,6 +41,7 @@ export function AiVaultVirtualRow({
   vaultScope,
   buildResumeStartup,
   getOriginalPaneTarget,
+  isStructuredSessionOpen,
   getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
@@ -72,6 +73,7 @@ export function AiVaultVirtualRow({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  isStructuredSessionOpen: (session: AiVaultSession) => boolean
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
@@ -99,6 +101,7 @@ export function AiVaultVirtualRow({
 
   const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
+  const structuredSessionOpen = row.type === 'session' && isStructuredSessionOpen(row.session)
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
   // Why: omit the jump affordance when the session already lives in the
   // worktree on screen — jumping there is a no-op.
@@ -179,8 +182,11 @@ export function AiVaultVirtualRow({
           resumeActions={visibleResumeActions}
           onToggleDetails={() => onToggleSessionDetails(row.session.id)}
           onJumpToOriginalPane={
-            originalPaneTarget ? () => onJumpToOriginalPane(row.session) : undefined
+            originalPaneTarget || structuredSessionOpen
+              ? () => onJumpToOriginalPane(row.session)
+              : undefined
           }
+          resumeHidden={structuredSessionOpen}
           showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
           subagentResume={{ getState: getSessionResumeState, onResume }}

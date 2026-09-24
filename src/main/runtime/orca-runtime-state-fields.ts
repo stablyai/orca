@@ -40,9 +40,14 @@ import { configureHostReadableTranscriptPathSources } from '../native-chat/host-
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from './terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
+
+  protected readonly machineName = new RuntimeMachineName(
+    () => this.store?.getSettings?.().machineName
+  )
 
   constructor(
     store: RuntimeStore | null = null,
@@ -107,6 +112,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   ) {
     super()
     this.store = store
+    this.machineName.start()
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     store?.onSettingsChanged?.((updates) => {
       if ('experimentalStructuredNativeChat' in updates) {

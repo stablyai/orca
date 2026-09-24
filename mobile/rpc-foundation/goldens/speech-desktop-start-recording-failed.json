@@ -3,10 +3,10 @@
   "family": "speech.dictation-start",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "e8a7be4ce24a3c4fed44b4488966db6f7596e396",
-  "lockfileSha256": "afafc16f7989373be291e3475af6b99bda6b9235f9e446398a94c5e49411188f",
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
+  "adapterSha256": "5d978690e3626892b83bdba64537f9b1e1bb66c2060a00517ceead042a6d2334",
   "scenarioSha256": "75b8d1b7ed98b2bf7420986958d0a36222b007c535f85c1308b534301241ec2d",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -19,6 +19,40 @@
       },
       "idle": true,
       "started": "unstarted"
+    },
+    "217153ab0a32": {
+      "name": "speech.dictation.cancel#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "speech.dictation.cancel"
+        },
+        {
+          "name": "params",
+          "value": {
+            "dictationId": "dictation-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "cancelled": true
+          }
+        }
+      }
     },
     "3b5708754539": {
       "name": "speech.dictation.start#1",
@@ -54,40 +88,6 @@
         }
       }
     },
-    "548f959723c1": {
-      "name": "speech.dictation.cancel#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "speech.dictation.cancel"
-        },
-        {
-          "name": "params",
-          "value": {
-            "dictationId": "dictation-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "cancelled": true
-          }
-        }
-      }
-    },
     "7a657475cacc": {
       "status": "rejected",
       "startedAt": 0,
@@ -98,34 +98,20 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "7bf099852710": {
-      "name": "keep-awake-acquire",
+    "9369f4de87f0": {
+      "name": "rollback-recording",
       "ordinal": 3,
-      "value": {
-        "id": "dictation-1"
-      }
+      "value": {}
     },
     "a7ddd021010a": {
       "name": "speech.dictation.start#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.start\",\"params\":{\"dictationId\":\"dictation-1\"}}"
     },
-    "bac140f032bf": {
-      "name": "keep-awake-release",
-      "ordinal": 5,
-      "value": {
-        "id": "dictation-1"
-      }
-    },
-    "d0a5a7a94d54": {
+    "d6e61920633f": {
       "name": "speech.dictation.cancel#1",
-      "ordinal": 7,
+      "ordinal": 5,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"speech.dictation.cancel\",\"params\":{\"dictationId\":\"dictation-1\"}}"
-    },
-    "f3c88c13b915": {
-      "name": "rollback-recording",
-      "ordinal": 4,
-      "value": {}
     }
   },
   "recording": {
@@ -134,13 +120,13 @@
       {
         "id": "rolled-back",
         "observation": {
-          "sender": ["3b5708754539", "548f959723c1"],
-          "payloads": ["a7ddd021010a", "d0a5a7a94d54"],
+          "sender": ["3b5708754539", "217153ab0a32"],
+          "payloads": ["a7ddd021010a", "d6e61920633f"],
           "settlements": {
             "start": "7a657475cacc"
           },
           "state": "1cf8d4be517f",
-          "effects": ["7bf099852710", "f3c88c13b915", "bac140f032bf"]
+          "effects": ["9369f4de87f0"]
         }
       }
     ]

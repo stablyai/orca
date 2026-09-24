@@ -8,18 +8,20 @@ import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scro
 function TranscriptHarness({
   isVisible,
   restoreScrollOffset,
-  scrollToEnd
+  scrollToEnd,
+  itemCount = 100
 }: {
   isVisible: boolean
   restoreScrollOffset: (offset: number) => void
   scrollToEnd: () => void
+  itemCount?: number
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const transcript = useNativeChatTranscriptScroll({
     scrollRef,
     contentRef,
-    itemCount: 100,
+    itemCount,
     isWorking: false,
     showTypingIndicator: false,
     isVisible,
@@ -92,5 +94,43 @@ describe('native chat transcript visibility', () => {
 
     expect(restoreScrollOffset).toHaveBeenCalledExactlyOnceWith(320)
     expect(scrollTop).toBe(320)
+  })
+})
+
+describe('native chat transcript follow', () => {
+  // Folding a settled turn shrinks the content, and the browser clamps a reader
+  // parked just above the end onto it. That offset moves up, but toward the end.
+  it('reattaches a detached reader that content shrinking clamps onto the end', () => {
+    let scrollTop = 900
+    let scrollHeight = 1_000
+    const scrollToEnd = vi.fn()
+    const props = { isVisible: true, restoreScrollOffset: vi.fn(), scrollToEnd }
+    const view = render(<TranscriptHarness {...props} />)
+    const scrollElement = view.getByTestId('scroll')
+    Object.defineProperties(scrollElement, {
+      clientHeight: { configurable: true, get: () => 100 },
+      scrollHeight: { configurable: true, get: () => scrollHeight },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value
+        }
+      }
+    })
+
+    scrollTop = 850
+    fireEvent.scroll(scrollElement)
+    scrollToEnd.mockClear()
+    view.rerender(<TranscriptHarness {...props} itemCount={101} />)
+    // Anti-vacuous: detached 50px up, new content does not pull the reader down.
+    expect(scrollToEnd).not.toHaveBeenCalled()
+
+    scrollHeight = 700
+    scrollTop = 600
+    fireEvent.scroll(scrollElement)
+    view.rerender(<TranscriptHarness {...props} itemCount={102} />)
+
+    expect(scrollToEnd).toHaveBeenCalled()
   })
 })

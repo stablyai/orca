@@ -4,7 +4,8 @@ import { normalizeExecutionHostId } from '../execution-host'
 import {
   AGENT_SESSION_ID_MAX_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
-  AGENT_SESSION_HISTORY_MAX_LIMIT
+  AGENT_SESSION_HISTORY_MAX_LIMIT,
+  AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH
 } from '../agent-session-wire'
 
 export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
@@ -223,6 +224,25 @@ export const ConversationCommandParams = z
   })
   .strict()
 
+export const ThreadGoalParams = z
+  .object({
+    envelope: MutationEnvelope,
+    change: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('set'),
+          objective: z
+            .string()
+            .max(AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH)
+            .refine((value) => value.trim().length > 0, 'Objective is empty')
+        })
+        .strict(),
+      z.object({ kind: z.literal('status'), status: z.enum(['active', 'paused']) }).strict(),
+      z.object({ kind: z.literal('clear') }).strict()
+    ])
+  })
+  .strict()
+
 /** One surface's claim on one session. The id names the surface, not the client: two chat views
  *  looking at the same session are two holders, and either leaving must not release
  *  the other's. */
@@ -230,9 +250,13 @@ export const HoldParams = z
   .object({ sessionId: SessionId, holderId: Identifier('Invalid holder id') })
   .strict()
 
-/** A launch's offer to resume what the last teardown recorded as working. No arguments: the set is
- *  the host's to derive, never a client's to assert. */
-export const RestartResumableParams = z.object({}).strict()
+/** A launch's offer to resume what the last teardown recorded as working; the set is the host's to
+ *  derive, never a client's to assert. Listing takes nothing. Dismissing takes the sessions to
+ *  forget, or nothing to forget them all; a client only ever names sessions the host itself listed,
+ *  so an older host that rejects the key is never asked to. */
+export const RestartResumableParams = z
+  .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
+  .strict()
 
 /** Omitting `sessionIds` takes the whole offered set; naming them takes that subset. Either way the
  *  host re-derives eligibility, so an id a client invents is simply not in the set. */

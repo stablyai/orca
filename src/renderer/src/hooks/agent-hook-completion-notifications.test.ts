@@ -48,10 +48,6 @@ type MockStoreState = {
   getAgentLaunchConfigForStatusEntry: (entry: {
     paneKey: string
   }) => { agentArgs: string; agentEnv: Record<string, string> } | undefined
-  getAgentLaunchConfigForStatusMetadata: (metadata: {
-    paneKey: string
-    launchToken?: string
-  }) => { agentArgs: string; agentEnv: Record<string, string> } | undefined
 }
 
 let mockStoreState: MockStoreState
@@ -148,13 +144,7 @@ describe('agent hook completion notifications', () => {
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
       getAgentLaunchConfigForStatusEntry: (entry) =>
-        mockStoreState.agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig,
-      getAgentLaunchConfigForStatusMetadata: (metadata) =>
-        metadata.launchToken &&
-        metadata.launchToken ===
-          mockStoreState.agentLaunchConfigByPaneKey[metadata.paneKey]?.launchToken
-          ? mockStoreState.agentLaunchConfigByPaneKey[metadata.paneKey]?.launchConfig
-          : undefined
+        mockStoreState.agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig
     }
   })
 

@@ -650,9 +650,8 @@ jobs:
             src/main/orcad/external-chromium-browser-process.integration.test.ts
 
   # Why its own job: it needs mobile/node_modules and a real browser, and the sharded `test`
-  # matrix would pay for both on every shard to run two files. Dark through Phase C: this proves
-  # `build:mobile-web:app` on every PR that touches the page, and ships nothing -- packaging still
-  # builds the Phase A bootstrap via build:mobile-web.
+  # matrix would pay for both on every shard to run two files. It builds the same bundle the
+  # package job ships, and adds the render and census checks packaging does not run.
   mobile_web_app:
     name: mobile web app bundle
     needs: [code_paths]
@@ -699,7 +698,7 @@ jobs:
         run: pnpm exec playwright install --with-deps webkit
 
       - name: Build and verify the app bundle
-        run: pnpm run build:mobile-web:app
+        run: pnpm run build:mobile-web
 
       # The bundling tests skip themselves where mobile dependencies are absent, which is how they
       # stay green in the sharded `test` job. This is the job that installs them, so here a missing
@@ -817,6 +816,12 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
 
+      # The checkout must pass without depending on a historical baseline that leaks.
+      - name: Verify Linux daemon shutdown descendant cleanup
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: node config/scripts/run-daemon-shutdown-descendants-docker.mjs
+
       # Why --no-file-parallelism: every file here launches a full Electron stack twice, and each
       # probe carries its own in-process deadline. Four at once on a 4-vCPU runner starve each other
       # past those deadlines; serial, every probe owns the runner.
@@ -852,7 +857,7 @@ jobs:
 
       # Why here and not inside "Build package inputs": this job assembles packaging inputs step by
       # step instead of calling build:release, and electron-builder's beforePack guard hard-fails
-      # without out/mobile-web.
+      # without out/mobile-web. This is the real page, ~8 MB, not a bootstrap document.
       - name: Build mobile web bundle
         run: pnpm run build:mobile-web
 

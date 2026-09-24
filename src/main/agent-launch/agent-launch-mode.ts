@@ -72,6 +72,10 @@ export type AgentLaunchModePlacement = {
    *  resolved — never accepted from a caller, which would let one route around this decision.
    *  Absent means the kind was never established, and is not read as any particular kind. */
   workspaceKind?: WorkspaceLaunchKind
+  /** A start directory other than the workspace root. It belongs here, unlike `model` or `effort`,
+   *  because a structured session has no way to apply one — it runs in its workspace — so honouring
+   *  it and honouring the chat preference are mutually exclusive rather than merely awkward. */
+  cwd?: string
 }
 
 const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, string> = {
@@ -141,7 +145,10 @@ export function decideAgentLaunchMode(args: {
     // the create-support probe reads the resolved workspace rather than guessing from a
     // client-side project runtime.
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
-    requiresTuiLaunchCommand: hasExplicitTuiLaunchCommand(settings, agent)
+    // Mirrors the renderer's own route input (`agent-launch-route-input.ts`), which has always
+    // treated a requested cwd as terminal-only; the host simply had no way to be told about one.
+    requiresTuiLaunchCommand:
+      Boolean(placement.cwd?.trim()) || hasExplicitTuiLaunchCommand(settings, agent)
   })
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker], vocabulary)

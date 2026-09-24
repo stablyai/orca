@@ -36,6 +36,7 @@ export function VaultSessionRow({
   vaultScope,
   detailsExpanded,
   resumeDisabled,
+  resumeHidden,
   onToggleDetails,
   onJumpToOriginalPane,
   showJumpToWorktree,
@@ -65,6 +66,7 @@ export function VaultSessionRow({
   vaultScope: AiVaultScope
   detailsExpanded: boolean
   resumeDisabled: boolean
+  resumeHidden?: boolean
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
@@ -96,7 +98,9 @@ export function VaultSessionRow({
         'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
         'The transcript source is unavailable.'
       )
-  const requestDelete = (): void => onRequestDelete?.(session)
+  const requestDelete = session.structuredSession
+    ? undefined
+    : (): void => onRequestDelete?.(session)
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
@@ -179,6 +183,7 @@ export function VaultSessionRow({
               detailsId={detailsId}
               detailsTooltip={detailsTooltip}
               resumeDisabled={resumeDisabled}
+              resumeHidden={resumeHidden}
               resumeLabel={resumeLabel}
               worktreeInfo={worktreeInfo}
               onToggleDetails={onToggleDetails}
@@ -244,6 +249,7 @@ export function VaultSessionRow({
         <SessionActionMenuItems
           menuKind="context"
           resumeDisabled={resumeDisabled}
+          resumeHidden={resumeHidden}
           resumeLabel={resumeLabel}
           onJumpToOriginalPane={onJumpToOriginalPane}
           showJumpToWorktree={showJumpToWorktree}

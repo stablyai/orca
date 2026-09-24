@@ -153,8 +153,11 @@ describe('terminal viewport refit', () => {
     expect(sessionSource).toContain('textScale: terminalTextScale')
     expect(sessionSource).toContain('connState,')
     expect(sessionSource).toContain('notifyTerminalFrameHeight(nextHeight)')
-    expect(sessionSource).toContain('notifyKeyboardVisibility(true)')
-    expect(sessionSource).toContain('notifyKeyboardVisibility(false)')
+    // One seam for both facts: on the page they come apart, because the shell shortens the WebView
+    // and the keyboard covers nothing the screen has to lift for.
+    expect(sessionSource).toContain('const softKeyboard = useSoftKeyboard()')
+    expect(sessionSource).toContain('notifyKeyboardVisibility(softKeyboard.visible)')
+    expect(sessionSource).toContain('setKeyboardHeight(softKeyboard.height)')
   })
 
   it('does not rerender SessionScreen for frame-height-only layout changes', () => {

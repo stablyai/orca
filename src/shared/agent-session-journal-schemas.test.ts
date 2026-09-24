@@ -216,6 +216,23 @@ describe('nested corruption is rejected', () => {
     ).toBe(true)
   })
 
+  it('refuses an empty producer id, which a presence test would read as a subagent', () => {
+    const base = {
+      itemId: 'codex:t:turn:0',
+      revision: 1,
+      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      sequence: 1,
+      observedAt: 1_000
+    }
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: 'task-1' })).toBe(true)
+    // `''` is PRESENT. Admitting it would hide the row from its own author on
+    // every parent-scoped surface — the defect linkage exists to remove.
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, parentAgentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, providerParentRef: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, producerKind: '' })).toBe(false)
+  })
+
   it('rejects shallow render items and submissions', () => {
     expect(
       isAdmissibleAgentJournalRenderItem({
@@ -363,5 +380,84 @@ describe('optional tool annotations', () => {
         blocks: [{ type: 'tool-call', name: 'shell', input: null, callId: '\n\t' }]
       })
     ).toBe(false)
+  })
+})
+
+describe('thread goal fields', () => {
+  const GOAL = {
+    objective: 'Ship the parser',
+    status: 'active',
+    tokenBudget: null,
+    tokensUsed: 0,
+    timeUsedSeconds: 0,
+    createdAt: 1_000,
+    updatedAt: 1_000
+  } as const
+
+  it('admits a user message sent as a goal and a typed goal transition', () => {
+    const bodies: AgentJournalItemBody[] = [
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Ship the parser' }],
+        sentAs: 'goal'
+      },
+      {
+        kind: 'status',
+        text: 'Goal set: Ship the parser',
+        threadGoal: { state: 'set', goal: GOAL }
+      },
+      { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } }
+    ]
+    for (const body of bodies) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
+    }
+    expect(isAdmissibleAgentJournalMessageBody(bodies[0])).toBe(true)
+  })
+
+  it('keeps a send mode or goal state a newer build writes admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        sentAs: 'scheduled'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal archived',
+        threadGoal: { state: 'archived' }
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, status: 'snoozed' } }
+      })
+    ).toBe(true)
+  })
+
+  it('rejects a malformed send mode or goal snapshot', () => {
+    for (const body of [
+      { kind: 'message', role: 'user', blocks: [], sentAs: 5 },
+      { kind: 'message', role: 'user', blocks: [], sentAs: '' },
+      { kind: 'status', text: 'Goal set', threadGoal: { state: 'set' } },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, objective: null } }
+      },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, timeUsedSeconds: 'soon' } }
+      },
+      { kind: 'status', text: 'Goal set', threadGoal: 'set' }
+    ]) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(false)
+    }
   })
 })

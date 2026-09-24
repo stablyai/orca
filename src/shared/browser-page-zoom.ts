@@ -1,5 +1,10 @@
 export type BrowserPageZoomDirection = 'in' | 'out' | 'reset'
 
+export type BrowserPageZoomCommand = {
+  browserPageId: string
+  direction: BrowserPageZoomDirection
+}
+
 export const BROWSER_PAGE_ZOOM_STEP = 0.5
 export const BROWSER_PAGE_ZOOM_MIN = -3
 export const BROWSER_PAGE_ZOOM_MAX = 5

@@ -172,6 +172,71 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(result.current.state.items[0]?.itemId).toBe('oldest')
   })
 
+  it('shares one in-flight older page, and its result, with every caller', async () => {
+    const tailItems = Array.from({ length: 300 }, (_, index) =>
+      message(`tail-${index}`, 301 + index, 'assistant')
+    )
+    let deliver = (): void => {}
+    mocks.call
+      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            deliver = () =>
+              resolve({ ok: true, page: page('before', [message('older', 1, 'user')], false) })
+          })
+      )
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
+
+    let first!: Promise<string>
+    let second!: Promise<string>
+    act(() => {
+      first = result.current.loadOlder()
+    })
+    expect(result.current.loadingOlder).toBe(true)
+    // A rail jump asking while scroll-to-top's page is in flight joins it.
+    act(() => {
+      second = result.current.loadOlder()
+    })
+    expect(second).toBe(first)
+    await act(async () => {
+      deliver()
+      await first
+    })
+
+    await expect(first).resolves.toBe('applied')
+    await expect(second).resolves.toBe('applied')
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    expect(result.current.loadingOlder).toBe(false)
+    expect(result.current.state.items[0]?.itemId).toBe('older')
+    await expect(result.current.loadOlder()).resolves.toBe('exhausted')
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports an older page the host refused as failed, not applied', async () => {
+    const tailItems = Array.from({ length: 300 }, (_, index) =>
+      message(`tail-${index}`, 301 + index, 'assistant')
+    )
+    mocks.call
+      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
+      .mockResolvedValueOnce({ ok: false, reset: 'expired', page: page('tail', [], true) })
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
+
+    let outcome: Promise<string> = Promise.resolve('')
+    await act(async () => {
+      outcome = result.current.loadOlder()
+      await outcome
+    })
+    await expect(outcome).resolves.toBe('failed')
+    expect(result.current.loadingOlder).toBe(false)
+  })
+
   it('does no host work when the app regains focus', async () => {
     const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
     mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })

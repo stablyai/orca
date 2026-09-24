@@ -65,17 +65,6 @@ export type AgentLaunchConfigRegistrationMetadata = {
   providerSession?: AgentProviderSessionMetadata
 }
 
-export type AgentLaunchConfigStatusMetadata = {
-  paneKey: string
-  agentType?: AgentType
-  tabId?: string
-  terminalHandle?: string
-  launchToken?: string
-  providerSession?: AgentProviderSessionMetadata
-  existingProviderSession?: AgentProviderSessionMetadata
-  providerSessionChanged?: boolean
-}
-
 export type AgentLaunchConfigRegistryEntry = {
   launchConfig: SleepingAgentLaunchConfig
   registeredAt: number

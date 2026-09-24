@@ -430,4 +430,22 @@ describe('mobile structured send retries', () => {
     expect(calls()).toHaveLength(0)
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
   })
+
+  it('puts a store that would not take the journal on screen, and sends nothing', async () => {
+    // Inside the page the store is the app's, reached over the `storage` grant, and it rejects a
+    // journal past `PAGE_STORAGE_MAX_VALUE_CHARS` — 48 unsettled sends, measured. A refusal that
+    // resolved instead would put a mutation on the wire carrying an operation id nothing holds,
+    // and a retry after a crash would send this message twice (rulings-ota-c7.md ruling 7).
+    asyncStorage.setItem.mockImplementation(async () => {
+      throw new Error('Orca could not save orca:mobileStructuredSendOperations:v1')
+    })
+    await mountSession()
+
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('the journal will not take this')).toBe('rejected')
+    })
+
+    expect(onSendError).toHaveBeenCalledWith('Message not sent')
+    expect(calls()).toHaveLength(0)
+  })
 })

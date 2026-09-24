@@ -1,18 +1,20 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { MobileWebBundleRouteSchema } from '../../src/shared/mobile-web-bundle/manifest-contract.ts'
 import {
   buildMobileWebAppBundle,
   resolveMobileWebPageRoutes
 } from './build-mobile-web-app-bundle.mjs'
-import { computeMobileWebBundleBuildId } from './build-mobile-web-bundle.mjs'
+import { computeMobileWebBundleBuildId } from './mobile-web-bundle-manifest.mjs'
 import {
   collectMobileWebAppRouteKeys,
   routePathnameFromKey
 } from './mobile-web-app-route-manifest.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 
 /**
  * Which screens this desktop declares as page routes, and whether the bundle can render each.
@@ -46,10 +48,10 @@ async function withScratch(run) {
  * the route tree resolves to, and what the built manifest actually carries.
  */
 const EXPECTED_PAGE_ROUTES = [
-  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] },
+  { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'externalLink', 'haptics'] },
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
   },
   {
     pathname: '/h/[hostId]/tasks',
@@ -70,7 +72,49 @@ const EXPECTED_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/review/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
+  },
+  {
+    pathname: '/h/[hostId]/session/[worktreeId]',
+    grants: [
+      'navigate',
+      'storage',
+      'externalLink',
+      'haptics',
+      'screencastBinary',
+      'native.clipboard.write',
+      'native.clipboard.read',
+      'native.media.pick',
+      'native.media.read',
+      'native.media.release',
+      'native.audio.start',
+      'native.audio.read',
+      'native.audio.stop'
+    ],
+    // The one optional grant in the list (C8.1): the HTML preview's links, hidden rather than dead
+    // against a shell that cannot open one.
+    optionalGrants: ['externalNavigation']
   }
+]
+
+const sessionGrants = EXPECTED_PAGE_ROUTES.filter(
+  (route) => route.pathname === '/h/[hostId]/session/[worktreeId]'
+).flatMap((route) => route.grants)
+
+const sessionOptionalGrants = EXPECTED_PAGE_ROUTES.filter(
+  (route) => route.pathname === '/h/[hostId]/session/[worktreeId]'
+).flatMap((route) => route.optionalGrants ?? [])
+
+const withPrefix = (prefix) => sessionGrants.filter((grant) => grant.startsWith(prefix))
+
+/** Every count this table's own comments spell out, beside the list each is a count of. */
+const SPELLED_COUNTS = [
+  { precedes: 'grants', counted: sessionGrants.length },
+  { precedes: 'audio verbs', counted: withPrefix('native.audio.').length },
+  { precedes: 'media verbs', counted: withPrefix('native.media.').length },
+  // "All three or none": the audio verbs again, as the rule that they are declared together.
+  { precedes: 'or none', counted: withPrefix('native.audio.').length },
+  // C8.1's, and the count the optional lane will grow first.
+  { precedes: 'optional grant', counted: sessionOptionalGrants.length }
 ]
 
 describe('the page routes the manifest declares', () => {
@@ -87,9 +131,63 @@ describe('the page routes the manifest declares', () => {
     expect(routePathnameFromKey('./h/[hostId]/_layout.tsx')).toBeNull()
   })
 
+  it("spells the session route's own counts off the table it comments", async () => {
+    const source = await readFile(
+      join(projectDir, 'config', 'scripts', 'mobile-web-page-routes.mjs'),
+      'utf8'
+    )
+    for (const { precedes, spelled, counts } of spelledCountsAgainstTables(
+      source,
+      SPELLED_COUNTS
+    )) {
+      expect(spelled, precedes).toEqual(counts)
+    }
+  })
+
   it('declares only routes the bundle has a module for', async () => {
     const keys = await collectMobileWebAppRouteKeys(appDir)
     expect(resolveMobileWebPageRoutes(keys)).toEqual(EXPECTED_PAGE_ROUTES)
+  })
+
+  /**
+   * The optional lane through the builder, which drops what it does not name.
+   *
+   * `resolveMobileWebPageRoutes` maps each declaration member by member, so a field the declaration
+   * grows reaches a phone only once this map names it. Driven on an input of its own rather than on
+   * the real list, so the case stays a rule about the map whatever the declarations become.
+   */
+  it('carries an optional grant list through, and writes no key for a route without one', () => {
+    expect(
+      resolveMobileWebPageRoutes(
+        ['./h/[hostId]/index.tsx', './h/[hostId]/tasks.tsx'],
+        [
+          {
+            pathname: '/h/[hostId]',
+            grants: ['navigate'],
+            optionalGrants: ['externalNavigation']
+          },
+          { pathname: '/h/[hostId]/tasks', grants: ['navigate'], optionalGrants: [] }
+        ]
+      )
+    ).toEqual([
+      { pathname: '/h/[hostId]', grants: ['navigate'], optionalGrants: ['externalNavigation'] },
+      { pathname: '/h/[hostId]/tasks', grants: ['navigate'] }
+    ])
+  })
+
+  it('holds the optional lane to the manifest grammar and the ceiling over the union', () => {
+    // The declaration is checked against `MobileWebBundleRouteSchema` when the manifest is written,
+    // so this is that schema's rule read from the builder's side: a name the required lane refuses
+    // is refused here, and the two lists are bounded together rather than one at a time.
+    const withOptional = (optionalGrants, grants = []) =>
+      MobileWebBundleRouteSchema.safeParse({ pathname: '/h/[hostId]', grants, optionalGrants })
+        .success
+    expect(withOptional(['externalNavigation'])).toBe(true)
+    expect(withOptional(['native.externalNavigation'])).toBe(false)
+    const names = (count, prefix) =>
+      Array.from({ length: count }, (_value, index) => `${prefix}${String(index)}`)
+    expect(withOptional(names(8, 'opt'), names(8, 'req'))).toBe(true)
+    expect(withOptional(names(9, 'opt'), names(8, 'req'))).toBe(false)
   })
 
   it('fails the build on a declaration the bundle cannot render', () => {

@@ -24,5 +24,6 @@ export {
   SessionId,
   SetOptionParams,
   SubscribeParams,
+  ThreadGoalParams,
   UnsubscribeParams
 } from '../../../../shared/rpc-contract/structured-agent-session-params'

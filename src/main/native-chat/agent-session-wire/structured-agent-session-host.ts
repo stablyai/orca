@@ -35,7 +35,8 @@ import { listStructuredAgentSessionTabs } from './structured-agent-session-host-
 import {
   structuredAgentSessionMutationDelegates,
   settleStructuredAgentSessionLateDispatch,
-  type StructuredAgentSessionMutationContext
+  type StructuredAgentSessionMutationContext,
+  releaseStructuredAgentSessionUnansweredDispatches
 } from './structured-agent-session-host-mutations'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type {
@@ -45,6 +46,7 @@ import type {
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
+import type { StructuredAgentSessionTurnCompletionSubscriber } from './structured-agent-session-turn-completion-feed'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
@@ -288,6 +290,7 @@ export class StructuredAgentSessionHost {
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
   setOption = this.mutations.setOption
+  changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 
   requestHandoff = (
@@ -328,6 +331,10 @@ export class StructuredAgentSessionHost {
   settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
     settleStructuredAgentSessionLateDispatch(this.mutationContext(), input)
 
+  releaseUnansweredDispatches = (
+    input: Parameters<typeof releaseStructuredAgentSessionUnansweredDispatches>[1]
+  ) => releaseStructuredAgentSessionUnansweredDispatches(this.mutationContext(), input)
+
   publishBackgroundTaskState: StructuredAgentSessionBackgroundTaskChannel['publish'] = (...args) =>
     this.backgroundTasks.publish(...args)
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
@@ -335,6 +342,11 @@ export class StructuredAgentSessionHost {
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
     this.clientDelivery.subscribeStatus(subscriber)
+
+  /** Turns that settle from now on. Live-only: nothing missed is replayed. */
+  subscribeTurnCompletions = (
+    subscriber: StructuredAgentSessionTurnCompletionSubscriber
+  ): (() => void) => this.clientDelivery.subscribeTurnCompletions(subscriber)
 
   private requireSession(sessionId: string): StructuredAgentSessionHostSession {
     const session = this.sessions.get(sessionId)

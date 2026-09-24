@@ -37,6 +37,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'muse',
       'omp',
       'opencode',
       'opencode2',
@@ -69,6 +70,26 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(args).toContain('--quiet')
     expect(args).toContain('--thinking')
     expect(args).toEqual(expect.arrayContaining(['--model', 'kimi-code/kimi-for-coding']))
+  })
+
+  it('uses Muse exec for non-interactive Source Control AI generation', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.muse
+    expect(spec).toBeDefined()
+    expect(spec?.promptDelivery).toBe('argv')
+    expect(spec?.buildArgs({ prompt: 'Write a concise commit message', model: 'default' })).toEqual(
+      [
+        'exec',
+        '--no-session-log',
+        '--approval-mode',
+        'never',
+        '--disable-sandbox',
+        '--disable-shell',
+        '--disable-write',
+        '--disable-web-tools',
+        '--',
+        'Write a concise commit message'
+      ]
+    )
   })
 
   it('uses the provider-qualified Kimi model id accepted by the CLI', () => {

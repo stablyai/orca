@@ -11,7 +11,7 @@ import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
-import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()

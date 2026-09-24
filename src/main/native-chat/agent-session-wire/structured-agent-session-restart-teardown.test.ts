@@ -66,7 +66,7 @@ it.each(['approval', 'question', 'completed'])(
       { lifecycle: true }
     )
     await host.flushAllStreamedEvents()
-    expect(await new AgentSessionRecoveryCapsule(root).take(NOW)).toEqual([])
+    expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
   }
 )
 
@@ -99,6 +99,6 @@ it.each(['approval', 'question', 'completed'] as const)(
       return true
     }
     await host.flushAllStreamedEvents()
-    expect(await new AgentSessionRecoveryCapsule(root).take(NOW)).toEqual([])
+    expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
   }
 )

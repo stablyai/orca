@@ -172,7 +172,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
-            persistHostSessionBinding: true
+            ...dependencies.BACKGROUND_TERMINAL_SPAWN_FLAGS
           })
         } finally {
           releaseStablePaneCreate?.()
@@ -180,7 +180,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         if (!result.stablePaneOwner) {
           reportPtySpawnCommitted()
         }
-        const adoptedStablePane = Boolean(result.stablePaneOwner)
+        // Why here: refused before a handle, snapshot or reveal could pose the live PTY as new.
+        const adoptedStablePane = dependencies.admitStablePaneAdoption(result, launchOpts)
         if (result.agentSessionEnsure) {
           const canonicalSurface = result.agentSessionEnsure.owner.surface
           preAllocatedHandle = canonicalSurface.terminalHandle

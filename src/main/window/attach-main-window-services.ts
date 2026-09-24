@@ -119,7 +119,7 @@ export function attachMainWindowServices(
     void hydrateLocalPtyRegistryAtBoot(store)
   }
   registerSshHandlers(store, () => mainWindow, runtime)
-  registerRemoteWorkspaceHandlers(store, () => mainWindow)
+  registerRemoteWorkspaceHandlers(store, () => mainWindow, runtime)
   registerFileDropRelay(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)
   scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)

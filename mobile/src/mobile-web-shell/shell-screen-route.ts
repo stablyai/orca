@@ -1,4 +1,7 @@
-import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/bridge-envelope'
+// From the module that declares it, not from the envelope that re-exports it: the envelope reaches
+// this file through the page-to-shell union, so reading the schema back through it is a cycle —
+// and one that resolves to `undefined` in the page bundle rather than failing to build.
+import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/bridge-init-route'
 
 /**
  * The route to hand the shell, or nothing if the page could not be given it.

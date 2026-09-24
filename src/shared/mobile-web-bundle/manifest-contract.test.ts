@@ -7,6 +7,7 @@ import {
   MOBILE_WEB_BUNDLE_ENTRYPOINT,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
+  MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS,
   MOBILE_WEB_BUNDLE_MAX_ROUTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
   MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
@@ -161,6 +162,60 @@ describe('the page routes a manifest declares', () => {
 
   it('refuses a route carrying a field the contract does not declare', () => {
     expect(withRoutes([{ pathname: '/h', grants: [], screen: 'x' }])).toBe(false)
+  })
+
+  /**
+   * The optional lane (ruling 37), held to the required lane's own rules.
+   *
+   * One grammar, because the shell filters both lists against one implemented set and the page reads
+   * one `grants.native`: a name only one lane could carry would be a second vocabulary, which is
+   * what candidate A was rejected for. One ceiling over the union, because the union is what a
+   * session's granted list is built from.
+   */
+  it('takes an optional grant list, absent or empty, under the same grammar', () => {
+    expect(withRoutes([{ pathname: '/h', grants: ['navigate'], optionalGrants: [] }])).toBe(true)
+    expect(
+      withRoutes([{ pathname: '/h', grants: ['navigate'], optionalGrants: ['screencastBinary'] }])
+    ).toBe(true)
+    expect(
+      withRoutes([
+        { pathname: '/h', grants: ['navigate'], optionalGrants: ['native.clipboard.write'] }
+      ])
+    ).toBe(true)
+    // The spellings the required lane refuses, refused here too.
+    expect(
+      withRoutes([{ pathname: '/h', grants: [], optionalGrants: ['native.screencast'] }])
+    ).toBe(false)
+    expect(withRoutes([{ pathname: '/h', grants: [], optionalGrants: [''] }])).toBe(false)
+  })
+
+  it('bounds the two lists together, not one at a time', () => {
+    const names = (count, prefix) =>
+      Array.from({ length: count }, (_value, index) => `${prefix}${String(index)}`)
+    const half = MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS / 2
+    // At the ceiling exactly, split across the lanes.
+    expect(
+      withRoutes([
+        { pathname: '/h', grants: names(half, 'req'), optionalGrants: names(half, 'opt') }
+      ])
+    ).toBe(true)
+    // One past it, with neither lane over the ceiling on its own: this is the case a per-array
+    // ceiling passes and a page would be handed twice what the cap bounds.
+    expect(
+      withRoutes([
+        { pathname: '/h', grants: names(half + 1, 'req'), optionalGrants: names(half, 'opt') }
+      ])
+    ).toBe(false)
+    // And the per-array ceiling still holds on its own, so the union check is not the only fence.
+    expect(
+      withRoutes([
+        {
+          pathname: '/h',
+          grants: [],
+          optionalGrants: names(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS + 1, 'opt')
+        }
+      ])
+    ).toBe(false)
   })
 
   it('requires the field, so a bundle cannot leave the shell guessing', () => {

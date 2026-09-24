@@ -107,6 +107,36 @@ describe('Claude background task status', () => {
     }
   })
 
+  // The inventory shares one kind table with the SDK stream, so the stream's `local_*` agent names
+  // classify as agents here too rather than failing active as untyped watch work.
+  // A teammate row still never gates the pane: it reports running permanently, so only its
+  // lifecycle events may (the #8825 idle-squat rule), which is why its pane state differs.
+  it.each([
+    ['local_agent', 'working'],
+    ['local_subagent', 'working'],
+    ['subagent', 'working'],
+    ['teammate', 'done']
+  ])('reads a running %s task as agent work, not a watch loop', (type, paneState) => {
+    expect(
+      readClaudeBackgroundAgentTasks({
+        background_tasks: [{ id: 'agent-1', type, status: 'running' }]
+      })
+    ).toMatchObject({
+      present: true,
+      truncated: false,
+      hasRunningNonAgentTask: false,
+      tasks: [{ id: 'agent-1', running: true }]
+    })
+
+    const state = createHookListenerState()
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'agent-1', type, status: 'running' }]
+      })
+    ).toMatchObject({ state: paneState, workingMode: undefined })
+  })
+
   it('drains the Claude 2.1.229 background-task completion sequence', () => {
     const state = createHookListenerState()
 

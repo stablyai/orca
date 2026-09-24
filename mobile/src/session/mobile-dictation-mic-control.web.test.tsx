@@ -39,7 +39,7 @@ vi.mock(
 // runtime this test does not have. Nothing below calls one.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -52,7 +52,6 @@ import {
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { createNativeAudioCapture, type NativeAudioEngine } from '../platform/native-audio'
-import { createNativeWakelockServer } from '../platform/native-wakelock'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
@@ -60,7 +59,10 @@ import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-
 /** Every message that reached the composer's own error handler, which is what it toasts. */
 const reported: string[] = []
 
-/** The four verbs served by the real handlers over an engine that opens and produces no audio. */
+/** Every hold and release the shell's capture asked the device for, as `+` and `-`. */
+const screen: string[] = []
+
+/** The three verbs served by the real handlers over an engine that opens and produces no audio. */
 function createAudioShell(): (verb: BridgeNativeVerb, params: unknown) => Promise<unknown> {
   const engine: NativeAudioEngine = {
     requestPermission: async () => 'granted',
@@ -68,16 +70,19 @@ function createAudioShell(): (verb: BridgeNativeVerb, params: unknown) => Promis
     begin: () => true,
     end: () => {},
     onMicrophoneData: () => ({ remove: () => {} }),
-    onInterruption: () => ({ remove: () => {} })
+    onInterruption: () => ({ remove: () => {} }),
+    screenLock: {
+      hold: () => screen.push('+'),
+      release: () => screen.push('-')
+    }
   }
   const capture = createNativeAudioCapture(engine)
-  const { serve: wakelock } = createNativeWakelockServer({
-    activate: async () => undefined,
-    deactivate: async () => undefined
-  })
-  return (verb, params) =>
-    verb === 'native.wakelock.set' ? wakelock(params) : capture.serve(verb, params)
+  return (verb, params) => capture.serve(verb, params)
 }
+
+/** The hook the composer holds, for a case that has to act on a state the button does not offer:
+ *  the cancel affordance only exists once a dictation is recording or processing. */
+const composer: { dictation: ReturnType<typeof useMobileDictation> | null } = { dictation: null }
 
 function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
   const dictation = useMobileDictation({
@@ -86,6 +91,7 @@ function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
     onTranscript: () => {},
     onError: (error) => reported.push(error.message)
   })
+  composer.dictation = dictation
   return (
     <MobileTerminalInputActions
       canSend
@@ -113,9 +119,26 @@ function Composer({ pair }: { pair: BridgePortPair }): ReactElement {
   )
 }
 
+/** What the desktop answers a forwarded request with. `null` leaves it in flight for the case to
+ *  settle later; the default is a plain success. */
+type DesktopReply = {
+  id: string
+  ok: boolean
+  result?: unknown
+  error?: unknown
+}
+type DesktopAnswer = (method: string) => DesktopReply | null
+
+const DESKTOP_OK: DesktopAnswer = () => ({ id: 'desktop', ok: true, result: {} })
+
+/** Requests a case left unanswered, in the order the page sent them. */
+const pending: { method: string; resolve: (reply: DesktopReply) => void }[] = []
+
 type MicControl = {
   readonly label: () => string
-  readonly tap: () => Promise<void>
+  readonly tap: (answer?: DesktopAnswer) => Promise<void>
+  /** Drives the bridge and the desktop without pressing anything, for a case acting on the hook. */
+  readonly settle: (answer?: DesktopAnswer) => Promise<void>
 }
 
 /** The mic button, found by the label it carries in every state rather than by position. */
@@ -147,28 +170,43 @@ async function mount(pair: BridgePortPair): Promise<MicControl> {
   if (rendered === null) {
     throw new Error('nothing mounted')
   }
+  // The tap crosses the bridge, the shell answers, and the desktop answers what was forwarded.
+  async function settle(answer: DesktopAnswer = DESKTOP_OK): Promise<void> {
+    for (let round = 0; round < 4; round += 1) {
+      await act(async () => {
+        await pair.flush()
+        for (const request of pair.rpc.requests.splice(0)) {
+          const reply = answer(request.method)
+          if (reply === null) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake client's resolver takes the reply shape the host would have sent.
+            pending.push({ method: request.method, resolve: request.resolve as never })
+            continue
+          }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake client takes the reply shape the host would have sent, which is what a case builds here.
+          request.resolve(reply as never)
+        }
+        await pair.flush()
+      })
+    }
+  }
+
   return {
     label: () => String(micOf(rendered.root).props.accessibilityLabel),
-    tap: async () => {
+    settle,
+    tap: async (answer: DesktopAnswer = DESKTOP_OK) => {
       await act(async () => {
         micOf(rendered.root).props.onPress()
       })
-      // The tap crosses the bridge, the shell answers, and the desktop answers what was forwarded.
-      for (let round = 0; round < 4; round += 1) {
-        await act(async () => {
-          await pair.flush()
-          for (const request of pair.rpc.requests.splice(0)) {
-            request.resolve({ id: 'desktop', ok: true, result: {} })
-          }
-          await pair.flush()
-        })
-      }
+      await settle(answer)
     }
   }
 }
 
 beforeEach(() => {
   reported.length = 0
+  screen.length = 0
+  pending.length = 0
+  composer.dictation = null
 })
 
 afterEach(() => {
@@ -205,6 +243,38 @@ describe('the mic control on a page the shell did not grant audio', () => {
   })
 })
 
+describe('a page whose desktop start fails after the microphone opened', () => {
+  /**
+   * The shell has the microphone open by the time the desktop refuses the session: `open()` is
+   * `native.audio.start`, and the page only asks the desktop for a session afterwards. Nothing on
+   * that path used to end the capture, so the screen the shell took stayed held until the user
+   * cancelled or the screen unmounted.
+   */
+  it('closes the shell capture and gives the screen back', async () => {
+    const shell = createAudioShell()
+    const verbs: string[] = []
+    const pair = createFakeBridgePortPair({
+      serveNativeVerb: (verb, params) => {
+        verbs.push(verb)
+        return shell(verb, params)
+      }
+    })
+    const mic = await mount(pair)
+    await mic.tap((method) =>
+      method === 'speech.dictation.start'
+        ? { id: 'desktop', ok: false, error: { code: 'refused', message: 'no model installed' } }
+        : { id: 'desktop', ok: true, result: {} }
+    )
+    expect(verbs).toContain('native.audio.start')
+    // The microphone is closed and the screen is back, both because the capture ended.
+    expect(verbs).toContain('native.audio.stop')
+    expect(screen).toEqual(['+', '-'])
+    // And the user is told, rather than left looking at a live mic button.
+    expect(reported).not.toEqual([])
+    expect(mic.label()).toBe('Start voice dictation')
+  })
+})
+
 describe('the mic control on a page the shell did grant audio', () => {
   it('reaches recording, with no refusal reported', async () => {
     const pair = createFakeBridgePortPair({ serveNativeVerb: createAudioShell() })
@@ -215,7 +285,7 @@ describe('the mic control on a page the shell did grant audio', () => {
     expect(mic.label()).toBe('Stop voice dictation')
   })
 
-  it('opens the capture and takes the wake tag through the shell', async () => {
+  it('opens the capture through the shell, and asks it for nothing else', async () => {
     const pair = createFakeBridgePortPair({ serveNativeVerb: createAudioShell() })
     const mic = await mount(pair)
     await mic.tap()
@@ -225,12 +295,51 @@ describe('the mic control on a page the shell did grant audio', () => {
         frame.type === 'request' && frame.method.startsWith('native.') ? [frame.method] : []
       )
     expect(verbs).toContain('native.audio.start')
-    expect(verbs).toContain('native.wakelock.set')
+    // Only the microphone: the screen it holds awake is the device's, and the page has no verb for
+    // it to ask through.
+    expect(verbs.every((verb) => verb.startsWith('native.audio.'))).toBe(true)
     // And the desktop was told, which is what makes the recording a session rather than a mic.
     expect(
       pair
         .readToShell()
         .some((frame) => frame.type === 'request' && frame.method.startsWith('speech.dictation.'))
     ).toBe(true)
+  })
+})
+
+describe('a stale page start whose refusal arrives after a newer one is recording', () => {
+  it('leaves the newer dictation recording, with the shell capture and the screen still its own', async () => {
+    const shell = createAudioShell()
+    const verbs: string[] = []
+    const pair = createFakeBridgePortPair({
+      serveNativeVerb: (verb, params) => {
+        verbs.push(verb)
+        return shell(verb, params)
+      }
+    })
+    const mic = await mount(pair)
+    // A opens the shell's microphone and waits on the desktop.
+    await mic.tap((method) => (method === 'speech.dictation.start' ? null : DESKTOP_OK(method)))
+    expect(screen).toEqual(['+'])
+    const first = pending.find((request) => request.method === 'speech.dictation.start')
+    expect(first).toBeDefined()
+    // The user gives up on A while it is still starting, which is a state the button has no
+    // affordance for, and then starts B.
+    await act(async () => {
+      void composer.dictation?.cancel()
+    })
+    await mic.settle()
+    await mic.tap()
+    expect(mic.label()).toBe('Stop voice dictation')
+    const verbsWhileRecording = [...verbs]
+    const screenWhileRecording = [...screen]
+    // A's request finally fails. It owns nothing: the capture and the screen are B's.
+    await act(async () => {
+      first?.resolve({ id: 'desktop', ok: false, error: { code: 'refused', message: 'no model' } })
+    })
+    await mic.settle()
+    expect(mic.label()).toBe('Stop voice dictation')
+    expect(verbs).toEqual(verbsWhileRecording)
+    expect(screen).toEqual(screenWhileRecording)
   })
 })

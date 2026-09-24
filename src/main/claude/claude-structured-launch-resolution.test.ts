@@ -10,6 +10,7 @@ import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
+  CLAUDE_SESSION_STATE_EVENTS_ENV,
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   claudeSessionIdForOrcaSession,
   createClaudeStructuredLaunchResolver
@@ -126,9 +127,10 @@ describe('claude structured launch resolution', () => {
     })
     expect(first.options.resume).toBeUndefined()
     expect(CLAUDE_STRUCTURED_BASE_OPTIONS.includePartialMessages).toBe(true)
+    expect(first.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
   })
 
-  it('resumes the session and leaf at the durable chain head', async () => {
+  it('resumes the durable chain head by session id and carries its leaf as bookkeeping', async () => {
     const launch = await resolverFor(
       record({
         providerHandleChain: [
@@ -150,28 +152,35 @@ describe('claude structured launch resolution', () => {
       resumed: true
     })
     expect(launch.options.resume).toBe('provider-current')
-    expect(launch.options.resumeSessionAt).toBe('leaf-current')
+    // Claude owns where the conversation continues; a stored leaf would cut or branch it.
+    expect(launch.options).not.toHaveProperty('resumeSessionAt')
     expect(launch.options.sessionId).toBeUndefined()
   })
 
-  it('refuses a durable journal leaf that diverged before resume resolution', async () => {
-    const resolve = resolverFor(
-      record({
-        providerHandleChain: [
-          {
-            handle: {
-              provider: 'claude',
-              sessionId: 'provider-current',
-              leafUuid: 'leaf-current'
-            }
-          }
-        ] as AgentSessionRecord['providerHandleChain']
-      })
-    )
+  it('forces session-state events on when the inherited overlay disables them', async () => {
+    const launch = await resolverFor(record(), () => ({
+      [CLAUDE_SESSION_STATE_EVENTS_ENV]: '0'
+    }))({ identity: IDENTITY })
 
-    await expect(resolve({ identity: identityAt('leaf-stale') })).rejects.toThrow(
-      'durable resume identity changed before spawn'
-    )
+    expect(launch.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
+  })
+
+  it('launches when only the bookkeeping leaf moved, and refuses a changed session', async () => {
+    const resolve = resolverFor(RESUMABLE)
+
+    // A failed turn-end or exit write leaves the identity's leaf behind the record's.
+    await expect(resolve({ identity: identityAt('leaf-stale') })).resolves.toMatchObject({
+      providerSessionId: 'provider-current',
+      resumeLeafUuid: 'leaf-current'
+    })
+    await expect(
+      resolve({
+        identity: {
+          ...IDENTITY,
+          providerHandle: { kind: 'claude', sessionId: 'provider-other', leafUuid: 'leaf-current' }
+        }
+      })
+    ).rejects.toThrow('durable resume identity changed before spawn')
   })
 
   it('keeps session-only resume when the durable handle has no leaf', async () => {
@@ -190,7 +199,7 @@ describe('claude structured launch resolution', () => {
     )({ identity: identityAt(null) })
 
     expect(launch.options.resume).toBe('provider-current')
-    expect(launch.options.resumeSessionAt).toBeUndefined()
+    expect(launch.options).not.toHaveProperty('resumeSessionAt')
   })
 
   // Agent Permissions is stored as the bypass flag inside the launch arguments, so presence of
@@ -295,6 +304,61 @@ describe('claude structured launch resolution', () => {
         }
       }
     }
+  })
+
+  it('builds on the supplied inherited env instead of Orca process env', async () => {
+    const launch = await createClaudeStructuredLaunchResolver({
+      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      resolveWorkspacePath: async (id) => `/repos/${id}`,
+      resolveCommand: () => '/usr/local/bin/claude',
+      resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+      resolveInheritedEnv: async () => ({ PATH: '/shell/bin', SHELL_ONLY_MARKER: 'from-shell' })
+    })({ identity: IDENTITY })
+
+    expect(launch.env?.SHELL_ONLY_MARKER).toBe('from-shell')
+  })
+
+  it('drops an inherited CLAUDE_CONFIG_DIR so the record stays the only Claude home the pin sees', async () => {
+    const launch = await createClaudeStructuredLaunchResolver({
+      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      resolveWorkspacePath: async (id) => `/repos/${id}`,
+      resolveCommand: () => '/usr/local/bin/claude',
+      resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+      resolveInheritedEnv: async () => ({
+        PATH: '/shell/bin',
+        CLAUDE_CONFIG_DIR: '/shell/claude',
+        SHELL_ONLY_MARKER: 'from-shell'
+      })
+    })({ identity: IDENTITY })
+
+    expect(launch.env).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+    expect(launch.env?.SHELL_ONLY_MARKER).toBe('from-shell')
+    expect(launch.claudeConfigDir).toBe('/home/work/.claude')
+  })
+
+  it('keeps a configured overlay CLAUDE_CONFIG_DIR over the dropped inherited one', async () => {
+    const launch = await createClaudeStructuredLaunchResolver({
+      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      resolveWorkspacePath: async (id) => `/repos/${id}`,
+      resolveCommand: () => '/usr/local/bin/claude',
+      resolveAuthPolicy: () => ({ stripAuthEnv: false }),
+      resolveEnv: () => ({ CLAUDE_CONFIG_DIR: '/accounts/selected/home' }),
+      resolveInheritedEnv: async () => ({ PATH: '/shell/bin', CLAUDE_CONFIG_DIR: '/shell/claude' })
+    })({ identity: IDENTITY })
+
+    expect(launch.env?.CLAUDE_CONFIG_DIR).toBe('/accounts/selected/home')
+  })
+
+  it('still strips an inherited auth key under a managed account', async () => {
+    const launch = await createClaudeStructuredLaunchResolver({
+      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      resolveWorkspacePath: async (id) => `/repos/${id}`,
+      resolveCommand: () => '/usr/local/bin/claude',
+      resolveAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveInheritedEnv: async () => ({ PATH: '/shell/bin', ANTHROPIC_API_KEY: 'listed-key' })
+    })({ identity: IDENTITY })
+
+    expect(launch.env?.ANTHROPIC_API_KEY).toBeUndefined()
   })
 
   it('lets an explicit Claude env overlay override ambient auth under system auth', async () => {

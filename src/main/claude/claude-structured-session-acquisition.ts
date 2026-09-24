@@ -1,4 +1,3 @@
-import { ClaudeRewindAttempt, proveClaudeRewindRecovery } from './claude-structured-rewind'
 import {
   AgentSessionPreSpawnError,
   type AgentSessionAcquisition,
@@ -45,6 +44,7 @@ import {
 } from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import { readClaudeTranscriptEntryUuid } from './claude-tui-exit'
+import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
 import {
@@ -92,7 +92,6 @@ export async function acquireClaudeSession({
     createClaudeJournalFailureHandler({ attempt, initDeadline, callbacks, sessionId })
   )
 
-  const rewind = new ClaudeRewindAttempt(input.rewind, input.rewind?.onProved)
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
@@ -101,11 +100,6 @@ export async function acquireClaudeSession({
       if (init || (message.type === 'system' && message.subtype === 'init')) {
         initDeadline.reject(new Error('claude provider session expected'))
       }
-      return
-    }
-    const refusal = rewind.observe(message)
-    if (refusal) {
-      initDeadline.reject(refusal)
       return
     }
     if (init) {
@@ -122,6 +116,10 @@ export async function acquireClaudeSession({
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
+      // Recording a turn end is an owner action; a result that trails the child's exit has no owner.
+      if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
+        persistClaudeTurnResumePoint(sessionId, liveSession, deps)
+      }
     }
     const turnOrigin = liveSession
       ? resolveClaudeReplayTurn(liveSession, message, (settlement) =>
@@ -161,8 +159,7 @@ export async function acquireClaudeSession({
       exits,
       callbacks,
       previous,
-      attempt,
-      rewind
+      attempt
     })
     expectedProviderSessionId = launch.providerSessionId
     observedLeafUuid = launch.resumeLeafUuid
@@ -241,9 +238,6 @@ export async function acquireClaudeSession({
         diagnostic: claudeAuthDiagnostic(init, settings)
       })
     )
-    observedLeafUuid = (await rewind.prove(launch, deps)) ?? observedLeafUuid
-    observedLeafUuid =
-      (await proveClaudeRewindRecovery(input.rewindRecovery, launch, deps)) ?? observedLeafUuid
     const process = await claudeProcessIdentity(
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
@@ -257,8 +251,8 @@ export async function acquireClaudeSession({
         connection,
         init,
         initialization,
-        claudeConfigDir: launch.claudeConfigDir,
         leafUuid: observedLeafUuid,
+        turnEndLeafUuid: launch.resumeLeafUuid,
         fence: input.fence,
         effort: readClaudeSettingsEffort(settings),
         ...claudeStructuredSessionPublicationOptions(acquisitionOptions),
@@ -304,7 +298,6 @@ export async function acquireClaudeSession({
     acquisitions.deleteIfCurrent(sessionId, attempt)
     throw acquisitionError
   } finally {
-    rewind.clear()
     attempt.finish()
   }
 }

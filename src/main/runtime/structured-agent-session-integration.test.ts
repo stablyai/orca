@@ -37,6 +37,7 @@ import { createTrackedJournalOpener } from '../native-chat/agent-session-journal
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -222,6 +223,7 @@ let dispatcher: RpcDispatcher
 let bootEnvironmentReads: number
 let codexOverrideReads: number
 let configuredCodexProfile: string
+let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 
 /** Runs a one-shot method and returns its decoded reply. */
 async function call(method: string, params: unknown): Promise<RpcResponse> {
@@ -307,6 +309,7 @@ beforeEach(async () => {
   bootEnvironmentReads = 0
   codexOverrideReads = 0
   configuredCodexProfile = 'configured'
+  shellEnvironmentPolicy = { inheritAll: true, names: [] }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
@@ -336,6 +339,7 @@ beforeEach(async () => {
             CODEX_HOME: '/shell/home'
           }
         },
+        resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
         resolveCodexOverrides: () => {
           codexOverrideReads += 1
           return { CODEX_PROFILE: configuredCodexProfile }
@@ -730,18 +734,24 @@ describe('a structured codex session over agentSession.*', () => {
   })
 
   it('caches shell exports but re-reads configured overrides for a resume', async () => {
+    shellEnvironmentPolicy = { inheritAll: false, names: [] }
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    expect(codex.live().launch.env?.EXAMPLE_GATEWAY_TOKEN).toBeUndefined()
     expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
       bootEnvironmentReads: 1,
       codexOverrideReads: 1
     })
 
     configuredCodexProfile = 'updated'
+    shellEnvironmentPolicy = { inheritAll: false, names: ['EXAMPLE_GATEWAY_TOKEN'] }
     const resumed = await ok<{ fence: number }>('agentSession.ensure', attachParams(created.fence))
 
     expect(resumed.fence).toBe(created.fence + 1)
     expect(codex.live().resumedThreadId).toBe(THREAD)
-    expect(codex.live().launch.env).toMatchObject({ CODEX_PROFILE: 'updated' })
+    expect(codex.live().launch.env).toMatchObject({
+      CODEX_PROFILE: 'updated',
+      EXAMPLE_GATEWAY_TOKEN: 'shell-exported'
+    })
     expect({ bootEnvironmentReads, codexOverrideReads }).toEqual({
       bootEnvironmentReads: 1,
       codexOverrideReads: 2

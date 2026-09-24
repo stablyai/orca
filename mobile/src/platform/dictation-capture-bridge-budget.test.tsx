@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // runtime this test does not have. Nothing below calls one.
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -77,7 +77,8 @@ function createAudioShell() {
         }
       }
     },
-    onInterruption: () => ({ remove: () => {} })
+    onInterruption: () => ({ remove: () => {} }),
+    screenLock: { hold: () => {}, release: () => {} }
   }
   const capture = createNativeAudioCapture(engine)
   return {

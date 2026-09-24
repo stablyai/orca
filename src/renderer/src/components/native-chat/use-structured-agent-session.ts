@@ -17,6 +17,8 @@ import { useStructuredAgentSessionMessages } from './use-structured-agent-sessio
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import { useStructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
+import { useStructuredAgentSessionRailOutline } from './use-structured-agent-session-rail-outline'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
@@ -39,22 +41,40 @@ export function useStructuredAgentSession(args: {
     })
   const commandPending = useRef(false)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
-  const { conversationCommands, optionSnapshot, optionSurface, setStructuredOption } =
-    useStructuredAgentSessionOptions({
-      agent,
-      sessionId,
-      target,
-      transportEnabled,
-      providerVisible,
-      fence: state.fence,
-      turnId: transportState.turnId,
-      mutate
-    })
+  const {
+    conversationCommands,
+    optionSnapshot,
+    optionSurface,
+    setStructuredOption,
+    threadGoal: threadGoalSupport
+  } = useStructuredAgentSessionOptions({
+    agent,
+    sessionId,
+    target,
+    transportEnabled,
+    providerVisible,
+    fence: state.fence,
+    turnId: transportState.turnId,
+    mutate
+  })
   const outboxController = useStructuredAgentSessionOutbox({
     sessionId,
     target,
     fence: transportState.fence,
     submissions: transportState.submissions
+  })
+
+  const threadGoal = useStructuredAgentSessionThreadGoal({
+    journalItems: transportState.journalItems,
+    support: threadGoalSupport,
+    mutate
+  })
+
+  const railOutline = useStructuredAgentSessionRailOutline({
+    sessionId,
+    target,
+    state,
+    enabled: providerVisible
   })
 
   const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
@@ -90,6 +110,7 @@ export function useStructuredAgentSession(args: {
       ? (state.error ?? writeError ?? outboxController.error)
       : outboxController.error,
     hasOlder: transportEnabled && state.hasOlder,
+    railOutline: transportEnabled ? railOutline : null,
     loadingOlder: transportEnabled && loadingOlder,
     loadOlder,
     prompts,
@@ -131,6 +152,7 @@ export function useStructuredAgentSession(args: {
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
-    setStructuredOption
+    setStructuredOption,
+    threadGoal
   }
 }

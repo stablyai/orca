@@ -35,7 +35,7 @@ function assertInteger(value, field) {
 
 /**
  * Canonical serialization of the asset list. Must stay byte-identical to
- * serializeMobileWebBundleAssets in config/scripts/build-mobile-web-bundle.mjs; a divergence here
+ * serializeMobileWebBundleAssets in config/scripts/mobile-web-bundle-manifest.mjs; a divergence here
  * would reject every honest bundle, so the two move together.
  */
 function serializeAssets(assets) {

@@ -22,9 +22,12 @@ import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import {
+  codexMainAgentStatusForPayload,
+  codexOutcomeRestatedByStop,
   getOrCreateCodexSubagentRoster,
   getOrCreateCodexSubagentTranscriptState,
-  hasCodexTranscriptSubagents
+  hasCodexTranscriptSubagents,
+  setCodexMainAgentTurnState
 } from './codex-state'
 
 export function buildCodexStatusPayload(
@@ -54,7 +57,8 @@ export function buildCodexStatusPayload(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
+    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
+    mainAgent: codexMainAgentStatusForPayload(lead)
   })
 }
 
@@ -224,12 +228,15 @@ export function normalizeCodexEvent(
     stateName
   )
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
-  state.codexLeadStateByPaneKey.set(paneKey, {
+  setCodexMainAgentTurnState(state, paneKey, {
     state: ownedState,
+    ...codexOutcomeRestatedByStop(previousLead, ownedState),
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model)
   })
+  // The combined state keeps Codex's own rule (a waiting child wins, a done root with any live
+  // child reads working); folding it onto `foldAgentLeadStatus` is a separate slice.
   const effectiveState = codexRosterEffectiveState(
     state.codexSubagentRosterByPaneKey.get(paneKey),
     ownedState

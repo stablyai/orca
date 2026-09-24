@@ -5,6 +5,7 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import { isCursorAgentTitle } from '../../shared/agent-detection'
 import { isAbsolute, relative, resolve } from 'node:path'
+import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
 import type {
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -77,7 +78,9 @@ export const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
 export const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
-export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
+// Why: covers the daemon's own immediate-kill verdict plus the follow-up inventory check. A
+// shorter budget abandoned agents that run exit hooks mid-kill and reported them unverifiable.
+export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = IMMEDIATE_KILL_REPLY_BUDGET_MS + 2_000
 
 export const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 
