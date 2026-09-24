@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { ParkVerdictFlipRecord } from './terminal-park-verdict-flip-telemetry'
+import {
+  TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS,
+  TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT,
+  TERMINAL_TAB_PARK_FLIP_WINDOW_MS,
+  recordParkVerdictFlips,
+  type ParkVerdictFlipRecord
+} from './terminal-park-verdict-flip-telemetry'
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 
 const coverage = vi.hoisted(() => ({ byTabId: new Map<string, boolean>() }))
@@ -94,6 +100,44 @@ describe('withholdUnparkableTerminalTabs', () => {
 
     expect(parkedTabIds.has('tab-a')).toBe(true)
     expect(parkVerdictPinUntilMsByTabId.size).toBe(0)
+  })
+
+  // Why: field #12596 notice-limit pin must reach this gate, not only burst pins.
+  it('withholds a tab pinned by slow notice-limit churn', () => {
+    const records = new Map<string, ParkVerdictFlipRecord>()
+    const tabId = 'tab-a'
+    let lastNow = 1_000
+    for (let i = 0; i < TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT + 1; i += 1) {
+      lastNow = 1_000 + i * TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS * 4
+      recordParkVerdictFlips({
+        records,
+        liveTabIds: new Set([tabId]),
+        nextParkedTabIds: i % 2 === 0 ? new Set([tabId]) : new Set(),
+        nowMs: lastNow
+      })
+    }
+
+    const live = withholdUnparkableTerminalTabs({
+      worktreeId: WORKTREE,
+      terminalTabs: [terminalTab(tabId)],
+      coldParkedTabIds: new Set([tabId]),
+      parkVerdictRecords: records,
+      nowMs: lastNow
+    })
+    expect(live.parkedTabIds.has(tabId)).toBe(false)
+    expect(live.parkVerdictPinUntilMsByTabId.get(tabId)).toBe(
+      lastNow + TERMINAL_TAB_PARK_FLIP_WINDOW_MS
+    )
+
+    const lapsed = withholdUnparkableTerminalTabs({
+      worktreeId: WORKTREE,
+      terminalTabs: [terminalTab(tabId)],
+      coldParkedTabIds: new Set([tabId]),
+      parkVerdictRecords: records,
+      nowMs: lastNow + TERMINAL_TAB_PARK_FLIP_WINDOW_MS
+    })
+    expect(lapsed.parkedTabIds.has(tabId)).toBe(true)
+    expect(lapsed.parkVerdictPinUntilMsByTabId.size).toBe(0)
   })
 
   it('does not consult non-candidates and leaves the input set untouched', () => {
