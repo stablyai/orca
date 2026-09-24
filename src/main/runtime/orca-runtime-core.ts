@@ -2,8 +2,6 @@
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
-import { isCursorAgentTitle } from '../../shared/agent-detection'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
 import type {
@@ -50,13 +48,6 @@ export type RuntimeWorktreeScanRefresh = {
 export type ResolvedTerminalWorkspaceLaunchTarget = {
   scope: TerminalWorkspaceLaunchScope
   managedWorktree: ResolvedWorktree | null
-}
-
-export function isCursorAgentOrchestrationTarget(
-  leaf: RuntimeLeafRecord,
-  tabTitle: string | null | undefined
-): boolean {
-  return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
 }
 
 export const AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT = 512
