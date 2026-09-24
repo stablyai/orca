@@ -46,6 +46,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let destroyed = false
   let onAbandonedConnect: ((ptyId: string) => boolean) | undefined
   let ptyId: string | null = null
+  let pendingShutdownPtyId: string | null = null
   let lifecycleGeneration = 0
   let lastExitGeneration: number | null = null
   let suppressAttentionEvents = false
@@ -182,18 +183,36 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     disconnect() {
       advancePtyLifecycle()
       preconnectInputBuffer?.clear()
-      const id = ptyId
+      const disconnectsLivePty = ptyId !== null
+      const id = ptyId ?? pendingShutdownPtyId
       connected = false
       ptyId = null
       handlers.clearAccumulatedState()
       if (id) {
         try {
-          window.api.pty.kill(id)
+          const killPromise = Promise.resolve(window.api.pty.kill(id))
+          return killPromise.then(
+            () => {
+              if (pendingShutdownPtyId === id) {
+                pendingShutdownPtyId = null
+              }
+            },
+            (error: unknown) => {
+              pendingShutdownPtyId = id
+              throw error
+            }
+          )
+        } catch (error) {
+          pendingShutdownPtyId = id
+          throw error
         } finally {
-          handlers.unregisterAll(id)
-          storedCallbacks.onDisconnect?.()
+          if (disconnectsLivePty) {
+            handlers.unregisterAll(id)
+            storedCallbacks.onDisconnect?.()
+          }
         }
       }
+      return undefined
     },
 
     detach(options) {
@@ -264,6 +283,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     isConnected: () => connected,
     getPtyId: () => ptyId,
+    getPendingShutdownPtyId: () => pendingShutdownPtyId,
     getConnectionId: () => connectionId ?? null,
     getLocalSessionMetadata: () =>
       connectionId
@@ -275,7 +295,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       onAbandonedConnect ??= options?.onAbandonedConnect
       destroyed = true
       try {
-        this.disconnect()
+        return this.disconnect()
       } finally {
         outputProcessor.disposePendingSideEffectGauge()
       }
