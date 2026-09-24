@@ -139,10 +139,9 @@ async function runBeforeProfileRelaunch(
   }
 }
 
-function scheduleProfileRelaunch(
-  reason: Extract<AppRelaunchReason, `profile-${string}`>,
-  sender: WebContents
-): void {
+type ProfileRelaunchReason = Extract<AppRelaunchReason, `profile-${string}`>
+
+function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebContents): void {
   if (!sender.isDestroyed()) {
     sender.send('app:restart-committed')
   }
@@ -245,8 +244,12 @@ export function registerOrcaProfileHandlers(
         )
         if (result.status === 'transferred') {
           await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-          setActiveOrcaProfile(args.targetProfileId)
-          scheduleProfileRelaunch('profile-transfer', event.sender)
+          try {
+            setActiveOrcaProfile(args.targetProfileId)
+          } finally {
+            // The source has already changed and its writer cannot resume.
+            scheduleProfileRelaunch('profile-transfer', event.sender)
+          }
           return { ...result, willRelaunch: true }
         }
         return result

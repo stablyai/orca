@@ -358,6 +358,33 @@ describe('registerOrcaProfileHandlers', () => {
     expect(appExitMock).not.toHaveBeenCalled()
   })
 
+  it('relaunches the closed source when a completed move cannot update the profile index', async () => {
+    const store = makeStoreMock()
+    getOrcaProfileListStateMock.mockReturnValue({ activeProfileId: 'personal', profiles: [] })
+    transferOrcaProfileProjectMock.mockReturnValue({ status: 'transferred', mode: 'move' })
+    setActiveOrcaProfileMock.mockImplementationOnce(() => {
+      throw new Error('profile index disk full')
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every Store operation exercised by these IPC handlers.
+    registerOrcaProfileHandlers(store as never)
+
+    await expect(
+      handlers.get('orcaProfiles:transferProject')?.(ipcEvent, {
+        sourceProfileId: 'personal',
+        targetProfileId: 'work',
+        repoId: 'repo-1',
+        mode: 'move'
+      })
+    ).rejects.toThrow('profile index disk full')
+
+    expect(store.freezeWrites).toHaveBeenCalledOnce()
+    expect(store.resumeMaintenance).not.toHaveBeenCalled()
+    expect(ipcEvent.sender.send).toHaveBeenCalledWith('app:restart-committed')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
+    expect(appQuitMock).toHaveBeenCalledOnce()
+  })
+
   it('rejects transfers that would mutate the active target profile offline', async () => {
     getOrcaProfileListStateMock.mockReturnValue({
       activeProfileId: 'work',
