@@ -75,6 +75,7 @@ describe('cookie-import Google disclosure footer', () => {
       'Settings browser-use setup',
       () => (
         <BrowserUseCookieImportStep
+          stepIndex={2}
           cookiesImported={false}
           isImportingDefault={false}
           step3Blocked={false}

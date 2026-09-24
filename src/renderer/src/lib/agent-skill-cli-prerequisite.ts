@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../shared/cli-install-types'
 import { translate } from '@/i18n/i18n'
+import type { ProjectAgentSkillRuntime } from './project-skill-runtime'
 
 type EnsureOrcaCliAvailableOptions = {
   onStatusChange?: (status: CliInstallStatus) => void
@@ -13,6 +14,14 @@ export const AGENT_SKILL_CLI_PREREQUISITE_NOTICE =
 export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its CLI on PATH.'
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
   'Approve the system prompt so skill setup can use the Orca CLI command.'
+
+// Why: Orca PTYs on macOS/Windows/Linux already put the bundled CLI on PATH
+// (prependOrcaCliDirToChildPath); a WSL guest reaches `orca-ide` only once it is registered.
+export function isOrcaCliRegistrationRequired(
+  agentRuntime: ProjectAgentSkillRuntime | null | undefined
+): boolean {
+  return agentRuntime?.runtime === 'wsl'
+}
 
 export function isOrcaCliAvailableOnPath(status: CliInstallStatus | null | undefined): boolean {
   return status?.state === 'installed' && status.pathConfigured === true

@@ -14527,8 +14527,6 @@
                       "71bd9a8c95": "Sachez à quel moment un agent termine son travail, a besoin d'attention ou est bloqué.",
                       "46db810da8": "Choisissez votre agent par défaut",
                       "b8e5bae17f": "Démarrez un nouveau travail plus rapidement avec votre agent préféré déjà sélectionné.",
-                      "fee5557b02": "Activer la CLI Orca",
-                      "7bcb4097fa": "Enregistrez la commande shell Orca et installez les compétences d'agent pour les workflows de navigateur, d'ordinateur et d'orchestration.",
                       "ad342dd4c6": "Connecter les intégrations",
                       "06fe30fdb0": "Démarrez un agent à partir d'une tâche en un clic et gardez l'état des relations publiques en vue.",
                       "eddc532e58": "Automatisez la configuration de l'espace de travail",

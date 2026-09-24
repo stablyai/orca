@@ -23,6 +23,7 @@ import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
 
 type BrowserUseCookieImportStepProps = {
+  stepIndex: number
   cookiesImported: boolean
   isImportingDefault: boolean
   step3Blocked: boolean
@@ -31,6 +32,7 @@ type BrowserUseCookieImportStepProps = {
 }
 
 export function BrowserUseCookieImportStep({
+  stepIndex,
   cookiesImported,
   isImportingDefault,
   step3Blocked,
@@ -103,7 +105,7 @@ export function BrowserUseCookieImportStep({
     >
       <div className="flex items-start gap-3">
         <StepBadge
-          index={3}
+          index={stepIndex}
           state={cookiesImported ? 'done' : isImportingDefault ? 'in-progress' : 'pending'}
         />
         <div className="min-w-0 flex-1 space-y-1">

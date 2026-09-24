@@ -51,12 +51,12 @@ const getLocalizedFeatureWallSetupChecklistCopyById = createLocalizedCatalog(
     },
     'agent-capabilities': {
       name: translate(
-        'auto.components.feature.wall.feature.wall.setup.checklist.localized.copy.fee5557b02',
-        'Enable Orca CLI'
+        'auto.components.feature.wall.feature.wall.setup.checklist.localized.copy.agentSkillsName',
+        'Give agents Orca skills'
       ),
       description: translate(
-        'auto.components.feature.wall.feature.wall.setup.checklist.localized.copy.7bcb4097fa',
-        'Register the Orca shell command and install agent skills for browser, computer, and orchestration workflows.'
+        'auto.components.feature.wall.feature.wall.setup.checklist.localized.copy.agentSkillsDescription',
+        "Install the skills agents use to drive Orca's browser, control your computer, and coordinate multi-step work."
       )
     },
     'task-sources': {

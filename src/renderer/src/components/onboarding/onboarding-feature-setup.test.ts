@@ -101,6 +101,11 @@ function createDeps(
   }
 }
 
+const WSL_RUNTIME_CONTEXT = {
+  agentRuntime: { runtime: 'wsl' as const, wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
+  installDisabledReason: null
+}
+
 describe('onboarding feature setup runner', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -261,7 +266,8 @@ describe('onboarding feature setup runner', () => {
       computerUsePermissionsOpened: true,
       warnings: []
     })
-    expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
+    // Host terminals already have the bundled CLI on PATH, so setup leaves registration alone.
+    expect(deps.getCliStatus).not.toHaveBeenCalled()
     expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
     expect(deps.installCli).not.toHaveBeenCalled()
     expect(deps.getComputerUsePermissionStatus).toHaveBeenCalledTimes(1)
@@ -288,7 +294,8 @@ describe('onboarding feature setup runner', () => {
     expect(result.skillCommandsCopied).toBe(true)
     expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
     expect(result.computerUsePermissionsOpened).toBe(false)
-    expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
+    // Host terminals already have the bundled CLI on PATH, so setup leaves registration alone.
+    expect(deps.getCliStatus).not.toHaveBeenCalled()
     expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
     expect(deps.installCli).not.toHaveBeenCalled()
     expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
@@ -378,7 +385,7 @@ describe('onboarding feature setup runner', () => {
     })
   })
 
-  it('shows CLI registration context before installing a missing CLI during onboarding', async () => {
+  it('shows CLI registration context before installing a missing WSL CLI during onboarding', async () => {
     const staleStatus: CliInstallStatus = {
       ...INSTALLED_CLI_STATUS,
       state: 'stale',
@@ -395,7 +402,8 @@ describe('onboarding feature setup runner', () => {
 
     const result = await runOnboardingFeatureSetup(
       { browserUse: true, computerUse: false, orchestration: false, linearTickets: false },
-      deps
+      deps,
+      WSL_RUNTIME_CONTEXT
     )
 
     expect(result.cliTouched).toBe(true)
@@ -406,7 +414,7 @@ describe('onboarding feature setup runner', () => {
     )
   })
 
-  it('warns without changing PATH when the Windows registry read is unknown', async () => {
+  it('warns without changing PATH when the WSL CLI PATH state is unknown', async () => {
     const unknownStatus: CliInstallStatus = {
       ...INSTALLED_CLI_STATUS,
       platform: 'win32',
@@ -417,7 +425,8 @@ describe('onboarding feature setup runner', () => {
 
     const result = await runOnboardingFeatureSetup(
       { browserUse: true, computerUse: false, orchestration: false, linearTickets: false },
-      deps
+      deps,
+      WSL_RUNTIME_CONTEXT
     )
 
     expect(result.cliTouched).toBe(false)

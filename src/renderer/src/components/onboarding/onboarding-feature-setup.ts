@@ -12,9 +12,13 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
-import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
+import {
+  isOrcaCliRegistrationRequired,
+  showOrcaCliRegistrationPromptToast
+} from '@/lib/agent-skill-cli-prerequisite'
 import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { OnboardingFeatureSetupRuntimeContext } from './onboarding-feature-setup-runtime'
+import { registerOnboardingCli } from './onboarding-cli-registration'
 import {
   buildSkillCommandForRuntime,
   getWslCliDistroRequest
@@ -242,34 +246,12 @@ export async function runOnboardingFeatureSetup(
     }
   }
 
-  try {
-    const status = await deps.getCliStatus()
-    if (!status.supported) {
-      warnings.push({
-        featureId: 'cli',
-        message: status.detail ?? 'Orca CLI registration is not available on this platform.'
-      })
-    } else if (status.pathConfigured === null) {
-      // Why: an unknown registry read cannot safely drive a PATH read-modify-write.
-      warnings.push({
-        featureId: 'cli',
-        message: status.detail ?? 'Orca could not check your Windows user PATH.'
-      })
-    } else if (status.state !== 'installed' || status.pathConfigured === false) {
-      await deps.showCliRegistrationPrompt?.()
-      const next = await deps.installCli()
-      cliTouched = true
-      if (next.state !== 'installed') {
-        warnings.push({
-          featureId: 'cli',
-          message: next.detail ?? 'Orca CLI registration needs attention.'
-        })
-      } else if (next.pathConfigured !== true && next.detail) {
-        warnings.push({ featureId: 'cli', message: next.detail })
-      }
+  if (isOrcaCliRegistrationRequired(agentRuntime)) {
+    const registration = await registerOnboardingCli(deps)
+    cliTouched = registration.touched
+    if (registration.warning) {
+      warnings.push({ featureId: 'cli', message: registration.warning })
     }
-  } catch (error) {
-    warnings.push({ featureId: 'cli', message: formatFeatureSetupError(error) })
   }
 
   if (selection.computerUse) {

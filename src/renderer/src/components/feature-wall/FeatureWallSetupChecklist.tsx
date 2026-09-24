@@ -7,6 +7,7 @@ import type {
 import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
 import { cn } from '@/lib/utils'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
+import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
 import {
   AddReposAction,
@@ -374,6 +375,8 @@ export function FeatureWallSetupChecklist(
               </div>
               <SelectedStepVisual stepId={activeStep.id} />
             </div>
+            {/* Why: Full Disk Access matters for projects in protected folders; below the grid so it spans the full width. */}
+            {activeStep.id === 'add-two-repos' ? <FullDiskAccessSetupPrompt /> : null}
           </div>
         ) : null}
       </section>

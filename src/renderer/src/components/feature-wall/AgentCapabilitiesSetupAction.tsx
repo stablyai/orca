@@ -18,10 +18,11 @@ import {
   getAgentCapabilityStatusClassName,
   getDefaultAgentCapabilitySetupSelection,
   isAgentCapabilityReadinessChecking,
+  isAgentCapabilityReadinessComplete,
   useAgentCapabilitySetupStatus,
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
-import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
+import { isOrcaCliRegistrationRequired } from '@/lib/agent-skill-cli-prerequisite'
 import { translate } from '@/i18n/i18n'
 
 export function AgentCapabilitiesSetupAction(props: {
@@ -64,71 +65,74 @@ export function AgentCapabilitiesSetupAction(props: {
     featureSetupChangedByUserRef.current = true
     setFeatureSetup(value)
   }, [])
-  const handleStartFeatureSetup = useCallback(async (): Promise<void> => {
-    if (setupBusyLabel !== null || featureSetupCommand !== null) {
-      return
-    }
-    setSetupBusyLabel('Setting up capabilities...')
-    try {
-      const result = await runOnboardingFeatureSetup(featureSetup, undefined, activeSkillRuntime)
-      if (featureSetup.browserUse) {
-        recordFeatureInteraction('agent-browser-setup')
+  const handleStartFeatureSetup = useCallback(
+    async (selection: OnboardingFeatureSetupSelection = featureSetup): Promise<void> => {
+      if (setupBusyLabel !== null || featureSetupCommand !== null) {
+        return
       }
-      if (featureSetup.computerUse) {
-        recordFeatureInteraction('computer-use-setup')
-      }
-      if (featureSetup.orchestration) {
-        recordFeatureInteraction('agent-orchestration-setup')
-      }
-      const firstWarning = result.warnings[0]
-      if (firstWarning) {
-        toast.warning(
-          translate(
-            'auto.components.feature.wall.AgentCapabilitiesSetupAction.1aa657d8f4',
-            'Some capability setup needs attention'
-          ),
-          {
-            description: firstWarning.message
-          }
-        )
-      }
-      if (result.skillCommandsCopied) {
-        toast.success(
-          translate(
-            'auto.components.feature.wall.AgentCapabilitiesSetupAction.c605f51f2b',
-            'Capability setup ready'
-          ),
-          {
-            description: translate(
-              'auto.components.feature.wall.AgentCapabilitiesSetupAction.3a59452a67',
-              'Skill command copied and inserted below for review.'
-            )
-          }
-        )
-      }
-      if (result.computerUsePermissionsOpened) {
-        toast.message(
-          translate(
-            'auto.components.feature.wall.AgentCapabilitiesSetupAction.e9eb197e12',
-            'Opened Computer Use permissions'
+      setSetupBusyLabel('Setting up capabilities...')
+      try {
+        const result = await runOnboardingFeatureSetup(selection, undefined, activeSkillRuntime)
+        if (selection.browserUse) {
+          recordFeatureInteraction('agent-browser-setup')
+        }
+        if (selection.computerUse) {
+          recordFeatureInteraction('computer-use-setup')
+        }
+        if (selection.orchestration) {
+          recordFeatureInteraction('agent-orchestration-setup')
+        }
+        const firstWarning = result.warnings[0]
+        if (firstWarning) {
+          toast.warning(
+            translate(
+              'auto.components.feature.wall.AgentCapabilitiesSetupAction.1aa657d8f4',
+              'Some capability setup needs attention'
+            ),
+            {
+              description: firstWarning.message
+            }
           )
-        )
+        }
+        if (result.skillCommandsCopied) {
+          toast.success(
+            translate(
+              'auto.components.feature.wall.AgentCapabilitiesSetupAction.c605f51f2b',
+              'Capability setup ready'
+            ),
+            {
+              description: translate(
+                'auto.components.feature.wall.AgentCapabilitiesSetupAction.3a59452a67',
+                'Skill command copied and inserted below for review.'
+              )
+            }
+          )
+        }
+        if (result.computerUsePermissionsOpened) {
+          toast.message(
+            translate(
+              'auto.components.feature.wall.AgentCapabilitiesSetupAction.e9eb197e12',
+              'Opened Computer Use permissions'
+            )
+          )
+        }
+        if (result.skillInstallCommand) {
+          setFeatureSetupCommandSelection(selection)
+          setFeatureSetupRuntime(activeSkillRuntime)
+          setFeatureSetupCommand(result.skillInstallCommand)
+        }
+      } finally {
+        setSetupBusyLabel(null)
       }
-      if (result.skillInstallCommand) {
-        setFeatureSetupCommandSelection(featureSetup)
-        setFeatureSetupRuntime(activeSkillRuntime)
-        setFeatureSetupCommand(result.skillInstallCommand)
-      }
-    } finally {
-      setSetupBusyLabel(null)
-    }
-  }, [
-    activeSkillRuntime,
-    featureSetup,
-    featureSetupCommand,
-    recordFeatureInteraction,
-    setupBusyLabel
-  ])
+    },
+    [
+      activeSkillRuntime,
+      featureSetup,
+      featureSetupCommand,
+      recordFeatureInteraction,
+      setupBusyLabel
+    ]
+  )
 
   return (
     <div className="space-y-5">
@@ -140,7 +144,10 @@ export function AgentCapabilitiesSetupAction(props: {
         featureSetupRuntime={featureSetupRuntime}
         setupBusyLabel={setupBusyLabel}
         onStartFeatureSetup={() => void handleStartFeatureSetup()}
+        onUpdateAll={() => void handleStartFeatureSetup(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)}
+        allReady={isAgentCapabilityReadinessComplete(readiness)}
         installStatus={capabilitySetupStatus.installStatus}
+        cliRequired={isOrcaCliRegistrationRequired(activeSkillRuntime.agentRuntime)}
       />
     </div>
   )
@@ -212,10 +219,15 @@ function AgentCapabilitySetupControls(props: {
   featureSetupRuntime: OnboardingFeatureSetupRuntimeContext | null
   setupBusyLabel: string | null
   onStartFeatureSetup: () => void
+  onUpdateAll: () => void
+  allReady: boolean
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
+  cliRequired: boolean
 }): React.JSX.Element {
   const hasSelectedFeatures = hasSelectedOnboardingFeatureSetup(props.featureSetup)
   const showSetupAction = !props.featureSetupCommand
+  // Why: a disabled install button is noise once everything is set up; offer an update instead.
+  const showAllReady = props.allReady && !hasSelectedFeatures && !props.setupBusyLabel
 
   return (
     <>
@@ -224,8 +236,23 @@ function AgentCapabilitySetupControls(props: {
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
       />
-      <FullDiskAccessSetupPrompt />
-      {showSetupAction ? (
+      {showSetupAction && showAllReady ? (
+        <div className="mt-6 flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-status-success">
+            <Check className="size-4" />
+            {translate(
+              'auto.components.feature.wall.AgentCapabilitiesSetupAction.allInstalled',
+              'All skills installed'
+            )}
+          </span>
+          <Button type="button" variant="ghost" size="sm" onClick={props.onUpdateAll}>
+            {translate(
+              'auto.components.feature.wall.AgentCapabilitiesSetupAction.updateSkills',
+              'Update skills'
+            )}
+          </Button>
+        </div>
+      ) : showSetupAction ? (
         <div className="mt-6 flex items-center">
           <Button
             type="button"
@@ -240,10 +267,15 @@ function AgentCapabilitySetupControls(props: {
               <Terminal className="size-4" />
             )}
             {props.setupBusyLabel ??
-              translate(
-                'auto.components.feature.wall.AgentCapabilitiesSetupAction.c89534cbe9',
-                'Install CLI & Skills'
-              )}
+              (props.cliRequired
+                ? translate(
+                    'auto.components.feature.wall.AgentCapabilitiesSetupAction.c89534cbe9',
+                    'Install CLI & Skills'
+                  )
+                : translate(
+                    'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
+                    'Install Skills'
+                  ))}
           </Button>
         </div>
       ) : null}
@@ -296,16 +328,22 @@ function AgentCapabilitySetupChecklist(props: {
                 >
                   {row.icon}
                 </span>
-                <span
-                  aria-hidden
-                  className={cn(
-                    'flex size-5 items-center justify-center rounded-full border transition-colors',
-                    selected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background'
-                  )}
-                >
-                  {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+                <span className="flex items-center gap-2">
+                  <AgentCapabilityStatusPill status={installStatus} />
+                  {/* Why: an empty circle on an installed card reads as "not done"; show it only when it means something. */}
+                  {selected || !installStatus.installed ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'flex size-5 items-center justify-center rounded-full border transition-colors',
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background'
+                      )}
+                    >
+                      {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+                    </span>
+                  ) : null}
                 </span>
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>
@@ -321,36 +359,41 @@ function AgentCapabilitySetupChecklist(props: {
   )
 }
 
-function AgentCapabilityStatusNote(props: {
+// Why: pills sit top-right so they line up across cards regardless of description length.
+function AgentCapabilityStatusPill(props: {
   status: AgentCapabilityInstallStatus
-}): React.JSX.Element {
-  if (props.status.installed) {
+}): React.JSX.Element | null {
+  if (props.status.unavailable) {
     return (
-      <span className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-full border border-green-500/45 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold leading-none text-green-700 dark:text-green-300">
-          {translate(
-            'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
-            'Installed'
-          )}
-        </span>
-        {props.status.tone !== 'ready' ? (
-          <span
-            className={cn(
-              'text-xs font-medium',
-              getAgentCapabilityStatusClassName(props.status.tone)
-            )}
-          >
-            {props.status.label}
-          </span>
-        ) : null}
+      <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold leading-none text-muted-foreground">
+        {props.status.label}
       </span>
     )
   }
+  if (!props.status.installed) {
+    return null
+  }
+  return (
+    <span className="rounded-full border border-status-success-border bg-status-success-background px-2 py-0.5 text-[11px] font-semibold leading-none text-status-success">
+      {translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
+        'Installed'
+      )}
+    </span>
+  )
+}
 
+/** Secondary status text (checking, errors, pending actions); installed/unavailable live in the pill. */
+function AgentCapabilityStatusNote(props: {
+  status: AgentCapabilityInstallStatus
+}): React.JSX.Element | null {
+  if (props.status.unavailable || props.status.tone === 'ready') {
+    return null
+  }
   return (
     <span
       className={cn(
-        'mt-1 text-xs font-medium',
+        'mt-2 text-xs font-medium',
         getAgentCapabilityStatusClassName(props.status.tone)
       )}
     >

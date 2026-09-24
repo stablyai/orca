@@ -195,7 +195,7 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
   }
 
   return (
-    <div className="mt-5 flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
       <div className="flex min-w-0 items-start gap-3">
         <div className="mt-0.5 text-muted-foreground">
           <HardDrive className="size-4" />

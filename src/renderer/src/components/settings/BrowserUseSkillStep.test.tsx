@@ -21,6 +21,7 @@ describe('BrowserUseSkillStep', () => {
 
     renderToStaticMarkup(
       <BrowserUseSkillStep
+        stepIndex={1}
         command={bundleInstallCommand}
         installedCommand={updateCommand}
         skillDetected
