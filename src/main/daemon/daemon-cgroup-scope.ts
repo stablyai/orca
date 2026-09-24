@@ -35,7 +35,7 @@ const LEGACY_SCOPE_PREFIX = 'app-orca-'
  *  provisions, from `getuid()` rather than from the environment. The exported functions'
  *  `canonicalRuntimeDir` parameters default to this so production uses the real path; tests
  *  inject a fake one. */
-const CANONICAL_USER_RUNTIME_DIR =
+export const CANONICAL_USER_RUNTIME_DIR =
   typeof process.getuid === 'function' ? `/run/user/${process.getuid()}` : null
 
 /** systemd unit names are restricted to `[A-Za-z0-9:_.\-@]`; sanitize defensively even though
@@ -65,7 +65,10 @@ function hasReachableBus(runtimeDir: string): boolean {
  * "unsupported" on every host hardened that way. It stays as the fallback for hosts that have no
  * `/run/user/<uid>` but do have a working bus wherever they point.
  */
-function resolveUserRuntimeDir(env: NodeJS.ProcessEnv, canonicalDir: string | null): string | null {
+export function resolveUserRuntimeDir(
+  env: NodeJS.ProcessEnv,
+  canonicalDir: string | null
+): string | null {
   if (canonicalDir && hasReachableBus(canonicalDir)) {
     return canonicalDir
   }

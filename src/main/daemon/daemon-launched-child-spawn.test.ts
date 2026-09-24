@@ -1,13 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnDaemonChildProcess } from './daemon-launched-child-spawn'
 
-const { spawn, fork } = vi.hoisted(() => ({ spawn: vi.fn(), fork: vi.fn() }))
+const { spawn, fork, repairSessionBusEnv } = vi.hoisted(() => {
+  /** Apply a fixed address so launch tests isolate env forwarding from socket lookup. */
+  const repairSessionBusEnv = vi.fn((env: Record<string, string | undefined>) => {
+    if (env.DBUS_SESSION_BUS_ADDRESS === 'disabled:') {
+      env.DBUS_SESSION_BUS_ADDRESS = 'unix:path=/run/user/1000/bus'
+    }
+  })
+  return { spawn: vi.fn(), fork: vi.fn(), repairSessionBusEnv }
+})
 vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: spawn }))
 vi.mock('../../shared/child-process/fork-process', () => ({ forkProcess: fork }))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.0.0' })
 }))
 vi.mock('./daemon-launch-paths', () => ({ daemonLogArgs: () => [] }))
+vi.mock('../pty/dbus-session-bus-env', () => ({
+  repairDisabledSessionBusEnv: repairSessionBusEnv
+}))
 
 const options = {
   entryPath: '/app/daemon-entry.js',
@@ -20,7 +31,10 @@ const options = {
   macosLoginSessionWatch: false
 }
 
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.clearAllMocks()
+  vi.unstubAllEnvs()
+})
 
 describe('daemon launch scope ownership', () => {
   it('only arms lifetime cleanup through the private scope launcher', () => {
@@ -48,4 +62,24 @@ describe('daemon launch scope ownership', () => {
       })
     )
   })
+})
+
+describe('daemon launch session bus', () => {
+  it.each([true, false])(
+    'hands the repaired bus address to the daemon (scoped launch: %s)',
+    (useDurableScope) => {
+      vi.stubEnv('DBUS_SESSION_BUS_ADDRESS', 'disabled:')
+
+      spawnDaemonChildProcess(options, useDurableScope)
+
+      const launch = useDurableScope ? spawn : fork
+      expect(launch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus'
+          })
+        })
+      )
+    }
+  )
 })

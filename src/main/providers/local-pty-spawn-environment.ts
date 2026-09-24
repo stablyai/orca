@@ -5,6 +5,7 @@ import {
 } from '../../shared/terminal-image-protocol'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { repairDisabledSessionBusEnv } from '../pty/dbus-session-bus-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
@@ -13,6 +14,7 @@ import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import { awaitCancelableLocalPtySpawn } from './local-pty-spawn-state'
 import type { PtySpawnOptions } from './types'
 
+/** Build the environment for a PTY launched by the local provider. */
 export function buildLocalPtySpawnEnvironment(args: {
   id: string
   spawn: PtySpawnOptions
@@ -34,6 +36,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   // Why: Orca can be launched from an Orca terminal; pane identity belongs to the child PTY, not the parent shell.
   removeUnspecifiedPaneIdentityEnv(spawnEnv, spawn.env)
   removeAppImageRuntimeEnv(spawnEnv)
+  repairDisabledSessionBusEnv(spawnEnv)
   removeInheritedNoColor(spawnEnv)
   for (const key of spawn.envToDelete ?? []) {
     delete spawnEnv[key]
