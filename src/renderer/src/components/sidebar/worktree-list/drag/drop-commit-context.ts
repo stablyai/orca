@@ -76,4 +76,10 @@ export type WorktreeDropCommitContext = {
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
   onReorderWorktrees: (args: WorktreeReorderArgs) => void
   onPinWorktrees: (worktreeIds: readonly string[], draggedCopies?: DraggedWorktreeCopies) => void
+  /** Adds the tag with this case-insensitive key to the dropped workspaces. */
+  onTagWorktrees: (
+    worktreeIds: readonly string[],
+    tagKey: string,
+    draggedCopies?: DraggedWorktreeCopies
+  ) => void
 }

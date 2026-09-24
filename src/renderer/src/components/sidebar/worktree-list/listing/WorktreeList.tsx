@@ -41,6 +41,7 @@ import { useMainSidebarListModel } from './use-main-list-model'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
+import { useWorkspaceTagCommands } from '../../workspace-tags/use-workspace-tag-commands'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -199,6 +200,7 @@ const WorktreeList = React.memo(function WorktreeList({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
   })
+  const tagCommands = useWorkspaceTagCommands()
   const statusMutations = useWorktreeStatusMutations({
     manualOrderCatalog,
     workspaceStatuses: boardStatuses,
@@ -393,6 +395,7 @@ const WorktreeList = React.memo(function WorktreeList({
         onMoveWorktreesToStatusAtIndex={statusMutations.moveWorktreesToStatusAtIndex}
         onPinWorktree={statusMutations.pinWorktree}
         onPinWorktrees={statusMutations.pinWorktrees}
+        onTagWorktrees={tagCommands.addTagToIds}
         onDropWorktreesOnWorkspaceBoard={statusMutations.dropWorktreesOnWorkspaceBoard}
         workspaceBoardOpen={workspaceBoardOpen}
         onWorktreeCardClick={onWorktreeCardClick}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   collectWorkspaceTags,
   getTagSelectionState,
+  planTagAdd,
   planTagDelete,
   planTagRename,
   planTagToggle
@@ -77,5 +78,12 @@ describe('planTagDelete', () => {
       api: ['backend'],
       web: []
     })
+  })
+})
+
+describe('planTagAdd', () => {
+  it('adds the tag only where it is missing and never removes it', () => {
+    expect(tagsById(planTagAdd([api, web, docs], 'Billing'))).toEqual({ docs: ['Billing'] })
+    expect(planTagAdd([api, web], 'billing')).toEqual([])
   })
 })

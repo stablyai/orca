@@ -1,4 +1,5 @@
 import React from 'react'
+import { getTagDropTargetProps } from '../drag/tag-target'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -129,6 +130,7 @@ export function renderFolderWorkspaceOption(args: {
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
       aria-current={isActiveWorktree ? 'page' : undefined}
       data-worktree-id={folderWorktree.id}
+      {...getTagDropTargetProps(row.sectionKey)}
       data-worktree-host-identity={folderWorktreeIdentity}
       data-worktree-row-key={folderWorktreeIdentity}
       data-worktree-lineage-drop-row=""

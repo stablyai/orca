@@ -6,20 +6,32 @@ import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-c
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
+import { worktreeTagKey } from '../../../../../shared/worktree/metadata/worktree-tags'
 import {
   collectWorkspaceTags,
+  planTagAdd,
   planTagDelete,
   planTagRename,
   planTagToggle,
   type WorkspaceTagSummary,
   type WorkspaceTagUpdate
 } from './workspace-tag-actions'
+import {
+  dropWriteRows,
+  type DraggedWorktreeCopies
+} from '../worktree-list/drag/dragged-worktree-copies'
 
 export type WorkspaceTagCommands = {
   allTags: WorkspaceTagSummary[]
   /** Current store rows for a captured selection; menus snapshot rows when they open. */
   resolveLive: (workspaces: readonly Worktree[]) => Worktree[]
   toggleTag: (workspaces: readonly Worktree[], tag: string) => Promise<void>
+  /** Adds the tag named by its case-insensitive key to the dragged copies of these ids. */
+  addTagToIds: (
+    workspaceIds: readonly string[],
+    tagKey: string,
+    draggedCopies?: DraggedWorktreeCopies
+  ) => Promise<void>
   renameTag: (from: string, to: string) => Promise<void>
   deleteTag: (tag: string) => Promise<void>
   countTagged: (tag: string) => number
@@ -75,6 +87,18 @@ export function useWorkspaceTagCommands(): WorkspaceTagCommands {
       apply(planTagToggle(resolveLive(workspaces), tag)),
     [apply, resolveLive]
   )
+  const addTagToIds = useCallback(
+    (workspaceIds: readonly string[], tagKey: string, draggedCopies?: DraggedWorktreeCopies) => {
+      const tag = allTags.find((entry) => worktreeTagKey(entry.tag) === tagKey)?.tag
+      if (!tag) {
+        return Promise.resolve()
+      }
+      // Why: an id can name a twin on another host; tag the dragged copies, never a guessed host.
+      const rowsFor = dropWriteRows(useAppStore.getState(), draggedCopies).status
+      return apply(planTagAdd(workspaceIds.flatMap(rowsFor), tag))
+    },
+    [allTags, apply]
+  )
   const renameTag = useCallback(
     (from: string, to: string) => apply(planTagRename(allWorkspaces, from, to)),
     [allWorkspaces, apply]
@@ -88,5 +112,5 @@ export function useWorkspaceTagCommands(): WorkspaceTagCommands {
     [allWorkspaces]
   )
 
-  return { allTags, resolveLive, toggleTag, renameTag, deleteTag, countTagged }
+  return { allTags, resolveLive, toggleTag, addTagToIds, renameTag, deleteTag, countTagged }
 }

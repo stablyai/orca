@@ -39,6 +39,7 @@ import {
   ProjectGroupHeaderMenu
 } from './project-group-header-actions'
 import { TagHeaderMenu } from './tag-header-actions'
+import { getTagDropTargetProps } from '../drag/tag-target'
 import {
   RepoHeaderCreateWorkspaceButton,
   RepoHeaderProjectActionsMenu
@@ -231,6 +232,7 @@ export function renderWorktreeSectionHeaderRow(
           data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
           data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
           data-workspace-status={headerWorkspaceStatus ?? undefined}
+          {...getTagDropTargetProps(ctx.groupBy === 'tag' ? row.key : undefined)}
           data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
           className={cn(
             'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',

@@ -105,6 +105,7 @@ export type VirtualizedWorktreeViewportProps = {
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
   onPinWorktree: (worktreeId: string) => void
   onPinWorktrees: WorktreeDropCommitContext['onPinWorktrees']
+  onTagWorktrees: WorktreeDropCommitContext['onTagWorktrees']
   onDropWorktreesOnWorkspaceBoard: (args: WorktreeStatusDropAtIndexArgs) => void
   workspaceBoardOpen: boolean
   onWorktreeCardClick?: () => void
