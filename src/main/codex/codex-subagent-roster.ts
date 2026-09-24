@@ -44,9 +44,9 @@ export { codexSubagentGroupBody } from './codex-subagent-group-body'
 import type { CodexThreadItem } from './codex-structured-item-translation'
 import {
   MAX_CODEX_SUBAGENT_GROUPS,
-  MAX_CODEX_SUBAGENTS_PER_GROUP,
-  MAX_CODEX_TOKEN_USAGE_THREADS
+  MAX_CODEX_SUBAGENTS_PER_GROUP
 } from './codex-structured-journal-limits'
+import { CodexThreadTokenTotals } from './codex-thread-token-totals'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
@@ -88,11 +88,8 @@ export type CodexSubagentRosterDeps = {
 
 export class CodexSubagentRoster {
   private readonly groups = new Map<string, RosterGroup>()
-  /** Latest reported total per thread, kept regardless of roster membership: a
-   *  usage frame can arrive before the child's first activity item, and filtering
-   *  at receipt would lose it permanently. Children are selected at write time;
-   *  the map itself is LRU-capped in `handleTokenUsage`. */
-  private readonly tokensByThread = new Map<string, number>()
+  /** Every thread's total, members or not; children are selected at write time. */
+  private readonly tokensByThread = new CodexThreadTokenTotals()
   private readonly now: () => number
   /** The one owner of child membership and turn state; the rows of calls on a helper read it too. */
   readonly executions: CodexSubagentExecutions
@@ -215,19 +212,7 @@ export class CodexSubagentRoster {
     if (!usage) {
       return null
     }
-    // A running total: the newest frame REPLACES the previous one. Summing
-    // updates would multiply a single child's usage by its frame count.
-    // Re-insert so the eviction scan below sees recency: `set` on an existing
-    // key keeps its original position, which would age out an active thread.
-    this.tokensByThread.delete(usage.threadId)
-    this.tokensByThread.set(usage.threadId, usage.totalTokens)
-    while (this.tokensByThread.size > MAX_CODEX_TOKEN_USAGE_THREADS) {
-      const oldest = this.tokensByThread.keys().next().value
-      if (typeof oldest !== 'string') {
-        break
-      }
-      this.tokensByThread.delete(oldest)
-    }
+    this.tokensByThread.record(usage.threadId, usage.totalTokens)
     for (const group of this.groups.values()) {
       if (!group.entries.has(usage.threadId)) {
         continue
