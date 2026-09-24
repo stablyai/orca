@@ -2,6 +2,12 @@
 // Ship Bun with orcad; keep module loading compatible with legacy Node launchers.
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
+import {
+  buildOrcadEntry,
+  externalNativeAddons,
+  ORCAD_EXTERNAL_MODULES
+} from './orcad-entry-build.mjs'
+
 import { createRequire } from 'node:module'
 import {
   chmodSync,
@@ -35,7 +41,6 @@ const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = process.env.ORCAD_OUT_DIR
   ? resolve(process.env.ORCAD_OUT_DIR)
   : join(ROOT, 'out', 'orcad')
-const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
 // Why beside orcad.js: the watcher runs in a forked child so a native @parcel/watcher
 // fault crashes that child instead of the server, and `resolveWatcherProcessEntryPath`
 // looks for it in the app root. A deployment has no desktop out/main to fall back to.
@@ -91,33 +96,6 @@ async function stageParcelWatcher(target) {
     logLevel: 'error'
   })
   copyFileSync(nativeSource, join(OUT_DIR, ORCAD_PARCEL_WATCHER_NATIVE))
-}
-
-// Native addons must exist on the host; they cannot be bundled.
-// `electron` is external so a residual import fails loudly at require() time rather
-// than silently bundling the npm package's installer shim, which is what happened the
-// first time and made the bundle look clean while it was not.
-// `node-pty` stays external for legacy Node launches; SQL profiles require a capable runtime.
-// Bun.Terminal handles production PTYs. The staged
-// watcher resolves `@parcel/watcher`; `fsevents` is macOS-only and optional upstream.
-const EXTERNAL = ['electron', 'node-pty', '@parcel/watcher', 'fsevents', 'bun:ffi', 'bun:sqlite']
-
-/** Why: the UMD build's relative dynamic requires do not bundle. Same fix build-relay.mjs uses. */
-const jsoncParserEsm = {
-  name: 'jsonc-parser-esm',
-  setup(pluginBuild) {
-    pluginBuild.onResolve({ filter: /^jsonc-parser$/ }, () => ({
-      path: join(ROOT, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js')
-    }))
-  }
-}
-
-/** Why: optional native deps reference prebuilt .node files that may not exist here. */
-const externalNativeAddons = {
-  name: 'external-native-addons',
-  setup(pluginBuild) {
-    pluginBuild.onResolve({ filter: /\.node$/ }, (args) => ({ path: args.path, external: true }))
-  }
 }
 
 rmSync(OUT_DIR, { recursive: true, force: true })
@@ -183,7 +161,7 @@ function buildForkedChild(entryPoint, outfile) {
     target: 'node18',
     format: 'cjs',
     outfile,
-    external: EXTERNAL,
+    external: ORCAD_EXTERNAL_MODULES,
     plugins: [externalNativeAddons],
     metafile: true,
     minify: true,
@@ -207,23 +185,7 @@ const childResults = await Promise.all([
   )
 ])
 
-const result = await build({
-  entryPoints: [ENTRY],
-  bundle: true,
-  platform: 'node',
-  target: 'node18',
-  format: 'cjs',
-  outfile: OUT_FILE,
-  external: EXTERNAL,
-  plugins: [jsoncParserEsm, externalNativeAddons],
-  metafile: true,
-  minify: true,
-  sourcemap: false,
-  define: {
-    'process.env.NODE_ENV': '"production"'
-  },
-  logLevel: 'error'
-})
+const result = await buildOrcadEntry(OUT_FILE)
 
 const output = Object.values(result.metafile.outputs).find(
   (o) => o.entryPoint === 'src/main/orcad/main.ts'

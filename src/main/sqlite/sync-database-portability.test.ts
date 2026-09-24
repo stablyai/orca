@@ -72,7 +72,14 @@ describe('SQLite runtime contract', () => {
   it('preserves 64-bit integers and rejects rounding in every reader by default', () => {
     const db = open(':memory:')
     const statement = db.prepare('SELECT ? AS integer')
-    for (const value of [-(1n << 63n), (1n << 63n) - 1n]) {
+    for (const value of [
+      -(1n << 63n),
+      -(1n << 63n) + 1n,
+      -(1n << 53n),
+      1n << 53n,
+      (1n << 53n) + 1n,
+      (1n << 63n) - 1n
+    ]) {
       expect(() => statement.get(value)).toThrow(RangeError)
       expect(() => statement.all(value)).toThrow(RangeError)
       expect(() => [...statement.iterate(value)]).toThrow(RangeError)
@@ -81,6 +88,33 @@ describe('SQLite runtime contract', () => {
       expect(statement.all(value)).toEqual([{ integer: value }])
       expect([...statement.iterate(value)]).toEqual([{ integer: value }])
       statement.setReadBigInts(false)
+    }
+  })
+
+  it('distinguishes large REAL values from INTEGER values in the same column', () => {
+    const db = open(':memory:')
+    db.exec('CREATE TABLE values_by_type(value); INSERT INTO values_by_type VALUES(1)')
+    const statement = db.prepare('SELECT value FROM values_by_type')
+    for (const readBigInts of [false, true, false]) {
+      statement.setReadBigInts(readBigInts)
+      db.exec('DELETE FROM values_by_type; INSERT INTO values_by_type VALUES(9007199254740991)')
+      const safe = readBigInts ? 9007199254740991n : Number.MAX_SAFE_INTEGER
+      expect(statement.get()).toEqual({ value: safe })
+      db.exec(
+        'DELETE FROM values_by_type; INSERT INTO values_by_type VALUES(CAST(-9223372036854775808 AS REAL))'
+      )
+      const real = { value: Number(-(1n << 63n)) }
+      expect(statement.get()).toEqual(real)
+      expect(statement.all()).toEqual([real])
+      expect([...statement.iterate()]).toEqual([real])
+      db.exec('DELETE FROM values_by_type; INSERT INTO values_by_type VALUES(-9223372036854775808)')
+      if (readBigInts) {
+        expect(statement.get()).toEqual({ value: -(1n << 63n) })
+      } else {
+        expect(() => statement.get()).toThrow(RangeError)
+        expect(() => statement.all()).toThrow(RangeError)
+        expect(() => [...statement.iterate()]).toThrow(RangeError)
+      }
     }
   })
 
@@ -115,6 +149,16 @@ describe('SQLite runtime contract', () => {
       changes: 1n,
       lastInsertRowid: 9007199254740993n
     })
+  })
+
+  it('rejects unsafe insert metadata without returning a rounded rowid', () => {
+    const db = open(':memory:')
+    db.exec('CREATE TABLE items(id INTEGER PRIMARY KEY)')
+    const rowid = 9007199254740993n
+    expect(() => db.prepare('INSERT INTO items VALUES(?)').run(rowid)).toThrow(RangeError)
+    const statement = db.prepare('SELECT id FROM items')
+    statement.setReadBigInts(true)
+    expect(statement.all()).toEqual([{ id: rowid }])
   })
 
   it('releases statements and an unfinished iterator before filesystem retirement', () => {

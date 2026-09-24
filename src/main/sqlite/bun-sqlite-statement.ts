@@ -1,4 +1,5 @@
 import type { SQLInputValue, StatementResultingChanges } from 'node:sqlite'
+import { SqliteIntegerReader } from './sqlite-integer-reader'
 import type { SqliteBindings, SqliteRow, SqliteStatement } from './sqlite-statement'
 
 type BunBindings = (SQLInputValue | SQLInputValue[])[]
@@ -15,7 +16,7 @@ export type BunStatement = {
 }
 
 export class BunSqliteStatement implements SqliteStatement {
-  private readBigInts = false
+  private readonly integers = new SqliteIntegerReader()
   private readonly parameterCount: number
 
   constructor(
@@ -29,22 +30,18 @@ export class BunSqliteStatement implements SqliteStatement {
   all(...parameters: SqliteBindings): SqliteRow[] {
     const rows = this.statement.all(...this.bindings(parameters))
     for (const row of rows) {
-      this.readRow(row)
+      this.integers.row(row)
     }
     return rows
   }
 
   get(...parameters: SqliteBindings): SqliteRow | undefined {
     const row = this.statement.get(...this.bindings(parameters))
-    return row === null ? undefined : this.readRow(row)
+    return row === null ? undefined : this.integers.row(row)
   }
 
   run(...parameters: SqliteBindings): StatementResultingChanges {
-    const result = this.statement.run(...this.bindings(parameters))
-    return {
-      changes: this.readInteger(result.changes),
-      lastInsertRowid: this.readInteger(result.lastInsertRowid)
-    }
+    return this.integers.result(this.statement.run(...this.bindings(parameters)))
   }
 
   *iterate(...parameters: SqliteBindings): IterableIterator<SqliteRow> {
@@ -53,7 +50,7 @@ export class BunSqliteStatement implements SqliteStatement {
     try {
       statement.safeIntegers(true)
       for (const row of statement.iterate(...this.bindings(parameters))) {
-        yield this.readRow(row)
+        yield this.integers.row(row)
       }
     } finally {
       statement.finalize()
@@ -61,7 +58,7 @@ export class BunSqliteStatement implements SqliteStatement {
   }
 
   setReadBigInts(enabled: boolean): void {
-    this.readBigInts = enabled
+    this.integers.readBigInts = enabled
   }
 
   private bindings(parameters: SqliteBindings): BunBindings {
@@ -73,29 +70,5 @@ export class BunSqliteStatement implements SqliteStatement {
       return parameters
     }
     return [...parameters, ...Array<null>(this.parameterCount - parameters.length).fill(null)]
-  }
-
-  private readRow(row: SqliteRow): SqliteRow {
-    for (const key of Object.keys(row)) {
-      const value = row[key]
-      if (typeof value === 'bigint') {
-        row[key] = this.readInteger(value)
-      }
-    }
-    return row
-  }
-
-  private readInteger(value: number | bigint): number | bigint {
-    if (this.readBigInts) {
-      return BigInt(value)
-    }
-    if (typeof value === 'number') {
-      return value
-    }
-    const number = Number(value)
-    if (!Number.isSafeInteger(number)) {
-      throw new RangeError('SQLite integer cannot be represented safely as a JavaScript number')
-    }
-    return number
   }
 }

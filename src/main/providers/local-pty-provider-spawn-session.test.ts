@@ -115,6 +115,7 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { pendingLocalPtySpawns } from './local-pty-provider-state'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -363,40 +364,153 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    it('registers post-build preflight before a nested-microtask shutdown', async () => {
-      spawnMock.mockClear()
-      let finishEnvBuild!: () => void
-      const envProvider = new LocalPtyProvider({
-        buildSpawnEnv: (_id, baseEnv) =>
-          new Promise<Record<string, string>>((resolve) => {
-            finishEnvBuild = () => resolve(baseEnv)
-          })
-      })
-      const spawn = envProvider.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'resolved-env-build-session'
-      })
-      const canceledSpawn = expect(spawn).rejects.toThrow(
-        'PTY spawn canceled: resolved-env-build-session'
-      )
-      await vi.waitFor(() => expect(finishEnvBuild).toBeTypeOf('function'))
+    it.each([1, 2])(
+      'keeps cancellation registered across %i environment-resume microtasks',
+      async (microtasks) => {
+        spawnMock.mockClear()
+        let finishEnvBuild!: () => void
+        const envProvider = new LocalPtyProvider({
+          buildSpawnEnv: (_id, baseEnv) =>
+            new Promise<Record<string, string>>((resolve) => {
+              finishEnvBuild = () => resolve(baseEnv)
+            })
+        })
+        const spawn = envProvider.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'resolved-env-build-session'
+        })
+        const canceledSpawn = expect(spawn).rejects.toThrow(
+          'PTY spawn canceled: resolved-env-build-session'
+        )
+        await vi.waitFor(() => expect(finishEnvBuild).toBeTypeOf('function'))
 
-      finishEnvBuild()
-      const shutdown = new Promise<void>((resolve, reject) => {
-        queueMicrotask(() => {
-          queueMicrotask(() => {
+        finishEnvBuild()
+        const shutdown = new Promise<void>((resolve, reject) => {
+          const shutdown = () => {
             envProvider
               .shutdown('resolved-env-build-session', { immediate: true })
               .then(resolve, reject)
-          })
+          }
+          queueMicrotask(() => (microtasks === 1 ? shutdown() : queueMicrotask(shutdown)))
         })
-      })
 
-      await shutdown
-      await canceledSpawn
-      expect(spawnMock).not.toHaveBeenCalled()
+        await shutdown
+        await canceledSpawn
+        expect(spawnMock).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each([1, 2])(
+      'settles final-preflight shutdown without a late PTY (%i microtasks)',
+      async (microtasks) => {
+        spawnMock.mockClear()
+        let finishPreparation!: () => void
+        prepareMacosTccLoginShellMock.mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              finishPreparation = resolve
+            })
+        )
+        const id = 'preflight-resume-session'
+        const kill = mockProc.kill
+        let committed = false
+        const outcome = provider
+          .spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: id,
+            onPtySpawnCommitted: () => {
+              committed = true
+            }
+          })
+          .then(
+            (result) => ({ ok: true as const, result }),
+            (error: unknown) => ({ ok: false as const, error })
+          )
+        await import('node-pty')
+        await vi.waitFor(() => expect(finishPreparation).toBeTypeOf('function'))
+        finishPreparation()
+        let committedAtShutdown = false
+        await new Promise<void>((resolve, reject) => {
+          const shutdown = () => {
+            committedAtShutdown = committed
+            provider.shutdown(id, { immediate: true }).then(resolve, reject)
+          }
+          queueMicrotask(() => (microtasks === 1 ? shutdown() : queueMicrotask(shutdown)))
+        })
+        const settled = await outcome
+        if (committedAtShutdown) {
+          expect(settled.ok).toBe(true)
+          expect(kill).toHaveBeenCalled()
+        } else {
+          expect(settled).toEqual({ ok: false, error: new Error(`PTY spawn canceled: ${id}`) })
+          expect(spawnMock.mock.calls.length).toBe(0)
+        }
+        expect(provider.getPtyProcess(id)).toBeUndefined()
+        expect(pendingLocalPtySpawns.has(id)).toBe(false)
+      }
+    )
+
+    it('cancels deferred shell availability before finalizing a launch plan', async () => {
+      spawnMock.mockClear()
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let finishAvailability!: (available: boolean) => void
+      const buildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'auto',
+        pwshAvailable: () =>
+          new Promise<boolean>((resolve) => {
+            finishAvailability = resolve
+          }),
+        buildSpawnEnv
+      })
+      const id = 'deferred-availability-session'
+      const spawn = provider.spawn({ cols: 80, rows: 24, sessionId: id })
+      const rejected = expect(spawn).rejects.toThrow(`PTY spawn canceled: ${id}`)
+      await provider.shutdown(id, { immediate: true })
+      finishAvailability(true)
+      await rejected
+      expect(buildSpawnEnv).not.toHaveBeenCalled()
+      expect(spawnMock.mock.calls.length).toBe(0)
+      expect(pendingLocalPtySpawns.has(id)).toBe(false)
     })
+
+    it.each(['synchronous environment', 'async environment', 'preflight'])(
+      'releases cancellation state after failed %s and allows a fresh retry',
+      async (phase) => {
+        spawnMock.mockClear()
+        const id = 'failed-preparation-session'
+        let fail = true
+        provider.configure({
+          buildSpawnEnv: (_id, env) => {
+            if (fail && phase === 'synchronous environment') {
+              throw new Error('preparation failed')
+            }
+            if (fail && phase === 'async environment') {
+              return Promise.reject(new Error('preparation failed'))
+            }
+            return env
+          }
+        })
+        if (phase === 'preflight') {
+          prepareMacosTccLoginShellMock.mockRejectedValueOnce(new Error('preparation failed'))
+        }
+        await expect(provider.spawn({ cols: 80, rows: 24, sessionId: id })).rejects.toThrow(
+          'preparation failed'
+        )
+        expect(pendingLocalPtySpawns.has(id)).toBe(false)
+        expect(spawnMock.mock.calls.length).toBe(0)
+        await provider.shutdown(id, { immediate: true })
+        fail = false
+        await expect(provider.spawn({ cols: 80, rows: 24, sessionId: id })).resolves.toMatchObject({
+          id
+        })
+        expect(spawnMock.mock.calls.length).toBe(1)
+        expect(pendingLocalPtySpawns.has(id)).toBe(false)
+      }
+    )
 
     it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {
       spawnMock.mockClear()

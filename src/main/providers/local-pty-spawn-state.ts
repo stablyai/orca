@@ -7,22 +7,21 @@ import {
   type PendingLocalPtySpawn
 } from './local-pty-provider-state'
 
-/** Awaits pre-launch work that shutdown must be able to cancel: no node-pty
- *  process exists yet, so cancellation can only be observed after the await. */
-export async function awaitCancelableLocalPtySpawn<T>(
+/** Keep shutdown visible between awaits until the native process is registered. */
+export async function runCancelableLocalPtySpawn<T>(
   id: string,
-  operation: T | Promise<T>
+  operation: (throwIfCanceled: () => void) => Promise<T>
 ): Promise<T> {
   const pendingSpawn: PendingLocalPtySpawn = { canceled: false }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
   try {
-    const result = await operation
-    if (pendingSpawn.canceled) {
-      throw new Error(`PTY spawn canceled: ${id}`)
-    }
-    return result
+    return await operation(() => {
+      if (pendingSpawn.canceled) {
+        throw new Error(`PTY spawn canceled: ${id}`)
+      }
+    })
   } finally {
     pending.delete(pendingSpawn)
     if (pending.size === 0) {

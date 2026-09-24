@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { BunSqliteDatabase, loadBunSqlite } from './bun-sqlite-database'
+import { NodeSqliteStatement } from './node-sqlite-statement'
 import type { SqliteStatement } from './sqlite-statement'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
@@ -105,7 +106,10 @@ class SyncDatabase {
       this.statementCache.set(sql, cached)
       return cached
     }
-    const statement = this.db.prepare(sql)
+    const statement =
+      this.db instanceof BunSqliteDatabase
+        ? this.db.prepare(sql)
+        : new NodeSqliteStatement(this.db.prepare(sql))
     if (isStatementCacheable(sql)) {
       if (this.statementCache.size >= STATEMENT_CACHE_LIMIT) {
         const oldest = this.statementCache.keys().next().value
@@ -119,7 +123,7 @@ class SyncDatabase {
   }
 
   pragma(sql: string, options?: PragmaOptions): unknown {
-    const statement = this.db.prepare(`PRAGMA ${sql}`)
+    const statement = this.prepare(`PRAGMA ${sql}`)
     if (options?.simple) {
       const row = statement.get()
       if (!row) {
