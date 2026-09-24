@@ -402,4 +402,66 @@ describe('ClaudeRuntimeAuthService pinned --account launches', () => {
     expect(readManagedCredentialsForTest('acct-b', fixture.pinnedPath)).toBe(refreshed)
     expect(existsSync(markerPath(fixture))).toBe(false)
   })
+
+  it('never holds the auth queue while a pinned launch waits out a usage fetch', async () => {
+    const fixture = await setUpTwoAccounts()
+    const endFetch = fixture.registry.beginClaudeAccountUsageFetch('acct-b')
+    const pinned = fixture.service.prepareForClaudeLaunch(
+      { runtime: 'host' },
+      { accountId: 'acct-b' }
+    )
+    const stalled = (ms: number) =>
+      new Promise<'stalled'>((resolve) => setTimeout(() => resolve('stalled'), ms))
+
+    await expect(
+      Promise.race([fixture.service.prepareForClaudeLaunch({ runtime: 'host' }), stalled(2_000)])
+    ).resolves.toMatchObject({ provenance: 'managed:acct-a' })
+    await expect(
+      Promise.race([
+        fixture.service.prepareForClaudeLaunch({ runtime: 'host' }, { accountId: 'acct-a' }),
+        stalled(2_000)
+      ])
+    ).resolves.toMatchObject({ provenance: 'managed:acct-a' })
+    await expect(
+      Promise.race([fixture.service.syncForCurrentSelection(), stalled(2_000)])
+    ).resolves.toBeUndefined()
+
+    endFetch?.()
+    await expect(pinned).resolves.toMatchObject({ pinnedAccountId: 'acct-b' })
+  })
+
+  it('releases the reservation when the wait for a usage fetch times out', async () => {
+    const fixture = await setUpTwoAccounts()
+    const endFetch = fixture.registry.beginClaudeAccountUsageFetch('acct-b')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      const pinned = fixture.service.prepareForClaudeLaunch(
+        { runtime: 'host' },
+        { accountId: 'acct-b' }
+      )
+      const rejection = expect(pinned).rejects.toThrow(/still checking usage/)
+      await vi.advanceTimersByTimeAsync(40_001)
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(fixture.registry.countClaudePinnedAccountUsers('acct-b')).toBe(0)
+    expect(keychain.scoped.has(fixture.pinnedDir)).toBe(false)
+    endFetch?.()
+  })
+
+  it('releases the reservation when the queued part refuses the launch', async () => {
+    const fixture = await setUpTwoAccounts()
+    const endFetch = fixture.registry.beginClaudeAccountUsageFetch('acct-b')
+    const pinned = fixture.service.prepareForClaudeLaunch(
+      { runtime: 'host' },
+      { accountId: 'acct-b' }
+    )
+    // A switch to the account completes while the launch waits.
+    fixture.store.updateSettings({ activeClaudeManagedAccountId: 'acct-b' })
+    endFetch?.()
+
+    await expect(pinned).rejects.toThrow(/just became the active account/)
+    expect(fixture.registry.countClaudePinnedAccountUsers('acct-b')).toBe(0)
+  })
 })

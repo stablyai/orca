@@ -4,7 +4,10 @@ import {
   normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
-import { countClaudePinnedAccountUsers } from './claude-pinned-pty-registry'
+import {
+  countClaudePinnedAccountUsers,
+  releaseClaudePinnedAccountReservation
+} from './claude-pinned-pty-registry'
 import {
   clearPendingPinnedClaudeSeed,
   listPendingPinnedClaudeSeedAccountIds,
@@ -35,9 +38,7 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
     const accountId = options?.accountId
     if (accountId) {
-      return this.serializeMutation(() =>
-        this.prepareRequestedAccountLaunch(accountId, effectiveTarget)
-      )
+      return this.prepareRequestedAccountLaunch(accountId, effectiveTarget)
     }
     await this.syncForCurrentSelection(effectiveTarget)
     return this.getPreparation(effectiveTarget)
@@ -101,27 +102,53 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     return this.getPreparation(target).configDir
   }
 
-  // Why one mutation: selection updates settings before it queues its sync, so reading the active
-  // account here, in the queue, can never pin an account a concurrent switch just activated.
+  /**
+   * An `--account` launch. The pinned reservation (and any wait for a usage fetch holding the
+   * account) happens before the auth queue, so a background fetch never stalls every other launch
+   * and sync; the queued part then re-validates against settings that no switch can race, since
+   * the claims make a host mutation and a reservation mutually exclusive.
+   */
   private async prepareRequestedAccountLaunch(
     accountId: string,
     target: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    const settings = this.store.getSettings()
-    const account = this.getActiveAccount(settings.claudeManagedAccounts, accountId)
-    if (!account) {
-      throw new Error('That Claude account no longer exists. Run `orca account list` and retry.')
+    this.requireClaudeAccountForLaunch(accountId)
+    if (this.isActiveHostAccountLaunch(accountId, target)) {
+      return this.serializeMutation(async () => {
+        if (!this.isActiveHostAccountLaunch(accountId, target)) {
+          throw new Error('The active Claude account changed during this launch. Retry the launch.')
+        }
+        // Why: the active account already owns ~/.claude; pinning it too would put one refresh
+        // token in two stores.
+        await this.doSyncForCurrentSelection(target)
+        return this.getPreparation(target)
+      })
     }
-    if (
+    if (normalizeClaudeAccountSelectionTarget(target).runtime !== 'host') {
+      throw new Error('Claude --account launches are not supported for WSL terminals yet.')
+    }
+    const sharedWithLiveSession = await this.reservePinnedClaudeAccount(accountId)
+    // Why no host-mutation re-check in the queue: while the reservation is held, no switch or
+    // removal can claim the account, so only settings changes made during the wait remain.
+    try {
+      return await this.serializeMutation(() =>
+        this.preparePinnedClaudeLaunch(accountId, sharedWithLiveSession)
+      )
+    } catch (error) {
+      releaseClaudePinnedAccountReservation(accountId)
+      throw error
+    }
+  }
+
+  private isActiveHostAccountLaunch(
+    accountId: string,
+    target: ClaudeAccountSelectionTarget
+  ): boolean {
+    return (
       normalizeClaudeAccountSelectionTarget(target).runtime === 'host' &&
-      getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' }) === accountId
-    ) {
-      // Why: the active account already owns ~/.claude; pinning it too would put one refresh
-      // token in two stores.
-      await this.doSyncForCurrentSelection(target)
-      return this.getPreparation(target)
-    }
-    return this.preparePinnedClaudeLaunch(account.id, target)
+      getSelectedClaudeAccountIdForTarget(this.store.getSettings(), { runtime: 'host' }) ===
+        accountId
+    )
   }
 
   /**

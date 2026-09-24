@@ -2,7 +2,6 @@ import { join } from 'node:path'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import {
   countClaudePinnedAccountUsers,
-  releaseClaudePinnedAccountReservation,
   reserveClaudePinnedAccount,
   whenClaudeAccountUsageFetchSettles
 } from '../claude-pinned-pty-registry'
@@ -14,11 +13,7 @@ import {
   seedPinnedClaudeKeychainCredentials
 } from '../claude-pinned-credentials'
 import { prepareClaudePinnedConfigDir } from '../claude-pinned-config-dir'
-import {
-  getSelectedClaudeAccountIdForTarget,
-  normalizeClaudeAccountSelectionTarget,
-  type ClaudeAccountSelectionTarget
-} from '../runtime-selection'
+import { getSelectedClaudeAccountIdForTarget } from '../runtime-selection'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-types'
 
@@ -38,98 +33,91 @@ import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-types'
  * it (the usage fetcher checks the registry), and read back only with identity proof.
  */
 // Why: a usage fetch is bounded by the hidden `claude` usage PTY's own 25s timeout; waiting a bit
-// longer beats refusing a launch over background polling. It holds the auth queue meanwhile.
+// longer beats refusing a launch over background polling. The wait happens outside the auth queue.
 const PINNED_LAUNCH_USAGE_FETCH_WAIT_MS = 40_000
 
 export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationService {
-  /** Caller holds the mutation queue. Reserves the account; the spawn releases the reservation. */
+  /**
+   * Caller holds the mutation queue AND a pinned reservation, which the spawn releases (the caller
+   * releases it if this throws). Re-validates what only the queue can see consistently.
+   */
   protected async preparePinnedClaudeLaunch(
     accountId: string,
-    target: ClaudeAccountSelectionTarget
+    sharedWithLiveSession: boolean
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    if (normalizeClaudeAccountSelectionTarget(target).runtime !== 'host') {
-      throw new Error('Claude --account launches are not supported for WSL terminals yet.')
+    // Why re-read: a removal may have finished while this launch waited for a usage fetch.
+    const account = this.requireClaudeAccountForLaunch(accountId)
+    if (
+      getSelectedClaudeAccountIdForTarget(this.store.getSettings(), { runtime: 'host' }) ===
+      accountId
+    ) {
+      // Why: a switch to it finished during the wait; pinning it now would put one refresh
+      // token in two stores, and the retry takes the normal path.
+      throw new Error('That Claude account just became the active account. Retry the launch.')
     }
-    const sharedWithLiveSession = await this.reservePinnedClaudeAccount(accountId)
-    try {
-      // Why re-read: a removal may have finished while this launch waited for a usage fetch.
-      const account = this.getActiveAccount(
-        this.store.getSettings().claudeManagedAccounts,
-        accountId
+    if (account.managedAuthRuntime === 'wsl') {
+      throw new Error(
+        `Claude account ${account.email} is a WSL account; --account supports host accounts only.`
       )
-      if (!account) {
-        throw new Error('That Claude account no longer exists. Run `orca account list` and retry.')
-      }
-      if (
-        getSelectedClaudeAccountIdForTarget(this.store.getSettings(), { runtime: 'host' }) ===
-        accountId
-      ) {
-        // Why: a switch to it finished during the wait; pinning it now would put one refresh
-        // token in two stores, and the retry takes the normal path.
-        throw new Error('That Claude account just became the active account. Retry the launch.')
-      }
-      if (account.managedAuthRuntime === 'wsl') {
-        throw new Error(
-          `Claude account ${account.email} is a WSL account; --account supports host accounts only.`
-        )
-      }
-      const configDir = await this.getOwnedManagedAuthPath(account)
-      if (!configDir) {
-        throw new Error(
-          `Orca cannot verify the saved sign-in for Claude account ${account.email}. Re-authenticate it in Settings > Accounts, then retry.`
-        )
-      }
-      if (process.platform === 'darwin' && !sharedWithLiveSession) {
-        await this.reconcilePinnedKeychainCredentials(account, configDir, { strict: true })
-      }
-      const credentialsJson = await this.readManagedCredentials(account)
-      if (!credentialsJson || !this.isValidCredentialsJsonObject(credentialsJson)) {
-        throw new Error(
-          `Claude account ${account.email} has no valid saved sign-in. Re-authenticate it in Settings > Accounts, then retry.`
-        )
-      }
-      if (process.platform === 'darwin' && !sharedWithLiveSession) {
-        await seedPinnedClaudeKeychainCredentials({
-          accountId: account.id,
-          configDir,
-          credentialsJson
-        })
-      }
-      const hostPaths = this.pathResolver.getRuntimePaths()
-      try {
-        prepareClaudePinnedConfigDir({
-          configDir,
-          source: { hostConfigDir: hostPaths.configDir, hostConfigPath: hostPaths.configPath },
-          oauthAccount: await this.readManagedOauthAccount(account)
-        })
-      } catch (error) {
-        // Why: the mirror only spares prompts; a launch that still authenticates is better than none.
-        console.warn(
-          '[claude-runtime-auth] Could not mirror host config for a pinned launch:',
-          error
-        )
-      }
-      return {
-        configDir,
-        runtime: 'host',
-        wslDistro: null,
-        wslLinuxConfigDir: null,
-        envPatch: { CLAUDE_CONFIG_DIR: configDir, CLAUDE_SECURESTORAGE_CONFIG_DIR: configDir },
-        stripAuthEnv: true,
-        pinnedAccountId: account.id,
-        provenance: `managed:${account.id}:pinned`
-      }
-    } catch (error) {
-      releaseClaudePinnedAccountReservation(accountId)
-      throw error
     }
+    const configDir = await this.getOwnedManagedAuthPath(account)
+    if (!configDir) {
+      throw new Error(
+        `Orca cannot verify the saved sign-in for Claude account ${account.email}. Re-authenticate it in Settings > Accounts, then retry.`
+      )
+    }
+    if (process.platform === 'darwin' && !sharedWithLiveSession) {
+      await this.reconcilePinnedKeychainCredentials(account, configDir, { strict: true })
+    }
+    const credentialsJson = await this.readManagedCredentials(account)
+    if (!credentialsJson || !this.isValidCredentialsJsonObject(credentialsJson)) {
+      throw new Error(
+        `Claude account ${account.email} has no valid saved sign-in. Re-authenticate it in Settings > Accounts, then retry.`
+      )
+    }
+    if (process.platform === 'darwin' && !sharedWithLiveSession) {
+      await seedPinnedClaudeKeychainCredentials({
+        accountId: account.id,
+        configDir,
+        credentialsJson
+      })
+    }
+    const hostPaths = this.pathResolver.getRuntimePaths()
+    try {
+      prepareClaudePinnedConfigDir({
+        configDir,
+        source: { hostConfigDir: hostPaths.configDir, hostConfigPath: hostPaths.configPath },
+        oauthAccount: await this.readManagedOauthAccount(account)
+      })
+    } catch (error) {
+      // Why: the mirror only spares prompts; a launch that still authenticates is better than none.
+      console.warn('[claude-runtime-auth] Could not mirror host config for a pinned launch:', error)
+    }
+    return {
+      configDir,
+      runtime: 'host',
+      wslDistro: null,
+      wslLinuxConfigDir: null,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir, CLAUDE_SECURESTORAGE_CONFIG_DIR: configDir },
+      stripAuthEnv: true,
+      pinnedAccountId: account.id,
+      provenance: `managed:${account.id}:pinned`
+    }
+  }
+
+  protected requireClaudeAccountForLaunch(accountId: string): ClaudeManagedAccount {
+    const account = this.getActiveAccount(this.store.getSettings().claudeManagedAccounts, accountId)
+    if (!account) {
+      throw new Error('That Claude account no longer exists. Run `orca account list` and retry.')
+    }
+    return account
   }
 
   /**
    * Reserves the account, waiting out an Orca usage fetch that already holds it. Returns whether
    * another pinned launch already held the account, i.e. whether its scoped item is live.
    */
-  private async reservePinnedClaudeAccount(accountId: string): Promise<boolean> {
+  protected async reservePinnedClaudeAccount(accountId: string): Promise<boolean> {
     const deadline = Date.now() + PINNED_LAUNCH_USAGE_FETCH_WAIT_MS
     while (true) {
       // Why: any other holder may already own the scoped item, and reseeding it would roll that
