@@ -155,10 +155,12 @@ export class RuntimeTerminalWait {
               // pane is identified as AGY (or its banner is present), regardless of that
               // stale status.
               (paneAgent === 'antigravity' ||
+                paneAgent === 'hermes' ||
                 hasAntigravityTerminalHeader(livePtyWaitText) ||
                 live.pty.lastAgentStatus === null) &&
               (livePtyWaitText.length === 0 ||
                 paneAgent === 'antigravity' ||
+                paneAgent === 'hermes' ||
                 hasAntigravityTerminalHeader(livePtyWaitText))
             ) {
               this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
@@ -255,10 +257,12 @@ export class RuntimeTerminalWait {
             const paneAgent = this.deps.getPaneAgent(live.leaf.ptyId)
             if (
               (paneAgent === 'antigravity' ||
+                paneAgent === 'hermes' ||
                 hasAntigravityTerminalHeader(liveLeafWaitText) ||
                 live.leaf.lastAgentStatus === null) &&
               (liveLeafWaitText.length === 0 ||
                 paneAgent === 'antigravity' ||
+                paneAgent === 'hermes' ||
                 hasAntigravityTerminalHeader(liveLeafWaitText))
             ) {
               this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)

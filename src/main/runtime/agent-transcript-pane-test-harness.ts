@@ -12,6 +12,7 @@ export type TranscriptPaneOptions = {
   paneTitle: string
   foregroundProcess: string | null
   data: string
+  ptySize?: { cols: number; rows: number }
   launchAgent?: TuiAgent
   /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
@@ -39,6 +40,7 @@ export async function createTranscriptPane(
     spawn: vi.fn().mockResolvedValue({ id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }),
     write: () => true,
     kill: () => true,
+    getSize: () => options.ptySize ?? null,
     getForegroundProcess: (): Promise<string | null> => {
       options.onForegroundProbe?.()
       return options.foregroundProbeHangs === true

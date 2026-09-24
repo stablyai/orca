@@ -5,6 +5,7 @@ import type {
   TerminalWaiter
 } from './runtime-terminal-contracts'
 import {
+  TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
@@ -25,14 +26,12 @@ import {
 } from './terminal-wait-results'
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
+import { isHermesReadyPromptSnapshot } from './hermes-terminal-readiness'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded look at the provider's screen for an adopted PTY whose retained
-   *  readiness metadata was lost. Deliberately single-shot: it answers "is the
-   *  screen already showing a settled prompt", and the poll above owns every
-   *  later transition. A provider screen that is still working when this fires
-   *  resolves through the poll, not here. */
+  /** Hermes repaints the grid without a usable retained tail; unlike other agents,
+   *  it needs bounded screen retries while the same waiter remains live. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -53,44 +52,65 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
-    void withTimeout(
-      this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
-        timeoutMs: providerTimeoutMs,
-        retireOnTimeout: true,
-        // Why: the ready banner stays in scrollback for the whole session, so
-        // classifying history would call a working agent idle (#15569 review).
-        visibleScreenOnly: true
-      } satisfies RuntimeProviderSnapshotReadOptions),
-      probeTimeoutMs,
-      null
-    )
-      .then((projection) => {
-        if (
-          !projection ||
-          projection.source !== 'screen' ||
-          !this.terminalWaiters.get(waiter.handle)?.has(waiter)
-        ) {
-          return
-        }
-        const snapshotText =
-          agent === 'antigravity'
-            ? [...projection.tail, projection.draft ?? ''].join('\n')
-            : projection.tail.join('\n')
-        const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        const ready =
-          agent === 'antigravity'
-            ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptPreview(snapshotText)
-        if (!blockedReason && !ready) {
-          return
-        }
-        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
-        if (waiter.cancelIdlePoll) {
-          waiter.cancelIdlePoll()
-        }
-        this.terminalWaiters.resolve(waiter, result)
-      })
-      .catch(() => {})
+    const probe = (): void => {
+      if (!this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+        return
+      }
+      void withTimeout(
+        this.readTerminal(
+          waiter.handle,
+          agent === 'antigravity' || agent === 'hermes' ? { screen: true } : {},
+          {
+            timeoutMs: providerTimeoutMs,
+            retireOnTimeout: true,
+            // Why: the ready banner stays in scrollback for the whole session, so
+            // classifying history would call a working agent idle (#15569 review).
+            visibleScreenOnly: true
+          } satisfies RuntimeProviderSnapshotReadOptions
+        ),
+        probeTimeoutMs,
+        null
+      )
+        .then((projection) => {
+          if (
+            !projection ||
+            projection.source !== 'screen' ||
+            !this.terminalWaiters.get(waiter.handle)?.has(waiter)
+          ) {
+            return
+          }
+          const snapshotText =
+            agent === 'antigravity'
+              ? [...projection.tail, projection.draft ?? ''].join('\n')
+              : projection.tail.join('\n')
+          const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
+          let ready = false
+          if (agent === 'antigravity') {
+            ready = isAntigravityReadyPromptSnapshot(snapshotText)
+          } else if (agent === 'hermes') {
+            ready = isHermesReadyPromptSnapshot(snapshotText)
+          } else {
+            ready = isKnownReadyPromptPreview(snapshotText)
+          }
+          if (!blockedReason && !ready) {
+            return
+          }
+          const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
+          if (waiter.cancelIdlePoll) {
+            waiter.cancelIdlePoll()
+          }
+          this.terminalWaiters.resolve(waiter, result)
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (agent !== 'hermes' || !this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+            return
+          }
+          const retry = setTimeout(probe, TUI_IDLE_POLL_INTERVAL_MS)
+          retry.unref?.()
+        })
+    }
+    probe()
   }
 
   protected buildTuiIdleProbeResult(
