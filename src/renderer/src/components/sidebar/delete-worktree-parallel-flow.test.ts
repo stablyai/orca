@@ -255,18 +255,25 @@ describe('runWorktreeDeletesInParallel', () => {
     )
 
     const run = runDeletesForCurrentWorktrees([
-      { id: 'repo-a::/ws/parent', displayName: 'parent', repoId: 'repo-a', path: '/ws/parent' },
+      {
+        id: 'repo-a::/ws/parent',
+        displayName: 'parent',
+        repoId: 'repo-a',
+        path: '/ws/parent',
+        hostId: 'local'
+      },
       {
         id: 'repo-b::/ws/parent/child',
         displayName: 'child',
         repoId: 'repo-b',
-        path: '/ws/parent/child'
+        path: '/ws/parent/child',
+        hostId: 'local'
       }
     ])
     await vi.waitFor(() => expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1))
     expect(mocks.state.removeWorktree.mock.calls[0]?.[0]).toEqual({
       id: 'repo-b::/ws/parent/child',
-      executionHostId: null
+      executionHostId: 'local'
     })
 
     child.resolve({ ok: true })
@@ -286,17 +293,73 @@ describe('runWorktreeDeletesInParallel', () => {
     )
 
     await runDeletesForCurrentWorktrees([
-      { id: 'repo-a::/ws/parent', displayName: 'parent', repoId: 'repo-a', path: '/ws/parent' },
+      {
+        id: 'repo-a::/ws/parent',
+        displayName: 'parent',
+        repoId: 'repo-a',
+        path: '/ws/parent',
+        hostId: 'local'
+      },
       {
         id: 'repo-b::/ws/parent/child',
         displayName: 'child',
         repoId: 'repo-b',
-        path: '/ws/parent/child'
+        path: '/ws/parent/child',
+        hostId: 'local'
       }
     ])
 
     expect(mocks.state.removeWorktree.mock.calls.map(([target]) => target.id)).toEqual([
       'repo-b::/ws/parent/child'
+    ])
+  })
+
+  it('queues an unhosted nested child with its hosted same-repo parent', async () => {
+    const child = deferredDeleteResult()
+    mocks.state.removeWorktree.mockImplementation(({ id }: { id: string }) =>
+      id === 'repo-a::/ws/parent/child' ? child.promise : Promise.resolve({ ok: true })
+    )
+
+    const run = runDeletesForCurrentWorktrees([
+      {
+        id: 'repo-a::/ws/parent',
+        displayName: 'parent',
+        repoId: 'repo-a',
+        path: '/ws/parent',
+        hostId: 'local'
+      },
+      {
+        id: 'repo-a::/ws/parent/child',
+        displayName: 'child',
+        repoId: 'repo-a',
+        path: '/ws/parent/child'
+      }
+    ])
+    await vi.waitFor(() => expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1))
+    expect(mocks.state.removeWorktree.mock.calls[0]?.[0]?.id).toBe('repo-a::/ws/parent/child')
+
+    child.resolve({ ok: true })
+    await run
+
+    expect(mocks.state.removeWorktree.mock.calls.map(([target]) => target.id)).toEqual([
+      'repo-a::/ws/parent/child',
+      'repo-a::/ws/parent'
+    ])
+  })
+
+  it('deletes a child spelled through the shorter WSL UNC alias before its parent', async () => {
+    const parentPath = '\\\\wsl.localhost\\Ubuntu\\ws\\parent'
+    const childPath = '\\\\wsl$\\Ubuntu\\ws\\parent\\c'
+    expect(childPath.length).toBeLessThan(parentPath.length)
+
+    await runDeletesForCurrentWorktrees([
+      { id: 'repo-a::parent', displayName: 'parent', repoId: 'repo-a', path: parentPath },
+      { id: 'repo-a::child', displayName: 'child', repoId: 'repo-a', path: childPath }
+    ])
+
+    expect(mocks.state.removeWorktree.mock.calls.map(([target]) => target.id)).toEqual([
+      'repo-a::child',
+      'repo-a::parent'
     ])
   })
 

@@ -5,6 +5,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { sharesWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -29,11 +30,12 @@ function isStrictDescendantPath(parentPath: string, childPath: string): boolean 
 }
 
 /** Why: lineage spans repos, so a checkout nested under another repo's target must share its ordered queue. */
-function mergeGroupsWithNestedPaths<T extends Pick<Worktree, 'hostId' | 'path'>>(
+function mergeGroupsWithNestedPaths<T extends Pick<Worktree, 'hostId' | 'repoId' | 'path'>>(
   groups: readonly T[][]
 ): T[][] {
+  // Why the lineage boundary: any pair lineage admits as one host must be sequenced together.
   const nests = (a: T, b: T): boolean =>
-    a.hostId === b.hostId &&
+    sharesWorktreeLineageBoundary(a, b) &&
     (isStrictDescendantPath(a.path, b.path) || isStrictDescendantPath(b.path, a.path))
   let merged: T[][] = []
   for (const group of groups) {
@@ -90,8 +92,13 @@ export async function runWorktreeDeletesInParallel(
   }
   const orderedGroups = mergeGroupsWithNestedPaths([...groups.values()])
   for (const group of orderedGroups) {
-    // Children must leave first or Git rejects their registered ancestor.
-    group.sort((a, b) => b.path.length - a.path.length)
+    // Children must leave first or Git rejects their registered ancestor; compare the same
+    // folded spelling nesting uses, since WSL UNC aliases differ in raw length.
+    group.sort(
+      (a, b) =>
+        normalizeRuntimePathForComparison(b.path).length -
+        normalizeRuntimePathForComparison(a.path).length
+    )
   }
   const preservedBranches: PreservedBranchCleanup[] = []
   const aggregatePreservedBranches = uniqueTargets.length > 1
