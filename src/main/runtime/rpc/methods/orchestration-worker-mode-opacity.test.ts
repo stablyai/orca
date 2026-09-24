@@ -92,7 +92,7 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
             runtimeFence: 1
           }
         }),
-        // No committed /clear: each session is its own lineage's root.
+        // No committed /clear: each session is its own conversation's root.
         listRecords: () => []
       }
     }
