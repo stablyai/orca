@@ -190,6 +190,7 @@ describe('OrcaRuntimeService', () => {
         return metaById[worktreeId]
       },
       getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
+      getAllWorktreeLineage: () => lineageById,
       setWorktreeLineage: vi.fn((worktreeId: string, lineage: WorktreeLineage) => {
         lineageById[worktreeId] = lineage
         return lineage
@@ -220,11 +221,19 @@ describe('OrcaRuntimeService', () => {
     registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
+    // A startup terminal resolves the new worktree, caching the fleet snapshot before lineage lands.
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-child-startup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'claude'
+    })
 
     try {
       const result = await runtime.createManagedWorktree({
         repoSelector: TEST_REPO_ID,
         name: 'child-feature',
+        startup: { command: 'claude' },
         lineage: { parentWorktree: `id:${parentId}` }
       })
 
@@ -244,6 +253,11 @@ describe('OrcaRuntimeService', () => {
       expect(remoteStore.setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
       expect(addWorktree).not.toHaveBeenCalled()
       expect(listWorktrees).not.toHaveBeenCalled()
+      // The fleet snapshot cached during create must not hide the edge recorded after it.
+      const listed = await runtime.listManagedWorktrees(undefined, 10)
+      expect(listed.worktrees.find((worktree) => worktree.id === childId)).toMatchObject({
+        parentWorktreeId: parentId
+      })
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
