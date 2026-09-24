@@ -214,14 +214,16 @@ export function applyGeneratedTabTitleUpdates(
   updates: readonly GeneratedTabTitleUpdate[]
 ): TitleUpdateResult {
   const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
-  if (state.settings?.tabAutoGenerateTitle !== true) {
-    return { patch: null, runtimeGraphChanged: false }
-  }
   const stages = new Map<string, OwnerStage>()
   for (const { paneKey, prompt, options } of updates) {
     const tabId = getTabIdFromPaneKey(paneKey)
     const ownerWorktreeId = tabId ? ownerByTabId.get(tabId) : undefined
     if (!tabId || !ownerWorktreeId) {
+      continue
+    }
+    // Why: prompt-less frames are the high-frequency case, and only a clear signal acts without a
+    // prompt — short-circuit before paying the per-worktree index allocation below.
+    if (prompt.length === 0 && options?.clearGeneratedTitle !== true) {
       continue
     }
     const stage = getOwnerStage(state, stages, ownerWorktreeId)
@@ -239,11 +241,12 @@ export function applyGeneratedTabTitleUpdates(
       }
       continue
     }
-    if (
-      prompt.length === 0 ||
-      currentTab.customTitle?.trim() ||
-      currentTab.quickCommandLabel?.trim()
-    ) {
+    // Why: generation is gated by the setting, but a clear only drops stale state that would
+    // otherwise reappear if the setting were re-enabled, so it runs regardless.
+    if (state.settings?.tabAutoGenerateTitle !== true) {
+      continue
+    }
+    if (currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
       continue
     }
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()

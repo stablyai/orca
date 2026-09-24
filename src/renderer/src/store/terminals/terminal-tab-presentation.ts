@@ -86,7 +86,10 @@ export function createTerminalTabPresentationActions(
       // Why: setAgentStatus is high-frequency; skip derive/set unless the feature is on and this tab still needs a (re)generated title.
       const state = get()
       const tabId = getTabIdFromPaneKey(paneKey)
-      if (!tabId || state.settings?.tabAutoGenerateTitle !== true) {
+      if (
+        !tabId ||
+        (options?.clearGeneratedTitle !== true && state.settings?.tabAutoGenerateTitle !== true)
+      ) {
         return
       }
       // Why: a clear signal carries no prompt and must outrank the has-title guards it exists to undo.

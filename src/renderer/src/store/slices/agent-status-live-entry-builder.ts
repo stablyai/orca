@@ -172,13 +172,14 @@ export function buildAgentStatusLiveEntry(
   const existingProviderSession = canReuseExistingProviderSession
     ? existing.providerSession
     : undefined
+  // Why: a completed row's id is the comparison base when the next `working` frame does not reuse it.
+  const sessionChangeBase =
+    existing?.state === 'done' && payload.state === 'working'
+      ? existing.providerSession
+      : existingProviderSession
   const providerSessionChanged =
-    Boolean(metadata?.providerSession && existingProviderSession) &&
-    !agentProviderSessionsEqual(
-      identity.agentType,
-      metadata?.providerSession,
-      existingProviderSession
-    )
+    Boolean(metadata?.providerSession && sessionChangeBase) &&
+    !agentProviderSessionsEqual(identity.agentType, metadata?.providerSession, sessionChangeBase)
   const statusTabId = routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
   const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
   const registryEntry = state.agentLaunchConfigByPaneKey[paneKey]
