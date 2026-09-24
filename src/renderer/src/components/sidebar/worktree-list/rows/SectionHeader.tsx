@@ -247,6 +247,8 @@ export function renderWorktreeSectionHeaderRow(
             isPinnedHeader &&
               ctx.pinDragOver &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
+            ctx.dragOverTagSection === row.key &&
+              'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
             row.repo && 'overflow-hidden'
           )}
           style={{
