@@ -54,23 +54,19 @@ export function hasLivePinnedClaudePtys(accountId: string): boolean {
   return false
 }
 
-/** Returns an idempotent release; call it once the launch registered its PTY or failed. */
-export function reserveClaudePinnedAccount(accountId: string): () => void {
+/** Held from auth preparation until the spawn settles; each reserve needs exactly one release. */
+export function reserveClaudePinnedAccount(accountId: string): void {
   reservationsByAccountId.set(accountId, (reservationsByAccountId.get(accountId) ?? 0) + 1)
-  let released = false
-  return () => {
-    if (released) {
-      return
-    }
-    released = true
-    const remaining = (reservationsByAccountId.get(accountId) ?? 1) - 1
-    if (remaining > 0) {
-      reservationsByAccountId.set(accountId, remaining)
-    } else {
-      reservationsByAccountId.delete(accountId)
-    }
-    notifyIfDrained(accountId)
+}
+
+export function releaseClaudePinnedAccountReservation(accountId: string): void {
+  const remaining = (reservationsByAccountId.get(accountId) ?? 0) - 1
+  if (remaining > 0) {
+    reservationsByAccountId.set(accountId, remaining)
+  } else {
+    reservationsByAccountId.delete(accountId)
   }
+  notifyIfDrained(accountId)
 }
 
 export function markPinnedClaudePtySpawned(ptyId: string, accountId: string): void {

@@ -17,7 +17,6 @@ import {
 } from '../host-env/codex-home'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
 import {
-  isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
@@ -44,6 +43,11 @@ import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import { awaitExplicitPiOmpGuestReadiness } from '../../../agent-hooks/wsl-pi-omp-guest-readiness'
 import type { RuntimePtySpawnState } from './spawn-state'
+import {
+  isRuntimeClaudeLaunch,
+  prepareRuntimeSpawnClaudeAuth,
+  resolveRuntimeSpawnClaudeAccount
+} from './spawn-claude-account'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -68,9 +72,10 @@ export async function prepareRuntimePtySpawn(
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
   }
-  ctx.isClaudeLaunch =
-    !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
+  const pinnedClaudeAccountId = resolveRuntimeSpawnClaudeAccount(ctx)
+  ctx.isClaudeLaunch = isRuntimeClaudeLaunch(ctx, pinnedClaudeAccountId)
+  // Why exempt: a switch never touches a pinned account; preparation re-reads it in the switch's queue.
+  if (ctx.isClaudeLaunch && !pinnedClaudeAccountId && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
@@ -147,11 +152,8 @@ export async function prepareRuntimePtySpawn(
   // Why: the drop still applies here, but this controller's result has no field for
   // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
   ctx.launchCommand = codexResumeLaunch.command
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
+  ctx.claudeAuth = await prepareRuntimeSpawnClaudeAuth(ctx, pinnedClaudeAccountId)
+  if (ctx.isClaudeLaunch && !ctx.claudeAuth?.pinnedAccountId && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {

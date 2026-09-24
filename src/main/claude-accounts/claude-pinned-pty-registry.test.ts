@@ -14,6 +14,7 @@ import {
   markPinnedClaudePtySpawned,
   onClaudePinnedAccountDrained,
   readClaudePinnedPtyRegistryFile,
+  releaseClaudePinnedAccountReservation,
   reserveClaudePinnedAccount,
   seedPinnedClaudePtysFromPersistence
 } from './claude-pinned-pty-registry'
@@ -26,13 +27,12 @@ describe('Claude pinned PTY registry', () => {
   it('counts reservations and live PTYs per account and drains once both are gone', () => {
     const drained = vi.fn()
     onClaudePinnedAccountDrained(drained)
-    const release = reserveClaudePinnedAccount('acct-b')
+    reserveClaudePinnedAccount('acct-b')
     markPinnedClaudePtySpawned('pty-1', 'acct-b')
     expect(countClaudePinnedAccountUsers('acct-b')).toBe(2)
     expect(countClaudePinnedAccountUsers('acct-c')).toBe(0)
 
-    release()
-    release()
+    releaseClaudePinnedAccountReservation('acct-b')
     expect(countClaudePinnedAccountUsers('acct-b')).toBe(1)
     expect(drained).not.toHaveBeenCalled()
 

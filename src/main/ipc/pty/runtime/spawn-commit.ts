@@ -7,7 +7,7 @@ import {
   recordCodexPaneAccountForSpawn,
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
+import { markRuntimeClaudePtySpawned } from './spawn-claude-account'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import {
@@ -228,7 +228,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
   }
   if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
+    markRuntimeClaudePtySpawned(ctx.result.id, ctx.claudeAuth)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import {
   countClaudePinnedAccountUsers,
+  releaseClaudePinnedAccountReservation,
   reserveClaudePinnedAccount
 } from '../claude-pinned-pty-registry'
 import {
@@ -35,7 +36,7 @@ import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-types'
  * it (the usage fetcher checks the registry), and read back only with identity proof.
  */
 export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationService {
-  /** Caller holds the mutation queue. Reserves the account; the spawn releases it. */
+  /** Caller holds the mutation queue. Reserves the account; the spawn releases the reservation. */
   protected async preparePinnedClaudeLaunch(
     account: ClaudeManagedAccount,
     target: ClaudeAccountSelectionTarget
@@ -57,7 +58,7 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
     // Why before reserving: any other holder means a pinned Claude may already own the scoped
     // item, and reseeding it would roll that session back to a spent refresh token.
     const sharedWithLiveSession = countClaudePinnedAccountUsers(account.id) > 0
-    const release = reserveClaudePinnedAccount(account.id)
+    reserveClaudePinnedAccount(account.id)
     try {
       if (process.platform === 'darwin' && !sharedWithLiveSession) {
         await this.reconcilePinnedKeychainCredentials(account, configDir, { strict: true })
@@ -100,7 +101,7 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
         provenance: `managed:${account.id}:pinned`
       }
     } catch (error) {
-      release()
+      releaseClaudePinnedAccountReservation(account.id)
       throw error
     }
   }
