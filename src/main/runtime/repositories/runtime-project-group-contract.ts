@@ -42,6 +42,7 @@ export type FolderWorkspaceUpdates = Partial<
     | 'sortOrder'
     | 'manualOrder'
     | 'workspaceStatus'
+    | 'tags'
     | 'createdWithAgent'
     | 'pendingFirstAgentMessageRename'
     | 'firstAgentMessageRenameError'

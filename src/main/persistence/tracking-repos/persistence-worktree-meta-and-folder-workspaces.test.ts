@@ -66,6 +66,21 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
+  it('persists normalized worktree tags across a reload and clears them with an empty list', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta('wt1', { tags: ['Billing', ' billing ', 'web'] })
+    store.flush()
+
+    const restored = await createStore()
+    expect(restored.getWorktreeMeta('wt1')?.tags).toEqual(['Billing', 'web'])
+
+    restored.setWorktreeMeta('wt1', { tags: [] })
+    restored.flush()
+    expect(readDataFile()).toMatchObject({
+      worktreeMeta: { wt1: expect.not.objectContaining({ tags: expect.anything() }) }
+    })
+  })
+
 
   it('drops corrupt worktreeMeta entries while still normalizing valid siblings', async () => {
     writeDataFile({
@@ -117,6 +132,26 @@ describe('Store', () => {
     expect(persisted.worktreeMeta).not.toHaveProperty('r1::/tmp/wt')
     expect(persisted.worktreeMeta).not.toHaveProperty('r1::/tmp/scalar')
     expect(persisted.workspaceLineageByChildKey).not.toHaveProperty('worktree:r1::/tmp/wt')
+  })
+
+  it('tags folder workspaces, normalizes on write, and clears with an empty list', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Ticket' })
+
+    expect(
+      store.updateFolderWorkspace(workspace.id, { tags: ['Billing', 'BILLING', ' web '] })?.tags
+    ).toEqual(['Billing', 'web'])
+    store.flush()
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.tags).toEqual(['Billing', 'web'])
+
+    const cleared = restored.updateFolderWorkspace(workspace.id, { tags: [] })
+    expect(cleared).not.toHaveProperty('tags')
   })
 
   it('persists exact folder workspace paths without a group folder on create, update and reload', async () => {

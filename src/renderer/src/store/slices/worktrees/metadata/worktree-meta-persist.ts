@@ -11,7 +11,8 @@ import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared
 import {
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_TAGS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
@@ -130,6 +131,16 @@ async function persistWorktreeMetaUntracked(
       translate(
         'auto.store.slices.worktrees.metadata.worktree.meta.persist.4367540861',
         'Update the remote runtime to link Linear issues'
+      )
+    )
+  }
+  if (target.kind === 'environment' && 'tags' in updates) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      WORKTREE_TAGS_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.tags',
+        'Update the remote runtime to tag workspaces'
       )
     )
   }

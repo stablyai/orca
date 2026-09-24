@@ -13,6 +13,7 @@ import {
   mergeDiffCommentMutation,
   type DiffCommentBaseMutation
 } from '../../../../shared/file-review/diff-comment-mutation'
+import { applyNormalizedWorktreeTags } from '../../../../shared/worktree/metadata/worktree-tags'
 
 type WorktreeMetaIdentity = {
   instanceId: string
@@ -60,6 +61,7 @@ export function mergeWorktreeMetaForWrite(
   )
     ? sourceContext
     : null
+  applyNormalizedWorktreeTags(updated)
   updated.instanceId ||= randomUUID()
   return updated
 }

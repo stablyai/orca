@@ -60,4 +60,17 @@ describe('worktree metadata write normalization', () => {
     const unlinked = mergeWorktreeMetaForWrite(selected, { linkedPR: null })
     expect(unlinked.linkedItems?.map((item) => item.number)).toEqual([32201, 32206, 32216, 32218])
   })
+
+  it('normalizes tags and stores an empty list as an absent key', () => {
+    const tagged = mergeWorktreeMetaForWrite(existingMeta, {
+      tags: [' Billing ', 'billing', 'web']
+    })
+    expect(tagged.tags).toEqual(['Billing', 'web'])
+
+    const untouched = mergeWorktreeMetaForWrite(tagged, { comment: 'note' })
+    expect(untouched.tags).toEqual(['Billing', 'web'])
+
+    const cleared = mergeWorktreeMetaForWrite(tagged, { tags: [] })
+    expect('tags' in cleared).toBe(false)
+  })
 })
