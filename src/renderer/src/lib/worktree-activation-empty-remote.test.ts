@@ -171,6 +171,27 @@ describe('empty remote worktree activation', () => {
     )
   })
 
+  it('preserves non-startup launch work when automatic creation is disabled', async () => {
+    const worktree = makeWorktree()
+    const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({ ok: true, result: {} })
+    seedRemoteWorktreeTestState(worktree, callRuntimeEnvironment, {
+      autoCreateTerminalOnWorkspaceActivation: false
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+      hasExplicitLaunchWork: true,
+      activate: false
+    })
+
+    await vi.waitFor(() => expect(callRuntimeEnvironment).toHaveBeenCalled())
+    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.createTerminal',
+        params: expect.objectContaining({ activate: false })
+      })
+    )
+  })
+
   it('does not repeat non-agent startup work when a terminal is already live', async () => {
     const worktree = makeWorktree()
     const callRuntimeEnvironment = vi.fn()

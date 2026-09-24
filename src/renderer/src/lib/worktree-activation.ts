@@ -315,7 +315,8 @@ export function activateAndRevealWorktree(
   ) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       startup: opts?.startup,
-      agent: opts?.agent
+      agent: opts?.agent,
+      ...(hasActivationWork ? { hasExplicitLaunchWork: true } : {})
     })
   }
 

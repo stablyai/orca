@@ -146,6 +146,9 @@ export async function executeWorktreeCreation(
   const startupOpt = structuredLaunch
     ? undefined
     : buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
+  const hasExplicitTerminalWork = Boolean(
+    startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs?.tabs.length
+  )
 
   if (worktree.path && !structuredLaunch) {
     const repoConnectionId =
@@ -224,7 +227,8 @@ export async function executeWorktreeCreation(
         try {
           ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
             startup: startupOpt,
-            agent: preparedRequest.agent
+            agent: preparedRequest.agent,
+            ...(hasExplicitTerminalWork ? { hasExplicitLaunchWork: true } : {})
           })
         } catch (recoveryError) {
           console.error(
@@ -237,9 +241,6 @@ export async function executeWorktreeCreation(
     }
   } else {
     // Why: backgrounded creates still need explicit setup/issue terminals, but must not activate them.
-    const hasExplicitTerminalWork = Boolean(
-      startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
-    )
     if (preparedRequest.agent === null || hasExplicitTerminalWork) {
       try {
         primaryTabId = ensureWorktreeHasInitialTerminal(
@@ -264,7 +265,8 @@ export async function executeWorktreeCreation(
         ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
           startup: startupOpt,
           agent: preparedRequest.agent,
-          activate: false
+          activate: false,
+          ...(hasExplicitTerminalWork ? { hasExplicitLaunchWork: true } : {})
         })
       } catch (error) {
         console.error('worktree create: after-wake terminal seeding failed', worktree.id, error)
