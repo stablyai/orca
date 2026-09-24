@@ -1,3 +1,5 @@
+import { markPinnedClaudePtyExited } from './claude-pinned-pty-registry'
+
 const liveClaudePtyIds = new Set<string>()
 // Why: ids restored from persistence at startup, not yet confirmed against the
 // daemon. They keep the OAuth refresh gate closed so an early managed refresh
@@ -85,6 +87,8 @@ export function markClaudePtyExited(ptyId: string): void {
   liveClaudePtyIds.delete(ptyId)
   seededUnconfirmedPtyIds.delete(ptyId)
   persistence?.removeClaudeLivePtySessionId(ptyId)
+  // Why: this is the one exit path every provider reports through, so pinned PTYs release here too.
+  markPinnedClaudePtyExited(ptyId)
   notifyDrainedOnTransition(hadLivePtys)
 }
 
