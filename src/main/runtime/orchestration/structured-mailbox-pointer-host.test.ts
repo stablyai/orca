@@ -142,7 +142,7 @@ describe('structured mailbox pointer host', () => {
       expectedRuntimeFence: 1,
       payloadFingerprint: 'fp',
       body: { kind: 'message', role: 'user', blocks: [] }
-    } as never)
+    })
     expect(outcome).toMatchObject({ kind: 'sent', state: 'pending' })
     await expect(
       outcome.kind === 'sent' && outcome.state === 'pending' ? outcome.settlement : null
