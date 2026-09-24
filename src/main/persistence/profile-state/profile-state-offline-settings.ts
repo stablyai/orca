@@ -174,19 +174,10 @@ function assertAcceptedLegacyJson(
 }
 
 function readAgentHookSettingsFromJson(dataFile: string): AgentHookSettings {
-  if (!existsSync(dataFile)) {
-    const defaults = getDefaultPersistedState(homedir()).settings
-    return {
-      agentStatusHooksEnabled: defaults.agentStatusHooksEnabled !== false,
-      disabledTuiAgents: normalizeDisabledTuiAgents(defaults.disabledTuiAgents)
-    }
-  }
-  return readAgentHookSettingsFromSnapshot(readFileSync(dataFile, 'utf8'))
-}
-
-function readAgentHookSettingsFromSnapshot(raw: string): AgentHookSettings {
-  const state = parseProfileStateRoot(raw)
-  return readAgentHookSettingsFromSettingsValue(state.settings)
+  const settings = existsSync(dataFile)
+    ? parseProfileStateRoot(readFileSync(dataFile, 'utf8')).settings
+    : getDefaultPersistedState(homedir()).settings
+  return readAgentHookSettingsFromSettingsValue(settings)
 }
 
 function readAgentHookSettingsFromSettingsValue(value: unknown): AgentHookSettings {

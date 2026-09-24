@@ -11,6 +11,7 @@ import {
 import { basename, join } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
 import { hashProfileStateJson } from '../persistence/profile-state/profile-state-documents'
+import { isRecord } from '../persistence/profile-state/profile-state-document-validation'
 import {
   readProfileStateWithRevision,
   writeSerializedProfileState,
@@ -235,8 +236,4 @@ function validateMoveIdentity(
 
 function isHash(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
