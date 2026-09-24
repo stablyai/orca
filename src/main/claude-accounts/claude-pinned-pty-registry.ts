@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { countHostClaudePtysForAccount } from './claude-host-pty-accounts'
 
 /**
  * Claude PTYs launched with `--account` on a managed account that is not the host's active one.
@@ -25,7 +26,7 @@ const hostMutationsByAccountId = new Map<string, number>()
 const usageFetchesByAccountId = new Map<string, number>()
 const usageFetchSettledListeners = new Map<string, Set<() => void>>()
 
-export type ClaudePinnedReservationConflict = 'host-mutation' | 'usage-fetch'
+export type ClaudePinnedReservationConflict = 'host-sessions' | 'host-mutation' | 'usage-fetch'
 
 export type ClaudePinnedPtyPersistence = {
   write(entries: Record<string, string>): void
@@ -64,11 +65,15 @@ export function hasLivePinnedClaudePtys(accountId: string): boolean {
 
 /**
  * Held from auth preparation until the spawn settles; each successful reserve needs exactly one
- * release. Refused, rather than counted, while a host mutation or usage fetch holds the account.
+ * release. Refused, rather than counted, while an ordinary host Claude still runs on the account
+ * or a host mutation or usage fetch holds it.
  */
 export function reserveClaudePinnedAccount(
   accountId: string
 ): ClaudePinnedReservationConflict | null {
+  if (countHostClaudePtysForAccount(accountId) > 0) {
+    return 'host-sessions'
+  }
   if (hostMutationsByAccountId.has(accountId)) {
     return 'host-mutation'
   }

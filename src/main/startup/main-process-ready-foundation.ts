@@ -34,6 +34,14 @@ import {
   readClaudePinnedPtyRegistryFile,
   seedPinnedClaudePtysFromPersistence
 } from '../claude-accounts/claude-pinned-pty-registry'
+import {
+  attachClaudeHostPtyAccountPersistence,
+  createClaudeHostPtyAccountFilePersistence,
+  readClaudeHostPtyAccountsFile,
+  seedHostClaudePtyAccounts,
+  setClaudeActiveHostAccountResolver
+} from '../claude-accounts/claude-host-pty-accounts'
+import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/runtime-selection'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -260,6 +268,18 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
   seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
+  // Why: `--account` must not pin an account a surviving host Claude still refreshes.
+  setClaudeActiveHostAccountResolver(() =>
+    getSelectedClaudeAccountIdForTarget(store.getSettings(), { runtime: 'host' })
+  )
+  const hostClaudePtyAccountsPath = join(app.getPath('userData'), 'claude-host-pane-accounts.json')
+  attachClaudeHostPtyAccountPersistence(
+    createClaudeHostPtyAccountFilePersistence(hostClaudePtyAccountsPath)
+  )
+  seedHostClaudePtyAccounts(
+    persistedClaudePtyIds,
+    readClaudeHostPtyAccountsFile(hostClaudePtyAccountsPath)
+  )
   // Why: same restart hazard for `--account` PTYs, whose accounts the global gate never covers.
   const pinnedClaudePtyRegistryPath = join(
     app.getPath('userData'),

@@ -464,4 +464,34 @@ describe('ClaudeRuntimeAuthService pinned --account launches', () => {
     await expect(pinned).rejects.toThrow(/just became the active account/)
     expect(fixture.registry.countClaudePinnedAccountUsers('acct-b')).toBe(0)
   })
+
+  it('refuses to pin an account old host terminals still run on, until they exit', async () => {
+    const fixture = await setUpTwoAccounts()
+    const gate = await import('./live-pty-gate')
+    // Started while acct-b was the host account; the host has since moved to acct-a.
+    gate.markClaudePtySpawned('old-host-b', 'managed:acct-b')
+    gate.markClaudePtySpawned('host-a', 'managed:acct-a')
+    try {
+      await expect(
+        fixture.service.prepareForClaudeLaunch({ runtime: 'host' }, { accountId: 'acct-b' })
+      ).rejects.toThrow(
+        'Account pinned@example.com still has 1 Claude terminal started while it was the active account; close it before launching it with --account.'
+      )
+      expect(fixture.registry.countClaudePinnedAccountUsers('acct-b')).toBe(0)
+      expect(keychain.scoped.has(fixture.pinnedDir)).toBe(false)
+      // The normal launch path does not consult the attribution at all.
+      await expect(
+        fixture.service.prepareForClaudeLaunch({ runtime: 'host' })
+      ).resolves.toMatchObject({ provenance: 'managed:acct-a' })
+
+      gate.markClaudePtyExited('old-host-b')
+
+      await expect(
+        fixture.service.prepareForClaudeLaunch({ runtime: 'host' }, { accountId: 'acct-b' })
+      ).resolves.toMatchObject({ pinnedAccountId: 'acct-b' })
+    } finally {
+      gate.markClaudePtyExited('old-host-b')
+      gate.markClaudePtyExited('host-a')
+    }
+  })
 })

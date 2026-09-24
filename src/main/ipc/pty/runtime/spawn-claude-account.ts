@@ -71,5 +71,5 @@ export function markRuntimeClaudePtySpawned(
     markPinnedClaudePtySpawned(ptyId, claudeAuth.pinnedAccountId)
     return
   }
-  markClaudePtySpawned(ptyId)
+  markClaudePtySpawned(ptyId, claudeAuth?.provenance)
 }

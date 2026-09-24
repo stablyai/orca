@@ -13,6 +13,7 @@ import {
   seedPinnedClaudeKeychainCredentials
 } from '../claude-pinned-credentials'
 import { prepareClaudePinnedConfigDir } from '../claude-pinned-config-dir'
+import { countHostClaudePtysForAccount } from '../claude-host-pty-accounts'
 import { getSelectedClaudeAccountIdForTarget } from '../runtime-selection'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth-types'
@@ -126,6 +127,13 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
       const conflict = reserveClaudePinnedAccount(accountId)
       if (conflict === null) {
         return sharedWithLiveSession
+      }
+      if (conflict === 'host-sessions') {
+        const account = this.requireClaudeAccountForLaunch(accountId)
+        const sessions = countHostClaudePtysForAccount(accountId)
+        throw new Error(
+          `Account ${account.email} still has ${sessions === 1 ? '1 Claude terminal' : `${sessions} Claude terminals`} started while it was the active account; close ${sessions === 1 ? 'it' : 'them'} before launching it with --account.`
+        )
       }
       if (conflict === 'host-mutation') {
         throw new Error(
