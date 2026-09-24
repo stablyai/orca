@@ -8,7 +8,11 @@ import {
   type CursorAuthSource
 } from './cursor-auth-paths'
 import { readCursorDesktopProfile, type CursorDesktopProfile } from './cursor-desktop-state-db'
-import { parseCursorSessionToken, type CursorSessionToken } from './cursor-session-token'
+import {
+  isCursorSessionTokenExpired,
+  parseCursorSessionToken,
+  type CursorSessionToken
+} from './cursor-session-token'
 
 // Why: cursor-agent 2026.06+ stores the session in the login keychain, not auth.json.
 const KEYCHAIN_SERVICE = 'cursor-access-token'
@@ -141,16 +145,29 @@ export async function readCursorAuthSession(
   const cliConfigPath = options.cliConfigPath ?? getCursorCliConfigPath()
   const desktopDbPath = options.desktopStateDbPath ?? getCursorDesktopStateDbPath()
   const errors: string[] = []
+  // Why a live session wins over precedence: a user who signed the CLI in once and
+  // now works only in the IDE has an expired keychain token in front of a fresh
+  // desktop one. Returning the first token that parses would report "sign-in
+  // expired" forever while a usable session sat one source below.
+  let expired: CursorAuthSession | null = null
+  const takeLive = (session: CursorAuthSession | null): CursorAuthSession | null => {
+    if (!session) {
+      return null
+    }
+    if (isCursorSessionTokenExpired(session.token)) {
+      expired ??= session
+      return null
+    }
+    return session
+  }
 
   const keychainRead = await readKeychainToken()
   if (keychainRead.status === 'error') {
     errors.push(keychainRead.error)
   }
   if (keychainRead.status === 'ok') {
-    const session = sessionFrom(
-      keychainRead.token,
-      'keychain',
-      readCursorCliIdentity(cliConfigPath)
+    const session = takeLive(
+      sessionFrom(keychainRead.token, 'keychain', readCursorCliIdentity(cliConfigPath))
     )
     if (session) {
       return { status: 'ok', session }
@@ -162,7 +179,9 @@ export async function readCursorAuthSession(
     errors.push(cliRead.error)
   }
   if (cliRead.status === 'ok') {
-    const session = sessionFrom(cliRead.token, 'cli', readCursorCliIdentity(cliConfigPath))
+    const session = takeLive(
+      sessionFrom(cliRead.token, 'cli', readCursorCliIdentity(cliConfigPath))
+    )
     if (session) {
       return { status: 'ok', session }
     }
@@ -173,14 +192,18 @@ export async function readCursorAuthSession(
   // every Cursor IDE user who never set Cursor up in Orca.
   const desktopRead = readCursorDesktopProfile(desktopDbPath)
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
-    const session = sessionFrom(
-      desktopRead.profile.accessToken,
-      'desktop',
-      desktopIdentity(desktopRead.profile)
+    const session = takeLive(
+      sessionFrom(desktopRead.profile.accessToken, 'desktop', desktopIdentity(desktopRead.profile))
     )
     if (session) {
       return { status: 'ok', session }
     }
+  }
+
+  // Why still returned: with no live session anywhere, the expired one is what the
+  // user must act on, and the fetcher turns it into "run cursor-agent login".
+  if (expired) {
+    return { status: 'ok', session: expired }
   }
 
   const firstError = errors[0]

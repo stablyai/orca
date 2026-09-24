@@ -25,10 +25,13 @@ const cursorUsageSummarySchema = z
     billingCycleEnd: z.unknown(),
     membershipType: z.unknown(),
     isUnlimited: z.unknown(),
+    // Why nullish and not optional: this route is undocumented and sends `null`
+    // for an absent sub-object. With `.optional()` one null pool fails the parse
+    // for the whole body, discarding valid pools and the billing cycle with it.
     individualUsage: z
-      .object({ plan: cursorPoolSchema.optional(), onDemand: cursorPoolSchema.optional() })
+      .object({ plan: cursorPoolSchema.nullish(), onDemand: cursorPoolSchema.nullish() })
       .partial()
-      .optional()
+      .nullish()
   })
   .partial()
 
@@ -102,7 +105,10 @@ function windowMinutesFor(startMs: number | null, endMs: number | null): number 
  * fields: the raw pair is internally consistent, while the percentages are
  * pre-rounded for the dashboard's own copy and disagree with it on real accounts.
  */
-function poolPercent(pool: CursorPool | undefined, percentField: keyof CursorPool): number | null {
+function poolPercent(
+  pool: CursorPool | null | undefined,
+  percentField: keyof CursorPool
+): number | null {
   if (!pool) {
     return null
   }

@@ -43,6 +43,12 @@ import { readCursorAuthSession, readCursorCliIdentity } from './cursor-auth'
 
 type JwtSegment = Record<string, unknown>
 
+function expiredJwt(sub: string): string {
+  const encode = (value: JwtSegment): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url')
+  return `${encode({ alg: 'RS256' })}.${encode({ sub, exp: 1_000 })}.signature`
+}
+
 function jwt(sub: string): string {
   const encode = (value: JwtSegment): string =>
     Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -159,6 +165,31 @@ describe('readCursorAuthSession', () => {
     files().set(CLI_AUTH, '{ not json')
     const result = await readCursorAuthSession(options)
     expect(result).toEqual({ status: 'error', error: 'Cursor CLI auth file is invalid' })
+  })
+
+  it('prefers a live desktop session over an expired keychain one', async () => {
+    // Why: a user who signed the CLI in once and now works only in the IDE would
+    // otherwise be told "sign-in expired" forever while a usable session sat below.
+    keychainState.token = expiredJwt('auth0|user_stale')
+    desktopState.result = {
+      status: 'ok',
+      profile: {
+        accessToken: jwt('auth0|user_ide'),
+        email: 'ide@example.com',
+        membershipType: 'pro',
+        subscriptionStatus: 'active'
+      }
+    }
+    const result = await readCursorAuthSession(options)
+    expect(result.status === 'ok' && result.session.source).toBe('desktop')
+    expect(result.status === 'ok' && result.session.token.subject).toBe('auth0|user_ide')
+  })
+
+  it('still returns the expired session when no live one exists anywhere', async () => {
+    // Why: the expiry message is the actionable answer in that case.
+    keychainState.token = expiredJwt('auth0|user_stale')
+    const result = await readCursorAuthSession(options)
+    expect(result.status === 'ok' && result.session.source).toBe('keychain')
   })
 
   it('never reads the keychain off macOS and falls through to the CLI file', async () => {

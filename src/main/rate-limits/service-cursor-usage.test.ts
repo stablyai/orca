@@ -99,6 +99,54 @@ describe('RateLimitService Cursor usage', () => {
     expect(state.gemini?.status).toBe('ok')
   })
 
+  it("drops a previous account's usage when the signed-in account changes", async () => {
+    // Why: the stale policy keeps a recent snapshot through a failed refresh. Across
+    // an account switch that would name the new account beside the old one's figures.
+    vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
+    vi.mocked(fetchCursorRateLimits).mockResolvedValue({
+      ...okProvider('cursor', 80),
+      usageMetadata: { source: 'cli', authProvenance: 'account-a' }
+    })
+    const service = new RateLimitService()
+    await service.refresh()
+    expect(service.getState().cursor?.session?.usedPercent).toBe(80)
+
+    vi.mocked(fetchCursorRateLimits).mockResolvedValue({
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Cursor usage request failed',
+      status: 'error',
+      usageMetadata: { source: 'cli', authProvenance: 'account-b' }
+    })
+    await service.refresh()
+    expect(service.getState().cursor?.session).toBeNull()
+    expect(service.getState().cursor?.status).toBe('error')
+  })
+
+  it('keeps the last reading when a refresh fails without naming an account', async () => {
+    vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
+    vi.mocked(fetchCursorRateLimits).mockResolvedValue({
+      ...okProvider('cursor', 60),
+      usageMetadata: { source: 'cli', authProvenance: 'account-a' }
+    })
+    const service = new RateLimitService()
+    await service.refresh()
+
+    vi.mocked(fetchCursorRateLimits).mockResolvedValue({
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Cursor usage request failed',
+      status: 'error',
+      usageMetadata: { source: 'cli' }
+    })
+    await service.refresh()
+    expect(service.getState().cursor?.session?.usedPercent).toBe(60)
+  })
+
   it('clears cursorAuthConfigured once the local session goes away', async () => {
     vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
     vi.mocked(fetchCursorRateLimits).mockResolvedValue(okProvider('cursor', 5))

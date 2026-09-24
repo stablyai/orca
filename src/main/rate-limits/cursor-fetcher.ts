@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { net } from 'electron'
 import type { ProviderRateLimits, UsageRateLimitSource } from '../../shared/rate-limit-types'
 import {
@@ -17,11 +18,22 @@ const USAGE_SUMMARY_URL = `${DASHBOARD_ORIGIN}/api/usage-summary`
 const LEGACY_USAGE_URL = `${DASHBOARD_ORIGIN}/api/usage`
 const API_TIMEOUT_MS = 10_000
 
-const SIGNED_OUT_MESSAGE = 'Not signed in to Cursor — run `cursor-agent login`'
+const SIGNED_OUT_MESSAGE =
+  'No Cursor sign-in on this computer — sign in with Cursor IDE or `cursor-agent login`'
 const EXPIRED_MESSAGE = 'Cursor sign-in expired — run `cursor-agent login` again'
 
 function usageSource(session: CursorAuthSession): UsageRateLimitSource {
   return session.source === 'desktop' ? 'web' : 'cli'
+}
+
+/**
+ * Stable, non-secret fingerprint of the signed-in account. Hashed because this
+ * rides `usageMetadata` into the renderer and mobile snapshots, where the raw
+ * WorkOS subject would be an account identifier nobody needs to see. Readers
+ * only compare it, so a digest is enough.
+ */
+function accountFingerprint(session: CursorAuthSession): string {
+  return createHash('sha256').update(session.token.subject).digest('hex').slice(0, 12)
 }
 
 function result(
@@ -156,7 +168,11 @@ export async function fetchCursorRateLimits(
   }
   const session = readResult.session
   const source = usageSource(session)
-  const metadata = { source, credentialSource: session.source }
+  const metadata = {
+    source,
+    credentialSource: session.source,
+    authProvenance: accountFingerprint(session)
+  }
 
   try {
     const outcome = await fetchDashboardJson(USAGE_SUMMARY_URL, session, options.signal)

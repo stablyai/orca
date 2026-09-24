@@ -1178,6 +1178,10 @@
           "4d03dec2d0": "Read app interface trees and perform requested actions.",
           "6b5a2cd3a5": "Accessibility"
         },
+        "CursorAccountsSection": {
+          "signedOut": "Not signed in to Cursor",
+          "signedOutHelp": "In a terminal, run cursor-agent login, then click Refresh usage here."
+        },
         "EphemeralVmRuntimesSection": {
           "cleaned": "Cleaned up temporary VM runtime.",
           "cleanupFailedToast": "Couldn’t clean up temporary VM runtime.",

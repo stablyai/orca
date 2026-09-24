@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { mapCursorLegacyRequestQuota, mapCursorUsageSummary } from './cursor-usage-mapping'
+import {
+  mapCursorLegacyRequestQuota,
+  mapCursorUsageSummary,
+  parseCursorUsageSummary
+} from './cursor-usage-mapping'
 
 const CYCLE = {
   billingCycleStart: '2026-09-01T00:00:00.000Z',
@@ -101,6 +105,28 @@ describe('mapCursorUsageSummary', () => {
     })
     expect(seconds.monthly?.resetsAt).toBe(1_790_000_000_000)
     expect(millis.monthly?.resetsAt).toBe(1_790_000_000_000)
+  })
+
+  it('keeps the plan when a sibling pool arrives as null', () => {
+    // Why: the route sends `null` for an absent sub-object, and a stricter schema
+    // would drop the whole body — plan pools and billing cycle included.
+    const mapped = mapCursorUsageSummary(
+      parseCursorUsageSummary({
+        ...CYCLE,
+        membershipType: 'pro',
+        individualUsage: { plan: { enabled: true, totalPercentUsed: 40 }, onDemand: null }
+      })
+    )
+    expect(mapped.monthly?.usedPercent).toBe(40)
+    expect(mapped.planType).toBe('pro')
+  })
+
+  it('survives a null individualUsage block', () => {
+    const mapped = mapCursorUsageSummary(
+      parseCursorUsageSummary({ ...CYCLE, membershipType: 'free', individualUsage: null })
+    )
+    expect(mapped.planType).toBe('free')
+    expect(mapped.monthly).toBeNull()
   })
 
   it('returns nothing to publish for an empty payload', () => {

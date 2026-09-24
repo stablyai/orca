@@ -199,12 +199,23 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    // Why: the stale policy keeps a recent snapshot through a failed refresh, but
+    // a snapshot belonging to a different Cursor account must not survive the
+    // switch — the Accounts pane would name the new account beside the old
+    // account's figures. Only a known-and-changed identity clears it, so an
+    // errored refresh that reports no account still keeps its own last reading.
+    const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
+    const cursorAccount = cursor.usageMetadata?.authProvenance
+    const cursorAccountChanged =
+      previousCursorAccount !== undefined &&
+      cursorAccount !== undefined &&
+      previousCursorAccount !== cursorAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
-      cursor: this.applyStalePolicy(cursor, previousState.cursor)
+      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor)
     })
   }
 }

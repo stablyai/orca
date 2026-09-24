@@ -37,10 +37,13 @@ reports `isAuthenticated: true` with an access token that expired months ago.
 
 ## The usage endpoint
 
-There is **no documented individual-user usage API** — [Cursor's documented
-APIs](https://cursor.com/docs/api) are all team- or organization-scoped and need
-an Enterprise `crsr_` key. Orca reads the same dashboard route the Cursor web
-dashboard reads:
+There is **no documented individual-user usage API**. Cursor documents plenty of
+APIs for all plans — Cloud Agents, Origin, and the TypeScript/Python SDKs — but
+every documented *usage and billing* surface (Admin, Analytics) is team- or
+organization-scoped behind an Enterprise `crsr_` key, and none of them exposes a
+solo subscriber's own consumption. See [Cursor's API
+index](https://cursor.com/docs/api). So Orca reads the same dashboard route the
+Cursor web dashboard reads:
 
 - `GET https://cursor.com/api/usage-summary` with
   `Cookie: WorkosCursorSessionToken=<subject>::<jwt>`.

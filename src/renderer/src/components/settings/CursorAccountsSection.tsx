@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
@@ -38,12 +38,25 @@ export function CursorAccountsSection(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
+  // Why a generation counter: two usage updates can overlap, and the slower read
+  // would otherwise land last and repaint the pane with the older account.
+  const latestLoad = useRef(0)
+
   const loadStatus = useCallback(async (): Promise<void> => {
+    const generation = latestLoad.current + 1
+    latestLoad.current = generation
+    const apply = (next: CursorAccountStatus): void => {
+      if (latestLoad.current !== generation) {
+        return
+      }
+      setStatus(next)
+      setLoading(false)
+    }
     try {
-      setStatus(await window.api.cursorAccounts.getStatus())
+      apply(await window.api.cursorAccounts.getStatus())
     } catch (error) {
       console.error('Failed to load Cursor account status:', error)
-      setStatus({
+      apply({
         signedIn: false,
         email: null,
         displayName: null,
@@ -52,8 +65,6 @@ export function CursorAccountsSection(): React.JSX.Element {
         tokenFresh: false,
         error: error instanceof Error ? error.message : 'Unable to read Cursor sign-in'
       })
-    } finally {
-      setLoading(false)
     }
   }, [])
 
@@ -79,9 +90,18 @@ export function CursorAccountsSection(): React.JSX.Element {
   const pools = cursorUsage?.buckets ?? []
   const monthly = cursorUsage?.monthly ?? null
   // Why: hiding the row entirely leaves signed-in users with no explanation when
-  // Cursor reports no allowance — never let unknown usage read as healthy.
+  // Cursor reports no allowance or the refresh failed — never let unknown usage
+  // read as healthy, and never let a failed fetch render as an empty section.
   const unavailableReason =
-    signedIn && pools.length === 0 && !monthly && cursorUsage?.status === 'unavailable'
+    signedIn && pools.length === 0 && !monthly
+      ? cursorUsage?.status === 'unavailable' || cursorUsage?.status === 'error'
+        ? (cursorUsage.error ?? null)
+        : null
+      : null
+  // Why separate from the row above: a stale snapshot still renders its numbers,
+  // so the failure has to be said beside them rather than instead of them.
+  const staleUsageError =
+    signedIn && cursorUsage?.status === 'error' && (pools.length > 0 || monthly)
       ? (cursorUsage.error ?? null)
       : null
 
@@ -161,13 +181,13 @@ export function CursorAccountsSection(): React.JSX.Element {
               <p className="text-xs font-medium">
                 {translate(
                   'auto.components.settings.CursorAccountsSection.signedOut',
-                  'Not signed in to Cursor'
+                  'No Cursor sign-in found on this computer'
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.CursorAccountsSection.signedOutHelp',
-                  'In a terminal, run cursor-agent login, then click Refresh usage here.'
+                  'Sign in with Cursor IDE, or run cursor-agent login in a terminal, then click Refresh usage here.'
                 )}
               </p>
             </>
@@ -230,6 +250,15 @@ export function CursorAccountsSection(): React.JSX.Element {
                   'auto.components.settings.CursorAccountsSection.resets',
                   'Resets {{when}}',
                   { when: (monthly ?? pools[0])?.resetDescription ?? '' }
+                )}
+              </p>
+            ) : null}
+            {staleUsageError ? (
+              <p className="text-xs text-destructive">
+                {translate(
+                  'auto.components.settings.CursorAccountsSection.staleUsage',
+                  'Last known usage — the latest refresh failed: {{reason}}',
+                  { reason: staleUsageError }
                 )}
               </p>
             ) : null}

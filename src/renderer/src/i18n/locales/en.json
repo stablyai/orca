@@ -12202,7 +12202,8 @@
           "planTotal": "Plan",
           "resets": "Resets {{when}}",
           "usageLabel": "Usage",
-          "noAllowance": "Cursor reported no usage allowance for this account."
+          "noAllowance": "Cursor reported no usage allowance for this account.",
+          "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
         }
       },
       "right": {

@@ -459,6 +459,16 @@ const MERMAID_PACKAGE = 'node_modules/mermaid/'
  *
  *   modules        4221 -> 4219   (-2)
  *   local modules  1035 -> 1033   (-2)
+ *
+ * #22616 (`f0b3f44f10`) then added `src/shared/agent-session-launch-args.ts` and
+ * `src/shared/agent-session-surface-tab-id.ts`, which this route reaches through its session
+ * types. Two local modules. Like #22452 and #22301 above, it touched nothing under `mobile/`, so
+ * its own CI never ran this suite and main sat two over its pin until a later PR touching
+ * `src/shared/` made the suite run again. Re-measured on a clean `origin/main` worktree at
+ * `f0b3f44f10`, not on the branch that surfaced it.
+ *
+ *   modules        4219 -> 4221   (+2)
+ *   local modules  1033 -> 1035   (+2)
  */
 /** What the page enters this route through once the route is a switch with a `.web.tsx` sibling. */
 const ROUTE_ENTRY = [

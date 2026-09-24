@@ -15,8 +15,10 @@ export function createMiniMaxCredentialsApi(): NonNullable<
 }
 
 export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['cursorAccounts']> {
-  // Why: Cursor's session lives on the machine running Orca, so a web client
-  // reports signed-out rather than guessing at the host's local credential.
+  // Why an explanation and not a bare `signedIn: false`: Cursor's session lives on
+  // the machine running Orca, and this bridge cannot read it. The host may well be
+  // signed in — its usage meter still arrives over the rate-limit snapshot — so
+  // asserting "not signed in" here would contradict the meter beside it.
   return {
     getStatus: () =>
       Promise.resolve({
@@ -26,7 +28,7 @@ export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['curs
         credentialSource: null,
         planType: null,
         tokenFresh: false,
-        error: null
+        error: 'Cursor sign-in details are only readable on the computer running Orca.'
       })
   }
 }
