@@ -11,6 +11,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { NativeChatBackgroundTasksStatus } from '@/components/native-chat/NativeChatBackgroundTasksStatus'
+import { buildBackgroundTaskGroupsFromViews } from '@/components/native-chat/background-task-roster'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -569,5 +570,26 @@ describe('the chat strip from views', () => {
     expect(root.querySelector('ul[aria-label="Shell"]')?.textContent).not.toContain('npm run dev')
     const stopShell = root.querySelector('button[aria-label="Stop npm run dev"]')
     expect(stopShell?.hasAttribute('disabled')).toBe(true)
+  })
+})
+
+describe('one lifecycle word for a child, on the sidebar row and the strip header', () => {
+  it.each<[string, AgentChildWorkView[], string, string]>([
+    ['failed', [settled('failed')], 'blocked', 'blocked'],
+    ['cancelled', [settled('cancelled')], 'idle', 'idle'],
+    ['ended, outcome unknown', [settled('unknown')], 'idle', 'idle'],
+    ['finished', [settled('succeeded')], 'done', 'done'],
+    ['monitoring its own shell', [settled('succeeded'), OWNED_SHELL], 'working', 'monitoring'],
+    ['waiting', [view('child', { state: 'waiting' })], 'waiting', 'waiting']
+  ])('%s', (_name, children, sidebarState, headerState) => {
+    const [sidebar] = buildSubagentChildRows({
+      parentEntry: parentWith(children),
+      tab,
+      parentIsFresh: true
+    })
+    const [group] = buildBackgroundTaskGroupsFromViews(children)
+    // A CLI row carries monitoring as `working` plus its working mode; every other word is shared.
+    expect(sidebar.state).toBe(sidebarState)
+    expect(group.tasks[0].state).toBe(headerState)
   })
 })
