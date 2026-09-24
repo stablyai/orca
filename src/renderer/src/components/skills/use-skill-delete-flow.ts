@@ -43,6 +43,7 @@ function toRequest(skills: readonly DiscoveredSkill[]): SkillDeleteRequest {
       id: skill.id,
       directoryPath: skill.directoryPath,
       skillFilePath: skill.skillFilePath,
+      ...(skill.alternateSkillFiles ? { alternateSkillFiles: skill.alternateSkillFiles } : {}),
       name: skill.name,
       updatedAt: skill.updatedAt
     }))
