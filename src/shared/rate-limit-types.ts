@@ -7,12 +7,19 @@ export type RateLimitWindow = {
   resetsAt: number | null
   /** Human-readable reset description, e.g. "2:30 PM" or "Thu". */
   resetDescription: string | null
+  /** Provider-specific source window name when no standard duration exists. */
+  windowLabel?: string
 }
 
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
 
 export type RateLimitBucket = RateLimitWindow & {
   name: string
+  /** Stable provider/source identifier when available. */
+  id?: string
+  /** Optional provider-defined quota group metadata. */
+  groupName?: string
+  groupDescription?: string | null
 }
 
 export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
