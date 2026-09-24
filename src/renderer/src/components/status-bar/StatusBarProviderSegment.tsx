@@ -12,6 +12,7 @@ import { getUsageGroupShortLabel, groupUsageSections } from './usage-section-sel
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 
 function MiniBar({
   usedPct,
@@ -103,10 +104,12 @@ function GroupLabel({ groupName }: { groupName: string | undefined }): React.JSX
 
 function VerboseProviderUsage({
   p,
-  display
+  display,
+  now
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
+  now: number
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
     // Why: every grouped quota pool matters; only Gemini's ungrouped extras are filtered.
@@ -125,7 +128,7 @@ function VerboseProviderUsage({
                 {groupName ? (
                   <WindowLabel
                     w={bucket}
-                    label={formatRateLimitWindowChipLabel(bucket)}
+                    label={formatRateLimitWindowChipLabel(bucket, now)}
                     display={display}
                   />
                 ) : (
@@ -140,7 +143,7 @@ function VerboseProviderUsage({
         {visibleBuckets.length === 0 && p.session ? (
           <WindowLabel
             w={p.session}
-            label={formatRateLimitWindowChipLabel(p.session)}
+            label={formatRateLimitWindowChipLabel(p.session, now)}
             display={display}
           />
         ) : null}
@@ -153,14 +156,14 @@ function VerboseProviderUsage({
       ? {
           key: 'session',
           window: p.session,
-          label: formatRateLimitWindowChipLabel(p.session)
+          label: formatRateLimitWindowChipLabel(p.session, now)
         }
       : null,
     p.weekly
       ? {
           key: 'weekly',
           window: p.weekly,
-          label: formatRateLimitWindowChipLabel(p.weekly)
+          label: formatRateLimitWindowChipLabel(p.weekly, now)
         }
       : null,
     p.fableWeekly
@@ -175,7 +178,7 @@ function VerboseProviderUsage({
       ? {
           key: 'monthly',
           window: p.monthly,
-          label: formatRateLimitWindowChipLabel(p.monthly)
+          label: formatRateLimitWindowChipLabel(p.monthly, now)
         }
       : null
   ].filter((window): window is { key: string; window: RateLimitWindow; label: string } => {
@@ -207,6 +210,15 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+  // Why: labels below are remaining-time text, so they must re-render on the countdown
+  // boundary instead of waiting for an unrelated state update.
+  const now = useResetCountdownClock([
+    p?.session?.resetsAt,
+    p?.weekly?.resetsAt,
+    p?.fableWeekly?.resetsAt,
+    p?.monthly?.resetsAt,
+    ...(p?.buckets ?? []).map((bucket) => bucket.resetsAt)
+  ])
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -261,10 +273,10 @@ export function ProviderSegment({
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
-          <VerboseProviderUsage p={p} display={display} />
+          <VerboseProviderUsage p={p} display={display} now={now} />
         </>
       ) : (
-        getCompactUsageSections(p).map((section, index) => (
+        getCompactUsageSections(p, now).map((section, index) => (
           <React.Fragment key={section.groupName ?? ''}>
             {index > 0 ? <span className="text-muted-foreground">|</span> : null}
             <GroupLabel groupName={section.groupName} />

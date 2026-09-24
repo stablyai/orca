@@ -4,6 +4,16 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
+const mocks = vi.hoisted(() => ({
+  // Why Date.now default: the existing label tests build resetsAt from the wall clock, so the
+  // stub must track it; individual tests override with mockReturnValueOnce to pin the wiring.
+  useResetCountdownClock: vi.fn(() => Date.now())
+}))
+
+vi.mock('@/hooks/useResetCountdownClock', () => ({
+  useResetCountdownClock: mocks.useResetCountdownClock
+}))
+
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-icon={agent} />
 }))
@@ -157,5 +167,27 @@ describe('Antigravity status summary', () => {
     expect(remaining).toContain('20% left')
     expect(used).toMatch(/80% used.*(?:1h|2h)/)
     expect(remaining).toMatch(/20% left.*(?:1h|2h)/)
+  })
+
+  it('renders reset labels from the countdown clock, not render-time Date.now()', () => {
+    mocks.useResetCountdownClock.mockClear()
+    const clockNow = 1_000_000_000
+    mocks.useResetCountdownClock.mockReturnValueOnce(clockNow)
+    const markup = renderToStaticMarkup(
+      <ProviderSegment
+        p={{
+          ...antigravity,
+          buckets: [
+            { ...antigravity.buckets![0], usedPercent: 80, resetsAt: clockNow + 2 * 60 * 60_000 }
+          ]
+        }}
+        compact={false}
+        display="used"
+        mode="compact"
+      />
+    )
+
+    expect(markup).toContain('80% used 2h')
+    expect(mocks.useResetCountdownClock).toHaveBeenCalledOnce()
   })
 })
