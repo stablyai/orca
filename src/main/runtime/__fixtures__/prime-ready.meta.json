@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-09-21T14:45:01.886Z",
+  "platform": "darwin",
+  "command": [
+    "/opt/homebrew/bin/prime-agent",
+    "--daemon-socket",
+    "/tmp/prime-orca-capture-20260921.sock",
+    "--provider",
+    "bifrost",
+    "--model",
+    "deepseek-v4.1-flash"
+  ],
+  "cols": 100,
+  "rows": 32,
+  "note": "Prime 0.9.4 cold start; explicit bifrost deepseek-v4.1-flash; no prompt",
+  "exitCode": 129
+}

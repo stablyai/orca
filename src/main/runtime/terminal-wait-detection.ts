@@ -102,9 +102,32 @@ function findKnownReadyPromptIndex(normalized: string): number | null {
   const indexes = [
     findCodexReadyPromptIndex(normalized),
     findAntigravityReadyPromptIndex(normalized),
-    findCursorReadyPromptIndex(normalized)
+    findCursorReadyPromptIndex(normalized),
+    findPrimeReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
   return indexes.length > 0 ? Math.max(...indexes) : null
+}
+
+// Prime 0.9.5 keeps its footer while busy, so a visible spinner vetoes readiness.
+function findPrimeReadyPromptIndex(normalized: string): number | null {
+  const modernFooter = normalized.lastIndexOf('← manage')
+  if (modernFooter !== -1) {
+    if (/[⠁-⣿]/.test(normalized) || !/^\s*>/m.test(normalized)) {
+      return null
+    }
+    return /^← manage\s+[^—\s]+\s+·\s+[\d.km]+\s+\(\d+%\)/.test(normalized.slice(modernFooter))
+      ? modernFooter
+      : null
+  }
+  const footerIndex = normalized.lastIndexOf('← agents/resume')
+  if (footerIndex === -1 || !/model\s+[^—\s]/.test(normalized.slice(0, footerIndex))) {
+    return null
+  }
+  const footer = normalized.slice(footerIndex)
+  if (!/^← agents\/resume\s+[^—\s].*?\? for shortcuts/.test(footer)) {
+    return null
+  }
+  return /[⠁-⣿]/.test(footer) ? null : footerIndex
 }
 
 // Why: match the banner's last occurrence to skip the trust dialog's own "Cursor Agent" text; "→" is cursor-agent's persistent input prompt.

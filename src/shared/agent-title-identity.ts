@@ -123,6 +123,9 @@ function computeAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  if (titleHasAgentName(title, 'prime agent') || titleHasAgentName(title, 'prime-agent')) {
+    return 'Prime Agent'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }

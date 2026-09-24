@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentLabel } from './agent-title-identity'
+import { resolveTerminalTitleAgentType } from './terminal-title-agent-type'
 
 /**
  * Characterization of `getAgentLabel` before the identity refactor.
@@ -115,4 +116,13 @@ describe('getAgentLabel — characterization (pre-refactor)', () => {
       expect(getAgentLabel('agy · Gemini 3.7 Flash')).toBe('Antigravity')
     })
   })
+})
+
+describe('Prime title spelling', () => {
+  it.each(['⠋ prime-agent', '⠋ prime agent', 'prime-agent', 'Prime Agent'])(
+    'preserves Prime identity for %s', (title) => {
+      expect(getAgentLabel(title)).toBe('Prime Agent')
+      expect(resolveTerminalTitleAgentType(title)).toBe('prime-agent')
+    }
+  )
 })

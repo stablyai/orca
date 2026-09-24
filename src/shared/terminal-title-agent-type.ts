@@ -214,6 +214,9 @@ function computeAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  if (titleHasAgentName(title, 'prime agent') || titleHasAgentName(title, 'prime-agent')) {
+    return 'Prime Agent'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }
@@ -242,7 +245,8 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Droid: 'droid',
   Hermes: 'hermes',
   Pi: 'pi',
-  OMP: 'omp'
+  OMP: 'omp',
+  'Prime Agent': 'prime-agent'
 }
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {

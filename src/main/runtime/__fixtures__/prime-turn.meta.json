@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-09-21T14:45:56.085Z",
+  "platform": "darwin",
+  "command": [
+    "/opt/homebrew/bin/prime-agent",
+    "--daemon-socket",
+    "/tmp/prime-orca-turn-capture.sock",
+    "--provider",
+    "bifrost",
+    "--model",
+    "deepseek-v4.1-flash"
+  ],
+  "cols": 100,
+  "rows": 32,
+  "note": "Prime 0.9.4 one harmless turn; explicit model route",
+  "exitCode": 129
+}
