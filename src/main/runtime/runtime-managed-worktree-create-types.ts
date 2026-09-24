@@ -50,6 +50,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   createdWithAgent?: TuiAgent
   startupAgent?: TuiAgent
   startupLaunchPreferences?: AgentLaunchPreferences
+  /** `--account <id|email>` for a `startupAgent: 'claude'` launch; resolved before any create. */
+  startupClaudeAccount?: string
   startupPrompt?: string
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null

@@ -133,7 +133,7 @@ describe('runtime PTY spawn pinned to a Claude account', () => {
   }
 
   it('leaves a launch without --account byte-for-byte unchanged', async () => {
-    const prepareClaudeAuth = vi.fn(async () => ACTIVE_PREPARATION)
+    const prepareClaudeAuth = vi.fn(async (..._args: unknown[]) => ACTIVE_PREPARATION)
     const controller = registerRuntimeController(prepareClaudeAuth)
     const args = { cols: 80, rows: 24, worktreeId: 'wt-1', command: 'claude', env: { KEEP: '1' } }
 
