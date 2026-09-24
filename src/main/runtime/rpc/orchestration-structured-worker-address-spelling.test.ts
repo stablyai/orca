@@ -12,6 +12,7 @@ import {
 import { formatReadMessages } from './methods/orchestration/messaging/mailbox-message-receipt'
 import {
   createSessionCallerHarness,
+  idOf,
   orchestrationRequest,
   resultOf,
   SESSION_X,
@@ -57,7 +58,7 @@ describe('a structured worker reads as session:<id> wherever an agent reads mail
         )
       )
     )
-    const runId = String((created.run as { id: string }).id)
+    const runId = idOf(created.run)
     h.db.insertMessage({
       from: workerHandle,
       to: `run:${runId}`,
