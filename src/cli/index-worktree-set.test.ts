@@ -391,4 +391,62 @@ describe('orca cli worktree awareness', () => {
       noParent: false
     })
   })
+
+  it.each([
+    ['--unread', true],
+    ['--read', false]
+  ])('passes %s through worktree.set as isUnread', async (flag, isUnread) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_unread', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), isUnread }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', flag, '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ worktree: 'id:repo::/tmp/repo/child', isUnread })
+    )
+  })
+
+  it('leaves isUnread unchanged when neither --unread nor --read is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_comment', { worktree: buildWorktree('/tmp/repo/child', 'feature/child') })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--comment', 'hi', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock.mock.calls[0]?.[1]).toHaveProperty('isUnread', undefined)
+  })
+
+  it.each([
+    [['--unread', '--read'], 'Choose either --unread or --read'],
+    [['--read', 'yes'], '--read takes no value']
+  ])('rejects %j on worktree.set before RPC', async (flags, message) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', ...flags, '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(message)
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
 })

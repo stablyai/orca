@@ -141,7 +141,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--unread|--read] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
@@ -150,6 +150,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'linear-issue',
       'comment',
       'workspace-status',
+      'unread',
+      'read',
       'parent-worktree',
       'no-parent'
     ],
@@ -159,7 +161,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: [
       'orca worktree set --worktree active --linear-issue STA-335 --json',
-      'orca worktree set --worktree active --linear-issue null --json'
+      'orca worktree set --worktree active --linear-issue null --json',
+      'orca worktree set --worktree active --workspace-status in-review --unread --json'
     ]
   },
   {
