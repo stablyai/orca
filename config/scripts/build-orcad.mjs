@@ -57,7 +57,10 @@ const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
 // optional upstream. better-sqlite3 / keytar / cpu-features were externalized here
 // defensively and appear nowhere in the graph; listing them implied a shipping burden
 // that does not exist.
-const EXTERNAL = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
+// @number0/iroh is listed explicitly: napi-rs requires its prebuilt addon through a
+// bare platform package (@number0/iroh-darwin-arm64) whose `main` IS the .node file,
+// so the specifier never matches externalNativeAddons' /\.node$/ filter.
+const EXTERNAL = ['electron', 'node-pty', '@parcel/watcher', 'fsevents', '@number0/iroh']
 
 /** Why: the UMD build's relative dynamic requires do not bundle. Same fix build-relay.mjs uses. */
 const jsoncParserEsm = {

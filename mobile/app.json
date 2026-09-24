@@ -107,7 +107,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "buildReactNativeFromSource": true
+            "buildReactNativeFromSource": true,
+            "deploymentTarget": "17.5"
           },
           "android": {
             "usesCleartextTraffic": true

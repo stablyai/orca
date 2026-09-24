@@ -1,7 +1,7 @@
 import { hostAnsweredStatusProbe, hostStatusProbe } from './host-status-probe-operations'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 
-export type PairingCandidatePath = 'direct' | 'relay'
+export type PairingCandidatePath = 'direct' | 'relay' | 'iroh'
 
 export type PairingCandidate = {
   path: PairingCandidatePath
@@ -55,7 +55,13 @@ export function racePairingCandidates(
     function rejectIfFinished(): void {
       if (!settled && failures === candidates.length && successes.length === 0) {
         settled = true
-        reject(new Error('direct and relay pairing paths both failed'))
+        // Why: iroh hosts race alone; the direct/relay wording is pinned by frozen recordings.
+        const irohOnly = candidates.every((candidate) => candidate.path === 'iroh')
+        reject(
+          new Error(
+            irohOnly ? 'iroh pairing path failed' : 'direct and relay pairing paths both failed'
+          )
+        )
       }
     }
   })

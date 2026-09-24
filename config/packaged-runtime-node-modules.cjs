@@ -18,6 +18,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
+  '@number0/iroh',
   '@parcel/watcher',
   'electron-updater',
   'i18next',
@@ -186,18 +187,20 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
     visit(packageName)
   }
 
-  // Why: @parcel/watcher loads its native .node addon from a platform-specific
-  // optionalDependency (e.g. @parcel/watcher-linux-x64-glibc) that the
-  // dependencies graph above never reaches. Include the ones installed for the
-  // build's supported architectures; afterPack pruning trims non-target
-  // platform/architecture variants. Without this the packaged main bundle's import of
-  // '@parcel/watcher' resolves at runtime but throws loading its binary.
-  const parcelWatcherDir = packages.get('@parcel/watcher')
-  if (parcelWatcherDir) {
-    const parcelWatcherPackage = JSON.parse(
-      readFileSync(join(parcelWatcherDir, 'package.json'), 'utf8')
-    )
-    for (const optionalName of Object.keys(parcelWatcherPackage.optionalDependencies ?? {})) {
+  // Why: napi packages load their native .node addon from a platform-specific
+  // optionalDependency (e.g. @parcel/watcher-linux-x64-glibc,
+  // @number0/iroh-darwin-arm64) that the dependencies graph above never
+  // reaches. Include the ones installed for the build's supported
+  // architectures; afterPack pruning trims non-target platforms. Without this
+  // the packaged main bundle's import resolves at runtime but throws loading
+  // its binary.
+  for (const napiRootName of ['@parcel/watcher', '@number0/iroh']) {
+    const napiRootDir = packages.get(napiRootName)
+    if (!napiRootDir) {
+      continue
+    }
+    const napiRootPackage = JSON.parse(readFileSync(join(napiRootDir, 'package.json'), 'utf8'))
+    for (const optionalName of Object.keys(napiRootPackage.optionalDependencies ?? {})) {
       try {
         visit(optionalName)
       } catch {
@@ -473,6 +476,39 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
   }
 }
 
+const IROH_NAPI_PLATFORM_PREFIX_BY_PLATFORM = {
+  darwin: 'iroh-darwin-',
+  linux: 'iroh-linux-',
+  win32: 'iroh-win32-'
+}
+
+function prunePackagedIrohNapi(resourcesDir, electronPlatformName, electronArch) {
+  const scopeDir = join(resourcesDir, 'node_modules', '@number0')
+  if (!existsSync(scopeDir)) {
+    return
+  }
+  // Why: mirrors prunePackagedParcelWatcher — every installed platform
+  // subpackage ships in the copy step; each build only needs its own.
+  const keepPrefix = IROH_NAPI_PLATFORM_PREFIX_BY_PLATFORM[electronPlatformName]
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const targetPrefix = keepPrefix ? `${keepPrefix}${architecture}` : null
+  for (const entry of readdirSync(scopeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'iroh') {
+      continue
+    }
+    if (!entry.name.startsWith('iroh-')) {
+      continue
+    }
+    if (
+      targetPrefix &&
+      (entry.name === targetPrefix || entry.name.startsWith(`${targetPrefix}-`))
+    ) {
+      continue
+    }
+    rmSync(join(scopeDir, entry.name), { recursive: true, force: true })
+  }
+}
+
 // Why type declarations: they are compile-time only; the packaged app never resolves them.
 // Why source maps: they embed the original sources (megabytes for @linear/sdk alone) and
 // nothing in the packaged app turns on Node's source-map support, so they are never read.
@@ -595,6 +631,7 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   const architecture = normalizeElectronArchitecture(electronArch)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
+  prunePackagedIrohNapi(resourcesDir, electronPlatformName, architecture)
   // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
   prunePackagedZodSources(resourcesDir)
   prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
@@ -620,6 +657,7 @@ module.exports = {
   isPackagedExternalSpecifier,
   normalizeNodePtyWindowsArch,
   packageNameFromSpecifier,
+  prunePackagedIrohNapi,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,

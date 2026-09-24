@@ -125,3 +125,27 @@ describe('local-only mobile pairing', () => {
     ).rejects.toThrow('relay_disabled_for_device')
   })
 })
+
+describe('iroh mobile pairing', () => {
+  it('refuses Relay splices the same way local-only does', async () => {
+    const registry = {
+      getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),
+      getMobilePairingConnectionMode: () => 'iroh' as const
+    }
+    const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
+    Object.defineProperty(service, 'runtimeRpc', {
+      value: { getDeviceRegistry: () => registry }
+    })
+
+    await expect(service.getEndpoints(context({ transport: 'direct' }), {})).resolves.toEqual({
+      v: 1,
+      relay: null
+    })
+    await expect(
+      service.provisionRelay(context({ transport: 'direct' }), {
+        reqId: 'install-1',
+        newResumeTokenHash: 'A'.repeat(43)
+      })
+    ).rejects.toThrow('relay_disabled_for_device')
+  })
+})

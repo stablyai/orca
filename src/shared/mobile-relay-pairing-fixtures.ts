@@ -49,6 +49,24 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
       expected: { ...directOffer, relay }
     },
     {
+      name: 'optional iroh endpoint is preserved',
+      payload: {
+        ...directOffer,
+        scope: 'mobile',
+        iroh: { endpointId: 'a'.repeat(64) }
+      },
+      expected: {
+        ...directOffer,
+        scope: 'mobile',
+        iroh: { endpointId: 'a'.repeat(64) }
+      }
+    },
+    {
+      name: 'invalid iroh endpoint id is rejected',
+      payload: { ...directOffer, iroh: { endpointId: 'not-hex' } },
+      expected: null
+    },
+    {
       name: 'offer-level endpoints are stripped',
       payload: { ...directOffer, endpoints: [{ kind: 'relay' }] },
       expected: directOffer

@@ -19,6 +19,14 @@ const directOffer: PairingOffer = {
   deviceToken: 'device-token',
   publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 }
+const irohOffer: PairingOffer = {
+  ...directOffer,
+  iroh: {
+    endpointId: 'a'.repeat(64),
+    relayUrl: 'https://use1-1.relay.n0.iroh.network./',
+    directAddresses: ['192.168.1.10:52431']
+  }
+}
 const relayOffer: PairingOffer = {
   ...directOffer,
   relay: {
@@ -100,6 +108,7 @@ function dependencies(client: RpcClient, events: string[]) {
     connectDirect: vi.fn(
       (..._args: Parameters<typeof connect>) => (events.push('connect'), client)
     ),
+    connectIroh: vi.fn((): RpcClient | null => null),
     connectRelay: vi.fn(() => unavailableRelay),
     resolveInviteDirector: vi.fn(async () => {
       throw new Error('director unavailable')
@@ -206,6 +215,67 @@ describe('pre-profile pairing coordinator', () => {
       publicKeyB64: directOffer.publicKeyB64,
       lastConnected: now
     })
+  })
+
+  it('pairs an iroh offer over iroh only — no ws dial', async () => {
+    const events: string[] = []
+    const wsClient = fakeClient([])
+    const irohClient = fakeClient([success({ version: '1.0.0' })])
+    const deps = dependencies(wsClient, events)
+    deps.connectIroh.mockImplementation(() => (events.push('connect-iroh'), irohClient))
+
+    const attempt = startPreProfilePairing({
+      offer: irohOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(deps.connectDirect).not.toHaveBeenCalled()
+    expect(deps.connectIroh).toHaveBeenCalledWith(
+      expect.objectContaining({
+        desktopEndpointId: irohOffer.iroh!.endpointId,
+        dialHints: {
+          relayUrl: irohOffer.iroh!.relayUrl,
+          directAddresses: irohOffer.iroh!.directAddresses
+        },
+        deviceToken: irohOffer.deviceToken,
+        publicKeyB64: irohOffer.publicKeyB64
+      })
+    )
+    expect(deps.saveHost).toHaveBeenCalledWith(expect.objectContaining({ iroh: irohOffer.iroh }))
+    expect(events).toEqual(['connect-iroh', 'save-host'])
+  })
+
+  it('falls back to the ws dial when the iroh native module is unavailable', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ version: '1.0.0' })])
+    const deps = dependencies(client, events)
+
+    const attempt = startPreProfilePairing({
+      offer: irohOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(deps.connectIroh).toHaveBeenCalledOnce()
+    expect(events).toEqual(['connect', 'save-host'])
+  })
+
+  it('does not race iroh for relay offers (journal implies direct/relay paths)', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ version: '1.0.0' }), failure('method_not_found')])
+    const deps = dependencies(client, events)
+
+    const attempt = startPreProfilePairing({
+      offer: { ...relayOffer, iroh: irohOffer.iroh },
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(deps.connectIroh).not.toHaveBeenCalled()
   })
 
   it('journals before connecting and publishes only after authoritative direct install', async () => {

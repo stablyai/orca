@@ -7,6 +7,7 @@ export function createWebMobileApi(): Partial<PreloadApi> {
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
       getPairingQR: () => Promise.resolve({ available: false }),
+      getIrohStatus: () => Promise.resolve({ bound: false, endpointId: null }),
       getWindowsFirewallStatus: () => Promise.resolve({ supported: false }),
       repairWindowsFirewall: () => Promise.resolve({ ok: false, reason: 'unsupported' }),
       openWindowsNetworkSettings: () => Promise.resolve(false),

@@ -1,4 +1,5 @@
 import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
+import { isMobilePairingRelayDisabled } from '../../../shared/mobile-pairing-connection-mode'
 import type { MobilePairingConnectionContext, OrcaRuntimeRpcServer } from '../runtime-rpc'
 import type {
   DeviceCredentialInstalled,
@@ -161,10 +162,7 @@ export class DesktopRelayService {
     params: PairingGetEndpointsParams
   ): Promise<PairingGetEndpointsResult> {
     this.requireMobileDevice(context.deviceId)
-    if (
-      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
-      'local-only'
-    ) {
+    if (this.isRelayDisabledForDevice(context.deviceId)) {
       return { v: 1, relay: null }
     }
     return await this.withTransientDemand(`endpoints:${context.deviceId}`, async () => {
@@ -201,10 +199,7 @@ export class DesktopRelayService {
     params: PairingProvisionRelayParams
   ): Promise<DeviceCredentialInstalled> {
     this.requireMobileDevice(context.deviceId)
-    if (
-      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
-      'local-only'
-    ) {
+    if (this.isRelayDisabledForDevice(context.deviceId)) {
       throw new Error('relay_disabled_for_device')
     }
     return await this.withTransientDemand(`provision:${context.deviceId}`, async () => {
@@ -260,6 +255,12 @@ export class DesktopRelayService {
     if (this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)?.scope !== 'mobile') {
       throw new Error('mobile_device_not_found')
     }
+  }
+
+  // Why: local-only and iroh pairing modes must never receive Relay credentials.
+  private isRelayDisabledForDevice(deviceId: string): boolean {
+    const mode = this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(deviceId)
+    return mode != null && isMobilePairingRelayDisabled(mode)
   }
 
   private assertRelayHost(

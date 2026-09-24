@@ -1,3 +1,4 @@
+import { parseMobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
 import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
 import {
   mobileRelayMintFailureFromUnknown,
@@ -24,16 +25,20 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     // Why: STA-2370 — creating a mobile pairing offer is the user's explicit opt-in to LAN reach, so
     // widen the loopback listener before advertising its LAN endpoint in the QR. If the widen fails the
     // listener stays on loopback, so report unavailable rather than advertise a dead LAN endpoint.
-    try {
-      await this.ensureNetworkExposure()
-    } catch (error) {
-      console.error(
-        '[runtime] Network exposure failed while creating a mobile pairing offer:',
-        error
-      )
-      return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+    if (args.connectionMode !== 'iroh') {
+      try {
+        await this.ensureNetworkExposure()
+      } catch (error) {
+        console.error(
+          '[runtime] Network exposure failed while creating a mobile pairing offer:',
+          error
+        )
+        return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+      }
     }
-    if (args.connectionMode === 'local-only') {
+    // Why: modes that never mint Relay credentials skip the mint queue; the
+    // generation bump supersedes an in-flight Anywhere request the user left.
+    if (args.connectionMode === 'local-only' || args.connectionMode === 'iroh') {
       this.mobilePairingOfferGeneration += 1
       return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
     }
@@ -84,7 +89,9 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     generation: number
   ): Promise<MobilePairingOffer> {
     // Why: the renderer is outside the trust boundary, so only an explicit local-only value may suppress Relay provisioning.
-    const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
+    // Why: the renderer is outside the trust boundary — only known modes pass
+    // through; anything else (including a stale renderer's value) is Anywhere.
+    const connectionMode = parseMobilePairingConnectionMode(args.connectionMode)
     const pending = this.deviceRegistry?.getPendingDevice('mobile')
     // Why: connection policy is part of the credential, so rotate on any policy switch — an old-policy QR must not pair under the new one.
     const switchingPendingMode =
@@ -104,7 +111,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     const direct = this.createPairingOffer({
       ...args,
       rotate: args.rotate || switchingPendingMode,
-      scope: 'mobile'
+      scope: 'mobile',
+      includeIroh: connectionMode === 'iroh'
     })
     if (!direct.available) {
       return direct
@@ -124,6 +132,11 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
         this.discardPendingMobilePairingDevice(direct.deviceId)
       }
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
+    }
+    // Why: iroh mode is LAN + iroh.endpointId with no Relay block (the endpoint
+    // itself is the phone's off-LAN path).
+    if (connectionMode === 'iroh') {
+      return { ...direct, connectionMode: 'iroh' }
     }
     // Why: explicit LAN path never needs Relay; mint the direct-only offer as selected.
     if (connectionMode === 'local-only') {

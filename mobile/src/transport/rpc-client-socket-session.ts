@@ -34,6 +34,7 @@ type SocketSessionOptions = {
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
   onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
   onForcedClose: (session: RpcClientSocketSession) => void
+  createSocket?: (endpoint: string) => WebSocket
 }
 
 export class RpcClientSocketSession {
@@ -46,7 +47,10 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = new WebSocket(options.endpoint)
+    // Why: default WS for LAN/relay; iroh injects MobileIrohFramedSocket (same probe path).
+    this.socket = options.createSocket
+      ? options.createSocket(options.endpoint)
+      : new WebSocket(options.endpoint)
     this.attachHandlers()
     this.armConnectTimeout()
   }
