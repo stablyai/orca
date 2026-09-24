@@ -219,7 +219,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       (this as RuntimeCommandSurfaceHost<this>).cloneRepo(url, destination, hostId),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
-    notifyReposChanged: () => this.notifyReposChanged()
+    notifyReposChanged: () => this.notifyReposChanged(),
+    notifyWorktreeRenamed: (repoId, oldWorktreeId, newWorktreeId) =>
+      this.notifyWorktreeFolderRenamed(repoId, oldWorktreeId, newWorktreeId)
   })
 
   protected readonly projectGroups = new RuntimeProjectGroupController({

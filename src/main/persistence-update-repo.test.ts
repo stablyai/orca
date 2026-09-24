@@ -321,16 +321,55 @@ describe('Store', () => {
     })
   })
 
-  it('rejects repo-backed project host setup path changes', async () => {
+  it('rejects a raw repo-backed project host setup path write', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1', path: '/repo' }))
 
+    // Persistence stays the backstop: a path write that skipped the relocation would strand every
+    // `<repoId>::<path>` workspace id, so it must never land as a plain field update.
     expect(() =>
       store.updateProjectHostSetup({
         setupId: 'r1',
         updates: { path: '/other' }
       })
-    ).toThrow('Repo-backed project host setup paths must be changed by re-importing the project.')
+    ).toThrow('must be moved through a project relocation')
+  })
+
+  it('refuses a folder project git upgrade that would unlist its folder workspaces', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/repo', kind: 'folder' }))
+    store.setWorktreeMeta('r1::/repo::workspace:11111111-1111-1111-1111-111111111111', {
+      displayName: 'draft'
+    })
+
+    // Why: the `.git` upgrade watch already refuses this. A second kind writer that allowed it would
+    // do silently what the first one refuses.
+    expect(() => store.updateProjectHostSetup({ setupId: 'r1', updates: { kind: 'git' } })).toThrow(
+      /folder workspaces that a Git project cannot list/
+    )
+    expect(store.getRepo('r1')?.kind).toBe('folder')
+  })
+
+  it('upgrades a folder project with no extra folder workspaces', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/repo', kind: 'folder' }))
+    store.setWorktreeMeta('r1::/repo', { displayName: 'repo' })
+
+    store.updateProjectHostSetup({ setupId: 'r1', updates: { kind: 'git' } })
+
+    expect(store.getRepo('r1')?.kind).toBe('git')
+  })
+
+  it('still lets a git project become a folder project', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/repo', kind: 'git' }))
+    store.setWorktreeMeta('r1::/repo::workspace:11111111-1111-1111-1111-111111111111', {
+      displayName: 'draft'
+    })
+
+    store.updateProjectHostSetup({ setupId: 'r1', updates: { kind: 'folder' } })
+
+    expect(store.getRepo('r1')?.kind).toBe('folder')
   })
 
   it('deletes independent project host setup records without deleting the project', async () => {
