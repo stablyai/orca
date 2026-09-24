@@ -31,7 +31,8 @@ function request(
   terminal: string,
   promptRequestId: string,
   text: string,
-  waitSubmitMs?: number
+  waitSubmitMs?: number,
+  guarded = false
 ): RpcRequest {
   return {
     id: `rpc-${promptRequestId}`,
@@ -44,6 +45,7 @@ function request(
       enter: true,
       agentPrompt: true,
       waitSubmitMs,
+      ...(guarded ? { requireAgentStatus: 'sendable' } : {}),
       client: { id: 'orca-cli', type: 'desktop' }
     }
   }
@@ -146,25 +148,28 @@ describe('durable terminal prompt delivery receipts', () => {
     harness.db.close()
   })
 
-  it('replays after a dispatcher replacement without duplicate text or Enter', async () => {
-    vi.useFakeTimers()
-    const harness = await createHarness('codex', true)
-    const firstPromise = harness.dispatcher.dispatch(
-      request(harness.handle, 'crash-retry', 'preserve once')
-    )
-    await vi.runAllTimersAsync()
-    const first = await firstPromise
-    const writesAfterFirst = [...harness.writes]
-    const replacement = new RpcDispatcher({ runtime: harness.runtime, methods: TERMINAL_METHODS })
-    const replay = await replacement.dispatch(
-      request(harness.handle, 'crash-retry', 'preserve once')
-    )
+  it.each([false, true])(
+    'replays after dispatcher replacement without duplicate input (guarded=%s)',
+    async (guarded) => {
+      vi.useFakeTimers()
+      const harness = await createHarness('codex', true)
+      const firstPromise = harness.dispatcher.dispatch(
+        request(harness.handle, 'crash-retry', 'preserve once', undefined, guarded)
+      )
+      await vi.runAllTimersAsync()
+      const first = await firstPromise
+      const writesAfterFirst = [...harness.writes]
+      const replacement = new RpcDispatcher({ runtime: harness.runtime, methods: TERMINAL_METHODS })
+      const replay = await replacement.dispatch(
+        request(harness.handle, 'crash-retry', 'preserve once', undefined, guarded)
+      )
 
-    expect(first).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
-    expect(replay).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
-    expect(harness.writes).toEqual(writesAfterFirst)
-    harness.db.close()
-  })
+      expect(first).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
+      expect(replay).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
+      expect(harness.writes).toEqual(writesAfterFirst)
+      harness.db.close()
+    }
+  )
 
   it('keeps an ambiguous partial write pending and refuses to resend it', async () => {
     vi.useFakeTimers()
