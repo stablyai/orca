@@ -26,7 +26,10 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   return {
     DropdownMenu: ({ open, children }: { open: boolean; children?: React.ReactNode }) =>
       React_.createElement(OpenContext.Provider, { value: open }, children),
-    DropdownMenuContent: (props: { children?: React.ReactNode; onCloseAutoFocus?: (e: { preventDefault: () => void }) => void }) => {
+    DropdownMenuContent: (props: {
+      children?: React.ReactNode
+      onCloseAutoFocus?: (e: { preventDefault: () => void }) => void
+    }) => {
       menuContentProps.last = props
       return React_.useContext(OpenContext) ? passthrough({ children: props.children }) : null
     },

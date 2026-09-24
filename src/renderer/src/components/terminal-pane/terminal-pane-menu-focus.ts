@@ -32,24 +32,6 @@ export type ReclaimTerminalPaneFocusOptions = {
   scheduleRefocus?: TerminalImeInputContextRefocusScheduler
 }
 
-type ClassListCarrier = {
-  classList: {
-    contains: (token: string) => boolean
-  }
-}
-
-function hasClassList(value: unknown): value is ClassListCarrier {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'classList' in value &&
-    typeof value.classList === 'object' &&
-    value.classList !== null &&
-    'contains' in value.classList &&
-    typeof value.classList.contains === 'function'
-  )
-}
-
 function isNode(value: unknown): value is Node {
   return typeof Node !== 'undefined' && value instanceof Node
 }
@@ -69,9 +51,6 @@ function isNeutralOrTerminalOwnedFocus(
     return true
   }
   if (isNode(active) && pane.terminal.element?.contains?.(active)) {
-    return true
-  }
-  if (hasClassList(active) && active.classList.contains('xterm-helper-textarea')) {
     return true
   }
   return false
