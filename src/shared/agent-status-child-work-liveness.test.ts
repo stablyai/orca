@@ -61,8 +61,8 @@ describe('agentChildWorkLiveness', () => {
     )
   })
 
-  // A child's `blocked` is a failure, not a request for a human; neither it nor lost contact waits.
-  it('keeps a failed or unverifiable agent live without asking for a human', () => {
+  // A live `blocked` is not a request for a human; neither it nor lost contact waits.
+  it('keeps a blocked or unverifiable agent live without asking for a human', () => {
     for (const state of ['blocked', 'unverifiable'] as const) {
       expect(agentChildWorkLiveness([child({ state })])).toBe('working')
       expect(agentChildWorkLiveness([child({ kind: 'command', state })])).toBe('monitoring')

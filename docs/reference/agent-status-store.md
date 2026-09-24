@@ -249,8 +249,11 @@ reader does not mistake them for drift:
   main agent event overwrites the slot, so the row stops reading `waiting`
   while the child is still asking, and a second asking child replaces the
   first.
-- The structured lane has no per-child wait: a child's pending prompt makes
-  the session `attention`, which reads as the main agent's own `blocked`.
+- In the structured lane a child's pending prompt also makes the session
+  `attention`, which reads as the main agent's own `blocked` and outranks the
+  waiting arm. The child's own record still reads `waiting` (a Claude child
+  while a pending request names it, a Codex child from its thread status), so
+  the child row waits while the parent row reads `blocked`.
 - The Codex hook lane drops its roster on a root `Stop` when it tracks no
   child transcripts, so a still-running or still-asking child stops holding
   the row.

@@ -4,6 +4,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
+import { structuredAgentSessionAgentStatus } from '../../shared/structured-agent-session-agent-status'
 import { producer } from './claude-child-work-producer-harness.test-fixture'
 import {
   invokeCanUseTool,
@@ -131,6 +133,26 @@ describe('a Claude subagent waiting on a permission request', () => {
       state: 'waiting',
       operation: { toolName: 'Bash', input: 'touch c9-probe-fg.txt', basis: 'open' }
     })
+  })
+
+  it("feeds the parent row's fold a waiting child, under the session's own attention", async () => {
+    const harness = await producer()
+    const events = capturedScenario('fg-allow')
+    const request = events.findIndex((event) => event.frame.type === 'control_request')
+    for (const { frame } of events.slice(0, request)) {
+      harness.send({ ...frame, session_id: PROVIDER_SESSION_ID })
+    }
+    expect(agentChildWorkLiveness(harness.records())).toBe('working')
+    requestFromWire(harness.claude.connections[0]!, events[request]!.frame)
+    const childWork = harness.records()
+    expect(agentChildWorkLiveness(childWork)).toBe('waiting')
+    // The pending request is also the session's attention, which keeps its own `blocked`.
+    expect(structuredAgentSessionAgentStatus({ status: 'attention', childWork }).state).toBe(
+      'blocked'
+    )
+    expect(structuredAgentSessionAgentStatus({ status: 'working', childWork }).state).toBe(
+      'waiting'
+    )
   })
 
   it('goes back to working when the request is denied', async () => {
