@@ -257,6 +257,8 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           allowFailedArchiveHook,
           allowUnverifiedPtyStop,
           deleteBranch,
+          hasAutomationProvenance: removedMeta?.automationProvenance !== undefined,
+          workspaceStatus: removedMeta?.workspaceStatus,
           acquireWatcherRemoval: this.acquireFileWatcherRemoval,
           stopPtys: () =>
             this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {

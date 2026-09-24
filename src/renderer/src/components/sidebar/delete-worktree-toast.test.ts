@@ -36,6 +36,31 @@ describe('getDeleteWorktreeToastCopy', () => {
 
   // Why: Force Delete proceeds on a proven-live PTY too, so the copy must not describe
   // that as an unconfirmed exit — the user is killing a terminal Orca watched running.
+  it('names the leftover pid and offers kill plus retry for a finished worktree', () => {
+    expect(
+      toastCopyForRemovalError(
+        'auto-review',
+        'cannot delete because PID 4242 still running in this worktree'
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace auto-review',
+      description: 'cannot delete because PID 4242 still running in this worktree',
+      isDestructive: false
+    })
+    expect(
+      classifyWorktreeForceDeleteReason(
+        'cannot delete because PID 4242 still running in this worktree'
+      )
+    ).toBe('live-worktree-pid')
+    expect(
+      classifyWorktreeForceDeleteReason(
+        'cannot delete because PID 4242 still running in this worktree',
+        true,
+        true
+      )
+    ).toBeNull()
+  })
+
   it('names the running terminals when verification proved they are still live', () => {
     expect(
       toastCopyForRemovalError(

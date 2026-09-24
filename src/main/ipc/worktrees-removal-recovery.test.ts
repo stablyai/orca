@@ -255,6 +255,34 @@ describe('registerWorktreeHandlers', () => {
     }
   })
 
+  it('keeps workspace metadata when an orphaned directory is still on disk', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'orca-keep-meta-'))
+    const worktreePath = join(parent, 'feature-wt')
+    await mkdir(worktreePath, { recursive: true })
+    await writeFile(join(worktreePath, 'still-here.txt'), 'leak')
+    const worktreeId = `repo-1::${worktreePath}`
+    mockKnownFeatureWorktree(worktreePath)
+    removeWorktreeMock.mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${worktreePath}' is not a working tree`
+      })
+    )
+    getEffectiveHooksMock.mockReturnValue(null)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    try {
+      await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
+        /workspace record was kept/
+      )
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+      await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.not.toThrow(
+        /selector_not_found/
+      )
+    } finally {
+      await rm(parent, { recursive: true, force: true })
+    }
+  })
+
   it('prunes git worktree tracking when removing an orphaned worktree', async () => {
     mockKnownFeatureWorktree()
     const orphanError = Object.assign(new Error('git worktree remove failed'), {

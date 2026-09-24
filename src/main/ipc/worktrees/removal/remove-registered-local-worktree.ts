@@ -11,17 +11,9 @@ import {
 } from '../../../git/worktree'
 import { gitExecFileAsync } from '../../../git/runner'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
-import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
-} from '../../../local-worktree-filesystem'
 import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import {
-  canSafelyRemoveOrphanedWorktreeDirectory,
-  findRegisteredDeletableWorktree
-} from '../../../worktree-removal-safety'
+import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -50,6 +42,15 @@ import {
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-owner'
+import {
+  EMPTY_FINISHED_WORKTREE_FORCE_CLEANUP_PLAN,
+  errorIfOrphanDirectoryRemains,
+  rewriteUnstoppedPtyErrorForFinishedWorktree,
+  runLocalFinishedWorktreeForceCleanup,
+  settleOrphanedLocalWorktreeDirectory,
+  type FinishedWorktreeForceCleanupPlan
+} from '../../../worktree-finished-force-cleanup'
 
 export async function removeRegisteredLocalWorktree(
   context: WorktreeIpcContext,
@@ -115,13 +116,48 @@ export async function removeRegisteredLocalWorktree(
     runtime.acquireFileWatcherRemoval(canonicalWorktreePath)
   )
   let removalCompleted = false
+  let cleanupPlan: FinishedWorktreeForceCleanupPlan = EMPTY_FINISHED_WORKTREE_FORCE_CLEANUP_PLAN
   try {
     // Why: hold the watcher/terminal gate through Git and any recursive fallback so no late spawn recreates a native handle.
     // Linked-path deletion is destructive too, so PTYs must release every handle before Windows or WSL filesystem cleanup starts.
+    const removedMeta = resolveWorktreeRemovalMetadata(
+      store,
+      repoId,
+      args.worktreeId,
+      removalHostId
+    )
     await withWorktreeRemoveStageSpan('pty_sweep', 'local', async () => {
-      await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
-        allowUnverifiedStop: args.allowUnverifiedPtyStop
-      })
+      if (args.allowUnverifiedPtyStop) {
+        cleanupPlan = await runLocalFinishedWorktreeForceCleanup({
+          allowUnverifiedPtyStop: true,
+          worktreeId: args.worktreeId,
+          worktreePath: canonicalWorktreePath,
+          branch: refreshedRegisteredWorktree.branch,
+          repoPath: repo.path,
+          hasAutomationProvenance: removedMeta?.automationProvenance !== undefined,
+          workspaceStatus: removedMeta?.workspaceStatus,
+          localOptions: localWorktreeGitOptions
+        })
+      }
+      try {
+        await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
+          allowUnverifiedStop: args.allowUnverifiedPtyStop
+        })
+      } catch (error) {
+        if (!args.allowUnverifiedPtyStop) {
+          cleanupPlan = await runLocalFinishedWorktreeForceCleanup({
+            allowUnverifiedPtyStop: false,
+            worktreeId: args.worktreeId,
+            worktreePath: canonicalWorktreePath,
+            branch: refreshedRegisteredWorktree.branch,
+            repoPath: repo.path,
+            hasAutomationProvenance: removedMeta?.automationProvenance !== undefined,
+            workspaceStatus: removedMeta?.workspaceStatus,
+            localOptions: localWorktreeGitOptions
+          })
+        }
+        throw rewriteUnstoppedPtyErrorForFinishedWorktree(error, cleanupPlan)
+      }
     })
 
     // Why: preflight only ignored these paths, not mutated them; keep watcher installs fenced through Git removal.
@@ -162,30 +198,25 @@ export async function removeRegisteredLocalWorktree(
         console.warn(
           `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
         )
-        const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-        if (
-          await canSafelyRemoveOrphanedWorktreeDirectory(
-            toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
-            toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-            CLIENT_REMOVAL_HOME,
-            access.statPath,
-            access.readPath
-          )
-        ) {
-          await runtime.closeFileWatchersForRemoval(canonicalWorktreePath)
-          await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
-            () => {}
-          )
-        } else {
-          console.warn(
-            `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
-          )
-        }
+        const directorySettlement = await settleOrphanedLocalWorktreeDirectory({
+          worktreePath: canonicalWorktreePath,
+          repoPath: repo.path,
+          options: localWorktreeGitOptions,
+          closeWatchers: (path) => runtime.closeFileWatchersForRemoval(path)
+        })
         // Why: remove failed so git still tracks it (.git/worktrees/<name>); prune or the stale entry keeps its branch locked.
         await gitExecFileAsync(['worktree', 'prune'], {
           cwd: repo.path,
           ...localWorktreeGitOptions
         }).catch(() => {})
+        const kept = errorIfOrphanDirectoryRemains(
+          directorySettlement,
+          canonicalWorktreePath,
+          cleanupPlan
+        )
+        if (kept) {
+          throw kept
+        }
         await cleanupUnusedWorktreePushTargetRemote(
           repo.path,
           args.worktreeId,

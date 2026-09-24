@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { GitWorktreeInfo, Worktree } from './types'
+import { isLiveWorktreePidBlocker } from './finished-worktree-force-cleanup'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
@@ -16,6 +17,7 @@ export type WorktreeForceDeleteReason =
   | 'missing-registration'
   | 'unstopped-pty'
   | 'running-agent-session'
+  | 'live-worktree-pid'
 
 // Why: everything before this separator is the worktree id — a user-chosen filesystem path.
 // Only the detail after it is Orca's own wording, so verdict matchers anchor on the boundary
@@ -129,6 +131,11 @@ export function classifyWorktreeForceDeleteReason(
   // about whether the user has waived closing a live agent session. Only the waiver itself does.
   if (isRunningAgentSessionRemovalError(error)) {
     return allowUnverifiedPtyStop ? null : 'running-agent-session'
+  }
+  // Same placement: an ordinary confirmed delete already passes force, and that
+  // is not the explicit Kill + Retry for a finished worktree's leftover pid.
+  if (isLiveWorktreePidBlocker(error)) {
+    return allowUnverifiedPtyStop ? null : 'live-worktree-pid'
   }
   if (force) {
     return null

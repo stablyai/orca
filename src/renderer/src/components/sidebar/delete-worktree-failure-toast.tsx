@@ -29,6 +29,7 @@ function deleteWorktreeFailureToastId(worktreeId: string): string {
 function DeleteWorktreeFailureToastBody({
   description,
   canForceDelete,
+  forceDeleteReason,
   canWaiveArchiveHook,
   showViewChanges,
   onViewChanges,
@@ -38,6 +39,7 @@ function DeleteWorktreeFailureToastBody({
 }: {
   description?: string
   canForceDelete: boolean
+  forceDeleteReason: WorktreeForceDeleteReason | null
   canWaiveArchiveHook: boolean
   showViewChanges: boolean
   onViewChanges: () => void
@@ -71,7 +73,15 @@ function DeleteWorktreeFailureToastBody({
         ) : null}
         {canForceDelete ? (
           <Button type="button" variant="destructive" size="sm" onClick={forceDelete}>
-            {translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
+            {forceDeleteReason === 'live-worktree-pid'
+              ? translate(
+                  'auto.components.sidebar.delete.worktree.toast.killAndRetry',
+                  'Kill + Retry'
+                )
+              : translate(
+                  'auto.components.sidebar.delete.worktree.flow.2b20ce87b3',
+                  'Force Delete'
+                )}
           </Button>
         ) : null}
         {canWaiveArchiveHook ? (
@@ -117,6 +127,7 @@ export function showDeleteWorktreeFailureToast({
       <DeleteWorktreeFailureToastBody
         description={toastCopy.description}
         canForceDelete={canForceDelete}
+        forceDeleteReason={forceDeleteReason}
         canWaiveArchiveHook={canWaiveArchiveHook === true}
         showViewChanges={!isLockedWorktreeRemovalError(error) || hasKnownChanges === true}
         onViewChanges={onViewChanges}

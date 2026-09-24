@@ -20,17 +20,17 @@ import {
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from '../ipc/worktree-logic'
-import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
-} from '../local-worktree-filesystem'
 import { recoverLocalWindowsWorktreeRemoval } from '../local-worktree-removal-recovery'
-import {
-  canSafelyRemoveOrphanedWorktreeDirectory,
-  findRegisteredDeletableWorktree
-} from '../worktree-removal-safety'
+import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
+import {
+  EMPTY_FINISHED_WORKTREE_FORCE_CLEANUP_PLAN,
+  errorIfOrphanDirectoryRemains,
+  rewriteUnstoppedPtyErrorForFinishedWorktree,
+  runLocalFinishedWorktreeForceCleanup,
+  settleOrphanedLocalWorktreeDirectory,
+  type FinishedWorktreeForceCleanupPlan
+} from '../worktree-finished-force-cleanup'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 
@@ -48,6 +48,8 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   allowFailedArchiveHook: boolean
   allowUnverifiedPtyStop: boolean
   deleteBranch: boolean
+  hasAutomationProvenance?: boolean
+  workspaceStatus?: string | null
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
   stopPtys: () => Promise<void>
   closeWatchers: (path: string) => Promise<void>
@@ -131,8 +133,34 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   let removalResult: RemoveWorktreeResult | undefined
   const gate = await args.acquireWatcherRemoval(canonicalPath)
   let completed = false
+  let cleanupPlan: FinishedWorktreeForceCleanupPlan = EMPTY_FINISHED_WORKTREE_FORCE_CLEANUP_PLAN
   try {
-    await args.stopPtys()
+    const cleanupArgs = {
+      worktreeId: args.target.id,
+      worktreePath: canonicalPath,
+      branch: refreshed.branch,
+      repoPath: repo.path,
+      hasAutomationProvenance: args.hasAutomationProvenance === true,
+      workspaceStatus: args.workspaceStatus,
+      localOptions
+    }
+    if (args.allowUnverifiedPtyStop) {
+      cleanupPlan = await runLocalFinishedWorktreeForceCleanup({
+        ...cleanupArgs,
+        allowUnverifiedPtyStop: true
+      })
+    }
+    try {
+      await args.stopPtys()
+    } catch (error) {
+      if (!args.allowUnverifiedPtyStop) {
+        cleanupPlan = await runLocalFinishedWorktreeForceCleanup({
+          ...cleanupArgs,
+          allowUnverifiedPtyStop: false
+        })
+      }
+      throw rewriteUnstoppedPtyErrorForFinishedWorktree(error, cleanupPlan)
+    }
     if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
@@ -160,10 +188,19 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
         removalResult = recovered
         completed = true
       } else if (isOrphanedWorktreeError(error)) {
-        await cleanupOrphanedDirectory(repo, canonicalPath, localOptions, args.closeWatchers)
+        const directorySettlement = await settleOrphanedLocalWorktreeDirectory({
+          worktreePath: canonicalPath,
+          repoPath: repo.path,
+          options: localOptions,
+          closeWatchers: args.closeWatchers
+        })
         await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path, ...localOptions }).catch(
           () => {}
         )
+        const kept = errorIfOrphanDirectoryRemains(directorySettlement, canonicalPath, cleanupPlan)
+        if (kept) {
+          throw kept
+        }
         await cleanupPushTarget(args)
         args.finishRemoval(undefined, false, refreshed.head)
         completed = true
@@ -187,29 +224,6 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
     ...removalResult,
     ...(archiveHookOverride ? { archiveHookOverride } : {}),
     ...(warning ? { warning } : {})
-  }
-}
-
-async function cleanupOrphanedDirectory(
-  repo: Repo,
-  path: string,
-  options: LocalProjectWorktreeGitOptions,
-  closeWatchers: (path: string) => Promise<void>
-): Promise<void> {
-  const access = getLocalWorktreePathAccess(options)
-  if (
-    await canSafelyRemoveOrphanedWorktreeDirectory(
-      toLocalWorktreeRuntimePath(path, options),
-      toLocalWorktreeRuntimePath(repo.path, options),
-      CLIENT_REMOVAL_HOME,
-      access.statPath,
-      access.readPath
-    )
-  ) {
-    await closeWatchers(path)
-    await removeLocalWorktreePath(path, options).catch(() => {})
-  } else {
-    console.warn(`[worktrees] Refusing recursive cleanup for unproven worktree directory: ${path}`)
   }
 }
 

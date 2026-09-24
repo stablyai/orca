@@ -5,6 +5,7 @@ import {
   isProvenLiveStructuredSessionRemovalError,
   type WorktreeForceDeleteReason
 } from '../../../../shared/worktree/removal'
+import { readLiveWorktreePids } from '../../../../shared/worktree/finished-worktree-force-cleanup'
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string
@@ -49,6 +50,22 @@ export function getDeleteWorktreeToastCopy(
         description: translate(
           'auto.components.sidebar.delete.worktree.toast.0899ebdb28',
           'Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.'
+        ),
+        isDestructive: false
+      }
+    }
+    if (forceDeleteReason === 'live-worktree-pid') {
+      const pids = readLiveWorktreePids(error) ?? ''
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        description: translate(
+          'auto.components.sidebar.delete.worktree.toast.liveWorktreePid',
+          'cannot delete because PID {{pids}} still running in this worktree',
+          { pids }
         ),
         isDestructive: false
       }

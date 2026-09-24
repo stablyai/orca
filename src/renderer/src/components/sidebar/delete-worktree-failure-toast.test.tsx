@@ -90,6 +90,27 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(onForceDelete).toHaveBeenCalled()
   })
 
+  it('offers Kill + Retry when a finished worktree still has a running pid', () => {
+    const onForceDelete = vi.fn()
+    showDeleteWorktreeFailureToast({
+      error: 'cannot delete because PID 4242 still running in this worktree',
+      canForceDelete: true,
+      forceDeleteReason: 'live-worktree-pid',
+      onViewChanges: vi.fn(),
+      onForceDelete,
+      onDeleteAnyway: vi.fn(),
+      worktreeId: 'wt-1',
+      worktreeName: 'auto-review'
+    })
+
+    const body = renderToastBody('info')
+    expect(body.textContent).toContain(
+      'cannot delete because PID 4242 still running in this worktree'
+    )
+    clickButton(body, 'Kill + Retry')
+    expect(onForceDelete).toHaveBeenCalled()
+  })
+
   it('keeps non-forceable failures destructive without a force action', () => {
     const onViewChanges = vi.fn()
 
