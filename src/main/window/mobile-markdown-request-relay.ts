@@ -62,7 +62,7 @@ export async function requestMobileMarkdownFromRenderer(
       event: Electron.IpcMainEvent,
       response: RuntimeMobileMarkdownResponse
     ): void => {
-      if (event.sender !== webContents) {
+      if (mainWindow.isDestroyed() || event.sender !== webContents) {
         return
       }
       if (response.id !== id) {

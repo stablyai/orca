@@ -28,13 +28,15 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({
     children,
     disabled,
-    onSelect
+    onSelect,
+    ...rest
   }: {
     children?: ReactNode
     disabled?: boolean
     onSelect?: () => void
+    title?: string
   }) => (
-    <button type="button" disabled={disabled} onClick={() => onSelect?.()}>
+    <button type="button" disabled={disabled} onClick={() => onSelect?.()} {...rest}>
       {children}
     </button>
   ),
@@ -298,5 +300,18 @@ describe('SortableTabContextMenu', () => {
 
     expect(container.textContent).not.toContain('Move Tab to Split')
     expect(container.textContent).toContain('Split terminal right')
+  })
+
+  it('triggers onSetTabColor when a frame color option is clicked', () => {
+    const onSetTabColor = vi.fn()
+    const { container } = renderMenu({ onSetTabColor })
+
+    expect(container.textContent).toContain('Frame Color')
+    const blueButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.getAttribute('title')?.includes('Blue')
+    )
+    expect(blueButton).toBeTruthy()
+    act(() => blueButton?.click())
+    expect(onSetTabColor).toHaveBeenCalledWith('term-1', '#3b82f6')
   })
 })

@@ -23,6 +23,8 @@ import {
   TerminalPaneSshReconnectPortals
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import { markTerminalFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
+import { useAppStore } from '../../store'
 
 export function TerminalPaneSurface({
   controller
@@ -112,20 +114,50 @@ export function TerminalPaneSurface({
     worktreeId
   } = controller
 
+  const tabColor = useAppStore((state) => {
+    const tabs = state.tabsByWorktree[worktreeId]
+    return tabs?.find((t) => t.id === tabId)?.color ?? null
+  })
+
   return (
     <>
       <div
         ref={setContainerRef}
-        className="absolute inset-0 min-h-0 min-w-0"
+        className="absolute inset-0 min-h-0 min-w-0 transition-[box-shadow] duration-200"
         data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
-        style={terminalContainerStyle}
+        style={{
+          ...terminalContainerStyle,
+          ...(tabColor
+            ? {
+                boxShadow: `inset 0 0 0 2px ${tabColor}, inset 0 0 16px color-mix(in srgb, ${tabColor} 20%, transparent)`
+              }
+            : {})
+        }}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
+        onClickCapture={(event) => {
+          if (event.button === 0) {
+            const selection = window.getSelection()?.toString()
+            if (!selection) {
+              const manager = managerRef.current
+              if (manager) {
+                const targetPane =
+                  manager.getPanes().find((p) => p.container?.contains(event.target as Node)) ??
+                  manager.getActivePane() ??
+                  manager.getPanes()[0]
+                if (targetPane?.terminal) {
+                  targetPane.terminal.scrollToBottom()
+                  markTerminalFollowOutput(targetPane.terminal)
+                }
+              }
+            }
+          }
+        }}
         onDragOver={(event) => {
           if (
             event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
@@ -266,6 +298,10 @@ export function TerminalPaneSurface({
         onCopyPaneId={contextMenu.onCopyPaneId}
         canCopyAgentSessionId={menuAgentSessionId !== null}
         onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
+        tabColor={tabColor}
+        onSetTabColor={(color) => {
+          useAppStore.getState().setTabColor(tabId, color)
+        }}
       />
       <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
       {quickCommandEditorOpen ? (

@@ -23,69 +23,7 @@ import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortc
 import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
-
-const TAB_COLORS = [
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.20baa43c05', 'None')
-    },
-    value: null
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.cb3eadefd2', 'Blue')
-    },
-    value: '#3b82f6'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.c2d8b0991f', 'Purple')
-    },
-    value: '#a855f7'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.03cf6dab1a', 'Pink')
-    },
-    value: '#ec4899'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.620aec6729', 'Red')
-    },
-    value: '#ef4444'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.a47629b3cf', 'Orange')
-    },
-    value: '#f97316'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.69682e2ce4', 'Yellow')
-    },
-    value: '#eab308'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.be905e9b0a', 'Green')
-    },
-    value: '#22c55e'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.845576bed1', 'Teal')
-    },
-    value: '#14b8a6'
-  },
-  {
-    get label() {
-      return translate('auto.components.tab.bar.SortableTabContextMenu.7703990447', 'Gray')
-    },
-    value: '#9ca3af'
-  }
-] as const
+import { PRESET_TAB_COLORS } from './tab-colors'
 
 type SortableTabContextMenuProps = {
   tab: TerminalTab
@@ -161,7 +99,8 @@ export function SortableTabContextMenu({
           style={{ left: point.x, top: point.y }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS} sideOffset={0} align="start">
+      {open ? (
+        <DropdownMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS} sideOffset={0} align="start">
         <TerminalTabSplitMenuSection
           unifiedTabId={unifiedTabId}
           groupId={groupId}
@@ -235,16 +174,33 @@ export function SortableTabContextMenu({
           {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <div className="px-2 pt-1.5 pb-1">
-          <div className="text-xs font-medium text-muted-foreground mb-1.5">
-            {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
+          <div className="flex items-center justify-between text-xs font-medium text-muted-foreground mb-1.5">
+            <span>
+              {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Frame Color')}
+            </span>
+            <label
+              className="relative flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-dashed border-muted-foreground/60 hover:border-foreground overflow-hidden"
+              title="自訂色彩 (Custom Color)"
+            >
+              <span className="text-[9px] font-mono leading-none select-none text-muted-foreground">+</span>
+              <input
+                type="color"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                value={tab.color ?? '#3b82f6'}
+                onChange={(e) => {
+                  onSetTabColor(tab.id, e.target.value)
+                  onOpenChange(false)
+                }}
+              />
+            </label>
           </div>
           <div className="flex flex-wrap gap-2">
-            {TAB_COLORS.map((color) => {
+            {PRESET_TAB_COLORS.map((color) => {
               const isSelected = tab.color === color.value
               return (
                 <DropdownMenuItem
                   key={color.label}
-                  className={`relative h-4 w-4 min-w-4 p-0 rounded-full border ${
+                  className={`relative h-4 w-4 min-w-4 p-0 rounded-full border cursor-pointer ${
                     isSelected ? 'ring-1 ring-foreground/70 ring-offset-1 ring-offset-popover' : ''
                   } ${
                     color.value ? 'border-transparent' : 'border-muted-foreground/50 bg-transparent'
@@ -253,6 +209,7 @@ export function SortableTabContextMenu({
                   onSelect={() => {
                     onSetTabColor(tab.id, color.value)
                   }}
+                  title={color.label}
                 >
                   {color.value === null && (
                     <span className="absolute block h-px w-3 rotate-45 bg-muted-foreground/80" />
@@ -262,7 +219,8 @@ export function SortableTabContextMenu({
             })}
           </div>
         </div>
-      </DropdownMenuContent>
+        </DropdownMenuContent>
+      ) : null}
     </DropdownMenu>
   )
 }

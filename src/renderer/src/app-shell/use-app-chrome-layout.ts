@@ -22,6 +22,7 @@ export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 export function useAppChromeLayout() {
   const activeView = useAppStore((s) => s.activeView)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarCollapseMode = useAppStore((s) => s.sidebarCollapseMode)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -89,7 +90,7 @@ export function useAppChromeLayout() {
   // Why: useLayoutEffect fires before paint, so dispatching SYNC_FIT_PANES_EVENT reflows the terminal in the same frame as the width change — no wrongly-sized transient.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
-  }, [sidebarOpen, rightSidebarOpen])
+  }, [sidebarOpen, rightSidebarOpen, sidebarCollapseMode])
 
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
@@ -114,8 +115,11 @@ export function useAppChromeLayout() {
     settings?.showTitlebarAppName,
     showSidebar,
     leftTitlebarChromeLayout.isFloating,
-    sidebarOpen
+    sidebarOpen,
+    sidebarCollapseMode
   ])
+
+  const isSidebarRail = !sidebarOpen && sidebarCollapseMode === 'rail'
 
   return {
     activeView,
@@ -138,6 +142,8 @@ export function useAppChromeLayout() {
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
     sidebarOpen,
+    sidebarCollapseMode,
+    isSidebarRail,
     stackedSidebarOpen,
     // Why: the workbench stays mounted while hidden, so visibility tracks the same condition separately.
     terminalWorkbenchVisible: workspaceChromeActive,

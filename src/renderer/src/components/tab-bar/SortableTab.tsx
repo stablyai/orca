@@ -113,6 +113,16 @@ export default function SortableTab({
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
 
+  // Why: determine 1-based terminal index within the worktree for cross-terminal addressing and mentions.
+  const terminalIndex = useAppStore((s) => {
+    const tabs = s.tabsByWorktree?.[tab.worktreeId]
+    if (!tabs) {
+      return undefined
+    }
+    const idx = tabs.findIndex((t) => t.id === tab.id)
+    return idx !== -1 ? idx + 1 : undefined
+  })
+
   // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
   const tabAgent = useTabAgent(tab)
 
@@ -185,11 +195,20 @@ export default function SortableTab({
       data-pinned={isPinned ? 'true' : 'false'}
       // Why: DOM attribute lets E2E assert real selection state; a store-only check would miss render breaks (PR #1186 shipped in #1193).
       data-active={isActive ? 'true' : 'false'}
+      data-terminal-index={terminalIndex !== undefined ? String(terminalIndex) : undefined}
       data-agent-activity-status={activityStatus}
+      data-tab-color={tab.color ?? undefined}
       {...attributes}
       {...dragListeners}
       // Why: subtle amber wash flags unread activity at a glance, layered over the active highlight so it still reads selected.
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      style={
+        tab.color
+          ? {
+              backgroundColor: `color-mix(in srgb, ${tab.color} 10%, var(--card))`
+            }
+          : undefined
+      }
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -224,6 +243,13 @@ export default function SortableTab({
         }
       }}
     >
+      {tab.color && (
+        <span
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px] z-20"
+          style={{ backgroundColor: tab.color }}
+          aria-hidden
+        />
+      )}
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {showUnreadActivity && (
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
@@ -236,6 +262,24 @@ export default function SortableTab({
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
       />
+      {terminalIndex !== undefined && !isEditing && (
+        <span
+          data-testid="tab-terminal-index"
+          data-terminal-index={String(terminalIndex)}
+          className="mr-1 inline-flex items-center rounded px-1 py-0.5 text-[10px] font-mono font-medium text-muted-foreground bg-muted/60"
+          style={
+            tab.color
+              ? {
+                  color: tab.color,
+                  backgroundColor: `color-mix(in srgb, ${tab.color} 15%, transparent)`,
+                  boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tab.color} 40%, transparent)`
+                }
+              : undefined
+          }
+        >
+          #{terminalIndex}
+        </span>
+      )}
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}

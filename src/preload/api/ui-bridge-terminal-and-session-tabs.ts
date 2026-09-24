@@ -11,6 +11,7 @@ import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
+import type { A2ALinkEvent } from '../../shared/terminal-a2a-link'
 import type { PreloadApi } from '../api-types'
 
 export const uiTerminalAndSessionTabsApi = {
@@ -216,5 +217,13 @@ export const uiTerminalAndSessionTabsApi = {
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)
     return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
+  },
+  onA2ALink: (callback: (data: A2ALinkEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: A2ALinkEvent) => callback(data)
+    ipcRenderer.on('terminal:a2a-link', listener)
+    return () => ipcRenderer.removeListener('terminal:a2a-link', listener)
+  },
+  sendA2ALink: (data: A2ALinkEvent): Promise<{ ok: boolean }> => {
+    return ipcRenderer.invoke('terminal:a2a-link', data)
   }
 } satisfies Partial<PreloadApi['ui']>

@@ -52,7 +52,11 @@ export async function requestTerminalTabCloseFromRenderer(
     const onResponse = (event: Electron.IpcMainEvent, response: TerminalTabCloseResponse): void => {
       // Why: request IDs are visible to renderer code; only the selected main
       // window may commit or reject its lifecycle transaction.
-      if (event.sender !== webContents || response.requestId !== requestId) {
+      if (
+        mainWindow.isDestroyed() ||
+        event.sender !== webContents ||
+        response.requestId !== requestId
+      ) {
         return
       }
       if (response.error) {

@@ -120,9 +120,12 @@ export type UiViewHistory =
 export type UISliceCore = {
   sidebarOpen: boolean
   sidebarWidth: number
+  sidebarCollapseMode: 'rail' | 'hidden'
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
+  setSidebarCollapseMode: (mode: 'rail' | 'hidden') => void
+  toggleSidebarCollapseMode: () => void
   agentSendPopoverTargetMode: AgentSendPopoverTargetMode | null
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void

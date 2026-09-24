@@ -12,7 +12,10 @@ import watercolorIcon from '../../resources/app-icons/orca-watercolor.png?asset'
 import watercolorMacDockIcon from '../../resources/app-icons/orca-watercolor.png?asset&asarUnpack'
 import blueIcon from '../../resources/app-icons/orca-blue.png?asset'
 import blueMacDockIcon from '../../resources/app-icons/orca-blue.png?asset&asarUnpack'
+import oagentPurpleIcon from '../../resources/app-icons/oagent-purple.png?asset'
+import oagentPurpleMacDockIcon from '../../resources/app-icons/oagent-purple.png?asset&asarUnpack'
 import { normalizeAppIconId, type AppIconId } from '../shared/app-icon'
+import { isOrcagentProcess } from './startup/orcagent-shared-settings'
 
 const APP_ICON_PATHS = {
   classic: is.dev ? classicDevIcon : classicIcon,
@@ -74,7 +77,11 @@ let macDockIconPersistenceGeneration = 0
 let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
-  return APP_ICON_PATHS[normalizeAppIconId(value)]
+  const iconId = normalizeAppIconId(value)
+  if (iconId === 'classic' && isOrcagentProcess()) {
+    return oagentPurpleIcon
+  }
+  return APP_ICON_PATHS[iconId]
 }
 
 export function createAppIconImage(value: unknown): Electron.NativeImage {
@@ -278,7 +285,11 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
       return
     }
     if (iconId === 'classic') {
-      await clearMacCustomIconMetadata(execFile, appBundlePath)
+      if (isOrcagentProcess()) {
+        await runMacCustomIconCommand(execFile, appBundlePath, oagentPurpleMacDockIcon)
+      } else {
+        await clearMacCustomIconMetadata(execFile, appBundlePath)
+      }
       return
     }
     // Why: a stopped app's Dock tile is resolved from Finder metadata, not

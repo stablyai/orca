@@ -72,6 +72,7 @@ export function registerRuntimeWindowLifecycle(
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
+        const targetWebContents = mainWindow.webContents
         const expectedIdentity = opts.expectedProcessIdentity
           ? opts.tabId && opts.leafId
             ? { worktreeId, tabId: opts.tabId, leafId: opts.leafId, ptyId: opts.ptyId }
@@ -87,7 +88,11 @@ export function registerRuntimeWindowLifecycle(
         }, 10_000)
         const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
-          if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
+          if (
+            mainWindow.isDestroyed() ||
+            event.sender !== targetWebContents ||
+            reply.requestId !== requestId
+          ) {
             return
           }
           clearTimeout(timer)

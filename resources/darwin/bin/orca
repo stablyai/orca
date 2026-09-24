@@ -13,13 +13,28 @@ function app_realpath() {
 }
 
 APP_PATH="$(app_realpath "${BASH_SOURCE[0]}")"
+if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+	if [ -d "/Applications/Oagent.app" ]; then
+		APP_PATH="/Applications/Oagent.app"
+	elif [ -d "/Applications/Orcagent.app" ]; then
+		APP_PATH="/Applications/Orcagent.app"
+	elif [ -d "/Applications/Orca.app" ]; then
+		APP_PATH="/Applications/Orca.app"
+	fi
+fi
 if [ -z "$APP_PATH" ]; then
 	echo "Unable to determine Orca.app path from symlink: ${BASH_SOURCE[0]}"
 	exit 1
 fi
 
 CONTENTS="$APP_PATH/Contents"
-ELECTRON="$CONTENTS/MacOS/Orca"
+if [ -x "$CONTENTS/MacOS/Oagent" ]; then
+	ELECTRON="$CONTENTS/MacOS/Oagent"
+elif [ -x "$CONTENTS/MacOS/Orcagent" ]; then
+	ELECTRON="$CONTENTS/MacOS/Orcagent"
+else
+	ELECTRON="$CONTENTS/MacOS/Orca"
+fi
 # Why: Orca packages the CLI entrypoint outside app.asar so the public shell
 # command can execute it directly with ELECTRON_RUN_AS_NODE, mirroring VS Code's
 # launcher model instead of requiring a separate npm-distributed binary.

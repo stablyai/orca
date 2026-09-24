@@ -49,6 +49,14 @@ vi.mock('../../resources/app-icons/orca-blue.png?asset&asarUnpack', () => ({
   default: 'blue-icon-unpacked'
 }))
 
+vi.mock('../../resources/app-icons/oagent-purple.png?asset', () => ({
+  default: 'oagent-purple-icon'
+}))
+
+vi.mock('../../resources/app-icons/oagent-purple.png?asset&asarUnpack', () => ({
+  default: 'oagent-purple-icon-unpacked'
+}))
+
 import { applyAppIcon, getAppIconPath, persistMacDockIcon } from './app-icon'
 
 function waitForQueuedPersistence(): Promise<void> {
@@ -447,5 +455,37 @@ describe('app icon selection', () => {
     )
 
     warnSpy.mockRestore()
+  })
+
+  it('resolves and persists oagent purple icon when running as Oagent', async () => {
+    vi.stubEnv('ORCA_PRODUCT_NAME', 'Oagent')
+    expect(getAppIconPath('classic')).toBe('oagent-purple-icon')
+
+    const execFile = vi.fn((_file, _args, _options, callback) => {
+      callback(null)
+      return { kill: vi.fn(), once: vi.fn() }
+    })
+
+    persistMacDockIcon('classic', {
+      appBundlePath: '/Applications/Oagent.app',
+      execFile,
+      isDevApp: false,
+      platform: 'darwin'
+    })
+
+    await waitForQueuedPersistence()
+
+    expect(execFile).toHaveBeenCalledWith(
+      '/usr/bin/osascript',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_APP_BUNDLE_PATH: '/Applications/Oagent.app',
+          ORCA_APP_ICON_PATH: 'oagent-purple-icon-unpacked'
+        })
+      }),
+      expect.any(Function)
+    )
+    vi.unstubAllEnvs()
   })
 })

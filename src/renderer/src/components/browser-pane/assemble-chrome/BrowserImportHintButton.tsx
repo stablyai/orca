@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Import } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, Import } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { Button } from '@/components/ui/button'
+import { webviewRegistry } from '../host-guest/webview-registry'
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import {
@@ -105,12 +106,50 @@ export function BrowserImportHintButton({
           ),
           result
         )
+        // Why: reload open webviews so newly imported session cookies take effect immediately
+        webviewRegistry.forEach((webview) => {
+          try {
+            webview.reload()
+          } catch {
+            // best-effort reload
+          }
+        })
         return
       }
       toast.error(result.reason)
     },
     [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser]
   )
+
+  // Why: fetch detected browsers proactively so local cookies can be imported without manual triggers
+  useEffect(() => {
+    void fetchDetectedBrowsers()
+  }, [fetchDetectedBrowsers])
+
+  const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const currentProfile = useMemo(
+    () => browserSessionProfiles?.find((p) => p.id === effectiveProfileId),
+    [browserSessionProfiles, effectiveProfileId]
+  )
+
+  const autoImportAttemptedRef = useRef(false)
+  useEffect(() => {
+    if (autoImportAttemptedRef.current || !detectedBrowsersLoaded || detectedBrowsers.length === 0) {
+      return
+    }
+    // If this profile has no imported cookies, automatically import from the primary detected local browser
+    if (currentProfile && !currentProfile.source && browserSessionImportState?.status !== 'importing') {
+      autoImportAttemptedRef.current = true
+      const primary = detectedBrowsers[0]
+      void handleImportFromBrowser(primary.family, primary.selectedProfile)
+    }
+  }, [
+    detectedBrowsersLoaded,
+    detectedBrowsers,
+    currentProfile,
+    browserSessionImportState,
+    handleImportFromBrowser
+  ])
 
   const handleImportFromFile = useCallback(async (): Promise<void> => {
     setOpen(false)
@@ -165,22 +204,45 @@ export function BrowserImportHintButton({
 
   return (
     <Popover modal={false} open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
+      <div className="inline-flex items-center rounded-full bg-secondary text-secondary-foreground shadow-sm">
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           size="sm"
-          className="h-7 shrink-0 rounded-full px-2.5 text-xs"
+          className="h-7 rounded-l-full px-2 text-xs hover:bg-muted font-medium"
           aria-label={translate(
             'auto.components.browser.pane.BrowserImportHintButton.4f5ffaa6a1',
             'Import browser data'
           )}
           data-contextual-tour-target="browser-import-hint"
+          disabled={browserSessionImportState?.status === 'importing'}
+          onClick={async (e) => {
+            e.stopPropagation()
+            if (detectedBrowsers.length > 0) {
+              const primary = detectedBrowsers[0]
+              await handleImportFromBrowser(primary.family, primary.selectedProfile)
+            } else {
+              setOpen(true)
+            }
+          }}
         >
-          <Import className="size-3.5" />
-          {translate('auto.components.browser.pane.BrowserImportHintButton.b24fef25be', 'Import')}
+          <Import className="size-3.5 mr-1" />
+          {browserSessionImportState?.status === 'importing'
+            ? 'Syncing…'
+            : translate('auto.components.browser.pane.BrowserImportHintButton.b24fef25be', 'Import')}
         </Button>
-      </PopoverTrigger>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-1.5 rounded-r-full hover:bg-muted border-l border-border/40"
+            aria-label="Import options"
+          >
+            <ChevronDown className="size-3" />
+          </Button>
+        </PopoverTrigger>
+      </div>
       <PopoverContent align="end" side="bottom" sideOffset={6} className="w-80 p-3">
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -198,6 +260,26 @@ export function BrowserImportHintButton({
               )}
             </p>
           </div>
+
+          {detectedBrowsers.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              className="w-full text-xs"
+              disabled={browserSessionImportState?.status === 'importing'}
+              onClick={() => {
+                const primary = detectedBrowsers[0]
+                void handleImportFromBrowser(primary.family, primary.selectedProfile)
+              }}
+            >
+              <Import className="size-3.5 mr-1.5" />
+              {translate(
+                'auto.components.browser.pane.BrowserImportHintButton.0c6d254eca',
+                'From {{value0}}',
+                { value0: detectedBrowsers[0].label }
+              )}
+            </Button>
+          )}
 
           <div className="flex items-center gap-3">
             <DropdownMenu modal={false} open={importMenuOpen} onOpenChange={setImportMenuOpen}>

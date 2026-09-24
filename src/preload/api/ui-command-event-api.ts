@@ -1,4 +1,5 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { A2ALinkEvent } from '../../shared/terminal-a2a-link'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
@@ -245,4 +246,6 @@ export type UiCommandEventApi = {
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void
+  onA2ALink: (callback: (data: A2ALinkEvent) => void) => () => void
+  sendA2ALink: (data: A2ALinkEvent) => Promise<{ ok: boolean }>
 }

@@ -3,6 +3,7 @@ import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
 import { resolveOpenedMarkdownDocuments } from './os-opened-markdown-files'
+import { registerTerminalA2AHandlers } from '../ipc/terminal-a2a'
 
 export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
@@ -67,4 +68,5 @@ export function registerMainProcessIpcHandlers(): void {
       logStartupMilestone(event, details && typeof details === 'object' ? details : {})
     }
   )
+  registerTerminalA2AHandlers({ getRuntime: () => state.runtime })
 }
