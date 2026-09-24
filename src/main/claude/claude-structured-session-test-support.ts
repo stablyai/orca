@@ -314,12 +314,12 @@ export function invokeCanUseTool(
     requestId,
     toolUseID,
     signal: extra.signal ?? new AbortController().signal,
-    ...(extra.suggestions ? { suggestions: extra.suggestions } : {}),
-    ...(extra.agentID ? { agentID: extra.agentID } : {})
+    ...(extra.suggestions ? { suggestions: extra.suggestions } : {})
   } as unknown as Parameters<NonNullable<ClaudeStreamJsonConnectionHandlers['canUseTool']>>[2]
+  const asked = extra.agentID ? { ...options, agentID: extra.agentID } : options
   let done = false
   const promise = Promise.resolve(
-    connection.handlers.canUseTool?.(toolName, extra.input ?? {}, options)
+    connection.handlers.canUseTool?.(toolName, extra.input ?? {}, asked)
   ).finally(() => {
     done = true
   })
