@@ -49,7 +49,11 @@ export function normalizeHookPayload(
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
-    hookPayloadRecord.hookEventName
+    hookPayloadRecord.hookEventName ??
+    // Why jcode only: its payload names the lifecycle point `event`, and it is posted
+    // verbatim through the shared transport rather than re-stated as a form field.
+    // Scoped so another provider's unrelated `event` key cannot become an event name.
+    (source === 'jcode' ? hookPayloadRecord.event : undefined)
   // Codex child hooks expose the child's session_id on the parent's pane.
   const providerSession =
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
@@ -149,7 +153,7 @@ export function normalizeHookPayload(
     extractedPrompt
   })
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent') &&
+    (source === 'pi' || source === 'prime-agent' || source === 'jcode') &&
     eventName === 'session_start' &&
     providerSession !== null
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.

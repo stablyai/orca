@@ -12,6 +12,7 @@ import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
+import { parseJcodeSessionContent } from './session-scanner-jcode-parser'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import {
@@ -100,6 +101,15 @@ export function remoteSessionSources(
     ),
     remoteDevinSource(remoteHome, hostPlatform),
     remoteDevinSource(remoteHome, hostPlatform, 'agent_logs'),
+    source(
+      'jcode',
+      remoteHome,
+      hostPlatform,
+      ['.jcode', 'sessions'],
+      ['.json'],
+      parseJcodeSessionContent,
+      (path) => remotePathSegments(path).pop()?.startsWith('session_') === true
+    ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
     {
       ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),

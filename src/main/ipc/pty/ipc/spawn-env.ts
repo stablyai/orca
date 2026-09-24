@@ -1,9 +1,14 @@
+import { mkdirSync } from 'node:fs'
 import {
   isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey
 } from '../../../../shared/stable-pane-id'
 import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
+import {
+  buildJcodeRuntimeDirEnv,
+  JCODE_RUNTIME_DIR_ENV_KEY
+} from '../../../../shared/jcode-runtime-dir'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
@@ -12,6 +17,7 @@ import {
   CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
   hasClaudeAuthEnvConflict
 } from '../../../claude-accounts/environment'
+import { prewarmJcodeDaemon } from '../../../jcode/daemon-prewarm'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
@@ -136,6 +142,43 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     delete ctx.baseEnv.ORCA_TAB_ID
     delete ctx.baseEnv.ORCA_WORKTREE_ID
     delete ctx.baseEnv.ORCA_AGENT_LAUNCH_TOKEN
+  }
+  // Why: jcode runs one server/client daemon per runtime dir, so a per-pane
+  // dir keeps every PTY on its own daemon (hooks inherit the pane key instead
+  // of the first pane's). Local unix sockets only, and only when the pane key
+  // survives into the spawn env (it is deleted in the else branch above).
+  if (ctx.baseEnv && ctx.stablePaneKey && !args.connectionId) {
+    const jcodeEnv = buildJcodeRuntimeDirEnv(ctx.stablePaneKey)
+    if (jcodeEnv) {
+      // Why: LocalPtyProvider.spawn creates the dir async; daemon-host spawns
+      // skip that provider, so ensure sync here — an extra await before
+      // provider.spawn would reorder the pane-spawn reservation race.
+      let runtimeDirReady = true
+      if (ctx.isDaemonHostSpawn) {
+        try {
+          mkdirSync(jcodeEnv[JCODE_RUNTIME_DIR_ENV_KEY], { recursive: true })
+        } catch {
+          // Why non-fatal: this dir is stamped on every local pane, so an EACCES on
+          // a shared /tmp/orca-jcode or a read-only TMPDIR would stop a plain shell
+          // from opening. Without it jcode falls back to its own default daemon.
+          runtimeDirReady = false
+        }
+      }
+      if (runtimeDirReady) {
+        Object.assign(ctx.baseEnv, jcodeEnv)
+        // Why here too: daemon-host spawns never reach LocalPtyProvider.spawn, so
+        // without this the pre-warm — the whole point of which is to beat jcode's
+        // 5s socket budget on a cold runtime dir — would not fire for those panes.
+        if (ctx.isDaemonHostSpawn) {
+          prewarmJcodeDaemon({
+            launchAgent: args.launchAgent,
+            runtimeDir: jcodeEnv[JCODE_RUNTIME_DIR_ENV_KEY],
+            cwd: args.cwd,
+            env: ctx.baseEnv
+          })
+        }
+      }
+    }
   }
   ctx.validatedPaneKey = ctx.stablePaneKey
   // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.

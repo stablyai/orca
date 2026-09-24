@@ -147,6 +147,37 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Jcode run generation with an argv prompt', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'jcode',
+        model: 'default'
+      },
+      'name this branch'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'jcode',
+        // --tool-profile none: the prompt is a staged patch, and jcode's default
+        // profile would expose shell/read/write/MCP to it.
+        args: [
+          '--no-update',
+          '--quiet',
+          '--no-selfdev',
+          '--tool-profile',
+          'none',
+          'run',
+          '--json',
+          'name this branch'
+        ],
+        stdinPayload: null,
+        label: 'Jcode'
+      }
+    })
+  })
+
   it('allows discovered dynamic models that are not in the seed catalog', () => {
     const result = planCommitMessageGeneration(
       {

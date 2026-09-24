@@ -45,6 +45,7 @@ export const AGENT_KIND_VALUES = [
   'grok',
   'devin',
   'ante',
+  'jcode',
   'trae',
   'muse',
   'other'

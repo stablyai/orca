@@ -18,6 +18,11 @@ import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 
+import {
+  paneShouldAnswerOscColorQueries,
+  resolvePaneLaunchAgentCandidate,
+  type PaneLaunchAgentPaneSlice
+} from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /** Pane agent identity, foreground-agent sampling, and command lifecycle handling. */
@@ -29,22 +34,18 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     const entry = state.agentStatusByPaneKey[session.cacheKey]
     return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
   }
-  // Why: one ladder for both launch-agent signals; a second copy could drift.
+  // Why the shared module: the same ladder answers the 133;D guard, the visible-pane
+  // resampler, and the OSC color-reply skip, and it is the one piece of this installer
+  // that is a pure rule worth testing on its own.
+  const panePane = (): PaneLaunchAgentPaneSlice => ({
+    worktreeId: session.deps.worktreeId,
+    tabId: session.deps.tabId,
+    paneKey: session.cacheKey,
+    startup: session.paneStartup
+  })
   const resolveLaunchAgentCandidate = (
     state: ReturnType<typeof useAppStore.getState>
-  ): string | undefined => {
-    const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
-      (candidate) => candidate.id === session.deps.tabId
-    )
-    const registeredLaunchAgent =
-      state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity.agentType
-    return (
-      tab?.launchAgent ??
-      session.paneStartup?.launchAgent ??
-      session.paneStartup?.initialAgentStatus?.agent ??
-      (isTuiAgent(registeredLaunchAgent) ? registeredLaunchAgent : undefined)
-    )
-  }
+  ): string | undefined => resolvePaneLaunchAgentCandidate(state, panePane())
   session.paneExpectsLaunchAgent = (state: ReturnType<typeof useAppStore.getState>): boolean =>
     Boolean(resolveLaunchAgentCandidate(state))
   // Why: the concrete TUI agent a fresh spawn is expected to launch, used to seed
@@ -54,13 +55,18 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     const candidate = resolveLaunchAgentCandidate(useAppStore.getState())
     return isTuiAgent(candidate) ? candidate : null
   }
+  // Why: jcode themes itself; answering its OSC color burst can land before its
+  // composer is ready and render the reply as pre-typed text (the main-side
+  // startup ingress already skips it, the renderer must skip the answer too).
+  session.shouldAnswerPaneOscColorQueries = (): boolean =>
+    paneShouldAnswerOscColorQueries(useAppStore.getState(), panePane())
   // Why: a launched/hook-known agent pane must confirm — not trust — a 133;D so a
   // full-screen agent's leaked nested-shell 133;D can't clear its tab identity,
   // even on a restore where no command-start read has recorded evidence yet.
   session.paneHasKnownAgentIdentity = (): boolean => {
     const state = useAppStore.getState()
     const registeredLaunchAgent =
-      state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity.agentType
+      state.agentLaunchConfigByPaneKey[session.cacheKey]?.identity?.agentType
     return (
       Boolean(state.paneForegroundAgentByPaneKey[session.cacheKey]?.agent) ||
       session.paneHasLiveHookAgentIcon(state) ||

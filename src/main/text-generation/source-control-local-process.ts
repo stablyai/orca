@@ -43,6 +43,19 @@ export async function killSourceControlAgentProcess(
   }
 }
 
+// Why: Windows caps the CreateProcess command line at 32,767 UTF-16 code units,
+// including the executable path, per-arg quoting, and separators. The budget
+// leaves headroom for cmd.exe `/d /c` shim wrappers.
+const WINDOWS_COMMAND_LINE_UNIT_BUDGET = 30_000
+
+function exceedsWindowsCommandLineBudget(command: string, args: string[]): boolean {
+  let units = command.length + args.length
+  for (const arg of args) {
+    units += arg.length + 2
+  }
+  return units > WINDOWS_COMMAND_LINE_UNIT_BUDGET
+}
+
 export function runLocalSourceControlPlan(input: {
   plan: CommitMessagePlan
   cwd: string
@@ -61,6 +74,16 @@ export function runLocalSourceControlPlan(input: {
   const result = new Promise<InternalTextGenerationResult>((resolve) => {
     let child: SpawnedSourceControlAgentProcess
     try {
+      if (process.platform === 'win32' && exceedsWindowsCommandLineBudget(plan.binary, plan.args)) {
+        markProcessClosed()
+        resolve({
+          success: false,
+          // Why: jcode rides the whole prompt on argv; a large staged diff would
+          // exceed Windows' 32,767-unit command line and fail to spawn at all.
+          error: `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+        })
+        return
+      }
       child = input.spawnAgent({
         binary: plan.binary,
         args: plan.args,

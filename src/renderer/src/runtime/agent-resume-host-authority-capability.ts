@@ -34,7 +34,9 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   copilot: undefined,
   muse: AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
   omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-  kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
+  kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  // Why: jcode resumed by id (--resume <id>) through the same host-authority session enum the generic probe covers.
+  jcode: undefined
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
 
 export function agentResumeHostAuthorityCapability(

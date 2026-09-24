@@ -22,6 +22,7 @@ import {
 import { getDevinManagedCommand, getDevinRemoteManagedCommand } from '../devin/hook-settings'
 import { getGrokManagedCommand } from '../grok/grok-hook-script'
 import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook-settings'
+import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -148,6 +149,15 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getMuseManagedCommand(path)],
       remote: (path) => [getMuseRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    // Why bare: jcode parses the hook command line shell-style but executes it
+    // directly, so a `sh -c`/`if [ -f … ]` wrapper would be run as the program name.
+    'jcode',
+    {
+      local: (path) => [getJcodeManagedCommand(path)],
+      remote: (path) => [getJcodeRemoteManagedCommand(path)]
     }
   ]
 ])

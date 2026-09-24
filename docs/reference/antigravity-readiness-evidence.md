@@ -251,7 +251,7 @@ What the captures support and the shipped detector now does:
   API-key users.
 - **Veto an active model picker.** `Switch Model` followed by a labeled selection row means the
   bare caret belongs to the composer behind the picker; readiness resumes after `Exited /model
-  command`.
+command`.
 - **Do not anchor on `headerIndex`.** The banner is printed once and never reprinted.
 - **The blocked-signal path already works** for the trust dialog: `antigravity-dialog-trust-workspace.txt`
   is correctly refused today, by wording, not by structure.

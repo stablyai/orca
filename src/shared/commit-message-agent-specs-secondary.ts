@@ -10,13 +10,15 @@ type SecondaryAgentSpecDeps = {
   OPENAI_THINKING_LEVELS: ThinkingLevel[]
   parseCursorModels: (stdout: string) => CommitMessageModel[]
   parseAntigravityModels: (stdout: string) => CommitMessageModel[]
+  parseLineModels: (stdout: string) => CommitMessageModel[]
 }
 
 export function buildSecondaryCommitMessageAgentSpecs({
   BASIC_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
   parseCursorModels,
-  parseAntigravityModels
+  parseAntigravityModels,
+  parseLineModels
 }: SecondaryAgentSpecDeps): Partial<Record<TuiAgent, CommitMessageAgentSpec>> {
   return {
     amp: {
@@ -252,6 +254,48 @@ export function buildSecondaryCommitMessageAgentSpecs({
       singletonOptions: [['--model'], ['--effort']],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
+    },
+    jcode: {
+      id: 'jcode',
+      label: 'Jcode',
+      binary: 'jcode',
+      // Why: `jcode run` takes the message as a positional argv argument and has no
+      // stdin prompt mode, so Source Control AI prompts ride argv (fine for branch
+      // naming and small diffs, argv-capped on Windows).
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model }) => [
+        // Why: these are jcode global options, so they must precede the subcommand;
+        // clap rejects them after `run`.
+        '--no-update',
+        '--quiet',
+        '--no-selfdev',
+        // Why: the prompt here IS a staged patch, i.e. attacker-influenced text, and
+        // jcode would otherwise expose shell/read/write/MCP to it. `none` resolves to
+        // an empty allowed-tool set in jcode's config (tools.rs `base_allowed_tools`),
+        // which drops `mcp` too since MCP is exposed as a tool. Matches the read-only
+        // posture the other generators already take (claude plan, codex read-only).
+        '--tool-profile',
+        'none',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        'run',
+        '--json',
+        prompt
+      ],
+      singletonOptions: [['--model']],
+      modelSource: 'dynamic',
+      // Why: `jcode model list` prints one bare model id per line, which is exactly
+      // what parseLineModels reads. Discovering beats a hardcoded list because
+      // jcode's catalog spans every provider the user has authenticated.
+      modelDiscovery: {
+        binary: 'jcode',
+        args: ['--no-update', '--quiet', 'model', 'list'],
+        parse: parseLineModels
+      },
+      // Why: `default` is not a jcode model id — it is the sentinel that omits
+      // --model so jcode uses the model from its own config.toml, rather than Orca
+      // pinning a provider the user may not be logged in to.
       models: [{ id: 'default', label: 'Config default' }],
       defaultModelId: 'default'
     }

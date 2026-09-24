@@ -83,12 +83,12 @@ worth — is answered by `RuntimeHostContact` (`src/shared/runtime-host-contact.
 never be mapped onto one:
 
 - `refused` is the host answering and turning us away — unauthorized, a protocol mismatch, a status
-  method it does not implement. That is positive evidence about the *connection*, and it says
+  method it does not implement. That is positive evidence about the _connection_, and it says
   nothing whatever about whether the host's PTYs are running. They almost certainly still are.
 - `retired` is the pairing being ended by explicit user action. Same point: the client stops having
   a route, the remote work is unaffected.
 
-Both are reasons to stop *trusting a cached answer*, never reasons to report a process `exited`. A
+Both are reasons to stop _trusting a cached answer_, never reasons to report a process `exited`. A
 reader that needs a process verdict must still get it from the host that owns the process, by the
 tests above.
 

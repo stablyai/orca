@@ -61,8 +61,8 @@ export function finalizeModelDiscoveryOutput(
   // should keep its configured provider even when discovery lists concrete models.
   const defaultModelId =
     spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
-    ? spec.defaultModelId
-    : models[0].id
+      ? spec.defaultModelId
+      : models[0].id
   return staticModelDiscoveryResult(spec, models, defaultModelId, 'probe')
 }
 

@@ -40,3 +40,4 @@ export type TuiAgent =
   | 'trae' // Trae CLI
   | 'muse' // Muse (Meta `muse` CLI)
   | 'prime-agent' // Prime Agent (Prime Intellect)
+  | 'jcode' // Jcode

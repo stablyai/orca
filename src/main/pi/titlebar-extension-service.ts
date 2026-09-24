@@ -191,8 +191,7 @@ export class PiTitlebarExtensionService {
   ): Record<string, string> {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
     // The caller resolves the effective launch environment before this point.
-    const sourceAgentDir =
-      existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
+    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
     if (kind !== 'prime-agent') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
