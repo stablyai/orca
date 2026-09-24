@@ -138,8 +138,9 @@ export function buildRuntimeMobileAgentStatus(
   const agentType = ownerAgent ?? hookRow.providerSessionAgentType ?? undefined
   return {
     agentStatus: {
-      state:
-        pty?.lastAgentStatus === 'working'
+      state: nonAgentTitle
+        ? 'done'
+        : pty?.lastAgentStatus === 'working'
           ? 'working'
           : pty?.lastAgentStatus === 'permission'
             ? 'blocked'

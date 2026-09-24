@@ -40,7 +40,7 @@ class IdleChatRuntime extends OrcaRuntimeService {
     }).tabs[0]
   }
 
-  setTitle(title: string, state: 'working' | 'idle' | null) {
+  setTitle(title: string, state: 'working' | 'permission' | 'idle' | null) {
     const pty = this.recordPtyWorktree(PTY_ID, WORKSPACE, {
       tabId: TAB_ID,
       paneKey: PANE_KEY,
@@ -130,11 +130,31 @@ describe('mobile chat identity while idle', () => {
     }
   )
 
-  it('keeps history after the shell reclaims a pane without reviving its old tool', () => {
-    const runtime = runtimeFor([row({ state: 'working', toolName: 'Bash', receivedAt: 1 })])
-    runtime.setTitle('bash', null)
-    expectChat(runtime, 'done')
-  })
+  it.each([null, 'working', 'permission'] as const)(
+    'keeps shell-pane history without reviving stale PTY state %s',
+    (state) => {
+      const runtime = runtimeFor([row({ state: 'working', toolName: 'Bash', receivedAt: 1 })])
+      runtime.setTitle('bash', state)
+      const tab = expectChat(runtime, 'done')
+      expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('toolName')
+    }
+  )
+
+  it.each(['bash', 'Review session'])(
+    'retires stale activity after renaming a terminal to %s',
+    async (title) => {
+      const runtime = runtimeFor([row({ providerSessionOnly: true })])
+      runtime.setTitle('⠋ Codex', 'working')
+      const tab = expectChat(runtime, 'working')
+      if (tab?.type !== 'terminal' || !tab.terminal) {
+        throw new Error('expected a live terminal handle')
+      }
+
+      await runtime.renameTerminal(tab.terminal, title)
+
+      expectChat(runtime, 'done')
+    }
+  )
 
   it('does not invent a chat session from an idle title alone', () => {
     const runtime = runtimeFor([])
