@@ -1,6 +1,6 @@
 {
   "capturedWith": "Claude Code 2.1.280, @anthropic-ai/claude-agent-sdk 0.3.251, permission mode default; fg-fail ran its subagent on a model that does not exist (CLAUDE_CODE_SUBAGENT_MODEL)",
-  "order": "SDK delivery order as the session consumer receives it; stream deltas, thinking, hooks and init dropped; paths, session ids and message ids scrubbed; prose over 400 characters trimmed",
+  "order": "SDK delivery order as the session consumer receives it; stream deltas, thinking, hooks and init dropped; paths, session ids, API message ids and API request ids scrubbed (frame uuids and tool-use ids are the capture's own random values); prose over 400 characters trimmed",
   "scenarios": {
     "fg-allow": [
       {
