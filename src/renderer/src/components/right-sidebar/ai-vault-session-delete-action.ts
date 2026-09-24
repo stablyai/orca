@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { agentLabel } from './ai-vault-session-filters'
 
 /**
@@ -46,6 +47,43 @@ export function useAiVaultSessionDeleteAction({
           filePath: session.filePath,
           executionHostId: session.executionHostId
         })
+        // Two refusals name something the user can act on, so they get their own
+        // copy and an exit. Every other reason stays a main-side detail.
+        if (
+          result.outcome === 'rejected' &&
+          result.reason === 'structured-session-owned' &&
+          result.structuredSession
+        ) {
+          const structuredSession = result.structuredSession
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.AiVaultPanel.sessionDeleteOwned',
+              'This conversation belongs to a chat, so its history was kept'
+            ),
+            {
+              action: {
+                label: translate(
+                  'auto.components.right.sidebar.AiVaultPanel.sessionDeleteOpenChat',
+                  'Open chat'
+                ),
+                onClick: () => void activateAiVaultStructuredSession({ structuredSession })
+              }
+            }
+          )
+          return
+        }
+        if (
+          result.outcome === 'rejected' &&
+          result.reason === 'structured-session-ownership-unknown'
+        ) {
+          toast.error(
+            translate(
+              'auto.components.right.sidebar.AiVaultPanel.sessionDeleteOwnershipUnknown',
+              "Couldn't check whether this history belongs to a chat, so nothing was deleted"
+            )
+          )
+          return
+        }
         if (result.outcome !== 'deleted') {
           // 'rejected' and 'failed' share one message: the specific reason is a
           // main-side detail, not something to surface raw.

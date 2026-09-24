@@ -11,13 +11,25 @@ import {
 } from './session-delete-target'
 import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl-unc-delete'
 import { isENOENT } from '../ipc/filesystem-path-containment'
+import {
+  deleteUnownedClaudeAiVaultSession,
+  type StructuredAiVaultDeletionDeps
+} from './structured-session-deletion'
 
 // Trashes a validated session's paths, companions first so a part-way failure
 // leaves the row on screen to retry from instead of stranding the rest on disk.
 // Never throws: IPC payloads are untyped at runtime, so a bad input and an fs
 // error both resolve to a discriminated result the handler can render.
+//
+// Claude is the one provider whose transcripts a structured session also writes,
+// so its removal runs inside the session store's ownership boundary. Passing no
+// `structuredOwnership` refuses that agent rather than deleting unchecked — a
+// caller that cannot reach the store cannot establish the file is free.
 export async function deleteAiVaultSessionFile(
-  args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string }
+  args: ValidateAiVaultSessionDeleteTargetArgs & {
+    sessionId?: string
+    structuredOwnership?: StructuredAiVaultDeletionDeps
+  }
 ): Promise<AiVaultDeleteSessionResult> {
   const validation = validateAiVaultSessionDeleteTarget(args)
   if (!validation.allowed) {
@@ -25,21 +37,31 @@ export async function deleteAiVaultSessionFile(
   }
   const { agent, removals } = validation
 
-  try {
-    for (const removal of removals) {
-      const rejection = await removeOne(removal)
-      if (rejection) {
-        return { outcome: 'rejected', agent, reason: rejection }
+  const runRemovals = async (): Promise<AiVaultDeleteSessionResult> => {
+    try {
+      for (const removal of removals) {
+        const rejection = await removeOne(removal)
+        if (rejection) {
+          return { outcome: 'rejected', agent, reason: rejection }
+        }
+      }
+      return { outcome: 'deleted' }
+    } catch (error) {
+      return {
+        outcome: 'failed',
+        agent,
+        error: error instanceof Error ? error.message : String(error)
       }
     }
-    return { outcome: 'deleted' }
-  } catch (error) {
-    return {
-      outcome: 'failed',
-      agent,
-      error: error instanceof Error ? error.message : String(error)
-    }
   }
+
+  if (agent !== 'claude') {
+    return runRemovals()
+  }
+  if (!args.structuredOwnership) {
+    return { outcome: 'rejected', agent, reason: 'structured-session-ownership-unknown' }
+  }
+  return deleteUnownedClaudeAiVaultSession(validation, args.structuredOwnership, runRemovals)
 }
 
 // Trash one planned path, or return the rejection code that stops the plan. A

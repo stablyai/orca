@@ -4,8 +4,10 @@ import type { ExecutionHostId } from './execution-host'
 // IPC payload for aiVault:deleteSession.
 export type AiVaultDeleteSessionArgs = {
   agent: AiVaultAgent
-  // Optional for mixed renderer/main versions. Main ignores this field on delete
-  // (path + host + agent validation only; no identity/liveness check).
+  // Optional for mixed renderer/main versions, and never authoritative: main
+  // resolves ownership from its own records, because a client-supplied id (or a
+  // client-supplied `structuredSession`) is exactly what an out-of-date or wrong
+  // caller gets wrong. Path + host + agent validation still gates the target.
   sessionId?: string
   filePath: string
   // The session's host; only a local session may be deleted.
@@ -14,7 +16,14 @@ export type AiVaultDeleteSessionArgs = {
 
 export type AiVaultDeleteSessionResult =
   | { outcome: 'deleted' }
-  | { outcome: 'rejected'; agent: AiVaultAgent; reason: AiVaultSessionDeleteRejectionCode }
+  | {
+      outcome: 'rejected'
+      agent: AiVaultAgent
+      reason: AiVaultSessionDeleteRejectionCode
+      // Present only for 'structured-session-owned', so the refusal can offer the
+      // chat instead of a dead end. Host-derived; never echoed from the request.
+      structuredSession?: { sessionId: string; workspaceId: string }
+    }
   | { outcome: 'failed'; agent: AiVaultAgent; error: string }
 
 // Agents whose sessions Orca can remove completely: everything the session
@@ -73,6 +82,14 @@ export type AiVaultSessionDeleteRejectionCode =
   // fs-side guard: lstat disagrees with the removal's declared kind (a symlink,
   // or a file where the plan expects a directory).
   | 'unexpected-target-kind'
+  // A structured session record names this transcript. Refused whether or not
+  // its lease currently admits a writer: a recovering owner still owns its
+  // history, and "not admitting right now" is not evidence it is safe to destroy.
+  | 'structured-session-owned'
+  // Ownership could not be established, so absence is not an answer: no host, an
+  // unreadable or backup-derived catalogue, a quarantined record, or a transcript
+  // reachable under aliases this check cannot enumerate.
+  | 'structured-session-ownership-unknown'
 
 // One path the executor removes. A `kind` mismatch on disk is a rejection,
 // never a coerced delete. `roots` are what the path's realpath must still

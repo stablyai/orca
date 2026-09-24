@@ -11,18 +11,34 @@ import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
+import type { StructuredAiVaultDeletionDeps } from '../ai-vault/structured-session-deletion'
 
 // Which cache backs the multi-host list is ai-vault.ts's concern, so its
 // invalidation is injected rather than reached into from here.
 type AiVaultDeleteDeps = {
   invalidateMultiHostListCache: () => void
   invalidateBackgroundCache?: (paths: string[]) => Promise<void>
+  structuredOwnership?: StructuredAiVaultDeletionDeps
 }
 
-// Binds the delete orchestration to the caller's cache-invalidation seam.
-export function registerAiVaultDeleteHandler(deps: AiVaultDeleteDeps): void {
+// Starting the structured host is the runtime's to do, so it arrives with the
+// handler options rather than being reached for here — the same seam resume uses.
+type AiVaultDeleteHandlerOptions = {
+  ensureStructuredSessionOwnership?: () => Promise<void>
+}
+
+// Binds the delete orchestration to the caller's cache-invalidation seam, and to
+// the ownership check that stands between a Claude row and its provider history.
+export function registerAiVaultDeleteHandler(
+  deps: AiVaultDeleteDeps,
+  options: AiVaultDeleteHandlerOptions = {}
+): void {
+  const ensureStructuredSessionOwnership = options.ensureStructuredSessionOwnership
+  const withOwnership: AiVaultDeleteDeps = ensureStructuredSessionOwnership
+    ? { ...deps, structuredOwnership: { ensureStructuredSessionOwnership } }
+    : deps
   ipcMain.handle('aiVault:deleteSession', (_event, args?: AiVaultDeleteSessionArgs) =>
-    deleteAiVaultSession(args, deps)
+    deleteAiVaultSession(args, withOwnership)
   )
 }
 
@@ -41,7 +57,8 @@ export async function deleteAiVaultSession(
     sessionId: args?.sessionId,
     filePath: args?.filePath ?? '',
     executionHostId: args?.executionHostId,
-    wslHomeDirs
+    wslHomeDirs,
+    structuredOwnership: deps.structuredOwnership
   })
 
   if (result.outcome === 'deleted') {

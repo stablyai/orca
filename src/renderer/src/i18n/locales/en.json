@@ -13343,7 +13343,10 @@
             "sessionDeleteFailed": "Couldn't delete the session",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
-            "resumeInChatFailed": "Could not resume this session in a new chat."
+            "resumeInChatFailed": "Could not resume this session in a new chat.",
+            "sessionDeleteOwned": "This conversation belongs to a chat, so its history was kept",
+            "sessionDeleteOpenChat": "Open chat",
+            "sessionDeleteOwnershipUnknown": "Couldn't check whether this history belongs to a chat, so nothing was deleted"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",

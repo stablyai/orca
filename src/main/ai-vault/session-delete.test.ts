@@ -33,7 +33,21 @@ vi.mock('../wsl-unc-delete', () => ({
   WslDeleteValidationError: WslDeleteValidationErrorMock
 }))
 
+// This suite is about what reaches the filesystem, so ownership admits and the
+// real decision is covered in structured-session-deletion.test.ts. The refusal
+// when no ownership dependency is supplied lives in the executor, not here, so
+// it is still exercised below.
+vi.mock('./structured-session-deletion', () => ({
+  deleteUnownedClaudeAiVaultSession: (
+    _validation: unknown,
+    _deps: unknown,
+    remove: () => Promise<unknown>
+  ) => remove()
+}))
+
 import { deleteAiVaultSessionFile } from './session-delete'
+
+const OWNERSHIP_ADMITS = { ensureStructuredSessionOwnership: () => Promise.resolve() }
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
@@ -249,8 +263,24 @@ describe('deleteAiVaultSessionFile', () => {
       agent: 'claude' as const,
       filePath: join(CLAUDE_ROOT, '-proj', 'sess-1.jsonl'),
       executionHostId: 'local' as const,
-      rootOptions: { claudeProjectsDir: CLAUDE_ROOT }
+      rootOptions: { claudeProjectsDir: CLAUDE_ROOT },
+      structuredOwnership: OWNERSHIP_ADMITS
     }
+
+    it('refuses a Claude delete that cannot reach the session store', async () => {
+      // Fail closed: a caller with no ownership dependency cannot establish the
+      // transcript is free, and an unowned-looking absence is not permission.
+      const { structuredOwnership: _omitted, ...withoutOwnership } = claudeArgs
+
+      const result = await deleteAiVaultSessionFile(withoutOwnership)
+
+      expect(result).toEqual({
+        outcome: 'rejected',
+        agent: 'claude',
+        reason: 'structured-session-ownership-unknown'
+      })
+      expect(trashItemMock).not.toHaveBeenCalled()
+    })
 
     it('trashes the subagents and session-env dirs before the transcript', async () => {
       lstatMock.mockImplementation((path: string) =>

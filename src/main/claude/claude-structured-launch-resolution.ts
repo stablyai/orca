@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
 import type {
   Options as ClaudeAgentSdkOptions,
   PermissionMode
 } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import { claudeSessionIdForOrcaSession } from './claude-session-identity'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { structuredWorkerChildIdentityEnv } from '../runtime/structured-worker-child-identity-env'
@@ -139,13 +139,9 @@ export async function assertClaudeAuthSwitchSettled(
   }
 }
 
-export function claudeSessionIdForOrcaSession(sessionId: string): string {
-  const bytes = createHash('sha256').update(`orca-claude:${sessionId}`).digest().subarray(0, 16)
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
-  const hex = bytes.toString('hex')
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-}
+// Re-exported so existing importers keep their path; also used below, which a
+// bare `export ... from` would not bring into scope.
+export { claudeSessionIdForOrcaSession }
 
 export function createClaudeStructuredLaunchResolver(
   deps: ClaudeStructuredLaunchResolverDeps
