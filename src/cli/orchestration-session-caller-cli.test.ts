@@ -19,6 +19,9 @@ vi.mock('./format', () => ({ printResult: vi.fn() }))
 vi.mock('./selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
+import { findCommandSpec } from './args'
+import { COMMAND_SPECS } from './specs'
+import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
 import { createOrchestrationCompatibilityEnvelope } from './runtime/orchestration-compatibility-envelope'
 import { formatCliError, reportCliError } from './cli-error'
 import { RuntimeRpcFailureError } from './runtime/types'
@@ -171,10 +174,27 @@ const CALLER_VERBS: Verb[] = [
   { command: 'worker-list', flags: {}, method: 'runCurrent', callerParam: 'from' }
 ]
 
+/** Enough flags for any verb to get past its own validation to identity resolution. */
+const EVERY_REQUIRED_FLAG = {
+  objective: 'o',
+  id: 'id_1',
+  task: 'task_1',
+  spec: 's',
+  question: 'q',
+  resolution: 'r',
+  subject: 's',
+  body: 'b',
+  to: 'term_worker',
+  status: 'completed',
+  preamble: true,
+  request: 'req_1'
+} as const
+
 function flagMap(flags: Record<string, string | true>): Map<string, string | boolean> {
   return new Map(Object.entries(flags))
 }
 
+/** What `main()` does between parsing and dispatch: the spec-driven caller check, then the handler. */
 async function invoke(
   command: string,
   flags: Map<string, string | boolean>,
@@ -184,6 +204,10 @@ async function invoke(
   if (!handler) {
     throw new Error(`no handler for ${command}`)
   }
+  refuseConflictingSessionCallerFlags(
+    findCommandSpec(COMMAND_SPECS, ['orchestration', command]),
+    flags
+  )
   await handler({
     flags,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read only `call`; RuntimeClient is a class, so a structural double cannot satisfy it without the cast.
@@ -488,23 +512,62 @@ describe('the orchestration envelope', () => {
   })
 })
 
-describe('every orchestration verb, enumerated', () => {
-  /** Enough flags for any verb to get past its own validation to identity resolution. */
-  const EVERY_REQUIRED_FLAG = {
-    objective: 'o',
-    id: 'id_1',
-    task: 'task_1',
-    spec: 's',
-    question: 'q',
-    resolution: 'r',
-    subject: 's',
-    body: 'b',
-    to: 'term_worker',
-    status: 'completed',
-    preamble: true,
-    request: 'req_1'
-  } as const
+describe('which flag names the caller, declared on every spec', () => {
+  const ORCHESTRATION_SPECS = COMMAND_SPECS.filter((spec) => spec.path[0] === 'orchestration')
 
+  it('classifies every --from and --terminal an orchestration verb accepts', () => {
+    // A new verb cannot take either flag without saying whether it names the caller, so the entry
+    // check covers it by construction instead of each handler remembering to refuse.
+    const unclassified = ORCHESTRATION_SPECS.flatMap((spec) =>
+      (['from', 'terminal'] as const)
+        .filter((flag) => spec.allowedFlags.includes(flag) && !spec.identityFlagRoles?.[flag])
+        .map((flag) => `${spec.path.join(' ')} --${flag}`)
+    )
+    expect(unclassified).toEqual([])
+  })
+
+  const callerFlagVerbs = ORCHESTRATION_SPECS.flatMap((spec) =>
+    (['from', 'terminal'] as const)
+      .filter((flag) => spec.identityFlagRoles?.[flag] === 'caller')
+      .map((flag) => ({ command: spec.path[1] ?? '', flag }))
+  )
+
+  it('covers the verbs whose requests name a caller', () => {
+    expect(callerFlagVerbs.length).toBeGreaterThanOrEqual(CALLER_VERBS.length)
+  })
+
+  it.each(callerFlagVerbs)(
+    '$command refuses --$flag naming another actor, before any request',
+    async ({ command, flag }) => {
+      asSessionInTerminalView()
+      await expect(
+        invoke(command, flagMap({ ...EVERY_REQUIRED_FLAG, [flag]: 'term_sibling' }))
+      ).rejects.toMatchObject({ code: 'consumer_fenced' })
+      expect(callMock).not.toHaveBeenCalled()
+      expect(getTerminalHandleMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(
+    ORCHESTRATION_SPECS.flatMap((spec) =>
+      (['from', 'terminal'] as const)
+        .filter((flag) => spec.identityFlagRoles?.[flag] === 'target')
+        .map((flag) => ({ command: spec.path[1] ?? '', flag }))
+    )
+  )('$command passes a --$flag target through unfenced', async ({ command, flag }) => {
+    asSessionInTerminalView()
+    await invoke(command, flagMap({ ...EVERY_REQUIRED_FLAG, [flag]: 'term_sibling' })).catch(
+      (error: unknown) => {
+        expect(error).not.toMatchObject({ code: 'consumer_fenced' })
+      }
+    )
+    expect(callMock.mock.calls.flatMap(([, params]) => Object.values(params ?? {}))).toContain(
+      'term_sibling'
+    )
+  })
+})
+
+describe('every orchestration verb, enumerated', () => {
   /** Runs every verb once; returns the ones that guessed an implicit terminal. */
   async function verbsThatGuess(): Promise<string[]> {
     const guessed: string[] = []

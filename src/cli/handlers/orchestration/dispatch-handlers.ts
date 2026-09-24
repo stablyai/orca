@@ -5,7 +5,8 @@ import { RuntimeClientError } from '../../runtime-client'
 import { orchestrationMigrationData } from '../../../shared/orchestration-rpc-contract'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
-import { injectedSessionAddress, resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { injectedSessionAddress } from '../../session-caller-flags'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
