@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatResetCountdown,
   formatResetDuration,
+  formatResetDurationTight,
   getResetCountdownNextTickDelay
 } from './rate-limit-reset-format'
 
@@ -59,5 +60,26 @@ describe('getResetCountdownNextTickDelay', () => {
     const soon = now + 5 * MIN + 10_000 // 10s to next flip
     const later = now + 42 * MIN + 40_000 // 40s to next flip
     expect(getResetCountdownNextTickDelay(now, [later, soon])).toBe(10_000 + 1)
+  })
+})
+
+describe('formatResetDurationTight', () => {
+  it('drops the separator the compact chip cannot afford', () => {
+    expect(formatResetDurationTight(3 * HOUR + 54 * MIN)).toBe('3h54m')
+    expect(formatResetDurationTight(6 * DAY + 7 * HOUR)).toBe('6d7h')
+    expect(formatResetDurationTight(DAY + 18 * HOUR)).toBe('1d18h')
+  })
+
+  it('leaves single-unit and "now" labels untouched', () => {
+    expect(formatResetDurationTight(47 * MIN)).toBe('47m')
+    expect(formatResetDurationTight(2 * HOUR)).toBe('2h')
+    expect(formatResetDurationTight(0)).toBe('now')
+  })
+
+  // Why pinned here: the prose surfaces keep their spaces, and only the chip
+  // opts out. If these two ever agree, the space was removed in the wrong place.
+  it('differs from the prose form only by the separator', () => {
+    expect(formatResetDuration(3 * HOUR + 54 * MIN)).toBe('3h 54m')
+    expect(formatResetCountdown(3 * HOUR + 54 * MIN)).toBe('Resets in 3h 54m')
   })
 })

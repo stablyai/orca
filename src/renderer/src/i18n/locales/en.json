@@ -4018,7 +4018,8 @@
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: only the tightest window",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "usageBars": "Usage bars"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -9322,8 +9323,22 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
-            }
-          }
+            },
+            "usageChipFormatTitle": "Usage chip format",
+            "usageChipFormatDescription": "Choose how much each usage meter spells out in the status bar.",
+            "usageChipFormatKeyword": "usage chip",
+            "usageChipCompactKeyword": "compact",
+            "usageChipStatusBarKeyword": "status bar"
+          },
+          "chipPresetLabelled": "Labelled",
+          "chipPresetCompact": "Compact",
+          "chipPresetPercentOnly": "Percent",
+          "chipPartDisplayWord": "Show \"used\" / \"left\"",
+          "chipPartDisplayWordDescription": "Spell the direction out on every meter instead of leaving it to the tooltip.",
+          "chipPartTightDuration": "Tight durations",
+          "chipPartTightDurationDescription": "Drop the space inside a countdown: \"3h54m\" rather than \"3h 54m\".",
+          "chipPartWindowLabel": "Show countdown",
+          "chipPartWindowLabelDescription": "Show time until the window resets next to the percentage."
         },
         "auto": {
           "rename": {
@@ -11324,7 +11339,9 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
-          "usagePercentageDisplayRemaining": "Remaining"
+          "usagePercentageDisplayRemaining": "Remaining",
+          "chipPreviewLabel": "Preview",
+          "chipCustom": "Custom combination"
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",

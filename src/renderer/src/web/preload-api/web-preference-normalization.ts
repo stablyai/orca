@@ -14,7 +14,7 @@ import type {
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { mergeStatusBarUsagePreferences } from '../../../../shared/status-bar-usage-preferences'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import {
   normalizeTuiAgentArgsRecord,
@@ -25,6 +25,13 @@ import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
 
+/**
+ * Applies a partial UI-state update over the web client's persisted blob.
+ *
+ * Fields that carry a constrained shape are re-normalized on the way through,
+ * because the web client persists this blob directly and a legacy profile can
+ * otherwise keep a field the renderer never validated.
+ */
 export function mergeWebUIState(
   base: PersistedUIState,
   updates: Partial<PersistedUIState>
@@ -52,9 +59,11 @@ export function mergeWebUIState(
     usagePercentageDisplay: normalizeUsagePercentageDisplay(
       safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
     ),
-    statusBarUsageMode: normalizeStatusBarUsageMode(
-      safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
-    )
+    // Why the grouped helper and not a field-per-line merge: the chip parts
+    // belong to the same persisted blob, and spelling the group out here is
+    // exactly the drift it exists to prevent — the three chip parts were
+    // already missing from this list and so reached the store unnormalized.
+    ...mergeStatusBarUsagePreferences(base, safeUpdates)
   }
 }
 

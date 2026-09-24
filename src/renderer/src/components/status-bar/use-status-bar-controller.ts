@@ -5,6 +5,7 @@ import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageBarsVisible } from '../../../../shared/status-bar-usage-bars'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
@@ -22,6 +23,15 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     useAppStore((s) => s.usagePercentageDisplay)
   )
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
+  const statusBarUsageBarsVisible = normalizeStatusBarUsageBarsVisible(
+    useAppStore((s) => s.statusBarUsageBarsVisible)
+  )
+  const setStatusBarUsageBarsVisible = useAppStore((s) => s.setStatusBarUsageBarsVisible)
+  const statusBarUsageChipParts = {
+    statusBarUsageChipDisplayWord: useAppStore((s) => s.statusBarUsageChipDisplayWord),
+    statusBarUsageChipTightDuration: useAppStore((s) => s.statusBarUsageChipTightDuration),
+    statusBarUsageChipWindowLabel: useAppStore((s) => s.statusBarUsageChipWindowLabel)
+  }
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
@@ -265,6 +275,9 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showSsh,
     statusBarItems,
     statusBarUsageMode,
+    statusBarUsageBarsVisible,
+    setStatusBarUsageBarsVisible,
+    statusBarUsageChipParts,
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,

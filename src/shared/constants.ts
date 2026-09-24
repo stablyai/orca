@@ -13,7 +13,7 @@ import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
-import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
+import { DEFAULT_STATUS_BAR_USAGE_PREFERENCES } from './status-bar-usage-preferences'
 import { buildDefaultSettings } from './default-global-settings'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
@@ -295,7 +295,7 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
-    statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
+    ...DEFAULT_STATUS_BAR_USAGE_PREFERENCES,
     dismissedUpdateVersion: null,
     dismissedUnexpectedSignoutVersion: null,
     lastUpdateCheckAt: null,

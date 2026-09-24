@@ -115,6 +115,8 @@ describe('UsageRow', () => {
           display="used"
           statusBarUsageMode="verbose"
           onStatusBarUsageModeChange={() => {}}
+          statusBarUsageBarsVisible
+          onStatusBarUsageBarsVisibleChange={() => {}}
           isRefreshing={false}
           onRefresh={() => {}}
           onOpenProvider={() => {}}
@@ -279,6 +281,8 @@ describe('UsageRosterPanel density picker', () => {
             display="used"
             statusBarUsageMode={statusBarUsageMode}
             onStatusBarUsageModeChange={onStatusBarUsageModeChange}
+            statusBarUsageBarsVisible
+            onStatusBarUsageBarsVisibleChange={() => {}}
             isRefreshing={false}
             onRefresh={() => {}}
             onOpenProvider={() => {}}

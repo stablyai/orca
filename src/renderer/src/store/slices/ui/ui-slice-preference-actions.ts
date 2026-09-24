@@ -20,6 +20,14 @@ import {
   DEFAULT_STATUS_BAR_USAGE_MODE,
   normalizeStatusBarUsageMode
 } from '../../../../../shared/status-bar-usage-mode'
+import {
+  DEFAULT_STATUS_BAR_USAGE_BARS_VISIBLE,
+  normalizeStatusBarUsageBarsVisible
+} from '../../../../../shared/status-bar-usage-bars'
+import {
+  DEFAULT_STATUS_BAR_USAGE_CHIP_PARTS,
+  normalizeStatusBarUsageChipParts
+} from '../../../../../shared/status-bar-usage-chip-format'
 import type { WorkspaceHostScope } from '../../../../../shared/ui-chrome-types'
 import {
   normalizeExecutionHostOrder,
@@ -300,6 +308,21 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeStatusBarUsageMode(mode)
       window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
       set({ statusBarUsageMode: normalized })
+    },
+    ...DEFAULT_STATUS_BAR_USAGE_CHIP_PARTS,
+    setStatusBarUsageChipParts: (parts) => {
+      // Why normalize the merged result rather than the patch: a preset writes
+      // every part at once, a switch writes one, and both must land on the same
+      // validated shape before they reach main.
+      const next = normalizeStatusBarUsageChipParts({ ...get(), ...parts })
+      window.api.ui.set(next).catch(console.error)
+      set(next)
+    },
+    statusBarUsageBarsVisible: DEFAULT_STATUS_BAR_USAGE_BARS_VISIBLE,
+    setStatusBarUsageBarsVisible: (visible) => {
+      const normalized = normalizeStatusBarUsageBarsVisible(visible)
+      window.api.ui.set({ statusBarUsageBarsVisible: normalized }).catch(console.error)
+      set({ statusBarUsageBarsVisible: normalized })
     }
   }
 }

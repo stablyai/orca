@@ -6,10 +6,15 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { DEFAULT_STATUS_BAR_USAGE_BARS_VISIBLE } from '../../../../shared/status-bar-usage-bars'
+import {
+  DEFAULT_STATUS_BAR_USAGE_CHIP_PARTS,
+  type StatusBarUsageChipParts
+} from '../../../../shared/status-bar-usage-chip-format'
 import { ProviderIcon, clampUsedPercent, getProviderUsageStatusLabel } from './tooltip'
 import { getTightestUsageSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
-import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatUsagePercentageLabel, formatUsagePercentageValue } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 
 function MiniBar({
@@ -36,17 +41,29 @@ function WindowLabel({
   w,
   label,
   display,
+  format,
   showLabel = true
 }: {
   w: RateLimitWindow
   label: string
   display: UsagePercentageDisplay
+  format: StatusBarUsageChipParts
   showLabel?: boolean
 }): React.JSX.Element {
+  const percentage = format.statusBarUsageChipDisplayWord
+    ? formatUsagePercentageLabel(w.usedPercent, display)
+    : formatUsagePercentageValue(w.usedPercent, display)
+  // With the word present the chip keeps the space it has always had; without
+  // it a comma joins the pair so the halves still read as one value.
+  const separator = format.statusBarUsageChipDisplayWord ? ' ' : ', '
+  const withLabel = showLabel && format.statusBarUsageChipWindowLabel
   return (
-    <span className="tabular-nums">
-      {formatUsagePercentageLabel(w.usedPercent, display)}
-      {showLabel ? ` ${label}` : ''}
+    // Why nowrap: the chip is one value. Left to wrap, flex breaks it at the
+    // space and strands the countdown on a second row under the percentage,
+    // which reads as two separate readings rather than one.
+    <span className="whitespace-nowrap tabular-nums">
+      {percentage}
+      {withLabel ? `${separator}${label}` : ''}
     </span>
   )
 }
@@ -96,11 +113,20 @@ const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function VerboseProviderUsage({
   p,
-  display
+  display,
+  format
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
+  format: StatusBarUsageChipParts
 }): React.JSX.Element {
+  // Why not pass Date.now() here: reading the clock during render is impure and
+  // the react(purity) lint rejects it. Leaving `now` undefined keeps the clock
+  // read inside the formatter's default parameter, exactly where it was before.
+  const chipLabel = (window: RateLimitWindow): string =>
+    formatRateLimitWindowChipLabel(window, undefined, {
+      tight: format.statusBarUsageChipTightDuration
+    })
   if (p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
     return (
@@ -108,16 +134,20 @@ function VerboseProviderUsage({
         {visibleBuckets.map((bucket, index) => (
           <React.Fragment key={bucket.name}>
             {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-            <span className="tabular-nums">
-              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+            <span className="whitespace-nowrap tabular-nums">
+              {bucket.name}{' '}
+              {format.statusBarUsageChipDisplayWord
+                ? formatUsagePercentageLabel(bucket.usedPercent, display)
+                : formatUsagePercentageValue(bucket.usedPercent, display)}
             </span>
           </React.Fragment>
         ))}
         {visibleBuckets.length === 0 && p.session ? (
           <WindowLabel
             w={p.session}
-            label={formatRateLimitWindowChipLabel(p.session)}
+            label={chipLabel(p.session)}
             display={display}
+            format={format}
           />
         ) : null}
       </>
@@ -129,14 +159,14 @@ function VerboseProviderUsage({
       ? {
           key: 'session',
           window: p.session,
-          label: formatRateLimitWindowChipLabel(p.session)
+          label: chipLabel(p.session)
         }
       : null,
     p.weekly
       ? {
           key: 'weekly',
           window: p.weekly,
-          label: formatRateLimitWindowChipLabel(p.weekly)
+          label: chipLabel(p.weekly)
         }
       : null,
     p.fableWeekly
@@ -151,7 +181,7 @@ function VerboseProviderUsage({
       ? {
           key: 'monthly',
           window: p.monthly,
-          label: formatRateLimitWindowChipLabel(p.monthly)
+          label: chipLabel(p.monthly)
         }
       : null
   ].filter((window): window is { key: string; window: RateLimitWindow; label: string } => {
@@ -163,7 +193,7 @@ function VerboseProviderUsage({
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-          <WindowLabel w={window.window} label={window.label} display={display} />
+          <WindowLabel w={window.window} label={window.label} display={display} format={format} />
         </React.Fragment>
       ))}
     </>
@@ -174,12 +204,16 @@ export function ProviderSegment({
   p,
   compact,
   display,
-  mode = 'verbose'
+  mode = 'verbose',
+  barsVisible = DEFAULT_STATUS_BAR_USAGE_BARS_VISIBLE,
+  chipFormat = DEFAULT_STATUS_BAR_USAGE_CHIP_PARTS
 }: {
   p: ProviderRateLimits | null
   compact: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
+  barsVisible?: boolean
+  chipFormat?: StatusBarUsageChipParts
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
@@ -234,16 +268,17 @@ export function ProviderSegment({
       <ProviderIcon provider={provider} />
       {mode === 'verbose' ? (
         <>
-          {tightest && !compact ? (
+          {barsVisible && tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
-          <VerboseProviderUsage p={p} display={display} />
+          <VerboseProviderUsage p={p} display={display} format={chipFormat} />
         </>
       ) : tightest ? (
         <WindowLabel
           w={tightest.window}
           label={tightest.label}
           display={display}
+          format={chipFormat}
           showLabel={!compact}
         />
       ) : null}

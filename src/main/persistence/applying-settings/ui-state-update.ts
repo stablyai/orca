@@ -10,7 +10,7 @@ import {
   clampWorkspaceBoardOpacity
 } from '../../../shared/workspace-statuses'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import { mergeStatusBarUsagePreferences } from '../../../shared/status-bar-usage-preferences'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
@@ -139,9 +139,7 @@ export function updatePersistedUI(
     usagePercentageDisplay: normalizeUsagePercentageDisplay(
       sanitizedUpdates.usagePercentageDisplay ?? operations.state.ui?.usagePercentageDisplay
     ),
-    statusBarUsageMode: normalizeStatusBarUsageMode(
-      sanitizedUpdates.statusBarUsageMode ?? operations.state.ui?.statusBarUsageMode
-    ),
+    ...mergeStatusBarUsagePreferences(operations.state.ui, sanitizedUpdates),
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(
       sanitizedUpdates.markdownTocPanelWidth ?? operations.state.ui?.markdownTocPanelWidth
     ),

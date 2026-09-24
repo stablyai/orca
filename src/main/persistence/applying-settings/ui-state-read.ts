@@ -10,7 +10,7 @@ import {
   clampWorkspaceBoardOpacity
 } from '../../../shared/workspace-statuses'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsagePreferences } from '../../../shared/status-bar-usage-preferences'
 import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
 import {
@@ -55,7 +55,7 @@ export function getPersistedUI(
     workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(state.ui?.workspaceBoardColumnWidth),
     syncTaskStatusFromWorkspaceBoard: state.ui?.syncTaskStatusFromWorkspaceBoard === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(state.ui?.usagePercentageDisplay),
-    statusBarUsageMode: normalizeStatusBarUsageMode(state.ui?.statusBarUsageMode),
+    ...normalizeStatusBarUsagePreferences(state.ui),
     // Why: strict boolean coercion so a missing/legacy value reads as false (first-run notice still fires).
     trayMinimizeNoticeShown: state.ui?.trayMinimizeNoticeShown === true,
     osc52ClipboardDefaultOnNoticePending: state.ui?.osc52ClipboardDefaultOnNoticePending === true,

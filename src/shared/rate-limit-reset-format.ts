@@ -25,6 +25,20 @@ export function formatResetDuration(ms: number): string {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
 }
 
+/**
+ * Space-free duration for the status-bar chip: "47m", "3h54m", "6d7h".
+ *
+ * Why a second formatter rather than tightening formatResetDuration: that one
+ * also feeds prose ("Resets in 3h 54m") in the popover and on the mobile
+ * accounts screen, where the space belongs. The status bar is the surface
+ * paying for it — every visible provider chip carries a duration, so the
+ * separator costs a column per provider on a bar that already competes for
+ * width against the segments beside it.
+ */
+export function formatResetDurationTight(ms: number): string {
+  return formatResetDuration(ms).replace(/ /g, '')
+}
+
 /** "Resets in 3h 54m" / "Resets now" for a window's time-until-reset (ms). */
 export function formatResetCountdown(ms: number): string {
   const duration = formatResetDuration(ms)
