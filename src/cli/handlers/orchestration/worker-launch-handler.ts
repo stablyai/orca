@@ -29,9 +29,17 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
         )
       }
     }
-    const account = flags.has('terminal')
-      ? getOptionalStringFlag(flags, 'account')
-      : await readClaudeLaunchAccountFlag(flags, client, getOptionalStringFlag(flags, 'agent'))
+    if (flags.has('account') && flags.has('terminal')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--account cannot be combined with --terminal; the reused terminal keeps its own account.'
+      )
+    }
+    const account = await readClaudeLaunchAccountFlag(
+      flags,
+      client,
+      getOptionalStringFlag(flags, 'agent')
+    )
     const task = getOptionalStringFlag(flags, 'task')
     const spec = getOptionalStringFlag(flags, 'spec')
     const taskTitle = getOptionalStringFlag(flags, 'task-title')

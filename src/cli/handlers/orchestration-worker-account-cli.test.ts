@@ -81,4 +81,22 @@ describe('orchestration worker-start --account', () => {
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock.mock.calls[0]?.[1]).not.toHaveProperty('account')
   })
+
+  it('refuses --account with --terminal before calling any host', async () => {
+    await expect(
+      invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['task', 'task_1'],
+          ['terminal', 'term_worker'],
+          ['account', 'acct-b'],
+          ['from', 'term_coord']
+        ])
+      )
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message:
+        '--account cannot be combined with --terminal; the reused terminal keeps its own account.'
+    })
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
