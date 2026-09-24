@@ -9,11 +9,13 @@ import type {
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { PairingGetDirectEndpointsResult } from '../../../shared/pairing-direct-endpoints'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 
 export type PairingRpcContext = {
-  getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
-  provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  getEndpoints?(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  provisionRelay?(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  getDirectEndpoints?(): Promise<PairingGetDirectEndpointsResult>
 }
 
 export type RpcEnvelopeMeta = {

@@ -2,6 +2,7 @@ import * as ExpoCrypto from 'expo-crypto'
 import type { ConnectionLogSink, ForegroundNudgeReason, HostProfile } from './types'
 import { connect } from './rpc-client'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+import { MobileCustomEndpointSupervisor } from './mobile-custom-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import {
@@ -48,7 +49,14 @@ export function startMobileEndpointLifecycle(
     owner = createSupervisor(logical, initialHost, onLog)
     void owner.start()
   } else {
-    owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
+    const direct = new MobileCustomEndpointSupervisor(logical, initialHost, {
+      openDirect: (endpoint) =>
+        connect(endpoint, initialHost.deviceToken, initialHost.publicKeyB64, { onLog }),
+      now: Date.now,
+      setTimer: defaultScheduleTimer,
+      clearTimer: defaultCancelTimer
+    })
+    const upgrade = new MobileRelayDirectUpgradeController(logical, initialHost, {
       upgrade: (client, host) =>
         upgradeDirectMobileRelay({
           client,
@@ -57,6 +65,25 @@ export function startMobileEndpointLifecycle(
         }),
       onUpgraded: ({ host }) => startSupervisor(host)
     })
+    owner = {
+      async start() {
+        await Promise.all([direct.start(), upgrade.start()])
+      },
+      setForeground(next) {
+        direct.setForeground(next)
+        upgrade.setForeground(next)
+      },
+      nudge(reason) {
+        direct.nudge(reason)
+        if (foreground) {
+          upgrade.nudge()
+        }
+      },
+      stop() {
+        direct.stop()
+        upgrade.stop()
+      }
+    }
     void owner.start()
   }
 

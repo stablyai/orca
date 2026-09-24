@@ -1,5 +1,6 @@
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import { DirectReturnProbe } from './mobile-direct-return-probe'
+import { MobileDirectEndpointDiscovery } from './mobile-direct-endpoint-discovery'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
@@ -30,10 +31,6 @@ import {
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 
-const DIRECT_OBSERVATION_MS = 30_000
-const MINIMUM_DWELL_MS = 60_000
-const FAILURE_COOLDOWN_MS = 60_000
-
 export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
   private stopped = false
@@ -51,18 +48,14 @@ export class MobileEndpointSupervisor {
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
+  private readonly directDiscovery = new MobileDirectEndpointDiscovery()
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
     private host: HostProfile,
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
-    this.hysteresis = new MobileEndpointHysteresis(dependencies.now(), {
-      directSuccessesRequired: 3,
-      directObservationMs: DIRECT_OBSERVATION_MS,
-      failureCooldownMs: FAILURE_COOLDOWN_MS,
-      minimumDwellMs: MINIMUM_DWELL_MS
-    })
+    this.hysteresis = new MobileEndpointHysteresis(dependencies.now())
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
     this.relayReconnect.reportRecoveryTo(logical)
@@ -117,6 +110,7 @@ export class MobileEndpointSupervisor {
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
       host: () => this.host,
+      resolveHost: (signal) => this.directDiscovery.getProbeHost(this.logical, this.host, signal),
       canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),

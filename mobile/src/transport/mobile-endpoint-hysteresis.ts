@@ -13,7 +13,12 @@ export class MobileEndpointHysteresis {
 
   constructor(
     startedAt: number,
-    private readonly options: EndpointHysteresisOptions
+    private readonly options: EndpointHysteresisOptions = {
+      directSuccessesRequired: 3,
+      directObservationMs: 30_000,
+      failureCooldownMs: 60_000,
+      minimumDwellMs: 60_000
+    }
   ) {
     this.lastMigrationAt = startedAt
   }
@@ -35,13 +40,16 @@ export class MobileEndpointHysteresis {
   }
 
   recordDirectFailure(now: number): void {
-    this.consecutiveDirectSuccesses = 0
-    this.directObservationStartedAt = null
+    this.resetDirectObservation()
     this.cooldownUntil = now + this.options.failureCooldownMs
   }
 
   recordMigration(now: number): void {
     this.lastMigrationAt = now
+    this.resetDirectObservation()
+  }
+
+  resetDirectObservation(): void {
     this.consecutiveDirectSuccesses = 0
     this.directObservationStartedAt = null
   }

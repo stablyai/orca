@@ -14,6 +14,7 @@ export class DirectReturnProbe {
 
   private stopped = false
   private activeProbe: AbortController | null = null
+  private candidateSnapshot: string | null = null
 
   constructor(
     private readonly deps: {
@@ -25,6 +26,7 @@ export class DirectReturnProbe {
     private readonly hooks: {
       hysteresis: MobileEndpointHysteresis
       host: () => HostProfile
+      resolveHost?: (signal: AbortSignal) => Promise<HostProfile | null>
       canSchedule: () => boolean
       canAttempt: () => boolean
       beginOperation: () => void
@@ -57,12 +59,16 @@ export class DirectReturnProbe {
 
   stop(): void {
     this.stopped = true
+    this.cancel()
+  }
+
+  cancel(): void {
     this.clear()
     this.activeProbe?.abort()
   }
 
   private async probe(): Promise<void> {
-    if (this.stopped) {
+    if (this.stopped || !this.hooks.canSchedule()) {
       return
     }
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
@@ -74,13 +80,24 @@ export class DirectReturnProbe {
     this.hooks.beginOperation()
     let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
     try {
+      const host = this.hooks.resolveHost
+        ? await this.hooks.resolveHost(controller.signal)
+        : this.hooks.host()
+      const snapshot = host ? JSON.stringify([host.endpoint, host.endpoints]) : null
+      if (snapshot !== this.candidateSnapshot) {
+        this.hooks.hysteresis.resetDirectObservation()
+        this.candidateSnapshot = snapshot
+      }
+      if (controller.signal.aborted || !host) {
+        return
+      }
       successful = await openAuthenticatedDirectEndpoint(
-        this.hooks.host(),
+        host,
         this.deps.openDirect,
         12_000,
         controller.signal
       )
-      if (this.stopped) {
+      if (controller.signal.aborted) {
         return
       }
       if (!successful) {
@@ -95,12 +112,12 @@ export class DirectReturnProbe {
       // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
       try {
-        await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
-      } catch (error) {
-        if (this.stopped) {
-          return
+        await this.hooks.migrate(candidate.client, candidate.path, () => controller.signal.aborted)
+      } catch {
+        if (!controller.signal.aborted) {
+          this.hooks.hysteresis.recordDirectFailure(this.deps.now())
         }
-        throw error
+        return
       }
       if (this.stopped) {
         return
