@@ -11,6 +11,8 @@ export type ComposerSourceContextModel = {
   setAgentPrompt: React.Dispatch<React.SetStateAction<string>>
   note: string
   setNote: React.Dispatch<React.SetStateAction<string>>
+  tags: string[]
+  setTags: React.Dispatch<React.SetStateAction<string[]>>
   attachmentPaths: string[]
   setAttachmentPaths: React.Dispatch<React.SetStateAction<string[]>>
   normalizedInitialLinkedWorkItem: LinkedWorkItemSummary | null
