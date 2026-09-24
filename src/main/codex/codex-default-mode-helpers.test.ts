@@ -308,6 +308,11 @@ describe('Codex default-mode helpers', () => {
       expect.objectContaining({ membership: 'live', state: 'working', description: LABEL })
     ])
     expect(run.strip()).toHaveLength(1)
+    expect(run.rosterRows()).toEqual([
+      expect.objectContaining({
+        agents: [expect.objectContaining({ id: HELPER, label: LABEL, state: 'working' })]
+      })
+    ])
   })
 
   it('ends a running helper its caller closed as cancelled, in the strip and the record together', async () => {

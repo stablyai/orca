@@ -23,14 +23,15 @@ import type { CodexThreadItem } from './codex-thread-item-identity'
 /** The roster's name for a helper thread, or null for one it never registered. */
 export type CodexHelperName = (threadId: string) => string | null
 
-/** Who the call acted on. A spawn names its helper-to-be by prompt until Codex says which thread
- *  it became; a helper the roster never registered (a restored thread) is named by its thread id. */
+/** Who the call acted on. A spawn names its helper by its prompt until the roster holds the
+ *  thread it became; a helper the roster never registered (a restored thread) is named by its
+ *  thread id. */
 function helperNames(call: CodexCollabAgentToolCall, helperName?: CodexHelperName): string {
-  const named = call.receiverThreadIds.map((threadId) => helperName?.(threadId) ?? threadId)
   if (call.tool === 'spawnAgent') {
-    return named[0] ?? codexCollabHelperLabel(call.prompt) ?? ''
+    const spawned = call.receiverThreadIds[0]
+    return (spawned && helperName?.(spawned)) || codexCollabHelperLabel(call.prompt) || ''
   }
-  return named.join(', ')
+  return call.receiverThreadIds.map((threadId) => helperName?.(threadId) ?? threadId).join(', ')
 }
 
 /** What the helpers said back. One reply reads as itself; several are each put under their name. */
