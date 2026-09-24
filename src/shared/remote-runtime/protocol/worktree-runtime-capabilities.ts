@@ -124,6 +124,8 @@ export const WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY =
 // Hosts that publish worktreeRowsChanged (only while the sidebar feed is off), so a phone's workspace list polls worktree.ps only as a backstop.
 export const WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'worktree.rows-changed-event.v1' as const
+// worktree.set accepts `tags`/`addTags`/`removeTags`, folderWorkspace.update `tags`; older hosts strip them silently.
+export const WORKTREE_TAGS_RUNTIME_CAPABILITY = 'worktree.tags.v1' as const
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY,
@@ -139,6 +141,7 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   ...WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+  WORKTREE_TAGS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
