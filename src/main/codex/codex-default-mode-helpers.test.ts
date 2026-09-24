@@ -12,6 +12,9 @@ import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subj
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { CodexSubagentExecutions } from './codex-subagent-executions'
 
 const parent = makeStructuredAgentStatusSubject(
   {
@@ -414,5 +417,63 @@ describe('the roster row follows a helper whose turn ends with no turn/completed
       closeCompleted
     )
     expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: 'stopped' })])
+  })
+})
+
+describe('a restored thread', () => {
+  function restored() {
+    const executions = new CodexSubagentExecutions()
+    const rows = new Map<string, AgentJournalItemBody>()
+    const translator = createCodexJournalTranslator({
+      sink: {
+        appendItem: (identity, body) => rows.set(JSON.stringify(identity), body),
+        appendTombstone: () => {},
+        publish: () => {}
+      },
+      primaryThreadId: () => THREAD_ID,
+      subagentExecutions: executions,
+      schedule: (run: () => void) => {
+        run()
+        return () => {}
+      }
+    })
+    const tracker = new CodexBackgroundTaskTracker(THREAD_ID, executions)
+    const replayed = [spawnCompleted, waitCompleted].map((frame) => frame.params.item)
+    const admission = translator.restoreThread(THREAD_ID, {
+      turns: [{ id: PARENT_TURN, items: replayed }]
+    })
+    expect(admission).toEqual({ accepted: true })
+    const bodies = () => [...rows.values()]
+    return { executions, tracker, bodies }
+  }
+
+  it('names the helper on a replayed call row, as the live row did', () => {
+    const { bodies } = restored()
+    expect(bodies()).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool-call',
+        name: 'wait_agent',
+        input: expect.objectContaining({ description: LABEL })
+      })
+    )
+  })
+
+  it('claims no running helper for a name it learned from history', () => {
+    const { executions, tracker, bodies } = restored()
+    expect(executions.workingChildren()).toEqual([])
+    // A live frame republishes the strip and drains evidence: neither holds the helper.
+    tracker.observe({
+      method: 'turn/started',
+      threadId: THREAD_ID,
+      params: { threadId: THREAD_ID, turn: { id: 'next-turn', status: 'inProgress' } }
+    })
+    expect(tracker.state).toBeNull()
+    expect(tracker.drainChildWorkEvidence(1)).toEqual([])
+    expect(
+      bodies().filter(
+        (body) =>
+          body.kind === 'message' && body.blocks.some((block) => block.type === 'subagent-group')
+      )
+    ).toEqual([])
   })
 })

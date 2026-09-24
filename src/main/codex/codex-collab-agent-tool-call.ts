@@ -84,7 +84,8 @@ export function codexCollabHelperLabel(prompt: string | null): string | null {
   return `${collapsed.slice(0, end)}…`
 }
 
-/** The name the model called the tool by, which is what its row shows. */
+/** The name the model called the tool by, which is what its row shows. The wire item spells the
+ *  tool in camelCase; the model-facing name is snake_case, so this map is not a spelling fix. */
 const CODEX_COLLAB_TOOL_NAMES = new Map<string, string>([
   ['spawnAgent', 'spawn_agent'],
   ['sendInput', 'send_input'],

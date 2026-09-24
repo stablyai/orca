@@ -29,7 +29,7 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
     activeTurn,
     (threadId, turnId) => genericFrames.suppress(threadId, turnId),
     // A collab call's row names its helpers the way the roster does.
-    (threadId) => subagents.helperLabel(threadId)
+    (threadId) => subagents.executions.label(threadId)
   )
   return {
     activeTurns,

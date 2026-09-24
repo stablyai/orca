@@ -94,7 +94,8 @@ export class CodexSubagentRoster {
    *  the map itself is LRU-capped in `handleTokenUsage`. */
   private readonly tokensByThread = new Map<string, number>()
   private readonly now: () => number
-  private readonly executions: CodexSubagentExecutions
+  /** The one owner of child membership and turn state; the rows of calls on a helper read it too. */
+  readonly executions: CodexSubagentExecutions
   private readonly unfollow: () => void
   /** Who produced a row, from what this roster learned about each child thread. */
   readonly linkage: CodexSubagentLinkage
@@ -114,11 +115,6 @@ export class CodexSubagentRoster {
     })
   }
 
-  /** The label a registered helper's row carries. */
-  helperLabel(agentThreadId: string): string | null {
-    return this.executions.label(agentThreadId)
-  }
-
   /** Consume an item that announces a child. Null means the item is not this roster's to render:
    *  a `subAgentActivity` item renders as the roster row alone, while a spawn call keeps its own
    *  row, so it is claimed only to hand back a refused write. */
@@ -127,7 +123,8 @@ export class CodexSubagentRoster {
     turnId: string | null
     item: CodexThreadItem
   }): StructuredAgentSessionSinkAdmission | null {
-    const claimed = readCodexSubagentActivity(input.item) ? ADMITTED : null
+    const renderedByRoster = readCodexSubagentActivity(input.item) !== null
+    const claimed = renderedByRoster ? ADMITTED : null
     const announcement = readCodexSubagentAnnouncement(input.item)
     // The root node is the parent turn itself, not a child it spawned.
     if (!announcement || announcement.agentThreadId === this.deps.primaryThreadId()) {
@@ -150,7 +147,7 @@ export class CodexSubagentRoster {
       this.recordExecution(group, child, child.execution)
     }
     const admission = this.write(group)
-    return claimed || !admission.accepted ? admission : null
+    return renderedByRoster || !admission.accepted ? admission : null
   }
 
   handleTurnEvent(event: {
