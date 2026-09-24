@@ -108,13 +108,13 @@ function operationId(): string {
 function attachParams(sessionId: string) {
   const params = {
     location: {
-      executionHostId: 'local',
+      executionHostId: 'local' as const,
       wslDistro: null,
       workspaceId: WORKSPACE,
       workspaceKind: 'git-worktree' as const
     },
     provider: 'codex' as const,
-    agent: 'codex',
+    agent: 'codex' as const,
     accountHome: { variable: 'CODEX_HOME' as const, path: '/home/dev/.codex' },
     runtimeKind: 'native' as const
   }
@@ -297,7 +297,6 @@ beforeEach(async () => {
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     openCodexConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    releaseGraceMs: 60_000,
     // The same call the runtime's own host install makes on every status change.
     onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary)
   })
