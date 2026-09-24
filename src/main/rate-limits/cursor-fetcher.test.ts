@@ -119,6 +119,16 @@ describe('fetchCursorRateLimits', () => {
     expect(limited.usageMetadata?.retryAtMs).toBeGreaterThan(Date.now())
   })
 
+  it('treats a redirect to the login page as an expired sign-in', async () => {
+    // Why: the dashboard bounces an unusable session to /login. With
+    // redirect:'error' that surfaced as a generic network failure, hiding the
+    // one message that tells the user what to do.
+    netFetchMock.mockResolvedValueOnce(jsonResponse({}, 302, { location: '/login' }))
+    const limits = await fetchCursorRateLimits({ authReadResult: session() })
+    expect(limits.usageMetadata?.failureKind).toBe('stale-token')
+    expect(limits.error).toContain('cursor-agent login')
+  })
+
   it('reports a server failure with its status code', async () => {
     netFetchMock.mockResolvedValueOnce(jsonResponse({}, 503))
     const limits = await fetchCursorRateLimits({ authReadResult: session() })

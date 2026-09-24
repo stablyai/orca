@@ -168,10 +168,10 @@ export async function readCursorAuthSession(
     }
   }
 
+  // Why not pushed to `errors`: the IDE holds a lock on state.vscdb while it runs,
+  // so a busy open is transient. Reporting it would pin an alert-triangle bar on
+  // every Cursor IDE user who never set Cursor up in Orca.
   const desktopRead = readCursorDesktopProfile(desktopDbPath)
-  if (desktopRead.status === 'error') {
-    errors.push(desktopRead.error)
-  }
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
     const session = sessionFrom(
       desktopRead.profile.accessToken,

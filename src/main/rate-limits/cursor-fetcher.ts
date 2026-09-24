@@ -66,11 +66,14 @@ async function fetchDashboardJson(
     ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
     : AbortSignal.timeout(API_TIMEOUT_MS)
   const res = await net.fetch(url, {
-    redirect: 'error',
+    // Why manual: the dashboard bounces an unusable session to /login, and
+    // 'error' would surface that as a generic network failure instead of the
+    // actionable sign-in message below.
+    redirect: 'manual',
     headers: requestHeaders(session),
     signal: requestSignal
   })
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400)) {
     return {
       kind: 'result',
       result: result('error', EXPIRED_MESSAGE, {

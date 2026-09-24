@@ -70,6 +70,19 @@ describe('mapCursorUsageSummary', () => {
     expect(mapped.monthly?.usedPercent).toBe(100)
   })
 
+  it('publishes no pools for a plan the account does not own', () => {
+    // Why: a team-billed account still reports 0% pools. Publishing them would
+    // paint a healthy 0% meter and skip the request-quota fallback.
+    const mapped = mapCursorUsageSummary({
+      ...CYCLE,
+      individualUsage: {
+        plan: { enabled: false, autoPercentUsed: 0, apiPercentUsed: 0, totalPercentUsed: 0 }
+      }
+    })
+    expect(mapped.buckets).toHaveLength(0)
+    expect(mapped.monthly).toBeNull()
+  })
+
   it('reports an unlimited plan without inventing a percentage', () => {
     const mapped = mapCursorUsageSummary({ ...CYCLE, isUnlimited: true, membershipType: 'ultra' })
     expect(mapped.isUnlimited).toBe(true)

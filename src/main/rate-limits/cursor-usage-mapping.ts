@@ -127,12 +127,15 @@ export function mapCursorUsageSummary(summary: CursorUsageSummary): CursorUsageM
   })
 
   const plan = summary.individualUsage?.plan
+  // Why: a team-billed account still reports 0% pools it does not own. Publishing
+  // them as buckets would paint a healthy 0% meter and skip the legacy fallback.
+  const planEnabled = plan?.enabled !== false
   const buckets: RateLimitBucket[] = []
-  const cursorModels = finiteNumber(plan?.autoPercentUsed)
+  const cursorModels = planEnabled ? finiteNumber(plan?.autoPercentUsed) : null
   if (cursorModels !== null) {
     buckets.push({ name: CURSOR_MODELS_BUCKET_NAME, ...toWindow(cursorModels) })
   }
-  const otherModels = finiteNumber(plan?.apiPercentUsed)
+  const otherModels = planEnabled ? finiteNumber(plan?.apiPercentUsed) : null
   if (otherModels !== null) {
     buckets.push({ name: CURSOR_OTHER_MODELS_BUCKET_NAME, ...toWindow(otherModels) })
   }
@@ -144,7 +147,7 @@ export function mapCursorUsageSummary(summary: CursorUsageSummary): CursorUsageM
     buckets.push({ name: CURSOR_ON_DEMAND_BUCKET_NAME, ...toWindow(onDemandPercent) })
   }
 
-  const planPercent = plan?.enabled === false ? null : poolPercent(plan, 'totalPercentUsed')
+  const planPercent = planEnabled ? poolPercent(plan, 'totalPercentUsed') : null
   const membership = summary.membershipType
   return {
     monthly: planPercent === null ? null : toWindow(planPercent),
