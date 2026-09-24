@@ -17659,6 +17659,11 @@
         "unverifiable": "Impossible de vérifier {{value0}} : {{value1}}",
         "unresolved": "Impossible de résoudre {{value0}} dans cet espace de travail"
       },
+      "contextMenu": {
+        "orchestrationAddressCopied": "Adresse d'orchestration copiée",
+        "orchestrationAddressCopyFailed": "Impossible de copier l'adresse d'orchestration",
+        "copyOrchestrationAddress": "Copier l'adresse d'orchestration"
+      },
       "contextUsage": {
         "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
         "title": "Contexte",

@@ -53,6 +53,9 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
+vi.mock('sonner', () => ({ toast: toasts }))
+
 vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
   TabWorkspaceLayoutMenuSection: () => 'Move Tab to Split'
 }))
@@ -73,11 +76,15 @@ function childrenText(children: ReactNode): string {
 function Harness({
   onSwitchToTerminal,
   structured = false,
-  enabled = true
+  enabled = true,
+  orchestrationAddress,
+  canCopyAgentSessionId = false
 }: {
   onSwitchToTerminal?: () => void
   structured?: boolean
   enabled?: boolean
+  orchestrationAddress?: string
+  canCopyAgentSessionId?: boolean
 }) {
   const rootRef = createRef<HTMLDivElement>()
   const { menu } = useNativeChatContextMenu({
@@ -86,8 +93,10 @@ function Harness({
     onSwitchToTerminal,
     showTerminalPaneActions: !structured,
     workspaceLayout: structured ? { unifiedTabId: 'chat-tab', groupId: 'group-1' } : undefined,
+    orchestrationAddress,
     actions: {
       ...emptyNativeChatContextMenuActions,
+      canCopyAgentSessionId,
       onPaste: vi.fn()
     } satisfies NativeChatContextMenuActions
   })
@@ -154,5 +163,64 @@ describe('useNativeChatContextMenu', () => {
     getSelection.mockClear()
     document.dispatchEvent(new Event('selectionchange'))
     expect(getSelection).not.toHaveBeenCalled()
+  })
+
+  describe('Copy Orchestration Address', () => {
+    const address = 'session:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+    const writeClipboardText = vi.fn()
+
+    beforeEach(() => {
+      writeClipboardText.mockReset().mockResolvedValue(undefined)
+      toasts.success.mockReset()
+      toasts.error.mockReset()
+      Object.assign(window, { api: { ui: { writeClipboardText } } })
+    })
+
+    function labels(): string[] {
+      return items.list.map((candidate) => childrenText(candidate.children))
+    }
+
+    function addressItem(): ItemProps | undefined {
+      return items.list.find(
+        (candidate) => childrenText(candidate.children) === 'Copy Orchestration Address'
+      )
+    }
+
+    it.each([
+      ['a chat tab', true],
+      ['a chat in a terminal pane', false]
+    ])('copies session:<id> in %s', async (_where, structured) => {
+      renderToStaticMarkup(<Harness structured={structured} orchestrationAddress={address} />)
+
+      addressItem()?.onSelect?.()
+
+      await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledOnce())
+      expect(writeClipboardText).toHaveBeenCalledWith(address)
+    })
+
+    it('keeps the provider-id action beside it, under its own label', () => {
+      renderToStaticMarkup(<Harness orchestrationAddress={address} canCopyAgentSessionId />)
+
+      expect(labels()).toEqual(
+        expect.arrayContaining(['Copy Orchestration Address', 'Copy Session ID'])
+      )
+    })
+
+    it('is absent for a chat with no orchestration address', () => {
+      renderToStaticMarkup(<Harness structured />)
+      renderToStaticMarkup(<Harness />)
+
+      expect(labels()).not.toContain('Copy Orchestration Address')
+    })
+
+    it('reports a failed copy instead of claiming success', async () => {
+      writeClipboardText.mockRejectedValue(new Error('denied'))
+      renderToStaticMarkup(<Harness structured orchestrationAddress={address} />)
+
+      addressItem()?.onSelect?.()
+
+      await vi.waitFor(() => expect(toasts.error).toHaveBeenCalledOnce())
+      expect(toasts.success).not.toHaveBeenCalled()
+    })
   })
 })

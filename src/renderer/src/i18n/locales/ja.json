@@ -17595,6 +17595,11 @@
         "unverifiable": "{{value0}} を確認できませんでした: {{value1}}",
         "unresolved": "このワークスペースで {{value0}} を解決できませんでした"
       },
+      "contextMenu": {
+        "orchestrationAddressCopied": "オーケストレーションアドレスをコピーしました",
+        "orchestrationAddressCopyFailed": "オーケストレーションアドレスのコピーに失敗しました",
+        "copyOrchestrationAddress": "オーケストレーションアドレスをコピー"
+      },
       "contextUsage": {
         "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
         "title": "コンテキスト",

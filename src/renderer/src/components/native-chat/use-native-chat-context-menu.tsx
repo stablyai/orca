@@ -31,6 +31,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
+import { NativeChatCopyAddressMenuItem } from './NativeChatCopyAddressMenuItem'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 
 type NativeChatContextMenuState = {
@@ -52,6 +53,8 @@ type UseNativeChatContextMenuArgs = {
     groupId: string
     shortcutLabels?: Partial<Record<TabSplitDirection, string>>
   }
+  /** A structured session's `session:<id>`; terminal-backed chats are addressed by their handle. */
+  orchestrationAddress?: string
 }
 
 export type NativeChatContextMenuActions = {
@@ -103,7 +106,8 @@ export function useNativeChatContextMenu({
   actions,
   showTerminalPaneActions = true,
   splitShortcutLabels,
-  workspaceLayout
+  workspaceLayout,
+  orchestrationAddress
 }: UseNativeChatContextMenuArgs): {
   onContextMenuCapture: MouseEventHandler<HTMLElement>
   onSelectionCapture: () => void
@@ -284,6 +288,9 @@ export function useNativeChatContextMenu({
                   'Set Title…'
                 )}
               </DropdownMenuItem>
+              {orchestrationAddress ? (
+                <NativeChatCopyAddressMenuItem address={orchestrationAddress} />
+              ) : null}
               {actions.canCopyAgentSessionId ? (
                 <DropdownMenuItem onSelect={actions.onCopyAgentSessionId}>
                   <Copy />
@@ -319,6 +326,11 @@ export function useNativeChatContextMenu({
                   </DropdownMenuItem>
                 </>
               ) : null}
+            </>
+          ) : orchestrationAddress ? (
+            <>
+              <DropdownMenuSeparator />
+              <NativeChatCopyAddressMenuItem address={orchestrationAddress} />
             </>
           ) : null}
         </DropdownMenuContent>
