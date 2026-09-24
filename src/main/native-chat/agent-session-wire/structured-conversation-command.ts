@@ -241,10 +241,15 @@ export function runStructuredConversationCommand(
           }
           await store.setConversationCommand(sessionId, ctx.fence, completed)
           if (completed.replacementSessionId) {
-            context.deps.onConversationReplaced?.({
-              sessionId,
-              replacementSessionId: completed.replacementSessionId
-            })
+            try {
+              context.deps.onConversationReplaced?.({
+                sessionId,
+                replacementSessionId: completed.replacementSessionId
+              })
+            } catch (error) {
+              // The clear already committed; an observer must not fail it. Idle edges re-derive.
+              console.warn('[structured-conversation-command] replacement observer failed', error)
+            }
           }
           return { ok: true, value: completed }
         }

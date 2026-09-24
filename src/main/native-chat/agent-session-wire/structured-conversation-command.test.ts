@@ -247,6 +247,22 @@ describe('host conversation commands', () => {
     expect(phaseAtReport).toBe('committed')
   })
 
+  it('keeps a committed clear committed when the replacement observer throws', async () => {
+    // Adoption is bookkeeping behind a commit the user already has; the idle edge re-derives it.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    host.deps.onConversationReplaced = vi.fn(() => {
+      throw new Error('adoption failed')
+    })
+    const result = await host.conversationCommand(caller, commandParams('clear'))
+    expect(result).toMatchObject({ ok: true, value: { phase: 'committed' } })
+    expect(result.ok && result.value.replacementSessionId).toBeTruthy()
+    expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand?.phase).toBe('committed')
+    expect(warn).toHaveBeenCalledWith(
+      '[structured-conversation-command] replacement observer failed',
+      expect.any(Error)
+    )
+  })
+
   it('reports no replacement for a compaction or a refused clear', async () => {
     const replaced = vi.fn()
     host.deps.onConversationReplaced = replaced
