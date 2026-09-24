@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { PreloadApi } from '../../../../preload/api-types'
 
 export function createMiniMaxCredentialsApi(): NonNullable<
@@ -28,7 +29,10 @@ export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['curs
         credentialSource: null,
         planType: null,
         tokenFresh: false,
-        error: 'Cursor sign-in details are only readable on the computer running Orca.'
+        error: translate(
+          'auto.components.web.preloadApi.cursorAccounts.hostOnly',
+          'Cursor sign-in details are only readable on the computer running Orca.'
+        )
       })
   }
 }
