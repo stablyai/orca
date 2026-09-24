@@ -5,7 +5,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { producer } from './claude-child-work-producer-harness.test-fixture'
-import { invokeCanUseTool, PROVIDER_SESSION_ID } from './claude-structured-session-test-support'
+import {
+  invokeCanUseTool,
+  PROVIDER_SESSION_ID,
+  type FakeConnection
+} from './claude-structured-session-test-support'
 
 type CapturedEvent = { from: 'cli' | 'orca'; frame: Record<string, unknown> }
 
@@ -31,6 +35,27 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+/** Hands `canUseTool` exactly what the SDK hands it for this wire request. */
+function requestFromWire(
+  connection: FakeConnection,
+  wire: Record<string, unknown>,
+  options: { signal?: AbortSignal; withoutAgentId?: boolean } = {}
+): void {
+  const request = isRecord(wire.request) ? wire.request : {}
+  const agentId = options.withoutAgentId ? '' : text(request.agent_id)
+  invokeCanUseTool(
+    connection,
+    text(request.tool_name),
+    text(wire.request_id),
+    text(request.tool_use_id),
+    {
+      input: isRecord(request.input) ? request.input : {},
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(agentId ? { agentID: agentId } : {})
+    }
+  )
+}
+
 /** Replays one capture and returns the subagent's record state after each event, labelled. */
 async function replay(name: string, options: { withoutAgentId?: boolean } = {}) {
   const harness = await producer()
@@ -44,21 +69,9 @@ async function replay(name: string, options: { withoutAgentId?: boolean } = {}) 
     const response = isRecord(frame.response) ? frame.response : null
     let label = text(frame.subtype) || text(frame.type)
     if (frame.type === 'control_request' && request?.subtype === 'can_use_tool') {
-      // Exactly what the SDK hands `canUseTool` for this wire request.
       const controller = new AbortController()
       aborts.set(text(frame.request_id), controller)
-      const agentId = options.withoutAgentId ? '' : text(request.agent_id)
-      invokeCanUseTool(
-        connection,
-        text(request.tool_name),
-        text(frame.request_id),
-        text(request.tool_use_id),
-        {
-          input: isRecord(request.input) ? request.input : {},
-          signal: controller.signal,
-          ...(agentId ? { agentID: agentId } : {})
-        }
-      )
+      requestFromWire(connection, frame, { ...options, signal: controller.signal })
       label = 'can_use_tool'
     } else if (frame.type === 'control_cancel_request') {
       aborts.get(text(frame.request_id))?.abort()
@@ -113,15 +126,7 @@ describe('a Claude subagent waiting on a permission request', () => {
     for (const { frame } of events.slice(0, request)) {
       harness.send({ ...frame, session_id: PROVIDER_SESSION_ID })
     }
-    const wire = events[request]!.frame
-    const body = isRecord(wire.request) ? wire.request : {}
-    invokeCanUseTool(
-      harness.claude.connections[0]!,
-      text(body.tool_name),
-      text(wire.request_id),
-      text(body.tool_use_id),
-      { input: isRecord(body.input) ? body.input : {}, agentID: text(body.agent_id) }
-    )
+    requestFromWire(harness.claude.connections[0]!, events[request]!.frame)
     expect(harness.byDescription('Touch probe file')).toMatchObject({
       state: 'waiting',
       operation: { toolName: 'Bash', input: 'touch c9-probe-fg.txt', basis: 'open' }
@@ -172,6 +177,23 @@ describe('a Claude subagent waiting on a permission request', () => {
       'allow -> live working',
       'session_state_changed -> live working'
     ])
+  })
+
+  it('names the subagent from the request before its tool call reaches the journal', async () => {
+    // The SDK answers control requests as they arrive but hands frames over in order, so a request
+    // can land before the subagent's own tool call has been read.
+    const harness = await producer()
+    const events = capturedScenario('fg-allow')
+    const request = events.findIndex((event) => event.frame.type === 'control_request')
+    const toolCall = events
+      .slice(0, request)
+      .map((event) => event.frame.type)
+      .lastIndexOf('assistant')
+    for (const { frame } of events.slice(0, toolCall)) {
+      harness.send({ ...frame, session_id: PROVIDER_SESSION_ID })
+    }
+    requestFromWire(harness.claude.connections[0]!, events[request]!.frame)
+    expect(harness.byDescription('Touch probe file')?.state).toBe('waiting')
   })
 
   it("leaves no child waiting when the session's own agent asks", async () => {
