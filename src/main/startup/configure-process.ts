@@ -6,6 +6,7 @@ import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import { resolveLinuxPasswordStore } from './linux-password-store'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -72,6 +73,28 @@ export function configureElectronNetworkCompatibility(
   }
   // Why: Chromium's HTTP/2 switch is process-wide and only applies before the first session exists, so set it during early startup.
   app.commandLine.appendSwitch('disable-http2')
+}
+
+/**
+ * Names a credential backend on Linux desktops Chromium cannot detect.
+ *
+ * Must run before app-ready: Chromium resolves the password store once, on the
+ * first safeStorage use, and a switch appended afterwards is ignored. Without
+ * it, every safeStorage-backed credential on an unrecognised compositor falls
+ * through to its plaintext branch (see linux-password-store.ts for why this is
+ * safe to change only there).
+ */
+export function selectLinuxPasswordStore(): void {
+  if (process.platform !== 'linux') {
+    return
+  }
+  const store = resolveLinuxPasswordStore(process.env, {
+    passwordStoreAlreadySet: Boolean(app.commandLine.getSwitchValue('password-store'))
+  })
+  if (!store) {
+    return
+  }
+  app.commandLine.appendSwitch('password-store', store)
 }
 
 export function disableUnsupportedChromiumFeatures(): void {
