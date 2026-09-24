@@ -44,7 +44,8 @@ changes on `/clear`). `ORCA status --json` reports your own as `caller.address`;
 a `caller` with `live: false` carries the refusal that stops you acting as that
 session, and `null` means the shell has no orchestration identity. A user may
 copy a chat's address with its Copy Orchestration Address menu action. A chat's
-address survives `/clear`, and its Runs and unread mail stay with it. A worker
+address survives `/clear`: it names the conversation, so `caller.address` stays
+the same while `caller.sessionId` becomes the new session, and nothing moves. A worker
 running as a chat is `session:<id>` too; its internal `structworker_` mailbox
 key is never an address to hand out. `check` is the exception: it identifies
 its caller with `--terminal`, never `--from`.

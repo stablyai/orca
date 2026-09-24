@@ -148,6 +148,39 @@ describe('orchestration.callerShow: the caller learns its own address from the h
     expect(resolvePane).toHaveBeenCalledTimes(3)
   })
 
+  it('gives the menu the exact address each session of a cleared chat acts as', async () => {
+    const cleared = sessionRecord(SESSION_X)
+    h.records.set(SESSION_X, {
+      ...cleared,
+      conversationCommand: {
+        command: 'clear',
+        state: 'completed',
+        replacementSessionId: SESSION_Y,
+        operationId: 'op',
+        callerKey: 'caller',
+        phase: 'committed'
+      }
+    })
+
+    for (const sessionId of [SESSION_X, SESSION_Y]) {
+      const shown = resultOf(
+        await h.dispatch(orchestrationRequest('orchestration.sessionAddress', { sessionId }))
+      )
+      const acting = resultOf(await h.dispatch(callerShow({ sessionId })))
+      // One derivation: whatever address the host gives the conversation, the copy is the actor's.
+      expect(shown.address).toMatch(/^session:/)
+      expect(acting.caller).toMatchObject({ kind: 'session', address: shown.address })
+    }
+  })
+
+  it('refuses an address for an id that is not an Orca session id', async () => {
+    const response = await h.dispatch(
+      orchestrationRequest('orchestration.sessionAddress', { sessionId: 'not an id' })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: CODES.unknown } })
+  })
+
   it('answers null for a caller whose environment carries no identity', async () => {
     const response = await h.dispatch(callerShow({}))
 

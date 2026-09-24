@@ -23,8 +23,8 @@ naming the `check` to run.
 
 A turn with no new Delivery is a checkpoint, not a failure. The compact guide's
 empty-wait enumeration applies when a turn arrives and a Dispatch you expected
-has still not settled. Your address survives `/clear`: your Runs and unread
-mail stay with the chat.
+has still not settled. Your address survives `/clear`; nothing moves, and your
+Runs and unread mail stay where they are.
 
 ## Ready waves
 

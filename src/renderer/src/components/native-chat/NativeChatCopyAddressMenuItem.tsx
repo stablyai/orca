@@ -4,13 +4,21 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 
 /**
- * Copies the session's orchestration address (`session:<id>`), the Orca-minted id other agents
- * message it by. Distinct from "Copy Session ID", which copies the provider's id and changes on
- * `/clear`.
+ * Copies the chat's orchestration address (`session:<id>`), the one other agents message it by,
+ * resolved when selected because `/clear` keeps the conversation's address, not the live id.
+ * Distinct from "Copy Session ID", which copies the provider's id and changes on `/clear`.
  */
-export function NativeChatCopyAddressMenuItem({ address }: { address: string }): React.JSX.Element {
+export function NativeChatCopyAddressMenuItem({
+  resolveAddress
+}: {
+  resolveAddress: () => Promise<string | null>
+}): React.JSX.Element {
   const copyAddress = async (): Promise<void> => {
     try {
+      const address = await resolveAddress()
+      if (!address) {
+        throw new Error('no orchestration address')
+      }
       await window.api.ui.writeClipboardText(address)
       toast.success(
         translate(

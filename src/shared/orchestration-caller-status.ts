@@ -34,3 +34,6 @@ export type OrchestrationCallerRefusal = {
 export type CliStatusCaller = OrchestrationCallerAddress | OrchestrationCallerRefusal | null
 
 export type OrchestrationCallerShowResult = { caller: OrchestrationCallerAddress | null }
+
+/** `orchestration.sessionAddress`: the `session:<id>` another agent reaches a session's chat at. */
+export type OrchestrationSessionAddressResult = { address: string }

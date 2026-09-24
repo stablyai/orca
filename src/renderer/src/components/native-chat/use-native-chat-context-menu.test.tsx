@@ -93,7 +93,8 @@ function Harness({
     onSwitchToTerminal,
     showTerminalPaneActions: !structured,
     workspaceLayout: structured ? { unifiedTabId: 'chat-tab', groupId: 'group-1' } : undefined,
-    orchestrationAddress,
+    resolveOrchestrationAddress:
+      orchestrationAddress === undefined ? undefined : async () => orchestrationAddress,
     actions: {
       ...emptyNativeChatContextMenuActions,
       canCopyAgentSessionId,

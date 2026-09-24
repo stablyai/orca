@@ -1,9 +1,15 @@
 import type {
   OrchestrationCallerAddress,
-  OrchestrationCallerShowResult
+  OrchestrationCallerShowResult,
+  OrchestrationSessionAddressResult
 } from '../../../../../shared/orchestration-caller-status'
 import type { OrchestrationCompatibilityEvidence } from '../../../../../shared/orchestration-compatibility-evidence'
+import { sessionOrchestrationActor } from '../../../../../shared/orchestration-actor'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { SessionAddressParams } from '../../../../../shared/rpc-contract/orchestration-params'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { sessionOrchestrationIdentity } from '../../../orchestration/structured-session-mail-address'
 import { defineMethod } from '../../core'
 
 export const ORCHESTRATION_CALLER_METHODS = [
@@ -28,6 +34,23 @@ export const ORCHESTRATION_CALLER_METHODS = [
         }
       }
       return { caller: resolveTerminalCaller(runtime, orchestrationCompatibilityEvidence) }
+    }
+  }),
+  defineMethod({
+    name: 'orchestration.sessionAddress',
+    params: SessionAddressParams,
+    // Why host-side: the address is derived from the session records, which only the host holds, the
+    // same derivation a verb acting as that session binds to.
+    handler: (params, { runtime }): OrchestrationSessionAddressResult => {
+      const actor = sessionOrchestrationActor(params.sessionId)
+      if (!actor) {
+        throw new OrchestrationError(
+          CODES.unknown,
+          `${params.sessionId} is not an Orca agent session id.`,
+          { effectsApplied: false }
+        )
+      }
+      return { address: sessionOrchestrationIdentity(actor.id, runtime.getOrchestrationDb()).actor }
     }
   })
 ]

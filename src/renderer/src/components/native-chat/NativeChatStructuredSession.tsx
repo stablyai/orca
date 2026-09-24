@@ -2,10 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import {
-  formatOrchestrationActor,
-  sessionOrchestrationActor
-} from '../../../../shared/orchestration-actor'
+import { sessionOrchestrationActor } from '../../../../shared/orchestration-actor'
+import { resolveStructuredSessionOrchestrationAddress } from '../../runtime/structured-session-orchestration-address'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -67,10 +65,13 @@ export function NativeChatStructuredSession(
   )
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
-  const orchestrationAddress = useMemo(() => {
-    const actor = sessionOrchestrationActor(props.sessionId)
-    return actor ? formatOrchestrationActor(actor) : undefined
-  }, [props.sessionId])
+  const resolveOrchestrationAddress = useMemo(
+    () =>
+      sessionOrchestrationActor(props.sessionId)
+        ? () => resolveStructuredSessionOrchestrationAddress(props.target, props.sessionId)
+        : undefined,
+    [props.sessionId, props.target]
+  )
   const paneCommands = useStructuredNativeChatPaneCommands({
     tabId: props.tabId,
     groupId: props.groupId,
@@ -78,7 +79,7 @@ export function NativeChatStructuredSession(
     rootRef,
     composerRef,
     terminalPaneActions: props.contextMenuActions,
-    orchestrationAddress
+    resolveOrchestrationAddress
   })
   const session = useMemo<NativeChatLiveSession>(
     () => ({

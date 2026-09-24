@@ -53,8 +53,8 @@ type UseNativeChatContextMenuArgs = {
     groupId: string
     shortcutLabels?: Partial<Record<TabSplitDirection, string>>
   }
-  /** A structured session's `session:<id>`; terminal-backed chats are addressed by their handle. */
-  orchestrationAddress?: string
+  /** Resolves a structured session's `session:<id>`; terminal-backed chats are addressed by their handle. */
+  resolveOrchestrationAddress?: () => Promise<string | null>
 }
 
 export type NativeChatContextMenuActions = {
@@ -107,7 +107,7 @@ export function useNativeChatContextMenu({
   showTerminalPaneActions = true,
   splitShortcutLabels,
   workspaceLayout,
-  orchestrationAddress
+  resolveOrchestrationAddress
 }: UseNativeChatContextMenuArgs): {
   onContextMenuCapture: MouseEventHandler<HTMLElement>
   onSelectionCapture: () => void
@@ -288,8 +288,8 @@ export function useNativeChatContextMenu({
                   'Set Title…'
                 )}
               </DropdownMenuItem>
-              {orchestrationAddress ? (
-                <NativeChatCopyAddressMenuItem address={orchestrationAddress} />
+              {resolveOrchestrationAddress ? (
+                <NativeChatCopyAddressMenuItem resolveAddress={resolveOrchestrationAddress} />
               ) : null}
               {actions.canCopyAgentSessionId ? (
                 <DropdownMenuItem onSelect={actions.onCopyAgentSessionId}>
@@ -327,10 +327,10 @@ export function useNativeChatContextMenu({
                 </>
               ) : null}
             </>
-          ) : orchestrationAddress ? (
+          ) : resolveOrchestrationAddress ? (
             <>
               <DropdownMenuSeparator />
-              <NativeChatCopyAddressMenuItem address={orchestrationAddress} />
+              <NativeChatCopyAddressMenuItem resolveAddress={resolveOrchestrationAddress} />
             </>
           ) : null}
         </DropdownMenuContent>
