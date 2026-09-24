@@ -33,12 +33,9 @@ export function structuredStatusChildWork(
     return {}
   }
   const children = views.map(({ totalTokens: _totalTokens, ...view }) => view)
-  // Live only: an old client folds every listed task into the parent, and reads a failed one's
-  // legacy `blocked` as still running.
-  const { tasks } = structuredChildWorkLegacyTasks(
-    children.filter((view) => view.membership === 'live'),
-    provider
-  )
+  // `tasks` only, the live rows: an old client folds every listed task into the parent, and
+  // reads a failed one's legacy `blocked` as still running.
+  const { tasks } = structuredChildWorkLegacyTasks(children, provider)
   return { children, ...(tasks ? { backgroundTasks: tasks } : {}) }
 }
 
