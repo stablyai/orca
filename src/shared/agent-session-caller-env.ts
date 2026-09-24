@@ -20,9 +20,9 @@ export function readInjectedAgentSessionId(
 }
 
 /**
- * The address the host gives this session (`mailboxAddressOf` on its resolved party): a structured
- * worker keeps the handle it was minted, any other session is `session:<id>`. Only for text that
- * must match what the host writes; the CLI spells it without the host resolver.
+ * The mailbox key the host binds this session to (`mailboxAddressOf` on its resolved party): a
+ * structured worker keeps the handle it was minted, any other session is `session:<id>`. Never shown
+ * to the agent as its address; the CLI spells it without the host resolver.
  */
 export function injectedSessionAddress(
   env: Readonly<Record<string, string | undefined>> = process.env

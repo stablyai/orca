@@ -5,6 +5,7 @@ import {
   dispatchPreambleSendOptions
 } from '../../../../orchestration/preamble'
 import { structuredSessionCliInvocation } from '../../../../orchestration/cli-command'
+import { agentVisibleOrchestrationAddress } from '../../../../orchestration/structured-session-mail-address'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
 
@@ -39,7 +40,10 @@ export async function deliverWorkerDispatchPreamble(args: {
     taskId: args.taskId,
     dispatchId: args.dispatchId,
     taskSpec: args.taskSpec,
-    coordinatorHandle: args.coordinatorHandle,
+    coordinatorHandle: agentVisibleOrchestrationAddress(
+      args.coordinatorHandle,
+      runtime.getOrchestrationDb()
+    ),
     workerHandle: terminalHandle,
     ...(structuredSession
       ? {

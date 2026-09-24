@@ -1,3 +1,6 @@
+import type { OrchestrationDb } from '../../../../orchestration/db'
+import { formatMessageBanner } from '../../../../orchestration/formatter'
+import { withAgentVisibleAddresses } from '../../../../orchestration/structured-session-mail-address'
 import type { MessageRow } from '../../../../orchestration/types'
 
 // Why: read/sequence and the pointer_* and sender_pane_key columns are delivery plumbing
@@ -25,4 +28,24 @@ export function exposeMessages(messages: MessageRow[]): MailboxMessageReceipt[] 
     }
     return exposed as MailboxMessageReceipt
   })
+}
+
+/**
+ * Rows as the reader of a mailbox sees them. Only reads are re-spelled: a send receipt echoes its
+ * stored row, whose sender key worker_done settlement matches.
+ */
+export function exposeReadMessages(
+  messages: readonly MessageRow[],
+  db: OrchestrationDb
+): MailboxMessageReceipt[] {
+  return exposeMessages(withAgentVisibleAddresses(messages, db))
+}
+
+export function formatReadMessages(
+  messages: readonly MessageRow[] | undefined,
+  db: OrchestrationDb
+): string {
+  return withAgentVisibleAddresses(messages ?? [], db)
+    .map((message) => formatMessageBanner(message))
+    .join('\n\n')
 }
