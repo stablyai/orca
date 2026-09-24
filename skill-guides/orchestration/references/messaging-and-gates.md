@@ -10,9 +10,11 @@ accepted steering.
 ## Coordinator delivery loop
 
 `check` names its caller with `--terminal <handle>` and is the only verb that
-rejects `--from`. Omit `--terminal` inside an Orca terminal, where Orca resolves
-the caller; pass it explicitly from anywhere else, including a dispatched
-worker reading coordinator follow-ups.
+rejects `--from`. Omit `--terminal` in a chat session, whose caller is always
+`session:<id>`, and inside an Orca terminal, where Orca resolves the caller.
+Pass your own handle explicitly from anywhere else, including a dispatched
+worker reading coordinator follow-ups. A chat coordinator never waits: it
+checks without `--wait` on each turn Orca starts for new mail.
 
 A consuming coordinator `check` returns the bound Run's oldest FIFO Delivery,
 up to 50 messages, and replays that exact batch until acknowledged. Process
@@ -36,7 +38,9 @@ ORCA orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body
 
 Do not substitute a remote terminal handle. Omit `--from` for ordinary
 coordinator calls; a dispatched worker instead copies the exact `--from` and
-capability arguments in its preamble. `check` is the exception: it identifies
+capability arguments in its preamble. Any live chat session on this host is
+reachable at `session:<id>`, its Orca session id; `ORCA status --json` reports
+your own as `caller.address`. `check` is the exception: it identifies
 its caller with `--terminal`, never `--from`.
 
 Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`,

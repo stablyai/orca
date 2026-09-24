@@ -65,8 +65,30 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
 - Use the executable you used to run `skills get` for the entire run. In the
   examples below, replace `ORCA` with it; do not create a shell variable or run
   `ORCA` literally. If it fails, report that exact error instead of switching.
+  When `ORCA_CLI_COMMAND` is set, that executable is its value: Orca sets it for
+  its chat sessions, where bare `orca` in a login shell can reach another Orca.
 - A successful `orchestration send` proves durable enqueue; its wake or nudge is
   best-effort attention only and does not prove the recipient read or accepted it.
+
+## Your address
+
+Every agent Orca runs has one orchestration address, and other agents reach it
+there:
+
+- A chat session is `session:<id>`, with the Orca session id. Never use the
+  provider's session id: it changes on `/clear` and names no live agent.
+- A terminal agent is its terminal handle.
+
+`ORCA status --json` reports yours as `caller.address`, resolved by Orca from
+the identity in your environment. A `caller` with `live: false` and a `refusal`
+says why you cannot act as that session right now; `null` means this shell has
+no orchestration identity. Send to another session with
+`ORCA orchestration send --to session:<id>`; a user may copy a chat's address
+with its Copy Orchestration Address menu action and give it to you.
+
+Your commands act as you without a caller flag. Never pass another agent's
+address as `--from` or `--terminal`: in a chat session the CLI refuses it, and in
+a terminal it acts as that agent and consumes its mail.
 
 ## Worker obligations
 
@@ -78,8 +100,8 @@ The injected preamble is authoritative. A dispatched worker must:
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
    liveness, not completion.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
-   new file, after a test run — and once more immediately before `worker_done`:
-   `ORCA orchestration check --terminal <your_handle> --json`.
+   new file, after a test run — and once more immediately before `worker_done`,
+   with the preamble's own `check` command.
 4. Send `worker_done` exactly once, from the dispatched terminal, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.
@@ -112,8 +134,10 @@ dependencies or a retry of a known Task. Use dependencies only for real ordering
 and prefer parallel waves over chains deeper than three or four steps; nested
 workers obey the depth limit, and a new Run does not reset the caller's depth.
 
-A consuming `check` names its caller with `--terminal <handle>`, never `--from`;
-omit it inside the coordinator's own Orca terminal. It returns the bound Run's
+A consuming `check` reads its caller from your environment, like every other
+verb: omit `--terminal` in a chat session and inside your own Orca terminal.
+Elsewhere pass `--terminal` with your own handle, never `--from` and never
+another agent's handle. It returns the bound Run's
 oldest FIFO Delivery and replays that batch until acknowledged. Process every
 message: reply to questions, validate each `worker_done` against the expected
 active Dispatch, and decide each settled terminal's next owner before the ack:
@@ -141,6 +165,25 @@ sent no `worker_done`. Then load `references/recovery-and-cleanup.md` and choose
 `worker-stop` or `worker-abandon` explicitly. `unverifiable` is absence,
 including when `worker-show` reports `agentWait` null. Absence never authorizes
 stop, abandon, retry, or release; keep waiting or inspect.
+
+### Chat coordinators: end the turn instead of waiting
+
+When `ORCA status --json` reports `caller.kind` `session`, you coordinate from a
+chat. Never block in `check --wait`: your shell tool has its own timeout, and
+Orca wakes you instead. When messages reach your Run, Orca starts a new turn in
+this chat once you are idle, saying `You have <n> orchestration message(s)`.
+
+1. Bind one Run and start the full independent wave, as above.
+2. End your turn.
+3. On each such turn run `ORCA orchestration check --json`, without `--wait`.
+   Process every message as above, then `ORCA orchestration check --ack
+   <delivery_id> --json`, which also returns the next batch. Repeat until it
+   returns no Delivery.
+4. End your turn again. When every expected Dispatch has settled, report.
+
+A turn with no new Delivery is a checkpoint, not a failure. The empty-wait
+enumeration above applies when a turn arrives and a Dispatch you expected has
+still not settled.
 
 `worker-start` is the normal path, composing placement, terminal readiness,
 prompt injection, and supervised resource ownership. `dispatch --inject` leaves
