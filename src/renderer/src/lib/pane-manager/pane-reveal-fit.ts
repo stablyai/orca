@@ -9,6 +9,7 @@ import {
 import { requestStablePaneFit } from './pane-fit-resize-observer'
 import { clearPaneFitContinuationRetry } from './pane-fit-continuation-retry'
 import { resumePendingFitScrollRestoreAfterFit } from './pane-scroll'
+import { refreshTerminalMouseWheelHandling } from './pane-terminal-mouse-wheel'
 
 // Why: a real resize changes the element's pixels; a metric-only wobble does not.
 // No baseline / unmeasurable counts as changed so a first reveal still fits.
@@ -77,4 +78,5 @@ export function fitRevealedPane(pane: ManagedPane): void {
     return
   }
   releaseMeasurableFitContinuations(pane)
+  refreshTerminalMouseWheelHandling(pane.terminal)
 }

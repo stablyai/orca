@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   requestStablePaneFit: vi.fn(),
   clearPaneFitContinuationRetry: vi.fn(),
   resumePendingFitScrollRestoreAfterFit: vi.fn(),
-  flushDeferredPaneMetricOptionsIfMeasurable: vi.fn(() => false)
+  flushDeferredPaneMetricOptionsIfMeasurable: vi.fn(() => false),
+  refreshTerminalMouseWheelHandling: vi.fn()
 }))
 
 vi.mock('./pane-fit', () => ({
@@ -28,6 +29,9 @@ vi.mock('./pane-fit-continuation-retry', () => ({
 }))
 vi.mock('./pane-scroll', () => ({
   resumePendingFitScrollRestoreAfterFit: mocks.resumePendingFitScrollRestoreAfterFit
+}))
+vi.mock('./pane-terminal-mouse-wheel', () => ({
+  refreshTerminalMouseWheelHandling: mocks.refreshTerminalMouseWheelHandling
 }))
 
 type RevealTestPane = ManagedPane & { lastFitClientSize?: { width: number; height: number } }
@@ -137,6 +141,7 @@ describe('fitRevealedPane routing', () => {
     // Parked replay/reattach continuations still get released.
     expect(mocks.flushPendingSafeFitContinuations).toHaveBeenCalledTimes(1)
     expect(mocks.clearPaneFitContinuationRetry).toHaveBeenCalledTimes(1)
+    expect(mocks.refreshTerminalMouseWheelHandling).toHaveBeenCalledWith(pane.terminal)
   })
 
   it('repairs on a steady grid when pixels are unchanged but the grid diverged while hidden', () => {

@@ -564,3 +564,27 @@ describe('deferred metric flush inside safeFit', () => {
     }
   })
 })
+
+describe('safeFit mouse-wheel relayout refresh', () => {
+  it('re-fires the live mouse protocol after a completed fit', () => {
+    const pane = createPane({
+      rect: { width: 800, height: 600 },
+      proposed: () => ({ cols: 80, rows: 24 })
+    })
+    const assigns: string[] = []
+    const mouseStateService = {
+      protocol: 'ANY',
+      get activeProtocol(): string {
+        return this.protocol
+      },
+      set activeProtocol(value: string) {
+        this.protocol = value
+        assigns.push(value)
+      }
+    }
+    Object.assign(pane.terminal, { _core: { mouseStateService } })
+
+    expect(safeFit(pane)).toBe(true)
+    expect(assigns).toEqual(['ANY'])
+  })
+})
