@@ -11,6 +11,7 @@ import { useAppStore } from '../../../store/index'
 import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { getManageSessionsSearchEntries } from './session-management/manage-sessions-search'
 import { getTerminalDefaultShellSearchEntry } from './terminal-default-shell-search'
+import { getTerminalSetupScriptSearchEntries } from './appearance/terminal-window-search'
 import {
   getTerminalAdvancedSearchEntries,
   getTerminalMacOptionSearchEntries,
@@ -28,6 +29,7 @@ import { ManageSessionsSection } from './session-management/ManageSessionsSectio
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './appearance/TerminalRenderingSection'
+import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
 import { TerminalWindowsShellSection } from './platform/TerminalWindowsShellSection'
 import { TerminalWindowsAdministratorSection } from './platform/TerminalWindowsAdministratorSection'
 import { TerminalCustomShellInput } from './platform/TerminalCustomShellInput'
@@ -307,6 +309,13 @@ export function TerminalPane({
         settings={settings}
         updateSettings={updateSettings}
         searchQuery={searchQuery}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getTerminalSetupScriptSearchEntries()) ? (
+      <TerminalSetupScriptSection
+        key="setup-script"
+        settings={settings}
+        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getManageSessionsSearchEntries()) ? (
