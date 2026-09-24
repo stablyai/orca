@@ -31,6 +31,8 @@ export type MonacoE2EProbe = {
   insertText: (line: number, column: number, text: string) => void
   /** Trigger the editor undo stack (mirrors Cmd/Ctrl+Z without key event flakiness). */
   undo: () => void
+  /** Apply several edits as ONE model change event (multi-change single gesture). */
+  applyEdits: (edits: readonly { range: IRange; text: string }[]) => void
   snapshot: () => MonacoE2ESnapshot
 }
 
@@ -108,6 +110,12 @@ export function installMonacoE2EProbe(
       // Why: a keypress in a hidden window doesn't reliably reach Monaco's
       // undo stack; the editor action is the same path the keybinding runs.
       editorInstance.trigger('e2e', 'undo', null)
+    },
+    applyEdits: (edits: readonly { range: IRange; text: string }[]): void => {
+      editorInstance.executeEdits(
+        'e2e',
+        edits.map((edit) => ({ ...edit, forceMoveMarkers: true }))
+      )
     },
     snapshot: (): MonacoE2ESnapshot => {
       const container = editorInstance.getContainerDomNode()
