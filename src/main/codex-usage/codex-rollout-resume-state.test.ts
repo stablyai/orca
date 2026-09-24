@@ -40,7 +40,7 @@ function persistedFile(
     size: fileStat.size,
     sessions: [],
     dailyAggregates: [],
-    ownedEventKeys: [],
+    ownedEventKeyDigests: '',
     hasDeferredClaims: false,
     parseResumeState
   }
