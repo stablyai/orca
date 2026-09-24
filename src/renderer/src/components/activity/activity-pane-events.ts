@@ -46,6 +46,7 @@ export function newestActivityHistoryEntries(
 }
 
 type PaneEventInputs = {
+  currentOnly?: boolean
   entry: AgentStatusEntry
   worktree: Worktree
   repo: Repo | null
@@ -84,7 +85,7 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
   }
 
   for (const history of newestActivityHistoryEntries(
-    args.entry.stateHistory,
+    args.currentOnly ? [] : args.entry.stateHistory,
     EVENTS_PER_PANE_CAP
   )) {
     if (history.startedAt <= args.clearedAt) {

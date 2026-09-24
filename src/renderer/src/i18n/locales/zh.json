@@ -1,4 +1,8 @@
 {
+  "dock": {
+    "completedConversations": "已完成，待查看",
+    "noCompletedConversations": "暂无已完成的待查看对话"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca 遇到渲染器错误。",

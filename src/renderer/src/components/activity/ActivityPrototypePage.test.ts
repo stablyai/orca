@@ -31,6 +31,48 @@ import {
 } from './ActivityPrototypePage-test-fixtures'
 
 describe('buildActivityEvents', () => {
+  it('retains only the selected pane when it falls outside the 80-event cap', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const entries: Record<string, AgentStatusEntry> = {}
+    const tabs: TerminalTab[] = []
+    let selectedPaneKey = ''
+    for (let index = 0; index < 81; index += 1) {
+      const tabId = `tab-${index}`
+      const paneKey = makePaneKey(
+        tabId,
+        `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
+      )
+      tabs.push(makeTabWithIds(tabId, worktree.id, `Agent ${index}`))
+      entries[paneKey] = {
+        ...makeWorkingEntryWithoutHistory(),
+        paneKey,
+        state: 'done',
+        stateStartedAt: 1_000 - index,
+        updatedAt: 1_000 - index,
+        stateHistory: []
+      }
+      if (index === 80) {
+        selectedPaneKey = paneKey
+      }
+    }
+    const base = {
+      agentStatusByPaneKey: entries,
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: { [worktree.id]: tabs },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 1_000
+    }
+    const capped = buildActivityEvents(base)
+    expect(capped.events).toHaveLength(80)
+    expect(capped.events.some((event) => event.entry.paneKey === selectedPaneKey)).toBe(false)
+    const selected = buildActivityEvents({ ...base, selectedPaneKey })
+    expect(selected.events).toHaveLength(81)
+    expect(selected.events.some((event) => event.entry.paneKey === selectedPaneKey)).toBe(true)
+  })
+
   it('keeps every pane visible before applying the global activity cap', () => {
     const repo = makeRepo()
     const worktree = makeWorktree()

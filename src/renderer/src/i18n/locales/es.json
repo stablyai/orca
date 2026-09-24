@@ -1,4 +1,8 @@
 {
+  "dock": {
+    "completedConversations": "Completadas, sin leer",
+    "noCompletedConversations": "No hay conversaciones completadas sin leer"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca tuvo un error de renderizado.",

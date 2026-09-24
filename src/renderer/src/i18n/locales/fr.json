@@ -1,4 +1,8 @@
 {
+  "dock": {
+    "completedConversations": "Terminées, non lues",
+    "noCompletedConversations": "Aucune conversation terminée à lire"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca a rencontré une erreur de rendu.",

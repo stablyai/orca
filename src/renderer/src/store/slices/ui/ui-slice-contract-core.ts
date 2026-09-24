@@ -165,6 +165,8 @@ export type UISliceCore = {
     options?: { recordTasksInteraction?: boolean }
   ) => void
   closeTaskPage: () => void
+  selectedActivityPaneKey: string | null
+  setSelectedActivityPaneKey: (paneKey: string | null) => void
   openActivityPage: () => void
   closeActivityPage: () => void
   selectedAutomationId: string | null

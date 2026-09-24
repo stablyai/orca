@@ -79,6 +79,7 @@ declare global {
     | undefined
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
+    __ORCA_WEB_CLIENT__?: boolean
     __paneManagers?: Map<string, PaneManager>
     __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps
     __terminalParkingDebug?: {

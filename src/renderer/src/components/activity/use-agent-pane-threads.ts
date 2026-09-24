@@ -142,13 +142,14 @@ export function useAgentPaneThreads(args: {
           resolveWorktree: storeData.getKnownWorktreeById,
           acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
           activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
+          selectedPaneKey,
           // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
           now: Date.now()
         },
         eventBuildCacheRef.current
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch]
+    [storeData, agentStatusEpoch, selectedPaneKey]
   )
 
   const allThreads = useMemo(

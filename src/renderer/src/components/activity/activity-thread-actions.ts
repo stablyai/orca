@@ -74,49 +74,9 @@ export function createActivityThreadActions({
     unacknowledgeAgents([thread.paneKey])
   }
 
-  const activateThreadTarget = (thread: AgentPaneThread): void => {
-    const executionHostId = getActivityThreadExecutionHostId(
-      thread,
-      getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
-    )
-    // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
-    // state of an SSH session that was never revived — has no resident tab until
-    // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
-    // Probing tab residency first is what made a remote row click a silent no-op (#16731).
-    if (
-      activateAndRevealWorkspace(thread.worktree.id, {
-        executionHostId,
-        revealInSidebar: false,
-        clearSidebarFilters: false
-      }) === false
-    ) {
-      return
-    }
-    if (
-      activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })
-    ) {
-      return
-    }
-    // Read post-activation: the tab this thread points at may have only just been revived.
-    const activated = useAppStore.getState()
-    const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
-    if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
-      // Retained threads outlive their tab; the workspace is still activated, but there is
-      // no pane to focus and focusing a sibling would be worse than focusing nothing.
-      return
-    }
-    activated.setActiveTabType('terminal')
-    const parsed = parsePaneKey(thread.paneKey)
-    activateTabAndFocusPane(
-      thread.tab.id,
-      parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,
-      { flashFocusedPane: true, scrollToBottomIfOutputSinceLastView: true }
-    )
-  }
-
   const selectThread = (thread: AgentPaneThread): void => {
     setSelectedPaneKey(thread.paneKey)
-    activateThreadTarget(thread)
+    activateActivityThreadTarget(thread)
   }
 
   const jumpToWorkspace = (thread: AgentPaneThread): void => {
@@ -147,4 +107,47 @@ export function createActivityThreadActions({
     jumpToWorkspace,
     markAllThreadsRead
   }
+}
+
+export function activateActivityThreadTarget(
+  thread: AgentPaneThread,
+  options?: { providesInitialSurface: boolean }
+): boolean {
+  const executionHostId = getActivityThreadExecutionHostId(
+    thread,
+    getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
+  )
+  // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
+  // state of an SSH session that was never revived — has no resident tab until
+  // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
+  // Probing tab residency first is what made a remote row click a silent no-op (#16731).
+  if (
+    activateAndRevealWorkspace(thread.worktree.id, {
+      executionHostId,
+      revealInSidebar: false,
+      clearSidebarFilters: false,
+      ...options
+    }) === false
+  ) {
+    return false
+  }
+  if (activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })) {
+    return true
+  }
+  // Read post-activation: the tab this thread points at may have only just been revived.
+  const activated = useAppStore.getState()
+  const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
+  if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
+    // Retained threads outlive their tab; the workspace is still activated, but there is
+    // no pane to focus and focusing a sibling would be worse than focusing nothing.
+    return false
+  }
+  activated.setActiveTabType('terminal')
+  const parsed = parsePaneKey(thread.paneKey)
+  activateTabAndFocusPane(
+    thread.tab.id,
+    parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,
+    { flashFocusedPane: true, scrollToBottomIfOutputSinceLastView: true }
+  )
+  return true
 }
