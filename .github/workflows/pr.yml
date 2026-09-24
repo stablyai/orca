@@ -747,16 +747,16 @@ jobs:
 
       # A path filter that matches nothing exits 1 ("No test files found"), so this
       # lane cannot report success while running zero tests.
+      #
+      # The whole directory, not a curated file list. The unit shards exclude this directory
+      # wholesale, so this is the only lane that runs it, and a curated list made "in the
+      # directory" and "runs somewhere" two different facts — two suites had already drifted
+      # into the gap and executed on no machine. The directory is the same boundary the shard
+      # exclusion uses, so a file cannot land between them.
       - name: Old/new client and server compatibility journeys
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
-          tests/e2e/cross-version-wire/release-checkout.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
-          tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
-          tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
+          tests/e2e/cross-version-wire/
 
   managed_hook_node18:
     name: managed hooks on Node 18

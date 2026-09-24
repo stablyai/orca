@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -346,6 +346,57 @@ describe('per-job path classification', () => {
       ['tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts'],
       { 'cross-version-wire': true }
     )
+  })
+
+  it('runs cross-version wire checks for the agent-status, worktree-row and relay surfaces', () => {
+    // Each path is checked against the working tree first. A list of paths that no longer
+    // exist classifies exactly the same as one that does, so without this the assertions
+    // below would keep passing after the files they name were renamed away.
+    const files = [
+      // The store a remote host and its client each keep a copy of. Its snapshot and mutation
+      // decoders refuse an unknown key, so a field added to either breaks the older peer.
+      'src/shared/agent-status-store.ts',
+      'src/shared/agent-status-store-codec.ts',
+      'src/shared/agent-status-store-contract.ts',
+      'src/shared/agent-status-transport-envelope.ts',
+      'src/shared/agent-status-child-work-codec.ts',
+      'src/shared/agent-status-subject.ts',
+      // The arm set and payload parser behind every row the sidebar, `worktree ps`, mobile
+      // and the dashboard read.
+      'src/shared/agent-status-types.ts',
+      'src/shared/runtime-worktree-contracts.ts',
+      // The desktop half of the relay framing, and the codec both halves share.
+      'src/main/ssh/relay-protocol.ts',
+      'src/shared/relay-frame-decoder.ts'
+    ]
+    // The relay daemon outlives a desktop update, so its framing and handshake meet a bridge
+    // from another build. Its tree also primes the Node 18 companion smoke.
+    const relayFiles = [
+      'src/relay/protocol.ts',
+      'src/relay/relay-frame-decoder.ts',
+      'src/relay/relay-handshake.ts'
+    ]
+    expect([...files, ...relayFiles].filter((file) => !existsSync(join(projectDir, file)))).toEqual(
+      []
+    )
+    for (const file of files) {
+      expectClassification([file], {
+        'cross-version-wire': true,
+        package: true,
+        package_windows: true
+      })
+    }
+    for (const file of relayFiles) {
+      expectClassification([file], {
+        'cross-version-wire': true,
+        managed_hook_node18: true,
+        package: true,
+        package_windows: true
+      })
+    }
+    // The relay's RPC handlers are not this job's surface: nothing it runs can fail on them,
+    // and gating them here would report a pass about a wire it never touched.
+    expect(classifyPrJobs(['src/relay/git-handler.ts'])['cross-version-wire']).toBe(false)
   })
 
   it('runs workflow-self-change and lockfile diffs as force-all', () => {
