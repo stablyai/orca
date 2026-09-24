@@ -63,6 +63,7 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../references/reference-input'
+import { getWorktreeSetTags } from './worktree-tag-flags'
 
 function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
   const agent = getPresentStringFlag(flags, 'agent')
@@ -220,6 +221,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
+    const tags = await getWorktreeSetTags(flags, client, worktree)
     const parentFields = await resolveSetParentFields(flags, cwd, client)
     const pending = callNamingParentEnvironment<RuntimeWorktreeSetResult>(client, 'worktree.set', {
       worktree,
@@ -230,6 +232,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       ...readFlags,
+      ...(tags !== undefined ? { tags } : {}),
       ...parentFields,
       noParent: flags.get('no-parent') === true
     })

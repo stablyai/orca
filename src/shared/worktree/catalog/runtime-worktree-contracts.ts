@@ -104,6 +104,8 @@ export type RuntimeWorktreePsSummary = {
   workspaceLineage?: WorkspaceLineageEdge | null
   displayName: string
   workspaceStatus: string
+  /** Absent when untagged, and from hosts that predate tags. */
+  tags?: string[]
   sortOrder: number
   manualOrder?: number
   lastActivityAt?: number
