@@ -143,7 +143,7 @@ describe('profile state Store authority factory', () => {
   it('uses a capability probe that remains false on a Node 18-style host', () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'node:sqlite') {
+      if (id === 'node:sqlite' || id === 'bun:sqlite') {
         return undefined
       }
       return original(id)

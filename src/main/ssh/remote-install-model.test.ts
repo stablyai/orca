@@ -21,6 +21,17 @@ import {
 const RELAY_DIRS = ['relay-0.1.0+abcdef123456', 'relay-v0.1.0', 'relay-1.2.3']
 const ORCAD_DIRS = ['orcad-0.1.0+abcdef123456', 'orcad-v0.1.0', 'orcad-1.2.3']
 
+it.each([false, true])(
+  'requires the executable and both profile workers on Windows=%s',
+  (isWindows) => {
+    const artifacts = ORCAD_INSTALL_MODEL.requiredArtifacts(isWindows)
+    expect(artifacts).toContain(isWindows ? 'bun-runtime.exe' : 'bun-runtime')
+    expect(artifacts).not.toContain(isWindows ? 'bun-runtime' : 'bun-runtime.exe')
+    expect(artifacts).toContain('profile-state-writer-worker-entry.js')
+    expect(artifacts).toContain('profile-state-backup-worker-entry.js')
+  }
+)
+
 describe('remote install namespace', () => {
   it('names each model its own version dir', () => {
     expect(remoteInstallDirName(RELAY_INSTALL_MODEL, '0.1.0+aa')).toBe('relay-0.1.0+aa')

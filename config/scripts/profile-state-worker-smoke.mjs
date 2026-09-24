@@ -1,10 +1,17 @@
 import { deepStrictEqual } from 'node:assert'
+import { randomUUID } from 'node:crypto'
 import { build } from 'esbuild'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
+import { runProcessSync } from './script-child-process.mjs'
+import {
+  ORCAD_PROFILE_PREFLIGHT_FLAG,
+  parseOrcadProfilePreflight
+} from '../../src/shared/orcad-profile-preflight.ts'
+import { ORCAD_BUN_VERSION } from '../../src/shared/orcad-bun-runtime.ts'
 
 async function initializeFixture(directory, databasePath, profileId) {
   const fixture = join(directory, 'initialize.cjs')
@@ -76,7 +83,22 @@ function runWorker(entry, workerData, steps, timeoutMs) {
 }
 
 /** Exercise the shipped entries and copied state before publishing their content version. */
-export async function smokeProfileStateWorkers(outDir, { timeoutMs = 30_000 } = {}) {
+export async function smokeProfileStateWorkers(outDir, { timeoutMs = 30_000, runtimePath } = {}) {
+  if (runtimePath) {
+    const nonce = randomUUID()
+    const result = runProcessSync({
+      program: runtimePath,
+      args: [join(outDir, 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
+      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+      timeoutMs,
+      maxOutputBytes: 64 * 1024
+    })
+    if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+      throw new Error(`Packaged profile runtime preflight failed: ${result.stderr}`)
+    }
+    parseOrcadProfilePreflight(result.stdout, nonce, ORCAD_BUN_VERSION)
+    return
+  }
   const directory = mkdtempSync(join(tmpdir(), 'orca-profile-worker-smoke-'))
   const databasePath = join(directory, 'profile.db')
   const targetPath = join(directory, 'backup.db')

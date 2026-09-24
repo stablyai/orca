@@ -1,0 +1,42 @@
+name: Bun profile persistence
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/persistence/**'
+      - 'src/main/sqlite/**'
+      - 'src/main/worker-thread-entry-path.ts'
+      - 'src/main/orcad/**'
+      - 'src/main/daemon/pty-subprocess/**'
+      - 'src/shared/**'
+      - 'config/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/workflows/bun-profile-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bun-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  persistence:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - run: pnpm test:bun:profile

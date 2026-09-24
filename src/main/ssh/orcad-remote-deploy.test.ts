@@ -27,12 +27,12 @@ import { finalizeInstall } from './ssh-relay-versioned-install'
 import type { SshConnection } from './ssh-connection'
 
 const mockExec = vi.mocked(execCommand)
-const NEW_VERSION = '0.2.0+bb01'
+const NEW_VERSION = '0.2.0+bb0100000000'
 const OLD_VERSION = '0.1.0+aa01'
 
 vi.mock('./ssh-relay-versioned-install', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readLocalFullVersion: () => '0.2.0+bb01',
+  readLocalFullVersion: () => '0.2.0+bb0100000000',
   isRemoteInstallComplete: vi.fn().mockResolvedValue(false),
   finalizeInstall: vi.fn().mockResolvedValue(undefined),
   abandonInstall: vi.fn().mockResolvedValue(undefined)
@@ -82,6 +82,7 @@ type HostScript = {
   /** Readiness content per version dir, keyed by the version in the path. */
   readiness: Record<string, string>
   log: string[]
+  preflightResult?: string
   snapshotResult?: string
   comparisonResult?: string
   candidateStopResult?: string
@@ -96,6 +97,21 @@ function scriptHost(script: HostScript): void {
     if (text.includes('.orcad-readiness') && text.startsWith('cat ')) {
       const version = Object.keys(script.readiness).find((v) => text.includes(v))
       return version ? script.readiness[version] : ''
+    }
+    if (text.includes('--orcad-profile-state-preflight')) {
+      script.log.push('preflight')
+      return (
+        script.preflightResult ??
+        JSON.stringify({
+          type: 'orca_profile_state_ready',
+          nonce: text.match(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/)?.[0],
+          runtime: 'bun',
+          runtimeVersion: '1.4.2',
+          sqliteVersion: '3.51.0',
+          artifactVersion: NEW_VERSION,
+          revision: 1
+        })
+      )
     }
     if (text.includes('nohup')) {
       script.log.push(`launch:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
@@ -140,6 +156,29 @@ const ACTIVE_OLD = JSON.stringify(
 )
 
 describe('deployOrcad', () => {
+  it.each(['', '{"type":"orca_profile_state_ready","revision":0}'])(
+    'leaves the incumbent and shared state alone when preflight returns %j',
+    async (preflightResult) => {
+      const script: HostScript = {
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: [],
+        preflightResult
+      }
+      scriptHost(script)
+      expect(await deployOrcad(options())).toMatchObject({
+        outcome: 'installed-not-activated',
+        code: 'orcad_candidate_preflight_failed'
+      })
+      expect(script.log).toEqual(['preflight'])
+      expect(
+        vi
+          .mocked(writeRelayFile)
+          .mock.calls.some(([, , path]) => path.includes('orcad-active.json'))
+      ).toBe(false)
+    }
+  )
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -286,6 +325,7 @@ describe('deployOrcad', () => {
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ outcome: 'installed-not-activated' })
     expect(script.log).toEqual([
+      'preflight',
       `stop:${OLD_VERSION}`,
       'snapshot',
       `launch:${NEW_VERSION}`,
@@ -313,6 +353,7 @@ describe('deployOrcad', () => {
 
       expect(result).toMatchObject({ outcome: 'installed-not-activated' })
       expect(script.log).toEqual([
+        'preflight',
         `stop:${OLD_VERSION}`,
         'snapshot',
         `launch:${NEW_VERSION}`,
@@ -341,7 +382,12 @@ describe('deployOrcad', () => {
     scriptHost(script)
 
     await expect(deployOrcad(options())).rejects.toThrow('incumbent was stopped')
-    expect(script.log).toEqual([`stop:${OLD_VERSION}`, 'snapshot', `launch:${OLD_VERSION}`])
+    expect(script.log).toEqual([
+      'preflight',
+      `stop:${OLD_VERSION}`,
+      'snapshot',
+      `launch:${OLD_VERSION}`
+    ])
   })
 
   it.each(['NO_PID', 'STILL_RUNNING', 'SIGNAL_FAILED', ''])(
@@ -358,6 +404,7 @@ describe('deployOrcad', () => {
       await deployOrcad(options())
 
       expect(script.log).toEqual([
+        'preflight',
         `stop:${OLD_VERSION}`,
         'snapshot',
         `launch:${NEW_VERSION}`,

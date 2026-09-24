@@ -172,7 +172,7 @@ describe('profile-state startup authority boundary', () => {
   it('rejects an orcad candidate request on a Node 18-style host', async () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
-      if (id === 'node:sqlite') {
+      if (id === 'node:sqlite' || id === 'bun:sqlite') {
         return undefined
       }
       return original(id)
@@ -290,6 +290,9 @@ describe('profile-state startup authority boundary', () => {
   it('keeps a runtime with SQLite but no native backup on JSON authority', async () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
+      if (id === 'bun:sqlite') {
+        return undefined
+      }
       return id === 'node:sqlite' ? { DatabaseSync: class {} } : original(id)
     })
     expect(orcadProfileStateAuthorityMode()).toBe('legacy')

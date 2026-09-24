@@ -11,6 +11,7 @@
 import { shellEscape } from './ssh-connection-utils'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { ORCAD_READINESS_FILENAME } from './orcad-remote-launch'
+import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import {
   assertPosixOrcadHost as assertPosixHost,
   ORCAD_PID_FILENAME,
@@ -48,7 +49,8 @@ export function stopOrcadCommand(
     ...(options.justLaunched
       ? []
       : [
-          `runtime_pid=$(${shellEscape(options.nodePath)} -e ${shellEscape(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
+          `${selectOrcadSlotRuntimeCommand(host, remoteInstallDir, options.nodePath)};`,
+          `runtime_pid=$("$orcad_runtime" -e ${shellEscape(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
           '[ "$pid" = "$runtime_pid" ] || { echo UNKNOWN; exit 0; };'
         ]),
     'orcad_alive "$pid" || { echo ALREADY_EXITED; exit 0; };',

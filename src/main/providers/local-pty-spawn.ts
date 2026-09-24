@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
-import * as pty from 'node-pty'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'
@@ -58,6 +57,7 @@ export async function spawnLocalPty(
     env: finalEnv
   })
 
+  const pty = await import('node-pty')
   // Why: the async macOS capability probe runs before node-pty exists.
   await awaitCancelableLocalPtySpawn(id, prepareMacosTccLoginShell())
   if (args.signal?.aborted) {

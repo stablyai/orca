@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { getAgentForegroundContextPaths } from '../../providers/agent-foreground-context-paths'
 import { resolveAgentForegroundProcessWithAvailability } from '../../providers/agent-foreground-process'
 import { confirmPtyShellForeground } from './pty-shell-foreground-confirmation'
@@ -154,7 +155,7 @@ export function createPtyForegroundProcessTracker(args: {
             const verdict = judgeCachedAgentJobEvidence({
               jobProcessIds: readWindowsPtyJobProcessIds(proc),
               jobSupported: isWindowsPtyJobReadable(),
-              shellPid: proc.pid,
+              shellPid: ptyShellProcessId(proc) ?? proc.pid,
               anchorProcessId: cachedAgentForeground.pid,
               identityAgeMs: Date.now() - cachedAgentForeground.refreshedAt
             })

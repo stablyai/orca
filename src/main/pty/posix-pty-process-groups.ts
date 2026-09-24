@@ -92,6 +92,16 @@ export function forceKillPosixPtyProcessGroups(
   fallback: () => void,
   deps: PosixPtyProcessGroupTerminationDeps = {}
 ): void {
+  signalPosixPtyProcessGroups(rootPid, 'SIGKILL', fallback, deps)
+}
+
+/** Signal every process group proven to belong to one POSIX PTY. */
+export function signalPosixPtyProcessGroups(
+  rootPid: number,
+  signal: NodeJS.Signals,
+  fallback: () => void,
+  deps: PosixPtyProcessGroupTerminationDeps = {}
+): void {
   if ((deps.platform ?? process.platform) === 'win32') {
     fallback()
     return
@@ -112,7 +122,7 @@ export function forceKillPosixPtyProcessGroups(
   }
 
   const signalProcessGroup =
-    deps.signalProcessGroup ?? ((pgid: number) => process.kill(-pgid, 'SIGKILL'))
+    deps.signalProcessGroup ?? ((pgid: number) => process.kill(-pgid, signal))
   let firstError: unknown
   for (const pgid of groups) {
     try {
@@ -127,11 +137,13 @@ export function forceKillPosixPtyProcessGroups(
     }
     // Outside the try: this catch is the ESRCH contract, and a throw from the
     // breadcrumb path would be rethrown as a failed kill.
-    recordSelfInitiatedTreeKill({
-      pid: pgid,
-      site: 'posix-pty-process-group-sweep',
-      scope: 'posix-process-group'
-    })
+    if (signal === 'SIGKILL') {
+      recordSelfInitiatedTreeKill({
+        pid: pgid,
+        site: 'posix-pty-process-group-sweep',
+        scope: 'posix-process-group'
+      })
+    }
   }
   if (firstError !== undefined) {
     throw firstError

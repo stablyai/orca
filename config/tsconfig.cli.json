@@ -213,6 +213,10 @@
     "../src/main/startup/cli-command-names.ts",
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/sqlite/sync-database.ts",
+    "../src/main/sqlite/bun-readonly-wal.ts",
+    "../src/main/sqlite/sqlite-statement.ts",
+    "../src/main/sqlite/bun-sqlite-statement.ts",
+    "../src/main/sqlite/bun-sqlite-database.ts",
     "../src/main/win32-utils.ts"
   ],
   "compilerOptions": {

@@ -1,5 +1,5 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
-import Database from '../../sqlite/sync-database'
+import Database, { isSqliteAvailable } from '../../sqlite/sync-database'
 import { migrateAutomationRunsStorage } from './profile-state-automation-runs-migration'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import {
@@ -13,7 +13,6 @@ import {
   PROFILE_STATE_DATABASE_FILE_NAME,
   profileStateDatabaseFile
 } from '../../../shared/profile-state-storage-paths'
-import { isRecord } from './profile-state-document-validation'
 import {
   ProfileStateDatabaseOpenError,
   type ProfileStateDatabaseOpenErrorCode
@@ -25,29 +24,8 @@ import {
 
 export const PROFILE_STATE_BUSY_TIMEOUT_MS = 5_000
 
-/**
- * Probe SQLite without importing the builtin at module evaluation time.
- *
- * The packaged orcad runtime still supports Node 18, where `node:sqlite` does
- * not exist. Keeping this probe beside the opener gives every authority
- * selector the same capability decision and keeps that runtime's module graph
- * safe to load.
- */
-export function isProfileStateSqliteAvailable(): boolean {
-  if (typeof process.getBuiltinModule !== 'function') {
-    return false
-  }
-  try {
-    const sqlite: unknown = process.getBuiltinModule('node:sqlite')
-    return (
-      isRecord(sqlite) &&
-      typeof sqlite.DatabaseSync === 'function' &&
-      typeof sqlite.backup === 'function'
-    )
-  } catch {
-    return false
-  }
-}
+// Keep relay-only Node 18 imports safe while selecting the actual database driver.
+export const isProfileStateSqliteAvailable = isSqliteAvailable
 
 export { ProfileStateDatabaseOpenError }
 export type { ProfileStateDatabaseOpenErrorCode }

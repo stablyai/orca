@@ -20,6 +20,7 @@ import {
   posixProcessAliveShellFunction
 } from './orcad-remote-host-support'
 import type { ServeReadiness } from '../server/serve-readiness'
+import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 
 /** Stdout of the launched candidate: exactly one `orca_server_ready` line, then nothing. */
 export const ORCAD_READINESS_FILENAME = '.orcad-readiness'
@@ -56,6 +57,7 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
   const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, 'orcad.js'))
   return [
     `cd ${dir} &&`,
+    `${selectOrcadSlotRuntimeCommand(host, spec.remoteInstallDir, spec.nodePath)} &&`,
     // Why truncate: a re-launch into a dir that already holds a previous readiness line would
     // otherwise let the deploy activate on the OLD process's health payload.
     `: > ${readiness} &&`,
@@ -63,7 +65,7 @@ export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSp
     `ORCA_VERSION=${shellEscape(spec.fullVersion)}`,
     `ORCA_USER_DATA=${shellEscape(spec.userDataDir)}`,
     // Keep $! equal to the runtime PID rather than a waiting shell's PID.
-    `exec nohup ${shellEscape(spec.nodePath)} ${entry}`,
+    `exec nohup "$orcad_runtime" ${entry}`,
     `--json --bind ${shellEscape(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &`,
     `echo $! > ${pidFile} && cat ${pidFile}`

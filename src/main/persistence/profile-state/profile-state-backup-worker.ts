@@ -20,12 +20,12 @@ export function resolveProfileStateBackupWorkerPath(moduleDir = __dirname): stri
   return [entry, join(dirname(entry), '..', WORKER_FILENAME)].find(existsSync) ?? entry
 }
 
-/** Desktop validation runs off the UI thread; plain-Node backups retain the native async path. */
+/** Bun snapshot copying and desktop validation run off the owning runtime thread. */
 export function runProfileStateBackup(
   job: ProfileStateBackupJob,
   signal?: AbortSignal
 ): Promise<void> {
-  return process.versions.electron
+  return process.versions.electron || process.versions.bun
     ? runProfileStateBackupWorker(job, { signal })
     : writeProfileStateBackup(job)
 }

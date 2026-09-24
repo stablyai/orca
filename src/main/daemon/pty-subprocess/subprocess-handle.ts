@@ -10,7 +10,10 @@ import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 
-type DisposableNativePty = pty.IPty & { destroy?: () => void }
+type DisposableNativePty = pty.IPty & {
+  destroy?: () => void
+  signalProcess?: (signal: string) => void
+}
 
 export function createDaemonPtySubprocessHandle(args: {
   process: pty.IPty
@@ -26,7 +29,7 @@ export function createDaemonPtySubprocessHandle(args: {
   const reportsChildExitStatus = args.reportsChildExitStatus
   const proc = args.process
   // node-pty exposes destroy at runtime but omits it from IPty.
-  const nativeProc = proc as DisposableNativePty
+  const nativeProc: DisposableNativePty = proc
   const events = new PtyPreListenerEvents()
   let dead = false
   // I/O failure is not exit evidence; keep termination and producer flow control available.
@@ -164,6 +167,14 @@ export function createDaemonPtySubprocessHandle(args: {
     },
     signal: (sig) => {
       if (dead) {
+        return
+      }
+      if (nativeProc.signalProcess) {
+        try {
+          nativeProc.signalProcess(sig)
+        } catch {
+          /* The process may have exited. */
+        }
         return
       }
       const signalRootPid = (): void => {

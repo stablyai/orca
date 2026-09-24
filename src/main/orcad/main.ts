@@ -2,6 +2,9 @@
 import process from 'node:process'
 import { main, resolveOrcadExitCode } from './orcad-entry'
 import { runOrcadNativePreflight } from './orcad-native-preflight'
+import { ORCAD_PROFILE_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
+import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
+import { handoffToBundledOrcad } from './orcad-bundled-runtime'
 
 // Why exit before the preflight: reaching this line means the whole module graph resolved
 // under plain Node, which is all the build guard needs to prove. Probing natives or
@@ -16,12 +19,27 @@ if (process.argv.includes('--orcad-smoke-load-check')) {
 // evaluated before this statement, so the guarantee is that no module in the graph
 // requires node-pty at import time — which the bundle's lazy `require("node-pty")` in
 // local-pty-provider satisfies. See ./node-pty-precondition.ts for why a child process.
-runOrcadNativePreflight()
-
-main().catch((error: unknown) => {
+function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
   // Why a resolved code and not a bare 1: a data-root or bind-address refusal is a
   // configuration fault that restarting cannot fix, and a supervisor needs to tell the two
   // apart to avoid restart-spinning on it.
   process.exit(resolveOrcadExitCode(error))
-})
+}
+
+try {
+  if (!handoffToBundledOrcad()) {
+    if (process.argv[2] === ORCAD_PROFILE_PREFLIGHT_FLAG && process.argv.length === 4) {
+      void runOrcadProfilePreflight(process.argv[3]).catch(failStartup)
+    } else {
+      void preflightBundledOrcadStartup()
+        .then(() => {
+          runOrcadNativePreflight()
+          return main()
+        })
+        .catch(failStartup)
+    }
+  }
+} catch (error) {
+  failStartup(error)
+}

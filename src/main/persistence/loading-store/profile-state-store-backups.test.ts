@@ -1,12 +1,12 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushActiveProfileBeforeFileMutation } from '../../orca-profiles/profile-persistence-deadline'
 import { openProfileStateDatabaseReadOnly } from '../profile-state/profile-state-database'
 import { readProfileStateSnapshot } from '../profile-state/profile-state-documents'
 import { profileStateDatabaseBackups } from '../profile-state/profile-state-backup-path'
-import * as snapshots from '../profile-state/profile-state-database-snapshot'
+import * as backupExecution from '../profile-state/profile-state-backup-worker'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { Store } from './store'
 import { scheduleSave } from './write-scheduling'
@@ -41,6 +41,10 @@ const PROFILE_ID = 'store-backup-test'
 const HOUR = 60 * 60 * 1000
 const fixtures: { directory: string; store: Store; authority: ProfileStateSqliteAuthority }[] = []
 const releases: (() => void)[] = []
+
+beforeEach(() => {
+  vi.spyOn(backupExecution, 'runProfileStateBackup')
+})
 
 afterEach(async () => {
   for (const release of releases.splice(0)) {
@@ -95,7 +99,7 @@ function readSnapshot(path: string) {
   }
 }
 
-describe('Store automatic SQLite recovery snapshots', () => {
+describe('Store automatic SQLite recovery backupExecution', () => {
   it.each([
     ['selective', 'sync'],
     ['selective', 'async'],
@@ -168,7 +172,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
     '%s waits for its owned backup across Store close',
     async (kind) => {
       const state = await fixture()
-      const realSnapshot = snapshots.writeProfileStateDatabaseSnapshotAsync
+      const realSnapshot = backupExecution.runProfileStateBackup
       let begin: () => void = () => {}
       let release: () => void = () => {}
       const started = new Promise<void>((resolve) => {
@@ -178,13 +182,11 @@ describe('Store automatic SQLite recovery snapshots', () => {
         release = resolve
       })
       releases.push(release)
-      vi.spyOn(snapshots, 'writeProfileStateDatabaseSnapshotAsync').mockImplementationOnce(
-        async (db, target) => {
-          begin()
-          await gate
-          await realSnapshot(db, target)
-        }
-      )
+      vi.spyOn(backupExecution, 'runProfileStateBackup').mockImplementationOnce(async (job) => {
+        begin()
+        await gate
+        await realSnapshot(job)
+      })
       state.store.updateSettings({ theme: 'dark' })
       state.store.flushOrThrow()
       await started
@@ -222,7 +224,8 @@ describe('Store automatic SQLite recovery snapshots', () => {
       const log = vi.spyOn(console, 'error').mockImplementation(() => {})
       const failure = new Error('injected backup disk failure')
       const snapshot = vi
-        .spyOn(snapshots, 'writeProfileStateDatabaseSnapshotAsync')
+        .spyOn(backupExecution, 'runProfileStateBackup')
+        .mockClear()
         .mockRejectedValueOnce(failure)
       state.store.updateSettings({ theme: 'dark' })
       if (flush === 'sync') {
