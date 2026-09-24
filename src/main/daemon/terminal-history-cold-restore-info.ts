@@ -1,5 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { SessionMeta } from './terminal-history-metadata'
+import { omitMouseTrackingFromRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import type { TerminalModes } from './types'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 
@@ -46,7 +47,7 @@ export function coldRestoreInfoFromSnapshot(
     snapshotAnsi: snapshot.snapshotAnsi,
     scrollbackAnsi,
     oscLinks: snapshot.oscLinks,
-    rehydrateSequences: snapshot.rehydrateSequences,
+    rehydrateSequences: omitMouseTrackingFromRehydrateSequences(snapshot.rehydrateSequences),
     cwd: cwd ?? meta.cwd,
     cols: snapshot.cols,
     rows: snapshot.rows,

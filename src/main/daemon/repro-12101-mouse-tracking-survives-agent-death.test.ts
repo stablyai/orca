@@ -115,7 +115,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     const armed = agent.getSnapshot()
     expect(armed?.modes.mouseTracking).toBe(true)
     expect(armed?.modes.mouseTrackingMode).toBe('any')
-    expect(armed?.rehydrateSequences).toContain(ANY_MOTION_TRACKING_ON)
+    expect(armed?.rehydrateSequences).not.toContain(ANY_MOTION_TRACKING_ON)
 
     // 2. Sleep/hibernation takes its final teardown checkpoint while the agent
     //    is still alive with mouse armed (daemon-pty-adapter's {final,teardown}).
