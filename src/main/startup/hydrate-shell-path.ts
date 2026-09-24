@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
+import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 
 // Why: GUI-launched Electron can miss PATH entries added by shell profiles.
@@ -11,7 +12,6 @@ import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell
 //
 // Probe the profile-loading shell once instead of hard-coding every tool's install path.
 
-const DELIMITER = '__ORCA_SHELL_PATH__'
 // Why 10s: 5s was chosen without measurement and a real profile overruns it —
 // a bash -ilc loading nvm, rvm, conda and gcloud measures ~1s idle but 6-7s on a
 // loaded machine, so a cold start under load silently fell back to the seeded
@@ -177,24 +177,6 @@ export function runWithLaunchPath<T>(action: () => T): T {
       process.env[name] = previousValue
     }
   }
-}
-
-function shellPathProbe(shell: string): { args: string[]; pathDelimiter: string } {
-  if (process.platform !== 'win32') {
-    const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
-    return { args: ['-ilc', command], pathDelimiter: delimiter }
-  }
-  if (resolveWindowsShellStartupFamily(shell) === 'posix') {
-    // Why: native child processes cannot resolve Git Bash's /c/... PATH entries.
-    const command = `printf '%s' '${DELIMITER}'; cygpath -wp "$PATH"; printf '%s' '${DELIMITER}'`
-    return { args: ['-ilc', command], pathDelimiter: ';' }
-  }
-  const command =
-    `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
-    `[Console]::Write('${DELIMITER}'); [Console]::Write($env:Path); ` +
-    `[Console]::Write('${DELIMITER}')`
-  // Why: omitting -NoProfile is the behavior this probe exists to capture.
-  return { args: ['-NoLogo', '-Command', command], pathDelimiter: ';' }
 }
 
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
