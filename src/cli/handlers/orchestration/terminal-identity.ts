@@ -4,8 +4,7 @@ import { RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
-import { normalizeOrchestrationActor } from '../../../shared/orchestration-actor'
-import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
+import { injectedSessionAddress } from '../../session-caller-flags'
 
 /**
  * The caller's terminal handle, or `undefined` when an injected agent session id names the caller:
@@ -19,7 +18,8 @@ export async function resolveOrchestrationTerminalHandle(
   flagName: 'from' | 'terminal',
   options: { validateEnvHandle?: boolean } = {}
 ): Promise<string | undefined> {
-  if (resolveInjectedSessionCaller(flags, flagName)) {
+  // A caller flag naming anyone else was already refused at the CLI entry, from the command's spec.
+  if (readInjectedAgentSessionId()) {
     return undefined
   }
   const explicit = getOptionalStringFlag(flags, flagName)
@@ -166,61 +166,6 @@ function getClientErrorMessage(err: unknown): string | undefined {
   }
   const message = (err as { message?: unknown }).message
   return typeof message === 'string' ? message : undefined
-}
-
-/**
- * The injected session id when this command runs as an agent session. The id wins over every other
- * identity this process carries; a caller flag may restate that same session but never name
- * another, and a conflicting one is refused here, before any request is sent.
- */
-function resolveInjectedSessionCaller(
-  flags: Map<string, string | boolean>,
-  flagName: 'from' | 'terminal'
-): string | undefined {
-  const sessionId = readInjectedAgentSessionId()
-  if (!sessionId) {
-    return undefined
-  }
-  const declared = getOptionalStringFlag(flags, flagName)
-  if (declared !== undefined && !namesInjectedSession(declared, sessionId)) {
-    throw new RuntimeClientError(
-      'consumer_fenced',
-      `This command runs as agent session ${sessionId}, so --${flagName} ${declared} would act as a ` +
-        `different caller. Drop --${flagName}: this session's orchestration commands already act as ` +
-        `session:${sessionId}. No request was sent.`
-    )
-  }
-  return sessionId
-}
-
-/**
- * For a listing scoped by `--run`, which needs no caller: a session still refuses a caller flag
- * naming someone else rather than dropping it.
- */
-export function refuseConflictingSessionCaller(
-  flags: Map<string, string | boolean>,
-  flagName: 'from' | 'terminal'
-): undefined {
-  resolveInjectedSessionCaller(flags, flagName)
-  return undefined
-}
-
-/** The session's own spellings, plus the handle a structured worker session was minted. */
-function namesInjectedSession(value: string, sessionId: string): boolean {
-  return normalizeOrchestrationActor(value)?.id === sessionId || value === injectedSessionAddress()
-}
-
-/**
- * The address the host gives this session: a structured worker keeps the handle it was minted, any
- * other session is `session:<id>`. Only for text that must match what the host writes.
- */
-export function injectedSessionAddress(): string | undefined {
-  const sessionId = readInjectedAgentSessionId()
-  if (!sessionId) {
-    return undefined
-  }
-  const ownHandle = process.env.ORCA_TERMINAL_HANDLE
-  return isStructuredWorkerHandle(ownHandle) ? ownHandle : `session:${sessionId}`
 }
 
 /** How check output names its caller: the handle, or the session's address. */
