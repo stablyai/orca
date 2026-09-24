@@ -160,6 +160,14 @@
           "statusItem": "status item",
           "activity": "activity"
         }
+      },
+      "customCss": {
+        "title": "Custom CSS",
+        "description": "Load ~/.orca/custom.css on top of the built-in theme. Changes apply as soon as you save the file.",
+        "openFile": "Open custom.css",
+        "revealFile": "Reveal in File Manager",
+        "tooLarge": "custom.css is larger than {{limit}} KB and was not loaded.",
+        "unreadable": "custom.css could not be read: {{message}}"
       }
     },
     "browser": {

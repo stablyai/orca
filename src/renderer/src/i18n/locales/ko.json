@@ -39,6 +39,14 @@
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
         "description": "macOS 메뉴 바에 Orca 바로가기 및 활동 표시기를 유지합니다."
+      },
+      "customCss": {
+        "title": "사용자 지정 CSS",
+        "description": "기본 테마 위에 ~/.orca/custom.css를 불러옵니다. 파일을 저장하면 변경 사항이 바로 적용됩니다.",
+        "openFile": "custom.css 열기",
+        "revealFile": "파일 관리자에 표시",
+        "tooLarge": "custom.css가 {{limit}}KB를 초과하여 불러오지 않았습니다.",
+        "unreadable": "custom.css를 읽을 수 없습니다: {{message}}"
       }
     }
   },

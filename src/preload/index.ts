@@ -36,6 +36,7 @@ import { settingsApi } from './api/settings-bridge'
 import { agentAwakeApi } from './api/agent-awake-bridge'
 import { localhostWorktreeLabelsApi } from './api/localhost-worktree-labels-bridge'
 import { keybindingsApi } from './api/keybindings-bridge'
+import { customCssApi } from './api/custom-css-bridge'
 import { codexAccountsApi } from './api/codex-accounts-bridge'
 import { claudeAccountsApi } from './api/claude-accounts-bridge'
 import { cliApi } from './api/cli-bridge'
@@ -135,6 +136,7 @@ const api = {
   agentAwake: agentAwakeApi,
   localhostWorktreeLabels: localhostWorktreeLabelsApi,
   keybindings: keybindingsApi,
+  customCss: customCssApi,
   codexAccounts: codexAccountsApi,
   claudeAccounts: claudeAccountsApi,
   cli: cliApi,
