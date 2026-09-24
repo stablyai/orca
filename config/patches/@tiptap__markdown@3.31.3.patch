@@ -1,0 +1,59 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index e4a07ed6a23c37e4569206dd214438ec7bcaef62..c1e0de58cc83a131ddc204f53d848cbe25a45ac7 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -1036,7 +1036,13 @@ var MarkdownManager = class {
+ 	* (`encodeTextForMarkdown`) via the existing `isInsideCode` guard.
+ 	*/
+ 	escapeMarkdownSyntax(text) {
+-		return text.replace(/([\\`*_[\]~])/g, "\\$1");
++		return text.replace(/[\\`*[\]~]|_/g, (match, offset, str) => {
++			if (match !== "_") return `\\${match}`;
++			const before = str[offset - 1];
++			const after = str[offset + 1];
++			const intraword = before !== void 0 && after !== void 0 && /\w/.test(before) && /\w/.test(after);
++			return intraword ? match : `\\${match}`;
++		});
+ 	}
+ 	renderNodeToMarkdown(node, parentNode, index = 0, level = 0, meta = {}) {
+ 		var _handler$renderMarkdo;
+diff --git a/dist/index.js b/dist/index.js
+index 76a9e773a58fd94f08b3b861118a536082d55e60..52df8de9e7c5ea55d0bb604178580a22a2adaaf5 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1035,7 +1035,13 @@ var MarkdownManager = class {
+ 	* (`encodeTextForMarkdown`) via the existing `isInsideCode` guard.
+ 	*/
+ 	escapeMarkdownSyntax(text) {
+-		return text.replace(/([\\`*_[\]~])/g, "\\$1");
++		return text.replace(/[\\`*[\]~]|_/g, (match, offset, str) => {
++			if (match !== "_") return `\\${match}`;
++			const before = str[offset - 1];
++			const after = str[offset + 1];
++			const intraword = before !== void 0 && after !== void 0 && /\w/.test(before) && /\w/.test(after);
++			return intraword ? match : `\\${match}`;
++		});
+ 	}
+ 	renderNodeToMarkdown(node, parentNode, index = 0, level = 0, meta = {}) {
+ 		var _handler$renderMarkdo;
+diff --git a/src/MarkdownManager.ts b/src/MarkdownManager.ts
+index 7a287409dd7608e2e72ec15c5fc5aae9c45e77ec..8f0625ec975f489e9290eb89731091978b20fd26 100644
+--- a/src/MarkdownManager.ts
++++ b/src/MarkdownManager.ts
+@@ -1163,7 +1163,15 @@ export class MarkdownManager {
+    * (`encodeTextForMarkdown`) via the existing `isInsideCode` guard.
+    */
+   private escapeMarkdownSyntax(text: string): string {
+-    return text.replace(/([\\`*_[\]~])/g, '\\$1')
++    return text.replace(/[\\`*[\]~]|_/g, (match, offset, str) => {
++      if (match !== '_') {
++        return `\\${match}`
++      }
++      const before = str[offset - 1]
++      const after = str[offset + 1]
++      const intraword = before !== undefined && after !== undefined && /\w/.test(before) && /\w/.test(after)
++      return intraword ? match : `\\${match}`
++    })
+   }
+ 
+   renderNodeToMarkdown(
