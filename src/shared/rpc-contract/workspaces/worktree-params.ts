@@ -195,6 +195,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   baseRef: OptionalString,
   workspaceStatus: OptionalString,
   tags: z.array(z.string()).optional(),
+  addTags: z.array(z.string()).optional(),
+  removeTags: z.array(z.string()).optional(),
   pushTarget: z
     .object({
       remoteName: z.string(),

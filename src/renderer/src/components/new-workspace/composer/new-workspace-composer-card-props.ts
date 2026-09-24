@@ -124,6 +124,9 @@ export type NewWorkspaceComposerCardProps = {
   onNoteChange: (value: string) => void
   tags: string[]
   onTagsChange: (tags: string[]) => void
+  /** Typed tag not yet committed with Enter; creation includes it. */
+  tagDraft: string
+  onTagDraftChange: (value: string) => void
   setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null

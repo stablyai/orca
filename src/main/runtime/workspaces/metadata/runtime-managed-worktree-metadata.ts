@@ -16,6 +16,7 @@ import {
   type WorktreeSortOrderRequest
 } from '../../../persistence/worktree-sort-order-write'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { applyWorktreeTagChanges } from '../../../../shared/worktree/metadata/worktree-tags'
 import {
   isWslMoveSourceHost,
   isWslMoveWorkspaceBlocked,
@@ -41,6 +42,8 @@ type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
     /** Write only while the current parent is this workspace key; else refuse, so a newer move stands. */
     ifParentWorkspace?: string
   }
+  /** Incremental tag edits, applied against the stored tags at write time. */
+  tagChanges?: { add?: string[]; remove?: string[] }
 }
 
 type Ports = {
@@ -65,7 +68,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   ports: Ports
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
-  const { lineage, ...metaUpdates } = args.updates
+  const { lineage, tagChanges, ...metaUpdates } = args.updates
   const folderParent = lineage?.parentWorktree ? folderParentKey(lineage.parentWorktree) : undefined
   const previousParentRepoId = lineage
     ? splitWorktreeId(args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId ?? '')?.repoId
@@ -77,7 +80,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     shouldDropWslMoveProjectUpdate(
       args.store,
       wslMoveProjectRefForWorkspace(worktree.id),
-      lineage ? args.updates : metaUpdates
+      lineage || tagChanges ? args.updates : metaUpdates
     )
   ) {
     return worktree
@@ -174,6 +177,11 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'A same-id workspace on another host owns this lineage.'
       )
     }
+  }
+  if (tagChanges && (tagChanges.add?.length || tagChanges.remove?.length)) {
+    // Why here: read and write stay in one synchronous step, so concurrent CLI edits cannot drop each other.
+    const stored = args.store.getWorktreeMetaForHost?.(target.id, target.hostId)
+    persisted.tags = applyWorktreeTagChanges(persisted.tags ?? stored?.tags, tagChanges)
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   // Recheck removal: an earlier resolution snapshot may still contain this workspace (#22712).

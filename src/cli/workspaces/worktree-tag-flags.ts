@@ -1,48 +1,43 @@
-import { normalizeWorktreeTags, worktreeTagKey } from '../../shared/worktree/metadata/worktree-tags'
+import { normalizeWorktreeTags } from '../../shared/worktree/metadata/worktree-tags'
 import { getRepeatedStringFlag, rejectValuelessFlag } from '../arguments/flags'
 import { WORKTREE_TAGS_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 
 export const WORKTREE_TAG_FLAGS = ['tag', 'untag', 'tags'] as const
 
+export type WorktreeSetTagParams = { tags?: string[]; addTags?: string[]; removeTags?: string[] }
+
 export function hasWorktreeTagFlags(flags: Map<string, string | boolean>): boolean {
   return WORKTREE_TAG_FLAGS.some((name) => flags.has(name))
 }
 
-/** `--tags` replaces the set (`null` or `""` clears it); then `--tag` adds and `--untag` removes. */
-export function resolveWorktreeTagFlags(
-  flags: Map<string, string | boolean>,
-  currentTags: readonly string[] | undefined
-): string[] {
+/** `--tags` replaces the set (`null` or `""` clears it); `--tag`/`--untag` edit it on the host. */
+export function parseWorktreeTagFlags(flags: Map<string, string | boolean>): WorktreeSetTagParams {
   const replacement = flags.get('tags')
   rejectValuelessFlag(replacement, 'tags')
-  const base =
-    typeof replacement !== 'string'
-      ? normalizeWorktreeTags(currentTags)
-      : replacement.trim() === 'null'
-        ? []
-        : replacement.split(',')
-  const removed = new Set(getRepeatedStringFlag(flags, 'untag').map(worktreeTagKey))
-  return normalizeWorktreeTags(
-    [...base, ...getRepeatedStringFlag(flags, 'tag')].filter(
-      (tag) => !removed.has(worktreeTagKey(tag))
-    )
-  )
+  const addTags = normalizeWorktreeTags(getRepeatedStringFlag(flags, 'tag'))
+  const removeTags = normalizeWorktreeTags(getRepeatedStringFlag(flags, 'untag'))
+  return {
+    ...(typeof replacement === 'string'
+      ? { tags: replacement.trim() === 'null' ? [] : normalizeWorktreeTags(replacement.split(',')) }
+      : {}),
+    ...(addTags.length > 0 ? { addTags } : {}),
+    ...(removeTags.length > 0 ? { removeTags } : {})
+  }
 }
 
-/** Tags to send with `worktree set`, or undefined when no tag flag was passed. */
-export async function getWorktreeSetTags(
+/** Tag params for `worktree set`, or undefined when no tag flag was passed. */
+export async function getWorktreeSetTagParams(
   flags: Map<string, string | boolean>,
-  client: RuntimeClient,
-  worktree: string
-): Promise<string[] | undefined> {
+  client: RuntimeClient
+): Promise<WorktreeSetTagParams | undefined> {
   if (!hasWorktreeTagFlags(flags)) {
     return undefined
   }
-  // Why: an older host strips `tags` from worktree.set and still reports success.
+  const params = parseWorktreeTagFlags(flags)
+  // Why: an older host strips tag fields from worktree.set and still reports success.
   const status = await client.call<RuntimeStatus>('status.get')
   if (!status.result.capabilities?.includes(WORKTREE_TAGS_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
@@ -50,11 +45,5 @@ export async function getWorktreeSetTags(
       'This Orca host does not support workspace tags. Nothing was changed; update Orca on the execution host.'
     )
   }
-  if (flags.has('tags')) {
-    return resolveWorktreeTagFlags(flags, [])
-  }
-  const current = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-    worktree
-  })
-  return resolveWorktreeTagFlags(flags, current.result.worktree.tags)
+  return params
 }

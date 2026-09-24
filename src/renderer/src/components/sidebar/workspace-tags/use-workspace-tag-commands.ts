@@ -1,6 +1,4 @@
 import { useCallback, useMemo } from 'react'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -9,39 +7,35 @@ import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qua
 import { worktreeTagKey } from '../../../../../shared/worktree/metadata/worktree-tags'
 import {
   collectWorkspaceTags,
+  countAtTagLimit,
   planTagAdd,
   planTagDelete,
   planTagRename,
   planTagToggle,
-  type WorkspaceTagSummary,
-  type WorkspaceTagUpdate
+  type WorkspaceTagSummary
 } from './workspace-tag-actions'
-import {
-  dropWriteRows,
-  type DraggedWorktreeCopies
-} from '../worktree-list/drag/dragged-worktree-copies'
+import { enqueueTagWrite } from './workspace-tag-writes'
 
 export type WorkspaceTagCommands = {
   allTags: WorkspaceTagSummary[]
   /** Current store rows for a captured selection; menus snapshot rows when they open. */
   resolveLive: (workspaces: readonly Worktree[]) => Worktree[]
   toggleTag: (workspaces: readonly Worktree[], tag: string) => Promise<void>
-  /** Adds the tag named by its case-insensitive key to the dragged copies of these ids. */
-  addTagToIds: (
-    workspaceIds: readonly string[],
-    tagKey: string,
-    draggedCopies?: DraggedWorktreeCopies
-  ) => Promise<void>
+  /** Adds the tag named by its case-insensitive key to workspaces given by host-qualified identity. */
+  addTagToIdentities: (identities: readonly string[], tagKey: string) => Promise<void>
   renameTag: (from: string, to: string) => Promise<void>
   deleteTag: (tag: string) => Promise<void>
   countTagged: (tag: string) => number
 }
 
-/** Tag reads and writes over every workspace the sidebar knows, git worktrees and folders alike. */
+function byIdentity(workspaces: Worktree[], identities: ReadonlySet<string>): Worktree[] {
+  return workspaces.filter((entry) => identities.has(getWorktreeHostIdentity(entry)))
+}
+
+/** Tag reads for rendering, and queued tag writes over git worktrees and folder workspaces alike. */
 export function useWorkspaceTagCommands(): WorkspaceTagCommands {
   const worktrees = useAllWorktrees()
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
 
   const allWorkspaces = useMemo(
     () => [
@@ -59,58 +53,39 @@ export function useWorkspaceTagCommands(): WorkspaceTagCommands {
     [allWorkspaces]
   )
 
-  const apply = useCallback(
-    async (updates: WorkspaceTagUpdate<Worktree>[]) => {
-      const results = await Promise.all(
-        updates.map(({ workspace, tags }) =>
-          updateWorktreeMeta(
-            workspace.id,
-            { tags },
-            { executionHostId: workspace.hostId ?? 'local' }
-          )
-        )
-      )
-      const failure = results.find((result) => !result.ok)
-      if (failure && !failure.ok) {
-        toast.error(
-          translate('auto.components.sidebar.workspaceTags.updateFailed', 'Could not update tags'),
-          { description: failure.error }
-        )
-      }
-    },
-    [updateWorktreeMeta]
-  )
-
-  const toggleTag = useCallback(
-    // Why live rows: planning from the snapshot would drop a tag toggled moments earlier.
-    (workspaces: readonly Worktree[], tag: string) =>
-      apply(planTagToggle(resolveLive(workspaces), tag)),
-    [apply, resolveLive]
-  )
-  const addTagToIds = useCallback(
-    (workspaceIds: readonly string[], tagKey: string, draggedCopies?: DraggedWorktreeCopies) => {
-      const tag = allTags.find((entry) => worktreeTagKey(entry.tag) === tagKey)?.tag
+  const toggleTag = useCallback((workspaces: readonly Worktree[], tag: string) => {
+    const identities = new Set(workspaces.map(getWorktreeHostIdentity))
+    return enqueueTagWrite((all) => {
+      const targets = byIdentity(all, identities)
+      return { updates: planTagToggle(targets, tag), atLimitCount: countAtTagLimit(targets, tag) }
+    })
+  }, [])
+  const addTagToIdentities = useCallback((identities: readonly string[], tagKey: string) => {
+    const wanted = new Set(identities)
+    return enqueueTagWrite((all) => {
+      const tag = collectWorkspaceTags(all).find(
+        (entry) => worktreeTagKey(entry.tag) === tagKey
+      )?.tag
       if (!tag) {
-        return Promise.resolve()
+        return { updates: [] }
       }
-      // Why: an id can name a twin on another host; tag the dragged copies, never a guessed host.
-      const rowsFor = dropWriteRows(useAppStore.getState(), draggedCopies).status
-      return apply(planTagAdd(workspaceIds.flatMap(rowsFor), tag))
-    },
-    [allTags, apply]
-  )
+      const targets = byIdentity(all, wanted)
+      return { updates: planTagAdd(targets, tag), atLimitCount: countAtTagLimit(targets, tag) }
+    })
+  }, [])
   const renameTag = useCallback(
-    (from: string, to: string) => apply(planTagRename(allWorkspaces, from, to)),
-    [allWorkspaces, apply]
+    (from: string, to: string) =>
+      enqueueTagWrite((all) => ({ updates: planTagRename(all, from, to) })),
+    []
   )
   const deleteTag = useCallback(
-    (tag: string) => apply(planTagDelete(allWorkspaces, tag)),
-    [allWorkspaces, apply]
+    (tag: string) => enqueueTagWrite((all) => ({ updates: planTagDelete(all, tag) })),
+    []
   )
   const countTagged = useCallback(
     (tag: string) => planTagDelete(allWorkspaces, tag).length,
     [allWorkspaces]
   )
 
-  return { allTags, resolveLive, toggleTag, addTagToIds, renameTag, deleteTag, countTagged }
+  return { allTags, resolveLive, toggleTag, addTagToIdentities, renameTag, deleteTag, countTagged }
 }

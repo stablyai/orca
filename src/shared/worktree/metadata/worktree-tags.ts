@@ -7,7 +7,9 @@ export function normalizeWorktreeTag(raw: unknown): string {
   if (typeof raw !== 'string') {
     return ''
   }
-  return raw.trim().replace(/\s+/g, ' ').slice(0, MAX_WORKTREE_TAG_LENGTH).trim()
+  const collapsed = raw.trim().replace(/\s+/g, ' ')
+  // Why code points: slicing UTF-16 units can split an emoji into a lone surrogate.
+  return Array.from(collapsed).slice(0, MAX_WORKTREE_TAG_LENGTH).join('').trim()
 }
 
 const TAG_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base' })
@@ -19,7 +21,8 @@ export function compareWorktreeTags(left: string, right: string): number {
 
 /** Case-insensitive identity, so `Billing` and `billing` are one tag. */
 export function worktreeTagKey(tag: string): string {
-  return normalizeWorktreeTag(tag).toLocaleLowerCase()
+  // Why not toLocaleLowerCase: hosts on different locales (e.g. Turkish I) must agree on identity.
+  return normalizeWorktreeTag(tag).toLowerCase()
 }
 
 /** Canonical tag list: normalized, deduped case-insensitively (first spelling wins), capped. */
@@ -31,7 +34,7 @@ export function normalizeWorktreeTags(raw: unknown): string[] {
   const tags: string[] = []
   for (const entry of raw) {
     const tag = normalizeWorktreeTag(entry)
-    const key = tag.toLocaleLowerCase()
+    const key = tag.toLowerCase()
     if (!tag || seen.has(key)) {
       continue
     }
@@ -56,4 +59,24 @@ export function applyNormalizedWorktreeTags<T extends { tags?: string[] }>(recor
     delete record.tags
   }
   return record
+}
+
+export type WorktreeTagChanges = {
+  /** Replaces the whole set before add/remove apply. */
+  replace?: readonly string[]
+  add?: readonly string[]
+  remove?: readonly string[]
+}
+
+/** Applies add/remove (after an optional replace) to a tag list; removals match case-insensitively. */
+export function applyWorktreeTagChanges(
+  current: readonly string[] | undefined,
+  changes: WorktreeTagChanges
+): string[] {
+  const removed = new Set((changes.remove ?? []).map(worktreeTagKey))
+  return normalizeWorktreeTags(
+    [...(changes.replace ?? current ?? []), ...(changes.add ?? [])].filter(
+      (tag) => !removed.has(worktreeTagKey(tag))
+    )
+  )
 }

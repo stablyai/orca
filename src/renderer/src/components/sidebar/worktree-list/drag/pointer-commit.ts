@@ -11,6 +11,7 @@ import { resolveWorktreeSidebarStatusDropCommitTarget } from './worktree-sidebar
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
 import { getPointerDropTagSection } from './tag-target'
 import { TAG_GROUP_PREFIX } from '../../../../../../shared/sidebar-list/sections/tag-groups'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type {
   WorktreeDropCommitContext,
   WorktreeStatusDropAtIndexArgs
@@ -90,7 +91,12 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       : null
     // Why only across sections: inside its own section a drag keeps reorder and lineage nesting.
     if (tagSection && tagSection !== drag.sourceGroupKey) {
-      ctx.onTagWorktrees(drag.draggedIds, tagSection.slice(TAG_GROUP_PREFIX.length))
+      // Why copies: a bare id repeats across hosts; lineage-expanded copies are not dragged rows.
+      const draggedIds = new Set(drag.draggedIds)
+      ctx.onTagWorktrees(
+        drag.draggedCopies.filter((copy) => draggedIds.has(copy.id)).map(getWorktreeHostIdentity),
+        tagSection.slice(TAG_GROUP_PREFIX.length)
+      )
       ctx.clearWorktreeDrag()
       return
     }

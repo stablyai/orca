@@ -50,6 +50,10 @@ function commit(container: HTMLElement, sourceGroupKey: string) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the commit reads only these drag fields on the tag path.
   const drag = {
     draggedIds: ['wt-1', 'wt-2'],
+    draggedCopies: [
+      { id: 'wt-1', hostId: 'local' },
+      { id: 'wt-2', hostId: 'local' }
+    ],
     reorderDraggedIds: ['wt-1', 'wt-2'],
     sourceGroupKey,
     latestBoardDropTarget: null,
@@ -69,7 +73,7 @@ describe('pointer drop onto a tag section', () => {
   it('adds that tag when dropped into a different tag section', () => {
     const ctx = commit(renderSection(getTagGroupKey('billing team')), getTagGroupKey('api'))
 
-    expect(ctx.onTagWorktrees).toHaveBeenCalledWith(['wt-1', 'wt-2'], 'billing team')
+    expect(ctx.onTagWorktrees).toHaveBeenCalledWith(['local::wt-1', 'local::wt-2'], 'billing team')
     expect(ctx.clearWorktreeDrag).toHaveBeenCalled()
   })
 

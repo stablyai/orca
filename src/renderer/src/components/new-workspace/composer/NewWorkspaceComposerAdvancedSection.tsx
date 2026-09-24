@@ -42,6 +42,8 @@ type NewWorkspaceComposerAdvancedSectionProps = Pick<
   | 'onNoteChange'
   | 'tags'
   | 'onTagsChange'
+  | 'tagDraft'
+  | 'onTagDraftChange'
   | 'setupControlsEnabled'
   | 'setupConfig'
   | 'requiresExplicitSetupChoice'
@@ -88,6 +90,8 @@ export function NewWorkspaceComposerAdvancedSection({
   onNoteChange,
   tags,
   onTagsChange,
+  tagDraft,
+  onTagDraftChange,
   setupControlsEnabled = true,
   setupConfig,
   requiresExplicitSetupChoice,
@@ -227,7 +231,13 @@ export function NewWorkspaceComposerAdvancedSection({
             />
           </div>
 
-          <ComposerTagsField tags={tags} onTagsChange={onTagsChange} disabled={!advancedOpen} />
+          <ComposerTagsField
+            tags={tags}
+            onTagsChange={onTagsChange}
+            draft={tagDraft}
+            onDraftChange={onTagDraftChange}
+            disabled={!advancedOpen}
+          />
 
           {setupControlsEnabled && setupConfig ? (
             <WorkspaceSetupSection

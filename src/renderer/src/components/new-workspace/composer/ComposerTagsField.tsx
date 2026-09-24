@@ -1,14 +1,16 @@
-import React, { useId, useState } from 'react'
+import React, { useId } from 'react'
 import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import {
+  MAX_WORKTREE_TAGS,
   normalizeWorktreeTag,
   normalizeWorktreeTags,
   worktreeTagKey
 } from '../../../../../shared/worktree/metadata/worktree-tags'
 import { useWorkspaceTagCommands } from '../../sidebar/workspace-tags/use-workspace-tag-commands'
+import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 
 const MAX_SUGGESTIONS = 8
 
@@ -16,15 +18,20 @@ const MAX_SUGGESTIONS = 8
 export function ComposerTagsField({
   tags,
   onTagsChange,
+  draft: query,
+  onDraftChange: setQuery,
   disabled
 }: {
   tags: string[]
   onTagsChange: (tags: string[]) => void
+  /** Typed tag not yet committed; lives in composer state so submit can include it. */
+  draft: string
+  onDraftChange: (value: string) => void
   disabled?: boolean
 }): React.JSX.Element {
   const inputId = useId()
   const { allTags } = useWorkspaceTagCommands()
-  const [query, setQuery] = useState('')
+  const atLimit = tags.length >= MAX_WORKTREE_TAGS
   const selectedKeys = new Set(tags.map(worktreeTagKey))
   const queryKey = worktreeTagKey(query)
   const suggestions = allTags
@@ -75,9 +82,12 @@ export function ComposerTagsField({
       <Input
         id={inputId}
         value={query}
-        disabled={disabled}
+        disabled={disabled || atLimit}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => {
+          if (shouldSuppressEnterSubmit(event.nativeEvent, false)) {
+            return
+          }
           if (event.key === 'Enter' || event.key === ',') {
             event.preventDefault()
             // Why: Enter in the composer creates the workspace; here it only commits the tag.
@@ -88,12 +98,19 @@ export function ComposerTagsField({
           }
         }}
         onBlur={() => addTag(query)}
-        placeholder={translate(
-          'auto.components.NewWorkspaceComposerCard.tagsPlaceholder',
-          'Add a tag and press Enter'
-        )}
+        placeholder={
+          atLimit
+            ? translate(
+                'auto.components.NewWorkspaceComposerCard.tagsLimit',
+                'A workspace can have up to 32 tags'
+              )
+            : translate(
+                'auto.components.NewWorkspaceComposerCard.tagsPlaceholder',
+                'Add a tag and press Enter'
+              )
+        }
       />
-      {suggestions.length > 0 ? (
+      {!atLimit && suggestions.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {suggestions.map((entry) => (
             <Button
