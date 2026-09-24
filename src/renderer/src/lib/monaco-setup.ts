@@ -18,6 +18,8 @@ import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancella
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
+import { installLanguageServerDocumentSync } from '@/components/editor/lsp-navigation/language-server-document-sync'
+import { installLanguageServerNavigationProviders } from '@/components/editor/lsp-navigation/language-server-navigation-providers'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -89,6 +91,11 @@ installMonacoPeekReferencesPreviewOptions()
 // blocked in Orca's sandboxed renderer. Route it through the trusted IPC bridge
 // so right-click Paste works like Cmd+V (which already works via native events).
 installMonacoContextMenuPaste(monaco)
+// C/C++ navigation tracer (S1): mirrors model content to the main-process
+// clangd host and registers definition/hover providers + the cross-file
+// opener that F12 needs to leave the current model.
+const uninstallLanguageServerDocumentSync = installLanguageServerDocumentSync(monaco)
+const uninstallLanguageServerNavigation = installLanguageServerNavigationProviders(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
@@ -96,6 +103,10 @@ loader.config({ monaco })
 const unregisterEditorModelRegistry = editorModelRegistry.register(monaco)
 if (import.meta.hot) {
   import.meta.hot.dispose(unregisterEditorModelRegistry)
+  import.meta.hot.dispose(() => {
+    uninstallLanguageServerDocumentSync()
+    uninstallLanguageServerNavigation()
+  })
 }
 // Re-export for convenience
 export { monaco }
