@@ -27,6 +27,17 @@ function globalGroup(): ShortcutGroup {
   return { title: 'Global', items }
 }
 
+function tilingGroup(): ShortcutGroup {
+  const items = (['terminal.closePane', 'tiling.focusPaneByIndex'] as const).map((actionId) => {
+    const definition = getKeybindingDefinition(actionId)
+    if (!definition) {
+      throw new Error(`Missing keybinding definition: ${actionId}`)
+    }
+    return definition
+  })
+  return { title: 'Terminal Panes', items }
+}
+
 const baseOptions = {
   keybindings: {},
   conflictByAction: new Map(),
@@ -35,6 +46,7 @@ const baseOptions = {
   managedBrowserCreationEnabled: false,
   mobileEmulatorCreationEnabled: false,
   agentDashboardEnabled: false,
+  tiledAgentsEnabled: false,
   settingsSearchQuery: '',
   shortcutQuery: '',
   shortcutFilter: 'all'
@@ -51,6 +63,7 @@ describe('buildShortcutRowVisibility', () => {
       managedBrowserCreationEnabled: false,
       mobileEmulatorCreationEnabled: false,
       agentDashboardEnabled: false,
+      tiledAgentsEnabled: false,
       settingsSearchQuery: '',
       shortcutQuery: '',
       shortcutFilter: 'all'
@@ -59,6 +72,23 @@ describe('buildShortcutRowVisibility', () => {
     expect(result.shortcutRows.map((row) => row.item.id)).toEqual([
       'tab.newTerminal',
       'tab.newMarkdown'
+    ])
+  })
+
+  it('hides the tiling rows while the tiled agents experiment is off', () => {
+    const hidden = buildShortcutRowVisibility({ ...baseOptions, groups: [tilingGroup()] })
+
+    expect(hidden.shortcutRows.map((row) => row.item.id)).toEqual(['terminal.closePane'])
+
+    const shown = buildShortcutRowVisibility({
+      ...baseOptions,
+      groups: [tilingGroup()],
+      tiledAgentsEnabled: true
+    })
+
+    expect(shown.shortcutRows.map((row) => row.item.id)).toEqual([
+      'terminal.closePane',
+      'tiling.focusPaneByIndex'
     ])
   })
 

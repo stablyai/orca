@@ -34,6 +34,8 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'unifiedTabsByWorktree',
   'groupsByWorktree',
   'layoutByWorktree',
+  'agentCardGroupIdsByWorktree',
+  'maximizedGroupIdByWorktree',
   'activeGroupIdByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',

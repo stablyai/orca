@@ -3353,7 +3353,14 @@
             "0d1963f4a6": "This tab is pinned. Are you sure you want to close it?",
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
-            "c337c9d75c": "Close"
+            "c337c9d75c": "Close",
+            "agentsCloseTitle": "Close all agents?",
+            "agentsCloseDescription": "This tab is running {{count}} agents. Closing it ends them.",
+            "agentsCloseDescription_one": "This tab is running {{count}} agent. Closing it ends it.",
+            "agentsCloseDescription_other": "This tab is running {{count}} agents. Closing it ends them.",
+            "agentsCloseConfirm": "Close {{count}} agents",
+            "agentsCloseConfirm_one": "Close {{count}} agent",
+            "agentsCloseConfirm_other": "Close {{count}} agents"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
@@ -3410,6 +3417,21 @@
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
+          },
+          "AgentCard": {
+            "restore": "Restore agent",
+            "enlarge": "Enlarge agent",
+            "close": "Close agent",
+            "plus": "Launch agent"
+          },
+          "AgentsTab": {
+            "label": "Agents"
+          },
+          "TiledAgentsCapNotification": {
+            "capToast": {
+              "title": "Showing the first 9 agents as cards",
+              "description": "Additional agents open as ordinary tabs."
+            }
           }
         },
         "bar": {
@@ -9670,7 +9692,14 @@
               "board": "board",
               "inWindow": "in-window",
               "worktrees": "worktrees"
-            }
+            },
+            "tiledAgentsKeywordSideBySide": "side by side",
+            "tiledAgentsKeywordPanes": "panes",
+            "tiledAgentsKeywordGrid": "grid",
+            "tiledAgentsKeywordTiled": "tiled",
+            "tiledAgentsKeywordTile": "tile",
+            "tiledAgentsDescription": "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time.",
+            "tiledAgentsTitle": "Tiled agents"
           }
         },
         "floating": {
@@ -12133,6 +12162,12 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "TiledAgentsExperimentalSetting": {
+          "toggleAriaLabel": "Toggle tiled agents",
+          "rowDescription": "Turns on automatically for any worktree with an agent, no further action needed. Up to nine agents as cards at once.",
+          "title": "Tiled agents",
+          "description": "Collect this worktree's AI agents as cards inside one Agents tab, up to nine at a time."
         }
       },
       "right": {

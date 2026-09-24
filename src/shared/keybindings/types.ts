@@ -114,6 +114,8 @@ export type KeybindingActionId =
   | 'terminal.splitRight'
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
+  | 'tiling.focusPaneByIndex'
+  | 'tiling.toggleMaximizePane'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

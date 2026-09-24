@@ -126,7 +126,9 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
         [WT2]: [{ startupCwd: '/path/wt2' }]
       },
       recentlyClosedTabKindsByWorktree: { [WT1]: ['terminal'], [WT2]: ['terminal'] },
-      defaultTerminalTabsAppliedByWorktreeId: { [WT1]: true, [WT2]: true }
+      defaultTerminalTabsAppliedByWorktreeId: { [WT1]: true, [WT2]: true },
+      agentCardGroupIdsByWorktree: { [WT1]: ['g-wt1'], [WT2]: ['g-wt2'] },
+      maximizedGroupIdByWorktree: { [WT1]: 'g-wt1', [WT2]: 'g-wt2' }
     })
   }
 
@@ -143,12 +145,16 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.recentlyClosedTerminalTabsByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedTabKindsByWorktree[WT1]).toBeUndefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT1]).toBeUndefined()
+    expect(s.agentCardGroupIdsByWorktree[WT1]).toBeUndefined()
+    expect(s.maximizedGroupIdByWorktree[WT1]).toBeUndefined()
     // Retained for the surviving worktree (guard over-eviction).
     expect(s.remoteStatusesByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedTerminalTabsByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedTabKindsByWorktree[WT2]).toBeDefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT2]).toBe(true)
+    expect(s.agentCardGroupIdsByWorktree[WT2]).toEqual(['g-wt2'])
+    expect(s.maximizedGroupIdByWorktree[WT2]).toBe('g-wt2')
   })
 
   it('single removeWorktree drops worktree-keyed maps for the removed worktree only', async () => {
@@ -164,11 +170,15 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.recentlyClosedTerminalTabsByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedTabKindsByWorktree[WT1]).toBeUndefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT1]).toBeUndefined()
+    expect(s.agentCardGroupIdsByWorktree[WT1]).toBeUndefined()
+    expect(s.maximizedGroupIdByWorktree[WT1]).toBeUndefined()
     expect(s.remoteStatusesByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedTerminalTabsByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedTabKindsByWorktree[WT2]).toBeDefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT2]).toBe(true)
+    expect(s.agentCardGroupIdsByWorktree[WT2]).toEqual(['g-wt2'])
+    expect(s.maximizedGroupIdByWorktree[WT2]).toBe('g-wt2')
   })
 
   it('worktree removal drops the hibernation output-epoch map for the removed worktree only', () => {

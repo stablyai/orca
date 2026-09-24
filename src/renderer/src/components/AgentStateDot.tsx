@@ -68,6 +68,22 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
+/** Tiled-pane frame tint mirroring this dot's own color for a state that needs
+ *  it, so a tiled pane's frame and its dot agree on one palette. Additive: the
+ *  render branches below own the canonical mapping, this only reuses it. */
+export function agentDotStateFrameToneClassName(state: 'blocked' | 'waiting' | 'done'): string {
+  if (state === 'blocked') {
+    // Why the destructive token, not a raw red: the design-system rule cannot see a raw color
+    // returned from a helper (it only inspects className attributes), so this class must already
+    // be a token (I6).
+    return 'border-destructive/40 bg-destructive/[0.06] hover:border-destructive/60 hover:bg-destructive/10'
+  }
+  if (state === 'done') {
+    return 'border-workspace-status-review/40 bg-workspace-status-review/[0.06] hover:border-workspace-status-review/60 hover:bg-workspace-status-review/10'
+  }
+  return 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
+}
+
 type Props = {
   state: AgentDotState
   size?: 'sm' | 'md'

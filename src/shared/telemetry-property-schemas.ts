@@ -136,6 +136,7 @@ export const launchSourceSchema = z.enum([
   'conflict_resolution',
   'source_control_recovery',
   'terminal_context_menu',
+  'agent_card_plus',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
@@ -195,6 +196,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalStructuredNativeChat',
   'experimentalActivity',
   'experimentalAgentDashboardPopout',
+  'experimentalTiledAgents',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',

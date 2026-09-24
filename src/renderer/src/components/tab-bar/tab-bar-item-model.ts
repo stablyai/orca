@@ -47,6 +47,13 @@ export type TabBarItem =
       isPinned: boolean
       data: Tab & { contentType: 'agent-session' }
     }
+  | {
+      type: 'agents'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
+    }
 
 export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -54,6 +61,9 @@ export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolea
   }
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
+  }
+  if (item.type === 'agents') {
+    return item.data.label
   }
   if (item.type === 'simulator' || item.type === 'agent-session') {
     return item.data.label || 'Mobile Emulator'
@@ -107,6 +117,7 @@ export function buildOrderedTabItems({
   browserTabIds,
   simulatorTabIds,
   agentSessionTabIds,
+  agentsTabIds,
   terminalMap,
   editorMap,
   browserMap,
@@ -119,6 +130,7 @@ export function buildOrderedTabItems({
   browserTabIds: string[]
   simulatorTabIds: string[]
   agentSessionTabIds: string[]
+  agentsTabIds: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
   browserMap: Map<string, BrowserTabState & { tabId?: string }>
@@ -131,7 +143,8 @@ export function buildOrderedTabItems({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
-    agentSessionTabIds
+    agentSessionTabIds,
+    agentsTabIds
   )
   const items: TabBarItem[] = []
   for (const id of ids) {
@@ -182,6 +195,17 @@ export function buildOrderedTabItems({
       })
       continue
     }
+    const agentsTab = unifiedTabByVisibleId.get(id)
+    if (agentsTab?.contentType === 'agents') {
+      items.push({
+        type: 'agents',
+        id,
+        unifiedTabId: agentsTab.id,
+        isPinned: agentsTab.isPinned === true,
+        data: agentsTab
+      })
+      continue
+    }
     const agentSession = agentSessionMap.get(id)
     if (agentSession) {
       items.push({
@@ -217,7 +241,7 @@ export function findActiveVisibleTabId(
     activeFileId?: string | null
     activeBrowserTabId?: string | null
     activeSimulatorTabId?: string | null
-    activeTabType?: WorkspaceVisibleTabType
+    activeTabType?: WorkspaceVisibleTabType | 'agents'
   }
 ): string | null {
   const activeItem = items.find((item) => {
@@ -232,6 +256,9 @@ export function findActiveVisibleTabId(
     }
     if (item.type === 'simulator') {
       return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId
+    }
+    if (item.type === 'agents') {
+      return active.activeTabType === 'agents' && item.id === active.activeTabId
     }
     if (item.type === 'agent-session') {
       // Reachable only from TabGroupPanel, which passes the structured tab's own id; the store's

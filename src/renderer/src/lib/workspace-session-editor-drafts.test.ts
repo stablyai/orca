@@ -30,6 +30,7 @@ function createSnapshot(
     groupsByWorktree: {},
     layoutByWorktree: {},
     activeGroupIdByWorktree: {},
+    agentCardGroupIdsByWorktree: {},
     sshConnectionStates: new Map(),
     repos: [],
     worktreesByRepo: {},

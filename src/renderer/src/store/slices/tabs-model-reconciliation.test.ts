@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeWorktree } from './store-test-helpers'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -582,6 +583,120 @@ describe('TabsSlice', () => {
       const result = store.getState().reconcileWorktreeTabModel(WT)
       expect(result.renderableTabCount).toBe(1)
       expect(result.activeRenderableTabId).toBe(tab.id)
+    })
+
+    it('keeps the Agents tab alive across a worktree switch and never promotes a card group into the layout (B1)', () => {
+      const homeGroupId = 'g-home'
+      const cardGroupId = 'g-card-1'
+      const otherWt = 'repo1::/tmp/other'
+      const agentsTabId = `agents:${WT}`
+      store.setState({
+        settings: { ...getDefaultSettings('/tmp'), experimentalTiledAgents: true },
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({ id: WT, repoId: 'repo1', path: '/tmp/feature' }),
+            makeWorktree({ id: otherWt, repoId: 'repo1', path: '/tmp/other' })
+          ]
+        },
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: agentsTabId,
+              entityId: agentsTabId,
+              groupId: homeGroupId,
+              worktreeId: WT,
+              contentType: 'agents',
+              label: 'Agents',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'agent-1',
+              entityId: 'agent-1',
+              groupId: cardGroupId,
+              worktreeId: WT,
+              contentType: 'agent-session',
+              label: 'Agent 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 2
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            { id: homeGroupId, worktreeId: WT, activeTabId: agentsTabId, tabOrder: [agentsTabId] },
+            { id: cardGroupId, worktreeId: WT, activeTabId: 'agent-1', tabOrder: ['agent-1'] }
+          ]
+        },
+        layoutByWorktree: { [WT]: { type: 'leaf', groupId: homeGroupId } },
+        activeGroupIdByWorktree: { [WT]: homeGroupId },
+        agentCardGroupIdsByWorktree: { [WT]: [cardGroupId] }
+      })
+
+      // Switch away, then back: this is the exact path (setActiveWorktree ->
+      // projectWorktreeTabModelReconciliation) the review found deletes the Agents tab.
+      store.getState().setActiveWorktree(otherWt)
+      store.getState().setActiveWorktree(WT)
+
+      const state = store.getState()
+      const agentsTabSurvived = (state.unifiedTabsByWorktree[WT] ?? []).some(
+        (item) => item.contentType === 'agents'
+      )
+      expect(agentsTabSurvived).toBe(true)
+      const layout = state.layoutByWorktree[WT]
+      const layoutRootGroupId = layout?.type === 'leaf' ? layout.groupId : null
+      expect(layoutRootGroupId).not.toBeNull()
+      expect(state.agentCardGroupIdsByWorktree[WT] ?? []).not.toContain(layoutRootGroupId)
+    })
+
+    it('never promotes a card group to the layout root when every surviving group is a card group (C1)', () => {
+      const homeGroupId = 'g-home'
+      const cardGroupId = 'g-card-1'
+      // Why: models the pinned Agents tab already gone from its home group (e.g. closed as the
+      // group's only tab), leaving only the tiled card group behind for the layout fallback.
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'agent-1',
+              entityId: 'agent-1',
+              groupId: cardGroupId,
+              worktreeId: WT,
+              contentType: 'agent-session',
+              label: 'Agent 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            { id: homeGroupId, worktreeId: WT, activeTabId: null, tabOrder: [] },
+            { id: cardGroupId, worktreeId: WT, activeTabId: 'agent-1', tabOrder: ['agent-1'] }
+          ]
+        },
+        layoutByWorktree: { [WT]: { type: 'leaf', groupId: homeGroupId } },
+        activeGroupIdByWorktree: { [WT]: homeGroupId },
+        agentCardGroupIdsByWorktree: { [WT]: [cardGroupId] },
+        tabsByWorktree: { [WT]: [] }
+      })
+
+      store.getState().reconcileWorktreeTabModel(WT)
+
+      const state = store.getState()
+      const layout = state.layoutByWorktree[WT]
+      const layoutRootGroupId = layout?.type === 'leaf' ? layout.groupId : null
+      expect(layoutRootGroupId).not.toBeNull()
+      expect(state.agentCardGroupIdsByWorktree[WT] ?? []).not.toContain(layoutRootGroupId)
+      // Why: refusing the card group is only half the guarantee. A layout rooted at a group that
+      // pruning deleted renders an empty pane and persists, so assert the root is still live.
+      expect(state.groupsByWorktree[WT].map((group) => group.id)).toContain(layoutRootGroupId)
     })
   })
 })

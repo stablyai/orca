@@ -9,6 +9,8 @@ type MockAppState = {
   groupsByWorktree: Record<string, readonly TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   runtimeEnvironmentId: string | null
+  settings?: { experimentalTiledAgents?: boolean }
+  agentCardGroupIdsByWorktree?: Record<string, readonly string[]>
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
@@ -27,6 +29,8 @@ vi.mock('@/store', async () => {
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
     runtimeEnvironmentId: null,
+    settings: {},
+    agentCardGroupIdsByWorktree: {},
     focusGroup: mocks.focusGroup
   }))
   mocks.store = useAppStore
@@ -216,6 +220,59 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatVisible).toBe('true')
     expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatFocusedGroup).toBe('false')
   })
+
+  it('hides card overlays when the Agents tab is not the home group active tab (F1)', () => {
+    const homeGroupId = 'home-group'
+    act(() => {
+      mocks.store?.setState({
+        settings: { experimentalTiledAgents: true },
+        agentCardGroupIdsByWorktree: { [WORKTREE_ID]: [GROUP_ID] },
+        unifiedTabsByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              id: 'agents-tab',
+              entityId: `agents:${WORKTREE_ID}`,
+              groupId: homeGroupId,
+              worktreeId: WORKTREE_ID,
+              contentType: 'agents',
+              label: 'Agents',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 0,
+              isPinned: true
+            },
+            structuredTab(FIRST_TAB_ID, 'session-1', 0),
+            structuredTab(SECOND_TAB_ID, 'session-2', 1)
+          ]
+        },
+        groupsByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              id: homeGroupId,
+              worktreeId: WORKTREE_ID,
+              activeTabId: 'term-1',
+              tabOrder: ['agents-tab', 'term-1']
+            },
+            createGroup(FIRST_TAB_ID)
+          ]
+        }
+      })
+    })
+    const view = render(
+      <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
+    )
+    const firstSlot = view.container.querySelector<HTMLElement>(
+      `[data-structured-agent-session-overlay-tab-id="${FIRST_TAB_ID}"]`
+    )
+    const secondSlot = view.container.querySelector<HTMLElement>(
+      `[data-structured-agent-session-overlay-tab-id="${SECOND_TAB_ID}"]`
+    )
+    expect(firstSlot?.style.display).toBe('none')
+    expect(secondSlot?.style.display).toBe('none')
+    expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatVisible).toBe('false')
+    expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatVisible).toBe('false')
+  })
 })
 
 function createState(activeTabId: string): MockAppState {
@@ -229,6 +286,8 @@ function createState(activeTabId: string): MockAppState {
     groupsByWorktree: { [WORKTREE_ID]: [createGroup(activeTabId)] },
     activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID },
     runtimeEnvironmentId: null,
+    settings: {},
+    agentCardGroupIdsByWorktree: {},
     focusGroup: mocks.focusGroup
   }
 }

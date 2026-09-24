@@ -1665,7 +1665,6 @@
             "d01b3882ba": "notifications",
             "d23ae13990": "worktree",
             "f082788cfe": "links",
-            "fa72e71f05": "agents",
             "fe5688b761": "sidebar"
           }
         },
@@ -2463,6 +2462,12 @@
           },
           "MobileDriverOverlay": {
             "3eed73394f": "Your keyboard is paused"
+          },
+          "PinnedTabCloseDialog": {
+            "agentsCloseConfirm_one": "Close {{count}} agent",
+            "agentsCloseConfirm_other": "Close {{count}} agents",
+            "agentsCloseDescription_one": "This tab is running {{count}} agent. Closing it ends it.",
+            "agentsCloseDescription_other": "This tab is running {{count}} agents. Closing it ends them."
           },
           "TerminalRemoteRuntimeReconnectBanner": {
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns."

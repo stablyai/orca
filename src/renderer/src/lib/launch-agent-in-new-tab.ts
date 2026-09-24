@@ -110,7 +110,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   const {
     agent,
     worktreeId,
-    groupId,
+    groupId: callerGroupId,
     prompt,
     agentArgs,
     initialCwd,
@@ -125,6 +125,11 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     activate
   } = args
   const store = useAppStore.getState()
+  // Why: resolving mints an agent card group, so call it only once a branch is committed to
+  // creating a tab; an early return afterwards would strand a registered but empty group.
+  // Why optional call: launch tests fake @/store with partial doubles.
+  const resolveCommittedGroupId = (): string | undefined =>
+    store.resolveAgentLaunchGroupId?.(worktreeId, callerGroupId) ?? callerGroupId
   const { worktreeSshConnectionId, resolvedLaunchPlatform, isRemote, queuedShell } =
     resolveAgentLaunchExecutionContext(store, {
       worktreeId,
@@ -182,7 +187,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,
-      groupId,
+      groupId: resolveCommittedGroupId(),
       cwd: initialCwd,
       startupPlan,
       prompt: trimmedPrompt,
@@ -225,7 +230,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
               beforeSurfaceOpen({ kind: 'local-agent-session', sessionId })
           }
         : {}),
-      ...(groupId ? { targetGroupId: groupId } : {})
+      // Why the caller's group, unresolved: the provisional tab opener resolves it itself, at
+      // the point it commits to creating the tab rather than reusing an existing one.
+      ...(callerGroupId ? { targetGroupId: callerGroupId } : {})
     })
     if (!structured) {
       return null
@@ -250,7 +257,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
-  const tab = store.createTab(worktreeId, groupId, undefined, {
+  const tab = store.createTab(worktreeId, resolveCommittedGroupId(), undefined, {
     launchAgent: agent,
     quickCommandLabel,
     ...(activate === false ? { activate: false } : {}),

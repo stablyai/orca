@@ -226,6 +226,50 @@ export function renderTabBarItems({
         />
       )
     }
+    if (item.type === 'agents') {
+      const agentsFile: OpenFile & { tabId: string } = {
+        id: item.id,
+        tabId: item.id,
+        // Why the model label, not a literal: EditorFileTab shows `filePath`, so a literal would
+        // keep this tab English in every other locale.
+        filePath: item.data.label,
+        relativePath: item.data.label,
+        worktreeId,
+        language: 'agents',
+        isPreview: false,
+        isDirty: false,
+        // Why read-only: this is a synthetic file. Without it the tab is renameable, and
+        // committing that rename would ask the disk to rename a path that does not exist.
+        mode: 'edit',
+        readOnly: true
+      }
+      return (
+        <EditorFileTab
+          key={item.id}
+          file={agentsFile}
+          isActive={
+            !clientHostedRowOwnsActiveState && activeTabType === 'agents' && item.id === activeTabId
+          }
+          isPinned={true}
+          showCloseWhenPinned
+          hasTabsToRight={index < items.length - 1}
+          hasTabsToLeft={index > 0}
+          tabCount={items.length}
+          statusByRelativePath={statusByRelativePath}
+          onActivate={() => activateRealTab(onActivateFile)(item.id)}
+          onClose={() => onCloseFile?.(item.id)}
+          onCloseOthers={() => onCloseOthers(item.id)}
+          onCloseToRight={() => onCloseToRight(item.id)}
+          onCloseToLeft={() => onCloseToLeft(item.id)}
+          onCloseAll={() => onCloseAllFiles?.()}
+          onMakePermanent={() => {}}
+          onTogglePin={() => togglePinned(item)}
+          dragData={dragData}
+          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+          includeTopTabBorder={includeTopTabBorder}
+        />
+      )
+    }
     if (item.type === 'agent-session') {
       const structuredTab: TerminalTab = {
         id: item.id,

@@ -3,7 +3,7 @@ import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 export type TabCycleType = WorkspaceVisibleTabType
 
 export type TypeCyclableTab = {
-  type: TabCycleType
+  type: TabCycleType | 'agents'
   id: string
   tabId?: string
 }

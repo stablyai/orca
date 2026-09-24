@@ -219,7 +219,10 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
       : null
   const fallbackVisibleTabType =
     activeUnifiedTab !== null
-      ? toVisibleTabType(activeUnifiedTab)
+      ? // Why no previous-type argument: both consumers below read this only after
+        // `currentVisibleTabTypeStillValid ??`, so by then no prior surface survived the sync
+        // and an Agents tab resolves to its own default rather than a removed surface.
+        toVisibleTabType(activeUnifiedTab)
       : nextActiveTerminalId
         ? ('terminal' as const)
         : nextActiveBrowserWorkspaceId

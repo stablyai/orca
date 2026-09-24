@@ -1,11 +1,15 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
+import { projectAgentCardsToOrdinaryTabs } from '../store/slices/tabs/agent-cards-projection'
 
 type PersistedUnifiedTabSessionData = Pick<
   WorkspaceSessionState,
   'activeGroupIdByWorktree' | 'tabGroupLayouts' | 'tabGroups' | 'unifiedTabs'
 >
+
+type WorktreeAgentCardGroupIds = Record<string, readonly string[]>
 
 function prunePersistedLayoutForGroups(
   root: TabGroupLayoutNode,
@@ -60,8 +64,17 @@ export function buildPersistedUnifiedTabSessionData(
   snapshot: Pick<
     WorkspaceSessionSnapshot,
     'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
-  >
+  > & {
+    // Why optional: callers outside the unified-tab session slice (e.g. the web tabs-sync
+    // mirror) have no card registry of their own; treat a missing one as empty.
+    agentCardGroupIdsByWorktree?: WorkspaceSessionSnapshot['agentCardGroupIdsByWorktree']
+    // Why optional: a card group is agent-only only if terminal-launched agents are visible
+    // too; callers without that data (e.g. hand-built session fixtures) get none.
+    tabsByWorktree?: WorkspaceSessionSnapshot['tabsByWorktree']
+  }
 ): PersistedUnifiedTabSessionData {
+  const sourceCardGroupIds: WorktreeAgentCardGroupIds = snapshot.agentCardGroupIdsByWorktree ?? {}
+  const sourceTerminalTabs: Record<string, readonly TerminalTab[]> = snapshot.tabsByWorktree ?? {}
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
   const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
@@ -77,12 +90,19 @@ export function buildPersistedUnifiedTabSessionData(
   ])
 
   for (const worktreeId of worktreeIds) {
-    const tabs = sourceTabs[worktreeId] ?? []
+    const projected = projectAgentCardsToOrdinaryTabs({
+      tabs: sourceTabs[worktreeId] ?? [],
+      groups: sourceGroups[worktreeId] ?? [],
+      layout: sourceLayouts[worktreeId],
+      cardGroupIds: sourceCardGroupIds[worktreeId] ?? [],
+      terminalTabs: sourceTerminalTabs[worktreeId] ?? []
+    })
+    const tabs = [...projected.tabs]
     if (tabs.length === 0) {
       continue
     }
 
-    const groups = buildPersistedGroupsForWorktree(tabs, sourceGroups[worktreeId] ?? [])
+    const groups = buildPersistedGroupsForWorktree(tabs, [...projected.groups])
     if (groups.length === 0) {
       continue
     }
@@ -98,8 +118,8 @@ export function buildPersistedUnifiedTabSessionData(
     const activeGroupId = sourceActiveGroups[worktreeId]
     activeGroupIdByWorktree[worktreeId] =
       activeGroupId && groupIds.has(activeGroupId) ? activeGroupId : groups[0].id
-    const prunedLayout = sourceLayouts[worktreeId]
-      ? prunePersistedLayoutForGroups(sourceLayouts[worktreeId], groupIds)
+    const prunedLayout = projected.layout
+      ? prunePersistedLayoutForGroups(projected.layout, groupIds)
       : null
     tabGroupLayouts[worktreeId] = prunedLayout ?? { type: 'leaf', groupId: groups[0].id }
   }

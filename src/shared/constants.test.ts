@@ -116,6 +116,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').experimentalAgentDashboardShowIdle).toBeUndefined()
   })
 
+  it('keeps tiled agents disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalTiledAgents).toBeUndefined()
+  })
+
   it('routes fresh Codex profiles through the real-home rollout by default', () => {})
 
   it('defaults local Windows projects to the host runtime', () => {

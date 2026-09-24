@@ -16,6 +16,10 @@ export type TabsSlice = {
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
+  /** Ordered card group ids per worktree. In memory only, never persisted. */
+  agentCardGroupIdsByWorktree: Record<string, readonly string[]>
+  /** Worktree -> the card group currently zoomed to fill the Agents tab body. Not persisted. */
+  maximizedGroupIdByWorktree: Record<string, string>
   createUnifiedTab: (
     worktreeId: string,
     contentType: TabContentType,
@@ -118,7 +122,13 @@ export type TabsSlice = {
   moveUnifiedTabToGroup: (
     tabId: string,
     targetGroupId: string,
-    opts?: { index?: number; activate?: boolean; recordInteraction?: boolean }
+    opts?: {
+      index?: number
+      activate?: boolean
+      /** Makes the moved tab the target group's own active tab without changing worktree focus. */
+      activateInTargetGroup?: boolean
+      recordInteraction?: boolean
+    }
   ) => boolean
   dropUnifiedTab: (
     tabId: string,
@@ -157,6 +167,16 @@ export type TabsSlice = {
     session: WorkspaceSessionState,
     options?: WorkspaceSessionHydrationOptions
   ) => void
+  resolveAgentLaunchGroupId: (
+    worktreeId: string,
+    callerGroupId: string | undefined
+  ) => string | undefined
+  syncAgentCards: (worktreeId: string) => { carded: boolean; overflowTabIds: string[] }
+  restoreAgentCardsAsTabs: (worktreeId: string) => boolean
+  focusAgentCardByIndex: (worktreeId: string, index: number) => boolean
+  toggleMaximizedAgentCard: (worktreeId: string, cardGroupId?: string) => string | null
+  /** Closes every agent hosted by the Agents tab; returns how many were closed. */
+  closeAllAgentCards: (worktreeId: string) => number
 }
 
 type TabsStateCreator = StateCreator<AppState, [], [], TabsSlice>

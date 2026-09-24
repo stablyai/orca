@@ -3,7 +3,7 @@ import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
 
 export type VisibleTabRef = {
-  type: 'terminal' | 'editor' | 'agent-session' | 'browser' | 'simulator'
+  type: 'terminal' | 'editor' | 'agent-session' | 'browser' | 'simulator' | 'agents'
   id: string
   tabId?: string
 }
@@ -52,6 +52,9 @@ export function getGroupVisibleTabOrder(
       // Structured chat tabs are self-backed: the unified tab is the entity, so none can be stale.
       return { type: 'agent-session', id: tab.entityId, tabId: tab.id }
     }
+    if (tab.contentType === 'agents') {
+      return { type: 'agents', id: tab.id, tabId: tab.id }
+    }
     return editorEntityIds.has(tab.entityId)
       ? { type: 'editor', id: tab.entityId, tabId: tab.id }
       : null
@@ -71,7 +74,8 @@ export function getGroupVisibleTabOrder(
       editor: new Set<string>(),
       browser: new Set<string>(),
       simulator: new Set<string>(),
-      'agent-session': new Set<string>()
+      'agent-session': new Set<string>(),
+      agents: new Set<string>()
     }
     const result: VisibleTabRef[] = []
     for (const unifiedId of group.tabOrder) {
@@ -101,12 +105,14 @@ export function getGroupVisibleTabOrder(
   const browserIds: string[] = []
   const simulatorIds: string[] = []
   const agentSessionIds: string[] = []
+  const agentsIds: string[] = []
   const idsByType = {
     terminal: terminalIds,
     editor: editorIds,
     browser: browserIds,
     simulator: simulatorIds,
-    'agent-session': agentSessionIds
+    'agent-session': agentSessionIds,
+    agents: agentsIds
   }
   for (const tab of [...declaredTabs, ...groupTabs]) {
     const visibleId = visibleIdOf(tab)
@@ -123,7 +129,8 @@ export function getGroupVisibleTabOrder(
         editor: 1,
         browser: 2,
         simulator: 3,
-        'agent-session': 4
+        'agent-session': 4,
+        agents: 5
       } as const
       if (priority[ref.type] > priority[existing.type]) {
         continue
@@ -141,7 +148,8 @@ export function getGroupVisibleTabOrder(
     editorIds,
     browserIds,
     simulatorIds,
-    agentSessionIds
+    agentSessionIds,
+    agentsIds
   ).flatMap((visibleId) => {
     const ref = refByVisibleId.get(visibleId)
     return ref ? [ref] : []
@@ -172,7 +180,9 @@ export function getActiveTabNavOrder(
     | 'tabsByWorktree'
     | 'openFiles'
     | 'browserTabsByWorktree'
-  >,
+  > & {
+    agentCardGroupIdsByWorktree?: Record<string, readonly string[]>
+  },
   worktreeId: string,
   ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
@@ -191,8 +201,20 @@ export function getActiveTabNavOrder(
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
       .filter((tab) => tab.contentType === 'agent-session')
       .map((tab) => tab.id)
+  const agentsIds = (state.unifiedTabsByWorktree[worktreeId] ?? [])
+    .filter((tab) => tab.contentType === 'agents')
+    .map((tab) => tab.id)
 
-  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const cardGroupIds = new Set(state.agentCardGroupIdsByWorktree?.[worktreeId] ?? [])
+  let activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  if (activeGroupId && cardGroupIds.has(activeGroupId)) {
+    const agentsTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) => tab.contentType === 'agents'
+    )
+    if (agentsTab) {
+      activeGroupId = agentsTab.groupId
+    }
+  }
   const group = activeGroupId
     ? (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === activeGroupId)
     : undefined
@@ -224,13 +246,15 @@ export function getActiveTabNavOrder(
     editorIds,
     browserIds,
     simulatorIds,
-    agentSessionIds
+    agentSessionIds,
+    agentsIds
   )
   const terminalIdSet = new Set(terminalIds)
   const editorIdSet = new Set(editorIds)
   const browserIdSet = new Set(browserIds)
   const simulatorIdSet = new Set(simulatorIds)
   const agentSessionIdSet = new Set(agentSessionIds)
+  const agentsIdSet = new Set(agentsIds)
   const result: VisibleTabRef[] = []
   for (const id of visibleIds) {
     if (terminalIdSet.has(id)) {
@@ -241,6 +265,8 @@ export function getActiveTabNavOrder(
       result.push({ type: 'browser', id })
     } else if (simulatorIdSet.has(id)) {
       result.push({ type: 'simulator', id })
+    } else if (agentsIdSet.has(id)) {
+      result.push({ type: 'agents', id, tabId: id })
     } else if (agentSessionIdSet.has(id)) {
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === id && candidate.contentType === 'agent-session'

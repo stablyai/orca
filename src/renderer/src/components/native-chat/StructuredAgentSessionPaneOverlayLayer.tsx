@@ -6,6 +6,10 @@ import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
+import {
+  isAgentCardPanePresentable,
+  useAgentCardPaneVisibility
+} from '../tab-group/agent-card-pane-visibility'
 import NativeChatView from './NativeChatView'
 
 type StructuredAgentSessionTab = Tab & {
@@ -69,6 +73,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       }))
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
+    const cardVisibility = useAgentCardPaneVisibility(worktreeId)
     const target = useMemo(
       () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId }),
       [runtimeEnvironmentId]
@@ -98,7 +103,11 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             key={tab.id}
             tab={tab}
             groupId={tab.groupId}
-            isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
+            isActive={Boolean(
+              isWorktreeActive &&
+              groupActiveTabById.get(tab.groupId) === tab.id &&
+              isAgentCardPanePresentable(tab.groupId, cardVisibility)
+            )}
             isFocusedGroup={Boolean(
               isWorktreeActive &&
               groupActiveTabById.get(tab.groupId) === tab.id &&

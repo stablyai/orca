@@ -157,7 +157,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       guardPinnedTabClose({
         isPinned: tab.isPinned === true,
         tabLabel: resolvePinnedTabLabel(state, target.worktreeId, tab.id),
-        onClose: close
+        onClose: close,
+        worktreeId: target.worktreeId,
+        tabId: tab.id
       })
     }
     return true

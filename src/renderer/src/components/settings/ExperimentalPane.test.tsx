@@ -164,6 +164,39 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
+  it('renders tiled agents as an off-by-default searchable experiment', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+    const searchEntry = getExperimentalPaneSearchEntries().find(
+      (entry) => entry.title === 'Tiled agents'
+    )
+
+    expect(settings.experimentalTiledAgents).toBeUndefined()
+    expect(markup).toContain('Tiled agents')
+    expect(markup).toContain('Up to nine agents as cards at once')
+    expect(searchEntry?.keywords).toEqual(expect.arrayContaining(['tile', 'grid']))
+  })
+
+  it('enables tiled agents through its experimental switch', async () => {
+    const updateSettings = vi.fn()
+    const { root, container } = await renderExperimentalPane({ updateSettings })
+    const switchButton = container.querySelector<HTMLButtonElement>(
+      '#experimental-tiled-agents button[role="switch"]'
+    )
+    if (!switchButton) {
+      throw new Error('Tiled agents switch was not rendered')
+    }
+
+    await act(async () => {
+      switchButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ experimentalTiledAgents: true })
+    root.unmount()
+  })
+
   it('keeps idle-agent visibility out of global settings', () => {
     const markup = renderToStaticMarkup(
       <ExperimentalPane

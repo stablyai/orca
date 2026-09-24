@@ -129,6 +129,7 @@ export function resetRemoteRuntimeMocks() {
 export function createTestStore() {
   return create<AppState>()(
     (...a) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this harness supplies only the state surface the worktree slice and tab reconciliation read; a full AppState would need every other slice.
       ({
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
@@ -163,6 +164,8 @@ export function createTestStore() {
         groupsByWorktree: {},
         activeGroupIdByWorktree: {},
         layoutByWorktree: {},
+        // Why: projectWorktreeTabModelReconciliation reads this map unconditionally (tabs-reconciliation.ts).
+        agentCardGroupIdsByWorktree: {},
         openFiles: [],
         editorDrafts: {},
         markdownViewMode: {},

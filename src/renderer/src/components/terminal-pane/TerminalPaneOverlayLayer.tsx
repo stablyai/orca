@@ -11,6 +11,10 @@ import { shouldMountBackgroundWorktreeTab } from '../terminal/background-termina
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import {
+  isAgentCardPanePresentable,
+  useAgentCardPaneVisibility
+} from '../tab-group/agent-card-pane-visibility'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -125,6 +129,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     activityTerminalPortals,
     activationDeferredMountTabIds
   })
+  const cardVisibility = useAgentCardPaneVisibility(worktreeId)
 
   if (!worktreePath) {
     return null
@@ -138,7 +143,12 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
         )
         .map((terminalTab) => {
           const assignment = assignments.get(terminalTab.id)
-          const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
+          // Why: a card's anchor only exists while the Agents tab is the on-screen tab of its group,
+          // and an off-screen card must not paint outside the grid rect (F2).
+          const isPresentable = isAgentCardPanePresentable(assignment?.groupId, cardVisibility)
+          const isVisible = Boolean(
+            isWorktreeActive && assignment?.isActiveInGroup && isPresentable
+          )
           const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
           const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
             worktreeId,
