@@ -1,5 +1,6 @@
 import type { RetainedUpdateTarget } from './retained-update-target'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
+import type { WorkspaceGroupBy } from '../../../../../shared/workspace-view/workspace-group-by'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
@@ -35,7 +36,7 @@ export type UISlicePreferences = {
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
   sidebarBody: 'workspaces' | 'agents'
   setSidebarBody: (body: UISlicePreferences['sidebarBody']) => void
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: WorkspaceGroupBy
   setGroupBy: (g: UISlicePreferences['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlicePreferences['sortBy']) => void

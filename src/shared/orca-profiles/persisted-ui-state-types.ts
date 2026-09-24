@@ -36,6 +36,7 @@ import type { WorkspaceStatusDefinition } from '../worktree/types'
 import type { PersistedAutomationHostFilter } from '../automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from '../remote-runtime/host-catalog/pending-runtime-repo-removal'
 import type { BotSidebarView } from '../bots/bot-sidebar-view'
+import type { WorkspaceGroupBy } from '../workspace-view/workspace-group-by'
 
 export type PersistedUIState = {
   gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
@@ -60,7 +61,7 @@ export type PersistedUIState = {
   activityBarHidden?: string[]
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: WorkspaceGroupBy
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project-header order in repo grouping, independent of workspace sort: manual permits drag, recent follows visible activity. */
   projectOrderBy: ProjectOrderBy

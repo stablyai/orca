@@ -78,6 +78,8 @@ export function appendWorktreeRows(
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
     /** Occurrences that are folder workspaces render as folder rows. */
     folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
+    /** Tag grouping repeats a folder workspace per tag, so its row key needs the section. */
+    sectionScopedFolderRows?: boolean
   }
 ): void {
   const lineageRanges = buildWorktreeLineageRanges(plan)
@@ -104,7 +106,8 @@ export function appendWorktreeRows(
           descendantIdentities: lineageRanges.get(occurrence.key),
           hostContextLabel: options.hostContextLabelByWorktreeIdentity?.get(
             getWorktreeHostIdentity(worktree)
-          )
+          ),
+          sectionKey: options.sectionScopedFolderRows ? occurrence.sectionKey : undefined
         })
       )
       continue
@@ -146,6 +149,8 @@ export function buildFolderWorkspaceRow(
     childWorktreeIds?: readonly string[]
     descendantIdentities?: WorktreeLineageSource
     hostContextLabel?: string
+    /** Set only where one folder workspace renders in several sections (tag grouping). */
+    sectionKey?: string
   }
 ): FolderWorkspaceRow {
   const lineageGroupKey =
@@ -153,7 +158,8 @@ export function buildFolderWorkspaceRow(
   return {
     type: 'folder-workspace',
     lineageDescendantIdentities: options?.descendantIdentities,
-    key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
+    key: `folder-workspace:${getFolderWorkspaceRowNavigationKey({ folderWorkspace: pair.folderWorkspace, sectionKey: options?.sectionKey })}`,
+    ...(options?.sectionKey ? { sectionKey: options.sectionKey } : {}),
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: occurrence?.depth ?? 0,
@@ -168,4 +174,12 @@ export function buildFolderWorkspaceRow(
         }
       : {})
   }
+}
+
+/** Navigation and DOM-option key for a folder row; section-scoped when the row can repeat. */
+export function getFolderWorkspaceRowNavigationKey(
+  row: Pick<FolderWorkspaceRow, 'folderWorkspace' | 'sectionKey'>
+): string {
+  const workspaceKey = getFolderWorkspaceHostIdentity(row.folderWorkspace)
+  return row.sectionKey ? `${row.sectionKey}:${workspaceKey}` : workspaceKey
 }

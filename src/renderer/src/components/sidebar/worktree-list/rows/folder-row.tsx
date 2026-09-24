@@ -29,6 +29,7 @@ import type { WorktreeItemRowContext } from './item-row'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
 import type { LineageRowFrame } from '../listing/lineage-row-projection'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
+import { getFolderWorkspaceRowNavigationKey } from '../../../../../../shared/sidebar-list/sections/row-builders'
 
 export type FolderWorkspaceRowContext = {
   groupBy: WorktreeGroupBy
@@ -123,7 +124,7 @@ export function renderFolderWorkspaceOption(args: {
   return (
     <div
       key={vItem?.key ?? row.key}
-      id={getWorktreeOptionId(folderWorktreeIdentity)}
+      id={getWorktreeOptionId(getFolderWorkspaceRowNavigationKey(row))}
       role="option"
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
       aria-current={isActiveWorktree ? 'page' : undefined}
