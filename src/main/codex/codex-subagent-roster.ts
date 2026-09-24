@@ -95,12 +95,19 @@ export class CodexSubagentRoster {
   private readonly tokensByThread = new Map<string, number>()
   private readonly now: () => number
   private readonly executions: CodexSubagentExecutions
+  private readonly unfollow: () => void
   /** Who produced a row, from what this roster learned about each child thread. */
   readonly linkage: CodexSubagentLinkage
 
   constructor(private readonly deps: CodexSubagentRosterDeps) {
     this.now = deps.now ?? (() => Date.now())
     this.executions = deps.executions ?? new CodexSubagentExecutions()
+    // The row follows the executions, so every frame that ends a child's turn — its own
+    // `turn/completed`, a fatal error, its thread closing, its caller closing it — settles it.
+    // A refused write clears `lastSerialized`, so the next write of the group retries it.
+    this.unfollow = this.executions.onExecutionChanged(
+      (child) => child.execution && this.follow(child, child.execution)
+    )
     this.linkage = new CodexSubagentLinkage({
       primaryThreadId: deps.primaryThreadId,
       executions: this.executions
@@ -173,12 +180,19 @@ export class CodexSubagentRoster {
       return ADMITTED
     }
     const observed = this.executions.observeTurn(input.threadId, input.turnId, input.state)
-    if (!observed || !observed.child.registered) {
+    // Followed already if the execution changed; re-derived (idempotently) for its admission.
+    return observed ? this.follow(observed.child, observed.execution) : ADMITTED
+  }
+
+  private follow(
+    child: Readonly<CodexExecutionChild>,
+    execution: CodexChildExecution
+  ): StructuredAgentSessionSinkAdmission {
+    if (!child.registered) {
       return ADMITTED
     }
-    const { child, execution } = observed
-    if (input.state === 'working') {
-      const parent = this.deps.primaryThreadId() ?? input.threadId
+    if (execution.state === 'working') {
+      const parent = this.deps.primaryThreadId() ?? child.agentThreadId
       const group =
         this.executionGroup(child.agentThreadId, execution.turnId) ??
         this.groupFor(parent, this.deps.activeTurn(parent) ?? child.parentTurnId)
@@ -186,7 +200,7 @@ export class CodexSubagentRoster {
       return this.write(group)
     }
     for (const group of this.groups.values()) {
-      if (group.executionTurns.get(input.threadId) !== input.turnId) {
+      if (group.executionTurns.get(child.agentThreadId) !== execution.turnId) {
         continue
       }
       this.recordExecution(group, child, execution)
@@ -249,6 +263,7 @@ export class CodexSubagentRoster {
   }
 
   dispose(): void {
+    this.unfollow()
     this.groups.clear()
     this.tokensByThread.clear()
   }

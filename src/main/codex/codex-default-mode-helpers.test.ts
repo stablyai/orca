@@ -371,3 +371,48 @@ describe('Codex default-mode helpers', () => {
     ])
   })
 })
+
+describe('the roster row follows a helper whose turn ends with no turn/completed', () => {
+  const lastRow = (run: Awaited<ReturnType<typeof session>>) => run.rosterRows().at(-1)?.agents
+  const fatal: Frame = {
+    method: 'error',
+    params: {
+      threadId: HELPER,
+      turnId: HELPER_TURN,
+      willRetry: false,
+      error: { message: 'Selected model is at capacity.', codexErrorInfo: 'serverOverloaded' }
+    }
+  }
+  const closed: Frame = { method: 'thread/closed', params: { threadId: HELPER } }
+
+  it.each([
+    ['a fatal error', fatal, 'failed', 'failed'],
+    ['its thread closing', closed, 'unverifiable', 'unknown']
+  ] as const)(
+    'settles the row with the strip and the record on %s',
+    async (_name, ending, rowState, outcome) => {
+      const run = await session()
+      run.send(
+        turn('turn/started', THREAD_ID, PARENT_TURN),
+        activityStarted,
+        turn('turn/started', HELPER, HELPER_TURN)
+      )
+      expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: 'working' })])
+      run.send(ending)
+      expect(run.strip()).toEqual([])
+      expect(run.agents()).toEqual([expect.objectContaining({ membership: 'settled', outcome })])
+      expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: rowState })])
+    }
+  )
+
+  it('settles the row when its caller closes the helper', async () => {
+    const run = await session()
+    run.send(
+      turn('turn/started', THREAD_ID, PARENT_TURN),
+      spawnCompleted,
+      turn('turn/started', HELPER, HELPER_TURN),
+      closeCompleted
+    )
+    expect(lastRow(run)).toEqual([expect.objectContaining({ id: HELPER, state: 'stopped' })])
+  })
+})
