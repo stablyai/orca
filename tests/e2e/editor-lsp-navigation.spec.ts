@@ -395,4 +395,45 @@ test.describe('Editor LSP navigation — native host (DiligentEngine + clangd)',
       )
       .toBe(true)
   })
+
+  test('Shift+F12 opens the peek references widget listing references for a symbol', async ({
+    orcaPage
+  }) => {
+    await openCppFile(orcaPage, TIMER_CPP)
+
+    // IPC references smoke (authoritative): GetElapsedTime has references
+    // (the declaration in Timer.hpp + call sites in Timer.cpp).
+    const references = await orcaPage.evaluate(async (filePath: string) => {
+      return window.api.languageServers.references({
+        filePath,
+        position: { line: 52, character: 25 }
+      })
+    }, TIMER_CPP)
+    expect(references.ok, `references IPC: ${JSON.stringify(references)}`).toBe(true)
+    expect(
+      (references.locations ?? []).length,
+      `references locations: ${JSON.stringify(references.locations)}`
+    ).toBeGreaterThan(0)
+
+    // DOM assertion (ticket requirement, not pixels): Shift+F12 mounts Monaco's
+    // built-in peek references widget — already customized by
+    // installMonacoPeekReferencesPreviewOptions in monaco-setup.ts. Hidden
+    // windows freeze late repaints, but widget mounting is DOM and reliable
+    // (spike findings §1: same basis as the hover widget DOM assertion).
+    await orcaPage.evaluate(() => window.__monacoEditorE2E?.setCursorPosition(53, 26))
+    await orcaPage.evaluate(() => window.__monacoEditorE2E?.triggerReferences())
+    await expect
+      .poll(async () => orcaPage.locator('.peekview-widget').count(), {
+        timeout: 10_000,
+        message: 'peek references widget did not mount'
+      })
+      .toBeGreaterThan(0)
+    // The peek lists references (Monaco's references tree rows).
+    await expect
+      .poll(async () => orcaPage.locator('.peekview-widget .monaco-list-row').count(), {
+        timeout: 10_000,
+        message: 'peek references list did not populate'
+      })
+      .toBeGreaterThan(0)
+  })
 })

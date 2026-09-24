@@ -1,10 +1,12 @@
 import type {
+  LanguageServerDeclarationResult,
   LanguageServerDefinitionLocation,
   LanguageServerDefinitionResult,
   LanguageServerDocumentChange,
   LanguageServerDocumentResult,
   LanguageServerHoverResult,
   LanguageServerPosition,
+  LanguageServerReferencesResult,
   LanguageServerStatusEvent
 } from '../../shared/language-server-navigation-types'
 
@@ -24,6 +26,14 @@ export type LanguageServersApi = {
     filePath: string
     position: LanguageServerPosition
   }) => Promise<LanguageServerDefinitionResult>
+  references: (args: {
+    filePath: string
+    position: LanguageServerPosition
+  }) => Promise<LanguageServerReferencesResult>
+  declaration: (args: {
+    filePath: string
+    position: LanguageServerPosition
+  }) => Promise<LanguageServerDeclarationResult>
   hover: (args: {
     filePath: string
     position: LanguageServerPosition
@@ -33,11 +43,13 @@ export type LanguageServersApi = {
 }
 
 export type {
+  LanguageServerDeclarationResult,
   LanguageServerDefinitionLocation,
   LanguageServerDefinitionResult,
   LanguageServerDocumentChange,
   LanguageServerDocumentResult,
   LanguageServerHoverResult,
   LanguageServerPosition,
+  LanguageServerReferencesResult,
   LanguageServerStatusEvent
 }

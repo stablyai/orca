@@ -34,6 +34,17 @@ function languageServerRangeToMonaco(range: LanguageServerRange): Monaco.IRange 
   }
 }
 
+/** Semantic location -> Monaco Location (definition/declaration/references share the shape). */
+function toMonacoLocation(
+  location: { path: string; range: LanguageServerRange },
+  monaco: typeof Monaco
+): Monaco.languages.Location {
+  return {
+    uri: monaco.Uri.parse(toEditorModelUri(location.path)),
+    range: languageServerRangeToMonaco(location.range)
+  }
+}
+
 function languageForNavigationTarget(targetPath: string, sourceLanguageId: string): string {
   const detected = detectLanguage(targetPath)
   // MSVC STL headers like `chrono` have no extension; detectLanguage would
@@ -86,10 +97,52 @@ export function installLanguageServerNavigationProviders(monaco: typeof Monaco):
         return null
       }
       const target = result.locations[0]
-      return {
-        uri: monaco.Uri.parse(toEditorModelUri(target.path)),
-        range: languageServerRangeToMonaco(target.range)
+      return toMonacoLocation(target, monaco)
+    }
+  })
+
+  // Shift+F12 pops Monaco's built-in peek references widget — already
+  // customized by installMonacoPeekReferencesPreviewOptions in monaco-setup.ts,
+  // so the provider only needs to return Location[]; the widget styling reuses.
+  const referencesProvider = monaco.languages.registerReferenceProvider(SELECTOR, {
+    async provideReferences(model, position) {
+      const filePath = nativePathForModel(model)
+      if (!filePath) {
+        return null
       }
+      if (!resolveLocalDocumentOwner(filePath)) {
+        return null
+      }
+      const result = await window.api.languageServers.references({
+        filePath,
+        position: monacoPositionToLanguageServer(position)
+      })
+      if (!result.ok || result.locations.length === 0) {
+        return null
+      }
+      return result.locations.map((location) => toMonacoLocation(location, monaco))
+    }
+  })
+
+  // Go-to-declaration: same shape/behavior as definition (project-internal +
+  // header symbols); the provider backs `editor.action.revealDeclaration`.
+  const declarationProvider = monaco.languages.registerDeclarationProvider(SELECTOR, {
+    async provideDeclaration(model, position) {
+      const filePath = nativePathForModel(model)
+      if (!filePath) {
+        return null
+      }
+      if (!resolveLocalDocumentOwner(filePath)) {
+        return null
+      }
+      const result = await window.api.languageServers.declaration({
+        filePath,
+        position: monacoPositionToLanguageServer(position)
+      })
+      if (!result.ok || result.locations.length === 0) {
+        return null
+      }
+      return result.locations.map((location) => toMonacoLocation(location, monaco))
     }
   })
 
@@ -198,6 +251,8 @@ export function installLanguageServerNavigationProviders(monaco: typeof Monaco):
 
   return () => {
     definitionProvider.dispose()
+    referencesProvider.dispose()
+    declarationProvider.dispose()
     hoverProvider.dispose()
     opener.dispose()
   }

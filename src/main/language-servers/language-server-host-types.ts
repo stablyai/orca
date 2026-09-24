@@ -60,6 +60,14 @@ export type LanguageServerHost = {
     filePath: string
     position: LanguageServerPosition
   }): Promise<LanguageServerDefinitionLocation[]>
+  references(args: {
+    filePath: string
+    position: LanguageServerPosition
+  }): Promise<LanguageServerDefinitionLocation[]>
+  declaration(args: {
+    filePath: string
+    position: LanguageServerPosition
+  }): Promise<LanguageServerDefinitionLocation[]>
   hover(args: {
     filePath: string
     position: LanguageServerPosition

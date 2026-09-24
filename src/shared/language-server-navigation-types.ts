@@ -29,6 +29,9 @@ export type LanguageServerDefinitionLocation = {
   range: LanguageServerRange
 }
 
+/** Semantic navigation target; same shape as definition (references/declaration reuse it). */
+export type LanguageServerNavigationLocation = LanguageServerDefinitionLocation
+
 export type LanguageServerHoverContent = {
   kind: 'markdown' | 'plaintext'
   value: string
@@ -40,6 +43,16 @@ export type LanguageServerDocumentResult =
 
 export type LanguageServerDefinitionResult =
   | { ok: true; locations: LanguageServerDefinitionLocation[] }
+  | { ok: false; error: string; locations: [] }
+
+/** References (Shift+F12): a list of navigation targets, same shape as definition. */
+export type LanguageServerReferencesResult =
+  | { ok: true; locations: LanguageServerNavigationLocation[] }
+  | { ok: false; error: string; locations: [] }
+
+/** Declaration: a list of targets (LSP allows single|[]|null; normalized to a list like definition). */
+export type LanguageServerDeclarationResult =
+  | { ok: true; locations: LanguageServerNavigationLocation[] }
   | { ok: false; error: string; locations: [] }
 
 export type LanguageServerHoverResult =

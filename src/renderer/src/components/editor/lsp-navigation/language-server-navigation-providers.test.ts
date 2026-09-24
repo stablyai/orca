@@ -50,6 +50,12 @@ type Captured = {
   definitionProviders: {
     provideDefinition: (model: unknown, position: unknown) => Promise<unknown>
   }[]
+  declarationProviders: {
+    provideDeclaration: (model: unknown, position: unknown) => Promise<unknown>
+  }[]
+  referencesProviders: {
+    provideReferences: (model: unknown, position: unknown) => Promise<unknown>
+  }[]
   hoverProviders: { provideHover: (model: unknown, position: unknown) => Promise<unknown> }[]
   openers: {
     openCodeEditor: (source: unknown, resource: unknown, selection: unknown) => Promise<boolean>
@@ -59,6 +65,8 @@ type Captured = {
 function installWithFakeMonaco(): Captured {
   const captured: Captured = {
     definitionProviders: [],
+    declarationProviders: [],
+    referencesProviders: [],
     hoverProviders: [],
     openers: []
   }
@@ -69,6 +77,20 @@ function installWithFakeMonaco(): Captured {
         provider: Captured['definitionProviders'][number]
       ) => {
         captured.definitionProviders.push(provider)
+        return { dispose: () => {} }
+      },
+      registerDeclarationProvider: (
+        _selector: unknown,
+        provider: Captured['declarationProviders'][number]
+      ) => {
+        captured.declarationProviders.push(provider)
+        return { dispose: () => {} }
+      },
+      registerReferenceProvider: (
+        _selector: unknown,
+        provider: Captured['referencesProviders'][number]
+      ) => {
+        captured.referencesProviders.push(provider)
         return { dispose: () => {} }
       },
       registerHoverProvider: (_selector: unknown, provider: Captured['hoverProviders'][number]) => {
@@ -92,9 +114,13 @@ function installWithFakeMonaco(): Captured {
 
 type ApiState = {
   definitionResult: { ok: boolean; locations?: { path: string; range: Record<string, number> }[] }
+  declarationResult?: { ok: boolean; locations?: { path: string; range: Record<string, number> }[] }
+  referencesResult?: { ok: boolean; locations?: { path: string; range: Record<string, number> }[] }
   hoverResult: { ok: boolean; hover: { kind: string; value: string } | null }
   authorized: string[]
   definitionArgs: unknown[]
+  declarationArgs?: unknown[]
+  referencesArgs?: unknown[]
   hoverArgs: unknown[]
 }
 
@@ -106,6 +132,14 @@ function installApi(state: ApiState): void {
         definition: async (args: unknown) => {
           state.definitionArgs.push(args)
           return state.definitionResult
+        },
+        declaration: async (args: unknown) => {
+          ;(state.declarationArgs ??= []).push(args)
+          return state.declarationResult ?? { ok: true, locations: [] }
+        },
+        references: async (args: unknown) => {
+          ;(state.referencesArgs ??= []).push(args)
+          return state.referencesResult ?? { ok: true, locations: [] }
         },
         hover: async (args: unknown) => {
           state.hoverArgs.push(args)
@@ -245,6 +279,189 @@ describe('hover provider', () => {
     const { model } = makeModel('D:\\repo\\src\\a.cpp')
     expect(
       await captured.hoverProviders[0]?.provideHover(model, { lineNumber: 1, column: 1 })
+    ).toBeNull()
+  })
+})
+
+describe('references provider', () => {
+  it('queries with a 0-based position and maps all locations to Monaco Location[]', async () => {
+    const apiState: ApiState = {
+      definitionResult: { ok: true, locations: [] },
+      referencesResult: {
+        ok: true,
+        locations: [
+          {
+            path: 'D:\\repo\\include\\timer.hpp',
+            range: { startLine: 39, startCharacter: 8, endLine: 39, endCharacter: 22 }
+          },
+          {
+            path: 'D:\\repo\\src\\main.cpp',
+            range: { startLine: 2, startCharacter: 6, endLine: 2, endCharacter: 18 }
+          }
+        ]
+      },
+      hoverResult: { ok: true, hover: null },
+      authorized: [],
+      definitionArgs: [],
+      referencesArgs: [],
+      hoverArgs: []
+    }
+    installApi(apiState)
+    setOwner('D:\\repo\\src\\a.cpp')
+    const captured = installWithFakeMonaco()
+    const { model } = makeModel('D:\\repo\\src\\a.cpp')
+
+    const result = (await captured.referencesProviders[0]?.provideReferences(model, {
+      lineNumber: 4,
+      column: 7
+    })) as { uri: { toString: () => string }; range: Record<string, number> }[]
+
+    expect(apiState.referencesArgs?.[0]).toEqual({
+      filePath: 'D:\\repo\\src\\a.cpp',
+      position: { line: 3, character: 6 }
+    })
+    expect(result).toHaveLength(2)
+    expect(result[0]?.uri.toString()).toMatch(/file:\/\//)
+    expect(result[0]?.range).toEqual({
+      startLineNumber: 40,
+      startColumn: 9,
+      endLineNumber: 40,
+      endColumn: 23
+    })
+    expect(result[1]?.range).toEqual({
+      startLineNumber: 3,
+      startColumn: 7,
+      endLineNumber: 3,
+      endColumn: 19
+    })
+  })
+
+  it('returns null when the server has no references', async () => {
+    installApi({
+      definitionResult: { ok: true, locations: [] },
+      referencesResult: { ok: true, locations: [] },
+      hoverResult: { ok: true, hover: null },
+      authorized: [],
+      definitionArgs: [],
+      referencesArgs: [],
+      hoverArgs: []
+    })
+    setOwner('D:\\repo\\src\\a.cpp')
+    const captured = installWithFakeMonaco()
+    const { model } = makeModel('D:\\repo\\src\\a.cpp')
+    expect(
+      await captured.referencesProviders[0]?.provideReferences(model, { lineNumber: 1, column: 1 })
+    ).toBeNull()
+  })
+
+  // Multi-byte column-offset regression (spec §9 residual risk, spike findings §1):
+  // the utf-16 positionEncoding negotiation makes Monaco columns (UTF-16 code
+  // units) the LSP basis, so a symbol after a multi-byte char on the same line
+  // resolves WITHOUT a UTF-8 byte conversion. This validates the negotiation
+  // end-to-end for references/declaration.
+  it('passes the correct UTF-16 column to IPC for a symbol after a CJK char on the same line', async () => {
+    const apiState: ApiState = {
+      definitionResult: { ok: true, locations: [] },
+      referencesResult: { ok: true, locations: [] },
+      hoverResult: { ok: true, hover: null },
+      authorized: [],
+      definitionArgs: [],
+      referencesArgs: [],
+      hoverArgs: []
+    }
+    installApi(apiState)
+    setOwner('D:\\repo\\src\\a.cpp')
+    const captured = installWithFakeMonaco()
+    const { model } = makeModel('D:\\repo\\src\\a.cpp')
+
+    // Line: "中文symbol" — 中 (col 1) and 文 (col 2) are each one UTF-16 code
+    // unit (BMP), so `symbol` starts at 1-based column 3 -> 0-based character 2.
+    await captured.referencesProviders[0]?.provideReferences(model, {
+      lineNumber: 1,
+      column: 3
+    })
+    expect(apiState.referencesArgs?.[0]).toMatchObject({
+      filePath: 'D:\\repo\\src\\a.cpp',
+      position: { line: 0, character: 2 }
+    })
+
+    // Line: "😀sym" — 😀 is a surrogate pair occupying two UTF-16 code units
+    // (columns 1-2), so `sym` starts at 1-based column 4 -> 0-based character 3.
+    // A UTF-8 byte conversion would yield character 5 (4 bytes for 😀) —
+    // asserting character 3 proves no conversion runs.
+    apiState.referencesArgs = []
+    await captured.referencesProviders[0]?.provideReferences(model, {
+      lineNumber: 1,
+      column: 4
+    })
+    expect(apiState.referencesArgs?.[0]).toMatchObject({
+      filePath: 'D:\\repo\\src\\a.cpp',
+      position: { line: 0, character: 3 }
+    })
+  })
+})
+
+describe('declaration provider', () => {
+  it('queries with a 0-based position and maps the location (header-symbol mirror of definition)', async () => {
+    const apiState: ApiState = {
+      definitionResult: { ok: true, locations: [] },
+      declarationResult: {
+        ok: true,
+        locations: [
+          {
+            path: 'D:\\repo\\include\\timer.hpp',
+            range: { startLine: 12, startCharacter: 4, endLine: 12, endCharacter: 16 }
+          }
+        ]
+      },
+      hoverResult: { ok: true, hover: null },
+      authorized: [],
+      definitionArgs: [],
+      declarationArgs: [],
+      hoverArgs: []
+    }
+    installApi(apiState)
+    setOwner('D:\\repo\\src\\a.cpp')
+    const captured = installWithFakeMonaco()
+    const { model } = makeModel('D:\\repo\\src\\a.cpp')
+
+    const result = (await captured.declarationProviders[0]?.provideDeclaration(model, {
+      lineNumber: 4,
+      column: 7
+    })) as { uri: { toString: () => string }; range: Record<string, number> }[]
+
+    expect(apiState.declarationArgs?.[0]).toEqual({
+      filePath: 'D:\\repo\\src\\a.cpp',
+      position: { line: 3, character: 6 }
+    })
+    expect(result).toHaveLength(1)
+    expect(result[0]?.uri.toString()).toMatch(/file:\/\//)
+    expect(result[0]?.range).toEqual({
+      startLineNumber: 13,
+      startColumn: 5,
+      endLineNumber: 13,
+      endColumn: 17
+    })
+  })
+
+  it('returns null when the server has no declaration', async () => {
+    installApi({
+      definitionResult: { ok: true, locations: [] },
+      declarationResult: { ok: true, locations: [] },
+      hoverResult: { ok: true, hover: null },
+      authorized: [],
+      definitionArgs: [],
+      declarationArgs: [],
+      hoverArgs: []
+    })
+    setOwner('D:\\repo\\src\\a.cpp')
+    const captured = installWithFakeMonaco()
+    const { model } = makeModel('D:\\repo\\src\\a.cpp')
+    expect(
+      await captured.declarationProviders[0]?.provideDeclaration(model, {
+        lineNumber: 1,
+        column: 1
+      })
     ).toBeNull()
   })
 })

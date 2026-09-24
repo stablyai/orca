@@ -12,9 +12,11 @@ import {
   LANGUAGE_SERVERS_STATUS_CHANNEL,
   type LanguageServerDocumentChange,
   type LanguageServerDocumentResult,
+  type LanguageServerDeclarationResult,
   type LanguageServerDefinitionResult,
   type LanguageServerHoverResult,
   type LanguageServerPosition,
+  type LanguageServerReferencesResult,
   type LanguageServerStatusEvent
 } from '../../shared/language-server-navigation-types'
 
@@ -43,7 +45,9 @@ export function registerLanguageServersHandlers(
     'languageServers:changeDocument',
     'languageServers:closeDocument',
     'languageServers:definition',
-    'languageServers:hover'
+    'languageServers:hover',
+    'languageServers:references',
+    'languageServers:declaration'
   ] as const) {
     ipcMain.removeHandler(channel)
   }
@@ -110,6 +114,42 @@ export function registerLanguageServersHandlers(
           ok: false,
           error: error instanceof Error ? error.message : String(error),
           hover: null
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'languageServers:references',
+    async (
+      _event,
+      args: { filePath: string; position: LanguageServerPosition }
+    ): Promise<LanguageServerReferencesResult> => {
+      try {
+        return { ok: true, locations: await host.references(args) }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          locations: []
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'languageServers:declaration',
+    async (
+      _event,
+      args: { filePath: string; position: LanguageServerPosition }
+    ): Promise<LanguageServerDeclarationResult> => {
+      try {
+        return { ok: true, locations: await host.declaration(args) }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          locations: []
         }
       }
     }

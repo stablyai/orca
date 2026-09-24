@@ -31,6 +31,8 @@ function stubSession(overrides: Partial<ClangdSession> = {}): SessionStub {
     },
     didClose: () => {},
     definition: vi.fn(async () => []),
+    references: vi.fn(async () => []),
+    declaration: vi.fn(async () => []),
     hover: vi.fn(async () => null),
     stop: vi.fn(async () => {}),
     ...overrides
@@ -91,6 +93,20 @@ describe('createLanguageServerHost', () => {
       position: { line: 0, character: 0 }
     })
     expect(definition).toEqual([])
+    // S4: references + declaration route to the same session as definition.
+    const references = await host.references({
+      filePath: 'D:/proj-a/src/util.cpp',
+      position: { line: 0, character: 0 }
+    })
+    expect(references).toEqual([])
+    const declaration = await host.declaration({
+      filePath: 'D:/proj-a/src/util.cpp',
+      position: { line: 0, character: 0 }
+    })
+    expect(declaration).toEqual([])
+    expect(stub.session.definition).toHaveBeenCalled()
+    expect(stub.session.references).toHaveBeenCalled()
+    expect(stub.session.declaration).toHaveBeenCalled()
 
     expect(host.closeDocument({ filePath: 'D:\\proj-a\\src\\main.cpp' }).ok).toBe(true)
   })
@@ -122,6 +138,17 @@ describe('createLanguageServerHost', () => {
     })
     expect(result.ok).toBe(false)
     expect(result.ok === false && result.error).toContain('no language-server session')
+  })
+
+  it('rejects references/declaration for documents with no session (IPC catches -> ok:false)', async () => {
+    const stub = stubSession()
+    const host = hostFrom(stub)
+    await expect(
+      host.references({ filePath: 'D:\\nowhere\\x.cpp', position: { line: 0, character: 0 } })
+    ).rejects.toThrow(/no language-server session/)
+    await expect(
+      host.declaration({ filePath: 'D:\\nowhere\\x.cpp', position: { line: 0, character: 0 } })
+    ).rejects.toThrow(/no language-server session/)
   })
 
   it('forwards status events from the session', async () => {

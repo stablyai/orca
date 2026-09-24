@@ -111,9 +111,21 @@ export function mapClangdDefinitionResult(
   result: unknown,
   lspUriToPath: (uri: string) => string
 ): LanguageServerDefinitionLocation[] {
+  return mapClangdLocationResult(result, lspUriToPath)
+}
+
+/**
+ * LSP `Location | Location[] | null` -> semantic navigation locations. The
+ * definition/declaration/references results share this shape; references may
+ * list many sites, declaration/definition usually one.
+ */
+export function mapClangdLocationResult(
+  result: unknown,
+  lspUriToPath: (uri: string) => string
+): LanguageServerDefinitionLocation[] {
   const raw = Array.isArray(result) ? result : result ? [result] : []
   const locations: LanguageServerDefinitionLocation[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the definition result is normalized to an array above; each item is validated (uri/range present) before use, so a malformed item is skipped.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the result is normalized to an array above; each item is validated (uri/range present) before use, so a malformed item is skipped.
   for (const item of raw as RawLocation[]) {
     if (!item?.uri || !item.range?.start || !item.range.end) {
       continue

@@ -2,7 +2,6 @@
 // adapter. The initialize shape, server-request answers and result mapping
 // live in clangd-protocol.ts; this module owns lifecycle and the document
 // table. Shutdown ladder per spec D8: shutdown -> exit -> grace -> tree kill.
-import type { spawnProcess } from '../../shared/child-process/run-process'
 import { createLspJsonRpcClient, type LspJsonRpcClient } from './lsp-jsonrpc-client'
 import {
   openNativeLanguageServerProcess,
@@ -14,9 +13,12 @@ import {
   buildClangdInitializeParams,
   createClangdProgressTracker,
   mapClangdDefinitionResult,
-  mapClangdHoverResult
+  mapClangdHoverResult,
+  mapClangdLocationResult
 } from './clangd-protocol'
 import { lspUriToNativePath, nativePathToLspUri, normalizeNativeFilePath } from './uri-mapping'
+import type { ClangdSession, ClangdSessionOptions } from './clangd-session-types'
+export type { ClangdSession, ClangdSessionOptions } from './clangd-session-types'
 import type {
   LanguageServerDefinitionLocation,
   LanguageServerDocumentChange,
@@ -42,44 +44,6 @@ export class ClangdDocumentNotOpenError extends Error {
 
 const INITIALIZE_TIMEOUT_MS = 15_000
 const SHUTDOWN_TIMEOUT_MS = 5_000
-
-export type ClangdSessionOptions = {
-  program: string
-  args: readonly string[]
-  /** Worktree root in native path form; session cwd + rootUri. */
-  rootPath: string
-  /** `$/progress` projection for the status line; null clears it. */
-  onStatus?: (text: string | null) => void
-  onLog?: (line: string) => void
-  /** Fired once when the session ends for any reason (crash or stop). */
-  onExit?: (error: Error | null) => void
-  spawnImpl?: typeof spawnProcess
-}
-
-export type ClangdSession = {
-  readonly serverVersion: string | null
-  readonly rootPath: string
-  readonly died: Error | null
-  hasDocument(filePath: string): boolean
-  didOpen(filePath: string, text: string): void
-  /** Returns the version actually sent after the monotonic clamp. */
-  didChange(
-    filePath: string,
-    version: number,
-    changes: readonly LanguageServerDocumentChange[]
-  ): number
-  didClose(filePath: string): void
-  definition(
-    filePath: string,
-    position: LanguageServerPosition
-  ): Promise<LanguageServerDefinitionLocation[]>
-  hover(
-    filePath: string,
-    position: LanguageServerPosition
-  ): Promise<LanguageServerHoverContent | null>
-  /** shutdown -> exit -> 5s grace -> tree kill (spec D8). */
-  stop(): Promise<void>
-}
 
 type OpenDocument = {
   uri: string
@@ -201,12 +165,27 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
       'initialize',
       buildClangdInitializeParams(options.rootPath, process.pid),
       { timeoutMs: INITIALIZE_TIMEOUT_MS }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the initialize result is the wire-deserialized LSP InitializeResult; `positionEncoding` is verified against utf-16 (throws otherwise) and `serverInfo.version` is read through optional chaining.
-    )) as { capabilities?: { positionEncoding?: string }; serverInfo?: { version?: string } } | null
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the initialize result is the wire-deserialized LSP InitializeResult; `positionEncoding` is verified against utf-16 (throws otherwise), `referencesProvider`/`declarationProvider` are checked for presence (warned if absent), and `serverInfo.version` is read through optional chaining.
+    )) as {
+      capabilities?: {
+        positionEncoding?: string
+        referencesProvider?: unknown
+        declarationProvider?: unknown
+      }
+      serverInfo?: { version?: string }
+    } | null
 
     const encoding = result?.capabilities?.positionEncoding
     if (encoding !== 'utf-16') {
       throw new ClangdPositionEncodingError(encoding)
+    }
+    // Verify the server echoes the S4 capabilities (S4 criterion). clangd
+    // always advertises both; absence means a non-conformant build — warn so
+    // the request's failure is explainable, but don't refuse (the request
+    // itself is the authoritative check; spec §9 residual risk).
+    const caps = result?.capabilities
+    if (caps && (!caps.referencesProvider || !caps.declarationProvider)) {
+      log('[clangd] server did not advertise references/declaration capability')
     }
     serverVersion = result?.serverInfo?.version ?? null
     client!.notify('initialized', {})
@@ -221,7 +200,13 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
     return doc
   }
 
-  function positionParams(filePath: string, position: LanguageServerPosition): unknown {
+  function positionParams(
+    filePath: string,
+    position: LanguageServerPosition
+  ): {
+    textDocument: { uri: string }
+    position: { line: number; character: number }
+  } {
     return {
       textDocument: { uri: documentFor(filePath).uri },
       position: { line: position.line, character: position.character }
@@ -286,6 +271,29 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
         positionParams(filePath, position)
       )
       return mapClangdDefinitionResult(result, lspUriToNativePath)
+    },
+    async references(
+      filePath: string,
+      position: LanguageServerPosition
+    ): Promise<LanguageServerDefinitionLocation[]> {
+      // `includeDeclaration: true` so the declaration site appears in the list
+      // (matches VS Code's Shift+F12 default; clangd honors the field).
+      const params = {
+        ...positionParams(filePath, position),
+        context: { includeDeclaration: true }
+      }
+      const result = await client!.request('textDocument/references', params)
+      return mapClangdLocationResult(result, lspUriToNativePath)
+    },
+    async declaration(
+      filePath: string,
+      position: LanguageServerPosition
+    ): Promise<LanguageServerDefinitionLocation[]> {
+      const result = await client!.request(
+        'textDocument/declaration',
+        positionParams(filePath, position)
+      )
+      return mapClangdLocationResult(result, lspUriToNativePath)
     },
     async hover(
       filePath: string,

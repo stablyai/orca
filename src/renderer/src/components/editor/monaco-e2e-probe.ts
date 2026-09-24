@@ -23,6 +23,8 @@ export type MonacoE2EProbe = {
   runLegacySetValueAppend: (suffix: string) => void
   /** Trigger F12 / go-to-definition at the current cursor. */
   revealDefinition: () => void
+  /** Trigger Shift+F12 / find references at the current cursor (peek widget). */
+  triggerReferences: () => void
   /** Show the hover widget at the current cursor (mirrors Ctrl+K hover). */
   showHover: () => void
   /** Move the cursor to a 1-based line/column so hover/definition target a symbol. */
@@ -79,6 +81,13 @@ export function installMonacoE2EProbe(
       // editor action the keybinding would, which routes through our
       // registerEditorOpener (spike findings §1, blocker B).
       editorInstance.trigger('e2e', 'editor.action.revealDefinition', null)
+    },
+    triggerReferences: (): void => {
+      // Why: Shift+F12 in a hidden window is unreliable as a keypress; drive the
+      // same action the keybinding would (editor.action.referenceSearch.trigger)
+      // which mounts Monaco's peek references widget — already customized by
+      // installMonacoPeekReferencesPreviewOptions in monaco-setup.ts.
+      editorInstance.trigger('e2e', 'editor.action.referenceSearch.trigger', null)
     },
     showHover: (): void => {
       // Why: hover is mouse-driven in real use; the showHover action renders

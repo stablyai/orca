@@ -18,6 +18,8 @@ import {
 
 type FakeClangdOptions = {
   positionEncoding?: string
+  /** When false, the initialize result omits references/declaration caps (S4 verification path). */
+  advertiseReferencesDeclaration?: boolean
   onClientMessage?: (message: Record<string, unknown>) => void
   /** Methods the fake never answers, for in-flight-at-death assertions. */
   hangOn?: readonly string[]
@@ -57,6 +59,7 @@ function fakeClangd(options: FakeClangdOptions = {}): FakeClangd {
         return
       }
       if (method === 'initialize') {
+        const advertise = options.advertiseReferencesDeclaration ?? true
         pushToClient({
           jsonrpc: '2.0',
           id,
@@ -65,7 +68,8 @@ function fakeClangd(options: FakeClangdOptions = {}): FakeClangd {
               positionEncoding: options.positionEncoding ?? 'utf-16',
               textDocumentSync: { change: 2, openClose: true, save: true },
               hoverProvider: true,
-              definitionProvider: true
+              definitionProvider: true,
+              ...(advertise ? { referencesProvider: true, declarationProvider: true } : {})
             },
             serverInfo: { name: 'clangd', version: '23.1.0' }
           }
@@ -82,6 +86,47 @@ function fakeClangd(options: FakeClangdOptions = {}): FakeClangd {
               range: {
                 start: { line: 39, character: 8 },
                 end: { line: 39, character: 22 }
+              }
+            }
+          ]
+        })
+        return
+      }
+      if (method === 'textDocument/references') {
+        // Two reference sites: the declaration (Header.hpp) + the call site (main.cpp).
+        pushToClient({
+          jsonrpc: '2.0',
+          id,
+          result: [
+            {
+              uri: 'file:///D:/zwf/Project%20A/lib/Header.hpp',
+              range: {
+                start: { line: 39, character: 8 },
+                end: { line: 39, character: 22 }
+              }
+            },
+            {
+              uri: 'file:///D:/zwf/Project%20A/src/main.cpp',
+              range: {
+                start: { line: 2, character: 6 },
+                end: { line: 2, character: 18 }
+              }
+            }
+          ]
+        })
+        return
+      }
+      if (method === 'textDocument/declaration') {
+        // Declaration resolves to the header (header-symbol behavior mirrors definition).
+        pushToClient({
+          jsonrpc: '2.0',
+          id,
+          result: [
+            {
+              uri: 'file:///D:/zwf/Project%20A/lib/Header.hpp',
+              range: {
+                start: { line: 12, character: 4 },
+                end: { line: 12, character: 16 }
               }
             }
           ]
@@ -124,13 +169,14 @@ function fakeClangd(options: FakeClangdOptions = {}): FakeClangd {
 
 async function openSessionWith(
   fake: FakeClangd,
-  events: { onStatus?: (text: string | null) => void } = {}
+  events: { onStatus?: (text: string | null) => void; onLog?: (line: string) => void } = {}
 ): Promise<ClangdSession> {
   return openClangdSession({
     program: 'clangd',
     args: ['--log=info'],
     rootPath: 'D:\\zwf\\Project A',
     onStatus: events.onStatus,
+    onLog: events.onLog,
     spawnImpl: fake.spawnImpl
   })
 }
@@ -161,6 +207,10 @@ describe('openClangdSession — handshake', () => {
     const textDocument = capabilities.textDocument as Record<string, Record<string, unknown>>
     expect(textDocument.synchronization.didSave).toBe(false)
     expect(textDocument.hover.contentFormat).toEqual(['markdown', 'plaintext'])
+    // S4: the client advertises references + declaration capability (mirrors definition).
+    expect(textDocument.references.dynamicRegistration).toBe(false)
+    expect(textDocument.declaration.dynamicRegistration).toBe(false)
+    expect(textDocument.declaration.linkSupport).toBe(false)
     expect(session.serverVersion).toBe('23.1.0')
     await session.stop()
     // initialized goes out right after the initialize result, before anything else.
@@ -173,6 +223,14 @@ describe('openClangdSession — handshake', () => {
   it('refuses the session when the server does not confirm utf-16', async () => {
     const fake = fakeClangd({ positionEncoding: 'utf-8' })
     await expect(openSessionWith(fake)).rejects.toBeInstanceOf(ClangdPositionEncodingError)
+  })
+
+  it('warns but does not refuse when the server omits references/declaration capability (S4 verification)', async () => {
+    const logs: string[] = []
+    const fake = fakeClangd({ advertiseReferencesDeclaration: false })
+    const session = await openSessionWith(fake, { onLog: (line) => logs.push(line) })
+    expect(logs.some((line) => /references\/declaration capability/.test(line))).toBe(true)
+    await session.stop()
   })
 })
 
@@ -324,6 +382,49 @@ describe('openClangdSession — navigation', () => {
           endLine: 39,
           endCharacter: 22
         }
+      }
+    ])
+    await session.stop()
+  })
+
+  it('references sends textDocument/references with includeDeclaration and maps Location[]', async () => {
+    const fake = fakeClangd()
+    const session = await openSessionWith(fake)
+    session.didOpen('D:\\zwf\\Project A\\src\\main.cpp', 'x')
+    const locations = await session.references('D:\\zwf\\Project A\\src\\main.cpp', {
+      line: 2,
+      character: 6
+    })
+    // includeDeclaration=true so the declaration site appears alongside the call.
+    const req = fake.clientMessages.find((m) => m.method === 'textDocument/references') as {
+      params: { context: { includeDeclaration: boolean } }
+    }
+    expect(req.params.context.includeDeclaration).toBe(true)
+    expect(locations).toEqual([
+      {
+        path: 'D:\\zwf\\Project A\\lib\\Header.hpp',
+        range: { startLine: 39, startCharacter: 8, endLine: 39, endCharacter: 22 }
+      },
+      {
+        path: 'D:\\zwf\\Project A\\src\\main.cpp',
+        range: { startLine: 2, startCharacter: 6, endLine: 2, endCharacter: 18 }
+      }
+    ])
+    await session.stop()
+  })
+
+  it('declaration maps Location[] to semantic locations (header-symbol mirror of definition)', async () => {
+    const fake = fakeClangd()
+    const session = await openSessionWith(fake)
+    session.didOpen('D:\\zwf\\Project A\\src\\main.cpp', 'x')
+    const locations = await session.declaration('D:\\zwf\\Project A\\src\\main.cpp', {
+      line: 0,
+      character: 0
+    })
+    expect(locations).toEqual([
+      {
+        path: 'D:\\zwf\\Project A\\lib\\Header.hpp',
+        range: { startLine: 12, startCharacter: 4, endLine: 12, endCharacter: 16 }
       }
     ])
     await session.stop()

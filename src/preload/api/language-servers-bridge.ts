@@ -19,6 +19,10 @@ export const languageServersApi = {
     ipcRenderer.invoke('languageServers:closeDocument', args),
   definition: (args: { filePath: string; position: LanguageServerPosition }) =>
     ipcRenderer.invoke('languageServers:definition', args),
+  references: (args: { filePath: string; position: LanguageServerPosition }) =>
+    ipcRenderer.invoke('languageServers:references', args),
+  declaration: (args: { filePath: string; position: LanguageServerPosition }) =>
+    ipcRenderer.invoke('languageServers:declaration', args),
   hover: (args: { filePath: string; position: LanguageServerPosition }) =>
     ipcRenderer.invoke('languageServers:hover', args),
   onStatus: (callback: (event: LanguageServerStatusEvent) => void): (() => void) => {

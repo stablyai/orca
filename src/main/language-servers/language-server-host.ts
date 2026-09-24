@@ -263,6 +263,20 @@ export function createLanguageServerHost(
       }
       return session.definition(normalizeNativeFilePath(filePath), position)
     },
+    async references({ filePath, position }) {
+      const session = sessionForDocument(filePath)
+      if (!session) {
+        throw new Error(`no language-server session owns ${filePath}`)
+      }
+      return session.references(normalizeNativeFilePath(filePath), position)
+    },
+    async declaration({ filePath, position }) {
+      const session = sessionForDocument(filePath)
+      if (!session) {
+        throw new Error(`no language-server session owns ${filePath}`)
+      }
+      return session.declaration(normalizeNativeFilePath(filePath), position)
+    },
     async hover({ filePath, position }) {
       const session = sessionForDocument(filePath)
       if (!session) {
