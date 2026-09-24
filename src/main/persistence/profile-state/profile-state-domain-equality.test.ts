@@ -109,6 +109,22 @@ describe('validated domain replacement equality', () => {
     }
   )
 
+  it('ignores caller-supplied prepared history when writing another domain', () => {
+    const { db } = fixture()
+    const replacement = {
+      domain: 'settings',
+      payload: '{"changed":true}',
+      automationRuns: { incoming: { presence: 'absent', contentHash: '' }, domainVersion: 1 }
+    }
+
+    writeProfileStateDomains(db, { expectedRevision: 1, replacements: [replacement] })
+
+    expect(JSON.parse(readProfileStateSnapshot(db).json)).toEqual({
+      settings: { changed: true },
+      extension: { future: { content: '雪 🐋', nullable: null } }
+    })
+  })
+
   it('fences a stale writer even when its payload remains equal', () => {
     const { db, payload } = fixture()
     writeProfileStateDomains(db, {

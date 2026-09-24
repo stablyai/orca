@@ -143,7 +143,13 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
       for (const file of [dataFile, rootJson, `${databasePath}-wal`, `${databasePath}-shm`]) {
         rmSync(file, { force: true })
       }
-      writeFileSync(databasePath, 'deliberately corrupt SQLite primary')
+      // Preserve both large artifacts so quarantine exercises batched recovery copies.
+      const corruptPrimary = readFileSync(databasePath)
+      corruptPrimary.write('deliberately corrupt SQLite primary')
+      writeFileSync(databasePath, corruptPrimary)
+      if (recoveryRuntime === 'electron') {
+        expect(corruptPrimary.length).toBeGreaterThan(8 * 1024 * 1024)
+      }
       expect(() => readSnapshot(databasePath)).toThrow()
       const restored = await rollbackProfileBackup(
         session.userDataDir,
@@ -151,7 +157,8 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
         recoveryExecutable
       )
       expect(restored.code, restored.stderr || restored.stdout).toBe(0)
-      expect(JSON.parse(restored.stdout)).toMatchObject({
+      const recovered = JSON.parse(restored.stdout)
+      expect(recovered).toMatchObject({
         ok: true,
         result: {
           storage: 'sqlite',
@@ -162,6 +169,17 @@ for (const recoveryRuntime of ['node', 'electron'] as const) {
         }
       })
       expect(readSnapshot(databasePath)).toEqual(chosen)
+      const quarantineDirectory: unknown = recovered.result.quarantineDirectory
+      if (typeof quarantineDirectory !== 'string') {
+        throw new Error('Recovery did not report its quarantine directory')
+      }
+      expect(
+        readFileSync(path.join(quarantineDirectory, 'profile-state.db')).equals(corruptPrimary)
+      ).toBe(true)
+      expect(
+        readFileSync(path.join(quarantineDirectory, path.basename(backup.path))).equals(backupBytes)
+      ).toBe(true)
+      expect(readFileSync(backup.path).equals(backupBytes)).toBe(true)
       expect(existsSync(dataFile)).toBe(false)
 
       const relaunched = await session.launch()
