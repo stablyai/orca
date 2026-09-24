@@ -66,14 +66,11 @@ export async function getArchiveHooksForRemoval(
 
 export async function runRemoteArchiveHook(
   repo: Repo,
+  connectionId: string,
   worktreePath: string,
   script: string
 ): Promise<ArchiveHookRunResult> {
-  if (!repo.connectionId) {
-    return { success: true, output: '' }
-  }
-
-  const provider = requireSshGitProvider(repo.connectionId)
+  const provider = requireSshGitProvider(connectionId)
   const env = getSetupRunnerEnvVars(repo, worktreePath)
   const isWindowsRemote = isWindowsAbsolutePathLike(worktreePath)
   const result = await provider
