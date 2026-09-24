@@ -72,7 +72,9 @@ describe('structuredSessionChildIdentityEnv', () => {
       ORCA_AGENT_SESSION_ID: SESSION_ID,
       // For a CLI that predates the id, which refuses on it instead of guessing a sibling.
       ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: join(SHIM_DIR, 'orca')
+      ORCA_CLI_COMMAND: join(SHIM_DIR, 'orca'),
+      // The instance that minted the id, so any current CLI dials it rather than the default.
+      ORCA_USER_DATA_PATH: USER_DATA
     })
     // A chat names itself by its id alone: no handle, no pane key.
     expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
@@ -141,6 +143,24 @@ describe('structuredSessionChildIdentityEnv', () => {
       expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
       expect(env.ORCA_CLI_COMMAND).toBe(join(USER_DATA, 'cli', 'bin', 'orca-dev'))
     })
+  })
+
+  it('omits the CLI command when no launcher resolves, never naming a bare `orca`', () => {
+    // On packaged Linux the shim can fail to resolve (no bundled launcher, an unverified AppImage);
+    // a bare `orca` there is GNOME's screen reader, and an inherited value names another app's CLI.
+    pinPlatform('linux')
+    installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
+    shim.ensureLinuxTerminalOrcaCliShimDir.mockReturnValue(null)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const env = structuredSessionChildIdentityEnv(SESSION_ID, {
+      PATH: '/usr/bin',
+      ORCA_CLI_COMMAND: '/Applications/Other Orca.app/Contents/Resources/bin/orca',
+      ORCA_USER_DATA_PATH: '/data/other-orca'
+    })
+    expect(env).not.toHaveProperty('ORCA_CLI_COMMAND')
+    expect(env.PATH).toBe('/usr/bin')
+    expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
+    expect(console.warn).toHaveBeenCalledOnce()
   })
 
   it("gives the terminal view the same id, and leaves any other terminal's env as given", () => {

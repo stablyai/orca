@@ -2,7 +2,7 @@ import type { RuntimeClient } from '../../runtime-client'
 import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
-import { isStructuredSessionWithoutIdentity } from '../../../shared/structured-session-marker'
+import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
 import { normalizeOrchestrationActor } from '../../../shared/orchestration-actor'
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
@@ -46,7 +46,7 @@ export async function resolveOrchestrationTerminalHandle(
   // default, so that guess consumed another pane's oldest unread batch and marked it read, and the
   // rightful worker never saw its mail. Refusing is the only honest answer: this child genuinely
   // cannot infer its own identity.
-  if (isStructuredSessionWithoutIdentity()) {
+  if (hasStructuredSessionMarker()) {
     throw structuredSessionRefusal(flagName)
   }
   if (flagName === 'from') {
@@ -275,7 +275,7 @@ export function throwNoActiveSenderTerminal(): never {
   // place left that would tell an identity-less session to pass a handle it does not have. A stale
   // ORCA_TERMINAL_HANDLE is a different case — that caller HAS an identity, so it keeps the advice
   // to re-run under a live one.
-  if (isStructuredSessionWithoutIdentity() && !process.env.ORCA_TERMINAL_HANDLE) {
+  if (hasStructuredSessionMarker() && !process.env.ORCA_TERMINAL_HANDLE) {
     throw structuredSessionRefusal('from')
   }
   throw new RuntimeClientError(

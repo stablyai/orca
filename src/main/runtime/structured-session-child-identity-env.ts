@@ -20,8 +20,13 @@
  *
  * `ORCA_CLI_COMMAND` is the absolute launcher in that directory, because a provider can run each
  * command in a login shell (Codex runs `zsh -lc`), whose profile rebuilds PATH and puts a global
- * install — possibly an older Orca — ahead of this app's. The absolute path is what an agent resolves
- * the CLI from, so it survives any shell's startup files, on every platform.
+ * install — possibly an older Orca — ahead of this app's. A current CLI reached that way re-runs
+ * itself as this launcher (`src/cli/session-cli-reexec.ts`), so an agent that types bare `orca` still acts
+ * through this app's CLI. When no launcher resolves the key is omitted rather than set to a bare
+ * name: on Linux a bare `orca` is GNOME's screen reader, and an inherited value names another app.
+ *
+ * `ORCA_USER_DATA_PATH` pins this instance beside the identity, so any current CLI — the session's
+ * own or a global one — dials the Orca that minted the id instead of the production default.
  *
  * Deliberately NOT `ORCA_PANE_KEY`. Claude structured sessions run hooks, and a pane key in their
  * environment starts flowing into hook-emitted agent-status payloads and the hook-attestation,
@@ -32,7 +37,9 @@
  * `ORCA_STRUCTURED_SESSION` stays beside the id for a CLI that predates it — one reached through a
  * global install when a shell rc resets PATH — which would otherwise guess a sibling's terminal;
  * such a CLI refuses on the marker. A current CLI checks the id first, so the marker never makes a
- * session with an id identity-less.
+ * session with an id identity-less. The terminal view deliberately gets the id WITHOUT the marker:
+ * there an older CLI has the view's own pane handle and legitimately acts as that pane, and the
+ * marker would make it refuse its own pane.
  *
  * The handle is read from the registry at spawn time, so an in-host recovery respawn re-bakes the
  * SAME handle rather than a stale or fresh one.
@@ -55,14 +62,16 @@ export function structuredSessionChildIdentityEnv(
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
     [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
-  env.ORCA_CLI_COMMAND = applyOrcaCliPath(env) ?? 'orca'
+  applyThisAppCli(env)
   return env
 }
 
 /**
  * The same session id for its terminal view, so switching views never changes who the session is.
  * Same-host only, as above: the host refuses the claim from a terminal that runs in WSL or over SSH.
- * A terminal that is not a session's view keeps its env exactly as given.
+ * A terminal that is not a session's view keeps its env exactly as given. No marker (see above), and
+ * no CLI command: the PTY lane names this app's launcher for every local terminal, and this env also
+ * crosses to SSH hosts, where a local path means nothing.
  */
 export function withStructuredSessionTerminalViewEnv(
   env: Record<string, string> | undefined,
@@ -75,14 +84,24 @@ export function withStructuredSessionTerminalViewEnv(
  * A host with no app environment installed — a plain-Node fork, or a unit test — has no userData
  * root to resolve, and inventing one would write a shim into the wrong directory.
  */
-function applyOrcaCliPath(env: Record<string, string>): string | null {
+function applyThisAppCli(env: Record<string, string>): void {
+  delete env.ORCA_CLI_COMMAND
   if (!hasAppEnvironment()) {
-    return null
+    return
   }
   const app = getAppEnvironment()
-  return prependOrcaCliDirToChildPath(env, {
+  const userDataPath = app.getPath('userData')
+  env.ORCA_USER_DATA_PATH = userDataPath
+  const launcher = prependOrcaCliDirToChildPath(env, {
     isPackaged: app.isPackaged(),
-    userDataPath: app.getPath('userData'),
+    userDataPath,
     resourcesPath: process.resourcesPath ?? null
   })
+  if (launcher) {
+    env.ORCA_CLI_COMMAND = launcher
+  } else {
+    console.warn(
+      "[structured-session] This app's CLI launcher did not resolve; the session's child has no ORCA_CLI_COMMAND."
+    )
+  }
 }

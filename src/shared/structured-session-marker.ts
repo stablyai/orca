@@ -7,9 +7,12 @@
  * id, which refuses on it. Either way the answer is refuse, never guess: a structured session has
  * no pane, so every implicit-terminal guess resolves to a sibling, and `orchestration check` is
  * destructive by default.
+ *
+ * The reader answers only "does this process carry the marker": a current CLI reaches it after the
+ * id check has already returned, which is what makes a marked child with an id act as its session.
  */
 export const ORCA_STRUCTURED_SESSION_ENV = 'ORCA_STRUCTURED_SESSION'
 
-export function isStructuredSessionWithoutIdentity(env: NodeJS.ProcessEnv = process.env): boolean {
+export function hasStructuredSessionMarker(env: NodeJS.ProcessEnv = process.env): boolean {
   return (env[ORCA_STRUCTURED_SESSION_ENV] ?? '').length > 0
 }
