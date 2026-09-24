@@ -33,7 +33,9 @@ function broadcastStatus(event: LanguageServerStatusEvent): void {
 
 export function registerLanguageServersHandlers(
   host: LanguageServerHost = getLanguageServerHost({
-    onStatus: (text) => broadcastStatus({ text })
+    onStatus: (text) => broadcastStatus({ kind: 'progress', text }),
+    onToast: (message) => broadcastStatus({ kind: 'toast', message }),
+    onDegraded: (message) => broadcastStatus({ kind: 'degraded', message })
   })
 ): void {
   for (const channel of [

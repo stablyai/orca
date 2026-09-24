@@ -46,9 +46,15 @@ export type LanguageServerHoverResult =
   | { ok: true; hover: LanguageServerHoverContent | null }
   | { ok: false; error: string; hover: null }
 
-/** Pushed from main: `$/progress` projection; null clears the status line. */
-export type LanguageServerStatusEvent = {
-  text: string | null
-}
+/**
+ * Pushed from main to renderer. The status surface is a small discriminated
+ * union: `progress` is the transient `$/progress` projection (null clears),
+ * `degraded` is a persistent hint (no clangd / version too low; null clears),
+ * `toast` is a one-shot notification (LRU eviction) the renderer surfaces via sonner.
+ */
+export type LanguageServerStatusEvent =
+  | { kind: 'progress'; text: string | null }
+  | { kind: 'degraded'; message: string | null }
+  | { kind: 'toast'; message: string }
 
 export const LANGUAGE_SERVERS_STATUS_CHANNEL = 'languageServers:status'

@@ -20,6 +20,7 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 import { installLanguageServerDocumentSync } from '@/components/editor/lsp-navigation/language-server-document-sync'
 import { installLanguageServerNavigationProviders } from '@/components/editor/lsp-navigation/language-server-navigation-providers'
+import { installLanguageServerStatusSubscriber } from '@/components/editor/lsp-navigation/language-server-status-subscriber'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -96,6 +97,8 @@ installMonacoContextMenuPaste(monaco)
 // opener that F12 needs to leave the current model.
 const uninstallLanguageServerDocumentSync = installLanguageServerDocumentSync(monaco)
 const uninstallLanguageServerNavigation = installLanguageServerNavigationProviders(monaco)
+// S2: $/progress -> status surface + LRU-eviction toast (spec §6).
+const uninstallLanguageServerStatusSubscriber = installLanguageServerStatusSubscriber()
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
@@ -106,6 +109,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     uninstallLanguageServerDocumentSync()
     uninstallLanguageServerNavigation()
+    uninstallLanguageServerStatusSubscriber()
   })
 }
 // Re-export for convenience
