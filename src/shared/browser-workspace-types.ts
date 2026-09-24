@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from './execution-host'
+
 export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
@@ -153,6 +155,9 @@ export type BrowserWorkspace = {
 }
 
 export type BrowserTab = BrowserWorkspace
+
+/** Which session profile is active per execution host; a host mapped to null means Default. */
+export type DefaultBrowserSessionProfileIdByHostId = Partial<Record<ExecutionHostId, string | null>>
 
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 

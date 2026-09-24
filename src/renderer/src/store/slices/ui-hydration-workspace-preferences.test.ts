@@ -301,6 +301,21 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().browserKagiSessionLink).toBe('https://kagi.com/search?token=secret')
   })
 
+  it('hydrates the active browser session profile for the focused host', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        defaultBrowserSessionProfileIdByHostId: { local: 'profile-a' }
+      })
+    )
+
+    expect(store.getState().defaultBrowserSessionProfileId).toBe('profile-a')
+    expect(store.getState().defaultBrowserSessionProfileIdByHostId).toEqual({
+      local: 'profile-a'
+    })
+  })
+
   it('hydrates and normalizes the default browser zoom level', () => {
     const store = createUIStore()
 

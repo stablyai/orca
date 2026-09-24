@@ -15,7 +15,10 @@ import {
   findPage,
   findWorkspace
 } from '../browser-page-records'
-import { getBrowserSessionProfileHostId } from './browser-host-state'
+import {
+  getBrowserSessionProfileHostId,
+  getDefaultBrowserProfileForHost
+} from './browser-host-state'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
@@ -56,13 +59,14 @@ export function createBrowserTabActions(
       const sessionProfileId =
         options?.sessionProfileId !== undefined
           ? options.sessionProfileId
-          : (get().defaultBrowserSessionProfileIdByHostId[
+          : getDefaultBrowserProfileForHost(
+              get(),
               getBrowserSessionProfileHostId(
                 get(),
                 worktreeId,
                 options?.browserRuntimeEnvironmentId
               )
-            ] ?? get().defaultBrowserSessionProfileId)
+            )
       const browserTab = buildWorkspaceFromPage(
         workspaceId,
         worktreeId,

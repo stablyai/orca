@@ -58,13 +58,18 @@ export function createBrowserHostActions(
     },
 
     setDefaultBrowserSessionProfileId: (profileId) => {
-      set((s) => ({
+      const state = get()
+      const defaultBrowserSessionProfileIdByHostId = {
+        ...state.defaultBrowserSessionProfileIdByHostId,
+        [getBrowserSettingsHostId(state)]: profileId
+      }
+      set({
         defaultBrowserSessionProfileId: profileId,
-        defaultBrowserSessionProfileIdByHostId: {
-          ...s.defaultBrowserSessionProfileIdByHostId,
-          [getBrowserSettingsHostId(s)]: profileId
-        }
-      }))
+        defaultBrowserSessionProfileIdByHostId
+      })
+      // Why persist: the selection lived only in this store, so every relaunch
+      // (an auto-update being the visible one) silently reverted it to Default.
+      void window.api.ui.set({ defaultBrowserSessionProfileIdByHostId }).catch(console.error)
     }
   }
 }
