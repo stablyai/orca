@@ -235,7 +235,13 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
   })
 
   it.each([
-    ['repository', { repoId: 'repo-2' }, {}, false],
+    [
+      'repository',
+      { repoId: 'repo-2', hostId: 'local' as const },
+      { hostId: 'local' as const },
+      false
+    ],
+    ['repository with an unknown host', { repoId: 'repo-2' }, { hostId: 'local' as const }, true],
     ['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }, true],
     ['known project', { projectId: 'project-b' }, { projectId: 'project-a' }, false]
   ])(

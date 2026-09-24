@@ -8,6 +8,7 @@ import { posix, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
@@ -292,12 +293,37 @@ const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
   workspaceLineage: null
 }
 
+/** Legacy metadata may lack a host; the owning repo still names it when exactly one repo has the id. */
+function resolveLineageEndpointHostId(
+  store: Store,
+  repoId: string,
+  hostId: ExecutionHostId | undefined
+): ExecutionHostId | undefined {
+  if (hostId) {
+    return hostId
+  }
+  const owners = store.getRepos().filter((repo) => repo.id === repoId)
+  return owners.length === 1 ? getRepoExecutionHostId(owners[0]) : undefined
+}
+
 /** Mirrors the projection's edge rule so we never persist a row the sidebar would silently drop. */
 function createdWorktreeSharesParentLineageBoundary(
+  store: Store,
   worktree: Worktree,
+  parentWorktreeId: string,
   parentMeta: WorktreeMeta
 ): boolean {
-  return sharesWorktreeLineageBoundary(worktree, { hostId: parentMeta.hostId })
+  const parentRepoId = getRepoIdFromWorktreeId(parentWorktreeId)
+  return sharesWorktreeLineageBoundary(
+    {
+      repoId: worktree.repoId,
+      hostId: resolveLineageEndpointHostId(store, worktree.repoId, worktree.hostId)
+    },
+    {
+      repoId: parentRepoId,
+      hostId: resolveLineageEndpointHostId(store, parentRepoId, parentMeta.hostId)
+    }
+  )
 }
 
 export function recordWorkspaceLineageForCreatedWorktree(
@@ -338,7 +364,14 @@ export function recordWorkspaceLineageForCreatedWorktree(
       console.warn(
         `[worktree-create] parent ${parentScope.worktreeId} has no instance identity; skipping lineage`
       )
-    } else if (!createdWorktreeSharesParentLineageBoundary(worktree, parentWorktreeMeta)) {
+    } else if (
+      !createdWorktreeSharesParentLineageBoundary(
+        store,
+        worktree,
+        parentScope.worktreeId,
+        parentWorktreeMeta
+      )
+    ) {
       parentOutsideLineageBoundary = true
       console.warn(
         `[worktree-create] parent ${parentScope.worktreeId} is on a different execution host than ${worktree.id}; skipping lineage`

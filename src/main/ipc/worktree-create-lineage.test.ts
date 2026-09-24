@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Worktree } from '../../shared/worktree/types'
+import type { Repo } from '../../shared/repo-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   assertAttachableParentWorkspace,
@@ -60,10 +61,13 @@ function parentMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 function createStore(options: {
   metaById?: Record<string, WorktreeMeta>
   folderWorkspaceIds?: string[]
+  repos?: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
 }) {
   const metaById = options.metaById ?? {}
   const folderWorkspaceIds = new Set(options.folderWorkspaceIds ?? [])
+  const repos = options.repos ?? [{ id: 'repo-1' }, { id: 'repo-2' }]
   return {
+    getRepos: vi.fn(() => repos),
     getWorktreeMeta: vi.fn((id: string) => metaById[id]),
     getFolderWorkspace: vi.fn((id: string) =>
       folderWorkspaceIds.has(id) ? { id, path: `/folders/${id}` } : undefined
@@ -141,6 +145,41 @@ describe('recordWorkspaceLineageForCreatedWorktree', () => {
     expect(result.lineage).toMatchObject({ parentWorktreeId: parentId })
     expect(result.workspaceLineage).toMatchObject({
       parentWorkspaceKey: worktreeWorkspaceKey(parentId)
+    })
+  })
+
+  it.each([
+    ['resolves to another host', [{ id: 'repo-1' }, { id: 'repo-2', connectionId: 'box' }]],
+    ['cannot be resolved', [{ id: 'repo-1' }]]
+  ])(
+    'skips both lineage records for a cross-repo parent whose unrecorded host %s',
+    (_label, repos) => {
+      const foreignParentId = 'repo-2::/repos/parent'
+      const store = createStore({
+        metaById: { [foreignParentId]: parentMeta({ hostId: undefined }) },
+        repos
+      })
+
+      const result = record(store, { parentWorkspace: worktreeWorkspaceKey(foreignParentId) })
+
+      expect(store.setWorktreeLineage).not.toHaveBeenCalled()
+      expect(store.setWorkspaceLineage).not.toHaveBeenCalled()
+      expect(result).toEqual({ lineage: null, workspaceLineage: null })
+    }
+  )
+
+  it('writes a cross-repo parent whose unrecorded host its repo resolves to the child host', () => {
+    const foreignParentId = 'repo-2::/repos/parent'
+    const store = createStore({
+      metaById: { [foreignParentId]: parentMeta({ hostId: undefined }) },
+      repos: [{ id: 'repo-1' }, { id: 'repo-2' }]
+    })
+
+    const result = record(store, { parentWorkspace: worktreeWorkspaceKey(foreignParentId) })
+
+    expect(result.lineage).toMatchObject({ parentWorktreeId: foreignParentId })
+    expect(result.workspaceLineage).toMatchObject({
+      parentWorkspaceKey: worktreeWorkspaceKey(foreignParentId)
     })
   })
 

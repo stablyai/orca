@@ -857,8 +857,8 @@ describe('computeVisibleWorktreeIds', () => {
 
   // Why: a same-host parent in another repo is a valid ancestor, and ancestors bypass filters (#8886).
   it('includes a cross-repo parent when repo filtering leaves the child visible', () => {
-    const parent = makeWorktree('parent', 'repo1')
-    const child = makeWorktree('child', 'repo2')
+    const parent = Object.assign(makeWorktree('parent', 'repo1'), { hostId: 'local' as const })
+    const child = Object.assign(makeWorktree('child', 'repo2'), { hostId: 'local' as const })
     const lineage = makeWorktreeLineage(child, parent)
 
     const result = computeVisibleWorktreeIds(
