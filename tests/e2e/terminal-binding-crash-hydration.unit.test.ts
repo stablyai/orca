@@ -1,11 +1,16 @@
-import './terminal-hydration-store-test-bootstrap'
+import '../../src/renderer/src/store/slices/terminal-hydration-store-test-bootstrap'
 import { describe, expect, it, vi } from 'vitest'
-import { applyPtyBinding } from '../../../../main/persistence/loading-store/pty-binding-session-update'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { reconcileHydratedWorkspaceTabModels } from '../../app-shell/reconcile-hydrated-workspace-tab-models'
-import { createTestStore, makeTab, makeWorktree, TEST_REPO } from './store-test-helpers'
+import { applyPtyBinding } from '../../src/main/persistence/loading-store/pty-binding-session-update'
+import { getDefaultWorkspaceSession } from '../../src/shared/constants'
+import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
+import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
+import { reconcileHydratedWorkspaceTabModels } from '../../src/renderer/src/app-shell/reconcile-hydrated-workspace-tab-models'
+import {
+  createTestStore,
+  makeTab,
+  makeWorktree,
+  TEST_REPO
+} from '../../src/renderer/src/store/slices/store-test-helpers'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
