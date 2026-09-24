@@ -37,6 +37,78 @@ describe('vendored xterm WebGL runtime contract', () => {
     }
   })
 
+  it('evicts one invisible glyph at a time instead of wiping the cache', () => {
+    const webgl = xtermManifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
+    for (const source of [
+      readProject(webgl.sourcePatch),
+      readInstalled('@xterm/addon-webgl', 'src/TextureAtlas.ts')
+    ]) {
+      // Invisible glyphs are keyed on their own, so admitting one never disturbs visible entries.
+      expect(source).toContain('this._emptyGlyphKeys.has(emptyKey)')
+      expect(source).toContain('this._emptyGlyphKeys.size >= Constants.EMPTY_GLYPH_CACHE_LIMIT')
+
+      // Overflow drops the single oldest admission. A clear-all here made every workload that
+      // stays above the cap re-rasterize all 4096 entries on each limit-th miss, and each of
+      // those misses is a canvas draw plus a getImageData readback on the renderer thread.
+      const overflow = source.slice(
+        source.indexOf('this._emptyGlyphKeys.size >= Constants.EMPTY_GLYPH_CACHE_LIMIT'),
+        source.indexOf('this._emptyGlyphKeys.add(emptyKey)')
+      )
+      expect(overflow).toContain('this._emptyGlyphKeys.delete(oldest)')
+      expect(overflow).not.toContain('.clear()')
+    }
+    for (const bundle of ['lib/addon-webgl.js', 'lib/addon-webgl.mjs']) {
+      const contents = readInstalled('@xterm/addon-webgl', bundle)
+      expect(contents, bundle).toContain('_emptyGlyphKeys')
+      expect(contents, bundle).toMatch(/_emptyGlyphKeys\.size>=4096/)
+    }
+  })
+
+  it('serves a repeated invisible variant from cache and re-rasterizes an evicted one', () => {
+    // A functional check of the eviction policy itself, run against the shipped bundle's own
+    // constant rather than a copy of it. The atlas needs a GPU context, so the browser-backed
+    // audit covers the real class; this pins the policy that makes the string checks meaningful.
+    const limit = Number(
+      readInstalled('@xterm/addon-webgl', 'lib/addon-webgl.js').match(
+        /_emptyGlyphKeys\.size>=(\d+)/
+      )?.[1]
+    )
+    expect(limit).toBe(4096)
+
+    const keys = new Set()
+    let rasterizations = 0
+    const admit = (key) => {
+      if (keys.has(key)) {
+        return
+      }
+      rasterizations++
+      if (keys.size >= limit) {
+        for (const oldest of keys) {
+          keys.delete(oldest)
+          break
+        }
+      }
+      keys.add(key)
+    }
+
+    for (let index = 0; index < limit * 3; index++) {
+      admit(index)
+    }
+    expect(keys.size).toBe(limit)
+    rasterizations = 0
+
+    // Everything admitted since the cap was last exceeded is still resident, so a redraw of any
+    // of them is free. Clear-all eviction would have left at most the entries since the last wipe.
+    for (let index = limit * 2; index < limit * 3; index++) {
+      admit(index)
+    }
+    expect(rasterizations).toBe(0)
+
+    // Only the oldest admission is gone, and only it pays to be drawn again.
+    admit(limit * 2 - 1)
+    expect(rasterizations).toBe(1)
+  })
+
   it('keeps the Orca-only WebGL hunks in the generated patch', () => {
     const webgl = xtermManifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
     const patch = readProject(webgl.patch)

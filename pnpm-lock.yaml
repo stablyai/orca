@@ -114,7 +114,7 @@ patchedDependencies:
   '@xterm/addon-ligatures@0.11.0-beta.300': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.300': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.300': 851eac3d75e6d8c013b9f4c053e61d824b23965cb19ecc28e335e05059f3a294
-  '@xterm/addon-webgl@0.20.0-beta.299': 94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e
+  '@xterm/addon-webgl@0.20.0-beta.299': fa4398c69421e25521f6ad9718bbd67d16511dd0a1d92f116f111d7dfe5708c5
   '@xterm/xterm@6.1.0-beta.303': dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   node-pty@1.1.0: 346cb29d33dd6eeb14910ff411c7584b0b2ff9a4b271c4b6d23c3b48e6548f74
@@ -342,7 +342,7 @@ importers:
         version: 0.13.0-beta.300(@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393))
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.299
-        version: 0.20.0-beta.299(patch_hash=94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e)(@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393))
+        version: 0.20.0-beta.299(patch_hash=fa4398c69421e25521f6ad9718bbd67d16511dd0a1d92f116f111d7dfe5708c5)(@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393))
       '@xterm/xterm':
         specifier: 6.1.0-beta.303
         version: 6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393)
@@ -10516,7 +10516,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393)
 
-  '@xterm/addon-webgl@0.20.0-beta.299(patch_hash=94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e)(@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393))':
+  '@xterm/addon-webgl@0.20.0-beta.299(patch_hash=fa4398c69421e25521f6ad9718bbd67d16511dd0a1d92f116f111d7dfe5708c5)(@xterm/xterm@6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393))':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.303(patch_hash=dd0ccc59cd1ccf99f4d76e5aa2456da165fa0804dce19a833d7638bd07ffa393)
 

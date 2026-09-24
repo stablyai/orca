@@ -95,6 +95,9 @@ design-docs/
 # and the tracked reference docs linked from AGENTS.md / README.md).
 docs/**
 !docs/
+!docs/audits/
+!docs/audits/webgl-empty-glyph-retention/
+!docs/audits/webgl-empty-glyph-retention/**
 # The deployable docs app is source, not local engineering notes.
 !docs/site/
 !docs/site/**

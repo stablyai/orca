@@ -21,7 +21,7 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }
  
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318e7db194c 100644
+index 4977ad741065e26bbfd35bc50e7558a033b13340..30046bf5ec5100d6bc04025ebf097c4c42a8aa33 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
 @@ -3,6 +3,7 @@
@@ -32,7 +32,28 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
  import { IColorContrastCache } from 'browser/Types';
  import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
  import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
-@@ -135,21 +136,23 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -42,7 +43,8 @@ const enum Constants {
+    * is enforced to ensure uploading the texture still finishes in a reasonable amount of time. A
+    * 4096 squared image takes up 16MB of GPU memory.
+    */
+-  FORCED_MAX_TEXTURE_SIZE = 4096
++  FORCED_MAX_TEXTURE_SIZE = 4096,
++  EMPTY_GLYPH_CACHE_LIMIT = 4096
+ }
+ 
+ interface ICharAtlasActiveRow {
+@@ -60,6 +62,10 @@ export class TextureAtlas implements ITextureAtlas {
+   private _cacheMap: FourKeyMap<number, number, number, number, IRasterizedGlyph> = new FourKeyMap();
+   private _cacheMapCombined: FourKeyMap<string, number, number, number, IRasterizedGlyph> = new FourKeyMap();
+ 
++  // Every empty glyph is the same NULL_RASTERIZED_GLYPH, so the key set is the whole cache. A Set
++  // iterates in insertion order, which is what lets the oldest admission be evicted on its own.
++  private _emptyGlyphKeys: Set<string> = new Set();
++
+   // The texture that the atlas is drawn to
+   private _pages: AtlasPage[] = [];
+   public get pages(): { canvas: HTMLCanvasElement, version: number }[] { return this._pages; }
+@@ -135,21 +141,24 @@ export class TextureAtlas implements ITextureAtlas {
    private _pageLayoutVersion = 0;
    public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
  
@@ -44,6 +65,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
 +
    public clearTexture(): void {
 -    if (this._pages[0].currentRow.x === 0 && this._pages[0].currentRow.y === 0) {
++    this._emptyGlyphKeys.clear();
 +    // Guard on every page rather than pages[0]: a merged page is never written through
 +    // currentRow, so once one lands at index 0 the old check made every later clear a no-op.
 +    if (this._pages.every(page => page.glyphs.length === 0 && page.currentRow.x === 0 && page.currentRow.y === 0)) {
@@ -68,7 +90,44 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
    }
  
    private _createNewPage(): AtlasPage {
-@@ -465,6 +468,36 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -273,6 +282,7 @@ export class TextureAtlas implements ITextureAtlas {
+     this._overflowSizePage = undefined;
+     this._cacheMap.clear();
+     this._cacheMapCombined.clear();
++    this._emptyGlyphKeys.clear();
+     this._didWarmUp = false;
+     this._pageLayoutVersion++;
+     this._logService.debug(`Evicted ${pageCount} WebGL atlas pages in ${(performance.now() - startTime).toFixed(2)}ms`);
+@@ -300,8 +310,27 @@ export class TextureAtlas implements ITextureAtlas {
+   ): IRasterizedGlyph {
+     $glyph = cacheMap.get(key, bg, fg, ext);
+     if (!$glyph) {
++      // Tag the key type so char code 49 and the combined string '1' cannot share an entry.
++      const emptyKey = `${typeof key === 'number' ? 'n' : 's'}${key}_${bg}_${fg}_${ext}`;
++      if (this._emptyGlyphKeys.has(emptyKey)) {
++        return NULL_RASTERIZED_GLYPH;
++      }
+       $glyph = this._drawToCache(key, bg, fg, ext, restrictToCellHeight, domContainer);
+-      cacheMap.set(key, bg, fg, ext, $glyph);
++      if ($glyph === NULL_RASTERIZED_GLYPH) {
++        // Empty glyphs consume no atlas pixels, so page eviction cannot bound their metadata.
++        // Evict only the oldest admission. Clearing the whole cache made any workload that stays
++        // above the limit re-rasterize all 4096 entries every limit-th miss, and _drawToCache
++        // costs a canvas draw plus a getImageData readback on the renderer thread.
++        if (this._emptyGlyphKeys.size >= Constants.EMPTY_GLYPH_CACHE_LIMIT) {
++          for (const oldest of this._emptyGlyphKeys) {
++            this._emptyGlyphKeys.delete(oldest);
++            break;
++          }
++        }
++        this._emptyGlyphKeys.add(emptyKey);
++      } else {
++        cacheMap.set(key, bg, fg, ext, $glyph);
++      }
+     }
+     return $glyph;
+   }
+@@ -465,6 +494,36 @@ export class TextureAtlas implements ITextureAtlas {
      return this._config.colors.contrastCache;
    }
  
@@ -105,7 +164,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
    private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
      const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
  
-@@ -536,6 +569,7 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -536,6 +595,7 @@ export class TextureAtlas implements ITextureAtlas {
      const fontStyle = italic ? 'italic' : '';
      this._tmpCtx.font =
        `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
