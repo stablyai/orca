@@ -30,7 +30,9 @@ state; never substitute a non-Orca subagent tool.
 Choose the executable once and reuse it for every later command:
 
 - If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports this
-  for managed WSL sessions.
+  for managed WSL sessions and for its chat sessions, whose login shells (Codex's among
+  them) can put a different `orca` first on PATH. Invoke it as `"$ORCA_CLI_COMMAND"` in a
+  POSIX shell, Git Bash included, and as `& $env:ORCA_CLI_COMMAND` in PowerShell.
 - Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `orca-dev`.
 - Otherwise, on Linux outside an Orca-managed terminal, use `orca-ide`. Never run bare
   `orca` there — outside Orca's terminals it normally resolves to the

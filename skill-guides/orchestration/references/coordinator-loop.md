@@ -1,8 +1,29 @@
 # Coordinator loop
 
-Load this reference for expanded DAG waves, per-invocation launch preferences,
-same-terminal reuse, or review ownership. The compact guide remains the source
+Load this reference for coordinating from a chat session, expanded DAG waves,
+per-invocation launch preferences, same-terminal reuse, or review ownership. The compact guide remains the source
 of truth for the loop order and completion boundary.
+
+## Coordinating from a chat session
+
+When `ORCA status --json` reports `caller.kind` `session`, you coordinate from a
+chat. Never block in `check --wait`: your shell tool has its own timeout, and
+Orca wakes you instead. When messages reach your Run, Orca starts a new turn in
+this chat once you are idle, saying `You have <n> orchestration message(s)` and
+naming the `check` to run.
+
+1. Bind one Run and start the full independent wave.
+2. End your turn.
+3. On each such turn run the `check` it names, without `--wait`. Process every
+   message as the compact guide requires, then acknowledge with
+   `ORCA orchestration check --ack <delivery_id> --json`, which also returns the
+   next batch. Repeat until no Delivery is returned.
+4. End your turn again. When every expected Dispatch has settled, report.
+
+A turn with no new Delivery is a checkpoint, not a failure. The compact guide's
+empty-wait enumeration applies when a turn arrives and a Dispatch you expected
+has still not settled. `/clear` gives the chat a new session and address; Orca
+moves your Runs and unread mail to it.
 
 ## Ready waves
 

@@ -39,8 +39,13 @@ ORCA orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body
 Do not substitute a remote terminal handle. Omit `--from` for ordinary
 coordinator calls; a dispatched worker instead copies the exact `--from` and
 capability arguments in its preamble. Any live chat session on this host is
-reachable at `session:<id>`, its Orca session id; `ORCA status --json` reports
-your own as `caller.address`. `check` is the exception: it identifies
+reachable at `session:<id>`, its Orca session id, never the provider's id (it
+changes on `/clear`). `ORCA status --json` reports your own as `caller.address`;
+a `caller` with `live: false` carries the refusal that stops you acting as that
+session, and `null` means the shell has no orchestration identity. A user may
+copy a chat's address with its Copy Orchestration Address menu action. `/clear`
+gives a chat a new address: Orca moves its Runs and unread mail there, and a
+send to the old one is refused with the new one named. `check` is the exception: it identifies
 its caller with `--terminal`, never `--from`.
 
 Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`,

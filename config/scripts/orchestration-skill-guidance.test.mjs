@@ -184,11 +184,16 @@ describe('orchestration kernel', () => {
     )
   })
 
-  it('names --terminal, never --from, as the check caller flag', () => {
+  it('resolves the check caller from the environment and never teaches naming another', () => {
     const kernel = squash(readKernel())
 
-    expect(kernel).toContain('`check` names its caller with `--terminal <handle>`, never `--from`')
+    expect(kernel).toContain(
+      '`check` takes its caller from the environment in a chat or Orca terminal; elsewhere pass your own `--terminal <handle>`, never `--from`'
+    )
+    expect(kernel).toContain('Never name another agent with `--from`/`--terminal`')
     expect(kernel).not.toContain('check --from')
+    // The #21097 shape: an instruction to name the caller by handle on every check.
+    expect(kernel).not.toContain('check --terminal <your_handle>')
   })
 
   it('makes a dispatched worker read coordinator follow-ups on a cadence', () => {
@@ -196,7 +201,7 @@ describe('orchestration kernel', () => {
 
     expect(kernel).toContain('Read coordinator follow-ups at each natural checkpoint')
     expect(kernel).toContain('once more immediately before `worker_done`')
-    expect(kernel).toContain('`ORCA orchestration check --terminal <your_handle> --json`')
+    expect(kernel).toContain("with the preamble's own `check` command")
   })
 
   it('requires full Delivery processing and settled-terminal accounting before ack', () => {
