@@ -13,11 +13,16 @@ export type LanguageServerStatusState = {
 type Listener = (state: LanguageServerStatusState) => void
 
 const state: LanguageServerStatusState = { progress: null, degraded: null }
+// Cached snapshot: useSyncExternalStore requires getSnapshot to return a
+// referentially-stable value between notifications, or React re-renders every
+// commit (Maximum update depth exceeded). Rebuilt only when state changes.
+let snapshot: LanguageServerStatusState = { ...state }
 const listeners = new Set<Listener>()
 
 function notify(): void {
+  snapshot = { ...state }
   for (const listener of listeners) {
-    listener({ ...state })
+    listener(snapshot)
   }
 }
 
@@ -33,9 +38,9 @@ export function setLanguageServerDegraded(message: string | null): void {
   notify()
 }
 
-/** Read the current status snapshot (immutable copy). */
+/** Read the current status snapshot (stable between notifications). */
 export function getLanguageServerStatus(): LanguageServerStatusState {
-  return { ...state }
+  return snapshot
 }
 
 /** Subscribe to status changes; returns an unsubscribe function. */
@@ -50,5 +55,6 @@ export function subscribeLanguageServerStatus(listener: Listener): () => void {
 export function resetLanguageServerStatusForTests(): void {
   state.progress = null
   state.degraded = null
+  snapshot = { ...state }
   listeners.clear()
 }
