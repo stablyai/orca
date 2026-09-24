@@ -234,10 +234,15 @@ describe('structured worker session hold', () => {
 })
 
 describe('structured worker dispatch preamble', () => {
-  function hostWithSubmission(submission: Record<string, unknown>) {
+  function hostWithSubmission(
+    submission: Record<string, unknown>,
+    settlesTo?: Record<string, unknown>
+  ) {
     return {
       deps: { store: { getRecord: () => ({ lease: { runtimeFence: 7 } }) } },
-      send: async () => ({ ok: true, value: { clientMessageId: 'c1', submission } })
+      send: async () => ({ ok: true, value: { clientMessageId: 'c1', submission } }),
+      waitForSendSettlement: async () =>
+        settlesTo ? { value: { clientMessageId: 'c1', submission: settlesTo } } : undefined
     } as never
   }
 
@@ -247,6 +252,19 @@ describe('structured worker dispatch preamble', () => {
   it('reports the preamble delivered only on an accepted submission', async () => {
     await expect(
       send(hostWithSubmission({ dispatchState: 'accepted', reason: null }))
+    ).resolves.toBeUndefined()
+  })
+
+  it('waits out a pending submission and reports it delivered once the provider echoes it', async () => {
+    // A live provider answers `pending` first: admitted, not yet echoed. Treating that as unknown
+    // failed every real structured worker start and discarded a worker whose turn had begun.
+    await expect(
+      send(
+        hostWithSubmission(
+          { dispatchState: 'pending', reason: null },
+          { dispatchState: 'accepted', reason: null }
+        )
+      )
     ).resolves.toBeUndefined()
   })
 

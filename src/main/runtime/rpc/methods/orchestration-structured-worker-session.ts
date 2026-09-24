@@ -244,7 +244,16 @@ export async function sendStructuredWorkerPreamble(args: {
   if (!result.ok) {
     throw new Error(`The dispatch preamble was refused: ${result.refusal.message}`)
   }
-  const submission = result.value.submission
+  // `pending` is the normal first answer from a live provider: admitted, not yet echoed. Wait for
+  // the echo the same way a chat client does; tearing the worker down here killed a started turn.
+  const submission =
+    result.value.submission.dispatchState === 'pending'
+      ? ((
+          await args.host
+            .waitForSendSettlement(args.sessionId, result.value.clientMessageId)
+            .catch(() => undefined)
+        )?.value.submission ?? result.value.submission)
+      : result.value.submission
   if (submission.dispatchState === 'accepted') {
     return
   }
