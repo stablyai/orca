@@ -12,13 +12,17 @@ import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
  * SAVEPOINT, mutation-receipt write, and companion inserts.
  */
 
+// Why bound, not datetime('now'): a literal SQLite datetime('now') stamps the timezone-less
+// "YYYY-MM-DD HH:MM:SS" space format, which every other write on this column (and the
+// completed_at it is diffed against) writes as ISO with an explicit 'Z' -- Date.parse reads
+// the zone-less form as local time, so a reader under a non-UTC TZ misreads the gap (N1).
 export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   id, run_id, task_id, contract_version, launch_token_hash,
   assignee_handle, assignee_pane_key, process_incarnation,
   creator_dispatch_id, creator_handle, creator_pane_key,
   status, failure_count, depth, dispatched_at
 )
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, ?
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
@@ -43,10 +47,13 @@ WHERE id = ? AND status = 'ready'
     )
   )`
 
+// Why no dispatched_at here: this row is 'pending' — a worker still 'starting' has not been
+// dispatched yet. Stamping it now would make dispatched_at a duplicate of created_at instead of
+// the pending->dispatched edge (markWorkerDispatchReady / federated ready reconcile stamp it).
 const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
    id, run_id, task_id, contract_version, launch_token_hash, retry_of_dispatch_id,
-   creator_dispatch_id, creator_handle, creator_pane_key, depth, status, dispatched_at
- ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`
+   creator_dispatch_id, creator_handle, creator_pane_key, depth, status
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
    dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
@@ -95,6 +102,7 @@ export function claimDispatchContextRow(
       params.creatorPaneKey ?? null,
       params.priorFailures,
       params.depth,
+      new Date().toISOString(),
       params.taskId,
       params.assigneeHandle,
       params.assigneePaneKey,
