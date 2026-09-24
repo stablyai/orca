@@ -56,6 +56,11 @@ export type TerminalCreateOptions = {
    */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  /**
+   * `--account`: a managed host Claude account id this launch must run on. Background-lane only,
+   * and deliberately not part of `callerSuppliedLaunch`: it picks credentials, not the launch.
+   */
+  claudeAccountId?: string
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'

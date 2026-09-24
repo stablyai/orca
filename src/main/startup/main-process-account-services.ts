@@ -4,6 +4,8 @@ import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../codex-accounts/service'
 import { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import { ClaudeAccountService } from '../claude-accounts/service'
+import { onClaudePinnedAccountDrained } from '../claude-accounts/claude-pinned-pty-registry'
+import { notePinnedClaudeSeedMarker } from '../claude-accounts/claude-pinned-credentials'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
@@ -71,7 +73,22 @@ export function initializeMainProcessAccountServices(): void {
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
+  // Why before the service: its constructor sync must already see seeds a crashed pinned session left.
+  if (process.platform === 'darwin') {
+    for (const account of store.getSettings().claudeManagedAccounts) {
+      if (account.managedAuthRuntime !== 'wsl') {
+        notePinnedClaudeSeedMarker(account.id, account.managedAuthPath)
+      }
+    }
+  }
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  onClaudePinnedAccountDrained((accountId) => {
+    void state.claudeRuntimeAuth
+      ?.reconcilePinnedAccountCredentials(accountId)
+      .catch((error) =>
+        console.warn('[claude-runtime-auth] Pinned Claude read-back failed:', error)
+      )
+  })
   state.claudeAccounts = new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
   state.rateLimits.setCodexHomePathResolver((target) =>
     state.codexRuntimeHome!.prepareForRateLimitFetch(target)

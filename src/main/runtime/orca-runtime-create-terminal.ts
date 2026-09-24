@@ -20,7 +20,8 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
     const rendererWindow = opts.rendererBacked === true ? availableAuthoritativeWindow : null
     const shouldCreateInBackground =
       worktreeSelector !== undefined &&
-      (Boolean(opts.agentSessionClaim) ||
+      // Why: only the background lane carries a pinned Claude account to the PTY spawn.
+      (Boolean(opts.agentSessionClaim || opts.claudeAccountId) ||
         (!requiresRendererFocus && opts.rendererBacked !== true) ||
         availableAuthoritativeWindow === null)
     if (shouldCreateInBackground) {
@@ -83,9 +84,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         let effectiveLaunchConfig = launchOpts.launchConfig
         try {
           const agentTeams = await buildRuntimeAgentTeamsLaunchPlan({
-            launchConfig: launchOpts.launchConfig,
-            command: launchOpts.command,
-            claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
+            launch: launchOpts,
             claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
             baseEnv: { ...process.env, ...baseEnv },
             adoptedBeforeLaunch,
@@ -139,6 +138,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               launchOpts.envToDelete,
               agentTeamsPlan?.envToDelete
             ),
+            ...(launchOpts.claudeAccountId ? { claudeAccountId: launchOpts.claudeAccountId } : {}),
             resumeProviderSession: launchOpts.resumeProviderSession,
             telemetry: launchOpts.telemetry,
             connectionId: workspace.connectionId,

@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { app, session } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
@@ -27,6 +28,12 @@ import {
   onLiveClaudePtysDrained,
   seedLiveClaudePtysFromPersistence
 } from '../claude-accounts/live-pty-gate'
+import {
+  attachClaudePinnedPtyPersistence,
+  createClaudePinnedPtyFilePersistence,
+  readClaudePinnedPtyRegistryFile,
+  seedPinnedClaudePtysFromPersistence
+} from '../claude-accounts/claude-pinned-pty-registry'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -253,6 +260,15 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
   seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
+  // Why: same restart hazard for `--account` PTYs, whose accounts the global gate never covers.
+  const pinnedClaudePtyRegistryPath = join(
+    app.getPath('userData'),
+    'claude-pinned-pane-accounts.json'
+  )
+  seedPinnedClaudePtysFromPersistence(readClaudePinnedPtyRegistryFile(pinnedClaudePtyRegistryPath))
+  attachClaudePinnedPtyPersistence(
+    createClaudePinnedPtyFilePersistence(pinnedClaudePtyRegistryPath)
+  )
   if (persistedClaudePtyIds.length > 0) {
     console.log(
       `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`
