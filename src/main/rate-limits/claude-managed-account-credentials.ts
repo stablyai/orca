@@ -13,6 +13,8 @@ import {
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from '../claude-accounts/managed-auth-path'
+import { beginClaudeAccountUsageFetch } from '../claude-accounts/claude-pinned-pty-registry'
+import { hasPendingPinnedClaudeSeed } from '../claude-accounts/claude-pinned-credentials'
 
 export type InactiveClaudeAccount = {
   id: string
@@ -95,6 +97,15 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccount): s
   } catch {
     return null
   }
+}
+
+/**
+ * Claims the account for one Orca usage fetch (token refresh and the `claude` usage preview), or
+ * returns null while a `--account` launch owns its credentials (live, starting, or unread). While
+ * the claim is held a pinned launch waits, so the two never refresh one account at once.
+ */
+export function beginClaudeManagedUsageFetch(accountId: string): (() => void) | null {
+  return hasPendingPinnedClaudeSeed(accountId) ? null : beginClaudeAccountUsageFetch(accountId)
 }
 
 export async function withClaudeManagedPreviewKeychainCredentials<T>(

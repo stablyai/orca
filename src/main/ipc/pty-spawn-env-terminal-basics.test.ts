@@ -8,6 +8,7 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
+import { countHostClaudePtysForAccount } from '../claude-accounts/claude-host-pty-accounts'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
 
@@ -313,10 +314,12 @@ describe('registerPtyHandlers', () => {
 
       expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
       expect(hasLiveClaudePtys()).toBe(true)
+      expect(countHostClaudePtysForAccount('account-1')).toBe(1)
 
       await handlers.get('pty:kill')!(null, { id: spawnResult.id })
 
       expect(hasLiveClaudePtys()).toBe(false)
+      expect(countHostClaudePtysForAccount('account-1')).toBe(0)
     })
     it('clears Claude live-PTY tracking from shared provider teardown', () => {
       markClaudePtySpawned('ssh-claude-pty')

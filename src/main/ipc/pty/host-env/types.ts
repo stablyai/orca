@@ -1,7 +1,10 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { NetworkProxySettings } from '../../../../shared/network-proxy'
-import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
+import type {
+  ClaudeLaunchAuthOptions,
+  ClaudeRuntimeAuthPreparation
+} from '../../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
@@ -76,5 +79,6 @@ export function allocatePtyLifecycleSequence(): number {
 }
 
 export type PrepareClaudeAuth = (
-  target?: ClaudeAccountSelectionTarget
+  target?: ClaudeAccountSelectionTarget,
+  options?: ClaudeLaunchAuthOptions
 ) => Promise<ClaudeRuntimeAuthPreparation>

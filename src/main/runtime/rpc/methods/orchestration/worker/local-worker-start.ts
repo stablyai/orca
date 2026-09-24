@@ -24,6 +24,7 @@ import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-cu
 import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
+import { assertClaudeAccountWorktreeIsLocal } from './worker-claude-account-placement'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 
 type WorkerStartMutation = {
@@ -47,7 +48,11 @@ export async function startLocalWorker(args: {
   const { params, runtime, db, run, coordinatorPane, existingTask, orchestrationMutation } = args
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+  const { agent, launch, claudeAccount } = prepareLocalWorkerStart({
+    params,
+    createsWorktree,
+    runtime
+  })
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(runtime, params.from)
   const creationWorktree = createsWorktree
@@ -73,6 +78,9 @@ export async function startLocalWorker(args: {
       coordinatorPane,
       resolvedWorktreeId: resolvedWorktree?.id
     })
+  }
+  if (claudeAccount && resolvedWorktree) {
+    await assertClaudeAccountWorktreeIsLocal(runtime, resolvedWorktree.id)
   }
   let mode = await resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
 
@@ -137,6 +145,7 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launchPreferences: launch.preferences,
+      ...(claudeAccount ? { claudeAccountId: claudeAccount.accountId } : {}),
       effects,
       onStage: (stage) => {
         failedStage = stage

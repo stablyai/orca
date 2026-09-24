@@ -96,6 +96,8 @@ export type RuntimePtySpawnArgs = {
   }
   env?: Record<string, string>
   envToDelete?: string[]
+  /** `--account`: the managed host Claude account this launch must run on. */
+  claudeAccountId?: string
   resumeProviderSession?: AgentProviderSessionMetadata
   connectionId?: string | null
   worktreeId?: string

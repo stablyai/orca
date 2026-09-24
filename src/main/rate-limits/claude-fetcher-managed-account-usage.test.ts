@@ -11,10 +11,17 @@ import {
 import { fetchViaPty } from './claude-pty'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
+  readActiveClaudeKeychainCredentialsStrict,
   readManagedClaudeKeychainCredentials,
   writeActiveClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from '../claude-accounts/keychain'
+import {
+  _internals as pinnedRegistryInternals,
+  markPinnedClaudePtySpawned,
+  releaseClaudePinnedAccountReservation,
+  reserveClaudePinnedAccount
+} from '../claude-accounts/claude-pinned-pty-registry'
 
 const { netFetchMock, readFileMock, resolveProxyMock, setProxyMock, appGetPathMock } = vi.hoisted(
   () => ({
@@ -74,6 +81,7 @@ describe('fetchClaudeRateLimits', () => {
 
   afterEach(() => {
     restorePlatform()
+    pinnedRegistryInternals.reset()
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -421,5 +429,100 @@ describe('fetchClaudeRateLimits', () => {
       String(url).includes('/api/oauth/usage')
     )
     expect(usageCall?.[1]?.headers?.Authorization).toBe('Bearer fresh-access')
+  })
+
+  it('never refreshes or previews an account a --account terminal is running on', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const credentialsPath = join(ownedAuthPath, '.credentials.json')
+    const expiring = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: 'live-access',
+        refreshToken: 'live-refresh',
+        expiresAt: Date.now() - 60_000
+      }
+    })
+    writeFileSync(credentialsPath, expiring, 'utf-8')
+    markPinnedClaudePtySpawned('pinned-pty', 'account-1')
+
+    await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { allowUsagePanelSupplement: true }
+    )
+
+    expect(netFetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      expect.stringContaining('/api/oauth/usage')
+    ])
+    expect(netFetchMock.mock.calls[0]?.[1]?.headers?.Authorization).toBe('Bearer live-access')
+    expect(readFileSync(credentialsPath, 'utf-8')).toBe(expiring)
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('reads a pinned macOS account from its session Keychain copy without staging it', async () => {
+    setPlatform('darwin')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const canonicalAuthPath = realpathSync(ownedAuthPath)
+    vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'spent', expiresAt: Date.now() - 1 } })
+    )
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'session', expiresAt: Date.now() + 60_000 } })
+    )
+    markPinnedClaudePtySpawned('pinned-pty', 'account-1')
+
+    await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { allowUsagePanelSupplement: true }
+    )
+
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(canonicalAuthPath)
+    expect(netFetchMock.mock.calls[0]?.[1]?.headers?.Authorization).toBe('Bearer session')
+    expect(writeActiveClaudeKeychainCredentials).not.toHaveBeenCalled()
+    expect(deleteActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalled()
+    expect(writeManagedClaudeKeychainCredentials).not.toHaveBeenCalled()
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('holds the account against pinned launches until its preview has finished', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(
+      join(ownedAuthPath, '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'token', expiresAt: Date.now() + 60_000 } }),
+      'utf-8'
+    )
+    let reservationDuringPreview: string | null = 'not-called'
+    vi.mocked(fetchViaPty).mockImplementationOnce(async () => {
+      reservationDuringPreview = reserveClaudePinnedAccount('account-1')
+      return {
+        provider: 'claude',
+        session: null,
+        weekly: null,
+        updatedAt: 1,
+        error: null,
+        status: 'ok'
+      }
+    })
+
+    await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { allowUsagePanelSupplement: true }
+    )
+
+    expect(reservationDuringPreview).toBe('usage-fetch')
+    expect(reserveClaudePinnedAccount('account-1')).toBeNull()
+    releaseClaudePinnedAccountReservation('account-1')
   })
 })

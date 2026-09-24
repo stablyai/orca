@@ -9,7 +9,14 @@ export type ClaudeRuntimeAuthPreparation = {
   envPatch: ClaudeEnvPatch
   stripAuthEnv: boolean
   managedRefreshDeferredByLivePty?: boolean
+  /** Set only by a `--account` launch on a non-active host account; see runtime-auth-pinned-launch. */
+  pinnedAccountId?: string
   provenance: string
+}
+
+export type ClaudeLaunchAuthOptions = {
+  /** A managed host account the launch must run on, whether or not it is the active one. */
+  accountId?: string
 }
 
 export type ClaudeSystemDefaultSnapshot = {

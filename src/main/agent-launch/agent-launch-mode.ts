@@ -72,6 +72,8 @@ export type AgentLaunchModePlacement = {
    *  resolved — never accepted from a caller, which would let one route around this decision.
    *  Absent means the kind was never established, and is not read as any particular kind. */
   workspaceKind?: WorkspaceLaunchKind
+  /** `--account`: a structured session has no way to run on a non-active account yet. */
+  claudeAccount?: string
   /** A start directory other than the workspace root. It belongs here, unlike `model` or `effort`,
    *  because a structured session has no way to apply one — it runs in its workspace — so honouring
    *  it and honouring the chat preference are mutually exclusive rather than merely awkward. */
@@ -87,7 +89,9 @@ const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, s
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  pinned_claude_account:
+    '--account runs Claude on a non-active account, which only a terminal can do'
 }
 
 const BLOCKER_REASON: Record<
@@ -132,6 +136,9 @@ export function decideAgentLaunchMode(args: {
       reason: 'user_default',
       detail: `Started ${vocabulary.terminal}, the default for new agent tabs in your settings.`
     }
+  }
+  if (placement.claudeAccount) {
+    return downgraded('pinned_claude_account', vocabulary)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent

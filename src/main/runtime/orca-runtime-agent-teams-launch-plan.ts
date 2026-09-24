@@ -8,10 +8,11 @@ import {
   inferCapturedClaudeAgentTeamsMode
 } from './orca-runtime-create-terminal-dependencies'
 
-export async function buildRuntimeAgentTeamsLaunchPlan(args: {
-  launchConfig: TerminalCreateOptions['launchConfig']
-  command?: string
-  claudeAgentTeamsSourceCommand?: string
+export async function buildRuntimeAgentTeamsLaunchPlan(input: {
+  launch: Pick<
+    TerminalCreateOptions,
+    'launchConfig' | 'command' | 'claudeAgentTeamsSourceCommand' | 'claudeAccountId'
+  >
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
   adoptedBeforeLaunch: boolean
@@ -21,13 +22,18 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   sequencedStartupCommand?: string
   effectiveLaunchConfig: TerminalCreateOptions['launchConfig']
 }> {
+  const args = { ...input, ...input.launch }
   const sourceCommand =
     args.claudeAgentTeamsSourceCommand?.trim() || args.command?.trim() || undefined
-  const mode = inferCapturedClaudeAgentTeamsMode(
+  const capturedMode = inferCapturedClaudeAgentTeamsMode(
     args.launchConfig,
     sourceCommand,
     args.claudeAgentTeamsMode
   )
+  // Why: native-pane teammates are separate terminals launched on the host's active account; an
+  // `--account` leader keeps its teammates in-process, on its own pinned credentials.
+  const mode =
+    args.claudeAccountId && capturedMode === 'native-panes-shim' ? 'in-process' : capturedMode
   const plan = args.adoptedBeforeLaunch
     ? undefined
     : await buildClaudeAgentTeamsLaunchPlan({
