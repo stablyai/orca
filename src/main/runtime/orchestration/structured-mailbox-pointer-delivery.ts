@@ -15,6 +15,7 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
+import { STRUCTURED_SESSION_CLI_COMMAND } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
@@ -218,7 +219,16 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
-      blocks: [{ type: 'text', text: formatMessagePointer(unread.length, mailboxHandle).trim() }]
+      blocks: [
+        {
+          type: 'text',
+          text: formatMessagePointer(
+            unread.length,
+            mailboxHandle,
+            STRUCTURED_SESSION_CLI_COMMAND
+          ).trim()
+        }
+      ]
     }
     const staged = unread.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({

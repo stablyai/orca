@@ -4,6 +4,13 @@ import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 
 export type OrchestrationCliCommand = 'orca' | 'orca-dev' | 'orca-ide'
 
+/**
+ * How text addressed to a structured session names this app's CLI. Its env carries the absolute
+ * launcher in `ORCA_CLI_COMMAND`; a bare `orca` can resolve elsewhere once a login shell (Codex runs
+ * `zsh -lc`) rebuilds PATH ahead of the directory Orca prepended.
+ */
+export const STRUCTURED_SESSION_CLI_COMMAND = '"$ORCA_CLI_COMMAND"'
+
 export function resolveTerminalOrchestrationCliCommand(args: {
   connectionId: string | null
   isWsl: boolean | null | undefined

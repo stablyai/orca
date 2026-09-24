@@ -1,6 +1,6 @@
 import type { MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
-import type { OrchestrationCliCommand } from './cli-command'
+import type { OrchestrationCliCommand, STRUCTURED_SESSION_CLI_COMMAND } from './cli-command'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -112,7 +112,7 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
-  cliCommand: OrchestrationCliCommand = 'orca'
+  cliCommand: OrchestrationCliCommand | typeof STRUCTURED_SESSION_CLI_COMMAND = 'orca'
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
   const runFlag = mailboxHandle?.startsWith('run:')

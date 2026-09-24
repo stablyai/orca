@@ -312,7 +312,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-const POINTER = /You have 1 orchestration message\. Run `orca orchestration check --run run_/
+// The session's own CLI by its env var: a bare `orca` can resolve elsewhere in a login shell.
+const POINTER =
+  /You have 1 orchestration message\. Run `\\?"\$ORCA_CLI_COMMAND\\?" orchestration check --run run_/
 
 describe('a worker result reaches the structured chat that coordinates it', () => {
   it('lands as a turn in the coordinator journal, and a flagless check returns the worker_done', async () => {
@@ -433,7 +435,8 @@ describe('any live session is addressable by its id', () => {
 
     await vi.waitFor(() => expect(peer.turns).toHaveLength(1))
     // Direct mail is not in a Run, so the pointer names no `--run`.
-    expect(peer.turns[0]!.text).toContain('Run `orca orchestration check`.')
+    expect(peer.turns[0]!.text).toContain('orchestration check`.')
+    expect(peer.turns[0]!.text).toContain('$ORCA_CLI_COMMAND')
     await settleTurn(PEER_CHAT, 0)
     const checked = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
     expect(checked).toMatchObject({ count: 1, messages: [{ subject: 'ping' }] })
