@@ -1,0 +1,121 @@
+{
+  "operation": "settings.bot-overrides",
+  "family": "settings.bot-overrides",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
+  "scenarioSha256": "f8ebd2348373b2b39c167735e0c418dfe868511fb5306ecba90cb6f2a905b95e",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4f53cda18c2b": [],
+    "b45a49bc8209": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "settings refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c8c77ac17e0a": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "e3973bb12da1": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "settings-bot-overrides-refused",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": ["e3973bb12da1"],
+          "payloads": ["c8c77ac17e0a"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["b45a49bc8209"],
+          "payloads": ["c8c77ac17e0a"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "4f53cda18c2b",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

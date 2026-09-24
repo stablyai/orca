@@ -4,7 +4,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http
 import { extname, isAbsolute, posix, relative, resolve } from 'node:path'
 
 const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
-const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/']
+const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
 const STATIC_WEB_CONTENT_TYPES = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -116,12 +116,14 @@ function mapProxyPrefixedStaticPathname(pathname: string): string {
   if (pathname === '/web-index.html' || pathname.endsWith('/web-index.html')) {
     return '/web-index.html'
   }
-  const assetMarker = '/assets/'
-  const assetIndex = pathname.indexOf(assetMarker)
-  if (assetIndex !== -1) {
+  const prefixIndex = STATIC_WEB_ALLOWED_PREFIXES.reduce(
+    (deepest, prefix) => Math.max(deepest, pathname.indexOf(prefix)),
+    -1
+  )
+  if (prefixIndex !== -1) {
     // Why: reverse proxies may forward the external path prefix through to
     // Orca. Only the bundled /assets subtree is served after the prefix.
-    return pathname.slice(assetIndex)
+    return pathname.slice(prefixIndex)
   }
   return pathname
 }

@@ -167,3 +167,34 @@ describe('agent session resume metadata', () => {
     ).toEqual({ key: 'session_id', id: 'ok' })
   })
 })
+
+describe('OMP recorded resume locators', () => {
+  it.each([
+    {
+      explicit: '/explicit/session.jsonl',
+      recorded: '/hook/session.jsonl',
+      target: '/explicit/session.jsonl'
+    },
+    { explicit: undefined, recorded: ' /hook/session.jsonl ', target: '/hook/session.jsonl' },
+    { explicit: ' ', recorded: '/hook/session.jsonl', target: '/hook/session.jsonl' },
+    { explicit: undefined, recorded: ' ', target: 'session-id' },
+    { explicit: undefined, recorded: undefined, target: 'session-id' }
+  ])('selects explicit then recorded path then UUID %j', ({ explicit, recorded, target }) => {
+    expect(
+      getAgentResumeArgv(
+        'omp',
+        { key: 'session_id', id: 'session-id', transcriptPath: recorded },
+        explicit
+      )
+    ).toEqual(['omp', '--resume', target])
+  })
+  it('retains UUID equality when hook path metadata arrives later', () => {
+    expect(
+      agentProviderSessionsEqual(
+        'omp',
+        { key: 'session_id', id: 'session-id' },
+        { key: 'session_id', id: 'session-id', transcriptPath: '/hook/session.jsonl' }
+      )
+    ).toBe(true)
+  })
+})

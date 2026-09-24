@@ -1,0 +1,170 @@
+{
+  "operation": "tasks.smart-source-search",
+  "family": "tasks.smart-source-search",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "4537bf83f7a030521eec549adf4490da5be183471d5a9f9e58b71815b29481ff",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2978f9aceb1e": {
+      "name": "repo.searchRefs#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "refDetails": [
+              {
+                "localBranchName": "main",
+                "refName": "origin/main"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "51e012c25ebf": {
+      "branches": [
+        {
+          "localBranchName": "main",
+          "refName": "origin/main"
+        }
+      ]
+    },
+    "791f6fc629fc": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "localBranchName": "main",
+          "refName": "origin/main"
+        }
+      ]
+    },
+    "ab2b1da8d0e9": {
+      "name": "repo.searchRefs#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
+    },
+    "bf7ab976b200": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "rate limited",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "cc32ff7ae122": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"state\":\"opened\",\"page\":1,\"perPage\":50,\"query\":\"bug\"}}"
+    },
+    "f87417f689e2": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": "bug",
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "rate limited",
+              "type": "quota"
+            },
+            "items": []
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-smart-search-gitlab-provider-error",
+    "checkpoints": [
+      {
+        "id": "in-band-provider-error",
+        "observation": {
+          "sender": ["f87417f689e2"],
+          "payloads": ["cc32ff7ae122"],
+          "settlements": {
+            "gitlab": "bf7ab976b200"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "branch-ref-details",
+        "observation": {
+          "sender": ["f87417f689e2", "2978f9aceb1e"],
+          "payloads": ["cc32ff7ae122", "ab2b1da8d0e9"],
+          "settlements": {
+            "gitlab": "bf7ab976b200",
+            "branches": "791f6fc629fc"
+          },
+          "state": "51e012c25ebf",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

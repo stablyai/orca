@@ -22,11 +22,16 @@ describe('plan document translation', () => {
     expect(
       codexItemBody({ id: 'r', type: 'reasoning', summary: ['Thinking through the problem.'] })
     ).toEqual({
-      kind: 'status',
-      text: 'Thinking through the problem.'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Thinking through the problem.' }]
     })
     expect(codexStreamingJournalItem({ id: 'r', type: 'reasoning' }, 'Thinking…')).toEqual({
-      body: { kind: 'status', text: 'Thinking…' },
+      body: {
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [{ type: 'text', text: 'Thinking…' }]
+      },
       handled: true
     })
   })

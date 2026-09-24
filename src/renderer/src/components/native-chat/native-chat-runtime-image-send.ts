@@ -1,6 +1,7 @@
+import { agentImagePasteWrites, formatAgentImagePath } from '../../../../shared/agent-image-paste'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import { imagePasteWritesFollowedByText } from '../../../../shared/image-paste-following-text'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../shared/native-chat-answer-stepping'
 import {
   buildNativeChatImagePasteBytes,
@@ -22,6 +23,7 @@ export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
 
 export function sendNativeChatMessageWithImageAttachments(
+  agent: AgentType,
   settings: RuntimeSettings,
   ptyId: string,
   text: string,
@@ -47,8 +49,11 @@ export function sendNativeChatMessageWithImageAttachments(
         if (isCancelled()) {
           return
         }
-        for (const payload of imagePasteWritesFollowedByText(
-          imagePaths.map(buildNativeChatImagePasteBytes),
+        for (const payload of agentImagePasteWrites(
+          agent,
+          imagePaths.map((path) =>
+            buildNativeChatImagePasteBytes(formatAgentImagePath(agent, path))
+          ),
           trimmedText.length > 0
         )) {
           sendRuntimePtyInput(settings, ptyId, payload)

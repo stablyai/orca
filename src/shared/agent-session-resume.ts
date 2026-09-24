@@ -8,6 +8,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'gemini',
   'antigravity',
   'opencode',
+  'opencode2',
   'pi',
   'mimo-code',
   'droid',
@@ -16,7 +17,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'omp',
   'prime-agent',
   'copilot',
-  'kimi'
+  'kimi',
+  'muse'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -63,9 +65,6 @@ export type SleepingAgentSessionRecord = {
    *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
-  /** Prevents provider-session relaunch while main reconciles a durable
-   *  orchestration assignment against authoritative PTY inventory. */
-  automaticResumeBlockedBy?: 'legacy-orchestration-worker'
   /** Set on a finished pane captured by an explicit workspace sleep. Its
    *  `--resume` is issued by the pane's own cold restore when its tab is
    *  opened, so a mobile wake must not background-mount every such tab and
@@ -202,11 +201,16 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'muse': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
+    }
     case 'antigravity': {
       const id = readSessionId(payload, ['conversationId'])
       return id ? { key: 'conversation_id', id } : null
     }
     case 'opencode':
+    case 'opencode2':
     case 'mimo-code': {
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
@@ -227,10 +231,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
-    // Why: OMP's managed extension reports the authoritative CLI resume id.
+    // OMP keeps id-based resume while optionally locating its native-chat transcript.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
-      return id ? { key: 'session_id', id } : null
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file']) : null
     }
     // Why: Copilot's hook `session_id` is also its `~/.copilot/session-state/<id>/`
     // directory name, so the same id is the CLI's resume locator.
@@ -263,6 +267,10 @@ export function getAgentResumeArgv(
       return providerSession.key === 'conversation_id' ? ['agy', '--conversation', id] : null
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
+    case 'opencode2':
+      return providerSession.key === 'session_id'
+        ? ['opencode2', '--standalone', '--session', id]
+        : null
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
@@ -281,7 +289,11 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
     case 'omp':
       return providerSession.key === 'session_id'
-        ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
+        ? [
+            'omp',
+            '--resume',
+            ompResumeFilePath?.trim() || providerSession.transcriptPath?.trim() || id
+          ]
         : null
     // Why: the joined form is the only one Copilot documents, and it matches the
     // flag spelling buildAgentResumeInvocation bakes into persisted AI Vault
@@ -291,5 +303,7 @@ export function getAgentResumeArgv(
     // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
     case 'kimi':
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
+    case 'muse':
+      return providerSession.key === 'session_id' ? ['muse', 'resume', id] : null
   }
 }

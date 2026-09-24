@@ -1,19 +1,10 @@
-/**
- * E2E for issue #14024: on a macOS layout that composes printable ASCII with
- * Option (Turkish Q: Option+Q → `@`, Option+4 → `$`), a kitty-keyboard TUI must
- * receive the composed character, not the physical Alt chord.
- *
- * The regression only exists once the pane's application has negotiated the
- * kitty keyboard protocol, so the kitty flags are armed the way a real TUI arms
- * them — by emitting `CSI > 1 u` from the PTY — rather than by poking renderer
- * state. Bytes are asserted at the main-process `pty:write` boundary so the test
- * proves what actually leaves the renderer.
- */
+// Option composition must survive kitty negotiation (#14024, #20171, #20850).
 
 import { test, expect } from './helpers/orca-app'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import {
   execInTerminal,
+  waitForTerminalOutput,
   waitForActiveTerminalManager,
   waitForActivePanePtyId
 } from './helpers/terminal'
@@ -155,7 +146,7 @@ async function setUpPane(
   return { ptyId, joinedWrites: async () => (await getPtyWrites(app)).join('') }
 }
 
-test.describe('Option-composed ASCII in a kitty-keyboard pane', () => {
+test.describe('Option-composed text in a kitty-keyboard pane', () => {
   test.skip(process.platform !== 'darwin', 'Option composition is a macOS-only input path (#14024)')
 
   test('types the composed character instead of reporting the physical Alt chord', async ({
@@ -223,9 +214,12 @@ test.describe('Option-composed ASCII in a kitty-keyboard pane', () => {
     expect(await joinedWrites()).not.toContain('@')
   })
 
-  test('keeps non-ASCII Option glyphs as TUI hotkeys', async ({ orcaPage, electronApp }) => {
+  test('keeps non-ASCII Option glyphs as TUI hotkeys when configured as Alt', async ({
+    orcaPage,
+    electronApp
+  }) => {
     const { joinedWrites } = await setUpPane(orcaPage, electronApp)
-    await setMacOptionAsAlt(orcaPage, 'false')
+    await setMacOptionAsAlt(orcaPage, 'true')
     await clearPtyWriteLog(electronApp)
 
     // #8031: OMP-class TUIs bind Option+P, which composes the non-ASCII `π`.
@@ -239,5 +233,102 @@ test.describe('Option-composed ASCII in a kitty-keyboard pane', () => {
       })
       .toContain('\x1b[112;3u')
     expect(await joinedWrites()).not.toContain('π')
+  })
+
+  test('types all Polish letters once under Claude flags and updates the mounted pane setting', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    const { ptyId, joinedWrites } = await setUpPane(orcaPage, electronApp)
+    await execInTerminal(orcaPage, ptyId, `printf '\\033[<u\\033[>5u'`)
+    await expect.poll(() => getPaneKittyKeyboardFlags(orcaPage)).toBe(5)
+    await setMacOptionAsAlt(orcaPage, 'false')
+    await clearPtyWriteLog(electronApp)
+    const letters = [
+      ['a', 'ą'],
+      ['c', 'ć'],
+      ['e', 'ę'],
+      ['l', 'ł'],
+      ['n', 'ń'],
+      ['o', 'ó'],
+      ['s', 'ś'],
+      ['x', 'ź'],
+      ['z', 'ż']
+    ]
+    for (const [base, key] of letters) {
+      await pressOptionComposedKey(orcaPage, { key, code: `Key${base.toUpperCase()}` })
+      await pressOptionComposedKey(orcaPage, {
+        key: key.toUpperCase(),
+        code: `Key${base.toUpperCase()}`,
+        shiftKey: true
+      })
+    }
+    await expect.poll(joinedWrites).toBe('ąĄćĆęĘłŁńŃóÓśŚźŹżŻ')
+    await setMacOptionAsAlt(orcaPage, 'true')
+    await clearPtyWriteLog(electronApp)
+    await pressOptionComposedKey(orcaPage, { key: 'ą', code: 'KeyA' })
+    await expect.poll(joinedWrites).toBe('\x1b[97;3u')
+    await setMacOptionAsAlt(orcaPage, 'false')
+    await clearPtyWriteLog(electronApp)
+    await pressOptionComposedKey(orcaPage, { key: 'ą', code: 'KeyA' })
+    await expect.poll(joinedWrites).toBe('ą')
+  })
+
+  test('reports Polish associated text once under report-all flags', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    const { ptyId, joinedWrites } = await setUpPane(orcaPage, electronApp)
+    await execInTerminal(orcaPage, ptyId, `printf '\\033[<u\\033[>29u'`)
+    await expect.poll(() => getPaneKittyKeyboardFlags(orcaPage)).toBe(29)
+    await setMacOptionAsAlt(orcaPage, 'false')
+    await clearPtyWriteLog(electronApp)
+    await pressOptionComposedKey(orcaPage, { key: 'ą', code: 'KeyA' })
+    await expect.poll(joinedWrites).toBe('\x1b[97;3;261u')
+  })
+
+  test('renders Polish words entered through Chromium keyboard events', async ({
+    orcaPage,
+    electronApp
+  }, testInfo) => {
+    const { ptyId, joinedWrites } = await setUpPane(orcaPage, electronApp)
+    await execInTerminal(orcaPage, ptyId, `printf '\\033[<u\\033[>5u'; cat`)
+    await expect.poll(() => getPaneKittyKeyboardFlags(orcaPage)).toBe(5)
+    await setMacOptionAsAlt(orcaPage, 'false')
+    await clearPtyWriteLog(electronApp)
+    const cdp = await orcaPage.context().newCDPSession(orcaPage)
+    const bases: Record<string, string> = {
+      ą: 'a',
+      ć: 'c',
+      ę: 'e',
+      ł: 'l',
+      ń: 'n',
+      ó: 'o',
+      ś: 's',
+      ź: 'x',
+      ż: 'z'
+    }
+    const phrase = 'zażółć wcześniej łącznie'
+    try {
+      for (const key of phrase) {
+        const base = bases[key] ?? key
+        const code = key === ' ' ? 'Space' : `Key${base.toUpperCase()}`
+        const modifiers = bases[key] ? 1 : 0
+        await cdp.send('Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key,
+          code,
+          modifiers,
+          text: key,
+          unmodifiedText: base
+        })
+        await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers })
+      }
+      await expect.poll(joinedWrites).toBe(phrase)
+      await waitForTerminalOutput(orcaPage, phrase)
+      await orcaPage.screenshot({ path: testInfo.outputPath('polish-words.png') })
+    } finally {
+      await cdp.detach()
+    }
   })
 })

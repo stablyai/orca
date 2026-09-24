@@ -1,0 +1,182 @@
+{
+  "operation": "tasks.worktree-create-retry",
+  "family": "worktree.create-retry",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "6cb658dadc9e146c4f36c6ce643451e72300b8cdda19cc684ffa9fb2b0822c0a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "06b14e4985de": {
+      "name": "worktree.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
+    },
+    "38d1ea203ccc": {
+      "name": "worktree.create#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-2",
+            "name": "kestrel-2",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "displayName": "kestrel-2",
+              "id": "repo-1::/w2"
+            }
+          }
+        }
+      }
+    },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "60f191fb0fe4": {
+      "name": "worktree.create#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-2",
+            "name": "kestrel-2",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8267e2ceffd6": {
+      "name": "worktree.create#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel-2\",\"clientMutationId\":\"mutation-2\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "96ffe866d064": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "name": "kestrel-2",
+        "worktreeId": "repo-1::/w2"
+      }
+    },
+    "db70004d62eb": {
+      "outcome": {
+        "name": "kestrel-2",
+        "worktreeId": "repo-1::/w2"
+      }
+    },
+    "dbde9cf24b8b": {
+      "name": "worktree.create#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-1",
+            "name": "kestrel",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "conflict",
+            "message": "Branch \"kestrel\" already exists."
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-create-retry-name-collision",
+    "checkpoints": [
+      {
+        "id": "retrying",
+        "observation": {
+          "sender": ["dbde9cf24b8b", "60f191fb0fe4"],
+          "payloads": ["06b14e4985de", "8267e2ceffd6"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "created-suffixed",
+        "observation": {
+          "sender": ["dbde9cf24b8b", "38d1ea203ccc"],
+          "payloads": ["06b14e4985de", "8267e2ceffd6"],
+          "settlements": {
+            "create": "96ffe866d064"
+          },
+          "state": "db70004d62eb",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

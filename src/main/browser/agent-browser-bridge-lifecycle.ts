@@ -131,57 +131,6 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     }
   }
 
-  protected async restartSessionForTarget(
-    sessionName: string,
-    browserPageId: string,
-    webContentsId: number,
-    options: { recreate: boolean } = { recreate: true }
-  ): Promise<void> {
-    const pendingCreation = this.pendingSessionCreation.get(sessionName)
-    if (pendingCreation) {
-      await pendingCreation.catch(() => {})
-    }
-
-    const session = this.sessions.get(sessionName)
-    if (session) {
-      if (session.activeInterceptPatterns.length > 0) {
-        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
-      }
-      this.sessions.delete(sessionName)
-      this.pendingSessionCreation.delete(sessionName)
-      if (session.activeProcess) {
-        this.cancelledProcesses.add(session.activeProcess)
-        try {
-          session.activeProcess.kill()
-        } catch {
-          // Process may already be exiting.
-        }
-        session.activeProcess = null
-      }
-
-      const destroy = (async (): Promise<void> => {
-        try {
-          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'], {
-            timeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS
-          })
-        } catch {
-          // Session may already be dead.
-        }
-        await session.proxy.stop()
-      })()
-      this.pendingSessionDestruction.set(sessionName, destroy)
-      try {
-        await destroy
-      } finally {
-        this.pendingSessionDestruction.delete(sessionName)
-      }
-    }
-
-    if (options.recreate) {
-      await this.ensureSession(sessionName, browserPageId, webContentsId)
-    }
-  }
-
   protected async destroySession(
     sessionName: string,
     options: AgentBrowserCleanupOptions = { closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS }

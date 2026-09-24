@@ -1,0 +1,149 @@
+{
+  "operation": "session.diff-review-actions",
+  "family": "session.diff-review-actions",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
+  "scenarioSha256": "c858cfca59148548146b4c0a775e9518d3ab826ef268ccc9af60b04e52cc9e3d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "6bdf0d77510f": {
+      "actionError": "Workspace is locked",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "ac014f21aa55": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "side": "modified",
+                "worktreeId": "workspace-1"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$rpc": "undefined"
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$rpc": "undefined"
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "worktree_locked",
+            "message": "Workspace is locked"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "b914541ed9b0": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Workspace is locked",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "bc47263d2197": {
+      "name": "worktree.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}"
+    }
+  },
+  "recording": {
+    "scenario": "review-mark-reviewed-rolls-back",
+    "checkpoints": [
+      {
+        "id": "rolled-back",
+        "observation": {
+          "sender": ["ac014f21aa55"],
+          "payloads": ["bc47263d2197"],
+          "settlements": {
+            "mark-reviewed": "b914541ed9b0"
+          },
+          "state": "6bdf0d77510f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

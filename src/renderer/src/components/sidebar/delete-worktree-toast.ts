@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   isLockedWorktreeRemovalError,
   isProvenLivePtyRemovalError,
+  isProvenLiveStructuredSessionRemovalError,
   type WorktreeForceDeleteReason
 } from '../../../../shared/worktree/removal'
 export type DeleteWorktreeToastCopy = {
@@ -81,13 +82,19 @@ export function getDeleteWorktreeToastCopy(
           'Failed to delete workspace {{value0}}',
           { value0: worktreeName }
         ),
-        // Why this is not the "could not confirm" wording: Orca watched these sessions stay
-        // attached, so there is no doubt to waive — Force Delete ends a conversation that is
-        // running right now, and any work it holds goes with it.
-        description: translate(
-          'auto.components.sidebar.delete.worktree.toast.runningAgentSession',
-          'This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold.'
-        ),
+        // Why two branches, like the PTY pair above: an ordinary delete already tried to close
+        // these sessions, and only the observation AFTER that attempt separates one Orca watched
+        // stay attached from one it simply could not reach. Telling the first user "could not
+        // confirm" asks them to waive a doubt that does not exist, and a conversation dies with it.
+        description: isProvenLiveStructuredSessionRemovalError(error)
+          ? translate(
+              'auto.components.sidebar.delete.worktree.toast.runningAgentSessionLive',
+              'This workspace still has running agent sessions that Orca could not close, so it stopped before deleting any files. Force Delete will discard any work they hold.'
+            )
+          : translate(
+              'auto.components.sidebar.delete.worktree.toast.runningAgentSession',
+              'Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
+            ),
         isDestructive: false
       }
     }

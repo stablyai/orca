@@ -50,6 +50,9 @@ describe('native chat tool icons', () => {
     expect(nativeChatToolCategory('list')).toBe('listFiles')
     expect(nativeChatToolCategory('shell')).toBe('unknown')
     expect(nativeChatToolCategory('apply_patch')).toBe('fileChange')
+    expect(nativeChatToolCategory('update_plan')).toBe('todoList')
+    expect(nativeChatToolIconName('update_plan')).toBe('list-checks')
+    expect(nativeChatToolRunIconName([{ name: 'update_plan' }])).toBe('list-checks')
     expect(nativeChatToolCategory('web search')).toBe('webSearch')
   })
 

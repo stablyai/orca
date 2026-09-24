@@ -1,12 +1,12 @@
 import { Info } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
 import { translate } from '@/i18n/i18n'
 import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
-import { CreateFromPicker } from './CreateFromPicker'
 import { WorkspaceCombobox } from './WorkspaceCombobox'
 import type { AutomationDraft } from './AutomationEditorDialog'
 

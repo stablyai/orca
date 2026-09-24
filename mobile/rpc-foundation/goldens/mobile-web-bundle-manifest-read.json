@@ -1,0 +1,135 @@
+{
+  "operation": "mobileWeb.bundle-manifest",
+  "family": "mobileWeb.bundle-manifest",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
+  "scenarioSha256": "5e9f4e6878be3f534288a90f7ccabc9cfe4e968aa29da372a98c3064d8e4d89e",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "23871e324a00": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "chunkBytes": 16,
+            "manifest": {
+              "assets": [
+                {
+                  "byteLength": 11,
+                  "contentType": "text/javascript; charset=utf-8",
+                  "path": "assets/app.js",
+                  "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d"
+                },
+                {
+                  "byteLength": 26,
+                  "contentType": "text/html; charset=utf-8",
+                  "path": "index.html",
+                  "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
+                }
+              ],
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "desktopVersion": "1.4.201",
+              "entrypoint": "index.html",
+              "minCompatibleRuntimeProtocolVersion": 2,
+              "runtimeProtocolVersion": 2,
+              "schemaVersion": 1,
+              "totalBytes": 37
+            }
+          }
+        }
+      }
+    },
+    "775bfa42070b": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
+    },
+    "9ca9b2d0fc07": {
+      "outcome": {
+        "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+        "chunkBytes": 16,
+        "entrypoint": "index.html",
+        "paths": ["assets/app.js", "index.html"]
+      }
+    },
+    "9d87b3b6bd74": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "chunkBytes": 16,
+        "manifest": {
+          "assets": [
+            {
+              "byteLength": 11,
+              "contentType": "text/javascript; charset=utf-8",
+              "path": "assets/app.js",
+              "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d"
+            },
+            {
+              "byteLength": 26,
+              "contentType": "text/html; charset=utf-8",
+              "path": "index.html",
+              "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e"
+            }
+          ],
+          "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+          "desktopVersion": "1.4.201",
+          "entrypoint": "index.html",
+          "minCompatibleRuntimeProtocolVersion": 2,
+          "runtimeProtocolVersion": 2,
+          "schemaVersion": 1,
+          "totalBytes": 37
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "mobile-web-bundle-manifest-read",
+    "checkpoints": [
+      {
+        "id": "manifest-read",
+        "observation": {
+          "sender": ["23871e324a00"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "read": "9d87b3b6bd74"
+          },
+          "state": "9ca9b2d0fc07",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

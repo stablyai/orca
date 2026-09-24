@@ -1,3 +1,4 @@
+import { windowDipToCssPx } from '@/lib/ui-zoom'
 import {
   useCallback,
   useEffect,
@@ -42,9 +43,8 @@ export function BrowserPageContextMenu({
         return
       }
       // Why: convert OS screen cursor coords to renderer CSS pixels — immune to guest/renderer coordinate-space mismatches from zoom/DPI.
-      const zoomFactor = 1.2 ** window.api.ui.getZoomLevel()
-      const x = Math.round((event.screenX - window.screenX) / zoomFactor)
-      const y = Math.round((event.screenY - window.screenY) / zoomFactor)
+      const x = Math.round(windowDipToCssPx(event.screenX - window.screenX))
+      const y = Math.round(windowDipToCssPx(event.screenY - window.screenY))
       setContextMenu({
         x,
         y,

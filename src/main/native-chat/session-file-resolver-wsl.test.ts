@@ -87,32 +87,40 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
     expect(resolved).toBe(ROLLOUT_UNC)
   })
 
-  it('keeps an attested distro when another guest has the same transcript path', async () => {
-    READABLE_WSL_UNC_PATHS.add(DEBIAN_ROLLOUT_UNC)
+  it.each(['codex', 'omp'] as const)(
+    'keeps an attested distro when another guest has the same transcript path (%s)',
+    async (agent) => {
+      READABLE_WSL_UNC_PATHS.add(DEBIAN_ROLLOUT_UNC)
 
-    const resolved = await resolveSessionFilePath('codex', 'wsl-sess', {
-      transcriptPath: ROLLOUT_LINUX,
-      wslDistro: 'Ubuntu',
-      codexSessionsDirs: []
-    })
-
-    expect(resolved).toBe(ROLLOUT_UNC)
-    expect(vi.mocked(listWslDistrosAsync)).not.toHaveBeenCalled()
-    expect(vi.mocked(getWslHomeAsync)).not.toHaveBeenCalled()
-  })
-
-  it('does not fall through to another guest when the attested path is missing', async () => {
-    READABLE_WSL_UNC_PATHS.delete(ROLLOUT_UNC)
-    READABLE_WSL_UNC_PATHS.add(DEBIAN_ROLLOUT_UNC)
-
-    await expect(
-      resolveSessionFilePath('codex', 'wsl-sess', {
+      const resolved = await resolveSessionFilePath(agent, 'wsl-sess', {
         transcriptPath: ROLLOUT_LINUX,
         wslDistro: 'Ubuntu',
         codexSessionsDirs: []
       })
-    ).resolves.toBeNull()
-  })
+
+      expect(resolved).toBe(ROLLOUT_UNC)
+      expect(vi.mocked(listWslDistrosAsync)).not.toHaveBeenCalled()
+      expect(vi.mocked(getWslHomeAsync)).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['codex', 'omp'] as const)(
+    'does not fall through to another guest when the attested path is missing (%s)',
+    async (agent) => {
+      READABLE_WSL_UNC_PATHS.delete(ROLLOUT_UNC)
+      READABLE_WSL_UNC_PATHS.add(DEBIAN_ROLLOUT_UNC)
+      scanned.hostRootHasRollout = true
+
+      await expect(
+        resolveSessionFilePath(agent, 'wsl-sess', {
+          transcriptPath: ROLLOUT_LINUX,
+          wslDistro: 'Ubuntu',
+          codexSessionsDirs: []
+        })
+      ).resolves.toBeNull()
+      expect(scanned.dirs).toEqual([])
+    }
+  )
 
   it('does not return a UNC twin that no distro actually has', async () => {
     const resolved = await resolveSessionFilePath('codex', 'wsl-sess', {
@@ -122,18 +130,21 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
     expect(resolved).toBeNull()
   })
 
-  it('does not fall back by id from an unattested guest hook path', async () => {
-    READABLE_WSL_UNC_PATHS.delete(ROLLOUT_UNC)
-    scanned.hostRootHasRollout = true
+  it.each(['codex', 'omp'] as const)(
+    'does not fall back by id from an unattested guest hook path (%s)',
+    async (agent) => {
+      READABLE_WSL_UNC_PATHS.delete(ROLLOUT_UNC)
+      scanned.hostRootHasRollout = true
 
-    await expect(
-      resolveSessionFilePath('codex', 'wsl-sess', {
-        transcriptPath: ROLLOUT_LINUX,
-        codexSessionsDirs: ['C:\\host\\sessions']
-      })
-    ).resolves.toBeNull()
-    expect(scanned.dirs).toEqual([])
-  })
+      await expect(
+        resolveSessionFilePath(agent, 'wsl-sess', {
+          transcriptPath: ROLLOUT_LINUX,
+          codexSessionsDirs: ['C:\\host\\sessions']
+        })
+      ).resolves.toBeNull()
+      expect(scanned.dirs).toEqual([])
+    }
+  )
 
   it('does not fall back to a host id match for an unattested guest hook path', async () => {
     scanned.hostRootHasRollout = true

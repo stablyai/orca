@@ -6,7 +6,9 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session-wire'
+import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
 import { resolveAttention } from '../sidebar/smart-attention'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
@@ -88,6 +90,7 @@ function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessi
     workspaceId: 'wt-1',
     agent: 'codex',
     status: 'working',
+    hostExecutionOwned: true,
     latestPrompt: 'hello',
     providerSession,
     updatedAt: 1,
@@ -180,6 +183,26 @@ describe('StructuredAgentSessionStatusBridge', () => {
   // Hiddenness is the host's side of this: see structured-agent-session-subscribers.test.ts,
   // which drives an unsubscribed journal through the feed. Here the transport is a mock, so
   // only the summary-to-store mapping is under test.
+  it('keeps host-held working evidence active past the normal freshness window', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    const updatedAt = Date.now() - 30 * 60 * 1000 - 1
+    act(() => feed().emit({ type: 'status', session: summary({ updatedAt }) }))
+    const entry = statuses()[0]
+    expect(entry).toEqual(expect.objectContaining({ state: 'working', structuredHostOwned: true }))
+    expect(isExplicitAgentStatusFresh(entry, Date.now(), 30 * 60 * 1000)).toBe(true)
+  })
+
+  it('clears host-held evidence when the status stream disconnects', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() => feed().emit({ type: 'status', session: summary() }))
+    expect(statuses()).toHaveLength(1)
+    act(() => feed().emit({ type: 'end' }))
+    expect(statuses()).toHaveLength(1)
+    expect(statuses()[0]).not.toHaveProperty('structuredHostOwned')
+  })
+
   it('maps each host status onto the sidebar agent state', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -195,6 +218,263 @@ describe('StructuredAgentSessionStatusBridge', () => {
       feed().emit({ type: 'status', session: summary({ status: 'attention', updatedAt: 3 }) })
     )
     expect(statuses()).toEqual([expect.objectContaining({ state: 'blocked' })])
+  })
+
+  it('publishes agent-kind background tasks as the sidebar subagent children', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            backgroundTasks: [
+              {
+                id: 'child-1',
+                kind: 'agent',
+                name: 'deep_review',
+                description: 'Review the diff',
+                state: 'working',
+                startedAt: 500
+              },
+              // A backgrounded shell is not a subagent; kinds stay distinct.
+              { id: 'shell-1', kind: 'command', description: 'sleep 180', state: 'working' }
+            ]
+          })
+        ]
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        subagents: [
+          {
+            id: 'child-1',
+            state: 'working',
+            startedAt: 500,
+            agentType: 'deep_review',
+            description: 'Review the diff'
+          }
+        ]
+      })
+    ])
+
+    // An unchanged roster must not rewrite the store.
+    const writes = mocks.setAgentStatus.mock.calls.length
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          backgroundTasks: [
+            {
+              id: 'child-1',
+              kind: 'agent',
+              name: 'deep_review',
+              description: 'Review the diff',
+              state: 'working',
+              startedAt: 500
+            },
+            { id: 'shell-1', kind: 'command', description: 'sleep 180', state: 'working' }
+          ]
+        })
+      })
+    )
+    expect(mocks.setAgentStatus.mock.calls.length).toBe(writes)
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          updatedAt: 2,
+          backgroundTasks: [
+            { id: 'child-1', kind: 'agent', name: 'deep_review', state: 'waiting', startedAt: 500 }
+          ]
+        })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        subagents: [expect.objectContaining({ id: 'child-1', state: 'waiting' })]
+      })
+    ])
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          updatedAt: 3,
+          backgroundTasks: [{ id: 'child-1', kind: 'agent', state: 'unverifiable' }]
+        })
+      })
+    )
+    expect(
+      buildSubagentChildRows({
+        parentEntry: statuses()[0],
+        tab: structuredTab as never,
+        parentIsFresh: true
+      })[0]?.state
+    ).toBe('unverifiable')
+
+    // A summary without tasks ends the fan-out: children clear with it.
+    act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 4 }) }))
+    expect(statuses()).toEqual([expect.objectContaining({ subagents: undefined })])
+  })
+
+  // The same fold the hook lane applies to a subagent roster: an idle lead is not idle
+  // while its children run, and a backgrounded shell reads as monitoring.
+  it('keeps an idle session working while a subagent runs, and monitoring while a shell runs', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            status: 'idle',
+            updatedAt: 1,
+            backgroundTasks: [
+              { id: 'child-1', kind: 'agent', state: 'working' },
+              { id: 'shell-1', kind: 'command', state: 'working' }
+            ]
+          })
+        ]
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'working', workingMode: undefined, stateStartedAt: 1 })
+    ])
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'idle',
+          updatedAt: 2,
+          backgroundTasks: [
+            { id: 'child-1', kind: 'agent', state: 'done' },
+            { id: 'shell-1', kind: 'command', state: 'working' }
+          ]
+        })
+      })
+    )
+    // Monitoring is its own displayed state, so its clock starts when the label does.
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'working', workingMode: 'monitoring', stateStartedAt: 2 })
+    ])
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'idle',
+          updatedAt: 3,
+          backgroundTasks: [
+            { id: 'child-1', kind: 'agent', state: 'done' },
+            { id: 'shell-1', kind: 'command', state: 'done' }
+          ]
+        })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'done', workingMode: undefined, stateStartedAt: 3 })
+    ])
+  })
+
+  // A watch loop's age is not how long the agent has been working: the clock restarts when the
+  // user's prompt turns a monitoring row into a real turn.
+  it('restarts the state clock when monitoring becomes a real turn', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            status: 'idle',
+            updatedAt: 1,
+            backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
+          })
+        ]
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'working', workingMode: 'monitoring', stateStartedAt: 1 })
+    ])
+
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'working',
+          updatedAt: 2_700_001,
+          backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
+        })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        state: 'working',
+        workingMode: undefined,
+        stateStartedAt: 2_700_001
+      })
+    ])
+  })
+
+  // Mirrors the host ingest: the journal clock cannot date child work, so a row held open by a
+  // live roster alone must not age into staleness while the work is still running.
+  it('dates a child-work row by when this client saw it, not by the journal clock', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    const before = Date.now()
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            status: 'idle',
+            updatedAt: 1,
+            backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
+          })
+        ]
+      })
+    )
+    const [row] = statuses()
+    expect(row).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+    expect(row?.evidenceObservedAt ?? 0).toBeGreaterThanOrEqual(before)
+  })
+
+  it('requires fresh parent evidence as well as a reconfirmed feed after reconnect', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    const live = summary({ backgroundTasks: [{ id: 'child', kind: 'agent', state: 'working' }] })
+    let parentIsFresh = false
+    const childState = () =>
+      buildSubagentChildRows({
+        parentEntry: statuses()[0],
+        tab: structuredTab as never,
+        parentIsFresh
+      })[0]?.state
+    act(() => feed().emit({ type: 'snapshot', sessions: [live] }))
+    expect(childState()).toBe('unverifiable')
+    parentIsFresh = true
+    expect(childState()).toBe('working')
+    act(() => feed().emit({ type: 'end' }))
+    expect(childState()).toBe('unverifiable')
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2))
+    act(() => feed(1).emit({ type: 'snapshot', sessions: [] }))
+    expect(childState()).toBe('unverifiable')
+    act(() => feed(1).emit({ type: 'status', session: live }))
+    expect(childState()).toBe('working')
+    parentIsFresh = false
+    expect(childState()).toBe('unverifiable')
+    const writes = mocks.setAgentStatus.mock.calls.length
+    act(() => feed(1).emit({ type: 'status', session: live }))
+    expect(mocks.setAgentStatus).toHaveBeenCalledTimes(writes)
+    act(() => feed(1).emit({ type: 'status', session: summary({ backgroundTasks: [] }) }))
+    expect(childState()).toBeUndefined()
   })
 
   it('carries the model, the running tool line, and the last assistant message', async () => {

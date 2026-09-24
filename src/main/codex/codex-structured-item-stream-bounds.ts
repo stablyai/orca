@@ -30,6 +30,7 @@ export function boundStreamItem(item: Record<string, unknown>): Record<string, u
   return {
     type: item.type,
     id: item.id,
+    ...(typeof item.source === 'string' ? { source: item.source } : {}),
     ...(typeof item.command === 'string' ? { command: item.command.slice(0, 4096) } : {}),
     ...(typeof item.cwd === 'string' ? { cwd: item.cwd.slice(0, 4096) } : {}),
     ...(typeof item.status === 'string' ? { status: item.status } : {}),

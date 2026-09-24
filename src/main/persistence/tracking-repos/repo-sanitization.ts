@@ -3,6 +3,8 @@ import type { Repo } from '../../../shared/repo-types'
 import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
+import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -79,7 +81,9 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'customWorktreeVisibilitySources'
       | 'worktreeVisibilitySourcePreferences'
     >
-  >
+  > & {
+    ghAccount?: GhAccountBinding | null
+  }
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -136,6 +140,15 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.forkSyncMode
     } else {
       sanitized.forkSyncMode = forkSyncMode
+    }
+  }
+  // Why: `null` is the clear sentinel for updateRepo; only malformed shapes are dropped.
+  if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
+    const ghAccount = normalizeGhAccountBinding(sanitized.ghAccount)
+    if (!ghAccount) {
+      delete sanitized.ghAccount
+    } else {
+      sanitized.ghAccount = ghAccount
     }
   }
   if ('customWorktreeVisibilitySources' in sanitized) {

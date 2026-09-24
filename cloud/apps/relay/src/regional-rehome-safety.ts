@@ -2,12 +2,20 @@ import type { RegionalRehomeSafetySnapshot } from './relay-observability.js'
 
 // Limits sit well above the healthy-fleet baseline measured in production on
 // 2026-08-28 (peak 2 waiters / 1ms pool waits on every cell; up to ~80
-// reconnects per published two-window row on the busiest cell). Sustained
-// pool saturation still trips: waiters-max 16 is 8x baseline yet far under a
-// backed-up pool, and 250ms peak wait is 1/10 of the incident-monitor alert.
-// Instantaneous databasePoolWaiting is not checked separately: it is bounded
-// by databasePoolWaitersMax within every published window.
+// reconnects per published two-window row on the busiest cell).
 export const REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT = 250
+
+// Pool pressure gates one cell, never the fleet. The combined snapshot is a
+// Math.max, so a single narrow client pool stops rehoming everywhere: measured
+// 2026-09-16, the asia-east2 cells sit at 94-156 waiters and ~2000ms waits
+// against 0.2ms server-side execution -- a pool too narrow for a 176ms round
+// trip, not database distress -- while us-central1 cells breach in bursts on
+// ~33% of polls, and a bar that flaps between the pre-check and the commit
+// re-check latches the worker off. regionalRehomeCellSafetyIsClean excludes a
+// breaching cell as both source and target; the bars below stay fleet-wide
+// because sql failures, control-recovery failures and reconnect storms mean
+// database-wide distress. Instantaneous databasePoolWaiting is not checked
+// separately: databasePoolWaitersMax bounds it within every published window.
 export const REGIONAL_REHOME_POOL_WAITERS_MAX_LIMIT = 16
 export const REGIONAL_REHOME_POOL_WAIT_MS_MAX_LIMIT = 250
 
@@ -19,7 +27,7 @@ export const REGIONAL_REHOME_POOL_WAIT_MS_MAX_LIMIT = 250
 // over four days; genuine database distress produced 395-457. The combined
 // snapshot spans up to two 30s windows per process (pathological ambient
 // alignment ~164), so 250 stays clear of noise while storms still trip.
-// Terminal outages also trip the pool bars and the worker's own
+// Terminal outages also trip the per-cell pool bars and the worker's own
 // dispatch-failure budget; the sql bar only needs to catch storms.
 export const REGIONAL_REHOME_SQL_FAILURES_LIMIT = 250
 // Per-cell candidate cleanliness is a soft skip, not a durable latch; the
@@ -47,9 +55,6 @@ export function regionalRehomeSafetyFailure(
     return 'monitoring_stale'
   }
   if (safety.sqlFailures > REGIONAL_REHOME_SQL_FAILURES_LIMIT) return 'sql_failures'
-  if (regionalRehomePoolPressure(safety)) {
-    return 'database_pool_pressure'
-  }
   if (safety.controlActivityRecoveryFailures > 0) {
     return 'control_recovery_failures'
   }

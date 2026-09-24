@@ -1,0 +1,685 @@
+{
+  "operation": "source-control.pr-link",
+  "family": "worktree.review-link",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
+  "scenarioSha256": "2fc093ec505bfac04a4ff0adab991baeba985253486dbe9e3ec9884b8d5f0920",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0d39ad71ac82": {
+      "linkedPR": "unread",
+      "outcome": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "1852c739af4f": {
+      "linkedPR": "unread",
+      "outcome": {
+        "ok": true
+      }
+    },
+    "1b2778bf67a2": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "1eca6a9f455a": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "2c506a17fb12": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "2ce9adc39d84": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "2dadf8156e0a": {
+      "linkedPR": "unread",
+      "outcome": {
+        "error": "Failed to update linked pull request",
+        "ok": false
+      }
+    },
+    "3c5c1d41026b": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "41bdce9de379": {
+      "linkedPR": "unread",
+      "outcome": "unlinked"
+    },
+    "4b458696422e": {
+      "name": "worktree.set#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"linkedPR\":12}}"
+    },
+    "5db472e0dad1": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "70190b361502": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "921b977a5f07": {
+      "linkedPR": "unread",
+      "outcome": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a197c20578aa": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
+    "a42570f300ad": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to update linked pull request",
+        "ok": false
+      }
+    },
+    "c8de0688e42c": {
+      "linkedPR": "unread",
+      "outcome": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
+    "c9f5a7510f9d": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "d9935f684ca3": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f384395675ad": {
+      "linkedPR": "unread",
+      "outcome": {
+        "error": "",
+        "ok": false
+      }
+    },
+    "f50799b307b6": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "fa93ca01f266": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "fb4429083480": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "",
+        "ok": false
+      }
+    },
+    "fb8390e4f36c": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "fbc51b3438c8": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    },
+    "fbdf619b8a78": {
+      "name": "worktree.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "linkedPR": 12,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-worktree.review-link-worktree.set-1",
+    "checkpoints": [
+      {
+        "id": "sc-pr-link-set.prelude:pending",
+        "observation": {
+          "sender": ["f50799b307b6"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "9270aeb7d9c6"
+          },
+          "state": "41bdce9de379",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.normal:settled",
+        "observation": {
+          "sender": ["fbc51b3438c8"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.result-absent:settled",
+        "observation": {
+          "sender": ["c9f5a7510f9d"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.result-null:settled",
+        "observation": {
+          "sender": ["2c506a17fb12"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["2ce9adc39d84"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["1eca6a9f455a"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["70190b361502"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fbc958e4d46e"
+          },
+          "state": "1852c739af4f",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.outer-refused:settled",
+        "observation": {
+          "sender": ["3c5c1d41026b"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "1b2778bf67a2"
+          },
+          "state": "921b977a5f07",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["fb8390e4f36c"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "a42570f300ad"
+          },
+          "state": "2dadf8156e0a",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.method-not-found:settled",
+        "observation": {
+          "sender": ["d9935f684ca3"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fa93ca01f266"
+          },
+          "state": "0d39ad71ac82",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.transport-rejection:settled",
+        "observation": {
+          "sender": ["5db472e0dad1"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "a197c20578aa"
+          },
+          "state": "c8de0688e42c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-pr-link-set.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["fbdf619b8a78"],
+          "payloads": ["4b458696422e"],
+          "settlements": {
+            "link": "fb4429083480"
+          },
+          "state": "f384395675ad",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

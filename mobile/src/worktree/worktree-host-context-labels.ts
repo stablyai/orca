@@ -10,7 +10,6 @@ export {
   buildHostLabelById,
   getHostContextLabel
 } from '../../../src/shared/worktree/host-context-labels'
-import type { RepoSummary } from './host-worktree-rpc-types'
 import type { Worktree } from './workspace-list-types'
 
 export type HostLabelSources = {
@@ -23,7 +22,7 @@ export type HostLabelSources = {
 }
 
 export function buildRepoHostIdByRepoId(
-  repos: readonly Pick<RepoSummary, 'id' | 'connectionId' | 'executionHostId'>[]
+  repos: readonly { id: string; connectionId?: string | null; executionHostId?: string | null }[]
 ): Map<string, ExecutionHostId> {
   return new Map(repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)]))
 }

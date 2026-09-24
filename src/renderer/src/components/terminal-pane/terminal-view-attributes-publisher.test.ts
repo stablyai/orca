@@ -138,6 +138,7 @@ describe('publishTerminalViewAttributes dedupe', () => {
 
 describe('applyTerminalAppearance publication', () => {
   function makePane(id: number): ManagedPane {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane members used by the publisher.
     return {
       id,
       terminal: { options: {}, cols: 80, rows: 24 }
@@ -145,9 +146,11 @@ describe('applyTerminalAppearance publication', () => {
   }
 
   function makeManager(panes: ManagedPane[]): PaneManager {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the pane manager members used by the publisher.
     return {
       getPanes: () => panes,
       setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
   }

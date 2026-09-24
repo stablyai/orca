@@ -1,0 +1,47 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "before": {
+    "source": "working tree without consumed-byte quota",
+    "sourceSha256": {
+      "src/main/native-chat/agent-session-journal/journal-legacy-import.ts": "da799f8f34e6c28516b4ac98102b9d1fb76edebefafbdf0ca17d18a06cb79535",
+      "src/main/native-chat/transcript-stream-lines.ts": "5f3a0a1e5b3d003076452fa22234af00502808ed6463672c0e58aa49ae5b6aa1"
+    },
+    "observedStatBytes": 149,
+    "sourceBytesAfterGrowth": 17825792,
+    "consumedBytes": 17825792,
+    "limitBytes": 16777216,
+    "streamDestroyed": true,
+    "result": {
+      "ok": true,
+      "epoch": "replacement-epoch",
+      "cursor": {
+        "epoch": "replacement-epoch",
+        "sequence": 1
+      },
+      "imported": 1,
+      "replaced": true
+    },
+    "journalReplaceCalls": 1,
+    "journalEpoch": "replacement-epoch"
+  },
+  "after": {
+    "source": "working tree",
+    "sourceSha256": {
+      "src/main/native-chat/agent-session-journal/journal-legacy-import.ts": "88c007b4fb83eba6ec5fdf21c50b4c4aff35199cc4eed92abe3a1c29addfc5f3",
+      "src/main/native-chat/transcript-stream-lines.ts": "5f3a0a1e5b3d003076452fa22234af00502808ed6463672c0e58aa49ae5b6aa1"
+    },
+    "observedStatBytes": 149,
+    "sourceBytesAfterGrowth": 17825792,
+    "consumedBytes": 16842752,
+    "limitBytes": 16777216,
+    "streamDestroyed": true,
+    "result": {
+      "ok": false,
+      "error": "Input exceeds 16777216 byte limit (16842752 bytes received)"
+    },
+    "journalReplaceCalls": 0,
+    "journalEpoch": "prior-epoch"
+  }
+}

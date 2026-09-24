@@ -16,6 +16,7 @@ import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
 } from './terminal-wait-tail-state'
+import { ownRetainedString } from '../../shared/own-retained-string'
 import type { ProcessedAgentStatusChunk } from '../../shared/agent-status-osc'
 import { createAgentStatusOscProcessor } from '../../shared/agent-status-osc'
 import type { RuntimePtyTitleTrackerEntry } from './runtime-terminal-state-records'
@@ -32,7 +33,9 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
     // plus the concatenation the pattern flattens anyway.
     const keywordWindow = `${state.keywordCarry}${appendedText}`.toLowerCase()
     const keywordHit = WAIT_BLOCKED_KEYWORD_PATTERN.test(keywordWindow)
-    state.keywordCarry = keywordWindow.slice(-WAIT_BLOCKED_KEYWORD_CARRY_CHARS)
+    // Why own: this 31-char carry lives per PTY until the next chunk, and un-owned it pins the
+    // whole lowercased window — a full copy of the chunk.
+    state.keywordCarry = ownRetainedString(keywordWindow.slice(-WAIT_BLOCKED_KEYWORD_CARRY_CHARS))
     appendWaitBlockedCarry(state.appended, appendedText)
     const elapsed = at - state.lastAt
     if (keywordHit || elapsed >= WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS || elapsed < 0) {

@@ -116,9 +116,9 @@ describe('Electron Vite output contract', () => {
     expect(external('node:fs', undefined, false)).toBe(true)
     expect(external('@xterm/headless', undefined, false)).toBe(false)
     expect(external('@xterm/addon-serialize', undefined, false)).toBe(false)
-    expect(external('psl', undefined, false)).toBe(false)
+    expect(external('tldts', undefined, false)).toBe(false)
     expect(external('zod', undefined, false)).toBe(false)
-    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('psl')
+    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('tldts')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
   })
 

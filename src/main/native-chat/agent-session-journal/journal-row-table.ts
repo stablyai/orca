@@ -20,6 +20,7 @@ const SELECT_EPOCH_ROWS = `SELECT epoch, seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER = `SELECT epoch, seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
+const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
 const DELETE_SUFFIX = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq >= ?'
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
@@ -54,12 +55,41 @@ export function readJournalEpochRows(
   return toStoredRows(db.prepare(SELECT_EPOCH_ROWS).all(sessionId, epoch))
 }
 
+// Why pages, not `.iterate()`: a lazily consumed cursor pins a read snapshot for as long as the
+// consumer reduces, and a WAL checkpoint cannot pass an open snapshot. Each page is one completed
+// statement, so the consumer's memory is bounded by a page while no snapshot outlives a fetch.
+const EPOCH_ROW_PAGE_SIZE = 128
+
+/** Epoch rows in sequence order, fetched one completed statement at a time. */
+export function* iterateJournalEpochRows(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string
+): Generator<JournalStoredRow> {
+  let afterSeq = Number.MIN_SAFE_INTEGER
+  for (;;) {
+    const page = readJournalRowsAfter(db, sessionId, epoch, afterSeq, EPOCH_ROW_PAGE_SIZE)
+    yield* page
+    const last = page.at(-1)
+    if (page.length < EPOCH_ROW_PAGE_SIZE || last === undefined) {
+      return
+    }
+    afterSeq = last.seq
+  }
+}
+
 export function readJournalRowsAfter(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  afterSeq: number
+  afterSeq: number,
+  limit?: number
 ): JournalStoredRow[] {
+  if (limit !== undefined) {
+    return toStoredRows(
+      db.prepare(SELECT_ROWS_AFTER_LIMITED).all(sessionId, epoch, afterSeq, limit)
+    )
+  }
   return toStoredRows(db.prepare(SELECT_ROWS_AFTER).all(sessionId, epoch, afterSeq))
 }
 

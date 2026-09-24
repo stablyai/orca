@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { WatcherProcessFailure } from '../main/ipc/parcel-watcher-process-failure'
 import { WatcherProcessSupervisor } from '../main/ipc/parcel-watcher-process-supervisor'
+import type { WatcherProcessSubscribeOptions } from '../main/ipc/parcel-watcher-process-protocol'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
@@ -50,7 +51,7 @@ class FakeWatcherPool {
   async subscribe(
     rootPath: string,
     callback: WatcherProcessCallback,
-    _options: object,
+    _options: WatcherProcessSubscribeOptions,
     hooks: WatcherProcessHooks
   ): Promise<WatcherProcessSubscription> {
     const unsubscribe = vi.fn(async () => undefined)

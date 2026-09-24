@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /**
  * OOM regression: a daemon owning 100+ terminals retained ~5000 rows of grid per session with no
  * bound, grew to ~1.9 GB, and was killed under system memory pressure — losing every session it

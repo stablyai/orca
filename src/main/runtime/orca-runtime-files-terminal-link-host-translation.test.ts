@@ -295,6 +295,10 @@ describe('RuntimeFileCommands', () => {
           ino: 2,
           mtimeMs: 3
         })),
+        read: vi.fn(async (buffer: Buffer) => {
+          const bytesRead = buffer.write('{}')
+          return { bytesRead, buffer }
+        }),
         close: vi.fn(async () => undefined)
       })
 

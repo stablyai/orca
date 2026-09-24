@@ -88,6 +88,33 @@
       "mr": "MR",
       "port": "端口",
       "pr": "PR"
+    },
+    "filter": {
+      "emptyTitle": "没有结果符合当前筛选条件",
+      "emptySubtitle": "清除上方筛选条件，或扩大到更多主机和项目。",
+      "tabKey": "Tab",
+      "label": "筛选",
+      "activeCount": "{{value0}} 个生效",
+      "removeChip": "移除筛选 {{value0}}",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "全部清除",
+      "hosts": "主机",
+      "projects": "项目",
+      "trigger": "筛选结果",
+      "search": "按主机或项目筛选...",
+      "searchHosts": "筛选主机...",
+      "searchProjects": "筛选项目...",
+      "noOptions": "没有匹配的主机或项目",
+      "noHosts": "没有匹配的主机",
+      "noProjects": "没有匹配的项目",
+      "moreOptions": "还有 {{value0}} 个 — 继续输入以缩小范围",
+      "selectAllMatching": "选择所有匹配项 ({{value0}})",
+      "selectedCollapsed": "已选择 {{value0}} 个 — 通过标签或清除移除",
+      "clearHosts": "清除主机",
+      "clearProjects": "清除项目",
+      "back": "返回",
+      "ariaActive": "筛选：{{value0}} 个生效。",
+      "scopedTo": "范围："
     }
   },
   "auto": {
@@ -334,6 +361,7 @@
           "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -358,7 +386,8 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "muse_label": "Muse"
         },
         "skill": {
           "cli": {
@@ -716,7 +745,6 @@
       "useComposerState": {
         "7eb3f44ff7": "所选智能体已禁用。创建之前选择启用的智能体。",
         "b2ead86962": "无法解析 PR 基础引用。",
-        "a9ff236145": "部分附件无法上传。",
         "3db83fc58a": "没有可用于附件的远程项目路径。",
         "ba6cb77082": "无法连接到项目。",
         "chooseOrAddProjectBeforeWorkspace": "创建工作区前，请选择或添加项目。",
@@ -772,7 +800,7 @@
         "94a5afe910": "SSH 主机",
         "40d80bad8a": "测试版",
         "de0c2907a1": "远程 Orca 服务器",
-        "b351014180": "Orca 统计，以及 Claude、Codex、OpenCode Token 分析和 Grok 订阅使用量。",
+        "b351014180": "Orca 统计，以及 Claude、Codex、OpenCode、Muse Token 分析和 Grok 订阅使用量。",
         "d72a58b5b9": "统计和使用情况",
         "dcd0d9b74f": "常见操作的键盘快捷键。",
         "94295ebfb3": "快捷键",
@@ -1316,7 +1344,7 @@
         "326a578923": "orca.yaml + 本地",
         "2132b670da": "两者",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "名称或创建来源",
+        "ac3748dcda": "创建来源",
         "f660aa1454": "连接中",
         "7711ad5122": "本地设置命令",
         "e5db1b0419": "组合设置命令",
@@ -1948,7 +1976,8 @@
         "0f3066256e": "上一个结果",
         "42e466b9f1": "正则表达式",
         "90c61387d9": "区分大小写",
-        "e07012f26e": "搜索..."
+        "e07012f26e": "搜索...",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "重启即可更新",
@@ -2221,6 +2250,10 @@
                 "7c302f8174": "无标题"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "此视图暂无任何项目。",
+            "7e4a2f80c6": "最近添加的项目可能需要一段时间才会显示。"
           }
         },
         "GitHubMarkdownComposer": {
@@ -3750,7 +3783,6 @@
           "444585cb41": "有数据",
           "ecb0cd8a4c": "已启用 -",
           "33f7b043d2": "供应商",
-          "60002bb22f": "尚未找到本地 Claude、Codex 或 OpenCode 使用情况。概览将在下一个智能体会话写入token日志后填充。",
           "70f36452d4": "缓存共享",
           "327603fe8b": "活跃天数",
           "0eaf937335": "预计成本",
@@ -3763,7 +3795,9 @@
           "ca6bc5fded": "刷新",
           "e06d1baf5c": "刷新使用概览",
           "c760c481c5": "使用概述",
-          "55c910f4f1": "- 部分型号价格不详"
+          "55c910f4f1": "- 部分型号价格不详",
+          "enableMuse": "启用 Muse",
+          "noLocalUsageYet": "尚未找到本地 Claude、Codex、OpenCode 或 Muse 使用情况。概览将在下一个智能体会话写入token日志后填充。"
         },
         "share": {
           "card": {
@@ -3794,13 +3828,14 @@
             "0bba8ca244": "统计数据",
             "0e2a0b6431": "用量",
             "372debfac0": "统计数据",
-            "26bb901fcd": "Orca 统计，以及 Claude、Codex、OpenCode Token 分析和 Grok 订阅使用量。",
+            "26bb901fcd": "Orca 统计，以及 Claude、Codex、OpenCode、Muse Token 分析和 Grok 订阅使用量。",
             "cb2430ae6a": "统计和使用情况",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "订阅",
             "d6e9f0a1b2": "额度",
             "a3b6c7d8e9": "grok 使用量",
-            "9f2a3b4c5d": "xai"
+            "9f2a3b4c5d": "xai",
+            "museKeyword": "muse"
           }
         },
         "usage": {
@@ -3818,7 +3853,6 @@
               "1dd166c920": "较少的",
               "52d9221dc0": "近期token活动热图",
               "c424eb3f8e": "最好的：",
-              "f28ff1f852": "近期 Claude、Codex 和 OpenCode 的综合token活动。",
               "69e2b50427": "每日强度",
               "3a795542fa": "综合token分布",
               "e65084cb4b": "推理",
@@ -3831,7 +3865,8 @@
               "6762f6a682": "token",
               "a7f937fb29": "{{value0}} 个会话 - {{value1}} {{value2}}",
               "c8f3a2d1e0b4": "轮次",
-              "d9a4b3e2f1c5": "事件"
+              "d9a4b3e2f1c5": "事件",
+              "recentCombinedActivity": "近期 Claude、Codex、OpenCode 和 Muse 的综合token活动。"
             }
           }
         },
@@ -3861,6 +3896,17 @@
           "e5a6b7c8d9": "已用每周额度",
           "f6b7c8d9e0": "计费周期重置",
           "a7b8c9d0e1": "Grok 账户设置"
+        },
+        "MuseUsagePane": {
+          "title": "Muse 使用情况跟踪",
+          "enableLabel": "启用 Muse 使用情况分析",
+          "disabledDescription": "读取本地 Muse 会话日志以显示token、模型和会话统计信息。",
+          "scopeAll": "所有本地 Muse 使用情况",
+          "optionsLabel": "Muse 使用情况选项",
+          "refreshAriaLabel": "刷新 Muse 使用情况",
+          "emptyMessage": "尚未找到此范围内的本地 Muse 使用情况。",
+          "noCostNote": "Muse 会话日志只记录token而不记录费用，因此不显示费用估算。",
+          "recentSessionsDescription": "此范围内最近的本地 Muse 会话。"
         }
       },
       "sparse": {
@@ -4441,7 +4487,6 @@
           "a30e34eb5c": "关闭工作区板",
           "spaces": "空间",
           "views": "侧边栏视图",
-          "createMenu": "创建",
           "addProject": "添加项目"
         },
         "SidebarNav": {
@@ -4713,6 +4758,7 @@
           "76865d827f": "移至群组",
           "503ec0f8e6": "来自项目的新组",
           "3350101edb": "复制路径",
+          "copyWorktreeName": "复制工作树名称",
           "f4475537d8": "删除",
           "f5ac91531d": "从 Orca 中删除项目",
           "b42391d8bf": "正在删除...",
@@ -5329,8 +5375,6 @@
           "01af244097": "取消",
           "28c8e53176": "这会强制退出所有工作区中每个正在运行的终端窗格。这些会话中所有未保存的工作都会丢失。守护进程本身保持运行，并且可以立即打开新终端。这无法撤销。",
           "1bbea41a77": "终止所有终端会话？",
-          "01d6b7c64e": "终止每个正在运行的终端窗格并重新启动守护进程。窗格显示“进程已退出”并且可以立即重新打开。先前应用程序版本的旧协议会话将被保留。这无法撤销。",
-          "922548bc66": "重新启动终端守护进程？",
           "2b4efdc162": "无法终止会话。",
           "d18f3005c2": "{{value0}} 会话{{value1}} 拒绝退出。",
           "baad8cd651": "没有正在运行的会话。",
@@ -5867,7 +5911,12 @@
           "14444243ba": "从路径中删除`{{value0}}`？",
           "5d432fe44d": "已安装",
           "8a9b784c60": "陈旧",
-          "d363e5929b": "正在检查 CLI 注册..."
+          "d363e5929b": "正在检查 CLI 注册...",
+          "6f894ef9c2": "在 Finder 中显示",
+          "cbe55e4d48": "在资源管理器中显示",
+          "9fd4023db0": "在文件管理器中显示",
+          "installFailureUnknownReason": "Orca 无法完成 CLI 注册，且未报告任何原因。",
+          "installFailureConflictRemedy": "删除 {{value0}} 并在不再需要时重新注册。"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -6013,7 +6062,16 @@
             "defaultCopy": "选择如何打开受支持智能体的新终端标签页。",
             "defaultViewLabel": "默认 Chat UI 视图",
             "defaultViewTerminal": "终端聊天",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "从 shell 传递的变量",
+            "shellEnvNamePlaceholder": "变量名",
+            "shellEnvNameAdd": "添加",
+            "shellEnvNameRemove": "删除 {{value0}}",
+            "shellEnvNamesEmpty": "尚未添加任何变量。",
+            "shellEnvNamesAlwaysPassed": "PATH、区域设置和 SSH_AUTH_SOCK 始终会传递。在下次聊天开始或恢复时生效。",
+            "shellEnvTitle": "使用 shell 环境",
+            "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
+            "shellEnvToggleLabel": "切换使用 shell 环境"
           },
           "agentDashboard": {
             "title": "智能体仪表盘",
@@ -7061,7 +7119,7 @@
           "b5ee17826b": "配对远程 Orca 运行时，以获得持久会话、更丰富的远程状态，以及 Web 或移动端接续。",
           "7686cb5c36": "将此浏览器连接到已保存的 Orca 服务器。",
           "bd0181eeca": "远程 Orca 服务器",
-          "8acf3f22e0": "Orca 统计，以及 Claude、Codex、OpenCode Token 分析和 Grok 订阅使用量。",
+          "8acf3f22e0": "Orca 统计，以及 Claude、Codex、OpenCode、Muse Token 分析和 Grok 订阅使用量。",
           "954a8f5aef": "统计和使用情况",
           "a737a4bb22": "常见操作的键盘快捷键。",
           "23bf7a1ad4": "快捷键",
@@ -8607,6 +8665,20 @@
             }
           }
         },
+        "machine": {
+          "name": {
+            "search": {
+              "title": "机器名称",
+              "description": "选择其他设备和主机用来显示这台电脑的名称。",
+              "machineName": "机器名称",
+              "machine": "机器",
+              "hostname": "主机名",
+              "computer": "电脑",
+              "rename": "重命名",
+              "name": "名称"
+            }
+          }
+        },
         "mobile": {
           "emulator": {
             "search": {
@@ -8947,6 +9019,12 @@
             "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。",
             "projectRuntime": "项目运行时",
             "projectRuntimeDescription": "选择此项目运行在 Windows 还是 WSL。",
+            "githubAccount": "GitHub 账户",
+            "githubAccountDescription": "为该项目的 GitHub API 调用绑定密钥环中的 gh 登录。",
+            "githubAccountKeyword": "GitHub 账户",
+            "ghAccount": "gh 账户",
+            "login": "登录",
+            "token": "token",
             "externalWorktrees": "外部工作树",
             "externalWorktreesDescription": "覆盖是否为此项目显示在 Orca 外部创建的工作树。",
             "copy": "复制",
@@ -9355,6 +9433,24 @@
           "on": "开启",
           "auto": "智能体",
           "off": "关闭"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "此运行时的 GitHub CLI 版本过旧，不支持账户绑定（需要 gh ≥ 2.40）。",
+          "capabilityUnknown": "无法确定此运行时的 GitHub CLI 是否支持账户绑定。请重试。",
+          "envToken": "环境令牌账户无法绑定。请使用密钥环登录。",
+          "invalidBinding": "该 GitHub 账户绑定无效。",
+          "unavailable": "该 GitHub 账户在此运行时不可用。",
+          "saveFailed": "无法保存 GitHub 账户绑定。",
+          "title": "GitHub 账户",
+          "description": "为此项目的 GitHub 议题和拉取请求调用使用特定的 gh 登录。",
+          "longDescription": "Orca 会将所选密钥环登录的短期令牌注入此项目的每次 gh 调用。项目视图继续使用当前活动的 gh 登录。",
+          "retry": "重试",
+          "selectLabel": "账户",
+          "ambient": "默认（当前活动的 gh 登录）",
+          "unavailableOption": "{{user}} @ {{host}}（不可用）",
+          "capabilityBlocked": "在此运行时的 GitHub CLI 支持 `gh auth token --user`（gh ≥ 2.40）之前，无法使用账户绑定。",
+          "capabilityUnknownHint": "无法确定此运行时的 GitHub CLI 是否支持账户绑定。请清除绑定或重试。",
+          "notEnforced": "已保存，但此运行时（混合版本主机）不会强制执行。"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
@@ -9899,6 +9995,12 @@
           "step2RelayDescription": "可选。选择手机在附近（同一 Wi‑Fi 或 Tailscale）时使用的地址，通常比 Relay 更快。外出时仍走 Relay。",
           "step2RelayDisclosure": "也可使用更快的本地连接"
         },
+        "MachineNameField": {
+          "label": "机器名称",
+          "description": "其他设备和主机会看到“{{name}}”。留空则使用这台电脑自己的名称。",
+          "pending": "其他设备和主机会看到此名称。留空则使用检测到的电脑名称。",
+          "placeholder": "自动检测"
+        },
         "MobileRelayBetaAvailability": {
           "about": "关于 Orca Relay 测试版",
           "beta": "测试版",
@@ -10267,7 +10369,8 @@
           "noteKeysBody": "API 密钥和工作区存储在当前运行环境中。",
           "noteVisibilityTitle": "隐藏不等于断开连接",
           "noteVisibilityBody": "在任务来源中隐藏 Linear 只会将其从选择器中移除，不会删除密钥或技能。",
-          "setupChecking": "检查中…"
+          "setupChecking": "检查中…",
+          "setupUnverified": "无法验证"
         },
         "TaskSourceLinearSetup": {
           "connectTitle": "连接 Linear",
@@ -10289,6 +10392,7 @@
           "statusReady": "已就绪",
           "statusConnectRequired": "需要连接",
           "statusSkillRequired": "需要技能",
+          "statusUnverified": "无法验证",
           "statusUnavailable": "状态不可用",
           "statusHidden": "已从任务中隐藏",
           "statusIncomplete": "需要设置",
@@ -11422,7 +11526,6 @@
             "localWorkspacesOnly": "从历史记录恢复仅适用于本地工作区。",
             "agentSessionQueued": "{{value0}} 会话已排队",
             "sessionHistory": "智能体会话历史",
-            "shownRecent": "已显示 {{value0}} 项 · 最近 {{value1}} 项",
             "resumePastSessions": "恢复过往会话",
             "refreshSessionHistory": "刷新会话历史",
             "searchSessions": "搜索会话",
@@ -11435,7 +11538,6 @@
             "sessionId": "会话 ID",
             "logPath": "日志路径",
             "agents": "智能体",
-            "sessionsShownCompact": "已显示 {{value0}} 个",
             "originalPaneUnavailable": "原始面板不再可用。",
             "worktreeUnavailable": "工作树不再可用。",
             "openSupportedWorkspace": "在恢复会话之前，请先打开一个工作区。",
@@ -11461,7 +11563,6 @@
             "agents": "智能体",
             "selectAllAgents": "选择全部",
             "clearAgents": "清除",
-            "sort": "排序",
             "lastUpdated": "最后更新",
             "created": "创建时间",
             "group": "分组",
@@ -13001,8 +13102,6 @@
           "10ed04a685": "笔记本单元在本机上从笔记本文件夹执行本地 Python。仅运行您信任的文件中的单元。",
           "9e06ae5d36": "运行笔记本代码？",
           "d6f37a640b": "空笔记本",
-          "8c3b21369a": "nbformat",
-          "329764e9fc": "BETA",
           "15ec40a735": "保存笔记本",
           "07e7d96612": "细胞",
           "c1601b23b2": "无法渲染笔记本",
@@ -13016,9 +13115,7 @@
           "fd8ac707bc": "向上手机单元格",
           "3e4cbf15ea": "生的",
           "1833dbbc43": "Markdown",
-          "7005960d73": "代码",
-          "59b6cd874b": "代码",
-          "ba149053d5": "markdown"
+          "7005960d73": "代码"
         },
         "MarkdownPreview": {
           "e4683f70c4": "取消",
@@ -14266,8 +14363,6 @@
           "5651b216c6": "未知项目",
           "22b22034bc": "独立终端在活动中不可用。",
           "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。",
-          "compactModeDescription": "以单行标题和两行状态消息显示更短的线程行。",
-          "unreadOnlyDescription": "将活动列表筛选为仅显示有未读更新的线程。",
           "clearCompleted": "清除已完成",
           "none": "无",
           "search": "搜索",
@@ -14285,7 +14380,9 @@
             "idle": "空闲",
             "unverifiable": "暂无近期更新",
             "permission": "需注意"
-          }
+          },
+          "filtersSection": "筛选",
+          "viewSection": "视图"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "显示所有主机和项目"
@@ -14694,7 +14791,8 @@
         "chooseInAgentPicker": "在智能体选择器中选择…",
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "当前值未知 — 请选择开或关",
+        "valueIsDefault": "默认",
+        "valueNotReported": "未报告",
         "sentNotConfirmed": "已发送给智能体 — 尚未确认",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
@@ -14707,9 +14805,7 @@
           "high": "高",
           "xhigh": "极高",
           "max": "最大",
-          "ultra": "极致",
-          "on": "开",
-          "off": "关"
+          "ultra": "极致"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
@@ -14907,27 +15003,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "仪表盘视图",
-      "board": "仪表盘",
-      "map": "智能体地图"
-    },
-    "map": {
-      "host": {
-        "local": "本地",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "远程"
-      },
-      "liveContainmentMap": "实时包含关系图",
-      "empty": "没有智能体符合当前筛选条件。",
-      "canvasLabel": "项目、工作区和智能体的嵌套关系图",
-      "zoomOut": "缩小",
-      "zoomIn": "放大",
-      "fit": "适配屏幕",
-      "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
-      "agentCount": "{{count}} 个智能体"
-    },
     "placeholder": {
       "title": "智能体仪表盘",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
@@ -15061,6 +15136,14 @@
       "hide": "隐藏智能体",
       "action": "试用智能体",
       "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "需要输入",
+      "working": "处理中",
+      "stopped": "已停止",
+      "finished": "已完成"
     }
   }
 }

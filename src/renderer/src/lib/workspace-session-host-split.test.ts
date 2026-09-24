@@ -154,7 +154,7 @@ describe('splitWorkspaceSessionByHost', () => {
     expect(Object.keys(slices[RUNTIME_B]?.tabsByWorktree ?? {})).toEqual(['b-wt'])
   })
 
-  it('keeps ssh-qualified visit recency in the local slice and routes runtime-qualified keys to their partition', () => {
+  it('routes host-qualified visit recency to the partition the key names', () => {
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       lastVisitedAtByWorktreeId: {
@@ -167,17 +167,18 @@ describe('splitWorkspaceSessionByHost', () => {
 
     const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
 
-    // Why local for ssh: boot hydration reads only local + runtime:* partitions,
-    // so an ssh partition would strand the recency across restarts.
-    expect(slices[LOCAL_EXECUTION_HOST_ID]?.lastVisitedAtByWorktreeId).toEqual({
-      'local-wt': 1,
-      'ssh:builder|ssh-wt': 3
-    })
+    // Why the key's own host and not 'local': the recency row has to land in the same partition as
+    // the workspace it describes, or a read that adopts one without the other reports a visit for
+    // a workspace it has no tabs for (#12721).
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.lastVisitedAtByWorktreeId).toEqual({ 'local-wt': 1 })
     expect(slices[RUNTIME_A]?.lastVisitedAtByWorktreeId).toEqual({
       'a-wt': 2,
       'runtime:env-a|a-wt': 4
     })
-    expect(slices['ssh:builder' as ExecutionHostId]).toBeUndefined()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal is a well-formed ssh: host id; ExecutionHostId is a template-literal type a plain string cannot satisfy.
+    expect(slices['ssh:builder' as ExecutionHostId]?.lastVisitedAtByWorktreeId).toEqual({
+      'ssh:builder|ssh-wt': 3
+    })
   })
 
   it('routes tab-keyed maps via the owning tab worktree (legacy + unified)', () => {
@@ -205,6 +206,37 @@ describe('splitWorkspaceSessionByHost', () => {
 
     const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
 
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toHaveProperty('orphan')
+    expect(slices[RUNTIME_A]).toBeUndefined()
+  })
+
+  it('routes tab-keyed rows through a caller-supplied tab index when the payload has no tab rows', () => {
+    // A debounced patch that changed only layouts (a park capture) or only PTY bindings carries
+    // no tabsByWorktree; the index stands in for the rows the payload never mentioned.
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      terminalLayoutsByTabId: { 't-a': makeLayout() },
+      remoteSessionIdsByTabId: { 't-a': 'sess-a' },
+      terminalPtyIncarnationsByPaneKey: { 't-a:leaf-1': 'inc-3' }
+    }
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix(), {
+      worktreeIdByTabId: new Map([['t-a', 'a-wt-1']])
+    })
+    expect(slices[RUNTIME_A]?.terminalLayoutsByTabId).toHaveProperty('t-a')
+    expect(slices[RUNTIME_A]?.remoteSessionIdsByTabId).toEqual({ 't-a': 'sess-a' })
+    expect(slices[RUNTIME_A]?.terminalPtyIncarnationsByPaneKey).toEqual({ 't-a:leaf-1': 'inc-3' })
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toEqual({})
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.remoteSessionIdsByTabId).toEqual({})
+  })
+
+  it('keeps a tab the supplied index does not name in the local slice', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      terminalLayoutsByTabId: { orphan: makeLayout() }
+    }
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix(), {
+      worktreeIdByTabId: new Map([['t-a', 'a-wt-1']])
+    })
     expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalLayoutsByTabId).toHaveProperty('orphan')
     expect(slices[RUNTIME_A]).toBeUndefined()
   })

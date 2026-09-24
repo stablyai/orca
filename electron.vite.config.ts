@@ -4,13 +4,15 @@ import { defineConfig, type UserConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  '@streamparser/json',
   '@xterm/headless',
   '@xterm/addon-serialize',
-  'psl',
+  'tldts',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
@@ -240,6 +242,10 @@ export const electronViteConfig: UserConfig = {
           'port-scan-command-worker-entry': resolve(
             'src/main/ports/port-scan-command-worker-entry.ts'
           ),
+          // Why: the Claude/Codex/OpenCode usage scans walk whole history
+          // corpora and read SQLite synchronously; a worker thread keeps that
+          // off the main-process event loop.
+          'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
@@ -291,7 +297,7 @@ export const electronViteConfig: UserConfig = {
   preload: {
     build: {
       externalizeDeps: {
-        exclude: ['@electron-toolkit/preload', 'zod']
+        exclude: ['zod']
       }
     }
   },
@@ -302,7 +308,7 @@ export const electronViteConfig: UserConfig = {
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), createPdfjsViewerAssetsPlugin()],
     worker: {
       format: 'es'
     },

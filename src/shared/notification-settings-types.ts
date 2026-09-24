@@ -33,6 +33,7 @@ export type NotificationDispatchRequest = {
   paneKey?: string
   repoLabel?: string
   worktreeLabel?: string
+  /** Legacy senders may still provide this; project labels are now always shown. */
   hasMultipleActiveRepos?: boolean
   terminalTitle?: string
   isActiveWorktree?: boolean
@@ -43,6 +44,11 @@ export type NotificationDispatchRequest = {
   agentToolInput?: string
   agentLastAssistantMessage?: string
   agentInterrupted?: boolean
+  /**
+   * Which lane raised this, so the click handler knows how to reveal the subject. Absent means the
+   * terminal lane, which is every sender that predates structured chat.
+   */
+  surface?: 'terminal' | 'agent-session'
 }
 
 export type NotificationDispatchResult = {

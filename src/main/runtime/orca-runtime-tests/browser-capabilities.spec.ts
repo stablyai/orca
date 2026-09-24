@@ -23,8 +23,29 @@ import {
   attachClientBrowserHost,
   publishClientHostedPage
 } from '../orca-runtime-test-scenario-builders.spec'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  initializeBrowserIdentityModeStore,
+  resetBrowserIdentityModeStoreForTests
+} from '../../browser/browser-identity-mode-store'
 
 describe('OrcaRuntimeService', () => {
+  // The mixed-version guarantee: a host that never initialized the identity store must not
+  // advertise a method that can only throw there.
+  it('advertises the browser identity capability only where an identity store exists', () => {
+    resetBrowserIdentityModeStoreForTests()
+    expect(createRuntime().getStatus().capabilities).not.toContain('browser.identity.v1')
+
+    initializeBrowserIdentityModeStore(mkdtempSync(join(tmpdir(), 'orca-identity-capability-')))
+    try {
+      expect(createRuntime().getStatus().capabilities).toContain('browser.identity.v1')
+    } finally {
+      resetBrowserIdentityModeStoreForTests()
+    }
+  })
+
   it('advertises headless browser capability when an offscreen backend backs a windowless host', () => {
     const runtime = createRuntime()
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })

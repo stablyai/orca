@@ -43,7 +43,9 @@ describe('useThrottledLatestValue', () => {
     update('ab')
     update('abc')
     expect(latest).toBe('a')
-    act(() => vi.advanceTimersByTime(50))
+    act(() => {
+      vi.advanceTimersByTime(50)
+    })
     expect(latest).toBe('abc')
   })
 
@@ -53,7 +55,9 @@ describe('useThrottledLatestValue', () => {
     expect(latest).toBe('a')
     update(undefined)
     expect(latest).toBeUndefined()
-    act(() => vi.advanceTimersByTime(50))
+    act(() => {
+      vi.advanceTimersByTime(50)
+    })
     expect(latest).toBeUndefined()
   })
 })

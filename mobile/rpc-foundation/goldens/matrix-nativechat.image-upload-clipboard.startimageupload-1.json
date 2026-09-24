@@ -1,0 +1,691 @@
+{
+  "operation": "nativeChat.image-upload",
+  "family": "nativeChat.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "0478b692709ef0fe3cd75bf0d47fc27fcbb50ebc779e231537ba36638a0125f8",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ff6f55894de": {
+      "failure": "transport failure",
+      "uploaded": "unuploaded"
+    },
+    "1284cf331810": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "23326ee9349f": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "40cb28255df6": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "468c321c00c0": {
+      "failure": "The host sent a reply this app could not read (clipboard.startImageUpload)",
+      "uploaded": "unuploaded"
+    },
+    "6696a47819e1": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "6f72c81d8bb0": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "7180e20192a8": {
+      "failure": "outer refused",
+      "uploaded": "unuploaded"
+    },
+    "766a69d73d62": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "7a79daaa2290": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "7c2e3ea286aa": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-1"
+          }
+        }
+      }
+    },
+    "814ccd56a769": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "8e050dc4db92": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "994fccf9b305": {
+      "name": "upload-start",
+      "ordinal": 1,
+      "value": {}
+    },
+    "9feead71a57d": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "uploaded": "unuploaded"
+    },
+    "a0e884b87798": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.saveImageAsTempFile\",\"params\":{\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"connectionId\":\"connection-1\"}}"
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "aee3a490cf0d": {
+      "failure": "",
+      "uploaded": "unuploaded"
+    },
+    "bf4d693e3e27": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (clipboard.startImageUpload)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "cb5056a8a1fe": {
+      "name": "clipboard.saveImageAsTempFile#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.saveImageAsTempFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "cd37c121c1fd": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "d088e8eeec5d": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d7fc074e6b40": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "e20dc4b09a24": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-nativechat.image-upload-clipboard.startimageupload-1",
+    "checkpoints": [
+      {
+        "id": "native-chat-image-upload-start-refused.normal:refused",
+        "observation": {
+          "sender": ["7c2e3ea286aa", "6f72c81d8bb0"],
+          "payloads": ["6696a47819e1", "814ccd56a769"],
+          "settlements": {
+            "normal": "9270aeb7d9c6"
+          },
+          "state": "9feead71a57d",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.result-absent:refused",
+        "observation": {
+          "sender": ["cd37c121c1fd"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "bf4d693e3e27"
+          },
+          "state": "468c321c00c0",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.result-null:refused",
+        "observation": {
+          "sender": ["d7fc074e6b40"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "bf4d693e3e27"
+          },
+          "state": "468c321c00c0",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.inner-ok-missing:refused",
+        "observation": {
+          "sender": ["8e050dc4db92"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "bf4d693e3e27"
+          },
+          "state": "468c321c00c0",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.inner-false-string-error:refused",
+        "observation": {
+          "sender": ["7a79daaa2290"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "bf4d693e3e27"
+          },
+          "state": "468c321c00c0",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.inner-false-object-error:refused",
+        "observation": {
+          "sender": ["23326ee9349f"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "bf4d693e3e27"
+          },
+          "state": "468c321c00c0",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.outer-refused:refused",
+        "observation": {
+          "sender": ["1284cf331810"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "32a7c0ae7918"
+          },
+          "state": "7180e20192a8",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.outer-refused-no-message:refused",
+        "observation": {
+          "sender": ["40cb28255df6"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "f3b516f62081"
+          },
+          "state": "aee3a490cf0d",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.method-not-found:refused",
+        "observation": {
+          "sender": ["d088e8eeec5d", "cb5056a8a1fe"],
+          "payloads": ["6696a47819e1", "a0e884b87798"],
+          "settlements": {
+            "normal": "9270aeb7d9c6"
+          },
+          "state": "9feead71a57d",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.transport-rejection:refused",
+        "observation": {
+          "sender": ["766a69d73d62"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "a947768bc0ed"
+          },
+          "state": "0ff6f55894de",
+          "effects": ["994fccf9b305"]
+        }
+      },
+      {
+        "id": "native-chat-image-upload-start-refused.transport-rejection-no-message:refused",
+        "observation": {
+          "sender": ["e20dc4b09a24"],
+          "payloads": ["6696a47819e1"],
+          "settlements": {
+            "normal": "c7584e82c72f"
+          },
+          "state": "aee3a490cf0d",
+          "effects": ["994fccf9b305"]
+        }
+      }
+    ]
+  }
+}

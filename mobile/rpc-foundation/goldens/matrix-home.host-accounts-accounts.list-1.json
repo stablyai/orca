@@ -1,0 +1,693 @@
+{
+  "operation": "home.host-accounts",
+  "family": "home.host-accounts",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c632fdbc4b730777ecb09f08bec14cca0586042b01ed99d40d0228806c7def4a",
+  "scenarioSha256": "047e4c8fb2c4b374406658ec3954ac00fda96928bdd999a33ab9867284ffb4a4",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "11f6bbd8152f": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "16b4c187b90c": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "claude": {
+              "accounts": [
+                {
+                  "email": "claude@example.test",
+                  "id": "claude-1",
+                  "updatedAt": 1700000000000
+                }
+              ],
+              "activeAccountId": "claude-1"
+            },
+            "codex": {
+              "accounts": [],
+              "activeAccountId": {
+                "$rpc": "null"
+              }
+            },
+            "rateLimits": {
+              "claude": {
+                "$rpc": "null"
+              },
+              "codex": {
+                "$rpc": "null"
+              },
+              "inactiveClaudeAccounts": [],
+              "inactiveCodexAccounts": []
+            }
+          }
+        }
+      }
+    },
+    "2525c654127c": {
+      "host-1": {
+        "claude": {
+          "accounts": [
+            {
+              "email": "claude@example.test",
+              "id": "claude-1",
+              "updatedAt": 1700000000000
+            }
+          ],
+          "activeAccountId": "claude-1"
+        },
+        "codex": {
+          "accounts": [],
+          "activeAccountId": {
+            "$rpc": "null"
+          }
+        },
+        "rateLimits": {
+          "claude": {
+            "$rpc": "null"
+          },
+          "claudeTarget": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          },
+          "codex": {
+            "$rpc": "null"
+          },
+          "codexTarget": {
+            "runtime": "host",
+            "wslDistro": {
+              "$rpc": "null"
+            }
+          },
+          "inactiveClaudeAccounts": [],
+          "inactiveCodexAccounts": []
+        }
+      }
+    },
+    "2812f0b1ec77": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3439bc68151d": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3bf8cb601ec3": {
+      "name": "accounts.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"accounts.list\"}"
+    },
+    "44136fa355b3": {},
+    "4a1c397d346b": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "564b115f0a17": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "6d54d83570d0": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "71d054262f17": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "78574a24b32d": {
+      "name": "accounts",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "claude": {
+            "accounts": [
+              {
+                "email": "claude@example.test",
+                "id": "claude-1",
+                "updatedAt": 1700000000000
+              }
+            ],
+            "activeAccountId": "claude-1"
+          },
+          "codex": {
+            "accounts": [],
+            "activeAccountId": {
+              "$rpc": "null"
+            }
+          },
+          "rateLimits": {
+            "claude": {
+              "$rpc": "null"
+            },
+            "claudeTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "codex": {
+              "$rpc": "null"
+            },
+            "codexTarget": {
+              "runtime": "host",
+              "wslDistro": {
+                "$rpc": "null"
+              }
+            },
+            "inactiveClaudeAccounts": [],
+            "inactiveCodexAccounts": []
+          }
+        }
+      }
+    },
+    "884d6f264bfd": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "a2761753b29a": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d308707eb973": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "d953c94f3173": {
+      "name": "accounts.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "accounts.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-home.host-accounts-accounts.list-1",
+    "checkpoints": [
+      {
+        "id": "home-host-accounts.prelude:accounts-pending",
+        "observation": {
+          "sender": ["884d6f264bfd"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.normal:accounts-published",
+        "observation": {
+          "sender": ["16b4c187b90c"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "2525c654127c",
+          "effects": ["78574a24b32d"]
+        }
+      },
+      {
+        "id": "home-host-accounts.result-absent:accounts-published",
+        "observation": {
+          "sender": ["6d54d83570d0"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.result-null:accounts-published",
+        "observation": {
+          "sender": ["d953c94f3173"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.inner-ok-missing:accounts-published",
+        "observation": {
+          "sender": ["d308707eb973"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.inner-false-string-error:accounts-published",
+        "observation": {
+          "sender": ["4a1c397d346b"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.inner-false-object-error:accounts-published",
+        "observation": {
+          "sender": ["11f6bbd8152f"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.outer-refused:accounts-published",
+        "observation": {
+          "sender": ["71d054262f17"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.outer-refused-no-message:accounts-published",
+        "observation": {
+          "sender": ["a2761753b29a"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.method-not-found:accounts-published",
+        "observation": {
+          "sender": ["2812f0b1ec77"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.transport-rejection:accounts-published",
+        "observation": {
+          "sender": ["3439bc68151d"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-accounts.transport-rejection-no-message:accounts-published",
+        "observation": {
+          "sender": ["564b115f0a17"],
+          "payloads": ["3bf8cb601ec3"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

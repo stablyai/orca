@@ -53,6 +53,12 @@ export type DetectedWorktreeMetadataPrune = Readonly<{
 export type DetectedWorktreeScanResult = {
   gitWorktrees: GitWorktreeInfo[]
   fresh: boolean
+  /**
+   * The scan ran, but a worktree mutation invalidated it before it settled (or it joined such a
+   * scan). Its rows describe a catalog that no longer exists: they must not be published as
+   * authoritative, because a worktree added during the scan reads as absent, i.e. deleted.
+   */
+  superseded: boolean
   sideEffectToken?: DetectedWorktreeSideEffectToken
   /** Whether this scan owns the repo's next store-hygiene pass; absent means "not from a local scan". */
   hygieneDue?: boolean
@@ -112,19 +118,28 @@ export async function listDetectedGitWorktrees(
   if (repo.connectionId || isFolderRepo(repo)) {
     return {
       gitWorktrees: await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
-      fresh: true
+      fresh: true,
+      superseded: false
     }
   }
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
-    return { gitWorktrees: cached.worktrees, fresh: false }
+    return { gitWorktrees: cached.worktrees, fresh: false, superseded: false }
   }
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
   if (inFlight) {
-    return { gitWorktrees: await inFlight.promise, fresh: false }
+    const gitWorktrees = await inFlight.promise
+    // Why: a joiner inherits the scan's staleness, not just its rows.
+    return {
+      gitWorktrees,
+      fresh: false,
+      superseded:
+        inFlight.invalidated ||
+        !isLocalWorktreeScanGenerationCurrent(repo.id, inFlight.sideEffectToken.generation)
+    }
   }
 
   // Why: capture before invoking Git because listing can mutate synchronously before its first await.
@@ -179,6 +194,7 @@ export async function listDetectedGitWorktrees(
     return {
       gitWorktrees,
       fresh,
+      superseded: !fresh,
       ...(fresh ? { sideEffectToken: scan.sideEffectToken, hygieneDue: scan.hygieneDue } : {}),
       ...(fresh && scan.metadataPrune ? { metadataPrune: scan.metadataPrune } : {})
     }

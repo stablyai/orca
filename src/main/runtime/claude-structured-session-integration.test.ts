@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -27,6 +27,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from './rpc/dispatcher'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -196,7 +197,7 @@ function ensureParams(fence: number) {
     },
     provider: 'claude' as const,
     agent: 'claude',
-    accountHome: { variable: 'CLAUDE_CONFIG_DIR' as const, path: join(root, 'claude-home') },
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR' as const, path: recordAccountHomePath },
     runtimeKind: 'native' as const,
     providerHandle: {
       kind: 'claude' as const,
@@ -249,9 +250,13 @@ let dispatcher: RpcDispatcher
 let cleanups: Map<string, () => void>
 let tuiOwner: StructuredTuiOwner | null
 let transcriptPath: string
+/** The Claude home the durable record pins; the managed dir under `root` unless a test says otherwise. */
+let recordAccountHomePath: string
 /** Managed-account state and configured overlay this host installs, per test. */
 let claudeAuthPolicy: ClaudeStructuredAuthPolicy
 let claudeLaunchEnv: Record<string, string>
+let shellEnv: NodeJS.ProcessEnv
+let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -316,11 +321,14 @@ function textOf(item: AgentJournalRenderItem): string {
 beforeEach(async () => {
   operations = 0
   claudeAuthPolicy = { stripAuthEnv: false }
+  shellEnv = { PATH: '/shell/bin:/usr/bin' }
+  shellEnvironmentPolicy = { inheritAll: true, names: [] }
   claudeLaunchEnv = {
     ANTHROPIC_AUTH_TOKEN: 'configured-token',
     ANTHROPIC_BASE_URL: 'https://gateway.example.test'
   }
   root = await mkdtemp(join(tmpdir(), 'orca-claude-structured-integration-'))
+  recordAccountHomePath = join(root, 'claude-home')
   transcriptPath = join(root, 'claude-home', 'projects', 'workspace', `${PROVIDER_SESSION}.jsonl`)
   await mkdir(join(root, 'claude-home', 'projects', 'workspace'), { recursive: true })
   resolveSessionFilePath.mockResolvedValue(transcriptPath)
@@ -409,6 +417,9 @@ beforeEach(async () => {
         resolveClaudeCommand: () => '/usr/local/bin/claude',
         readProcessStartTime: async (pid: number) => pid * 10,
         resolveClaudeLaunchEnv: () => claudeLaunchEnv,
+        // Hermetic: never the developer's real login shell.
+        resolveEnvironment: async () => shellEnv,
+        resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
         handoffTransport
@@ -433,8 +444,12 @@ describe('a structured Claude session over agentSession.*', () => {
   it('strips ambient Anthropic auth from the child once a managed account is pinned', async () => {
     claudeAuthPolicy = { stripAuthEnv: true }
     claudeLaunchEnv = { ANTHROPIC_BASE_URL: 'https://gateway.example.test' }
-    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-SHELL-LEAK')
-    vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'tok-SHELL-LEAK')
+    shellEnv = {
+      ...shellEnv,
+      ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK',
+      ANTHROPIC_AUTH_TOKEN: 'tok-SHELL-LEAK',
+      CLAUDE_CONFIG_DIR: '/shell/claude'
+    }
 
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
 
@@ -445,6 +460,45 @@ describe('a structured Claude session over agentSession.*', () => {
       ANTHROPIC_BASE_URL: 'https://gateway.example.test',
       CLAUDE_CONFIG_DIR: join(root, 'claude-home')
     })
+  })
+
+  it('passes shell exports straight to the child, as a terminal would', async () => {
+    shellEnv = {
+      ...shellEnv,
+      CODEX_LB_API_KEY: 'shell-exported',
+      ANTHROPIC_API_KEY: 'sk-ant-SHELL-ONLY'
+    }
+
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+
+    expect(claude.live().launch.env).toMatchObject({
+      CODEX_LB_API_KEY: 'shell-exported',
+      ANTHROPIC_API_KEY: 'sk-ant-SHELL-ONLY'
+    })
+  })
+
+  it('ignores a shell-exported CLAUDE_CONFIG_DIR: the pinned account chooses the Claude home', async () => {
+    // System auth on the CLI's own default home: an explicit pin to it would move the CLI off its
+    // default Keychain item, so the child must carry no CLAUDE_CONFIG_DIR at all.
+    recordAccountHomePath = join(homedir(), '.claude')
+    shellEnv = { ...shellEnv, CLAUDE_CONFIG_DIR: '/shell/claude', SHELL_ONLY_MARKER: 'from-shell' }
+
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+
+    const env = claude.live().launch.env
+    expect(env).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+    expect(env?.SHELL_ONLY_MARKER).toBe('from-shell')
+  })
+
+  it('leaves unlisted shell exports out when inheritance is off', async () => {
+    shellEnv = { ...shellEnv, CODEX_LB_API_KEY: 'shell-exported', LISTED_ONLY: 'yes' }
+    shellEnvironmentPolicy = { inheritAll: false, names: ['LISTED_ONLY'] }
+
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+
+    const env = claude.live().launch.env
+    expect(env?.LISTED_ONLY).toBe('yes')
+    expect(env).not.toHaveProperty('CODEX_LB_API_KEY')
   })
 
   it('refuses a create whose configured env overrides the pinned managed account auth', async () => {
@@ -533,7 +587,7 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   it('creates, sends, streams, approves, interrupts, and resumes from the chain head', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-SHELL-LEAK')
+    shellEnv = { ...shellEnv, ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK' }
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
     expect(claude.live().launch.options).toMatchObject({ sessionId: PROVIDER_SESSION })
     expect(claude.live().launch.options.resume).toBeUndefined()
@@ -600,6 +654,18 @@ describe('a structured Claude session over agentSession.*', () => {
       `claude:${PROVIDER_SESSION}:assistant-leaf`
     )
 
+    // A background task can wake Claude after the preceding dispatch settled.
+    // This assistant frame opens the provider-owned turn without an Orca send
+    // echo; Stop must target that frame's id rather than the settled user row.
+    claude.live().handlers.onMessage?.({
+      type: 'assistant',
+      session_id: PROVIDER_SESSION,
+      uuid: 'provider-opened-assistant',
+      parent_tool_use_id: null,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Background task update.' }] }
+    })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+
     claude.live().handlers.onMessage?.({
       type: 'system',
       subtype: 'background_tasks_changed',
@@ -649,7 +715,10 @@ describe('a structured Claude session over agentSession.*', () => {
     )
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
-    expect(approval?.body).toMatchObject({ title: 'Allow Bash?', detail: '{"command":"ls"}' })
+    expect(approval?.body).toMatchObject({
+      title: 'Allow Bash?',
+      detail: '{\n  "command": "ls"\n}'
+    })
     await ok('agentSession.respondToApproval', {
       envelope: envelope(
         'agentSession.respondTo:approval',
@@ -672,10 +741,14 @@ describe('a structured Claude session over agentSession.*', () => {
 
     await expect(
       ok('agentSession.cancel', {
-        envelope: envelope('agentSession.cancel', { turnId: 'user-1' }, created.fence),
-        turnId: 'user-1'
+        envelope: envelope(
+          'agentSession.cancel',
+          { turnId: 'provider-opened-assistant' },
+          created.fence
+        ),
+        turnId: 'provider-opened-assistant'
       })
-    ).resolves.toMatchObject({ turnId: 'user-1', cancelled: true })
+    ).resolves.toMatchObject({ turnId: 'provider-opened-assistant', cancelled: true })
     expect(claude.live().calls.at(-1)).toMatchObject({ subtype: 'interrupt' })
 
     const host = getStructuredAgentSessionHost() as unknown as {
@@ -700,13 +773,13 @@ describe('a structured Claude session over agentSession.*', () => {
     })
     expect(claude.live().launch.options).toMatchObject({
       resume: PROVIDER_SESSION,
-      resumeSessionAt: 'assistant-leaf'
+      resumeSessionAt: 'provider-opened-assistant'
     })
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject({
       handle: {
         provider: 'claude',
         sessionId: PROVIDER_SESSION,
-        leafUuid: 'assistant-leaf'
+        leafUuid: 'provider-opened-assistant'
       },
       origin: 'resumed'
     })

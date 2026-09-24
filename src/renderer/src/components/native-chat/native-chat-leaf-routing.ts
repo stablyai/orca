@@ -91,17 +91,10 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafStillMounted: boolean
   activeLeafIsEligible: boolean
   chatLeafHasConfirmedAgentExit?: boolean
-  structuredSessionId?: string | null
 }): NativeChatLeafRoute {
-  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit && !args.structuredSessionId
+  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
-  }
-  if (args.structuredSessionId) {
-    return {
-      chatLeafId: args.chatLeafId ?? args.activeLeafId,
-      exitChat: false
-    }
   }
   if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
     // Why: agent/title evidence can disappear while local, SSH, or runtime

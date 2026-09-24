@@ -1,8 +1,13 @@
+import { defaultCancelTimer, defaultScheduleTimer, type ScheduleTimer } from './timer-scheduler'
+
 export const LIVENESS_IDLE_MS = 20_000
 export const LIVENESS_PROBE_TIMEOUT_MS = 8_000
 export const MISSED_PROBE_LIMIT = 3
 
-export type RpcSessionIdentity = object
+declare const rpcSessionIdentityBrand: unique symbol
+
+/** Opaque per-session token; only ever compared by reference. */
+export type RpcSessionIdentity = object & { readonly [rpcSessionIdentityBrand]?: never }
 
 type WatchdogOptions = {
   transport: 'direct' | 'relay'
@@ -14,7 +19,7 @@ type WatchdogOptions = {
   missedProbeLimit?: number
   voluntaryProbeMinIntervalMs?: number
   now?: () => number
-  setTimer?: typeof setTimeout
+  setTimer?: ScheduleTimer
   clearTimer?: typeof clearTimeout
 }
 
@@ -38,7 +43,7 @@ export class RpcSessionLivenessWatchdog {
   private readonly missedProbeLimit: number
   private readonly voluntaryProbeMinIntervalMs: number
   private readonly now: () => number
-  private readonly setTimer: typeof setTimeout
+  private readonly setTimer: ScheduleTimer
   private readonly clearTimer: typeof clearTimeout
 
   constructor(private readonly options: WatchdogOptions) {
@@ -47,8 +52,8 @@ export class RpcSessionLivenessWatchdog {
     this.missedProbeLimit = options.missedProbeLimit ?? MISSED_PROBE_LIMIT
     this.voluntaryProbeMinIntervalMs = options.voluntaryProbeMinIntervalMs ?? 0
     this.now = options.now ?? Date.now
-    this.setTimer = options.setTimer ?? setTimeout
-    this.clearTimer = options.clearTimer ?? clearTimeout
+    this.setTimer = options.setTimer ?? defaultScheduleTimer
+    this.clearTimer = options.clearTimer ?? defaultCancelTimer
   }
 
   start(identity: RpcSessionIdentity): void {

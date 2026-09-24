@@ -175,11 +175,16 @@ describe('PortScanCommandClient', () => {
     const client = makeClient(workers)
 
     const accepted = Array.from({ length: MAX_QUEUED_CALLS + 1 }, () => client.run('lsof', []))
-    const overflow = client.run('lsof', [])
+    // A different command than the accepted ones: the message must name the
+    // request that was actually shed, which is all a log has to identify it.
+    const overflow = client.run('netstat', ['-ano'])
 
     const error = await overflow.catch((err: unknown) => err)
     expect(error).toBeInstanceOf(Error)
     expect(error).not.toBeInstanceOf(PortScanCommandTimeoutError)
+    expect(error instanceof Error ? error.message : String(error)).toBe(
+      'Port scan command queue is full; dropped netstat.'
+    )
 
     for (let i = 0; i < accepted.length; i++) {
       workers[0].respond({ ok: true, stdout: 'drained', spawnMs: 1 })

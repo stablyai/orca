@@ -8,8 +8,8 @@
  */
 
 import { createHash } from 'node:crypto'
-import { chmod, mkdir, readFile, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   agentSessionOperationKey,
   isAgentSessionOperationRow,
@@ -20,12 +20,8 @@ import {
   isAgentSessionRecord,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
-import {
-  copyFileDurable,
-  durableWriteTempPath,
-  renameDurable,
-  writeTempFileDurable
-} from '../durable-file-write'
+import { agentSessionStoreBackupPath as backupPath } from './agent-session-record-store-write'
+export { saveAgentSessionStore } from './agent-session-record-store-write'
 import { parseVisibleSessionIds } from './agent-session-visible-tab-index'
 import { serializeAgentSessionStoreState } from './agent-session-store-serialization'
 
@@ -64,8 +60,6 @@ export function agentSessionStorePath(directory: string): string {
   return join(directory, AGENT_SESSION_STORE_FILE_NAME)
 }
 
-const backupPath = (filePath: string): string => `${filePath}.bak`
-
 function emptyState(hostId: string): AgentSessionStoreState {
   return {
     schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
@@ -100,6 +94,7 @@ function parseState(
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field is read back as `unknown` and validated below before use.
   const file = parsed as {
     schemaVersion?: unknown
     hostId?: unknown
@@ -309,37 +304,5 @@ export async function loadAgentSessionStore(
     readOnly: false,
     recoveredFromBackup: false,
     needsRewrite: false
-  }
-}
-
-/**
- * Commit the whole state. The live path is never absent: the new content is made durable in a temp
- * file first, a validated primary is COPIED to the backup, and only then does the rename publish it.
- * Backup recovery keeps the known-good backup in place while publishing the repaired primary.
- *
- * The old ordering renamed the live file aside before writing the new one, so a death in that
- * window left the profile with a backup and no primary — which is exactly the state that wedged a
- * real profile. Copy, don't move.
- */
-export async function saveAgentSessionStore(
-  filePath: string,
-  state: AgentSessionStoreState,
-  options: { primaryStatus: 'validated' | 'unusable-or-absent' }
-): Promise<void> {
-  const directory = dirname(filePath)
-  await mkdir(directory, { recursive: true, mode: 0o700 })
-  await chmod(directory, 0o700)
-  const tmpPath = durableWriteTempPath(filePath)
-  try {
-    await writeTempFileDurable(tmpPath, serializeAgentSessionStoreState(state), 0o600)
-    // Only a primary parsed under the transaction lock may replace the backup. During recovery the
-    // primary is corrupt or absent, so the known-good backup must survive until publication.
-    if (options.primaryStatus === 'validated') {
-      await copyFileDurable(filePath, backupPath(filePath))
-    }
-    await renameDurable(tmpPath, filePath)
-  } catch (error) {
-    await rm(tmpPath, { force: true }).catch(() => {})
-    throw error
   }
 }

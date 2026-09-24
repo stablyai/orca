@@ -1,8 +1,32 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
+
+const { pruneLineageMock, pruneMetadataMock } = vi.hoisted(() => ({
+  pruneLineageMock: vi.fn(),
+  pruneMetadataMock: vi
+    .fn()
+    .mockResolvedValue({ scanGenerationCurrent: true, preservedMetadataCandidateIds: new Set() })
+}))
+vi.mock('../worktree-lineage-pruning', () => ({
+  pruneLineageForMissingRepoWorktrees: pruneLineageMock
+}))
+vi.mock('../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning', () => ({
+  pruneMetadataMissingFromAuthoritativeLocalScan: pruneMetadataMock
+}))
+vi.mock('../project-runtime-git-options', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getLocalProjectWorktreeGitOptions: () => ({})
+}))
+
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import type { RuntimeStore } from './runtime-store-contract'
+import {
+  bumpLocalWorktreeScanGeneration,
+  getLocalWorktreeScanGeneration,
+  resetLocalWorktreeScanGenerationsForTests
+} from '../local-worktree-scan-generation'
 
 const settings = {
   workspaceDir: '/worktrees',
@@ -219,5 +243,118 @@ describe('RuntimeManagedWorktreeQueries.list host scope', () => {
     }).list(undefined, 50)
 
     expect(unscoped.hostScope?.omittedHostIds).toEqual(['local', 'ssh:conn-1'])
+  })
+})
+
+describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
+  const repo = folderRepo({ kind: 'git' })
+  const created = '/worktrees/created'
+
+  function rows(paths: readonly string[]): GitWorktreeInfo[] {
+    return paths.map((path) => ({
+      path,
+      head: 'abc',
+      branch: 'main',
+      isBare: false,
+      isMainWorktree: path === repo.path
+    }))
+  }
+
+  function gitStore(overrides: Record<string, unknown> = {}): RuntimeStore {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the git listing reads only these store members; the prunes that would need more are mocked above.
+    return {
+      getRepos: () => [repo],
+      getRepo: () => repo,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: vi.fn(),
+      getAllWorktreeLineage: () => ({}),
+      getSettings: () => settings,
+      ...overrides
+    } as unknown as RuntimeStore
+  }
+
+  /** A scan a worktree change lands under: the generation moves before the rows come back. */
+  function overtakenScan(paths: readonly string[]) {
+    return async () => {
+      bumpLocalWorktreeScanGeneration(repo.id)
+      return { ok: true as const, worktrees: rows(paths) }
+    }
+  }
+
+  beforeEach(() => {
+    resetLocalWorktreeScanGenerationsForTests()
+    pruneLineageMock.mockClear()
+    pruneMetadataMock.mockClear()
+  })
+
+  it('re-runs a scan a worktree change overtook and publishes the second scan as authoritative', async () => {
+    const scanRepo = vi
+      .fn()
+      .mockImplementationOnce(overtakenScan([repo.path]))
+      .mockResolvedValueOnce({ ok: true, worktrees: rows([repo.path, created]) })
+
+    const result = await queries(gitStore(), { scanRepo }).listDetected(repo)
+
+    expect(scanRepo).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ authoritative: true, source: 'git' })
+    expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path, created])
+    // The overtaken rows omit the created worktree; only the settled rows may prune.
+    expect(pruneLineageMock).toHaveBeenCalledTimes(1)
+    expect(pruneLineageMock.mock.calls[0]?.[2]).toEqual(rows([repo.path, created]))
+  })
+
+  it('prunes metadata against the expectation and generation of the scan it publishes', async () => {
+    const expectations: unknown[] = []
+    const generations: number[] = []
+    const store = gitStore({
+      captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(() => {
+        const expectation = { repo, metadata: [] }
+        expectations.push(expectation)
+        generations.push(getLocalWorktreeScanGeneration(repo.id))
+        return expectation
+      })
+    })
+    const scanRepo = vi
+      .fn()
+      .mockImplementationOnce(overtakenScan([repo.path]))
+      .mockResolvedValueOnce({ ok: true, worktrees: rows([repo.path, created]) })
+
+    await queries(store, { scanRepo }).listDetected(repo)
+
+    expect(expectations).toHaveLength(2)
+    expect(pruneMetadataMock).toHaveBeenCalledTimes(1)
+    expect(pruneMetadataMock.mock.calls[0]?.[0]).toMatchObject({
+      scan: expectations[1],
+      scanGeneration: generations[1],
+      gitWorktrees: rows([repo.path, created])
+    })
+  })
+
+  it('publishes the last scan non-authoritatively once the re-scan bound is spent', async () => {
+    const scanRepo = vi.fn(overtakenScan([repo.path]))
+
+    const result = await queries(gitStore(), { scanRepo }).listDetected(repo)
+
+    // One scan plus the two re-runs the bound allows.
+    expect(scanRepo).toHaveBeenCalledTimes(3)
+    expect(result).toMatchObject({ authoritative: false, source: 'git' })
+    expect(result.unavailableReason).toBeUndefined()
+    expect(result.failureKind).toBeUndefined()
+    expect(result.worktrees.map((worktree) => worktree.path)).toEqual([repo.path])
+    expect(pruneLineageMock).not.toHaveBeenCalled()
+    expect(pruneMetadataMock).not.toHaveBeenCalled()
+  })
+
+  it('does not re-run a failed scan the change overtook', async () => {
+    const scanRepo = vi.fn(async () => {
+      bumpLocalWorktreeScanGeneration(repo.id)
+      return { ok: false as const, worktrees: [] }
+    })
+
+    const result = await queries(gitStore(), { scanRepo }).listDetected(repo)
+
+    expect(scanRepo).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ authoritative: false, source: 'metadata-fallback' })
   })
 })

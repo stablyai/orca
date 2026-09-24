@@ -1,0 +1,329 @@
+{
+  "operation": "session.pr-mutations",
+  "family": "github.pr-mutation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "70a94f45dbf7d58d9024c1cc4c94edd98fa48cd5ccffe8f2b7c53fa3e55d18d3",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0724cf7c0f6d": {
+      "name": "github.updatePRState#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "updates": {
+              "state": "closed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "Branch is protected"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "18863a025ec7": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "error": "Branch is protected",
+        "ok": false
+      },
+      "merge": {
+        "error": "Pull request is not mergeable",
+        "ok": false
+      },
+      "rerun-checks": {
+        "error": "Request failed: github.rerunPRChecks",
+        "ok": false
+      }
+    },
+    "1dbd11ea2634": {
+      "merge": {
+        "error": "Pull request is not mergeable",
+        "ok": false
+      }
+    },
+    "323e40d512cb": {
+      "name": "github.setPRAutoMerge#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.setPRAutoMerge"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": true
+        }
+      }
+    },
+    "3cc9fca74bf6": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}"
+    },
+    "5b819e88a0c1": {
+      "close": {
+        "error": "Branch is protected",
+        "ok": false
+      },
+      "merge": {
+        "error": "Pull request is not mergeable",
+        "ok": false
+      }
+    },
+    "75b6d425bd33": {
+      "name": "github.setPRAutoMerge#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}"
+    },
+    "7fe97d8036c2": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "Pull request is not mergeable",
+            "ok": false
+          }
+        }
+      }
+    },
+    "8aaaf574bb6f": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "error": "Branch is protected",
+        "ok": false
+      },
+      "merge": {
+        "error": "Pull request is not mergeable",
+        "ok": false
+      }
+    },
+    "8be705a6533e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Request failed: github.rerunPRChecks",
+        "ok": false
+      }
+    },
+    "beaae579e18a": {
+      "name": "github.updatePRState#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
+    },
+    "c6cd1f9aeefc": {
+      "name": "github.mergePR#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}"
+    },
+    "e847c3eef6b5": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": ""
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "f2d0a4251252": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Branch is protected",
+        "ok": false
+      }
+    },
+    "f8ef6dd619cb": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Pull request is not mergeable",
+        "ok": false
+      }
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    }
+  },
+  "recording": {
+    "scenario": "pr-mutation-in-band-failure",
+    "checkpoints": [
+      {
+        "id": "string-error",
+        "observation": {
+          "sender": ["7fe97d8036c2"],
+          "payloads": ["c6cd1f9aeefc"],
+          "settlements": {
+            "string-error": "f8ef6dd619cb"
+          },
+          "state": "1dbd11ea2634",
+          "effects": []
+        }
+      },
+      {
+        "id": "object-error",
+        "observation": {
+          "sender": ["7fe97d8036c2", "0724cf7c0f6d"],
+          "payloads": ["c6cd1f9aeefc", "beaae579e18a"],
+          "settlements": {
+            "string-error": "f8ef6dd619cb",
+            "object-error": "f2d0a4251252"
+          },
+          "state": "5b819e88a0c1",
+          "effects": []
+        }
+      },
+      {
+        "id": "unstructured",
+        "observation": {
+          "sender": ["7fe97d8036c2", "0724cf7c0f6d", "323e40d512cb"],
+          "payloads": ["c6cd1f9aeefc", "beaae579e18a", "75b6d425bd33"],
+          "settlements": {
+            "string-error": "f8ef6dd619cb",
+            "object-error": "f2d0a4251252",
+            "unstructured": "fbc958e4d46e"
+          },
+          "state": "8aaaf574bb6f",
+          "effects": []
+        }
+      },
+      {
+        "id": "empty-object-error",
+        "observation": {
+          "sender": ["7fe97d8036c2", "0724cf7c0f6d", "323e40d512cb", "e847c3eef6b5"],
+          "payloads": ["c6cd1f9aeefc", "beaae579e18a", "75b6d425bd33", "3cc9fca74bf6"],
+          "settlements": {
+            "string-error": "f8ef6dd619cb",
+            "object-error": "f2d0a4251252",
+            "unstructured": "fbc958e4d46e",
+            "empty-object-error": "8be705a6533e"
+          },
+          "state": "18863a025ec7",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

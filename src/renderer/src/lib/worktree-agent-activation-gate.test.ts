@@ -415,15 +415,49 @@ describe('worktree agent activation gate', () => {
     })
   })
 
+  it.each(['present', 'unknown'] as const)(
+    'does not resume OMP when a surfaced %s agent lacks conversation ownership',
+    async (agentOwnership) => {
+      const record = {
+        ...sleepingRecord('old-tab', DEAD_LEAF_ID, 'omp-session'),
+        agent: 'omp' as const
+      }
+      const ptyId = `${WORKTREE_ID}@@current-omp`
+      const { deps, resume, createTab } = testDeps({
+        sessions: [{ ...listed(ptyId), title: 'OMP', agentOwnership }],
+        sleeping: [record],
+        surfaceOwners: new Map([
+          [
+            ptyId,
+            {
+              ptyId,
+              tabId: 'current-tab',
+              paneKey: `current-tab:${LIVE_LEAF_ID}`
+            }
+          ]
+        ])
+      })
+      seedExistingSurface(deps.getState(), {
+        tabId: 'current-tab',
+        leafId: LIVE_LEAF_ID,
+        boundPtyId: ptyId
+      })
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
+      expect(resume).not.toHaveBeenCalled()
+      expect(createTab).not.toHaveBeenCalled()
+      expect(deps.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toEqual(record)
+    }
+  )
+
   it('does not use an ambiguous tab binding as a live session claim', async () => {
     const live = sleepingRecord('tab-live', LIVE_LEAF_ID, 'live-session')
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, resume } = testDeps({ sessions: [listed(livePtyId)], sleeping: [live] })
     deps.getState().ptyIdsByTabId['tab-live'] = [livePtyId, `${WORKTREE_ID}@@other-agent`]
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('resumed')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
-    expect(resume).toHaveBeenCalledWith(WORKTREE_ID, { skipClaimKeys: new Set() })
+    expect(resume).not.toHaveBeenCalled()
   })
 
   it('blocks when a structured TUI owner is absent from live inventory', async () => {
@@ -652,6 +686,33 @@ describe('worktree agent activation gate', () => {
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
   })
+
+  it.each([
+    ['ssh:box@@pty-1', WORKTREE_ID],
+    [`${WORKTREE_ID}@@legacy`, ''],
+    // A relay seeds worktreeId from the host's own ORCA_WORKTREE_ID, so a foreign value must not
+    // hide a session the minted id already claims for this workspace.
+    [`${WORKTREE_ID}@@stale-env`, 'other-repo::/elsewhere']
+  ])(
+    'adopts %s using workspace metadata or the legacy ID fallback',
+    async (livePtyId, worktreeId) => {
+      const { deps, createTab, resume } = testDeps({
+        sessions: [{ ...listed(livePtyId), worktreeId }],
+        surfaceOwners: new Map([
+          [livePtyId, { paneKey: `tab-live:${LIVE_LEAF_ID}`, ptyId: livePtyId, tabId: 'tab-live' }]
+        ])
+      })
+      const store = deps.getState()
+      seedExistingSurface(store, { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
+
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+      expect(createTab).not.toHaveBeenCalled()
+      expect(resume).not.toHaveBeenCalled()
+      expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
+        [LIVE_LEAF_ID]: livePtyId
+      })
+    }
+  )
 
   it('adopts a host surface hydrated under a differently spelled workspace id', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`

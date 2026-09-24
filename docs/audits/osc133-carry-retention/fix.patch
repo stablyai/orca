@@ -1,0 +1,7 @@
+--- a/src/shared/terminal-osc133-command-finished.ts
++++ b/src/shared/terminal-osc133-command-finished.ts
+@@ -9,0 +10,2 @@
++
++import { ownRetainedString } from './own-retained-string'
+@@ -93,0 +96 @@
++        carry = ownRetainedString(carry)

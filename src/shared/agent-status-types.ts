@@ -5,6 +5,7 @@
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
+import type { TuiAgent } from './tui-agent'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -26,30 +27,9 @@ export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as 
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 export type AgentWorkingMode = 'monitoring'
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
-// accepted — these well-known names are just a convenience union for pattern-matching.
-export type WellKnownAgentType =
-  | 'claude'
-  | 'openclaude'
-  | 'codex'
-  | 'gemini'
-  | 'antigravity'
-  | 'amp'
-  | 'opencode'
-  | 'mimo-code'
-  | 'cursor'
-  | 'copilot'
-  | 'aider'
-  | 'pi'
-  | 'omp'
-  | 'prime-agent'
-  | 'droid'
-  | 'command-code'
-  | 'grok'
-  | 'hermes'
-  | 'devin'
-  | 'ante'
-  | 'trae'
-  | 'unknown'
+// accepted — the well-known names are the launchable TuiAgent ids plus the 'unknown'
+// sentinel (no agent identified yet), a convenience union for pattern-matching.
+export type WellKnownAgentType = TuiAgent | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
 /** A snapshot of a previous agent state, used to render activity blocks.
@@ -85,7 +65,7 @@ export type AgentStatusOrchestrationContext = {
   attention?: OrchestrationFleetAttention
 }
 
-export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'
+export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle' | 'unverifiable'
 
 /** A live in-process child of the pane's provider session. Rendered as an
  *  indented child row with no PTY of its own. */
@@ -102,6 +82,8 @@ export type AgentSubagentSnapshot = {
 }
 
 export type AgentStatusEntry = {
+  /** Renderer-local status-feed confirmation for children; absent on hook rows. */
+  subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState
   /** Ongoing work that does not require foreground agent execution. Only valid while working. */
   workingMode?: AgentWorkingMode
@@ -114,12 +96,16 @@ export type AgentStatusEntry = {
    *  which is the delivery/ordering clock a relay reconnect must restamp to stay monotonic.
    *  Absent for locally derived rows and old hosts; freshness falls back to `updatedAt`. */
   evidenceObservedAt?: number
+  /** True only while a host-held structured session is represented by its live status feed. */
+  structuredHostOwned?: true
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string
+  /** Command installed by the running OMP extension; absent on older hosts. */
+  modelSwitchCommand?: 'orca-model'
   /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
   paneKey: string
   /** Runtime terminal handle for matching retained parent rows when the parent
@@ -186,6 +172,7 @@ export type AgentStatusPayload = {
   prompt?: string
   agentType?: AgentType
   model?: string
+  modelSwitchCommand?: 'orca-model'
   toolName?: string
   toolInput?: string
   /** JSON string of the AskUserQuestion tool input, captured live. See the
@@ -230,6 +217,7 @@ export function pickParsedAgentStatusPayload(
     prompt: row.prompt,
     ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
     ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.modelSwitchCommand ? { modelSwitchCommand: row.modelSwitchCommand } : {}),
     ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
     ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
     ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
@@ -300,7 +288,8 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
     obj.state !== 'working' &&
     obj.state !== 'blocked' &&
     obj.state !== 'waiting' &&
-    obj.state !== 'idle'
+    obj.state !== 'idle' &&
+    obj.state !== 'unverifiable'
   ) {
     return null
   }
@@ -387,6 +376,9 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     // Why: normalize like the other single-line fields so embedded newlines (e.g. `agentType: "claude\nrogue"`) can't break single-line UI and equality checks.
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
+    ...(obj.modelSwitchCommand === 'orca-model'
+      ? { modelSwitchCommand: 'orca-model' as const }
+      : {}),
     toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
     toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
     interactivePrompt: normalizeInteractivePromptField(

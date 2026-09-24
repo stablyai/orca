@@ -6,13 +6,8 @@ import {
   type NativeChatEditFile,
   type NativeChatEditLine
 } from './native-chat-edit-model'
-import { stripBoundedTextMarker } from './structured-agent-session-projection'
-import {
-  editLinesFromUnifiedPatch,
-  editLinesFromWholeFile,
-  unifiedPatchSections,
-  type UnifiedPatchSection
-} from './native-chat-unified-patch'
+import { editFilesFromPatchText, splitMoveMarker } from './native-chat-edit-patch-files'
+import { editLinesFromUnifiedPatch, editLinesFromWholeFile } from './native-chat-unified-patch'
 import type { NativeChatEditPatch } from './native-chat-types'
 
 // `NotebookEdit` is deliberately absent: its input carries only the new cell
@@ -25,9 +20,6 @@ const COMMAND_PATCH_TOOLS = new Set(['exec', 'shell', 'local_shell'])
 /** Tools whose input may wrap a `*** Begin Patch` envelope. The dedicated patch
  *  tool applies whatever it is given; a command tool must say that it is. */
 const PATCH_ENVELOPE_TOOLS = new Set(['apply_patch', ...COMMAND_PATCH_TOOLS])
-/** A count standing in for a path, from a producer that joined several files'
- *  patches and kept no per-file path. */
-const FILE_COUNT_PATH = /^\d+ files?$/
 /** Tools whose whole payload is patch text. `Diff` reaches its patch only
  *  through the result, because the structured journal projects a diff item as a
  *  call carrying just the path. */
@@ -172,22 +164,6 @@ function claudeEditFiles(
   ]
 }
 
-/** A move is appended to the patch body as prose rather than a header field, on
- *  every lane that carries the body as text. Left in place it renders as a
- *  numbered line of the file it moved.
- *
- *  Anchored to the start of the final line: unanchored, a row whose own content
- *  mentions a move was cut in half and the file it names claimed as a rename
- *  that never happened. */
-const MOVE_MARKER = /(?:^|\n)Moved to: (.+)$/
-
-function splitMoveMarker(patch: string): { body: string; movedTo: string | null } {
-  const match = MOVE_MARKER.exec(patch)
-  return match
-    ? { body: patch.slice(0, match.index), movedTo: match[1]!.trim() }
-    : { body: patch, movedTo: null }
-}
-
 function codexChangeFiles(changes: unknown[]): NativeChatEditFile[] {
   return changes.flatMap((entry) => {
     const change = record(entry)
@@ -298,52 +274,5 @@ export function editFilesFromToolPair(pair: {
   if (!patchText) {
     return null
   }
-  // The body carries its own marker when the journal clipped it. Read as
-  // content it becomes a numbered line of the file, and the rows that follow
-  // are reported complete.
-  const bounded = stripBoundedTextMarker(patchText)
-  const moved = splitMoveMarker(bounded.text)
-  // One card per file the patch touches: run together, the later files' rows
-  // and gutter numbers sit under the first file's name.
-  const split = unifiedPatchSections(moved.body)
-  const callerPath = text(input?.path) ?? text(input?.file_path)
-  if (callerPath !== null && FILE_COUNT_PATH.test(callerPath)) {
-    // The producer joined several files' patches and kept a count in place of a
-    // path, so nothing here can name a file. Naming the card after the count
-    // would assert a file that does not exist.
-    return null
-  }
-  // A patch that names one file is the file the call is reporting on, so the
-  // call's own path wins — it is the provider's, where the header's is relative
-  // to the patch. A patch naming several has no one path, and a rename's
-  // destination is only ever in the header. Sections that name nothing are
-  // preamble and must not change that count.
-  const namedSections = split.sections.filter((section) => section.path !== null).length
-  const named = (section: UnifiedPatchSection): string =>
-    (namedSections <= 1 && section.oldPath === null
-      ? (callerPath ?? section.path)
-      : (section.path ?? callerPath)) ?? 'file'
-  const files = split.sections.flatMap((section) => {
-    const parsed = editLinesFromUnifiedPatch(section.body)
-    if (!parsed && section.path === null) {
-      return []
-    }
-    return [
-      finalizeEditFile({
-        path: named(section),
-        oldPath: section.oldPath,
-        changeKind: section.changeKind,
-        lines: parsed?.lines ?? [],
-        lineNumbersKnown: parsed?.lineNumbersKnown ?? false,
-        truncated: bounded.truncated || split.truncated || (parsed?.truncated ?? false)
-      })
-    ]
-  })
-  // The move marker names where the whole patch moved, so it can only speak for
-  // a patch describing one file.
-  if (moved.movedTo !== null && files.length === 1 && files[0]) {
-    const only = files[0]
-    return [{ ...only, path: moved.movedTo, oldPath: only.path, changeKind: 'renamed' }]
-  }
-  return files.length > 0 ? files : null
+  return editFilesFromPatchText(patchText, text(input?.path) ?? text(input?.file_path))
 }

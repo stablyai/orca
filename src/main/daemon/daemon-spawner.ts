@@ -27,6 +27,10 @@ export type DaemonPidFile = {
   bootId?: string
   /** Forking app's binary — macOS pins the daemon's TCC responsible process to it (STA-3491). */
   spawnerExecPath?: string
+  /** Self-detected systemd scope unit the daemon landed in, e.g. `orca-daemon-<nonce>.scope`;
+   *  `null` when it detected none. Absent on records no daemon wrote (adoption) or that predate
+   *  durable-scope launching. */
+  cgroupUnit?: string | null
 }
 
 export type DaemonProcessHandle = {

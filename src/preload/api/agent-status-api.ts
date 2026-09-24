@@ -28,10 +28,6 @@ export type AgentStatusApi = {
       ptyId?: string
     }) => void
   ) => () => void
-  /** Listen for the automatic-resume fence a settled worker's pane gains or loses mid-session. */
-  onLegacyWorkerTerminalResumeFence: (
-    callback: (data: { paneKey: string; blocked: boolean }) => void
-  ) => () => void
   getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
   drop: (paneKey: string) => void
@@ -45,7 +41,7 @@ export type AgentStatusApi = {
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
   dropByTabPrefix: (tabId: string) => void
   /** Permanently retire one pane's hook authority while siblings stay live. */
-  retirePaneAuthority: (paneKey: string) => void
+  retirePaneAuthority: (paneKey: string, retirementId?: string) => void
   /** Lift one pane's retirement fence when a live PTY re-attaches to it. Closed tabs stay retired. */
   restorePaneAuthority: (paneKey: string) => void
   /** Move hook authority when a live pane is detached into another tab. */
@@ -54,7 +50,7 @@ export type AgentStatusApi = {
 
 export type AgentTrustApi = {
   markTrusted: (args: {
-    preset: 'cursor' | 'copilot' | 'codex'
+    preset: 'cursor' | 'copilot' | 'codex' | 'antigravity'
     workspacePath: string
     connectionId?: string
   }) => Promise<void>

@@ -70,6 +70,10 @@ export const ADMISSION_METHODS = [
     params: { envelope: envelope(), key: 'model', value: 'gpt-live' }
   },
   {
+    method: 'agentSession.threadGoal',
+    params: { envelope: envelope(), change: { kind: 'clear' } }
+  },
+  {
     method: 'agentSession.requestHandoff',
     params: { envelope: envelope(), direction: 'to-tui', mode: 'now' }
   },

@@ -1,9 +1,7 @@
 import * as ExpoCrypto from 'expo-crypto'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type PairingGetEndpointsResult
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { MobileRelayUpgradeHostRemovedError, saveExistingHostRelayUpgrade } from './host-store'
 import { persistRelayHost } from './mobile-endpoint-supervisor-support'
@@ -20,8 +18,13 @@ import {
   writeMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
 } from './mobile-relay-direct-upgrade-journal'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 import type { RpcClient } from './rpc-client'
-import type { HostProfile, RpcResponse } from './types'
+import type { HostProfile } from './types'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 
 export type MobileRelayDirectUpgradeResult = {
   host: HostProfile
@@ -64,7 +67,7 @@ export async function upgradeDirectMobileRelay(args: {
   }
 
   const initial = await getEndpoints(args.client, journal.reqId)
-  if (initial === 'method-not-found') {
+  if (initial === 'relay-pairing-unavailable') {
     await dependencies.clearJournal(args.host.id)
     return null
   }
@@ -75,18 +78,18 @@ export async function upgradeDirectMobileRelay(args: {
     throw new Error('relay endpoint unavailable for direct pairing upgrade')
   }
 
-  const provisionResponse = await args.client.sendRequest('pairing.provisionRelay', {
+  const provisionReply = await relayCredentialProvision.request(args.client, {
     reqId: journal.reqId,
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
-  if (isMethodNotFound(provisionResponse)) {
+  if (isPairingRelayRpcUnavailable(provisionReply)) {
     await dependencies.clearJournal(args.host.id)
     return null
   }
-  const installed = DeviceCredentialInstalledSchema.parse(requireSuccess(provisionResponse))
+  const installed = relayCredentialProvision.interpret(provisionReply)
   assertDirectInstall(journal, installed)
   const reconciled = await getEndpoints(args.client, journal.reqId)
-  if (reconciled === 'method-not-found') {
+  if (reconciled === 'relay-pairing-unavailable') {
     throw new Error('relay endpoint reconciliation became unavailable')
   }
   assertCommitted(reconciled, installed)
@@ -134,12 +137,12 @@ async function publishCommitted(
 async function getEndpoints(
   client: RpcClient,
   installReqId: string
-): Promise<PairingGetEndpointsResult | 'method-not-found'> {
-  const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (isMethodNotFound(response)) {
-    return 'method-not-found'
+): Promise<PairingGetEndpointsResult | 'relay-pairing-unavailable'> {
+  const reply = await relayPairingEndpointsRead.request(client, { installReqId })
+  if (isPairingRelayRpcUnavailable(reply)) {
+    return 'relay-pairing-unavailable'
   }
-  return PairingGetEndpointsResultSchema.parse(requireSuccess(response))
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 function assertDirectInstall(
@@ -161,15 +164,4 @@ function assertCommitted(
   ) {
     throw new Error('relay credential install was not authoritatively reconciled')
   }
-}
-
-function requireSuccess(response: RpcResponse): unknown {
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
-  }
-  return response.result
-}
-
-function isMethodNotFound(response: RpcResponse): boolean {
-  return !response.ok && response.error.code === 'method_not_found'
 }

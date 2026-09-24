@@ -1,0 +1,138 @@
+{
+  "sources": {
+    "src/main/browser/browser-client-host-command-dispatcher.ts": {
+      "before": "f8c610a54f7d16c59043250dde5ef399f70e1a974c9492d09d403138e46c1da3",
+      "after": "0e4074a4cb7379de58d75dd93e3f74090dea18a944bd4f038730cf19f6e68a98"
+    },
+    "src/main/browser/browser-client-host-command-result-cache.ts": {
+      "before": "9ec3dad78c83f864f74957cad766cbcf41863e92d81d7e7a471702b0f9ab2f34",
+      "after": "f06bd1f31be9ffcbb750f242bacd0c2f16222cde7d011010acbd46ceb70ea83f"
+    },
+    "src/main/browser/browser-client-host-command-state.ts": {
+      "before": "a5f6b7a3737f86b2953fc43fa0e3ed5faaa141814d5f94fd192da1bb510f355f",
+      "after": "a5f6b7a3737f86b2953fc43fa0e3ed5faaa141814d5f94fd192da1bb510f355f"
+    },
+    "src/main/browser/browser-client-host-command-page.ts": {
+      "before": "f5ca7f90511ee0290d2a1d0b3c5c39d3c9841ebcf90a5564bce83fbc9aca06bb",
+      "after": "f5ca7f90511ee0290d2a1d0b3c5c39d3c9841ebcf90a5564bce83fbc9aca06bb"
+    },
+    "src/main/browser/browser-client-host-command-join.ts": {
+      "before": "5bf1a38231100cc416176ef2052bdff7b3fca91b6f6dbefcd222b92be59cbb2f",
+      "after": "5bf1a38231100cc416176ef2052bdff7b3fca91b6f6dbefcd222b92be59cbb2f"
+    },
+    "src/main/browser/browser-client-page-command-executor.ts": {
+      "before": "d249de82f89365371fa4f3b457e0da552910819555a5a0bced0c95010ccacb01",
+      "after": "d249de82f89365371fa4f3b457e0da552910819555a5a0bced0c95010ccacb01"
+    },
+    "src/main/browser/browser-client-page-command-execution.ts": {
+      "before": "82b7c87d17b34c267ebfdf3d6ee25058cbd05dbc163ac24c43aefed00f0e3c6e",
+      "after": "82b7c87d17b34c267ebfdf3d6ee25058cbd05dbc163ac24c43aefed00f0e3c6e"
+    },
+    "src/main/browser/browser-client-page-command-executor-test-harness.ts": {
+      "before": "b43ec764e4d094070fab51381ceb24487999dca97b4a38131be08fab0c5cbe24",
+      "after": "b43ec764e4d094070fab51381ceb24487999dca97b4a38131be08fab0c5cbe24"
+    },
+    "src/main/browser/browser-client-page-automation-runtime.ts": {
+      "before": "7b1c0c527a87b8c22ea8290a2e1efc7ca659f2b4a5e2bd7c740fb5c22a2a6319",
+      "after": "7b1c0c527a87b8c22ea8290a2e1efc7ca659f2b4a5e2bd7c740fb5c22a2a6319"
+    },
+    "src/main/browser/browser-route-guest-lifecycle.ts": {
+      "before": "52adbea664bcfc5d774f129d442f4fc36d4a1e1280a073053fc09ae026ca83cb",
+      "after": "52adbea664bcfc5d774f129d442f4fc36d4a1e1280a073053fc09ae026ca83cb"
+    },
+    "src/main/browser/browser-route-webcontents-registry.ts": {
+      "before": "132c6740539aaeb9b1ceb3c108d2aebfb9e8e5c4ce3ff7cd1191e5b45dff8cad",
+      "after": "132c6740539aaeb9b1ceb3c108d2aebfb9e8e5c4ce3ff7cd1191e5b45dff8cad"
+    },
+    "src/main/browser/paired-runtime-browser-client-host.ts": {
+      "before": "797c0130e30c5f40551f5d392326fff1ac8752e262653b3f855dfd7df9fa0038",
+      "after": "797c0130e30c5f40551f5d392326fff1ac8752e262653b3f855dfd7df9fa0038"
+    },
+    "src/main/browser/paired-runtime-browser-client-host-composition.ts": {
+      "before": "f8b55a24035e929664f3c5f61ee8a81ee560250379dcf64b39d35e1b60628b74",
+      "after": "f8b55a24035e929664f3c5f61ee8a81ee560250379dcf64b39d35e1b60628b74"
+    },
+    "src/main/browser/paired-runtime-browser-client-host-teardown.ts": {
+      "before": "4d9eb53c81ddfa3cb8181735b08c2b90a380bebab1f173ae5d8da9f719671f59",
+      "after": "4d9eb53c81ddfa3cb8181735b08c2b90a380bebab1f173ae5d8da9f719671f59"
+    },
+    "src/main/browser/paired-runtime-browser-client-host-runtime.ts": {
+      "before": "2d0650d0a5ebe88f1185ab5676762ed93188e7c28a69508137ed7cfa36e3832c",
+      "after": "2d0650d0a5ebe88f1185ab5676762ed93188e7c28a69508137ed7cfa36e3832c"
+    },
+    "src/main/runtime/rpc/methods/browser-core.ts": {
+      "before": "fdc2afeece6689644fbd607a59e484ef9d2ac6db7404e3378f2db10e16984f6d",
+      "after": "fdc2afeece6689644fbd607a59e484ef9d2ac6db7404e3378f2db10e16984f6d"
+    },
+    "src/main/runtime/runtime-browser-commands-active-screencasts-by-page-id.ts": {
+      "before": "0af16d6fe883f6af79754e064b77a1b9ab8e80953657434eacc88cc1c523e038",
+      "after": "0af16d6fe883f6af79754e064b77a1b9ab8e80953657434eacc88cc1c523e038"
+    },
+    "src/main/browser/agent-browser-bridge-types.ts": {
+      "before": "3ea69d15aef862807108835d1cbd536275a105a96bdc86f3be95dfbed55ab45f",
+      "after": "3ea69d15aef862807108835d1cbd536275a105a96bdc86f3be95dfbed55ab45f"
+    },
+    "src/main/browser/agent-browser-bridge-raw-process.ts": {
+      "before": "d0e9929c4a4571d8752efa5e4063500efa75fefd228eb6cb1ea6092748befb0c",
+      "after": "d0e9929c4a4571d8752efa5e4063500efa75fefd228eb6cb1ea6092748befb0c"
+    },
+    "src/main/browser/agent-browser-bridge-core-commands.ts": {
+      "before": "d587a7e7c3bd368c9003802607edd20def98e64442cd6d5914779c633feebd03",
+      "after": "d587a7e7c3bd368c9003802607edd20def98e64442cd6d5914779c633feebd03"
+    },
+    "src/main/startup/main-process-ready-runtime.ts": {
+      "before": "5bb3615e9dc430e0a9ab61cb3d70e57ecbfa4c5ea82d5414fc82d93e81e9819b",
+      "after": "5bb3615e9dc430e0a9ab61cb3d70e57ecbfa4c5ea82d5414fc82d93e81e9819b"
+    },
+    "src/shared/browser-client-host-protocol.ts": {
+      "before": "712fe3eaed30c2de322466f316c966e526dcb60cf387cc0f6ba48012c70a7956",
+      "after": "712fe3eaed30c2de322466f316c966e526dcb60cf387cc0f6ba48012c70a7956"
+    },
+    "src/shared/browser-client-automation-protocol.ts": {
+      "before": "f93331c39fd0f8e08518d7a11a461bf5108c1a65be8f213ab2e2eff2ab977e58",
+      "after": "f93331c39fd0f8e08518d7a11a461bf5108c1a65be8f213ab2e2eff2ab977e58"
+    }
+  },
+  "runtime": {
+    "node": "26.6.0",
+    "electron": null,
+    "v8": "14.6.202.34-node.26"
+  },
+  "variant": "before",
+  "cases": [
+    {
+      "kind": "native-navigation-close",
+      "completedPayloads": 32,
+      "heldNativePorts": 1,
+      "joinTimeoutOverrideMs": 15,
+      "retainedPayloadsAfterClose": 32,
+      "cachedResultsAfterClose": 34,
+      "cancelledQueuedInputRetained": true,
+      "signalAborted": true,
+      "executorCustodyPreserved": true,
+      "routeLeasePreserved": true,
+      "closedDuplicateRejected": true,
+      "secondCloseSettled": false,
+      "retainedAfterNativeSettlement": 0,
+      "executorClosedAfterNativeSettlement": true
+    },
+    {
+      "kind": "late-sibling-settlement",
+      "oneHandlerStillOwned": true,
+      "cachedAfterFirstSettlement": 1,
+      "closedSettlementStillPending": true
+    },
+    {
+      "kind": "open-replay-and-retire-contract",
+      "openPromiseIdentityPreserved": true,
+      "retiredDuplicateRejected": true,
+      "retireCachePolicyUnchanged": true,
+      "explicitForgetReleasedCache": true
+    },
+    {
+      "kind": "synthetic-crlf-source-control",
+      "canonicalHashesMatch": true,
+      "reads": 24
+    }
+  ]
+}

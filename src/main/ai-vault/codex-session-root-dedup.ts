@@ -223,36 +223,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
   return candidates.filter((candidate) => !aliasesToDrop.has(candidate))
 }
 
-/**
- * Collapses parsed Codex sessions that share a rollout name and session id on
- * one execution host, keeping the canonical root's row. Requiring both the
- * parsed id and rollout name preserves id collisions and same-name files whose
- * parsed ids differ.
- */
-export function dedupeCodexSessionsBySessionId(
-  sessions: readonly AiVaultSession[]
-): AiVaultSession[] {
-  const bestByKey = new Map<string, AiVaultSession>()
-  for (const session of sessions) {
-    const key = codexSessionAliasKey(session)
-    if (!key) {
-      continue
-    }
-    const best = bestByKey.get(key)
-    if (!best || codexSessionAliasBeats(session, best)) {
-      bestByKey.set(key, session)
-    }
-  }
-  return sessions.filter((session) => {
-    const key = codexSessionAliasKey(session)
-    if (!key) {
-      return true
-    }
-    return bestByKey.get(key) === session
-  })
-}
-
-function codexSessionAliasKey(session: AiVaultSession): string | null {
+export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent !== 'codex') {
     return null
   }
@@ -263,7 +234,7 @@ function codexSessionAliasKey(session: AiVaultSession): string | null {
   return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }
 
-function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
+export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
   const candidateRank = codexSessionRootRank(candidate.codexHome)
   const bestRank = codexSessionRootRank(best.codexHome)
   if (candidateRank !== bestRank) {

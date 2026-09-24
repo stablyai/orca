@@ -167,12 +167,14 @@ describe('Claude structured session handoff options', () => {
     ).toMatchObject({ ok: true, value: { options: { model: PICKED_MODEL } } })
 
     expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
+      { timeout: 10_000 }
     )
     expect(await host.requestHandoff(CALLER, handoff('to-native'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' }),
+      { timeout: 10_000 }
     )
 
     expect(acquire.mock.calls[1]?.[0].options).toEqual({ model: PICKED_MODEL })

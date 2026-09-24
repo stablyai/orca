@@ -10,6 +10,10 @@ import {
 // input, and must preserve the fold property extract(a + b) === extract(extract(a) + b).
 // A 25.6M-case out-of-band sweep (exhaustive len<=5, 2000 x 16 KB random chunks, every BMP code
 // unit) found 0 divergences; this is the CI-sized slice of it.
+// The fold half re-splits every combined stream at every code-unit boundary; the alphabet and
+// SEQUENCES deliberately carry CAN/SUB and doubled ESC inside OSC/DCS/SOS/PM/APC, because two
+// fold breaks in those exact states shipped undetected while the fold check was only asserted
+// on already-normalized pendings (where it is a tautology).
 
 const oracle = (pending: string, chunk: string): string => {
   const tail = extractPartialEscapeTail(pending + chunk)
@@ -22,6 +26,7 @@ const ALPHABET = [
   '\x18',
   '\x1a',
   '\x07',
+  '\x00',
   '\\',
   '[',
   ']',
@@ -30,6 +35,7 @@ const ALPHABET = [
   '^',
   '_',
   '(',
+  ' ',
   '0',
   ';',
   'm',
@@ -37,6 +43,7 @@ const ALPHABET = [
   '\x7f',
   '\x9c',
   'é',
+  '中',
   '\u{1f600}',
   '\ud83d',
   '\udc00'
@@ -66,7 +73,17 @@ const SEQUENCES = [
   '\x1b7',
   '\x1b[?1049h',
   '\x1b]52;c;aGVsbG8=\x1b\\',
-  'ab\x1b[2Jcd'
+  'ab\x1b[2Jcd',
+  // CAN/SUB aborting from inside a string sequence, and from inside its ESC state.
+  '\x1b]0;title\x18rest',
+  '\x1bPx\x1b\x18X0abc',
+  '\x1bP data\x1b\x1arest',
+  '\x1b]0;t\x1b\x18\x1b[1m',
+  // A second ESC inside OSC/DCS opens its own sequence at that ESC, not at the first one.
+  '\x1b] \x1b\x1b^',
+  '\x1b]0;t\x1b\x1b\x1b[3',
+  '\x1bPq\x1b\x1b]0;x\x07',
+  '\x1bX sos \x1b\x1bP'
 ]
 
 // Yields {text, depth} because an astral symbol is two UTF-16 code units: filtering on
@@ -91,6 +108,26 @@ function* stringsUpTo(maxDepth: number): Generator<{ depth: number; text: string
 
 describe('advancePartialEscapeTail differential fuzz', () => {
   let checked = 0
+  let foldSplits = 0
+  // Why the sweep and not just `advance(extract(pending), chunk)`: every PENDINGS entry is
+  // already a tail, so `extract(pending) === pending` makes that form a tautology. Only
+  // re-splitting the combined stream lands a boundary inside oscEsc/stringEsc, where the
+  // CAN/SUB abort and the second-ESC restart live.
+  const checkFolds = (text: string): void => {
+    if (text.length > 32) {
+      return // keeps the cap corpus (5000-char chunks) out of an O(n^2) sweep
+    }
+    const whole = extractPartialEscapeTail(text)
+    for (let cut = 0; cut <= text.length; cut++) {
+      foldSplits++
+      const folded = extractPartialEscapeTail(
+        extractPartialEscapeTail(text.slice(0, cut)) + text.slice(cut)
+      )
+      if (folded !== whole) {
+        expect.fail(`fold property broke: ${JSON.stringify({ text, cut, whole, folded })}`)
+      }
+    }
+  }
   const check = (pending: string, chunk: string): void => {
     checked++
     const actual = advancePartialEscapeTail(pending, chunk)
@@ -104,6 +141,7 @@ describe('advancePartialEscapeTail differential fuzz', () => {
     ) {
       expect.fail(`fold property broke: ${JSON.stringify({ pending, chunk })}`)
     }
+    checkFolds(pending + chunk)
   }
 
   it('matches the unguarded oracle on every chunk up to length 4', () => {
@@ -149,6 +187,7 @@ describe('advancePartialEscapeTail differential fuzz', () => {
   })
 
   it('ran the whole corpus', () => {
-    expect(checked).toBe(593_468)
+    expect(checked).toBe(963_819)
+    expect(foldSplits).toBe(6_236_429)
   })
 })

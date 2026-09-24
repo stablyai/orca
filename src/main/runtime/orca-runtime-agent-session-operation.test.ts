@@ -1,3 +1,7 @@
+import {
+  CreateAgentSessionParams,
+  EnsureAgentSessionParams
+} from '../../shared/rpc-contract/agent-session-params'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeCreateAgentSessionRequest,
@@ -111,6 +115,40 @@ async function fenceRemoteAgentSessionSpawn(runtime: OrcaRuntimeService) {
 }
 
 describe('agent-session create operation ledger', () => {
+  it.each([true, false, undefined])(
+    'forwards renderer keyboard support on create and resume: %s',
+    async (terminalKittyKeyboardProtocol) => {
+      const runtime = createRuntime()
+      const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+      await runtime.createAgentSession(
+        CreateAgentSessionParams.parse(request(operationId(), { terminalKittyKeyboardProtocol }))
+      )
+      await runtime.ensureAgentSession(
+        EnsureAgentSessionParams.parse({
+          kind: 'explicit',
+          worktree: 'id:worktree-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-session-1' },
+          terminalKittyKeyboardProtocol
+        })
+      )
+      expect(createTerminal).toHaveBeenCalledTimes(2)
+      for (const call of createTerminal.mock.calls) {
+        expect(call[1]?.terminalKittyKeyboardProtocol).toBe(terminalKittyKeyboardProtocol)
+      }
+    }
+  )
+  it('refuses a changed keyboard capability under the same create operation', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const id = operationId()
+    await runtime.createAgentSession(request(id, { terminalKittyKeyboardProtocol: true }))
+    await expect(runtime.createAgentSession(request(id))).rejects.toThrow(
+      'agent_session_operation_conflict'
+    )
+    expect(createTerminal).toHaveBeenCalledOnce()
+  })
+
   it('selects legacy before trust, spawn, or ledger state for an old daemon', async () => {
     const provider = {
       supportsAgentSessionClaims: vi.fn(() => false),

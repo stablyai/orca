@@ -23,7 +23,11 @@ export function normalizePersistedState(
   state: OpenCodeUsagePersistedState
 ): OpenCodeUsagePersistedState {
   if (state.schemaVersion !== SCHEMA_VERSION) {
-    return getDefaultState()
+    const defaults = getDefaultState()
+    return {
+      ...defaults,
+      scanState: { ...defaults.scanState, enabled: state.scanState?.enabled ?? false }
+    }
   }
   return {
     ...state,

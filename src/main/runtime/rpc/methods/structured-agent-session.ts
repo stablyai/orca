@@ -10,7 +10,15 @@ import {
   computeAgentSessionPayloadFingerprint
 } from '../../../../shared/agent-session-mutation-envelope'
 import type { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import {
+  projectBackgroundTaskEvent,
+  projectBackgroundTaskHistory
+} from './structured-agent-session-background-task-capability'
+import {
+  projectTurnItemEvent,
+  projectTurnItemHistory
+} from './structured-agent-session-turn-item-capability'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireStructuredCapability,
@@ -26,6 +34,7 @@ import {
 } from './structured-agent-session-create'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './structured-agent-session-restart-resume'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import {
   bindStructuredAgentSessionStream,
@@ -35,6 +44,8 @@ import {
   structuredAgentSessionSubscriptionBase as subscriptionBaseFor,
   structuredAgentSessionSubscriptionId as subscriptionIdFor
 } from './structured-agent-session-subscription-id'
+import { STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS } from './structured-agent-session-turn-completion-stream'
+import { STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS } from './structured-agent-session-thread-goal'
 import {
   AttachParams,
   CancelParams,
@@ -52,6 +63,7 @@ import {
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
+import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
 
 /**
  * The attach-shaped entries take the location from the client instead of resolving it from a
@@ -82,7 +94,7 @@ async function attachClientSuppliedLocation(
   return host.attach(callerFor(ctx), attachParams)
 }
 
-export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.rewind',
     params: RewindParams,
@@ -186,7 +198,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'agentSession.send',
     params: SendParams,
-    handler: async (params, ctx) => requireHost(ctx).send(callerFor(ctx), params)
+    handler: sendStructuredAgentSessionForClient
   }),
   defineMethod({
     // Stopping a turn, so it stays available after admission is revoked: see the gate's rule.
@@ -251,7 +263,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'agentSession.history',
     params: HistoryParams,
-    handler: async (params, ctx) => requireHost(ctx).history(params)
+    handler: async (params, ctx) =>
+      projectTurnItemHistory(
+        projectBackgroundTaskHistory(requireHost(ctx).history(params), ctx),
+        ctx
+      )
   }),
   defineStreamingMethod({
     name: 'agentSession.subscribe',
@@ -278,7 +294,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       dispose = host.subscribe({
         id: subscriptionId,
         sessionId: params.sessionId,
-        emit,
+        emit: (event) => emit(projectTurnItemEvent(projectBackgroundTaskEvent(event, ctx), ctx)),
         ...(params.cursor ? { cursor: params.cursor } : {})
       })
       if (stream.isClosed()) {
@@ -313,5 +329,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   }),
   ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
   ...STRUCTURED_AGENT_SESSION_REVEAL_METHODS,
-  ...STRUCTURED_AGENT_SESSION_STATUS_METHODS
+  ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
+  ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,
+  ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS
 ]

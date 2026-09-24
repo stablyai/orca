@@ -1,0 +1,900 @@
+{
+  "operation": "tasks.item-detail-metadata",
+  "family": "tasks.item-detail-metadata",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
+  "scenarioSha256": "a2ecf4ddc2c9870a8d73cbd920b46bb0663a958ac156dc6de092be3c9474ea2b",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0bfb51d103da": {
+      "name": "itemLabelsError",
+      "ordinal": 12,
+      "value": "transport failure"
+    },
+    "0d670a7b256b": {
+      "labels": [],
+      "labelsError": "transport failure",
+      "labelsLoading": false,
+      "users": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": "",
+      "usersLoading": false
+    },
+    "187a6bd82efe": {
+      "labels": ["bug", "chore"],
+      "labelsError": "",
+      "labelsLoading": false,
+      "users": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": "",
+      "usersLoading": false
+    },
+    "215de61d1fbb": {
+      "name": "itemAssignableUsersLoading",
+      "ordinal": 15,
+      "value": false
+    },
+    "222c049cbb2a": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2dcccd0a2e1e": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "3356ec8253b4": {
+      "name": "itemBodyDraft",
+      "ordinal": 1,
+      "value": "body"
+    },
+    "345426dc323b": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "3b4a3643a78c": {
+      "name": "github.listAssignableUsers#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "3c0f8d43db2e": {
+      "name": "itemLabelsLoading",
+      "ordinal": 13,
+      "value": false
+    },
+    "3edb9333eaaf": {
+      "name": "itemAssignableUsers",
+      "ordinal": 6,
+      "value": []
+    },
+    "43b6d24fbc7b": {
+      "name": "itemLabelsError",
+      "ordinal": 12,
+      "value": "outer refused"
+    },
+    "476e11905643": {
+      "labels": [],
+      "labelsError": "Unknown method",
+      "labelsLoading": false,
+      "users": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": "",
+      "usersLoading": false
+    },
+    "4f0b27d85f31": {
+      "name": "github.listAssignableUsers#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listAssignableUsers"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "avatarUrl": {
+                "$rpc": "null"
+              },
+              "login": "octocat",
+              "name": "Octo"
+            }
+          ]
+        }
+      }
+    },
+    "586d4bb85833": {
+      "name": "itemLabelsError",
+      "ordinal": 12,
+      "value": "The host sent a reply this app could not read (github.listLabels)"
+    },
+    "8133d5271224": {
+      "name": "itemLabelsError",
+      "ordinal": 12,
+      "value": ""
+    },
+    "90483b517d86": {
+      "name": "itemAssignableUsers",
+      "ordinal": 14,
+      "value": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ]
+    },
+    "99b2357770d0": {
+      "name": "itemAssignableUsersError",
+      "ordinal": 7,
+      "value": ""
+    },
+    "9a8e65d1e38f": {
+      "name": "github.listLabels#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "a2835189d719": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a49372405361": {
+      "name": "itemAssignableUsersLoading",
+      "ordinal": 8,
+      "value": true
+    },
+    "ae373967e842": {
+      "name": "itemLabelsLoading",
+      "ordinal": 4,
+      "value": true
+    },
+    "bcc62e574cde": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "c8bbeea01e3a": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cd0e3d61ff7d": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["bug", "chore"]
+        }
+      }
+    },
+    "d1182c2be3cf": {
+      "labels": [],
+      "labelsError": "outer refused",
+      "labelsLoading": false,
+      "users": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": "",
+      "usersLoading": false
+    },
+    "d79f6e922f48": {
+      "labels": [],
+      "labelsError": "",
+      "labelsLoading": false,
+      "users": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": "",
+      "usersLoading": false
+    },
+    "d7a33503e34e": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "de4475507e53": {
+      "name": "itemLabelsError",
+      "ordinal": 12,
+      "value": "Unknown method"
+    },
+    "e11f2dac1b42": {
+      "name": "itemLabelsError",
+      "ordinal": 3,
+      "value": ""
+    },
+    "e3c567dd8755": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e8ff540f77f3": {
+      "name": "itemAvailableLabels",
+      "ordinal": 2,
+      "value": []
+    },
+    "e988589d9748": {
+      "labels": [],
+      "labelsError": "The host sent a reply this app could not read (github.listLabels)",
+      "labelsLoading": false,
+      "users": [
+        {
+          "avatarUrl": {
+            "$rpc": "null"
+          },
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": "",
+      "usersLoading": false
+    },
+    "eb10dbb56e82": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f688d81cf210": {
+      "name": "github.listLabels#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listLabels"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "fbaca9693f87": {
+      "name": "itemAvailableLabels",
+      "ordinal": 12,
+      "value": ["bug", "chore"]
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.item-detail-metadata-github.listlabels-1",
+    "checkpoints": [
+      {
+        "id": "tk-item-detail-metadata.normal:mounted",
+        "observation": {
+          "sender": ["cd0e3d61ff7d", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "187a6bd82efe",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "fbaca9693f87",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.result-absent:mounted",
+        "observation": {
+          "sender": ["2dcccd0a2e1e", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e988589d9748",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "586d4bb85833",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.result-null:mounted",
+        "observation": {
+          "sender": ["bcc62e574cde", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e988589d9748",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "586d4bb85833",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.inner-ok-missing:mounted",
+        "observation": {
+          "sender": ["345426dc323b", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e988589d9748",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "586d4bb85833",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.inner-false-string-error:mounted",
+        "observation": {
+          "sender": ["eb10dbb56e82", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e988589d9748",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "586d4bb85833",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.inner-false-object-error:mounted",
+        "observation": {
+          "sender": ["f688d81cf210", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e988589d9748",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "586d4bb85833",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.outer-refused:mounted",
+        "observation": {
+          "sender": ["d7a33503e34e", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d1182c2be3cf",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "43b6d24fbc7b",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.outer-refused-no-message:mounted",
+        "observation": {
+          "sender": ["222c049cbb2a", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d79f6e922f48",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "8133d5271224",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.method-not-found:mounted",
+        "observation": {
+          "sender": ["e3c567dd8755", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "476e11905643",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "de4475507e53",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.transport-rejection:mounted",
+        "observation": {
+          "sender": ["a2835189d719", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "0d670a7b256b",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "0bfb51d103da",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-metadata.transport-rejection-no-message:mounted",
+        "observation": {
+          "sender": ["c8bbeea01e3a", "4f0b27d85f31"],
+          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d79f6e922f48",
+          "effects": [
+            "3356ec8253b4",
+            "e8ff540f77f3",
+            "e11f2dac1b42",
+            "ae373967e842",
+            "3edb9333eaaf",
+            "99b2357770d0",
+            "a49372405361",
+            "8133d5271224",
+            "3c0f8d43db2e",
+            "90483b517d86",
+            "215de61d1fbb"
+          ]
+        }
+      }
+    ]
+  }
+}

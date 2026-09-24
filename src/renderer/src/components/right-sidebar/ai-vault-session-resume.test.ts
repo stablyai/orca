@@ -592,6 +592,21 @@ describe('aiVaultSessionRowResumeGating', () => {
     })
   })
 
+  it('withholds copy-resume from a native structured session', () => {
+    expect(
+      aiVaultSessionRowResumeGating(
+        {
+          ...sessionWithTurns,
+          structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+        },
+        unblocked
+      )
+    ).toEqual({
+      resumeDisabled: false,
+      canCopyResumeCommand: false
+    })
+  })
+
   it('treats user/assistant previews as resumable content when the turn count is unknown', () => {
     const previewOnlySession = {
       messageCount: 0,

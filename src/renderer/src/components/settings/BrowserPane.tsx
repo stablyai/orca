@@ -16,6 +16,7 @@ import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsS
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
+import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
@@ -119,6 +120,7 @@ export function BrowserPane({
   const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [
     getBrowserPaneSearchEntries()[9]
   ])
+  const showUserAgent = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[10]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -249,6 +251,8 @@ export function BrowserPane({
           onChange={setBrowserDefaultZoomLevel}
         />
       ) : null}
+
+      {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
 
       {showLinkRouting ? (
         <BrowserLinkRoutingSetting

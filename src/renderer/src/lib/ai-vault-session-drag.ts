@@ -100,7 +100,9 @@ function isSerializedPayload(value: unknown): value is SerializedAiVaultSessionD
     isNonEmptyString(payload.sessionId) &&
     (payload.structuredSession === undefined || isStructuredSession(payload.structuredSession)) &&
     isNonEmptyString(payload.title) &&
-    isNonEmptyString(payload.command) &&
+    (payload.structuredSession
+      ? typeof payload.command === 'string'
+      : isNonEmptyString(payload.command)) &&
     (payload.sessionFilePath === undefined || isNonEmptyString(payload.sessionFilePath)) &&
     (payload.sessionExecutionHostId === undefined ||
       Boolean(normalizeExecutionHostId(payload.sessionExecutionHostId))) &&

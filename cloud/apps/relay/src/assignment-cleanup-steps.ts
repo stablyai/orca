@@ -1,9 +1,9 @@
 import { runRelayBackgroundOperation } from './relay-background-operation.js'
 
-// The ten periodic assignment sweeps the director runs every 30s. Each step
+// The eleven periodic assignment sweeps the director runs every 30s. Each step
 // re-derives its state from the database and is idempotent, so they carry no
 // intra-tick ordering dependency — which is what makes per-step isolation
-// sound: one failing sweep costs one tick of itself, never the other nine.
+// sound: one failing sweep costs one tick of itself, never the other ten.
 // (A single poisoned rehome row once silenced the whole chained form
 // fleet-wide.) Sweep failures are logged, never fed into the rehome worker's
 // dispatch-failure budget: a sweep exception is not a dispatch failure and
@@ -13,6 +13,7 @@ export type AssignmentCleanupStore = {
   completeReadyEvacuations(): Promise<unknown>
   completeReadyRegionalRehomes(): Promise<unknown>
   abortExpiredEvacuations(): Promise<unknown>
+  abortUnarrivedRegionalRehomes(): Promise<unknown>
   abortExpiredRegionalRehomes(): Promise<unknown>
   reapRegionalRehomeAttempts(): Promise<unknown>
   releaseExpiredActivityLeases(): Promise<unknown>
@@ -29,6 +30,7 @@ export function assignmentCleanupSteps(
     ['complete-ready-evacuations', () => assignments.completeReadyEvacuations()],
     ['complete-ready-regional-rehomes', () => assignments.completeReadyRegionalRehomes()],
     ['abort-expired-evacuations', () => assignments.abortExpiredEvacuations()],
+    ['abort-unarrived-regional-rehomes', () => assignments.abortUnarrivedRegionalRehomes()],
     ['abort-expired-regional-rehomes', () => assignments.abortExpiredRegionalRehomes()],
     ['reap-regional-rehome-attempts', () => assignments.reapRegionalRehomeAttempts()],
     ['release-expired-activity-leases', () => assignments.releaseExpiredActivityLeases()],

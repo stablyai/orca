@@ -232,7 +232,9 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
     opts: { limit?: number } = {}
   ): Promise<RuntimeTerminalRead> {
     const visibleState = await this.readVisibleTerminalState(ptyId)
-    const projection = visibleState ?? (await this.readProviderTerminalTailLines(ptyId, opts.limit))
+    const projection =
+      visibleState ??
+      (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true }))
     if (projection.lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }
     }

@@ -4,7 +4,10 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { LegacyImportOptions } from '../agent-session-journal/journal-legacy-import'
 import { importLegacyTranscriptIntoJournal } from '../agent-session-journal/journal-legacy-import'
 import { journalIdentityFor } from './structured-agent-session-attach'
-import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-adapter'
+import {
+  rethrowAfterAgentSessionAcquisitionCleanup,
+  type StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
 import { canRestoreLiveTuiOwner } from './structured-agent-session-handoff-restart'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host'
@@ -16,6 +19,7 @@ import type { AgentSessionSubscribers } from './structured-agent-session-subscri
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
 import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 
 type HostHandoffAccess = {
   session: (sessionId: string) => StructuredAgentSessionHostSession
@@ -25,6 +29,7 @@ type HostHandoffAccess = {
   flush: (sessionId: string) => Promise<void>
   serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
   subscribers: AgentSessionSubscribers
+  publishStatus?: (sessionId: string) => void
   now: () => number
 }
 
@@ -82,17 +87,26 @@ export function createStructuredAgentSessionHostHandoff(
         return { state: 'live' }
       }
       host.session(sessionId).hasProviderChild = false
+      host.publishStatus?.(sessionId)
       try {
         await host.flush(sessionId)
+        const session = host.session(sessionId)
+        await session.journal.markPendingSubmissionsUnknown(
+          session.fence,
+          'provider_exited_before_acknowledgement'
+        )
+        host.subscribers.publish(sessionId, session.journal)
+        host.publishStatus?.(sessionId)
         host.eventSink(sessionId).unbind()
         return { state: 'stopped' }
       } catch (error) {
         return { state: 'stopped-cleanup-failed', error }
       }
     },
+    acknowledgeNativeRelease: (sessionId) => deps.adapter.acknowledgeSessionRelease?.(sessionId),
     acquireNative: (input) => acquireNativeHandoffOwner(deps, host, input),
-    acquireNativeStop: async (sessionId, turnId, fence) =>
-      (await deps.adapter.cancelTurn({ sessionId, turnId, fence })).cancelled,
+    acquireNativeStop: (sessionId, turnId, fence) =>
+      stopNativeHandoffTurn(deps.adapter, host.session(sessionId), { sessionId, turnId, fence }),
     importTuiHistory: (input) => importTuiHistory(deps, host, input),
     retryPendingSettlement: (sessionId) =>
       retryLoadedStructuredAgentSessionSettlement({
@@ -145,6 +159,24 @@ export function createStructuredAgentSessionHostHandoff(
       }
     }
   })
+}
+
+/** Handoff's own Stop, which never passes through `performCancel` and so has to carry the
+ *  journal reads that judge a cancellation itself. */
+export async function stopNativeHandoffTurn(
+  adapter: Pick<StructuredAgentSessionAdapter, 'cancelTurn'>,
+  session: Pick<StructuredAgentSessionHostSession, 'journal'>,
+  input: { sessionId: string; turnId: string; fence: number }
+): Promise<boolean> {
+  const dispatchStatus = latestJournalDispatchObservation(session.journal, input.fence)
+  return (
+    await adapter.cancelTurn({
+      ...input,
+      // The journal is what the client read to name a turn, so it is what judges the request.
+      resolveLiveTurnId: () => session.journal.activeTurnId(),
+      ...(dispatchStatus ? { dispatchStatus } : {})
+    })
+  ).cancelled
 }
 
 async function importTuiHistory(
@@ -243,6 +275,7 @@ export async function acquireNativeHandoffOwner(
     return rethrowAfterAgentSessionAcquisitionCleanup(deps.adapter, input.sessionId, error)
   }
   session.hasProviderChild = true
+  host.publishStatus?.(input.sessionId)
   session.fence = proved.lease.runtimeFence
   session.acquisitionGeneration = acquired.acquisitionGeneration ?? null
   eventSink.bind({

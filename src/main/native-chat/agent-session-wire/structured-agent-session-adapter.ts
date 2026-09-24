@@ -14,10 +14,12 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalItemBody,
   AgentJournalMessageItem,
+  AgentJournalDispatchState,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type {
+  AgentSessionAccountHome,
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity
 } from '../../../shared/agent-session-record'
@@ -25,9 +27,12 @@ import type {
   AgentSessionBackgroundTaskState,
   AgentSessionOptionsResult,
   AgentSessionSlashCommand,
+  AgentSessionThreadGoalChange,
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
+import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 
 export class AgentSessionAcquisitionRefusal extends Error {
   constructor(
@@ -42,6 +47,13 @@ export class AgentSessionAcquisitionRefusal extends Error {
 export class AgentSessionRewindRefusal extends AgentSessionAcquisitionRefusal {
   constructor(readonly rewindReason: AgentSessionRewindReason) {
     super(`agent_session_rewind:${rewindReason}`)
+  }
+}
+
+export class AgentSessionPromptUnavailableError extends Error {
+  constructor(itemId: string) {
+    super(`The provider is no longer waiting on ${itemId}.`)
+    this.name = 'AgentSessionPromptUnavailableError'
   }
 }
 
@@ -91,6 +103,13 @@ export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessi
 export type AgentSessionDispatchOutcome =
   /** The provider owns the turn now, under this identity. */
   | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
+  /**
+   * The provider transport took the message; identity settles later, out of band.
+   * The submission stays `pending`: a message queued behind a running turn is
+   * acknowledged only when that turn starts, so elapsed time is not evidence of
+   * anything and never promotes this to `unknown`.
+   */
+  | { state: 'admitted' }
   | { state: 'rejected'; reason: string }
   /** The call did not settle. Never re-send on the user's behalf. */
   | { state: 'unknown'; reason: string }
@@ -102,6 +121,8 @@ export type StructuredAgentSessionLifecycleEvent = {
   cause: 'unexpected-exit' | 'requested-close'
   fence: number
   acquisitionGeneration: string
+  /** Host receipt of the child exit, retained across settlement retries. */
+  observedAt?: number
   /** Translator could not admit terminal rows; host recovery must append its bounded fallback. */
   settlementRetryRequired?: boolean
 }
@@ -121,6 +142,7 @@ export type StructuredAgentSessionAcquireInput = {
   options?: Readonly<Record<string, string>>
   /** Provider events may begin before acquisition returns. */
   events?: StructuredAgentSessionEventSink
+  recordPhase?: AgentSessionCreatePhaseRecorder
 }
 
 export type StructuredAgentSessionSetOptionInput = {
@@ -149,6 +171,11 @@ export type StructuredAgentSessionAdapter = {
     clientMessageId: string
     body: AgentJournalMessageItem
     fence: number
+    /** Host clock on the submission row this send came from; the origin the turn
+     *  it opens records as `requestedAt`. */
+    requestedAt?: number
+    /** Revalidate after preparation, immediately before writing to the provider. */
+    beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome>
   rewindSupport?(sessionId: string): AgentSessionRewindSupport
   recoverRewind?(input: {
@@ -183,7 +210,26 @@ export type StructuredAgentSessionAdapter = {
     sessionId: string
     turnId: string
     fence: number
+    prompt?: { itemId: string }
+    /** Latest journal submission for this fence, when the host has one. */
+    dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
+    /** Re-reads the turn the published journal says is running — the only turn a client
+     *  could have named. A function, not a value, because the guard re-checks after the
+     *  delivery fence may have waited. Absent for direct callers with no journal. */
+    resolveLiveTurnId?: () => string | null
   }): Promise<{ cancelled: boolean }>
+  /** Changes the provider thread's goal. `rejected` is the provider refusing the
+   *  change; a throw leaves its effect unknown. Absent where no goal exists. */
+  changeThreadGoal?(input: {
+    sessionId: string
+    fence: number
+    change: AgentSessionThreadGoalChange
+    /** True when the journal records a goal, whatever its status: a `set` must
+     *  start a new goal rather than rewrite that one's objective in place. */
+    replacesGoal: boolean
+  }): Promise<{ ok: true } | { ok: false; rejected: string }>
+  /** Whether this live session can change its goal. */
+  supportsThreadGoal?(sessionId: string): boolean
   stopBackgroundTasks?(input: {
     sessionId: string
     fence: number
@@ -193,14 +239,15 @@ export type StructuredAgentSessionAdapter = {
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
-  /** Fires the provider callback for an approval or a question. The wire calls
-   *  this only after the durable compare-and-set won, so it runs exactly once. */
+  /** Claims the live callback, commits the journal CAS while that claim is held, then answers it.
+   *  A prompt cancel claims the same callback, so only one operation can commit. */
   answerPrompt(input: {
     sessionId: string
     itemId: string
     kind: 'approval' | 'question'
     optionId: string
     fence: number
+    commit: () => Promise<void>
   }): Promise<void>
   setOption(
     input: StructuredAgentSessionSetOptionInput
@@ -211,6 +258,15 @@ export type StructuredAgentSessionAdapter = {
   /** Transcript path for journal recovery. Omit to let the existing session-file
    *  resolver discover it from the provider session id. */
   historyFilePath?(input: { identity: AgentSessionJournalIdentity }): Promise<string | null>
+  /** Provider history for restart reconciliation, bounded to what the provider
+   *  recorded after the journal's last committed item. Only the adapter can say
+   *  whether the read has a proven start and whether a turn is still running, so
+   *  it owns both flags. Omit where the provider records no boundary-consistent
+   *  history; an omitted window leaves every unsettled submission `unknown`. */
+  providerHistoryWindow?(input: {
+    identity: AgentSessionJournalIdentity
+    accountHome: AgentSessionAccountHome
+  }): Promise<ProviderHistoryWindow | null>
   /** Gracefully stops the structured owner after its event stream is drained. */
   /** Returns true only after the provider child exit is proven. */
   closeSession?(sessionId: string): Promise<boolean>
@@ -218,6 +274,8 @@ export type StructuredAgentSessionAdapter = {
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Stops a provider child for teardown without requiring a future-resume cursor. */
   disposeSession?(sessionId: string): Promise<boolean>
+  /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
+  acknowledgeSessionRelease?(sessionId: string): void
 }
 
 export async function rethrowAfterAgentSessionAcquisitionCleanup(

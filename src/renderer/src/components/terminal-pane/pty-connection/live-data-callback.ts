@@ -171,7 +171,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
           hiddenStartupRendererQuery: true
         })
       }
-      session.writePtyOutputToXterm(orderedRendererData, foreground)
+      session.writePtyOutputToXterm(orderedRendererData, foreground, { liveStartupBatch: true })
       if (foreground) {
         session.recordRendererOrderedSeq(rendererMeta)
       }

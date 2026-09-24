@@ -88,6 +88,33 @@
       "mr": "MR",
       "port": "Puerto",
       "pr": "PR"
+    },
+    "filter": {
+      "emptyTitle": "Ningún resultado coincide con el filtro activo",
+      "emptySubtitle": "Borra el filtro de arriba o amplíalo a más hosts y proyectos.",
+      "tabKey": "Tab",
+      "label": "Filtrar",
+      "activeCount": "{{value0}} activos",
+      "removeChip": "Quitar filtro {{value0}}",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "Borrar todo",
+      "hosts": "Hosts",
+      "projects": "Proyectos",
+      "trigger": "Filtrar resultados",
+      "search": "Filtrar por host o proyecto...",
+      "searchHosts": "Filtrar hosts...",
+      "searchProjects": "Filtrar proyectos...",
+      "noOptions": "No hay hosts ni proyectos coincidentes",
+      "noHosts": "No hay hosts coincidentes",
+      "noProjects": "No hay proyectos coincidentes",
+      "moreOptions": "{{value0}} más: sigue escribiendo para acotar",
+      "selectAllMatching": "Seleccionar todas las coincidencias ({{value0}})",
+      "selectedCollapsed": "{{value0}} seleccionados: quítalos con los chips o con Borrar",
+      "clearHosts": "Borrar hosts",
+      "clearProjects": "Borrar proyectos",
+      "back": "Atrás",
+      "ariaActive": "Filtro: {{value0}} activos.",
+      "scopedTo": "Ámbito:"
     }
   },
   "auto": {
@@ -331,6 +358,7 @@
           "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -355,7 +383,8 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "muse_label": "Muse"
         },
         "skill": {
           "cli": {
@@ -713,7 +742,6 @@
       "useComposerState": {
         "7eb3f44ff7": "El agente seleccionado está deshabilitado. Elige un agente habilitado antes de crear.",
         "b2ead86962": "No se pudo resolver la base del PR.",
-        "a9ff236145": "Algunos archivos adjuntos no se pudieron cargar.",
         "3db83fc58a": "No hay ninguna ruta de proyecto remoto disponible para los archivos adjuntos.",
         "ba6cb77082": "No se pudo conectar al proyecto.",
         "chooseOrAddProjectBeforeWorkspace": "Elige o agrega un proyecto antes de crear un espacio de trabajo.",
@@ -769,7 +797,7 @@
         "94a5afe910": "Hosts SSH",
         "40d80bad8a": "Beta",
         "de0c2907a1": "Servidores remotos de Orca",
-        "b351014180": "Estadísticas de Orca más análisis de tokens de Claude, Codex y OpenCode y uso de suscripción de Grok.",
+        "b351014180": "Estadísticas de Orca más análisis de tokens de Claude, Codex, OpenCode y Muse y uso de suscripción de Grok.",
         "d72a58b5b9": "Estadísticas y uso",
         "dcd0d9b74f": "Atajos de teclado para acciones comunes.",
         "94295ebfb3": "Atajos",
@@ -1313,7 +1341,7 @@
         "326a578923": "orca.yaml + local",
         "2132b670da": "ambos",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "Nombre o 'Crear desde'",
+        "ac3748dcda": "Crear desde",
         "f660aa1454": "Conectando",
         "7711ad5122": "Comando de configuración local",
         "e5db1b0419": "Comando de configuración combinado",
@@ -1945,7 +1973,8 @@
         "0f3066256e": "Coincidencia anterior",
         "42e466b9f1": "Expresión regular",
         "90c61387d9": "Distingue mayúsculas y minúsculas",
-        "e07012f26e": "Buscar..."
+        "e07012f26e": "Buscar...",
+        "10e039b591": "No results"
       },
       "UpdateCard": {
         "68b235d264": "Reiniciar para actualizar",
@@ -2218,6 +2247,10 @@
                 "7c302f8174": "Sin título"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "Esta vista aún no tiene elementos.",
+            "7e4a2f80c6": "Los elementos añadidos recientemente pueden tardar un poco en aparecer."
           }
         },
         "GitHubMarkdownComposer": {
@@ -3735,7 +3768,6 @@
           "444585cb41": "con datos",
           "ecb0cd8a4c": "habilitado -",
           "33f7b043d2": "Proveedores",
-          "60002bb22f": "Aún no se encontró uso local de Claude, Codex u OpenCode. El resumen se completará después de que la siguiente sesión de agente escriba logs de tokens.",
           "70f36452d4": "Porcentaje de caché",
           "327603fe8b": "Días activos",
           "0eaf937335": "Est. costo",
@@ -3748,7 +3780,9 @@
           "ca6bc5fded": "Actualizar",
           "e06d1baf5c": "Actualizar resumen de uso",
           "c760c481c5": "Resumen de uso",
-          "55c910f4f1": "- algunos precios de modelos no están disponibles"
+          "55c910f4f1": "- algunos precios de modelos no están disponibles",
+          "enableMuse": "Activar Muse",
+          "noLocalUsageYet": "Aún no se encontró uso local de Claude, Codex, OpenCode ni Muse. El resumen se completará después de que la próxima sesión de agente escriba registros de tokens."
         },
         "share": {
           "card": {
@@ -3779,13 +3813,14 @@
             "0bba8ca244": "estadísticas",
             "0e2a0b6431": "uso",
             "372debfac0": "estadísticas",
-            "26bb901fcd": "Estadísticas de Orca más análisis de tokens de Claude, Codex y OpenCode y uso de suscripción de Grok.",
+            "26bb901fcd": "Estadísticas de Orca más análisis de tokens de Claude, Codex, OpenCode y Muse y uso de suscripción de Grok.",
             "cb2430ae6a": "Estadísticas y uso",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "suscripción",
             "d6e9f0a1b2": "créditos",
             "a3b6c7d8e9": "uso de grok",
-            "9f2a3b4c5d": "xai"
+            "9f2a3b4c5d": "xai",
+            "museKeyword": "muse"
           }
         },
         "usage": {
@@ -3803,7 +3838,6 @@
               "1dd166c920": "Menos",
               "52d9221dc0": "Heatmap de actividad reciente de tokens",
               "c424eb3f8e": "Mejor:",
-              "f28ff1f852": "Actividad reciente de tokens combinados de Claude, Codex y OpenCode.",
               "69e2b50427": "Intensidad diaria",
               "3a795542fa": "Mix combinado de tokens",
               "e65084cb4b": "razonamiento",
@@ -3816,7 +3850,8 @@
               "6762f6a682": "tokens",
               "a7f937fb29": "{{value0}} sesiones - {{value1}} {{value2}}",
               "c8f3a2d1e0b4": "turnos",
-              "d9a4b3e2f1c5": "eventos"
+              "d9a4b3e2f1c5": "eventos",
+              "recentCombinedActivity": "Actividad combinada reciente de tokens de Claude, Codex, OpenCode y Muse."
             }
           }
         },
@@ -3846,6 +3881,17 @@
           "e5a6b7c8d9": "Créditos semanales usados",
           "f6b7c8d9e0": "Restablecimiento del periodo de facturación",
           "a7b8c9d0e1": "Configuración de la cuenta de Grok"
+        },
+        "MuseUsagePane": {
+          "title": "Seguimiento de uso de Muse",
+          "enableLabel": "Activar análisis de uso de Muse",
+          "disabledDescription": "Lee los registros de sesión locales de Muse para mostrar estadísticas de tokens, modelos y sesiones.",
+          "scopeAll": "Todo el uso local de Muse",
+          "optionsLabel": "Opciones de uso de Muse",
+          "refreshAriaLabel": "Actualizar uso de Muse",
+          "emptyMessage": "Aún no se encontró uso local de Muse para este ámbito.",
+          "noCostNote": "Los registros de sesión de Muse registran tokens pero no el costo, por lo que no se muestra una estimación de costo.",
+          "recentSessionsDescription": "Sesiones locales de Muse más recientes en este ámbito."
         }
       },
       "sparse": {
@@ -4412,7 +4458,6 @@
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
           "spaces": "Espacios",
           "views": "Vista de la barra lateral",
-          "createMenu": "Crear",
           "addProject": "Agregar proyecto"
         },
         "SidebarNav": {
@@ -4684,6 +4729,7 @@
           "76865d827f": "Mover al grupo",
           "503ec0f8e6": "Nuevo grupo del proyecto",
           "3350101edb": "Copiar ruta",
+          "copyWorktreeName": "Copiar nombre del worktree",
           "f4475537d8": "Eliminar",
           "f5ac91531d": "Quitar proyecto de Orca",
           "b42391d8bf": "Eliminando…",
@@ -5281,8 +5327,6 @@
           "01af244097": "Cancelar",
           "28c8e53176": "Esto fuerza el cierre de todos los paneles de terminal en ejecución en todos los espacios de trabajo. Cualquier trabajo sin guardar en esas sesiones se perderá. El servicio sigue ejecutándose y se pueden abrir nuevos terminales inmediatamente. Esto no se puede deshacer.",
           "1bbea41a77": "¿Terminar todas las sesiones de terminal?",
-          "01d6b7c64e": "Termina todos los paneles de terminal en ejecución y reinicia el proceso del servicio. Los paneles muestran \"Process exited\" y se pueden volver a abrir inmediatamente. Se conservan las sesiones de protocolo heredado de una versión anterior de la app. Esto no se puede deshacer.",
-          "922548bc66": "¿Reiniciar el servicio del terminal?",
           "2b4efdc162": "No se pudieron finalizar las sesiones.",
           "d18f3005c2": "{{value0}} sesión{{value1}} se negó a salir.",
           "baad8cd651": "No hay sesiones en ejecución.",
@@ -5816,7 +5860,12 @@
           "14444243ba": "¿Eliminar `{{value0}}` de PATH?",
           "5d432fe44d": "instalado",
           "8a9b784c60": "desactualizado",
-          "d363e5929b": "Comprobando registro de CLI..."
+          "d363e5929b": "Comprobando registro de CLI...",
+          "6f894ef9c2": "Mostrar en Finder",
+          "cbe55e4d48": "Mostrar en el Explorador",
+          "9fd4023db0": "Mostrar en el administrador de archivos",
+          "installFailureUnknownReason": "Orca no pudo completar el registro de CLI y no reportó ninguna razón.",
+          "installFailureConflictRemedy": "Elimina {{value0}} y regístrate nuevamente si ya no es necesario."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -5962,7 +6011,16 @@
             "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de agentes compatibles.",
             "defaultViewLabel": "Vista predeterminada de Chat UI",
             "defaultViewTerminal": "Chat en terminal",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
+            "shellEnvNamePlaceholder": "Nombre de la variable",
+            "shellEnvNameAdd": "Agregar",
+            "shellEnvNameRemove": "Quitar {{value0}}",
+            "shellEnvNamesEmpty": "Aún no se han agregado variables.",
+            "shellEnvNamesAlwaysPassed": "PATH, la configuración regional y SSH_AUTH_SOCK se pasan siempre. Se aplica la próxima vez que un chat se inicie o se reanude.",
+            "shellEnvTitle": "Usar el entorno de tu shell",
+            "shellEnvCopy": "Los chats de Codex y Claude empiezan con todas las variables que exporta tu shell de inicio de sesión, igual que un terminal. Desactívalo para elegir cuáles reciben.",
+            "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell"
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -7010,7 +7068,7 @@
           "b5ee17826b": "Empareja runtimes remotos de Orca para sesiones persistentes, estado remoto más completo y traspaso web o móvil.",
           "7686cb5c36": "Conecta este navegador a un servidor Orca guardado.",
           "bd0181eeca": "Servidores remotos de Orca",
-          "8acf3f22e0": "Estadísticas de Orca más análisis de tokens de Claude, Codex y OpenCode y uso de suscripción de Grok.",
+          "8acf3f22e0": "Estadísticas de Orca más análisis de tokens de Claude, Codex, OpenCode y Muse y uso de suscripción de Grok.",
           "954a8f5aef": "Estadísticas y uso",
           "a737a4bb22": "Atajos de teclado para acciones comunes.",
           "23bf7a1ad4": "Atajos",
@@ -8552,6 +8610,20 @@
             }
           }
         },
+        "machine": {
+          "name": {
+            "search": {
+              "title": "Nombre del equipo",
+              "description": "Elige el nombre con el que otros dispositivos y hosts muestran este equipo.",
+              "machineName": "nombre del equipo",
+              "machine": "máquina",
+              "hostname": "hostname",
+              "computer": "equipo",
+              "rename": "renombrar",
+              "name": "nombre"
+            }
+          }
+        },
         "mobile": {
           "emulator": {
             "search": {
@@ -8892,6 +8964,12 @@
             "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward.",
             "projectRuntime": "Runtime del proyecto",
             "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL.",
+            "githubAccount": "Cuenta de GitHub",
+            "githubAccountDescription": "Vincula un inicio de sesión de gh del llavero para las llamadas a la API de GitHub de este proyecto.",
+            "githubAccountKeyword": "cuenta de github",
+            "ghAccount": "cuenta gh",
+            "login": "inicio de sesión",
+            "token": "token",
             "externalWorktrees": "Worktrees externos",
             "externalWorktreesDescription": "Sobrescribe si los worktrees creados fuera de Orca aparecen en este proyecto.",
             "copy": "copy",
@@ -9300,6 +9378,24 @@
           "on": "Activado",
           "auto": "Agente",
           "off": "Desactivado"
+        },
+        "RepositoryGitHubAccountSection": {
+          "unsupported": "La CLI de GitHub de este runtime es demasiado antigua para vincular cuentas (necesita gh ≥ 2.40).",
+          "capabilityUnknown": "No se pudo determinar si la CLI de GitHub de este runtime admite la vinculación de cuentas. Reintenta.",
+          "envToken": "Las cuentas con token de entorno no se pueden vincular. Usa un inicio de sesión del llavero.",
+          "invalidBinding": "Esa vinculación de cuenta de GitHub no es válida.",
+          "unavailable": "Esa cuenta de GitHub no está disponible en este runtime.",
+          "saveFailed": "No se pudo guardar la vinculación de la cuenta de GitHub.",
+          "title": "Cuenta de GitHub",
+          "description": "Usa un inicio de sesión de gh específico para las llamadas de issues y pull requests de GitHub de este proyecto.",
+          "longDescription": "Orca inyecta un token de corta duración del inicio de sesión del llavero seleccionado en cada llamada de gh de este proyecto. La vista de proyecto sigue usando la sesión de gh activa.",
+          "retry": "Reintentar",
+          "selectLabel": "Cuenta",
+          "ambient": "Predeterminado (sesión de gh activa)",
+          "unavailableOption": "{{user}} @ {{host}} (no disponible)",
+          "capabilityBlocked": "La vinculación no está disponible hasta que la CLI de GitHub de este runtime admita `gh auth token --user` (gh ≥ 2.40).",
+          "capabilityUnknownHint": "No se pudo determinar si la CLI de GitHub de este runtime admite la vinculación de cuentas. Borra la vinculación o reintenta.",
+          "notEnforced": "Guardado, pero este runtime no lo aplica (host de versión mixta)."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Hooks de estado del agente",
@@ -9828,6 +9924,12 @@
           "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Tailscale o Wi‑Fi.",
           "step2RelayDescription": "Opcional. Elige la dirección Wi‑Fi o Tailscale que el teléfono usará cuando esté cerca — suele ser más rápido que Relay. Relay sigue funcionando cuando estás fuera.",
           "step2RelayDisclosure": "También usar una ruta local más rápida"
+        },
+        "MachineNameField": {
+          "label": "Nombre del equipo",
+          "description": "Otros dispositivos y hosts ven “{{name}}”. Déjalo en blanco para usar el nombre propio del equipo.",
+          "pending": "Otros dispositivos y hosts ven este nombre. Déjalo en blanco para usar el nombre detectado del equipo.",
+          "placeholder": "Detectado automáticamente"
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -11344,7 +11446,6 @@
             "localWorkspacesOnly": "Reanudar desde el historial solo está disponible en espacios de trabajo locales.",
             "agentSessionQueued": "Sesión de {{value0}} en cola",
             "sessionHistory": "Historial de sesiones de agentes",
-            "shownRecent": "{{value0}} mostradas · {{value1}} recientes",
             "resumePastSessions": "Reanudar sesiones anteriores",
             "refreshSessionHistory": "Actualizar historial de sesiones",
             "searchSessions": "Buscar sesiones",
@@ -11357,7 +11458,6 @@
             "sessionId": "ID de sesión",
             "logPath": "Ruta del log",
             "agents": "Agentes",
-            "sessionsShownCompact": "{{value0}} mostradas",
             "originalPaneUnavailable": "El panel original ya no está disponible.",
             "worktreeUnavailable": "El worktree ya no está disponible.",
             "openSupportedWorkspace": "Abre un workspace antes de reanudar una sesión.",
@@ -11383,7 +11483,6 @@
             "agents": "Agentes",
             "selectAllAgents": "Seleccionar todo",
             "clearAgents": "Limpiar",
-            "sort": "Ordenar",
             "lastUpdated": "Última actualización",
             "created": "Creado",
             "group": "Agrupar",
@@ -12923,8 +13022,6 @@
           "10ed04a685": "Las celdas del notebook ejecutan Python localmente en esta máquina desde la carpeta del notebook. Ejecuta solo celdas de archivos en los que confíes.",
           "9e06ae5d36": "¿Ejecutar código del notebook?",
           "d6f37a640b": "Notebook vacío",
-          "8c3b21369a": "nbformat",
-          "329764e9fc": "BETA",
           "15ec40a735": "Guardar notebook",
           "07e7d96612": "celdas",
           "c1601b23b2": "No se puede renderizar el cuaderno",
@@ -12938,9 +13035,7 @@
           "fd8ac707bc": "Mover celda hacia arriba",
           "3e4cbf15ea": "Raw",
           "1833dbbc43": "Markdown",
-          "7005960d73": "Código",
-          "59b6cd874b": "código",
-          "ba149053d5": "markdown"
+          "7005960d73": "Código"
         },
         "MarkdownPreview": {
           "e4683f70c4": "Cancelar",
@@ -14188,8 +14283,6 @@
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
           "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
-          "compactModeDescription": "Muestra filas de hilo más cortas con títulos de una línea y mensajes de estado de dos líneas.",
-          "unreadOnlyDescription": "Filtra la lista de actividad para mostrar solo hilos con actualizaciones sin leer.",
           "clearCompleted": "Borrar completados",
           "none": "Ninguno",
           "search": "Buscar",
@@ -14207,7 +14300,9 @@
             "idle": "Inactivo",
             "unverifiable": "Sin actualizaciones recientes",
             "permission": "Requiere atención"
-          }
+          },
+          "filtersSection": "Filtros",
+          "viewSection": "Vista"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "Mostrar todos los hosts y proyectos"
@@ -14616,7 +14711,8 @@
         "chooseInAgentPicker": "Elegir en el selector del agente…",
         "toggleOption": "Alternar {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
+        "valueIsDefault": "Predeterminado",
+        "valueNotReported": "No informado",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
         "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -14629,9 +14725,7 @@
           "high": "Alto",
           "xhigh": "Muy alto",
           "max": "Máximo",
-          "ultra": "Supremo",
-          "on": "Activado",
-          "off": "Desactivado"
+          "ultra": "Supremo"
         },
         "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
         "commands": "Comandos",
@@ -14768,27 +14862,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "Vista del panel",
-      "board": "Panel",
-      "map": "Mapa de agentes"
-    },
-    "map": {
-      "host": {
-        "local": "Local",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "Remoto"
-      },
-      "liveContainmentMap": "Mapa de contención en vivo",
-      "empty": "Ningún agente coincide con los filtros actuales.",
-      "canvasLabel": "Mapa anidado de proyectos, espacios de trabajo y agentes",
-      "zoomOut": "Alejar",
-      "zoomIn": "Acercar",
-      "fit": "Ajustar",
-      "projectCount": "{{agents}} agentes · {{workspaces}} espacios de trabajo",
-      "agentCount": "{{count}} agentes"
-    },
     "placeholder": {
       "title": "Agent dashboard",
       "description": "This is where all your agents will show up at a glance. The board is coming soon."
@@ -14922,6 +14995,14 @@
       "hide": "Ocultar Agentes",
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "necesita información",
+      "working": "trabajando",
+      "stopped": "detenido",
+      "finished": "finalizado"
     }
   }
 }

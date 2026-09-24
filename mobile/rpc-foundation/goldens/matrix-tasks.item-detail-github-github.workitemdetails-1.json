@@ -1,0 +1,1116 @@
+{
+  "operation": "tasks.item-detail-github",
+  "family": "tasks.item-detail-github",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c0ef16b959002e4a3c5347114a0844b95670e274ef010d910b6671ac5f49e783",
+  "scenarioSha256": "955729f9100dce7eeb103f7b4d08ff56ac66853b9ad0d33627c0838011287bca",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1874e6e64ab8": {
+      "error": "",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": "APPROVED",
+        "reviewRequests": []
+      }
+    },
+    "1e333ed80a4e": {
+      "name": "detailError",
+      "ordinal": 6,
+      "value": ""
+    },
+    "1fb950c5f545": {
+      "name": "detailError",
+      "ordinal": 6,
+      "value": "outer refused"
+    },
+    "264010756b38": {
+      "name": "detailLoading",
+      "ordinal": 3,
+      "value": true
+    },
+    "27a2291313be": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "2f7a8a3927f9": {
+      "name": "detailPayload",
+      "ordinal": 6,
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": "APPROVED",
+        "reviewRequests": []
+      }
+    },
+    "33614c90b6eb": {
+      "name": "detailPayload",
+      "ordinal": 1,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "397d0cad127a": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "assignees": ["octocat"],
+            "baseSha": "base-sha",
+            "body": "body",
+            "checks": [],
+            "comments": [],
+            "files": [],
+            "headSha": "head-sha",
+            "item": {
+              "labels": ["bug"],
+              "latestReviews": [],
+              "reviewDecision": "APPROVED",
+              "reviewRequests": []
+            },
+            "pullRequestId": "PR_kwDO"
+          }
+        }
+      }
+    },
+    "3de07d9166a8": {
+      "error": "outer refused",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
+    "476f180b1c14": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "4b6d860435ab": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "503523c4019b": {
+      "name": "detailPayload",
+      "ordinal": 6,
+      "value": {
+        "assignees": [],
+        "baseSha": {
+          "$rpc": "undefined"
+        },
+        "body": "",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": {
+          "$rpc": "undefined"
+        },
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": {
+          "$rpc": "undefined"
+        },
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
+    },
+    "51b631ca885a": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "5d06a9d9f7ea": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12,\"type\":\"pr\"}}"
+    },
+    "6a25e546eff7": {
+      "error": "Details not found",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
+    "6fac44c7cb30": {
+      "name": "detailError",
+      "ordinal": 6,
+      "value": "Unknown method"
+    },
+    "7816d31432b8": {
+      "name": "detailLoading",
+      "ordinal": 7,
+      "value": false
+    },
+    "7b3cb84c5944": {
+      "error": "The host sent a reply this app could not read (github.workItemDetails)",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
+    "8977e1f23e64": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "923a1c0af8db": {
+      "name": "detailError",
+      "ordinal": 6,
+      "value": "Details not found"
+    },
+    "92a5dcfabad9": {
+      "name": "detailError",
+      "ordinal": 6,
+      "value": "transport failure"
+    },
+    "a4f1a8696a24": {
+      "name": "detailError",
+      "ordinal": 2,
+      "value": ""
+    },
+    "a5d45c8804b0": {
+      "name": "detailError",
+      "ordinal": 6,
+      "value": "The host sent a reply this app could not read (github.workItemDetails)"
+    },
+    "a8fceb0dbc5a": {
+      "error": "",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "assignees": [],
+        "baseSha": {
+          "$rpc": "undefined"
+        },
+        "body": "",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": {
+          "$rpc": "undefined"
+        },
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": {
+          "$rpc": "undefined"
+        },
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": []
+      }
+    },
+    "b326e968faf5": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c4c878da84ba": {
+      "error": "Unknown method",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
+    "d0ca69d05b12": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d43e07fc80d9": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "eb1f947767b0": {
+      "error": "",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f4959bf4b3e2": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "fb96d655d686": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "fbedc0789cfe": {
+      "error": "transport failure",
+      "item": {
+        "provider": "github",
+        "source": {
+          "id": "github:pr:12",
+          "labels": ["bug"],
+          "latestReviews": [],
+          "number": 12,
+          "repoId": "repo-1",
+          "reviewDecision": {
+            "$rpc": "null"
+          },
+          "reviewRequests": [],
+          "state": "open",
+          "type": "pr"
+        },
+        "title": "A pull request"
+      },
+      "items": [
+        {
+          "provider": "github",
+          "source": {
+            "id": "github:pr:12",
+            "labels": ["bug"],
+            "latestReviews": [],
+            "number": 12,
+            "repoId": "repo-1",
+            "reviewDecision": {
+              "$rpc": "null"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "type": "pr"
+          },
+          "title": "A pull request"
+        }
+      ],
+      "loading": false,
+      "payload": {
+        "$rpc": "null"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.item-detail-github-github.workitemdetails-1",
+    "checkpoints": [
+      {
+        "id": "tk-item-detail-github.normal:mounted",
+        "observation": {
+          "sender": ["397d0cad127a"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "1874e6e64ab8",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "2f7a8a3927f9",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.result-absent:mounted",
+        "observation": {
+          "sender": ["d43e07fc80d9"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "7b3cb84c5944",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "a5d45c8804b0",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.result-null:mounted",
+        "observation": {
+          "sender": ["27a2291313be"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "6a25e546eff7",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "923a1c0af8db",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.inner-ok-missing:mounted",
+        "observation": {
+          "sender": ["b326e968faf5"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a8fceb0dbc5a",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "503523c4019b",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.inner-false-string-error:mounted",
+        "observation": {
+          "sender": ["51b631ca885a"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a8fceb0dbc5a",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "503523c4019b",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.inner-false-object-error:mounted",
+        "observation": {
+          "sender": ["4b6d860435ab"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a8fceb0dbc5a",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "503523c4019b",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.outer-refused:mounted",
+        "observation": {
+          "sender": ["8977e1f23e64"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "3de07d9166a8",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "1fb950c5f545",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.outer-refused-no-message:mounted",
+        "observation": {
+          "sender": ["476f180b1c14"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "eb1f947767b0",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "1e333ed80a4e",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.method-not-found:mounted",
+        "observation": {
+          "sender": ["fb96d655d686"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "c4c878da84ba",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "6fac44c7cb30",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.transport-rejection:mounted",
+        "observation": {
+          "sender": ["d0ca69d05b12"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "fbedc0789cfe",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "92a5dcfabad9",
+            "7816d31432b8"
+          ]
+        }
+      },
+      {
+        "id": "tk-item-detail-github.transport-rejection-no-message:mounted",
+        "observation": {
+          "sender": ["f4959bf4b3e2"],
+          "payloads": ["5d06a9d9f7ea"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "eb1f947767b0",
+          "effects": [
+            "33614c90b6eb",
+            "a4f1a8696a24",
+            "264010756b38",
+            "1e333ed80a4e",
+            "7816d31432b8"
+          ]
+        }
+      }
+    ]
+  }
+}

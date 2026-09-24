@@ -1,4 +1,5 @@
-import { getAgentPromptSubmitDelayMs } from '../../shared/agent-prompt-injection'
+import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
+import type { TuiAgent } from '../../shared/tui-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import {
   agentSessionPtyWriteGate,
@@ -17,7 +18,8 @@ export class RuntimeTerminalWriter {
   constructor(
     private readonly write: (ptyId: string, data: string) => boolean,
     private readonly getWriteHostPlatform: (ptyId: string) => NodeJS.Platform = () =>
-      process.platform
+      process.platform,
+    private readonly getAgent: (ptyId: string) => TuiAgent | null = () => null
   ) {}
 
   async writeAction(
@@ -42,9 +44,10 @@ export class RuntimeTerminalWriter {
         // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
         // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.
         await waitForTerminalWriteDelay(
-          getAgentPromptSubmitDelayMs(
+          resolveAgentPromptSubmitDelayForAgent(
             this.getWriteHostPlatform(ptyId),
-            Buffer.byteLength(text, 'utf8')
+            text,
+            this.getAgent(ptyId)
           ),
           options.signal
         )

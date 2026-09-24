@@ -13,6 +13,7 @@ import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provide
 import { ptySizes } from '../delivery/visibility-state'
 import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-size'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
@@ -115,7 +116,8 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
         leafId: ctx.validatedLeafId,
         ptyId: ctx.result.id,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-        ...(ctx.cwd ? { startupCwd: ctx.cwd } : {})
+        ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
+        origin: spawnCommitBindingOrigin(ctx.result)
       }
       if (args.connectionId) {
         ctx.deps.store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))

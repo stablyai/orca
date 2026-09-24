@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithCreateManagedWorktree } from './orca-runtime-create-managed-worktree'
+import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeRemoteWorktreeCreateArgs } from './runtime-remote-worktree-create-request'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
@@ -51,7 +52,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
   async getCanonicalFetchKey(
     repoPath: string,
     remote: string,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<string> {
     return await this.remoteFetches.getCanonicalFetchKey(repoPath, remote, gitOptions)
   }
@@ -59,7 +60,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
   async getOrStartRemoteFetch(
     repoPath: string,
     remote: string,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<RemoteFetchResult> {
     return await this.remoteFetches.getOrStartRemoteFetch(repoPath, remote, gitOptions)
   }
@@ -67,7 +68,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
   async getOrStartRemoteTrackingBaseRefresh(
     repoPath: string,
     base: RemoteTrackingBase,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<RemoteFetchResult> {
     return await this.remoteFetches.getOrStartRemoteTrackingBaseRefresh(repoPath, base, gitOptions)
   }
@@ -75,7 +76,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
   async fetchRemoteWithCache(
     repoPath: string,
     remote: string,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<void> {
     await this.remoteFetches.fetchRemoteWithCache(repoPath, remote, gitOptions)
   }
@@ -83,7 +84,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
   async resolveRemoteTrackingBase(
     repoPath: string,
     baseBranch: string,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<RemoteTrackingBase | null> {
     return await this.remoteFetches.resolveRemoteTrackingBase(repoPath, baseBranch, gitOptions)
   }
@@ -91,7 +92,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
   async hasRemoteTrackingRef(
     repoPath: string,
     base: RemoteTrackingBase,
-    gitOptions: { wslDistro?: string } = {}
+    gitOptions: LocalGitExecOptions = {}
   ): Promise<boolean> {
     return await this.remoteFetches.hasRemoteTrackingRef(repoPath, base, gitOptions)
   }

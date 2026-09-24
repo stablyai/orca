@@ -99,6 +99,12 @@ const terminalTabSchema = z.object({
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
   isPinned: z.boolean().optional(),
+  // Why: recovery asks the terminal row who owns the surface, so a row that
+  // loses viewMode on reload reads as "not chat-owned" and lets a hidden chat
+  // surface remount itself. Declared here so the row survives the parse, with
+  // the same `.catch('terminal')` degradation the unified tab uses below.
+  // Legacy rows that predate this stay undefined → 'terminal' in the renderer.
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional(),
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
@@ -127,9 +133,6 @@ const tabSchema = z.object({
   executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
   agentSessionAgent: z.enum(['codex', 'claude']).optional().catch(undefined),
-  // Why: a structured terminal tab must recover its durable host session after
-  // restart; omitting this additive field silently routes it back through PTY.
-  structuredSessionId: z.string().min(1).optional().catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z
@@ -206,6 +209,12 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'terminalLayoutsByTabId',
     salvagingRecord(terminalTabIdSchema, terminalLayoutSnapshotSchema),
     () => ({})
+  ),
+  // Client-local park scrollback; see WorkspaceSessionState.localOnlyScrollbackByTabId for why it is
+  // not a field on the layout snapshot. Optional so an older profile simply carries none.
+  localOnlyScrollbackByTabId: salvagedOptional(
+    'localOnlyScrollbackByTabId',
+    salvagingRecord(terminalTabIdSchema, leafStringsSchema)
   ),
   activeWorktreeIdsOnShutdown: salvagedOptional(
     'activeWorktreeIdsOnShutdown',

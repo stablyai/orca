@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
@@ -68,26 +68,6 @@ async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promis
   return false
 }
 
-async function preflightAgentTrust(args: {
-  agent: TuiAgent
-  workspacePath: string
-  connectionId: string | null | undefined
-}): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust
-  if (!preset || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset,
-      workspacePath: args.workspacePath,
-      ...(args.connectionId ? { connectionId: args.connectionId } : {})
-    })
-  } catch {
-    // Why: a failed best-effort trust write should not discard a prepared handoff.
-  }
-}
-
 export async function launchAgentSessionContinuation({
   agent,
   prompt,
@@ -110,7 +90,7 @@ export async function launchAgentSessionContinuation({
     worktreeId,
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: 'submit-after-ready',
+    promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
     onPromptDelivered: () =>

@@ -1,0 +1,113 @@
+{
+  "baselineCommit": "9e2c137548bf99f91255ab4862c01145e42a0883",
+  "sources": [
+    {
+      "sourcePath": "src/main/daemon/session-output-pipeline.ts",
+      "baselineSha256": "99ff9d936469a59e07f979b19344815c8636cd58a985e139614f221e99eaf8c9",
+      "fixedSha256": "94f6f221d85388274d585ad714fda25c32a824942950074e4e95b85c94a6771f"
+    },
+    {
+      "sourcePath": "src/main/daemon/terminal-host-session-create.ts",
+      "baselineSha256": "44fb82244a3307b5c89ebf724640be585dfe1b79566d11649b38eaf518c54d32",
+      "fixedSha256": "d54cbaff13c8daba1766e4fec24a6903ecdf1486249f1a9e5d96a207de410309"
+    },
+    {
+      "sourcePath": "src/main/daemon/terminal-host.ts",
+      "baselineSha256": "8cd6804b249ffb0d82da7f5a7ec8faa66514b0d6e3e36472cd81e6409c3edbc4",
+      "fixedSha256": "23cfd9c6317db30edd48a0c8bd7c54658206654703461cf12295274b23fb8844",
+      "alternatePairs": [
+        {
+          "name": "independent-main-publication",
+          "baselineSha256": "5216562b3c10c5fce4238614dc3a81887c970359a60e7e23179c6dfa15ccbcca",
+          "fixedSha256": "f22856504559a6bb78498c6d5aae07cbbd80a21019723278a560628e0142236f"
+        }
+      ]
+    }
+  ],
+  "comparedRefs": [
+    {
+      "ref": "origin/main",
+      "commit": "77cd61df396f25ec91ee2d5ddcbd1f55aa94f818",
+      "sources": [
+        {
+          "sourcePath": "src/main/daemon/session-output-pipeline.ts",
+          "sha256": "99ff9d936469a59e07f979b19344815c8636cd58a985e139614f221e99eaf8c9",
+          "matchesBaseline": true,
+          "patchApplies": true,
+          "overlaySha256": "94f6f221d85388274d585ad714fda25c32a824942950074e4e95b85c94a6771f",
+          "matchesFixed": true
+        },
+        {
+          "sourcePath": "src/main/daemon/terminal-host-session-create.ts",
+          "sha256": "44fb82244a3307b5c89ebf724640be585dfe1b79566d11649b38eaf518c54d32",
+          "matchesBaseline": true,
+          "patchApplies": true,
+          "overlaySha256": "d54cbaff13c8daba1766e4fec24a6903ecdf1486249f1a9e5d96a207de410309",
+          "matchesFixed": true
+        },
+        {
+          "sourcePath": "src/main/daemon/terminal-host.ts",
+          "sha256": "5216562b3c10c5fce4238614dc3a81887c970359a60e7e23179c6dfa15ccbcca",
+          "matchesBaseline": false,
+          "patchApplies": true,
+          "overlaySha256": "f22856504559a6bb78498c6d5aae07cbbd80a21019723278a560628e0142236f",
+          "matchesFixed": false
+        }
+      ]
+    },
+    {
+      "ref": "v1.4.198",
+      "commit": "e0826956fcfc532f5a1e55b5e081f2e57e553c43",
+      "sources": [
+        {
+          "sourcePath": "src/main/daemon/session-output-pipeline.ts",
+          "sha256": "99ff9d936469a59e07f979b19344815c8636cd58a985e139614f221e99eaf8c9",
+          "matchesBaseline": true,
+          "patchApplies": true,
+          "overlaySha256": "94f6f221d85388274d585ad714fda25c32a824942950074e4e95b85c94a6771f",
+          "matchesFixed": true
+        },
+        {
+          "sourcePath": "src/main/daemon/terminal-host-session-create.ts",
+          "sha256": "44fb82244a3307b5c89ebf724640be585dfe1b79566d11649b38eaf518c54d32",
+          "matchesBaseline": true,
+          "patchApplies": true,
+          "overlaySha256": "d54cbaff13c8daba1766e4fec24a6903ecdf1486249f1a9e5d96a207de410309",
+          "matchesFixed": true
+        },
+        {
+          "sourcePath": "src/main/daemon/terminal-host.ts",
+          "sha256": "5216562b3c10c5fce4238614dc3a81887c970359a60e7e23179c6dfa15ccbcca",
+          "matchesBaseline": false,
+          "patchApplies": true,
+          "overlaySha256": "f22856504559a6bb78498c6d5aae07cbbd80a21019723278a560628e0142236f",
+          "matchesFixed": false
+        }
+      ]
+    }
+  ],
+  "publicationMain": {
+    "commit": "291b4ddd6f1c1af480169885e0fda7f9c78ff053",
+    "sources": [
+      {
+        "sourcePath": "src/main/daemon/session-output-pipeline.ts",
+        "baselineSha256": "99ff9d936469a59e07f979b19344815c8636cd58a985e139614f221e99eaf8c9",
+        "fixedSha256": "94f6f221d85388274d585ad714fda25c32a824942950074e4e95b85c94a6771f",
+        "patchApplies": true
+      },
+      {
+        "sourcePath": "src/main/daemon/terminal-host-session-create.ts",
+        "baselineSha256": "44fb82244a3307b5c89ebf724640be585dfe1b79566d11649b38eaf518c54d32",
+        "fixedSha256": "d54cbaff13c8daba1766e4fec24a6903ecdf1486249f1a9e5d96a207de410309",
+        "patchApplies": true
+      },
+      {
+        "sourcePath": "src/main/daemon/terminal-host.ts",
+        "baselineSha256": "5216562b3c10c5fce4238614dc3a81887c970359a60e7e23179c6dfa15ccbcca",
+        "fixedSha256": "f22856504559a6bb78498c6d5aae07cbbd80a21019723278a560628e0142236f",
+        "patchApplies": true
+      }
+    ],
+    "dependencyScope": "Only these three modules are mapped; other dependencies are current worktree source."
+  }
+}

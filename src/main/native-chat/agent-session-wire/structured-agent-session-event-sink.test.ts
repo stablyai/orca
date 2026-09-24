@@ -5,6 +5,10 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type {
+  JournalItemAppendOptions,
+  JournalLifecycleBatchInput
+} from '../agent-session-journal/journal-store-contracts'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget
@@ -29,20 +33,35 @@ type Recorded = {
   activity?: AgentSessionTurnActivity | null
 }
 
+/** The journal's OWN append options, captured beside the call log rather than on
+ *  it: a double that omits the third parameter makes every assertion about what
+ *  the sink forwards pass against `undefined`, which is how this went unnoticed
+ *  before. Kept separate so the call-order assertions stay about call order. */
+const journalAppendOptions: JournalItemAppendOptions[] = []
+
 function target(
   fence: number,
   log: Recorded[],
   failOn?: number
 ): StructuredAgentSessionEventTarget {
+  journalAppendOptions.length = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the handful of journal methods this sink calls; nothing else on it is ever reached.
   const journal = {
-    appendItem: vi.fn(async (id: AgentJournalItemIdentity, _body: AgentJournalItemBody) => {
-      const ordinal = id.provider === 'codex' ? id.ordinal : -1
-      if (ordinal === failOn) {
-        throw new Error(`refused ${ordinal}`)
+    appendItem: vi.fn(
+      async (
+        id: AgentJournalItemIdentity,
+        _body: AgentJournalItemBody,
+        options: JournalItemAppendOptions
+      ) => {
+        const ordinal = id.provider === 'codex' ? id.ordinal : -1
+        if (ordinal === failOn) {
+          throw new Error(`refused ${ordinal}`)
+        }
+        journalAppendOptions.push(options)
+        log.push({ call: 'appendItem', fence, ordinal })
+        return { cursor: { epoch: 'e', sequence: ordinal } }
       }
-      log.push({ call: 'appendItem', fence, ordinal })
-      return { cursor: { epoch: 'e', sequence: ordinal } }
-    }),
+    ),
     appendTombstone: vi.fn(async (id: AgentJournalItemIdentity) => {
       log.push({
         call: 'appendTombstone',
@@ -51,10 +70,14 @@ function target(
       })
       return { epoch: 'e', sequence: 0 }
     }),
-    appendLifecycleBatch: vi.fn(async (input: { settlementId: string }) => {
+    appendLifecycleBatch: vi.fn(async (input: JournalLifecycleBatchInput) => {
+      // A batch carries no producer linkage by design, so the fence is all
+      // there is to record — see the batch row builder.
+      journalAppendOptions.push({ fence: input.fence })
       log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
       return { epoch: 'e', sequence: 0 }
-    })
+    }),
+    latestItemMatching: vi.fn(() => null)
   } as unknown as AgentSessionJournal
   return {
     journal,
@@ -113,6 +136,25 @@ describe('deferred structured agent-session event sink', () => {
     await deferred.drained()
 
     expect(log).toEqual([{ call: 'appendItem', fence: 2, ordinal: 0 }])
+  })
+
+  it('resolves a lifecycle transition after journal bind and skips an existing state', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+
+    expect(
+      deferred.sink.tryAppendLifecycleTransition?.(identity(0), BODY, () => identity(1))
+    ).toEqual({ accepted: true })
+    expect(deferred.sink.tryAppendLifecycleTransition?.(identity(0), BODY, () => null)).toEqual({
+      accepted: true
+    })
+    deferred.bind(target(2, log))
+    await deferred.drained()
+
+    expect(log).toEqual([
+      { call: 'appendItem', fence: 2, ordinal: 1 },
+      { call: 'publish', fence: 2 }
+    ])
   })
 
   it('drops buffered and later writes once closed, and refuses to rebind', async () => {
@@ -202,6 +244,35 @@ describe('deferred structured agent-session event sink', () => {
     expect(readingControl.pauseReading).toHaveBeenCalledOnce()
     expect(readingControl.resumeReading).toHaveBeenCalledOnce()
     expect(log).toHaveLength(2)
+  })
+
+  it('admits a resolved append and publication as one bounded operation', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink({
+      watermarks: {
+        pauseQueuedOperations: 1,
+        maxQueuedOperations: 2,
+        lowQueuedOperations: 0,
+        maxQueuedBytes: 1_000_000
+      }
+    })
+
+    expect(deferred.sink.tryAppendItem?.(identity(0), BODY)).toEqual({ accepted: true })
+    expect(
+      deferred.sink.tryAppendResolvedItemAndPublish?.(identity(1), BODY, () => identity(1))
+    ).toEqual({ accepted: true })
+    expect(deferred.sink.tryAppendItem?.(identity(2), BODY)).toEqual({
+      accepted: false,
+      reason: 'backpressure'
+    })
+
+    deferred.bind(target(5, log))
+    await deferred.drained()
+    expect(log).toEqual([
+      { call: 'appendItem', fence: 5, ordinal: 0 },
+      { call: 'appendItem', fence: 5, ordinal: 1 },
+      { call: 'publish', fence: 5 }
+    ])
   })
 
   it('pauses provider reading at the soft byte watermark before rejecting writes', async () => {
@@ -346,5 +417,75 @@ describe('deferred structured agent-session event sink', () => {
         activity: { turnId: 'turn-1', text: 'Checking the result' }
       }
     ])
+  })
+})
+
+describe('producer linkage reaches the journal through every append path', () => {
+  const LINKAGE = {
+    agentId: 'task-1',
+    parentAgentId: 'task-parent',
+    providerParentRef: 'toolu_1',
+    producerKind: 'agent',
+    attempt: 2
+  } as const
+
+  it('forwards the whole bundle on the plain and try append paths', async () => {
+    for (const append of ['appendItem', 'tryAppendItem'] as const) {
+      const log: Recorded[] = []
+      const deferred = createDeferredStructuredAgentSessionEventSink()
+      deferred.bind(target(5, log))
+      deferred.sink[append]?.(identity(1), BODY, { ...LINKAGE })
+      await deferred.drained()
+
+      expect(journalAppendOptions).toEqual([{ fence: 5, ...LINKAGE }])
+      deferred.close()
+    }
+  })
+
+  it('forwards it on the resolved-append paths, which lost it once before', async () => {
+    for (const append of ['tryAppendResolvedItem', 'tryAppendResolvedItemAndPublish'] as const) {
+      const log: Recorded[] = []
+      const deferred = createDeferredStructuredAgentSessionEventSink()
+      deferred.bind(target(5, log))
+      deferred.sink[append]?.(identity(1), BODY, () => identity(1), { ...LINKAGE })
+      await deferred.drained()
+
+      expect(journalAppendOptions).toEqual([{ fence: 5, ...LINKAGE }])
+      deferred.close()
+    }
+  })
+
+  it('does NOT forward it on the lifecycle-batch path, which is one row for N mutations', async () => {
+    // A batch row carries one producer for every mutation in it, so forwarding
+    // would stamp whoever opened the batch onto all of them. Both callers are
+    // single-producer today; a mixed batch would have to stamp per mutation.
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+    deferred.bind(target(5, log))
+    deferred.sink.appendLifecycleBatch?.(
+      'settle-1',
+      [{ kind: 'item', identity: identity(1), body: BODY }],
+      { ...LINKAGE }
+    )
+
+    await deferred.drained()
+
+    // The fence and nothing else: no linkage key reaches the batch row.
+    expect(journalAppendOptions).toEqual([{ fence: 5 }])
+    deferred.close()
+  })
+
+  it("writes no linkage keys at all for the session's own agent", async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+    deferred.bind(target(5, log))
+    deferred.sink.appendItem(identity(1), BODY)
+    await deferred.drained()
+
+    // A control, not a pin. Absence is the claim, so the keys must be missing
+    // rather than present-and-undefined: a reader holding this options object
+    // would read `agentId: undefined` as a key that exists.
+    expect(journalAppendOptions).toEqual([{ fence: 5 }])
+    deferred.close()
   })
 })

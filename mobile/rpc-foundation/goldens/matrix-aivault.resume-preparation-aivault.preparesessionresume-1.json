@@ -1,0 +1,667 @@
+{
+  "operation": "aiVault.resume-preparation",
+  "family": "aiVault.resume-preparation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
+  "scenarioSha256": "c3b400967b0b1c7bd3f82a278f4b10855ade72d384922ec4d34795c7bb20084d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02733b10ba3d": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "prepared": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-accounts/acct-1/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
+    "06345cef27f9": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Could not prepare this legacy Codex session. Retry resume.",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "15e10cea84b9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-accounts/acct-1/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
+    "1c3fd8a3af39": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "1cf09af5681c": {
+      "failure": "Could not prepare this legacy Codex session. Retry resume.",
+      "prepared": "unprepared"
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "33eae5d8842d": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "66ff2c43e820": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "substituteCodexHome": "/hosts/codex-accounts/acct-1/home",
+            "useRealCodexHome": false
+          }
+        }
+      }
+    },
+    "796728116a08": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "88c8bb20eb6f": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}"
+    },
+    "945eca02b16b": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "954fabd8665f": {
+      "failure": "transport failure",
+      "prepared": "unprepared"
+    },
+    "a1414c068c04": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ac9818e55504": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d1a7cba8ed8f": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d5a15317673c": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "da0644b59bd5": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "dd625f18432a": {
+      "failure": "",
+      "prepared": "unprepared"
+    },
+    "e0c290ca8a22": {
+      "failure": "outer refused",
+      "prepared": "unprepared"
+    },
+    "e839ea279e77": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
+    "f7898cc218f8": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f9dc8bff0bbd": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "prepared": {
+        "agent": "codex",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-aivault.resume-preparation-aivault.preparesessionresume-1",
+    "checkpoints": [
+      {
+        "id": "aivault-resume-prepare-repin.normal:repinned",
+        "observation": {
+          "sender": ["66ff2c43e820"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "15e10cea84b9"
+          },
+          "state": "02733b10ba3d",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.result-absent:repinned",
+        "observation": {
+          "sender": ["33eae5d8842d"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.result-null:repinned",
+        "observation": {
+          "sender": ["796728116a08"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.inner-ok-missing:repinned",
+        "observation": {
+          "sender": ["d5a15317673c"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.inner-false-string-error:repinned",
+        "observation": {
+          "sender": ["1c3fd8a3af39"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.inner-false-object-error:repinned",
+        "observation": {
+          "sender": ["a1414c068c04"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.outer-refused:repinned",
+        "observation": {
+          "sender": ["ac9818e55504"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "32a7c0ae7918"
+          },
+          "state": "e0c290ca8a22",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.outer-refused-no-message:repinned",
+        "observation": {
+          "sender": ["945eca02b16b"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "06345cef27f9"
+          },
+          "state": "1cf09af5681c",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.method-not-found:repinned",
+        "observation": {
+          "sender": ["d1a7cba8ed8f"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "e839ea279e77"
+          },
+          "state": "f9dc8bff0bbd",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.transport-rejection:repinned",
+        "observation": {
+          "sender": ["da0644b59bd5"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "a947768bc0ed"
+          },
+          "state": "954fabd8665f",
+          "effects": []
+        }
+      },
+      {
+        "id": "aivault-resume-prepare-repin.transport-rejection-no-message:repinned",
+        "observation": {
+          "sender": ["f7898cc218f8"],
+          "payloads": ["88c8bb20eb6f"],
+          "settlements": {
+            "prepare": "c7584e82c72f"
+          },
+          "state": "dd625f18432a",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

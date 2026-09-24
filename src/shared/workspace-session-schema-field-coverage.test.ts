@@ -28,6 +28,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   activeTabId: true,
   tabsByWorktree: true,
   terminalLayoutsByTabId: true,
+  localOnlyScrollbackByTabId: true,
   activeWorktreeIdsOnShutdown: true,
   openFilesByWorktree: true,
   activeFileIdByWorktree: true,

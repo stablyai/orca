@@ -458,4 +458,112 @@ describe('incident monitor sources', () => {
     expect(serialized).not.toContain(identityToken)
     expect(serialized).not.toContain(sensitiveIdentity)
   })
+
+  // Why: the director maps a Cloud SQL pool connect timeout in cell-status onto
+  // a 404, so without this the whole sample dies on one 2 s database stall.
+  it('retries a transient director admin failure and then reports the cell', async () => {
+    const gcloud: GcloudClient = {
+      accessToken: async () => 'unused',
+      identityToken: async () => 'unused'
+    }
+    const selector = {
+      generation: 1,
+      membership: { existingOnly: [], migrationOnly: [], general: productionCells }
+    }
+    const waits: number[] = []
+    let cellStatusCalls = 0
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { cellId?: string; sourceCellId?: string }
+      if (!body.cellId && !body.sourceCellId) return Response.json({ selector })
+      if (body.cellId) {
+        cellStatusCalls++
+        if (cellStatusCalls === 1) {
+          return Response.json(
+            { error: 'timeout exceeded when trying to connect' },
+            { status: 404 }
+          )
+        }
+        return Response.json({
+          status: {
+            enabled: true,
+            connectionCapacity: { hardCap: 600 },
+            runtime: { lastHeartbeatAt: now - 1_000, heartbeatFresh: true }
+          }
+        })
+      }
+      return Response.json({
+        blocked: 0,
+        blockedExpiredUnregistered: 0,
+        registeredTargetInactive: 0
+      })
+    }
+    const result = await directorSignals(
+      'production',
+      selector,
+      gcloud,
+      now,
+      fetchImpl,
+      async (ms) => {
+        waits.push(ms)
+      }
+    )
+    expect(waits).toEqual([5_000])
+    expect(cellStatusCalls).toBe(productionCells.length + 1)
+    expect(result.cells).toHaveLength(productionCells.length)
+    expect(
+      result.source.signals['cell.production-gce-c1.connection_hard_cap']
+    ).toMatchObject({ value: 600 })
+  })
+
+  // A rejected admin token is a decision, not weather: retrying it only burns
+  // the sample budget and hides the misconfiguration.
+  it('fails immediately on an unauthorized director admin response', async () => {
+    const gcloud: GcloudClient = {
+      accessToken: async () => 'unused',
+      identityToken: async () => 'unused'
+    }
+    const selector = {
+      generation: 1,
+      membership: { existingOnly: [], migrationOnly: [], general: productionCells }
+    }
+    const waits: number[] = []
+    let requestCount = 0
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      requestCount++
+      const body = JSON.parse(String(init?.body)) as { cellId?: string; sourceCellId?: string }
+      if (!body.cellId && !body.sourceCellId) return Response.json({ selector })
+      return Response.json({ error: 'invalid_token' }, { status: 401 })
+    }
+    await expect(
+      directorSignals('production', selector, gcloud, now, fetchImpl, async (ms) => {
+        waits.push(ms)
+      })
+    ).rejects.toThrow('Relay admin telemetry returned 401')
+    expect(requestCount).toBe(2)
+    expect(waits).toEqual([])
+  })
+
+  // A 404 the director means (wrong role) must not be retried either.
+  it('does not retry a director-only 404', async () => {
+    const gcloud: GcloudClient = {
+      accessToken: async () => 'unused',
+      identityToken: async () => 'unused'
+    }
+    let requestCount = 0
+    const fetchImpl: typeof fetch = async () => {
+      requestCount++
+      return Response.json({ error: 'director_only' }, { status: 404 })
+    }
+    await expect(
+      directorSignals(
+        'production',
+        { generation: 1, membership: { existingOnly: [], migrationOnly: [], general: productionCells } },
+        gcloud,
+        now,
+        fetchImpl,
+        async () => {}
+      )
+    ).rejects.toThrow('Relay admin telemetry returned 404')
+    expect(requestCount).toBe(1)
+  })
 })

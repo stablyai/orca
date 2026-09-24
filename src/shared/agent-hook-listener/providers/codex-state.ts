@@ -73,13 +73,17 @@ export function markCodexLeadTurnInterrupted(state: HookListenerState, paneKey: 
 }
 
 export function codexLeadStateForHookEvent(
-  eventName: string | undefined
+  eventName: string | undefined,
+  normalizedState?: ParsedAgentStatusPayload['state']
 ): CodexLeadTurnState['state'] | undefined {
   if (eventName === 'Stop') {
     return 'done'
   }
   if (eventName === 'PermissionRequest') {
-    return 'waiting'
+    // Why: the execution host's normalizer already ruled on whether this approval is human-owned
+    // or reviewer-owned, reading the reviewer off that host's rollout (STA-7698). Re-deriving
+    // 'waiting' from the event name here would discard that verdict for every relayed pane.
+    return normalizedState === 'working' ? 'working' : 'waiting'
   }
   if (
     eventName === 'SessionStart' ||
@@ -120,7 +124,7 @@ export function reconcileRemoteCodexState(
       finishCodexSubagent(roster, agentId)
     }
   } else {
-    const leadState = codexLeadStateForHookEvent(eventName)
+    const leadState = codexLeadStateForHookEvent(eventName, payload.state)
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }

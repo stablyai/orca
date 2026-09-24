@@ -126,6 +126,7 @@
       "loadingHint": "Chargement de l'issue Linear…"
     },
     "renderCapOverflow": "{{value0}} autres — faites défiler ou continuez à taper pour affiner",
+    "seeMore": "Voir plus",
     "filter": {
       "emptyTitle": "Aucun résultat ne correspond au filtre actif",
       "emptySubtitle": "Effacez le filtre ci-dessus, ou élargissez-le à davantage d'hôtes et de projets.",
@@ -150,7 +151,8 @@
       "clearHosts": "Effacer les hôtes",
       "clearProjects": "Effacer les projets",
       "back": "Retour",
-      "ariaActive": "Filtre : {{value0}} actif(s)."
+      "ariaActive": "Filtre : {{value0}} actif(s).",
+      "scopedTo": "Portée :"
     },
     "taskUrl": {
       "loadingHint": "Chargement de {{value0}}…",
@@ -433,6 +435,7 @@
           "9e2a9bb87b": "Continuer",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
+          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -457,7 +460,8 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "mimo_code_label": "MiMo Code",
+          "muse_label": "Muse"
         },
         "skill": {
           "cli": {
@@ -835,7 +839,6 @@
       "useComposerState": {
         "7eb3f44ff7": "L'agent sélectionné est désactivé. Choisissez un agent activé avant de créer.",
         "b2ead86962": "Échec de la résolution de la base de la PR.",
-        "a9ff236145": "Certaines pièces jointes n'ont pas pu être envoyées.",
         "3db83fc58a": "Aucun chemin de projet n'est disponible sur cet hôte pour les pièces jointes.",
         "ba6cb77082": "Échec de la connexion au projet.",
         "chooseOrAddProjectBeforeWorkspace": "Choisissez ou ajoutez un projet avant de créer un espace de travail.",
@@ -891,7 +894,7 @@
         "94a5afe910": "Hôtes SSH",
         "40d80bad8a": "Beta",
         "de0c2907a1": "Serveurs Orca distants",
-        "b351014180": "Statistiques Orca, plus analyses de tokens Claude, Codex, OpenCode et utilisation d'abonnement Grok.",
+        "b351014180": "Statistiques Orca, plus analyses de tokens Claude, Codex, OpenCode, Muse et utilisation d'abonnement Grok.",
         "d72a58b5b9": "Statistiques & usage",
         "dcd0d9b74f": "Raccourcis clavier pour les actions courantes.",
         "94295ebfb3": "Raccourcis",
@@ -1473,7 +1476,7 @@
         "326a578923": "orca.yaml + local",
         "2132b670da": "les deux",
         "0e587e31fb": "yaml",
-        "ac3748dcda": "Nom ou « Créer à partir de »",
+        "ac3748dcda": "Créer à partir de",
         "f660aa1454": "Connexion",
         "7711ad5122": "Commande de setup locale",
         "e5db1b0419": "Commande de setup combinée",
@@ -2201,8 +2204,6 @@
         "recentChatsTerminalsHeader": "Chats et terminaux récents",
         "27f10cca63": "Rechercher chats, terminaux, worktrees, paramètres et actions...",
         "2770f02910": "Rechercher chats, terminaux, worktrees, paramètres et actions",
-        "paletteOpenTabBranch": "Nom de branche",
-        "paletteOpenTabWorkspace": "Nom de l'espace de travail",
         "lastActiveTime": "Dernière activité il y a {{value0}}"
       },
       "github": {
@@ -2384,6 +2385,10 @@
                 "7c302f8174": "Sans titre"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "Cette vue ne contient encore aucun élément.",
+            "7e4a2f80c6": "Les éléments ajoutés récemment peuvent mettre un moment à apparaître."
           }
         },
         "GitHubMarkdownComposer": {
@@ -3955,7 +3960,6 @@
           "444585cb41": "avec données",
           "ecb0cd8a4c": "activés -",
           "33f7b043d2": "Fournisseurs",
-          "60002bb22f": "Aucune utilisation locale de Claude, Codex ou OpenCode trouvée pour l'instant. La vue d'ensemble se remplira après la prochaine session d'agent qui écrira des journaux de tokens.",
           "70f36452d4": "Part du cache",
           "327603fe8b": "Jours actifs",
           "0eaf937335": "Coût estimé",
@@ -3968,7 +3972,9 @@
           "ca6bc5fded": "Actualiser",
           "e06d1baf5c": "Actualiser la vue d'ensemble de l'utilisation",
           "c760c481c5": "Vue d'ensemble de l'utilisation",
-          "55c910f4f1": "- certains prix de modèles sont indisponibles"
+          "55c910f4f1": "- certains prix de modèles sont indisponibles",
+          "enableMuse": "Activer Muse",
+          "noLocalUsageYet": "Aucune utilisation locale de Claude, Codex, OpenCode ou Muse trouvée pour l'instant. L'aperçu se remplira dès que la prochaine session d'agent écrira des journaux de tokens."
         },
         "share": {
           "card": {
@@ -3999,13 +4005,14 @@
             "0bba8ca244": "statistiques",
             "0e2a0b6431": "utilisation",
             "372debfac0": "stats",
-            "26bb901fcd": "Statistiques Orca, plus analyses de tokens Claude, Codex, OpenCode et utilisation d'abonnement Grok.",
+            "26bb901fcd": "Statistiques Orca, plus analyses de tokens Claude, Codex, OpenCode, Muse et utilisation d'abonnement Grok.",
             "cb2430ae6a": "Statistiques & usage",
             "f8a1b2c3d4": "grok",
             "e7f0a1b2c3": "abonnement",
             "d6e9f0a1b2": "crédits",
             "a3b6c7d8e9": "utilisation grok",
-            "9f2a3b4c5d": "xai"
+            "9f2a3b4c5d": "xai",
+            "museKeyword": "muse"
           }
         },
         "usage": {
@@ -4023,7 +4030,6 @@
               "1dd166c920": "Moins",
               "52d9221dc0": "Heatmap d'activité récente des tokens",
               "c424eb3f8e": "Meilleur :",
-              "f28ff1f852": "Activité combinée récente des tokens Claude, Codex et OpenCode.",
               "69e2b50427": "Intensité quotidienne",
               "3a795542fa": "Répartition combinée des tokens",
               "e65084cb4b": "raisonnement",
@@ -4039,7 +4045,8 @@
               "d9a4b3e2f1c5": "événements",
               "statusScanning": "Analyse en cours",
               "statusEnabled": "Activé",
-              "statusOff": "Désactivé"
+              "statusOff": "Désactivé",
+              "recentCombinedActivity": "Activité récente combinée des tokens Claude, Codex, OpenCode et Muse."
             }
           }
         },
@@ -4072,6 +4079,17 @@
           "e5a6b7c8d9": "Crédits hebdomadaires utilisés",
           "f6b7c8d9e0": "Réinitialisation de la période de facturation",
           "a7b8c9d0e1": "Paramètres du compte Grok"
+        },
+        "MuseUsagePane": {
+          "title": "Suivi de l'utilisation de Muse",
+          "enableLabel": "Activer l'analyse d'utilisation de Muse",
+          "disabledDescription": "Lit les journaux de session Muse locaux pour afficher les statistiques de tokens, de modèles et de sessions.",
+          "scopeAll": "Toute l'utilisation locale de Muse",
+          "optionsLabel": "Options d'utilisation de Muse",
+          "refreshAriaLabel": "Actualiser l'utilisation de Muse",
+          "emptyMessage": "Aucune utilisation locale de Muse trouvée pour l'instant dans cette portée.",
+          "noCostNote": "Les journaux de session Muse enregistrent les tokens mais pas le coût, aucune estimation de coût n'est donc affichée.",
+          "recentSessionsDescription": "Sessions Muse locales les plus récentes dans cette portée."
         }
       },
       "sparse": {
@@ -5044,7 +5062,6 @@
           "49f62c5665": "Tableau des espaces de travail",
           "5c9c7c16aa": "Ajoutez un projet pour créer des espaces de travail",
           "a30e34eb5c": "Fermer le tableau des espaces de travail",
-          "createMenu": "Créer",
           "addProject": "Ajouter un projet"
         },
         "SidebarNav": {
@@ -5328,6 +5345,7 @@
           "76865d827f": "Déplacer vers un groupe",
           "503ec0f8e6": "Nouveau groupe à partir du projet",
           "3350101edb": "Copier le chemin",
+          "copyWorktreeName": "Copier le nom du worktree",
           "f4475537d8": "Supprimer",
           "f5ac91531d": "Retirer le projet d'Orca",
           "b42391d8bf": "Suppression…",
@@ -6018,8 +6036,6 @@
           "01af244097": "Annuler",
           "28c8e53176": "Force l'arrêt de tous les volets de terminal en cours d'exécution dans tous les espaces de travail. Tout travail non enregistré de ces sessions est perdu. Le daemon continue de tourner et de nouveaux terminaux peuvent être ouverts immédiatement. Irréversible.",
           "1bbea41a77": "Forcer l'arrêt de toutes les sessions de terminal ?",
-          "01d6b7c64e": "Tue tous les volets de terminal en cours d'exécution et redémarre le processus daemon. Les volets affichent \"Process exited\" et peuvent être rouverts immédiatement. Les sessions au protocole hérité d'une version précédente de l'application sont préservées. Irréversible.",
-          "922548bc66": "Redémarrer le daemon de terminal ?",
           "2b4efdc162": "Impossible de tuer les sessions.",
           "d18f3005c2": "Fermeture refusée pour {{value0}} session{{value1}}.",
           "baad8cd651": "Aucune session en cours.",
@@ -6559,7 +6575,12 @@
           "8a9b784c60": "périmé",
           "d363e5929b": "Vérification de l'enregistrement de la CLI…",
           "cliSkillTerminalTitle": "Configuration de la skill CLI",
-          "cliSkillTerminalAria": "Terminal d'installation de la skill CLI"
+          "cliSkillTerminalAria": "Terminal d'installation de la skill CLI",
+          "6f894ef9c2": "Afficher dans le Finder",
+          "cbe55e4d48": "Afficher dans l'Explorateur",
+          "9fd4023db0": "Afficher dans le Gestionnaire de fichiers",
+          "installFailureUnknownReason": "Orca n'a pas pu terminer l'enregistrement de l'interface CLI et n'a signalé aucune raison.",
+          "installFailureConflictRemedy": "Supprimez {{value0}} s'il n'est plus nécessaire, puis réenregistrez la CLI."
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
@@ -6740,7 +6761,16 @@
             "defaultCopy": "Choisissez comment s'ouvrent les nouveaux onglets de terminal d'agents pris en charge.",
             "defaultViewLabel": "Vue Chat UI par défaut",
             "defaultViewTerminal": "Chat dans le terminal",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "Variables à transmettre depuis votre shell",
+            "shellEnvNamePlaceholder": "Nom de la variable",
+            "shellEnvNameAdd": "Ajouter",
+            "shellEnvNameRemove": "Supprimer {{value0}}",
+            "shellEnvNamesEmpty": "Aucune variable ajoutée pour le moment.",
+            "shellEnvNamesAlwaysPassed": "PATH, les paramètres régionaux et SSH_AUTH_SOCK sont toujours transmis. S'applique au prochain démarrage ou à la prochaine reprise d'un chat.",
+            "shellEnvTitle": "Utiliser l'environnement de votre shell",
+            "shellEnvCopy": "Les chats Codex et Claude démarrent avec toutes les variables exportées par votre shell de connexion, comme un terminal. Désactivez pour choisir celles qu'ils reçoivent.",
+            "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell"
           },
           "agentDashboard": {
             "title": "Tableau de bord des agents",
@@ -7847,7 +7877,7 @@
           "b5ee17826b": "Appairez des runtimes Orca distants pour des sessions persistantes, un état distant plus riche et un transfert web ou mobile.",
           "7686cb5c36": "Connectez ce navigateur à un serveur Orca enregistré.",
           "bd0181eeca": "Serveurs Orca distants",
-          "8acf3f22e0": "Statistiques Orca, plus analyses de tokens Claude, Codex, OpenCode et utilisation d'abonnement Grok.",
+          "8acf3f22e0": "Statistiques Orca, plus analyses de tokens Claude, Codex, OpenCode, Muse et utilisation d'abonnement Grok.",
           "954a8f5aef": "Statistiques & usage",
           "a737a4bb22": "Raccourcis clavier pour les actions courantes.",
           "23bf7a1ad4": "Raccourcis",
@@ -9404,6 +9434,20 @@
             }
           }
         },
+        "machine": {
+          "name": {
+            "search": {
+              "title": "Nom de la machine",
+              "description": "Choisissez le nom sous lequel les autres appareils et hôtes affichent cet ordinateur.",
+              "machineName": "nom de la machine",
+              "machine": "machine",
+              "hostname": "hostname",
+              "computer": "ordinateur",
+              "rename": "renommer",
+              "name": "nom"
+            }
+          }
+        },
         "mobile": {
           "emulator": {
             "search": {
@@ -10664,6 +10708,12 @@
           "step2RelayDescription": "Facultatif. Choisissez l'adresse Wi‑Fi ou Tailscale que votre téléphone utilisera à proximité — généralement plus rapide que Relay. Relay reste fonctionnel quand vous êtes loin.",
           "step2RelayDisclosure": "Utiliser aussi un chemin local plus rapide"
         },
+        "MachineNameField": {
+          "label": "Nom de la machine",
+          "description": "Les autres appareils et hôtes voient « {{name}} ». Laissez vide pour utiliser le nom de l’ordinateur.",
+          "pending": "Les autres appareils et hôtes voient ce nom. Laissez vide pour utiliser le nom d’ordinateur détecté.",
+          "placeholder": "Détecté automatiquement"
+        },
         "MobileRelayBetaAvailability": {
           "about": "À propos de la bêta d'Orca Relay",
           "beta": "Beta",
@@ -11161,7 +11211,6 @@
           "account": "Compte Orca",
           "connected": "Connecté",
           "signInRequired": "La connexion est requise pour téléverser et gérer les artifacts.",
-          "signingIn": "Connexion…",
           "signIn": "Se connecter à Orca",
           "title": "Artefacts",
           "description": "Partagez des fichiers HTML et Markdown avec votre équipe et gérez leurs liens publics.",
@@ -11198,7 +11247,6 @@
           "checking": "Vérification de l'état du compte…",
           "account": "Compte Orca",
           "signOut": "Se déconnecter",
-          "signingIn": "Connexion…",
           "signInAgain": "Se reconnecter",
           "signIn": "Se connecter à Orca",
           "title": "Compte Orca",
@@ -11252,7 +11300,6 @@
           "signInTitle": "Se connecter pour partager des skills",
           "signInWebDescription": "La publication et la gestion des liens sont disponibles dans l'app Orca de bureau.",
           "signInDescription": "Utilisez votre compte Orca pour publier des bundles et gérer leurs liens. Les destinataires n'ont pas besoin de compte.",
-          "signingIn": "Connexion…",
           "signInAgain": "Se reconnecter",
           "signIn": "Se connecter à Orca",
           "howToTitle": "Comment partager des skills",
@@ -12501,8 +12548,6 @@
             "agentSessionQueued": "Session {{value0}} en file d'attente",
             "sessionHistory": "Historique des sessions d'agent",
             "agents": "Agents",
-            "shownRecent": "{{value0}} affichées · {{value1}} récentes",
-            "sessionsShownCompact": "{{value0}} affichées",
             "resumePastSessions": "Reprendre les sessions passées",
             "refreshSessionHistory": "Actualiser l'historique des sessions",
             "searchSessions": "Rechercher des sessions",
@@ -12539,7 +12584,6 @@
             "agents": "Agents",
             "selectAllAgents": "Tout sélectionner",
             "clearAgents": "Effacer",
-            "sort": "Trier",
             "lastUpdated": "Dernière mise à jour",
             "created": "Créé",
             "group": "Regroupement",
@@ -14171,8 +14215,6 @@
           "10ed04a685": "Les cellules du notebook exécutent du Python en local sur cette machine depuis le dossier du notebook. N'exécutez que des cellules issues de fichiers de confiance.",
           "9e06ae5d36": "Exécuter le code du notebook ?",
           "d6f37a640b": "Notebook vide",
-          "8c3b21369a": "nbformat",
-          "329764e9fc": "BÊTA",
           "15ec40a735": "Enregistrer le notebook",
           "07e7d96612": "cellules",
           "c1601b23b2": "Impossible d'afficher le notebook",
@@ -14186,9 +14228,7 @@
           "fd8ac707bc": "Déplacer la cellule vers le haut",
           "3e4cbf15ea": "Brut",
           "1833dbbc43": "Markdown",
-          "7005960d73": "Code",
-          "59b6cd874b": "code",
-          "ba149053d5": "markdown"
+          "7005960d73": "Code"
         },
         "MarkdownPreview": {
           "e4683f70c4": "Annuler",
@@ -15464,6 +15504,10 @@
           "4616ea39fd": "Aller à l'espace de travail",
           "threadListOptionsFiltered": "Options de la liste des fils, filtres actifs",
           "showSearch": "Afficher la recherche",
+          "showUnreadOnly": "Afficher uniquement les fils non lus",
+          "showChildAgents": "Afficher les agents enfants",
+          "filtersSection": "Filtres",
+          "viewSection": "Affichage",
           "59b131fbd9": "Marquer le fil comme non lu",
           "beb2c19173": "Non lus",
           "5651b216c6": "Projet inconnu",
@@ -15819,7 +15863,6 @@
           "refresh": "Actualiser",
           "signInHeading": "Se connecter à Orca",
           "signInCopy": "Connectez-vous pour voir et gérer les artifacts partagés via votre compte.",
-          "signingIn": "Connexion…",
           "signIn": "Se connecter à Orca",
           "empty": "Aucun artifact partagé",
           "emptyCopy": "Ouvrez un fichier HTML ou Markdown et choisissez Partager comme artifact, ou demandez à votre agent de le partager.",
@@ -15868,7 +15911,6 @@
           "confirmDescription": "Ceci publie le fichier actuel à un lien consultable par toute personne disposant de l'URL.",
           "accountTitle": "Compte Orca",
           "accountDescription": "Connectez-vous pour créer et gérer ce lien.",
-          "signingIn": "Connexion…",
           "signInAgain": "Se reconnecter",
           "signIn": "Se connecter",
           "publishingOffTitle": "Le partage d'artifacts est désactivé",
@@ -16028,7 +16070,8 @@
         "chooseInAgentPicker": "Choisir dans le sélecteur d'agents…",
         "toggleOption": "Basculer {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "Valeur actuelle inconnue — choisissez Activé ou Désactivé",
+        "valueIsDefault": "Par défaut",
+        "valueNotReported": "Non signalé",
         "sentNotConfirmed": "Envoyé à l'agent — non confirmé",
         "setWhenSessionStarts": "Défini au démarrage de la session.",
         "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
@@ -16041,9 +16084,7 @@
           "high": "Haute",
           "xhigh": "Extra élevé",
           "max": "Max",
-          "ultra": "Ultra",
-          "on": "Activé",
-          "off": "Désactivé"
+          "ultra": "Ultra"
         }
       },
       "tool": {
@@ -16401,78 +16442,6 @@
     }
   },
   "dashboardPopout": {
-    "view": {
-      "label": "Vue tableau de bord",
-      "board": "Tableau de bord",
-      "map": "Carte des agents"
-    },
-    "map": {
-      "host": {
-        "local": "Local",
-        "ssh": "SSH",
-        "wsl": "WSL",
-        "remote": "Distant"
-      },
-      "filters": {
-        "showStates": "États des agents",
-        "agentlessWorkspaces": "Espaces de travail sans agents",
-        "orchestrationLinks": "Liens d'orchestration",
-        "orchestrationLinksHidden": "Liens d'orchestration masqués",
-        "workspaceVisibility": "Contenu de la carte",
-        "title": "Contrôles de la carte",
-        "reset": "Réinitialiser",
-        "ofTotalAgents": "sur {{total}} agents affichés",
-        "quickViews": "Vues rapides",
-        "agents": "Agents",
-        "time": "Heure",
-        "lifespan": "Durée de vie de la session",
-        "sinceMessage": "Depuis le dernier message",
-        "timeInState": "Temps dans l'état actuel",
-        "timeMinimum": "{{label}} minimum",
-        "timeMaximum": "{{label}} maximum",
-        "timeAny": "tous",
-        "timeRangeCount": "{{count}} plages",
-        "resetRanges": "Réinitialiser les plages",
-        "summaryAll": "Tous",
-        "summaryCount": "{{shown}} sur {{total}}",
-        "summarySelected": "{{count}} sélectionnés",
-        "workspace": "Espace de travail",
-        "stateChip": "État : {{states}}"
-      },
-      "liveContainmentMap": "Carte d'imbrication en temps réel",
-      "empty": "Aucun agent ne correspond aux filtres actuels.",
-      "canvasLabel": "Carte imbriquée des projets, espaces de travail et agents",
-      "zoomOut": "Zoom arrière",
-      "zoomIn": "Zoom avant",
-      "fit": "Ajuster",
-      "openWorktree": "Ouvrir les détails du worktree {{worktree}}",
-      "openFolderWorkspace": "Ouvrir les détails de l'espace de travail de type dossier {{workspace}}",
-      "worktreeSummary": "{{total}} agents · {{active}} actifs · {{done}} terminés",
-      "worktreeSummary_one": "{{total}} agent · {{active}} actif · {{done}} terminé",
-      "worktreeSummary_other": "{{total}} agents · {{active}} actifs · {{done}} terminés",
-      "runningAgents": "Agents",
-      "spawnAgent": "Démarrer un nouvel agent",
-      "noLaunchableAgents": "Aucun agent activé détecté.",
-      "sleepWorkspace": "Veille",
-      "projectCount": "{{agents}} agents · {{workspaces}} workspaces",
-      "agentCount": "{{count}} agents",
-      "agentCount_one": "{{count}} agent",
-      "agentCount_other": "{{count}} agents",
-      "noWorkspaceAgents": "Aucun agent dans cet espace de travail.",
-      "status": {
-        "doneSeen": "Terminé, vu"
-      },
-      "quickView": {
-        "everything": "Tout",
-        "attention": "Me concerne",
-        "stuck": "Bloqué",
-        "unread": "Non lus",
-        "recent": "30 dernières minutes",
-        "longRunning": "Exécutions longues",
-        "stale": "Inactif > 3 j",
-        "orchestration": "Orchestration"
-      }
-    },
     "placeholder": {
       "title": "Tableau de bord des agents",
       "description": "C'est ici que tous vos agents s'afficheront d'un coup d'œil. Le tableau arrive bientôt."
@@ -16534,8 +16503,7 @@
       "project": "Projet",
       "workspaceStatus": "Statut de l'espace de travail",
       "reviewStatus": "Statut PR / MR",
-      "clearAll": "Effacer tous les filtres",
-      "removeChip": "Retirer {{filter}}"
+      "clearAll": "Effacer tous les filtres"
     },
     "search": {
       "placeholder": "Rechercher un worktree, un projet ou un agent…",
@@ -16588,5 +16556,13 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "attend une réponse",
+      "working": "en cours",
+      "stopped": "arrêté",
+      "finished": "terminé"
+    }
   }
 }

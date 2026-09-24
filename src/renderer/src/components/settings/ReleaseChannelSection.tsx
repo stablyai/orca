@@ -116,46 +116,54 @@ export function ReleaseChannelSection(): React.JSX.Element {
   // from a channel the picker is no longer showing.
   const latestRequestRef = useRef(0)
 
-  const loadBuilds = useCallback(async (channel: ReleaseChannel): Promise<void> => {
-    const requestId = latestRequestRef.current + 1
-    latestRequestRef.current = requestId
-    const isStale = (): boolean => latestRequestRef.current !== requestId
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const result = await window.api.updater.listBuilds(channel)
-      if (isStale()) {
-        return
-      }
-      if (result.ok) {
-        setBuilds(result.builds)
-        setSelectedTag(result.builds[0]?.tag ?? null)
-      } else {
+  const loadBuilds = useCallback(
+    async (channel: ReleaseChannel, options?: { force?: boolean }): Promise<void> => {
+      const requestId = latestRequestRef.current + 1
+      latestRequestRef.current = requestId
+      const isStale = (): boolean => latestRequestRef.current !== requestId
+      setLoading(true)
+      setLoadError(null)
+      try {
+        const result = await window.api.updater.listBuilds(channel, options)
+        if (isStale()) {
+          return
+        }
+        if (result.ok) {
+          setBuilds(result.builds)
+          setSelectedTag(result.builds[0]?.tag ?? null)
+        } else {
+          setBuilds(null)
+          setLoadError(result.message)
+        }
+      } catch (error) {
+        if (isStale()) {
+          return
+        }
         setBuilds(null)
-        setLoadError(result.message)
+        setLoadError(String((error as Error)?.message ?? error))
+      } finally {
+        // Why: only the newest request owns the spinner; a superseded one clearing
+        // it would show "no builds" while the current load is still running.
+        if (!isStale()) {
+          setLoading(false)
+        }
       }
-    } catch (error) {
-      if (isStale()) {
-        return
-      }
-      setBuilds(null)
-      setLoadError(String((error as Error)?.message ?? error))
-    } finally {
-      // Why: only the newest request owns the spinner; a superseded one clearing
-      // it would show "no builds" while the current load is still running.
-      if (!isStale()) {
-        setLoading(false)
-      }
-    }
-  }, [])
+    },
+    []
+  )
 
   // Why: reload whenever the channel changes so the picker never offers tags
-  // from the channel the user just switched away from.
+  // from the channel the user just switched away from. Not before the version
+  // resolves: the running channel is unknown until then, and a load for the
+  // 'stable' placeholder would be a GitHub request whose result is thrown away.
   useEffect(() => {
+    if (appVersion === null) {
+      return
+    }
     setBuilds(null)
     setSelectedTag(null)
     void loadBuilds(activeChannel)
-  }, [activeChannel, loadBuilds])
+  }, [activeChannel, appVersion, loadBuilds])
 
   const selectedBuild = useMemo(
     () => builds?.find((build) => build.tag === selectedTag) ?? null,
@@ -276,7 +284,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
             <SelectTrigger size="sm" className="min-w-64 flex-1">
               <SelectValue
                 placeholder={
-                  loading
+                  loading || (builds === null && loadError === null)
                     ? translate(
                         'auto.components.settings.ReleaseChannelSection.loadingBuilds',
                         'Loading builds…'
@@ -306,7 +314,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
               'Refresh build list'
             )}
             disabled={loading}
-            onClick={() => void loadBuilds(activeChannel)}
+            onClick={() => void loadBuilds(activeChannel, { force: true })}
           >
             {loading ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -349,6 +357,13 @@ export function ReleaseChannelSection(): React.JSX.Element {
             )}
           </Button>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.ReleaseChannelSection.cacheHint',
+            'Build lists are cached for 5 minutes. Refresh to check for new builds.'
+          )}
+        </p>
 
         {loadError ? (
           <p className="text-xs text-destructive">{loadError}</p>

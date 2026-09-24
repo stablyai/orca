@@ -59,6 +59,22 @@ function deliverActivity(
   translator: ReturnType<typeof createCodexJournalTranslator>,
   params: unknown
 ): void {
+  const item = (params as { item: { kind: string; agentThreadId: string } }).item
+  if (item.kind === 'started' || item.kind === 'completed') {
+    translator.handle({
+      type: 'notification',
+      sessionId: SESSION_ID,
+      threadId: item.agentThreadId,
+      method: item.kind === 'started' ? 'turn/started' : 'turn/completed',
+      params: {
+        threadId: item.agentThreadId,
+        turn: {
+          id: `execution:${item.agentThreadId}`,
+          status: item.kind === 'started' ? 'inProgress' : 'completed'
+        }
+      }
+    })
+  }
   translator.handle(notification('item/started', params))
   translator.handle(notification('item/completed', params))
 }

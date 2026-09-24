@@ -4,6 +4,7 @@ import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../shared/runtime-types'
 import { makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 import { randomUUID } from 'node:crypto'
 import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from './orca-runtime-core'
 
@@ -89,8 +90,12 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
     this.registerPty(result.id, workspace.id, workspace.connectionId)
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
-      createdPty.tabId = parentTabId
-      createdPty.paneKey = paneKey
+      recordPtySurface(
+        createdPty,
+        parentTabId,
+        paneKey,
+        spawnSurfaceClaimSequence(this.graphSequence)
+      )
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
       this.setPairedRendererSessionOwnership(
         createdPty.ptyId,

@@ -7,8 +7,8 @@
 //
 // Recovery records the floor instead of rewriting the current fence, because `live` means a handle
 // proven at exactly the current fence — moving it would invalidate the very records recovery exists
-// to save. Every mint site routes through here so a new transition cannot quietly reintroduce a
-// bare `+ 1`; the floor is pinned by a test that drives each transition.
+// to save. A source-level ratchet rejects direct `+ 1` mints, while acquisition-transition tests
+// pin the one-step bound and floor; an indirected mint is not caught.
 
 import type { AgentSessionLease } from './agent-session-record'
 

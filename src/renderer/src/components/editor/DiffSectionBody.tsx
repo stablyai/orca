@@ -94,7 +94,7 @@ export function DiffSectionBody({
         // Why: key by lineNumber so the popover remounts when the anchor
         // line changes instead of leaking draft state across lines.
         <DiffCommentPopover
-          key={popover.lineNumber}
+          key={`${popover.startLine ?? popover.lineNumber}:${popover.lineNumber}`}
           lineNumber={popover.lineNumber}
           startLine={popover.startLine}
           top={popover.top}

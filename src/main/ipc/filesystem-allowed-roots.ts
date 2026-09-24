@@ -27,20 +27,6 @@ export function getLocalRepos(store: Store) {
   return filterLocalRepos(store.getRepos())
 }
 
-function getFolderScopeCandidateRepos(
-  folderPath: string,
-  projectGroupId: string,
-  childGroupIndex: ProjectGroupChildIndex,
-  repos: readonly Repo[]
-): Repo[] {
-  const groupIds = collectProjectGroupSubtreeIds(childGroupIndex, projectGroupId)
-  return repos.filter(
-    (repo) =>
-      (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
-      isPathInsideOrEqual(folderPath, repo.path)
-  )
-}
-
 function isRemoteOnlyFolderScope(
   folderPath: string,
   projectGroupId: string,
@@ -51,13 +37,21 @@ function isRemoteOnlyFolderScope(
   if (connectionId) {
     return true
   }
-  const candidates = getFolderScopeCandidateRepos(
-    folderPath,
-    projectGroupId,
-    childGroupIndex,
-    repos
-  )
-  return candidates.length > 0 && candidates.every((repo) => Boolean(repo.connectionId))
+  const groupIds = collectProjectGroupSubtreeIds(childGroupIndex, projectGroupId)
+  let hasRemoteCandidate = false
+  for (const repo of repos) {
+    if (
+      (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
+      isPathInsideOrEqual(folderPath, repo.path)
+    ) {
+      // One local candidate settles the scope without scanning the remaining repositories.
+      if (!repo.connectionId) {
+        return false
+      }
+      hasRemoteCandidate = true
+    }
+  }
+  return hasRemoteCandidate
 }
 
 function getFolderWorkspaceConnectionId(

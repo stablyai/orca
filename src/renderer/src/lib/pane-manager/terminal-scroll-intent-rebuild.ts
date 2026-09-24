@@ -1,15 +1,17 @@
+import type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+
 // Why: buffer rebuilds (snapshot replay clear + rewrite) parse asynchronously.
 // Until the rebuild's bytes have parsed, viewportY/baseY describe a transient
 // half-cleared buffer; any intent capture/enforce latched from it pins the
 // terminal at line 0. Callers bracket the rebuild and re-apply intent once
 // after parse (see terminal-scroll-intent.ts).
-const terminalScrollIntentRebuilds = new WeakMap<object, number>()
+const terminalScrollIntentRebuilds = new WeakMap<TerminalScrollIntentTarget, number>()
 const terminalScrollIntentRebuildCompletions = new WeakMap<
-  object,
+  TerminalScrollIntentTarget,
   Set<(completed: boolean) => void>
 >()
 const deferredTerminalGeometryMutations = new WeakMap<
-  object,
+  TerminalScrollIntentTarget,
   {
     mutations: Map<string, () => void>
   }
@@ -30,11 +32,11 @@ function notifyRebuildCompletions(
   }
 }
 
-export function beginTerminalScrollIntentBufferRebuild(terminal: object): void {
+export function beginTerminalScrollIntentBufferRebuild(terminal: TerminalScrollIntentTarget): void {
   terminalScrollIntentRebuilds.set(terminal, (terminalScrollIntentRebuilds.get(terminal) ?? 0) + 1)
 }
 
-export function endTerminalScrollIntentBufferRebuild(terminal: object): void {
+export function endTerminalScrollIntentBufferRebuild(terminal: TerminalScrollIntentTarget): void {
   const count = terminalScrollIntentRebuilds.get(terminal) ?? 0
   if (count <= 1) {
     terminalScrollIntentRebuilds.delete(terminal)
@@ -46,12 +48,14 @@ export function endTerminalScrollIntentBufferRebuild(terminal: object): void {
   terminalScrollIntentRebuilds.set(terminal, count - 1)
 }
 
-export function isTerminalScrollIntentRebuildInFlight(terminal: object): boolean {
+export function isTerminalScrollIntentRebuildInFlight(
+  terminal: TerminalScrollIntentTarget
+): boolean {
   return (terminalScrollIntentRebuilds.get(terminal) ?? 0) > 0
 }
 
 export function onTerminalScrollIntentBufferRebuildComplete(
-  terminal: object,
+  terminal: TerminalScrollIntentTarget,
   completion: (completed: boolean) => void
 ): () => void {
   if (!isTerminalScrollIntentRebuildInFlight(terminal)) {
@@ -75,7 +79,7 @@ export function onTerminalScrollIntentBufferRebuildComplete(
 // Why: source-dimension replay must finish and restore its viewport before
 // unrelated fit/resize work is allowed to reflow the rebuilt buffer.
 export function deferTerminalGeometryMutationDuringRebuild(
-  terminal: object,
+  terminal: TerminalScrollIntentTarget,
   operationKey: string,
   mutation: () => void
 ): boolean {
@@ -117,7 +121,9 @@ export function deferTerminalGeometryMutationDuringRebuild(
   return true
 }
 
-export function cancelTerminalScrollIntentBufferRebuildCompletions(terminal: object): void {
+export function cancelTerminalScrollIntentBufferRebuildCompletions(
+  terminal: TerminalScrollIntentTarget
+): void {
   const completions = terminalScrollIntentRebuildCompletions.get(terminal)
   terminalScrollIntentRebuildCompletions.delete(terminal)
   notifyRebuildCompletions(completions, false)

@@ -23,9 +23,11 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/orca-profiles/profile-cloud-client.ts', 1],
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],
+  ['main/runtime/push/push-gateway-client.ts', 1],
   ['main/runtime/relay/relay-http-client.ts', 2],
   ['main/runtime/relay/relay-region-catalog-fetch.ts', 1],
-  ['main/runtime/relay/relay-region-preference.ts', 2],
+  // Measurement reuses the audited catalog/probe consumers, which consume or cancel every body.
+  ['main/runtime/relay/relay-region-preference.ts', 3],
   ['main/runtime/relay/relay-region-probe.ts', 1],
   ['main/source-control/hosted-review-api-request.ts', 1],
   ['main/speech/openai-transcription-client.ts', 1],
@@ -40,6 +42,12 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/browser/browser-route-h3-egress-electron-main.ts', 1],
   ['main/browser/browser-route-persisted-worker-fixture.ts', 3],
   ['main/browser/browser-route-tcp-egress-fixture.ts', 1],
+  // Electron-test rig: the CDP poll cancels its unread body and the version probe consumes
+  // the body through response.json(), so neither leaves an unread undici response.
+  ['main/browser/browser-session-ua-cdp-collector.ts', 2],
+  // Every hit is inside an injected page/worker script source string, not a call this
+  // process makes.
+  ['main/browser/browser-session-ua-wire-probe-server.ts', 10],
   ['main/opencode/status-plugin-post-source.ts', 1],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP

@@ -1,3 +1,5 @@
+import type { RpcClient } from '../transport/rpc-client'
+import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
@@ -13,6 +15,7 @@ import {
 } from './use-mobile-native-chat-session-options'
 
 export function useMobileNativeChatSessionOptionController(args: {
+  client?: RpcClient | null
   activeChatStructured: boolean
   activeSessionTabId: string | null
   agent: string | null
@@ -21,6 +24,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
   reportedModel: string | null
+  modelSwitchCommand?: string
   structured: {
     conversationCommands?: readonly AgentSessionConversationCommand[]
     optionPickerRequest?: { id: string; sequence: number } | null
@@ -61,7 +65,15 @@ export function useMobileNativeChatSessionOptionController(args: {
     }
   }, [activeSessionTabId, isTabChatView, toggleTabChatView])
 
+  const discoveredModels = useMobileOmpModelDiscovery({
+    client: args.client ?? null,
+    hostId,
+    worktreeId,
+    enabled: !activeChatStructured && agent === 'omp' && activeSessionTabId !== null
+  })
   const sessionOptions = useMobileNativeChatSessionOptions({
+    discoveredModels,
+    modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,

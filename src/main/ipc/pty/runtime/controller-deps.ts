@@ -68,7 +68,7 @@ export type PtyRuntimeControllerDeps = {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ) => Promise<boolean>
-  rememberSyntheticKillExit: (id: string) => void
+  rememberSyntheticKillExit: (id: string, incarnationId?: string) => void
   rememberRetiredRejectedPty: (id: string) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
   sendPtySpawnedToRenderer: (id: string) => void
@@ -84,6 +84,8 @@ export type PtyRuntimeControllerDeps = {
   retiredRejectedPtyIds: Map<string, NodeJS.Timeout>
   reversibleStopOwnersByPtyId: Map<string, number>
   mainWindow: BrowserWindow
+  transitionSpawnHiddenRendererPtyDeliveryState?: (id: string, hidden: boolean) => void
+  syncPtyBackgroundedDelivery?: (id: string, caller: string) => void
 }
 
 export type { StablePaneOwner }

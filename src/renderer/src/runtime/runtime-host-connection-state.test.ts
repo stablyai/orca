@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isConnectedRuntimeHostState,
+  isDisconnectedRuntimeHostState,
   runtimeHostConnectionState,
+  runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from './runtime-host-connection-state'
 
@@ -173,6 +176,152 @@ describe('runtime host connection state', () => {
             lastError: 'Connection closed'
           }
         }
+      })
+    ).toBe('disconnected')
+  })
+})
+
+describe('runtime host connection state for a recorded status entry', () => {
+  it('separates a host that was never probed from one a probe found unreachable', () => {
+    // The sidebar read raw truthiness, which collapsed these two into the same red glyph.
+    expect(runtimeHostConnectionStateForEntry(undefined)).toBe('checking')
+    expect(runtimeHostConnectionStateForEntry({ status: null })).toBe('disconnected')
+  })
+
+  it('reads the remote-control diagnostics recorded beside a failed probe', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        remoteControl: remoteControl('reconnecting')
+      })
+    ).toBe('reconnecting')
+  })
+
+  it('agrees with the status bar that a closed control channel is disconnected', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: makeStatus({ remoteControl: remoteControl('closed') })
+      })
+    ).toBe('disconnected')
+  })
+
+  it('names only the disconnected verdict as disconnected', () => {
+    expect(isDisconnectedRuntimeHostState('disconnected')).toBe(true)
+    for (const state of [
+      'connected',
+      'checking',
+      'reconnecting',
+      'runtime-unavailable',
+      'workspace-window-closed'
+    ] as const) {
+      expect(isDisconnectedRuntimeHostState(state)).toBe(false)
+    }
+  })
+})
+
+function remoteControl(
+  state: NonNullable<RuntimeStatus['remoteControl']>['state']
+): NonNullable<RuntimeStatus['remoteControl']> {
+  return {
+    state,
+    pendingRequestCount: 0,
+    subscriptionCount: 0,
+    reconnectAttempt: 1,
+    lastConnectedAt: null,
+    lastClose: null,
+    lastError: null
+  }
+}
+
+it('does not report reconnecting after verification is terminally blocked', () => {
+  expect(
+    runtimeHostConnectionStateForEntry({
+      status: null,
+      snapshot: {
+        environmentId: 'browser',
+        pairingRevision: 1,
+        sequence: 1,
+        checkedAt: 1,
+        status: null,
+        verification: 'blocked',
+        transport: 'disconnected'
+      }
+    })
+  ).toBe('disconnected')
+})
+
+describe('snapshot transport evidence', () => {
+  const snapshotWith = (
+    transport: RuntimeHostStatusSnapshot['transport'],
+    verification: RuntimeHostStatusSnapshot['verification']
+  ): RuntimeHostStatusSnapshot => ({
+    environmentId: 'host',
+    pairingRevision: 1,
+    sequence: 1,
+    checkedAt: 1,
+    status: null,
+    verification,
+    transport
+  })
+
+  // Enumerated rather than spot-checked: the destructive verdict must be reachable
+  // only from transport evidence that actually proves the host is gone.
+  it.each([
+    ['disconnected', 'unavailable', 'reconnecting'],
+    ['disconnected', 'checking', 'reconnecting'],
+    ['ready', 'unavailable', 'runtime-unavailable'],
+    // A null status under 'checking' is answered by the checking guard, before transport.
+    ['ready', 'checking', 'checking'],
+    ['connecting', 'checking', 'checking'],
+    ['unknown', 'checking', 'checking'],
+    // Was 'disconnected': a transport still being established fell through to the default.
+    ['connecting', 'unavailable', 'checking'],
+    // Deliberately unchanged: 'unknown' means no transport was ever attempted, which is the
+    // permanent state of an unreachable paired host. See the affordance test below.
+    ['unknown', 'unavailable', 'disconnected']
+  ] as const)('reads transport=%s verification=%s as %s', (transport, verification, expected) => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        snapshot: snapshotWith(transport, verification)
+      })
+    ).toBe(expected)
+  })
+
+  // A paired host that is simply switched off never gets a shared-control connection, so its
+  // transport stays 'unknown' for the whole session. Calling that 'checking' withdrew the row's
+  // Connect action (RuntimeHostStatusRow returns no label for it) and held the status-bar
+  // segment in 'connecting', leaving the user a permanent spinner and nothing to click.
+  it('keeps a never-contacted host actionable after its probe fails', () => {
+    const state = runtimeHostConnectionStateForEntry({
+      status: null,
+      snapshot: snapshotWith('unknown', 'unavailable')
+    })
+    expect(isDisconnectedRuntimeHostState(state)).toBe(true)
+    expect(runtimeStatusForOverall(state)).toBe('disconnected')
+  })
+
+  it('still lets a blocked or retired snapshot reach the disconnected verdict', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        snapshot: snapshotWith('connecting', 'blocked')
+      })
+    ).toBe('disconnected')
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        snapshot: { ...snapshotWith('connecting', 'unavailable'), retired: true }
+      })
+    ).toBe('disconnected')
+  })
+
+  it('keeps a closed control channel disconnected while the transport is connecting', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        remoteControl: remoteControl('closed'),
+        snapshot: snapshotWith('connecting', 'unavailable')
       })
     ).toBe('disconnected')
   })

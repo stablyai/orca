@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+/**
+ * The session screen as one source family, rooted at the component the route mounts.
+ *
+ * `MobileSessionRouteScreen.tsx` and not the route file: C7.7 made that file a flag switch, whose
+ * business is which of the two screens to render and not what the session screen does. Walking it
+ * would pin the switch's own params and literals into an extraction parity hash that is about the
+ * screen, and the root function this family is read from is the one that calls the controller.
+ */
 export const MOBILE_SESSION_ROUTE_SOURCE_FILES = [
-  '../../app/h/[hostId]/session/[worktreeId].tsx',
+  './MobileSessionRouteScreen.tsx',
   './use-mobile-session-controller.ts',
   './use-mobile-session-foundation.ts',
   './use-mobile-session-screen-state.ts',

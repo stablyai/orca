@@ -38,6 +38,7 @@ describe('web GitHub preload API', () => {
         'listAccessibleProjects',
         'listAssignableUsers',
         'listAssignableUsersBySlug',
+        'listBindableAccounts',
         'listIssueTypesBySlug',
         'listIssues',
         'listLabels',
@@ -77,6 +78,7 @@ describe('web GitHub preload API', () => {
         'updatePRTitle',
         'updateProjectItemField',
         'updatePullRequestBySlug',
+        'validateAccountBinding',
         'viewer',
         'workItem',
         'workItemByOwnerRepo',
@@ -369,6 +371,18 @@ describe('web GitHub preload API', () => {
         args: { force: true },
         expectedMethod: 'github.rateLimit',
         expectedParams: { force: true }
+      },
+      {
+        key: 'listBindableAccounts',
+        args: { repoPath, refreshCapability: true },
+        expectedMethod: 'github.listBindableAccounts',
+        expectedParams: withRepo({ repoPath, refreshCapability: true })
+      },
+      {
+        key: 'validateAccountBinding',
+        args: { repoPath, host: 'github.com', user: 'octocat' },
+        expectedMethod: 'github.validateAccountBinding',
+        expectedParams: withRepo({ repoPath, host: 'github.com', user: 'octocat' })
       },
       {
         key: 'listAccessibleProjects',

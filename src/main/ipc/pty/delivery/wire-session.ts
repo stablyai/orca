@@ -89,9 +89,11 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.requestSerializedBuffer = (ptyId, opts) => requestSerializedBuffer(session, ptyId, opts)
   session.shutdownProviderAndDetectExit = (provider, id, opts) =>
     shutdownProviderAndDetectExit(provider, id, opts)
-  session.rememberSyntheticKillExit = (id) => rememberSyntheticKillExit(session, id)
+  session.rememberSyntheticKillExit = (id, incarnationId) =>
+    rememberSyntheticKillExit(session, id, incarnationId)
   session.rememberRetiredRejectedPty = (id) => rememberRetiredRejectedPty(session, id)
-  session.consumeSyntheticKillExit = (id) => consumeSyntheticKillExit(session, id)
+  session.consumeSyntheticKillExit = (id, incarnationId) =>
+    consumeSyntheticKillExit(session, id, incarnationId)
   session.syncPtyBackgroundedDelivery = (id, caller) =>
     syncPtyBackgroundedDelivery(session, id, caller)
   session.resyncBackgroundedDeliveriesAfterGateReset = () =>

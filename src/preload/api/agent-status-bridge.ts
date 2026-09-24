@@ -61,16 +61,6 @@ export const agentStatusApi = {
     ipcRenderer.on('agentStatus:legacyWorkerTerminalRecovery', listener)
     return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)
   },
-  onLegacyWorkerTerminalResumeFence: (
-    callback: (data: { paneKey: string; blocked: boolean }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { paneKey: string; blocked: boolean }
-    ) => callback(data)
-    ipcRenderer.on('agentStatus:legacyWorkerTerminalResumeFence', listener)
-    return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalResumeFence', listener)
-  },
   getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
     ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
   /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
@@ -90,8 +80,8 @@ export const agentStatusApi = {
   dropByTabPrefix: (tabId: string): void => {
     ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
   },
-  retirePaneAuthority: (paneKey: string): void => {
-    ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey)
+  retirePaneAuthority: (paneKey: string, retirementId?: string): void => {
+    ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey, retirementId)
   },
   restorePaneAuthority: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:restorePaneAuthority', paneKey)

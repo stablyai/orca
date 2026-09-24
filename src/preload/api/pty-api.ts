@@ -4,7 +4,7 @@ import type {
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
@@ -39,6 +39,7 @@ export type PtyApi = {
     // Why: lets a single tab open in a different shell than the user's default.
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
@@ -123,7 +124,7 @@ export type PtyApi = {
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
-  listSessions: () => Promise<PtyListedSession[]>
+  listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>

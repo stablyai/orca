@@ -25,6 +25,8 @@ export type NativeChatStructuredComposerTransport = {
    *  per-agent catalog, which is what an older host leaves the client with. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
   worktreeId?: string
+  /** Present only where the host can set this session's goal. */
+  threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
   onError: (message: string | null) => void
   runtime: 'local' | 'remote'
   /** The session behind this composer; a real user send relinquishes orchestration ownership. */

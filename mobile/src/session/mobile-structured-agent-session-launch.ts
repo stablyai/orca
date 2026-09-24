@@ -12,7 +12,11 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
-import { structuredSessionRandomUuid } from './mobile-structured-agent-session-rpc'
+import {
+  structuredAgentSessionCreate,
+  structuredAgentSupportProbe
+} from './mobile-session-launch-operations'
+import { structuredSessionRandomUuid } from './structured-session-operation-id'
 
 type StructuredCreateSupport = {
   supported?: boolean
@@ -82,7 +86,7 @@ export async function createMobileStructuredAgentSession(
   let supportResponse
   for (let attempt = 0; ; attempt += 1) {
     try {
-      supportResponse = await client.sendRequest('agentSession.createSupport', { worktree, agent })
+      supportResponse = await structuredAgentSupportProbe.request(client, { worktree, agent })
     } catch (error) {
       const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
       if (
@@ -120,14 +124,14 @@ export async function createMobileStructuredAgentSession(
   const params = createParamsFor(agent, worktree)
   let response
   try {
-    response = await client.sendRequest('agentSession.create', params, {
+    response = await structuredAgentSessionCreate.request(client, params, {
       timeoutMs: 15_000,
       budgetSpansConnect: true
     })
   } catch {
     // Replay the durable envelope once so a lost acknowledgement cannot create a sibling.
     try {
-      response = await client.sendRequest('agentSession.create', params, {
+      response = await structuredAgentSessionCreate.request(client, params, {
         timeoutMs: 15_000,
         budgetSpansConnect: true
       })
@@ -137,18 +141,22 @@ export async function createMobileStructuredAgentSession(
     }
   }
 
+  // Why: this path distrusts the declared RpcResponse type — a malformed reply must read as
+  // unconfirmed, not as a refusal we can classify.
   if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!response.ok) {
+    const error = response.error as { code?: unknown; message?: unknown } | null | undefined
     if (
-      !response.error ||
-      typeof response.error !== 'object' ||
-      typeof response.error.code !== 'string'
+      !error ||
+      typeof error !== 'object' ||
+      typeof error.code !== 'string' ||
+      typeof error.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
-    return classifyCreateRefusal(agent, response.error.code, response.error.message)
+    return classifyCreateRefusal(agent, error.code, error.message)
   }
   const result = response.result as AgentSessionMutationResult<AgentSessionAttachResult>
   if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
@@ -158,7 +166,8 @@ export async function createMobileStructuredAgentSession(
     if (
       !result.refusal ||
       typeof result.refusal !== 'object' ||
-      typeof result.refusal.code !== 'string'
+      typeof result.refusal.code !== 'string' ||
+      typeof result.refusal.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }

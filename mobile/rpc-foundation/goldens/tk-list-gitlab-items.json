@@ -1,0 +1,193 @@
+{
+  "operation": "tasks.task-list-gitlab-items",
+  "family": "tasks.task-list-gitlab-items",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "9b26b8f112021fe65c156b7d4067071551bcdab44a5858f8a933f7ace66e6f80",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2af5bdc42011": {
+      "error": "",
+      "items": [
+        {
+          "key": "gitlab:repo-1:issue:4",
+          "provider": "gitlab",
+          "source": {
+            "author": {
+              "$rpc": "null"
+            },
+            "id": "issue:4",
+            "labels": [],
+            "number": 4,
+            "repoId": "repo-1",
+            "repoName": "Repo",
+            "state": "opened",
+            "title": "A GitLab issue",
+            "type": "issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": ""
+          },
+          "status": "Open",
+          "subtitle": "Repo #4",
+          "title": "A GitLab issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": false,
+      "refreshing": false
+    },
+    "341101aedcbe": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"state\":\"opened\",\"page\":1,\"perPage\":50}}"
+    },
+    "341ebd23fc0b": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": {
+              "$rpc": "undefined"
+            },
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:4",
+                "labels": [],
+                "number": 4,
+                "state": "opened",
+                "title": "A GitLab issue",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ]
+          }
+        }
+      }
+    },
+    "39f99cf479f0": {
+      "name": "error",
+      "ordinal": 1,
+      "value": ""
+    },
+    "411aee2eccd9": {
+      "name": "refreshing",
+      "ordinal": 8,
+      "value": false
+    },
+    "5ac1816a09df": {
+      "name": "loading",
+      "ordinal": 7,
+      "value": false
+    },
+    "609f32a21704": {
+      "name": "loading",
+      "ordinal": 2,
+      "value": true
+    },
+    "a2f93be0d571": {
+      "name": "items",
+      "ordinal": 5,
+      "value": [
+        {
+          "key": "gitlab:repo-1:issue:4",
+          "provider": "gitlab",
+          "source": {
+            "author": {
+              "$rpc": "null"
+            },
+            "id": "issue:4",
+            "labels": [],
+            "number": 4,
+            "repoId": "repo-1",
+            "repoName": "Repo",
+            "state": "opened",
+            "title": "A GitLab issue",
+            "type": "issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": ""
+          },
+          "status": "Open",
+          "subtitle": "Repo #4",
+          "title": "A GitLab issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1dcb0c02c92": {
+      "name": "error",
+      "ordinal": 6,
+      "value": ""
+    }
+  },
+  "recording": {
+    "scenario": "tk-list-gitlab-items",
+    "checkpoints": [
+      {
+        "id": "load-settled",
+        "observation": {
+          "sender": ["341ebd23fc0b"],
+          "payloads": ["341101aedcbe"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "2af5bdc42011",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "a2f93be0d571",
+            "f1dcb0c02c92",
+            "5ac1816a09df",
+            "411aee2eccd9"
+          ]
+        }
+      }
+    ]
+  }
+}

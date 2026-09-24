@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import { REPO_METHODS } from './repo'
 import {
   NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
@@ -447,6 +447,43 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { repo: { id: 'repo-1', forkSyncMode: 'safe-auto' } }
     })
+  })
+
+  it('persists normalized ghAccount bindings and clear sentinels', async () => {
+    const runtime = new OrcaRuntimeService(null)
+    vi.spyOn(runtime, 'updateRepo').mockResolvedValue({
+      id: 'repo-1',
+      path: '/srv/repo',
+      displayName: 'repo',
+      badgeColor: '#000000',
+      addedAt: 0,
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: { host: ' GitHub.COM ', user: ' Alice ' } }
+      }),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', ghAccount: { host: 'github.com', user: 'Alice' } } }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: null }
+      })
+    )
+    expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', { ghAccount: null })
   })
 
   it('persists agent worktree visibility updates', async () => {

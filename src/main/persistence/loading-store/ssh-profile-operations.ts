@@ -30,6 +30,7 @@ import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import { syncProjectHostSetupCompatibilityState } from './repo-lifecycle-operations'
 import { scheduleSave } from './write-scheduling'
+import { forgetSshConnectionGeneration } from '../../ssh/ssh-connection-generation'
 
 type SshProfileOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
 
@@ -70,7 +71,11 @@ export class SshProfileOperations {
   }
 
   removeSshTarget(id: string): void {
+    const existed = this.getSshTarget(id) !== undefined
     removeSshTargetOperation(getSshTargetStateOperations(this), id)
+    if (existed) {
+      forgetSshConnectionGeneration(id)
+    }
   }
 
   allocateSshTargetGeneration(): number {
@@ -146,7 +151,7 @@ export function getSshTargetStateOperations(owner: SshProfileOperations): SshTar
 }
 
 export function installSshProfileOperationsContext(
-  target: object,
+  target: SshProfileOperations,
   source: SshProfileOperations
 ): void {
   Object.defineProperty(target, sshProfileOperationsContext, {

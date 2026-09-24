@@ -90,9 +90,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     const scanData = session.foregroundRefreshRiskScanTail
       ? `${session.foregroundRefreshRiskScanTail}${data}`
       : data
-    const prefersRefresh =
-      (scanData.includes('\x1b[') || session.containsNonAsciiOutput(scanData)) &&
-      terminalOutputPrefersRenderRefresh(scanData)
+    const prefersRefresh = terminalOutputPrefersRenderRefresh(scanData)
     session.foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
     return prefersRefresh
   }

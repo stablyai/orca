@@ -208,15 +208,13 @@ export function NativeChatSubagentRun({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="group flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        className="group/subagent-run flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-muted-foreground hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         aria-expanded={open}
         aria-live="polite"
       >
         <SubagentGlyph />
         <StatusDot state={alertState ?? verdictState} pulsing={working} />
-        <span className={cn('min-w-0 flex-1 truncate', working && 'text-foreground/85')}>
-          {headline}
-        </span>
+        <span className={cn('min-w-0 truncate', working && 'text-foreground/85')}>{headline}</span>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
           {verdict}
           {alert === null ? null : ` +${alert}`}
@@ -242,7 +240,7 @@ export function NativeChatSubagentRun({
         <ChevronRight
           className={cn(
             'size-3.5 shrink-0 text-muted-foreground transition-all',
-            open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover:opacity-100'
+            open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/subagent-run:opacity-100'
           )}
         />
       </button>

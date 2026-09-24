@@ -1,0 +1,113 @@
+{
+  "operation": "terminal.viewport-refit",
+  "family": "terminal.viewport-refit",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
+  "scenarioSha256": "f966c2ef2e747a5231f423147ddaf38458cb08c719434b274016a5e4abc10771",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "685125182eef": {
+      "name": "reflow",
+      "ordinal": 4,
+      "value": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "7e0619ad636f": {
+      "measured": true,
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "8ee930d6bf0e": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.updateViewport\",\"params\":{\"terminal\":\"terminal-1\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"viewport\":{\"cols\":100,\"rows\":30}}}"
+    },
+    "a47f5afd190d": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "applied": true,
+            "updated": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f199e923e51c": {
+      "name": "measure-fit",
+      "ordinal": 1,
+      "value": {
+        "frameHeight": 600
+      }
+    }
+  },
+  "recording": {
+    "scenario": "terminal-viewport-refit-applied",
+    "checkpoints": [
+      {
+        "id": "reflowed",
+        "observation": {
+          "sender": ["a47f5afd190d"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "685125182eef"]
+        }
+      }
+    ]
+  }
+}

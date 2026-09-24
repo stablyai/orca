@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
+import { useClipboardWriter } from '../../platform/clipboard'
 import { colors } from '../../theme/mobile-theme'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { PRSection } from './PRSection'
@@ -17,7 +17,9 @@ export type PrConflictsTriage = {
 }
 
 type Props = {
-  pr: PRInfo
+  // What it reads, not the whole PR: the conflict view-model is the only thing derived here, and
+  // a caller holding a full `PRInfo` satisfies this.
+  pr: Pick<PRInfo, 'mergeable' | 'conflictSummary'>
   // True while a refresh is in flight, so the fallback notice can explain that
   // missing conflict file details may still be loading (desktop parity).
   isRefreshing?: boolean
@@ -29,7 +31,12 @@ type Props = {
 // list is not yet available. Ports the desktop ConflictingFilesSection +
 // MergeConflictNotice into the mobile card shell.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
-  const [commandsCopied, setCommandsCopied] = useState(false)
+  // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
+  // context, which the iOS custom scheme is not and Android's https is.
+  const clipboard = useClipboardWriter()
+  // Three states, not a boolean: a refused write used to be caught and dropped, so the tap was
+  // indistinguishable from one that copied. The tasks page reports its refusals the same way.
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const copiedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const conflict = resolveConflictDisplay(pr)
 
@@ -56,20 +63,28 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
     if (!conflict.mergeabilityRefreshCommands) {
       return
     }
+    let next: 'copied' | 'failed' = 'copied'
     try {
-      await Clipboard.setStringAsync(conflict.mergeabilityRefreshCommands)
+      await clipboard.writeText(conflict.mergeabilityRefreshCommands)
     } catch {
-      return
+      next = 'failed'
     }
     if (copiedResetTimerRef.current) {
       clearTimeout(copiedResetTimerRef.current)
     }
-    setCommandsCopied(true)
+    setCopyState(next)
     copiedResetTimerRef.current = setTimeout(() => {
       copiedResetTimerRef.current = null
-      setCommandsCopied(false)
+      setCopyState('idle')
     }, 1500)
   }
+
+  const copyLabel =
+    copyState === 'copied'
+      ? 'Copied'
+      : copyState === 'failed'
+        ? 'Failed to copy text'
+        : 'Copy commands'
 
   return (
     <PRSection title="Conflicts">
@@ -97,14 +112,12 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
                   accessibilityRole="button"
                   accessibilityLabel="Copy mergeability refresh commands"
                 >
-                  {commandsCopied ? (
+                  {copyState === 'copied' ? (
                     <Check size={13} color={colors.textPrimary} strokeWidth={2.2} />
                   ) : (
                     <Copy size={13} color={colors.textPrimary} strokeWidth={2.2} />
                   )}
-                  <Text style={styles.copyCommandText}>
-                    {commandsCopied ? 'Copied' : 'Copy commands'}
-                  </Text>
+                  <Text style={styles.copyCommandText}>{copyLabel}</Text>
                 </Pressable>
               </View>
               <Text selectable style={styles.commandText}>

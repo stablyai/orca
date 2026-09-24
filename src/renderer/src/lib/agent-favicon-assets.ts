@@ -14,6 +14,7 @@ import augUrl from '../../../shared/agent-icons/aug.png?url'
 import autohandUrl from '../../../shared/agent-icons/autohand.png?url'
 import clineUrl from '../../../shared/agent-icons/cline.png?url'
 import codebuffUrl from '../../../shared/agent-icons/codebuff.png?url'
+import freebuffUrl from '../../../shared/agent-icons/freebuff.png?url'
 import commandCodeUrl from '../../../shared/agent-icons/command-code.png?url'
 import continueUrl from '../../../shared/agent-icons/continue.png?url'
 import cursorUrl from '../../../shared/agent-icons/cursor.png?url'
@@ -23,6 +24,7 @@ import qwenCodeUrl from '../../../shared/agent-icons/qwen-code.png?url'
 import rovoUrl from '../../../shared/agent-icons/rovo.png?url'
 import hermesUrl from '../../../shared/agent-icons/hermes.png?url'
 import devinUrl from '../../../shared/agent-icons/devin.png?url'
+import museUrl from '../../../shared/agent-icons/muse.png?url'
 import openclawUrl from '../../../shared/agent-icons/openclaw.png?url'
 
 // Why: these agents have no hand-authored SVG glyph, so previously their icons
@@ -48,6 +50,7 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   autohand: autohandUrl,
   cline: clineUrl,
   codebuff: codebuffUrl,
+  freebuff: freebuffUrl,
   'command-code': commandCodeUrl,
   continue: continueUrl,
   cursor: cursorUrl,
@@ -57,5 +60,6 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   rovo: rovoUrl,
   hermes: hermesUrl,
   devin: devinUrl,
+  muse: museUrl,
   openclaw: openclawUrl
 }

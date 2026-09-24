@@ -4,10 +4,7 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
-import {
-  isAutomaticHibernationAllowed,
-  isLiveResumeAnchorForCompletedAgent
-} from './live-resume-anchor-record'
+import { isLiveResumeAnchorForCompletedAgent } from './live-resume-anchor-record'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 
 export type EligiblePane = {
@@ -95,10 +92,7 @@ export function getEligiblePane(args: {
     entry.interrupted === true ||
     Boolean(entry.subagents?.length) ||
     hasUnsettledOrUnknownDispatch(entry) ||
-    (sleepingRecord && !hasOnlyLiveResumeAnchor) ||
-    // Why: a fenced worker must never be auto-relaunched; killing it would also
-    // erase the fence, since the capture does not copy it.
-    !isAutomaticHibernationAllowed(sleepingRecord)
+    (sleepingRecord && !hasOnlyLiveResumeAnchor)
   ) {
     return null
   }

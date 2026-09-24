@@ -2,8 +2,7 @@ import type { ReactNode } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
-  Braces,
-  FileCode2,
+  Ellipsis,
   Loader2,
   MoveDown,
   MoveUp,
@@ -11,11 +10,32 @@ import {
   Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
-import type { IpynbCell, IpynbCellKind } from './ipynb-parse'
+import { cn } from '@/lib/utils'
+import type { IpynbCellKind } from './ipynb-parse'
+
+const CELL_KINDS: readonly IpynbCellKind[] = ['code', 'markdown', 'raw']
+
+function cellKindLabel(kind: IpynbCellKind): string {
+  return kind === 'code'
+    ? translate('auto.components.editor.IpynbViewer.7005960d73', 'Code')
+    : kind === 'markdown'
+      ? translate('auto.components.editor.IpynbViewer.1833dbbc43', 'Markdown')
+      : translate('auto.components.editor.IpynbViewer.3e4cbf15ea', 'Raw')
+}
 
 export function IpynbToolbarButton({
   label,
@@ -36,8 +56,7 @@ export function IpynbToolbarButton({
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="size-7"
+          size="icon-xs"
           aria-label={label}
           disabled={disabled}
           onClick={onClick}
@@ -45,7 +64,7 @@ export function IpynbToolbarButton({
           {children}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent side="top" sideOffset={4}>
         <span className="flex items-center gap-2">
           <span>{label}</span>
           {shortcut && shortcut.keys.length > 0 ? (
@@ -57,120 +76,140 @@ export function IpynbToolbarButton({
   )
 }
 
-export function IpynbCellToolbar({
-  cell,
-  index,
+/** VS Code-style gutter: a fixed `[n]` count with a run button slot below it, shown on hover or focus. */
+export function IpynbRunPrompt({
+  executionCount,
   running,
-  canMoveUp,
-  canMoveDown,
-  onRun,
-  onKindChange,
-  onInsertAbove,
-  onInsertBelow,
-  onMoveUp,
-  onMoveDown,
-  onDelete
+  onRun
 }: {
-  cell: IpynbCell
-  index: number
+  executionCount: number | null
   running: boolean
-  canMoveUp: boolean
-  canMoveDown: boolean
   onRun: () => void
-  onKindChange: (kind: IpynbCellKind) => void
-  onInsertAbove: (kind: IpynbCellKind) => void
-  onInsertBelow: (kind: IpynbCellKind) => void
-  onMoveUp: () => void
-  onMoveDown: () => void
-  onDelete: () => void
 }): React.JSX.Element {
-  const Icon = cell.kind === 'code' ? Play : cell.kind === 'markdown' ? FileCode2 : Braces
-  const executionLabel = cell.kind === 'code' ? `In [${cell.executionCount ?? ' '}]:` : cell.kind
   return (
-    <div className="flex items-center gap-2 border-b border-border/50 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground">
-      <Icon className="size-3.5" />
-      <span className="font-mono">{executionLabel}</span>
-      <select
-        value={cell.kind}
-        onChange={(event) => onKindChange(event.target.value as IpynbCellKind)}
-        className="h-7 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-      >
-        <option value="code">
-          {translate('auto.components.editor.IpynbViewer.7005960d73', 'Code')}
-        </option>
-        <option value="markdown">
-          {translate('auto.components.editor.IpynbViewer.1833dbbc43', 'Markdown')}
-        </option>
-        <option value="raw">
-          {translate('auto.components.editor.IpynbViewer.3e4cbf15ea', 'Raw')}
-        </option>
-      </select>
-      {cell.kind === 'code' ? (
+    <div className="flex flex-col items-center">
+      {/* h-5 matches one code line, so the count sits on the first line's centre. */}
+      <span className="flex h-5 items-center font-mono text-[11px] text-muted-foreground">
+        [{running ? '*' : (executionCount ?? ' ')}]
+      </span>
+      {/* Why: `invisible` keeps the slot's box, so revealing the button never moves anything. */}
+      <div className={cn(!running && 'invisible group-focus-within:visible group-hover:visible')}>
         <IpynbToolbarButton
           label={translate('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
           disabled={running}
           onClick={onRun}
         >
-          {running ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+          {running ? <Loader2 className="animate-spin" /> : <Play />}
         </IpynbToolbarButton>
-      ) : null}
+      </div>
+    </div>
+  )
+}
+
+export function IpynbCellToolbar({
+  kind,
+  canMoveUp,
+  canMoveDown,
+  onKindChange,
+  onInsert,
+  onMove,
+  onDelete
+}: {
+  kind: IpynbCellKind
+  canMoveUp: boolean
+  canMoveDown: boolean
+  onKindChange: (kind: IpynbCellKind) => void
+  onInsert: (offset: 0 | 1, kind: IpynbCellKind) => void
+  onMove: (direction: -1 | 1) => void
+  onDelete: () => void
+}): React.JSX.Element {
+  return (
+    <div className="absolute -top-2 right-1 z-10 flex items-center rounded-md border border-border bg-background opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
       <IpynbToolbarButton
         label={translate('auto.components.editor.IpynbViewer.fd8ac707bc', 'Move cell up')}
         disabled={!canMoveUp}
-        onClick={onMoveUp}
+        onClick={() => onMove(-1)}
       >
-        <MoveUp className="size-3.5" />
+        <MoveUp />
       </IpynbToolbarButton>
       <IpynbToolbarButton
         label={translate('auto.components.editor.IpynbViewer.27e064e2db', 'Move cell down')}
         disabled={!canMoveDown}
-        onClick={onMoveDown}
+        onClick={() => onMove(1)}
       >
-        <MoveDown className="size-3.5" />
-      </IpynbToolbarButton>
-      <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.53b839b8a0', 'Insert code cell above')}
-        onClick={() => onInsertAbove('code')}
-      >
-        <ArrowUpToLine className="size-3.5" />
-      </IpynbToolbarButton>
-      <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.b4208cad7e', 'Insert code cell below')}
-        onClick={() => onInsertBelow('code')}
-      >
-        <ArrowDownToLine className="size-3.5" />
-      </IpynbToolbarButton>
-      <IpynbToolbarButton
-        label={translate(
-          'auto.components.editor.IpynbViewer.ffc1ac2699',
-          'Insert markdown cell above'
-        )}
-        onClick={() => onInsertAbove('markdown')}
-      >
-        <span className="relative size-4">
-          <FileCode2 className="absolute left-0.5 top-0.5 size-3" />
-          <MoveUp className="absolute -right-0.5 -top-0.5 size-2.5" />
-        </span>
-      </IpynbToolbarButton>
-      <IpynbToolbarButton
-        label={translate(
-          'auto.components.editor.IpynbViewer.b42f6a9547',
-          'Insert markdown cell below'
-        )}
-        onClick={() => onInsertBelow('markdown')}
-      >
-        <span className="relative size-4">
-          <FileCode2 className="absolute left-0.5 top-0.5 size-3" />
-          <MoveDown className="absolute -bottom-0.5 -right-0.5 size-2.5" />
-        </span>
+        <MoveDown />
       </IpynbToolbarButton>
       <IpynbToolbarButton
         label={translate('auto.components.editor.IpynbViewer.781abd6926', 'Delete cell')}
         onClick={onDelete}
       >
-        <Trash2 className="size-3.5" />
+        <Trash2 />
       </IpynbToolbarButton>
-      <span className="ml-auto font-mono">#{index + 1}</span>
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={translate(
+                  'auto.components.editor.IpynbViewer.8dbe39a152',
+                  'More cell actions'
+                )}
+              >
+                <Ellipsis />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {translate('auto.components.editor.IpynbViewer.8dbe39a152', 'More cell actions')}
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => onInsert(0, 'code')}>
+            <ArrowUpToLine />
+            {translate('auto.components.editor.IpynbViewer.53b839b8a0', 'Insert code cell above')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onInsert(1, 'code')}>
+            <ArrowDownToLine />
+            {translate('auto.components.editor.IpynbViewer.b4208cad7e', 'Insert code cell below')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onInsert(0, 'markdown')}>
+            <ArrowUpToLine />
+            {translate(
+              'auto.components.editor.IpynbViewer.ffc1ac2699',
+              'Insert markdown cell above'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onInsert(1, 'markdown')}>
+            <ArrowDownToLine />
+            {translate(
+              'auto.components.editor.IpynbViewer.b42f6a9547',
+              'Insert markdown cell below'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>
+            {translate('auto.components.editor.IpynbViewer.fa8fd99cf1', 'Cell type')}
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={kind}
+            onValueChange={(value) => {
+              const nextKind = CELL_KINDS.find((candidate) => candidate === value)
+              if (nextKind) {
+                onKindChange(nextKind)
+              }
+            }}
+          >
+            {CELL_KINDS.map((candidate) => (
+              <DropdownMenuRadioItem key={candidate} value={candidate}>
+                {cellKindLabel(candidate)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

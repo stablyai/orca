@@ -6,6 +6,7 @@ export const RELAY_MONITOR_ADMIN_ROUTES = [
   '/v1/admin/cell-status',
   '/v1/admin/evacuation-status',
   '/v1/admin/regional-rehome-control',
+  '/v1/admin/regional-rehome-preview',
   '/v1/admin/runtime-status'
 ] as const
 

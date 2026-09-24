@@ -47,12 +47,25 @@ export function sourceLabelForSkill(root: SkillScanRoot, sourceKind: SkillSource
   return sourceKind === 'bundled' ? `${root.label} bundled` : root.label
 }
 
-export function compareSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
-  return (
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
-    a.sourceLabel.localeCompare(b.sourceLabel, undefined, { sensitivity: 'base' }) ||
-    a.skillFilePath.localeCompare(b.skillFilePath)
+export function sortDiscoveredSkills(skills: DiscoveredSkill[]): DiscoveredSkill[] {
+  if (skills.length < 2) {
+    return skills
+  }
+  const compare = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+  return skills.sort(
+    (a, b) =>
+      compare(a.name, b.name) ||
+      compare(a.sourceLabel, b.sourceLabel) ||
+      a.skillFilePath.localeCompare(b.skillFilePath)
   )
+}
+
+export function sortSkillDiscoverySources(sources: SkillDiscoverySource[]): SkillDiscoverySource[] {
+  if (sources.length < 2) {
+    return sources
+  }
+  const compare = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+  return sources.sort((a, b) => compare(a.label, b.label))
 }
 
 function source(
@@ -219,6 +232,17 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'aug'
+    ),
+    // Why: user skills live under XDG config home (`~/.config/muse/skills` by
+    // default); project skills are the canonical `.agents/skills` root already
+    // covered by home-agents/repo-agents, so no agent-specific repo source.
+    source(
+      'home-muse',
+      'Muse home',
+      pathApi.join(home, '.config', 'muse', 'skills'),
+      'home',
+      ['agent-skills'],
+      'muse'
     )
   ]
 

@@ -10,6 +10,8 @@ import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-ty
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+  /** Live acknowledgement of the matching renderer retirement; never cached. */
+  authorityRestartId?: string
   receivedAt: number
   /** When this evidence was first observed, as distinct from `receivedAt`. A relay reconnect
    *  replays cached rows and `receivedAt` must restamp to clear the connection watermark, so
@@ -29,6 +31,7 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
+  | 'authorityRestartId'
   | 'claudeRunningNonAgentTask'
   | 'launchToken'
   | 'promptInteractionKey'
@@ -36,6 +39,8 @@ export type PersistedAgentHookEventPayload = Omit<
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
   | 'observation'
+  // Same: a terminal handle is issued by one runtime and means nothing to the next.
+  | 'terminalHandle'
 > & {
   launchTokenHash?: string
 }
@@ -50,9 +55,15 @@ export type PersistedAgentHookAuthorityCommitment = {
 }
 
 export type AgentHookStatusChangeEntry = {
+  paneKey: string
   state: AgentStatusState
   receivedAt: number
   observedInCurrentRuntime: boolean
+}
+
+export type AgentHookStatusFreshnessObservation = AgentHookStatusChangeEntry & {
+  worktreeId?: string
+  terminalHandle?: string
 }
 
 export type AgentHookProviderSessionIdentity = {
@@ -77,9 +88,20 @@ export type AgentHookAuthorityAttestation = Readonly<{
 }>
 
 export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+export type StatusFreshnessListener = (status: AgentHookStatusFreshnessObservation) => void
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
+export type AgentHookStatusRowIdentity = {
+  paneKey: string
+  worktreeId?: string
+  terminalHandle?: string
+}
+export type AgentHookStatusRowMutation = {
+  before: AgentHookStatusRowIdentity | null
+  after: AgentHookStatusRowIdentity | null
+}
+export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) => void
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 export type StatusDropListener = (paneKey: string) => void
 export type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
@@ -95,6 +117,8 @@ export type RetiredPaneAlias = { physicalPaneKey: string; entry: PaneKeyAliasEnt
 export type RetiredPaneFence = {
   paneKeys: readonly string[]
   aliases: readonly RetiredPaneAlias[]
+  closed?: true
+  retirementIdsByPaneKey: Record<string, string>
 }
 
 export type LastStatusFile = {

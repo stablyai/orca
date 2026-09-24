@@ -13,9 +13,8 @@ type CompletionSource = 'hook' | 'title' | 'process-exit'
 
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
-const CODEX_ATTENTION_QUIET_MS = 1_500
 
-type CompletionState = {
+export type CompletionState = {
   currentTurn: number
   workingStatusObserved: boolean
   requiresFreshWorking: boolean
@@ -28,7 +27,6 @@ type CompletionState = {
   pendingHookDoneTimer: ReturnType<typeof setTimeout> | null
   pendingHookDoneTitle: string | null
   pendingHookDonePayload: AgentCompletionStatusSnapshot | null
-  pendingCodexAttentionTimer: ReturnType<typeof setTimeout> | null
 }
 
 type ProcessState = {
@@ -180,8 +178,6 @@ export function createAgentCompletionNotificationController({
     state.lastCompletedTurn = state.currentTurn
     state.lastCompletionSource = source
     state.workingStatusObserved = false
-    // Why: any committed completion ends the turn, so a debounced Codex attention from an earlier pause must not fire after it.
-    clearPendingCodexAttention()
     if (optionsOverride.completionIdentity) {
       identityScope.setLast(optionsOverride.completionIdentity)
       if (optionsOverride.completionIdentity.lastTurnCompletedAtNotified !== undefined) {
@@ -220,13 +216,6 @@ export function createAgentCompletionNotificationController({
     return true
   }
 
-  function dispatchAttentionNotification(payload: AgentCompletionStatusSnapshot): void {
-    options.dispatchAttention?.(payload.agentType ?? options.paneKey, {
-      source: 'hook',
-      agentStatus: payload
-    })
-  }
-
   function dispatchAttention(payload: AgentCompletionStatusSnapshot): void {
     if (!options.dispatchAttention || !options.isLive() || !processState.hasAgentRunEvidence) {
       return
@@ -236,21 +225,12 @@ export function createAgentCompletionNotificationController({
       return
     }
     state.lastAttentionToken = token
-    // Why: the visual "needs input" status updates immediately; only the OS attention notification is debounced (Codex, below).
+    // Why: the visual "needs input" row is driven by the lifecycle hook, the OS banner by the dispatch below.
     options.dispatchHookLifecycle?.(payload)
-    if (payload.agentType === 'codex') {
-      // Why: an auto-resolved Codex "Approve for me" cancels this pending notification via a later hook; scoped to Codex so other agents notify at once.
-      clearPendingCodexAttention()
-      state.pendingCodexAttentionTimer = setTimeout(() => {
-        state.pendingCodexAttentionTimer = null
-        if (!options.isLive() || !processState.hasAgentRunEvidence) {
-          return
-        }
-        dispatchAttentionNotification(payload)
-      }, CODEX_ATTENTION_QUIET_MS)
-      return
-    }
-    dispatchAttentionNotification(payload)
+    options.dispatchAttention(payload.agentType ?? options.paneKey, {
+      source: 'hook',
+      agentStatus: payload
+    })
   }
 
   function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
@@ -294,24 +274,15 @@ export function createAgentCompletionNotificationController({
     state.pendingHookDonePayload = null
   }
 
-  function clearPendingCodexAttention(): void {
-    if (state.pendingCodexAttentionTimer !== null) {
-      clearTimeout(state.pendingCodexAttentionTimer)
-      state.pendingCodexAttentionTimer = null
-    }
-  }
-
   return {
     completionIdentityFor,
     hookCompletionIdentity,
     hookCompletionAgentIdentity,
     doneShouldUseQuietWindow,
     clearPendingHookDone,
-    clearPendingCodexAttention,
     dispatchCompletion,
     dispatchAttention,
     scheduleHookDoneCompletion,
-    hasPendingHookDone: () => state.pendingHookDoneTimer !== null,
-    hasPendingCodexAttention: () => state.pendingCodexAttentionTimer !== null
+    hasPendingHookDone: () => state.pendingHookDoneTimer !== null
   }
 }

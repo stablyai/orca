@@ -57,6 +57,21 @@ describe('buildAgentContext', () => {
     ])
   })
 
+  it('omits hidden specs so agents do not discover an unadvertised command', () => {
+    const schema = buildAgentContext([
+      ...specs,
+      {
+        path: ['terminal', 'stop'],
+        summary: 'Deprecated',
+        usage: 'orca terminal stop',
+        allowedFlags: [],
+        hidden: true
+      }
+    ])
+    expect(schema.commandCount).toBe(2)
+    expect(schema.commands.map((command) => command.command)).not.toContain('terminal stop')
+  })
+
   it('defaults optional fields to empty arrays', () => {
     const schema = buildAgentContext(specs)
     const agentContext = schema.commands.find((command) => command.command === 'agent-context')

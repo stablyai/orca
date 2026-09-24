@@ -14,6 +14,19 @@ type RecoveryRetry = {
   timer: ReturnType<typeof setTimeout> | null
 }
 
+// Why a module-level set: a retry re-arms itself until its deferred worker materializes, so a host
+// that never resolves one keeps a recovery loop running with no handle on it. A controller joins
+// only while it has a timer armed and leaves as soon as it has none, so nothing is retained past
+// the loop it belongs to.
+const controllersWithArmedRetries = new Set<RuntimeLegacyWorkerTerminalRecoveryController>()
+
+/** Stop every armed recovery retry. Test-only: a retry loop must not outlive the test that armed it. */
+export function __cancelLegacyWorkerTerminalRecoveryRetriesForTests(): void {
+  for (const controller of Array.from(controllersWithArmedRetries)) {
+    controller.cancelAllRetries()
+  }
+}
+
 export class RuntimeLegacyWorkerTerminalRecoveryController {
   private queue: Promise<void> = Promise.resolve()
   private readonly retries = new Map<string, RecoveryRetry>()
@@ -21,10 +34,6 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
   private readonly recoveredPtys = new Set<string>()
 
   constructor(private readonly ports: LegacyWorkerRecoveryPorts) {}
-
-  prepare(): LegacyWorkerTerminalRecoveryPlan {
-    return this.ports.preparePlan()
-  }
 
   reconcile(
     options: LegacyWorkerRecoveryOptions = {}
@@ -52,6 +61,15 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
       clearTimeout(retry.timer)
     }
     this.retries.delete(scopeKey)
+    if (this.retries.size === 0) {
+      controllersWithArmedRetries.delete(this)
+    }
+  }
+
+  cancelAllRetries(): void {
+    for (const scopeKey of Array.from(this.retries.keys())) {
+      this.cancelScope(scopeKey)
+    }
   }
 
   updateRetry(
@@ -130,5 +148,6 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
         })
     }, delayMs)
     retry.timer.unref?.()
+    controllersWithArmedRetries.add(this)
   }
 }

@@ -1,3 +1,4 @@
+import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
 import { createRef } from 'react'
@@ -96,19 +97,21 @@ describe('native chat composer composition ownership', () => {
     const input = textarea()
     input.focus()
     fireEvent.compositionStart(input)
-    input.value = '가'
+    changePrompt(input, '가')
 
     for (let index = 0; index < 120; index += 1) {
       view.rerender(<TestField {...props} draft={`stale streaming draft ${index}`} />)
       expect(textarea()).toBe(input)
       expect(document.activeElement).toBe(input)
-      expect(input.value).toBe('가')
+      expect(promptValue(input)).toBe('가')
     }
 
     fireEvent.compositionEnd(input, { data: '가' })
     expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(onImeSettled).toHaveBeenCalledWith(input)
-    expect(input.value).toBe('가')
+    expect(onImeSettled).toHaveBeenCalledWith(
+      expect.objectContaining({ value: promptValue(input) })
+    )
+    expect(promptValue(input)).toBe('가')
   })
 
   it('synchronizes launch, programmatic, cleared, and pane-scoped drafts while idle', () => {
@@ -120,7 +123,7 @@ describe('native chat composer composition ownership', () => {
     for (const draft of ['programmatic insertion', '', 'next pane draft']) {
       view.rerender(<TestField {...props} draft={draft} />)
       expect(textarea()).toBe(input)
-      expect(input.value).toBe(draft)
+      expect(promptValue(input)).toBe(draft)
     }
   })
 
@@ -140,10 +143,13 @@ describe('native chat composer composition ownership', () => {
     )
     const input = textarea()
     fireEvent.compositionStart(input)
-    fireEvent.change(input, { target: { value: '한글' } })
-    expect(onDraftChange).toHaveBeenLastCalledWith('한글', input)
+    changePrompt(input, '한글')
+    expect(onDraftChange).toHaveBeenLastCalledWith(
+      '한글',
+      expect.objectContaining({ value: '한글' })
+    )
 
-    input.value = ''
+    changePrompt(input, '')
     fireEvent.compositionEnd(input, { data: '' })
     expect(settledValue).toBe('')
   })
@@ -177,14 +183,14 @@ describe('native chat composer composition ownership', () => {
     const view = render(<TestField {...props} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '각'
+    changePrompt(input, '각')
 
     fireEvent.blur(input)
     view.rerender(<TestField {...props} draft="external draft" />)
     fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: false })
 
     expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(input.value).toBe('external draft')
+    expect(promptValue(input)).toBe('external draft')
     expect(onKeyDown).toHaveBeenCalledOnce()
   })
 
@@ -194,15 +200,17 @@ describe('native chat composer composition ownership', () => {
     const view = render(<TestField {...props} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '각'
+    changePrompt(input, '각')
 
     view.rerender(<TestField {...props} draft="programmatic draft" />)
-    expect(input.value).toBe('각')
+    expect(promptValue(input)).toBe('각')
     fireEvent.blur(input)
 
     expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(onImeSettled).toHaveBeenCalledWith(input)
-    expect(input.value).toBe('각')
+    expect(onImeSettled).toHaveBeenCalledWith(
+      expect.objectContaining({ value: promptValue(input) })
+    )
+    expect(promptValue(input)).toBe('각')
   })
 
   it('exposes the browser value on blur when compositionend is omitted', () => {
@@ -210,7 +218,7 @@ describe('native chat composer composition ownership', () => {
     render(<TestField {...fieldProps({ onImeSettled })} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '각'
+    changePrompt(input, '각')
 
     fireEvent.blur(input)
 
@@ -223,7 +231,7 @@ describe('native chat composer composition ownership', () => {
     render(<TestField {...fieldProps({ onImeSettled })} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '각'
+    changePrompt(input, '각')
 
     act(() => {
       fireEvent.compositionEnd(input, { data: '각' })
@@ -231,7 +239,9 @@ describe('native chat composer composition ownership', () => {
     })
 
     expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(onImeSettled).toHaveBeenCalledWith(input)
+    expect(onImeSettled).toHaveBeenCalledWith(
+      expect.objectContaining({ value: promptValue(input) })
+    )
   })
 
   it('settles once when blur precedes compositionend in one batch', () => {
@@ -239,7 +249,7 @@ describe('native chat composer composition ownership', () => {
     render(<TestField {...fieldProps({ onImeSettled })} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '각'
+    changePrompt(input, '각')
 
     act(() => {
       fireEvent.blur(input)
@@ -247,7 +257,9 @@ describe('native chat composer composition ownership', () => {
     })
 
     expect(onImeSettled).toHaveBeenCalledOnce()
-    expect(onImeSettled).toHaveBeenCalledWith(input)
+    expect(onImeSettled).toHaveBeenCalledWith(
+      expect.objectContaining({ value: promptValue(input) })
+    )
   })
 
   it('replays a draft clear dropped mid-composition when the field settles on blur', () => {
@@ -261,16 +273,16 @@ describe('native chat composer composition ownership', () => {
     const view = render(<TestField {...props} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '안녕하'
+    changePrompt(input, '안녕하')
     view.rerender(<TestField {...props} draft="안녕하" />)
 
     // The accepted structured send lands while the next composition is still open.
     view.rerender(<TestField {...props} draft="" />)
-    expect(input.value).toBe('안녕하')
+    expect(promptValue(input)).toBe('안녕하')
 
     fireEvent.blur(input)
     expect(settledValue).toBe('하')
-    expect(input.value).toBe('하')
+    expect(promptValue(input)).toBe('하')
   })
 
   it('forgets a dropped clear that the browser already settled', () => {
@@ -279,16 +291,16 @@ describe('native chat composer composition ownership', () => {
     const view = render(<TestField {...props} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '안녕하'
+    changePrompt(input, '안녕하')
     view.rerender(<TestField {...props} draft="" />)
     fireEvent.blur(input)
 
     // A second composition must not inherit the first one's clear.
     fireEvent.compositionStart(input)
-    input.value = '하늘'
+    changePrompt(input, '하늘')
     fireEvent.blur(input)
 
-    expect(input.value).toBe('하늘')
+    expect(promptValue(input)).toBe('하늘')
   })
 
   it('keeps the browser value through a same-draft streaming rerender', () => {
@@ -297,12 +309,14 @@ describe('native chat composer composition ownership', () => {
     const view = render(<TestField {...props} />)
     const input = textarea()
     fireEvent.compositionStart(input)
-    input.value = '각'
+    changePrompt(input, '각')
 
     view.rerender(<TestField {...props} />)
     fireEvent.blur(input)
 
-    expect(input.value).toBe('각')
-    expect(onImeSettled).toHaveBeenCalledWith(input)
+    expect(promptValue(input)).toBe('각')
+    expect(onImeSettled).toHaveBeenCalledWith(
+      expect.objectContaining({ value: promptValue(input) })
+    )
   })
 })

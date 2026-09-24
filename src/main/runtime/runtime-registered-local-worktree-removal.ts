@@ -1,5 +1,7 @@
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { ArchiveHookOverride } from '../../shared/worktree/archive-hook-removal-gate'
+import { gateWorktreeRemovalOnArchiveHook } from '../worktree-archive-hook-gate'
 import type { Repo } from '../../shared/repo-types'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -27,6 +29,7 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree
 } from '../worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 
@@ -40,6 +43,8 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   hasLocalOptions: boolean
   force: boolean
   runHooks: boolean
+  /** Explicit waiver for a FAILED archive hook. Never implied by `force` — see #19334. */
+  allowFailedArchiveHook: boolean
   allowUnverifiedPtyStop: boolean
   deleteBranch: boolean
   acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
@@ -60,6 +65,9 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   const canonicalPath = registeredWorktree.path
   const hooks = getEffectiveHooks(repo)
   let warning: string | undefined
+  // Precondition, not an advisory: this runs before the registration refresh, the preflights, the
+  // PTY stop and `removeWorktree`, so a throw here leaves every one of them untouched (#19334).
+  let archiveHookOverride: ArchiveHookOverride | undefined
   if (hooks?.scripts.archive && args.runHooks) {
     const result = await runHook(
       'archive',
@@ -68,9 +76,11 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
       undefined,
       args.hasLocalOptions ? localOptions : undefined
     )
-    if (!result.success) {
-      console.error(`[hooks] archive hook failed for ${canonicalPath}:`, result.output)
-    }
+    archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
+      worktreePath: canonicalPath,
+      result,
+      allowFailure: args.allowFailedArchiveHook
+    })
   } else if (hooks?.scripts.archive) {
     warning = `orca.yaml archive hook skipped for ${canonicalPath}; pass --run-hooks to run it.`
     console.warn(`[hooks] ${warning}`)
@@ -79,7 +89,12 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   const refreshedWorktrees = args.hasLocalOptions
     ? await listWorktreesStrict(repo.path, localOptions)
     : await listWorktreesStrict(repo.path)
-  const refreshed = findRegisteredDeletableWorktree(repo.path, canonicalPath, refreshedWorktrees)
+  const refreshed = findRegisteredDeletableWorktree(
+    repo.path,
+    canonicalPath,
+    refreshedWorktrees,
+    CLIENT_REMOVAL_HOME
+  )
   if (!refreshed) {
     throw new Error(
       `Worktree registration changed during deletion: ${canonicalPath}. Retry deletion.`
@@ -151,7 +166,10 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
         await cleanupPushTarget(args)
         args.finishRemoval(undefined, false, refreshed.head)
         completed = true
-        return warning ? { warning } : {}
+        return {
+          ...(archiveHookOverride ? { archiveHookOverride } : {}),
+          ...(warning ? { warning } : {})
+        }
       } else {
         throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
       }
@@ -162,7 +180,11 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   }
   await cleanupPushTarget(args)
   args.finishRemoval(removalResult, true, refreshed.head)
-  return { ...removalResult, ...(warning ? { warning } : {}) }
+  return {
+    ...removalResult,
+    ...(archiveHookOverride ? { archiveHookOverride } : {}),
+    ...(warning ? { warning } : {})
+  }
 }
 
 async function cleanupOrphanedDirectory(
@@ -176,6 +198,7 @@ async function cleanupOrphanedDirectory(
     await canSafelyRemoveOrphanedWorktreeDirectory(
       toLocalWorktreeRuntimePath(path, options),
       toLocalWorktreeRuntimePath(repo.path, options),
+      CLIENT_REMOVAL_HOME,
       access.statPath,
       access.readPath
     )

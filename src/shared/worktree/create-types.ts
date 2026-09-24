@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
+import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
 import type { TaskSourceContext } from '../task-source-context'
 import type { WorkspaceKey } from '../folder-workspace-types'
@@ -207,6 +208,8 @@ export type PreservedWorktreeBranch = {
 
 export type RemoveWorktreeResult = {
   preservedBranch?: PreservedWorktreeBranch
+  /** Present only when a FAILED archive hook was explicitly waived for this removal (#19334). */
+  archiveHookOverride?: ArchiveHookOverride
 }
 
 export type ForceDeleteWorktreeBranchResult = {

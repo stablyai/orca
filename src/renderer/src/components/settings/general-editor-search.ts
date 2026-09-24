@@ -56,6 +56,28 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.collapseUnchanged',
+      'Collapse Unchanged Regions'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.collapseUnchangedDesc',
+      'Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.3b5733573e', 'diff'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.collapseUnchangedKw',
+        'collapse'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.hideUnchangedKw',
+        'hide unchanged'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.foldKw', 'fold')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.2760c9933f', 'Default Diff View'),
     description: translate(
       'auto.components.settings.general.search.ecb9415c80',

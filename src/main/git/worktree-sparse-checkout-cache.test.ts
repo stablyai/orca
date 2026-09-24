@@ -16,6 +16,7 @@ import {
   clearSparseCheckoutStateCacheForRepo,
   detectSparseCheckoutCached,
   invalidateSparseCheckoutState,
+  MAX_SPARSE_CHECKOUT_CACHE_ENTRIES,
   onSparseCheckoutStateChanged
 } from './worktree-sparse-checkout-cache'
 
@@ -34,6 +35,16 @@ beforeEach(() => {
 })
 
 describe('detectSparseCheckoutCached', () => {
+  it('bounds cache growth when worktree paths churn', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+
+    for (let index = 0; index < MAX_SPARSE_CHECKOUT_CACHE_ENTRIES + 4; index += 1) {
+      await detectSparseCheckoutCached('/repo', `/repo/worktree-${index}`)
+    }
+
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(MAX_SPARSE_CHECKOUT_CACHE_ENTRIES)
+  })
+
   it('caches a detection result across repeated calls for the same repo+path', async () => {
     detectSparseCheckoutMock.mockResolvedValue(true)
 

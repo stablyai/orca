@@ -15,6 +15,7 @@ export type SkillInstallProviderId =
   | 'trae'
   | 'grok'
   | 'aug'
+  | 'muse'
 
 export type SkillInstallProviderDefinition = {
   id: SkillInstallProviderId
@@ -80,6 +81,13 @@ export const SKILL_INSTALL_PROVIDERS: readonly SkillInstallProviderDefinition[] 
     displayName: 'Augment',
     globalSegments: ['.augment', 'skills'],
     workspaceSegments: ['.augment', 'skills']
+  },
+  // Why: Muse reads the canonical .agents/skills root at both scopes.
+  {
+    id: 'muse',
+    displayName: 'Muse',
+    globalSegments: null,
+    workspaceSegments: null
   }
 ]
 

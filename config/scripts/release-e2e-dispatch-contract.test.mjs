@@ -19,6 +19,7 @@ describe('release E2E dispatch contract', () => {
     expect(restoreStep.run).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
     expect(restoreStep.run).toContain('golden-source-control-open-diff.spec.ts')
     expect(restoreStep.run).toContain('golden-terminal-file-link.spec.ts')
+    expect(restoreStep.run).toContain('golden-worktree-create-switch.spec.ts')
   })
 
   it('dispatches tag-scoped E2E only after publication', () => {

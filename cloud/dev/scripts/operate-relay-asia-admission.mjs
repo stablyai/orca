@@ -12,16 +12,30 @@ const SHAPES = {
   staging: {
     directorOrigin: 'https://relay-staging.onorca.dev',
     domain: 'relay-staging.onorca.dev',
-    allCells: ['staging-gce-c4']
+    allCells: ['staging-gce-c4'],
+    registrationWaves: [['staging-gce-c4']],
+    promotionWaves: [['staging-gce-c4']]
   },
   production: {
     directorOrigin: 'https://relay.onorca.dev',
     domain: 'relay.onorca.dev',
-    allCells: ['production-gce-c27', 'production-gce-c28', 'production-gce-c29']
+    allCells: ['production-gce-c27', 'production-gce-c28', 'production-gce-c29', 'production-gce-c30'],
+    // The launch set was registered together; each later cell registers alone beside it.
+    registrationWaves: [
+      ['production-gce-c27', 'production-gce-c28', 'production-gce-c29'],
+      ['production-gce-c30']
+    ],
+    promotionWaves: [
+      ['production-gce-c27'],
+      ['production-gce-c28', 'production-gce-c29'],
+      ['production-gce-c30']
+    ]
   }
 }
 
-function parseArguments(argv) {
+const PRODUCTION_CANARY_CELL = 'production-gce-c27'
+
+export function parseRelayAsiaAdmissionArguments(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]
@@ -58,13 +72,17 @@ function parseArguments(argv) {
     throw new Error('--cell-ids are invalid')
   }
   const exact = (expected) => JSON.stringify([...cells].sort()) === JSON.stringify([...expected].sort())
+  const [launchWave] = shape.registrationWaves
   if (
-    (['inspect', 'initialize', 'register', 'registered', 'verify'].includes(values.mode) &&
-      !exact(shape.allCells)) ||
-    (['promote', 'recover-promotion'].includes(values.mode) && values.environment === 'production' &&
-      !exact(['production-gce-c27']) && !exact(['production-gce-c28', 'production-gce-c29'])) ||
-    (['promote', 'recover-promotion'].includes(values.mode) && values.environment === 'staging' && !exact(shape.allCells)) ||
-    (values.mode === 'rollback' && cells.length === 0)
+    (['inspect', 'verify'].includes(values.mode) &&
+      !exact(shape.allCells) && !shape.registrationWaves.some(exact)) ||
+    // Generation zero predates every later cell, so the boundary freezes only the launch set.
+    (values.mode === 'initialize' && !exact(launchWave)) ||
+    (['register', 'registered'].includes(values.mode) && !shape.registrationWaves.some(exact)) ||
+    (['promote', 'recover-promotion'].includes(values.mode) && !shape.promotionWaves.some(exact)) ||
+    // Rollback takes any reviewed wave or the whole set, never a mixed partial set.
+    (values.mode === 'rollback' && !exact(shape.allCells) &&
+      ![...shape.registrationWaves, ...shape.promotionWaves].some(exact))
   ) throw new Error('--cell-ids do not match the reviewed admission wave')
   const attemptId = values['attempt-id']
   if (!['inspect', 'verify', 'registered'].includes(values.mode) &&
@@ -418,10 +436,18 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
   if (
     config.mode === 'promote' &&
     config.environment === 'production' &&
-    config.cells.includes('production-gce-c28') &&
-    selectorCellState(current.selector, 'production-gce-c27') !== 'general'
+    !config.cells.includes(PRODUCTION_CANARY_CELL) &&
+    selectorCellState(current.selector, PRODUCTION_CANARY_CELL) !== 'general'
   ) {
     throw new Error('Asia expansion requires the C27 canary to be general')
+  }
+  const [launchWave] = shape.registrationWaves
+  if (
+    config.mode === 'promote' &&
+    !config.cells.some((cellId) => launchWave.includes(cellId)) &&
+    launchWave.some((cellId) => selectorCellState(current.selector, cellId) !== 'general')
+  ) {
+    throw new Error('a later Asia cell requires every launch cell to be general')
   }
   const result = await applyExactAdmissionSelector(
     selectorPost,
@@ -434,7 +460,7 @@ export async function operateRelayAsiaAdmission(config, dependencies = {}) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const config = parseArguments(process.argv.slice(2))
+  const config = parseRelayAsiaAdmissionArguments(process.argv.slice(2))
   if (!config.token) throw new Error('ORCA_RELAY_ADMIN_ID_TOKEN is required')
   console.log(JSON.stringify(await operateRelayAsiaAdmission(config)))
 }

@@ -8,7 +8,6 @@ import type {
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
-import { createCodexAutoApprovalHookCompletionSuppressor } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-hook-terminal-lifecycle'
 import {
   isAgentHookCompletionTrackingEnabled,
@@ -99,17 +98,8 @@ function pruneClosedPaneCoordinators(): void {
   }
 }
 
-function isAgentTaskCompleteNotificationEnabled(): boolean {
-  const notifications = useAppStore.getState().settings?.notifications
-  return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
-}
-
-function isTerminalAttentionEnabled(): boolean {
-  return useAppStore.getState().settings?.experimentalTerminalAttention === true
-}
-
 function isAgentTaskCompleteTrackingEnabled(): boolean {
-  return isAgentTaskCompleteNotificationEnabled() || isTerminalAttentionEnabled()
+  return isAgentHookCompletionTrackingEnabled(useAppStore.getState())
 }
 
 function syncAgentTaskCompleteTrackingEnabled(enabled: boolean): void {
@@ -260,7 +250,6 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
         source: 'agent-task-complete',
         terminalTitle: title,
         paneKey,
-        suppressOsNotification: !isAgentTaskCompleteNotificationEnabled(),
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       })
     },
@@ -274,12 +263,10 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
         source: 'agent-task-complete',
         terminalTitle: title,
         paneKey,
-        suppressOsNotification: !isAgentTaskCompleteNotificationEnabled(),
         agentStatusSnapshot: meta.agentStatus
       })
     },
-    isLive: () => paneCanReceiveHookCompletion(paneKey),
-    shouldSuppressHookCompletion: createCodexAutoApprovalHookCompletionSuppressor(paneKey)
+    isLive: () => paneCanReceiveHookCompletion(paneKey)
   })
 }
 

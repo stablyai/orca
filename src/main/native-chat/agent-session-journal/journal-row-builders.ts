@@ -3,9 +3,11 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
+  AgentJournalProducerLinkage,
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import type {
@@ -20,6 +22,7 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
+import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
@@ -28,7 +31,7 @@ export function journalItemRowBuilder(
   state: () => JournalReducerState,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  options: { fence: number; observedAt?: number; recovered?: true }
+  options: AgentJournalProducerLinkage & { fence: number; observedAt?: number; recovered?: true }
 ): RowBuilder<JournalItemRow> {
   return (seq, ts) =>
     buildJournalItemRow({
@@ -38,7 +41,8 @@ export function journalItemRowBuilder(
       seq,
       fence: options.fence,
       ts: options.observedAt ?? ts,
-      recovered: options.recovered
+      recovered: options.recovered,
+      linkage: options
     })
 }
 
@@ -76,12 +80,23 @@ export function journalDispatchRowBuilder(
       clientMessageId: input.clientMessageId,
       dispatchState: input.state,
       providerItemId,
-      reason: input.state === 'accepted' ? null : (input.reason ?? null),
+      reason: boundedDispatchReason(input),
       seq,
       fence: input.fence,
       ts,
       recovered: input.recovered
     })
+}
+
+/** `reason` is the only unbounded field written by Orca's own code: a provider error is
+ *  arbitrary text, and a multi-megabyte one reached the row verbatim. Bounded head-first,
+ *  because `dispatchRejectionWasTransportWriteFailure` prefix-matches the value. Rows
+ *  written before this keep their full text, so readers still meet unbounded ones. */
+function boundedDispatchReason(input: ResolveDispatchInput): string | null {
+  if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
+    return null
+  }
+  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
 }
 
 export type JournalLifecycleMutationInput =
@@ -92,6 +107,11 @@ export function journalLifecycleBatchRowBuilder(
   state: () => JournalReducerState,
   settlementId: string,
   mutations: readonly JournalLifecycleMutationInput[],
+  /** No producer linkage: one batch row covers N mutations, so a row-level
+   *  producer would stamp whoever opened the batch onto every one of them. The
+   *  reducer still READS linkage off a batch row, because a row may come from a
+   *  host that writes one; a mixed-producer batch would have to stamp per
+   *  mutation, which nothing needs yet. */
   options: { fence: number; recovered?: true }
 ): RowBuilder<JournalLifecycleBatchRow> {
   return (seq, ts) => {
@@ -118,7 +138,13 @@ export function journalLifecycleBatchRowBuilder(
       kind: 'lifecycle-batch',
       settlementId,
       mutations: built,
-      ...journalRowBase(current.epoch, seq, options.fence, ts),
+      ...journalRowBase(
+        current.epoch,
+        seq,
+        options.fence,
+        ts,
+        built.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+      ),
       ...(options.recovered ? { recovered: options.recovered } : {})
     }
     if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
@@ -132,9 +158,10 @@ export function journalRowBase(
   epoch: string,
   seq: number,
   fence: number,
-  ts: number
+  ts: number,
+  bodies: readonly { kind: string }[] = []
 ): { v: number; epoch: string; seq: number; fence: number; ts: number } {
-  return { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch, seq, fence, ts }
+  return { v: journalRowSchemaVersion(bodies), epoch, seq, fence, ts }
 }
 
 export function buildJournalItemRow(input: {
@@ -145,17 +172,25 @@ export function buildJournalItemRow(input: {
   fence: number
   ts: number
   recovered?: true
+  linkage?: AgentJournalProducerLinkage
 }): JournalItemRow {
   const itemId = agentJournalItemKey(input.identity)
   const resolved = input.state.aliases.get(itemId) ?? itemId
-  const revision = (input.state.items.get(resolved)?.revision ?? 0) + 1
+  // A tombstoned row keeps its revision in `tombstones`, and the reducer drops
+  // any item at or below it — so a re-add has to outrank the tombstone too.
+  const revision =
+    Math.max(
+      input.state.items.get(resolved)?.revision ?? 0,
+      input.state.tombstones.get(resolved) ?? 0
+    ) + 1
   return {
     kind: 'item',
     itemId,
     revision,
     body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
-    ...(input.recovered ? { recovered: input.recovered } : {})
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [input.body]),
+    ...(input.recovered ? { recovered: input.recovered } : {}),
+    ...agentJournalLinkageFields(input.linkage)
   }
 }
 
@@ -170,7 +205,15 @@ export function buildJournalTombstoneRow(input: {
   return {
     kind: 'tombstone',
     itemId: input.itemId,
-    revision: (input.state.items.get(resolved)?.revision ?? 0) + 1,
+    // Symmetric with the item builder: `upsertItem` clearing the tombstone on a
+    // re-add is what keeps the two maps disjoint, and that invariant lives in the
+    // reducer. Outranking both here means a repeat removal cannot be dropped as a
+    // stale revision if it ever stops holding.
+    revision:
+      Math.max(
+        input.state.items.get(resolved)?.revision ?? 0,
+        input.state.tombstones.get(resolved) ?? 0
+      ) + 1,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
   }
 }
@@ -198,7 +241,7 @@ export function buildJournalSubmissionRow(input: {
 export function buildJournalDispatchRow(input: {
   state: JournalReducerState
   clientMessageId: string
-  dispatchState: Exclude<AgentJournalDispatchState, 'pending'>
+  dispatchState: AgentJournalDispatchState
   providerItemId: string | null
   reason: string | null
   seq: number

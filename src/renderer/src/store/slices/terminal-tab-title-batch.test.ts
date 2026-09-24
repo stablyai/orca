@@ -140,6 +140,7 @@ describe('terminal tab title batches', () => {
         if (typeof property === 'string' && property.startsWith('wt-')) {
           bucketVisits += 1
         }
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, property, receiver)
       }
     })

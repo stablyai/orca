@@ -1,4 +1,5 @@
 import {
+  mobileSnapshotByteBudget,
   sendSnapshotFrames,
   serializeBudgetedMobileSnapshot,
   serializeStableMobileRendererSnapshot
@@ -45,7 +46,17 @@ export async function publishLegacyBinaryInitialSnapshot(
   }
 
   let read = await runtime.readTerminal(params.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+  // One object for the budget and the frame it approves. Written out twice, the two drifted: the
+  // budget measured a `scrollback` and the publication sent a `resized` with a `reason` beside it.
+  // `displayMode` is not in here because the flow re-reads it below, after the snapshot is
+  // serialized; the budget takes it at its widest instead.
+  const scrollbackFrame = { kind: 'scrollback' } as const
+  let serialized = await serializeBudgetedMobileSnapshot(
+    runtime,
+    ptyId,
+    isMobile,
+    mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, scrollbackFrame)
+  )
   if (state.closed) {
     return
   }
@@ -95,7 +106,13 @@ export async function publishLegacyBinaryInitialSnapshot(
     }
     if (rendererReady) {
       read = await runtime.readTerminal(params.terminal)
-      const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+      const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
+        runtime,
+        ptyId,
+        // The same frame, because this snapshot is published by the scrollback send below rather
+        // than by one of its own: the `resized` it used to name is a frame nothing here sends.
+        mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, scrollbackFrame)
+      )
       if (state.closed) {
         return
       }
@@ -123,7 +140,15 @@ export async function publishLegacyBinaryInitialSnapshot(
     state.pendingOutputBytes = 0
     state.pendingOutputOverflowed = false
     read = await runtime.readTerminal(params.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+    serialized = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      isMobile,
+      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+        kind: 'scrollback',
+        displayMode: state.displayMode
+      })
+    )
     if (state.closed) {
       return
     }
@@ -151,7 +176,7 @@ export async function publishLegacyBinaryInitialSnapshot(
     seq: layoutSeq
   })
   const snapshotStats = sendSnapshotFrames(state.sendFrame, {
-    kind: 'scrollback',
+    ...scrollbackFrame,
     // Why: prefer the subscriber's viewport over the 80x24 stopgap when the PTY has
     // no size yet — the mismatch made mobile burn its resubscribe budget (STA-3337).
     cols: serialized?.cols ?? size?.cols ?? params.viewport?.cols ?? 80,
@@ -178,11 +203,19 @@ export async function publishLegacyBinaryInitialSnapshot(
   // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
   state.lastResizeCols = serialized?.cols ?? size?.cols
   let recoveryAttempts = 0
+  // The recovery's own frame, for the same reason: this one really is a `resized`, and it is the
+  // budget and the publication that have to agree on that, not a reader comparing two literals.
+  const recoveryFrame = { kind: 'resized', reason: 'pending-output-overflow' } as const
   // Why: if the bounded pre-subscribe tail overflowed, only a fresh model snapshot covers the dropped middle without replay gaps.
   while (state.pendingOutputOverflowed && recoveryAttempts < 2) {
     state.pendingOutputOverflowed = false
     recoveryAttempts += 1
-    const recovery = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+    const recovery = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      isMobile,
+      mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, recoveryFrame)
+    )
     if (state.closed) {
       return
     }
@@ -195,11 +228,10 @@ export async function publishLegacyBinaryInitialSnapshot(
     }
     // Why: clients drop a repeat scrollback snapshot but apply 'resized' inline; omit seq so output-byte seqs don't pollute the layout-seq filter.
     const recoveryStats = sendSnapshotFrames(state.sendFrame, {
-      kind: 'resized',
+      ...recoveryFrame,
       cols: recovery.cols,
       rows: recovery.rows,
       displayMode: state.displayMode,
-      reason: 'pending-output-overflow',
       source: recovery.source,
       truncated: false,
       truncatedByByteBudget: recovery.truncatedByByteBudget,

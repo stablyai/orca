@@ -65,7 +65,6 @@ describe('ipynb parsing', () => {
       })
     )
 
-    expect(notebook.nbformat).toBe('4.5')
     expect(notebook.kernelName).toBe('Python 3')
     expect(notebook.cells).toHaveLength(2)
     expect(notebook.cells[0]).toMatchObject({

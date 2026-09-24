@@ -1,0 +1,176 @@
+{
+  "operation": "clipboard.image-terminal-attachment",
+  "family": "clipboard.image-attachment",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "ea04d03c15d3cb94be7fe111a8a6219c4e0304095679bbae62af623f5b36c9f4",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "08a3a6323626": {
+      "name": "before-terminal-send",
+      "ordinal": 8,
+      "value": {
+        "terminal": "terminal-1"
+      }
+    },
+    "6696a47819e1": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "7c2e3ea286aa": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-1"
+          }
+        }
+      }
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "814ccd56a769": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "8452698ac11a": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}"
+    },
+    "8aa742456efd": {
+      "attached": false,
+      "failure": {
+        "$rpc": "null"
+      }
+    },
+    "994fccf9b305": {
+      "name": "upload-start",
+      "ordinal": 1,
+      "value": {}
+    },
+    "b50d2ec23283": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.commitImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": "/tmp/img.png"
+        }
+      }
+    },
+    "f05e4695ffa3": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "received": 32
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "clipboard-image-attachment-blocked-before-send",
+    "checkpoints": [
+      {
+        "id": "blocked",
+        "observation": {
+          "sender": ["7c2e3ea286aa", "f05e4695ffa3", "b50d2ec23283"],
+          "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a"],
+          "settlements": {
+            "blocked": "7ed3d39f0607"
+          },
+          "state": "8aa742456efd",
+          "effects": ["994fccf9b305", "08a3a6323626"]
+        }
+      }
+    ]
+  }
+}

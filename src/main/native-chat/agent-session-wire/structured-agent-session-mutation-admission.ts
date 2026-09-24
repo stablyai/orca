@@ -13,6 +13,7 @@ import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -21,8 +22,10 @@ import { runSettledAgentSessionMutation } from './structured-agent-session-opera
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
+// The code is shared with the client so a read that refuses this way can be told apart from a
+// transcript that failed to load; the two must never drift apart.
 export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = {
-  code: 'agent_session_ownership_unknown',
+  code: AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
   message: 'This host holds no attached session by that id.'
 }
 
@@ -42,6 +45,8 @@ export type AgentSessionMutationRequest<TValue> = {
   /** Journal of the attached session; absent when this host holds none. */
   journal: AgentSessionJournal | undefined
   publish: (journal: AgentSessionJournal) => void
+  flushStreamedEvents: (sessionId: string) => Promise<void>
+  hasPendingStreamedEvents?: (sessionId: string) => boolean
   now: () => number
 }
 
@@ -49,8 +54,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   request: AgentSessionMutationRequest<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
   const { envelope, plan, journal } = request
-  const record = request.store.getRecord(envelope.sessionId)
-  if (!journal || !record) {
+  if (!journal) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
@@ -62,17 +66,17 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
   }
-  const admission = admitAgentSessionMutation({
+  const admitted = await request.store.admitMutationOperation({
+    callerKey: request.callerKey,
     envelope,
     hostFingerprint,
-    ledger: await request.store.admitOperation({
-      callerKey: request.callerKey,
-      operationId: envelope.clientOperationId,
-      fingerprint: hostFingerprint,
-      now: request.now()
-    }),
-    lease: record.lease
+    now: request.now(),
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  if (!admitted) {
+    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+  }
+  const { admission, record } = admitted
   if (admission.decision === 'refused') {
     return refuseAgentSessionMutation(admission.refusal)
   }
@@ -108,10 +112,11 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
-  plan.beforeRun?.()
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
-    callerKey: request.callerKey,
+    // A global send replay can cross caller identities. Settlement still owns
+    // the durable row admitted by the original caller.
+    operationCallerKey: admission.row.callerKey,
     envelope,
     plan,
     context
@@ -144,6 +149,9 @@ function turnContext<TValue>(
         .then(() => undefined),
     resolvedBy: request.callerKey,
     publish: () => request.publish(journal),
+    flushStreamedEvents: () => request.flushStreamedEvents(request.envelope.sessionId),
+    hasPendingStreamedEvents: () =>
+      request.hasPendingStreamedEvents?.(request.envelope.sessionId) ?? false,
     now: () => request.now()
   }
 }

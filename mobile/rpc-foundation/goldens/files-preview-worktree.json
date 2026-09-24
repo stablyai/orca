@@ -1,0 +1,97 @@
+{
+  "operation": "files.preview-load",
+  "family": "files.preview-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "bcba4a7d9d929078c5ed80fc7e1acd45859d0b4c559767a919b0396dc6a70a3e",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1cf4496bc8c0": {
+      "name": "files.read#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "byteLength": 8,
+            "content": "# readme",
+            "truncated": false
+          }
+        }
+      }
+    },
+    "3f8bf3069e3d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "byteLength": 8,
+        "content": "# readme",
+        "kind": "markdown",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "47ef2e397e18": {
+      "preview": {
+        "byteLength": 8,
+        "content": "# readme",
+        "kind": "markdown",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "8423ff93fda2": {
+      "name": "files.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "files-preview-worktree",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["1cf4496bc8c0"],
+          "payloads": ["8423ff93fda2"],
+          "settlements": {
+            "load": "3f8bf3069e3d"
+          },
+          "state": "47ef2e397e18",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

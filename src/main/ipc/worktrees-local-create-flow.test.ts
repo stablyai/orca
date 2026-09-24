@@ -234,6 +234,8 @@ describe('registerWorktreeHandlers', () => {
       baseBranch: sha
     })
 
+    // The warm-up is speculative, so it stays at the default tier; only the create the user is
+    // waiting on is promoted.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
       { cwd: '/workspace/repo' }
@@ -272,7 +274,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/pr-title',
       'feature/fix',
       sha,
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -354,7 +358,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard-2',
       'improve-dashboard-2',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
@@ -385,7 +391,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/rocket',
       'rocket',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/rocket',
@@ -435,7 +443,9 @@ describe('registerWorktreeHandlers', () => {
       '../worktrees/feature',
       'feature',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::../worktrees/feature',
@@ -551,7 +561,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/feature-something',
       'feature/something',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({

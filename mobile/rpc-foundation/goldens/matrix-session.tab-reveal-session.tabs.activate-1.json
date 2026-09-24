@@ -1,0 +1,730 @@
+{
+  "operation": "source-control.session-diff-reveal",
+  "family": "session.tab-reveal",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
+  "scenarioSha256": "73366226aeaec1581aeeb47219fc703917143cfd7f6a2eb01d7bd703a7c7612d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0bc55a97ecd6": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "184bcd0b60bd": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "1da2ff4ec6f6": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "activeTabId": "tab-1"
+          }
+        }
+      }
+    },
+    "20530029f5c2": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "23b88a48116d": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tabs": [
+              {
+                "id": "tab-term",
+                "type": "terminal"
+              },
+              {
+                "id": "tab-other",
+                "mode": "diff",
+                "relativePath": "src/other.ts",
+                "type": "file"
+              },
+              {
+                "diffSource": "unstaged",
+                "id": "tab-1",
+                "mode": "diff",
+                "relativePath": "src/app.ts",
+                "type": "file"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "33d426b99e5c": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "34cf3d7406a3": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "4a9fdd8b822c": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "54cc22314505": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "60ef11dd407d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "revealed"
+    },
+    "671d1a0cea0d": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "746bd8b74b60": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "83e0f62a8922": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:repo42::/p\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
+    },
+    "8bf735082e01": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "bde782b3557a": {
+      "result": "revealed"
+    },
+    "c7a157cde28d": {
+      "result": "unrevealed"
+    },
+    "d11ba712aef5": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "e97fb1c85cc2": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "f974834d56d0": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.activate"
+        },
+        {
+          "name": "params",
+          "value": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.tab-reveal-session.tabs.activate-1",
+    "checkpoints": [
+      {
+        "id": "sc-reveal-first-poll.prelude:list-pending",
+        "observation": {
+          "sender": ["746bd8b74b60"],
+          "payloads": ["33d426b99e5c"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.prelude:activate-pending",
+        "observation": {
+          "sender": ["23b88a48116d", "34cf3d7406a3"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.normal:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "1da2ff4ec6f6"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "60ef11dd407d"
+          },
+          "state": "bde782b3557a",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.result-absent:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "d11ba712aef5"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.result-null:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "0bc55a97ecd6"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "8bf735082e01"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "184bcd0b60bd"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "4a9fdd8b822c"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.outer-refused:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "671d1a0cea0d"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "f974834d56d0"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.method-not-found:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "e97fb1c85cc2"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.transport-rejection:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "54cc22314505"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-reveal-first-poll.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["23b88a48116d", "20530029f5c2"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
+          "settlements": {
+            "reveal": "9270aeb7d9c6"
+          },
+          "state": "c7a157cde28d",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

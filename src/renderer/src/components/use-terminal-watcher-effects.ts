@@ -11,13 +11,47 @@ import {
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
 import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 
-export function useTerminalWatcherEffects(controller: TerminalColdActivationController): void {
+// Why shared: surfaces without watchable live tabs need no per-pass allocation.
+const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
+
+type TerminalWatcherController = Pick<
+  TerminalColdActivationController,
+  | 'activationDeferredMountTabIdsByWorktreeRef'
+  | 'activeTabId'
+  | 'activeTabIdByWorktree'
+  | 'activeView'
+  | 'activeWorktreeId'
+  | 'activityTerminalPortals'
+  | 'anyMountedWorktreeHasLayout'
+  | 'backgroundMountRevision'
+  | 'createTab'
+  | 'effectiveParkedTerminalWorktreeIds'
+  | 'evictionExemptTerminalTabIds'
+  | 'getEffectiveLayoutForWorktree'
+  | 'groupsByWorktree'
+  | 'hydrationSucceeded'
+  | 'measurableBackgroundWorktreeIdsRef'
+  | 'mountedWorktreeIdsRef'
+  | 'pairedRuntimeParkingEnvironmentIds'
+  | 'pendingStartupByTabId'
+  | 'reconcileWorktreeTabModel'
+  | 'renderedActiveWorktreeId'
+  | 'tabsByWorktree'
+  | 'terminalParkingEnabled'
+  | 'terminalProviderSnapshotCapabilityRevision'
+  | 'terminalSshParkingEnabled'
+  | 'terminalStartupRestorationReady'
+  | 'terminalTitleSnapshotAuthorityEnabled'
+  | 'workspaceSessionReady'
+  | 'workspaceSurfaceIds'
+>
+
+export function useTerminalWatcherEffects(controller: TerminalWatcherController): void {
   const {
     activationDeferredMountTabIdsByWorktreeRef,
     activeTabId,
@@ -35,11 +69,14 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
     hydrationSucceeded,
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
+    pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     reconcileWorktreeTabModel,
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
+    terminalProviderSnapshotCapabilityRevision,
+    terminalSshParkingEnabled,
     terminalStartupRestorationReady,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
@@ -58,9 +95,11 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
         continue
       }
       const tabs = tabsByWorktree[workspaceId] ?? []
-      const parkedTabIds = new Set<string>()
+      let parkedTabIds: ReadonlySet<string> = NO_PARKED_TAB_IDS
       let deferredTabIds: ReadonlySet<string> | null = null
       if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspaceId)) {
+        const mountedParkedTabIds = new Set<string>()
+        parkedTabIds = mountedParkedTabIds
         const isVisible = activeView === 'terminal' && workspaceId === renderedActiveWorktreeId
         const shouldMeasureHiddenWorktree =
           !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspaceId)
@@ -75,7 +114,7 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
               tabId: tab.id
             })
             if (!activityTerminalPortal && !evictionExemptTerminalTabIds.has(tab.id)) {
-              parkedTabIds.add(tab.id)
+              mountedParkedTabIds.add(tab.id)
             }
           }
         }
@@ -83,15 +122,32 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
         for (const tab of tabs) {
           if (
             deferredTabIds?.has(tab.id) &&
-            !parkedTabIds.has(tab.id) &&
+            !mountedParkedTabIds.has(tab.id) &&
             canWatcherCoverParkedTerminalTab(workspaceId, tab) &&
             !findActivityTerminalPortal(activityTerminalPortals, {
               worktreeId: workspaceId,
               tabId: tab.id
             })
           ) {
-            parkedTabIds.add(tab.id)
+            mountedParkedTabIds.add(tab.id)
           }
+        }
+      }
+      if (tabs.length > 0 && !mountedWorktreeIdsRef.current.has(workspaceId)) {
+        const backgroundTabIds = tabs
+          .filter(
+            (tab) =>
+              canWatcherCoverParkedTerminalTab(workspaceId, tab) &&
+              !findActivityTerminalPortal(activityTerminalPortals, {
+                worktreeId: workspaceId,
+                tabId: tab.id
+              })
+          )
+          .map((tab) => tab.id)
+        if (backgroundTabIds.length > 0) {
+          // CLI-created live terminals have never mounted a pane to consume host title facts.
+          parkedTabIds = new Set(backgroundTabIds)
+          deferredTabIds = parkedTabIds
         }
       }
       syncEntriesByWorktreeId.set(workspaceId, {
@@ -113,10 +169,13 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
     getEffectiveLayoutForWorktree,
     groupsByWorktree,
     effectiveParkedTerminalWorktreeIds,
+    pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
+    terminalProviderSnapshotCapabilityRevision,
+    terminalSshParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
     workspaceSurfaceIds
@@ -191,7 +250,12 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {
-    if (!workspaceSessionReady || !hydrationSucceeded || !activeWorktreeId) {
+    if (
+      !workspaceSessionReady ||
+      !terminalStartupRestorationReady ||
+      !hydrationSucceeded ||
+      !activeWorktreeId
+    ) {
       return
     }
     if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
@@ -203,7 +267,20 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
       return
     }
     startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
-    // Why: startup hydration restores the worktree without activateAndRevealWorktree, so orphaned live/quit records need a terminal-surface pass after cold restore.
-    resumeSleepingAgentSessionsForWorktree(activeWorktreeId)
-  }, [activeWorktreeId, activeWorktreeHostAuthority, hydrationSucceeded, workspaceSessionReady])
+    // Startup recovery needs the same host census and in-flight gate as explicit activation.
+    void gateWorktreeAgentActivation(activeWorktreeId).then(
+      (outcome) => {
+        if (outcome === 'blocked') {
+          startupResumeWorktreeIdsRef.current.delete(activeWorktreeId)
+        }
+      },
+      () => startupResumeWorktreeIdsRef.current.delete(activeWorktreeId)
+    )
+  }, [
+    activeWorktreeId,
+    activeWorktreeHostAuthority,
+    hydrationSucceeded,
+    terminalStartupRestorationReady,
+    workspaceSessionReady
+  ])
 }

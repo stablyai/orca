@@ -105,7 +105,8 @@ function answersFor(
 export function projectGroupedQuestion(
   questions: readonly AgentJournalQuestion[],
   draft: GroupedQuestionDraft | null,
-  promptKey: string
+  promptKey: string,
+  promptIdentity?: { itemId: string; expectedRevision: number }
 ): MobileChatQuestion | null {
   const answered = answersFor(draft, promptKey).length
   const question = questions[answered]
@@ -117,6 +118,7 @@ export function projectGroupedQuestion(
   return {
     question:
       questions.length > 1 ? `${heading} (${answered + 1} of ${questions.length})` : heading,
+    ...(promptIdentity ? { prompt: promptIdentity } : {}),
     options: question.options.map((option) => option.label),
     ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: question.multiSelect,

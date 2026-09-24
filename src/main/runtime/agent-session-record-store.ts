@@ -1,18 +1,27 @@
 import { setVisibleSessionId } from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
+import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
 
-import {
-  agentSessionOperationKey,
-  settleAgentSessionOperation,
-  type AgentSessionOperationDecision,
-  type AgentSessionOperationOutcome,
-  type AgentSessionOperationRow
+import type {
+  AgentSessionOperationClaim,
+  AgentSessionOperationDecision,
+  AgentSessionOperationOutcome,
+  AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
-  admitAgentSessionOperationRow,
+  admitAgentSessionGlobalOperationInto,
+  admitAgentSessionMutationOperation,
+  admitAgentSessionOperationInto,
+  claimAgentSessionOperationInto,
+  settleAgentSessionOperationInto,
+  type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
 } from './agent-session-operation-admission'
+import {
+  isAgentSessionClaimKeyVerifiable,
+  retireAgentSessionClaimKey
+} from './agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import { classifyObservedAgentSessionSpawnToken } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
@@ -51,10 +60,7 @@ import {
   type AgentSessionReservationProcesslessProof
 } from './agent-session-processless-reservation'
 import {
-  admitPendingAgentSessionReservationReplay,
-  applyAgentSessionReservation,
-  evaluateAgentSessionReserveOperation,
-  requireAgentSessionRecordForReplay,
+  commitAgentSessionReservation,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
 } from './agent-session-reservation-admission'
@@ -71,8 +77,6 @@ import {
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
-/** Retired claim keys stay verifiable this long so a rotation cannot strand a running agent. */
-export const AGENT_SESSION_CLAIM_KEY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export class AgentSessionRecordStore {
   private constructor(private readonly transactions: AgentSessionStoreTransactionQueue) {}
@@ -145,6 +149,13 @@ export class AgentSessionRecordStore {
     )
   }
 
+  /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
+   *  writer lease. `null` clears it. */
+  setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      setAgentSessionRecordConversationName(record, name, Date.now())
+    )
+
   /** A record this build cannot validate: readable as present, never grantable as a writer. */
   isSessionUnreadable(sessionId: string): boolean {
     return this.state.unreadableRecords.has(sessionId)
@@ -152,10 +163,8 @@ export class AgentSessionRecordStore {
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
 
-  isClaimKeyVerifiable(keyId: string, now: number): boolean {
-    const retired = this.state.retiredClaimKeys.find((entry) => entry.keyId === keyId)
-    return !retired || now - retired.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
-  }
+  isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
+    isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
 
   /** Spawn tokens observed on the host with no matching lease. Stop them; never adopt them. */
   listOrphanSpawnTokens(observedTokens: readonly string[]): string[] {
@@ -165,31 +174,10 @@ export class AgentSessionRecordStore {
     )
   }
 
-  /**
-   * Compare-and-swap reservation plus its client-operation row, committed together. A replayed
-   * operation returns the recorded outcome and never reaches the reservation.
-   */
   async reserveOwner(request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> {
-    return this.transact(() => {
-      const decision = evaluateAgentSessionReserveOperation(this.state, request)
-      if (decision.decision === 'refused') {
-        throw new Error(decision.code)
-      }
-      if (decision.decision === 'replay') {
-        let record = requireAgentSessionRecordForReplay(this.state, decision.row, request.sessionId)
-        if (decision.row.outcome.status === 'pending' && request.handoffOperationId !== null) {
-          record = admitPendingAgentSessionReservationReplay(record, request)
-        }
-        return { record, disposition: 'replayed' as const, operationRow: decision.row }
-      }
-      const result = applyAgentSessionReservation(this.state, request, AGENT_SESSION_LEASE_TTL_MS)
-      this.state.operations.set(
-        agentSessionOperationKey(request.operation.callerKey, request.operation.operationId),
-        decision.row
-      )
-      this.state.records.set(result.record.sessionId, result.record)
-      return { ...result, operationRow: decision.row }
-    })
+    return this.transact(() =>
+      commitAgentSessionReservation(this.state, request, AGENT_SESSION_LEASE_TTL_MS)
+    )
   }
 
   async commitProcessIdentity(
@@ -287,24 +275,33 @@ export class AgentSessionRecordStore {
   }
 
   /** Admits one non-reservation mutation through the durable ledger. */
-  async admitOperation(
+  admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
+    this.transact(() => admitAgentSessionOperationInto(this.state, args))
+
+  /** Send ids stay global after a caller reconnects under a different identity. */
+  admitGlobalOperation = (
     args: AgentSessionOperationAdmission
-  ): Promise<AgentSessionOperationDecision> {
-    return this.transact(() => {
-      const admitted = admitAgentSessionOperationRow(this.state.operations, args)
-      this.state.operations = admitted.rows
-      return admitted.decision
-    })
-  }
+  ): Promise<AgentSessionOperationDecision> =>
+    this.transact(() => admitAgentSessionGlobalOperationInto(this.state, args))
+
+  admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+    this.transact(() => admitAgentSessionMutationOperation(this.state, args))
+
+  /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
+   *  read `pending`, and only a conditional swap tells the one that may run from the one that must
+   *  replay. */
+  claimOperation = (args: {
+    callerKey: string
+    operationId: string
+  }): Promise<AgentSessionOperationClaim> =>
+    this.transact(() => claimAgentSessionOperationInto(this.state, args))
 
   async recordOperationOutcome(args: {
     callerKey?: string
     operationId: string
     outcome: AgentSessionOperationOutcome
   }): Promise<void> {
-    await this.transact(() => {
-      this.state.operations = settleAgentSessionOperation(this.state.operations, args)
-    })
+    await this.transact(() => settleAgentSessionOperationInto(this.state, args))
   }
 
   async markClaimConflicted(sessionId: string, now: number): Promise<AgentSessionRecord> {
@@ -321,14 +318,7 @@ export class AgentSessionRecordStore {
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 
   async retireClaimKey(keyId: string, now: number): Promise<void> {
-    await this.transact(() => {
-      if (!this.state.retiredClaimKeys.some((entry) => entry.keyId === keyId)) {
-        this.state.retiredClaimKeys.push({ keyId, retiredAt: now })
-      }
-      this.state.retiredClaimKeys = this.state.retiredClaimKeys.filter(
-        (entry) => now - entry.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
-      )
-    })
+    await this.transact(() => retireAgentSessionClaimKey(this.state, keyId, now))
   }
 
   private async mutate(

@@ -16,7 +16,8 @@ import {
   getWslDirectoryProbeArgs,
   parseWslDirectoryProbeOutput
 } from './wsl-directory-probe-command'
-
+import { clearWslHomeCache, getCachedWslHome, rememberWslHome } from './wsl-home-cache'
+export { hasCachedWslHome } from './wsl-home-cache'
 // Why re-exported rather than defined here: the relay bundle needs the path
 // conversion without this module's distro-probing subprocess graph.
 export { toLinuxPath, toWindowsWslPath } from '../shared/wsl-paths'
@@ -26,21 +27,11 @@ export {
   isWslAvailable,
   isWslAvailableAsync
 } from './wsl-availability'
-
 export type WslPathInfo = {
   distro: string
   linuxPath: string
 }
-
-/**
- * Detect if a Windows path is a WSL UNC path and extract the distro name
- * and equivalent Linux path.
- *
- * Why: Windows exposes WSL filesystems as UNC paths under \\wsl.localhost\<Distro>\...
- * (modern) or \\wsl$\<Distro>\... (legacy). When a repo lives on a WSL filesystem,
- * native Windows git.exe is either absent or painfully slow — all process spawning
- * must be routed through `wsl.exe -d <distro>` with Linux-native paths instead.
- */
+/** Detect and parse a WSL UNC path on Windows. */
 export function parseWslPath(windowsPath: string): WslPathInfo | null {
   if (process.platform !== 'win32') {
     return null
@@ -103,9 +94,6 @@ export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | n
   })
 }
 
-// ─── WSL home directory resolution ──────────────────────────────────
-
-const wslHomeCache = new Map<string, string>()
 const wslHomeProbeCache = new Map<string, Promise<string | null>>()
 let wslDistroCache: string[] | null = null
 let wslDistroListInFlight: Promise<string[]> | null = null
@@ -118,6 +106,7 @@ let wslDistroListRetryAfterMs = 0
 let wslDistroListEmptyStreak = 0
 let wslDistroProbeSequence = 0
 let wslDistroCacheSequence = 0
+
 function armWslDistroListRetry(): void {
   const now = Date.now()
   // Concurrent completions belong to the retry window already armed by the first result.
@@ -279,8 +268,9 @@ export function getDefaultWslDistro(): string | null {
  * WSL user's $HOME to compute that path.
  */
 export function getWslHome(distro: string): string | null {
-  if (wslHomeCache.has(distro)) {
-    return wslHomeCache.get(distro)!
+  const cachedHome = getCachedWslHome(distro)
+  if (cachedHome !== undefined) {
+    return cachedHome
   }
 
   try {
@@ -296,22 +286,17 @@ export function getWslHome(distro: string): string | null {
     }
 
     const uncPath = toWindowsWslPath(home, distro)
-    wslHomeCache.set(distro, uncPath)
-    return uncPath
+    return rememberWslHome(distro, uncPath)
   } catch {
     return null
   }
 }
 
-/** Pure cache lookup — never probes. Lets callers that memoize a derived value avoid caching one
- *  built from the unresolved fallback, since only the success path is cached above. */
-export function hasCachedWslHome(distro: string): boolean {
-  return wslHomeCache.has(distro)
-}
-
+/** Pure cache lookup — never probes. */
 export async function getWslHomeAsync(distro: string): Promise<string | null> {
-  if (wslHomeCache.has(distro)) {
-    return wslHomeCache.get(distro)!
+  const cachedHome = getCachedWslHome(distro)
+  if (cachedHome !== undefined) {
+    return cachedHome
   }
   const inflight = wslHomeProbeCache.get(distro)
   if (inflight) {
@@ -325,8 +310,7 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
         return null
       }
       const uncPath = toWindowsWslPath(home, distro)
-      wslHomeCache.set(distro, uncPath)
-      return uncPath
+      return rememberWslHome(distro, uncPath)
     })
     .catch(() => null)
     .finally(() => {
@@ -358,7 +342,7 @@ function resetWslDistroListState(): void {
 }
 
 export function _resetWslCachesForTests(): void {
-  wslHomeCache.clear()
+  clearWslHomeCache()
   wslHomeProbeCache.clear()
   resetWslDistroListState()
   _resetRunningWslDistroCacheForTests()

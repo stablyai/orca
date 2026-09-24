@@ -20,6 +20,7 @@ export function createBrowserPageMetadataActions(
   | 'updateBrowserPageAnnotation'
   | 'deleteBrowserPageAnnotation'
   | 'clearBrowserPageAnnotations'
+  | 'removeDeliveredBrowserPageAnnotations'
 > {
   return {
     setRemoteBrowserPageHandle: (pageId, handle) => {
@@ -125,6 +126,24 @@ export function createBrowserPageMetadataActions(
         }
         const nextByPageId = { ...s.browserAnnotationsByPageId }
         delete nextByPageId[pageId]
+        return { browserAnnotationsByPageId: nextByPageId }
+      }),
+
+    // Identity matching preserves edits and additions made during delivery.
+    removeDeliveredBrowserPageAnnotations: (pageId, deliveredAnnotations) =>
+      set((s) => {
+        const existing = s.browserAnnotationsByPageId[pageId] ?? []
+        const delivered = new Set(deliveredAnnotations)
+        const remaining = existing.filter((note) => !delivered.has(note))
+        if (remaining.length === existing.length) {
+          return s
+        }
+        const nextByPageId = { ...s.browserAnnotationsByPageId }
+        if (remaining.length > 0) {
+          nextByPageId[pageId] = remaining
+        } else {
+          delete nextByPageId[pageId]
+        }
         return { browserAnnotationsByPageId: nextByPageId }
       })
   }

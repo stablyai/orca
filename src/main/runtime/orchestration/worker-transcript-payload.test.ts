@@ -132,6 +132,37 @@ describe('worker transcript wire bounds', () => {
     expect(result.limited).toBe(true)
   })
 
+  it('bounds a background-task kind and state a newer build wrote as open strings', () => {
+    const result = boundWorkerTranscriptMessages([
+      JSON.parse(
+        JSON.stringify({
+          id: 'message-task-state',
+          role: 'system',
+          timestamp: null,
+          source: 'transcript',
+          blocks: [
+            {
+              type: 'background-task',
+              taskId: 'task-1',
+              kind: 'k'.repeat(900),
+              label: 'l'.repeat(900),
+              state: 's'.repeat(900)
+            }
+          ]
+        })
+      )
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    if (block?.type !== 'background-task') {
+      throw new Error('expected a background-task block')
+    }
+    expect(block.kind).toBe('unknown')
+    expect(block.label).toHaveLength(512)
+    expect(block.state).toBe('unverifiable')
+    expect(result.limited).toBe(true)
+  })
+
   it('keeps complete bounded messages unlimited', () => {
     const result = boundWorkerTranscriptMessages([
       {
@@ -144,6 +175,36 @@ describe('worker transcript wire bounds', () => {
     ])
 
     expect(result).toMatchObject({ limited: false, warnings: [] })
+  })
+
+  it('keeps two roster ids sharing a 512-char prefix distinct', () => {
+    // The id is the roster key: a plain prefix clip would merge the two children.
+    const head = 'a'.repeat(512)
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-1',
+        role: 'assistant',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: [
+              { id: `${head}-one`, label: 'Audit', state: 'working' },
+              { id: `${head}-two`, label: 'Audit', state: 'working' }
+            ]
+          }
+        ]
+      }
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    if (block?.type !== 'subagent-group') {
+      throw new Error('expected a subagent-group block')
+    }
+    expect(block.agents[0]?.id).not.toBe(block.agents[1]?.id)
+    expect(block.agents[0]?.id).toHaveLength(512)
   })
 
   it('keeps fallback identifiers stable without exposing the transcript path', () => {

@@ -51,15 +51,12 @@ describe('orchestration skill routing', () => {
     }
   })
 
-  it('keeps external browser routing at the OS/page boundary', () => {
+  it('does not advertise Computer Use or page automation from orchestration discovery', () => {
     const description = readDescription()
 
-    expect(description).toContain(
-      "Use Computer Use for external browser windows, webviews, Orca app UI, or desktop UI outside Orca's embedded browser only when the task requires OS/window-level control such as focus, menus, dialogs, coordinates, or screenshots."
-    )
-    expect(description).toContain(
-      "`orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages."
-    )
+    expect(description).not.toMatch(/Computer Use/iu)
+    expect(description).not.toMatch(/Playwright/iu)
+    expect(description).not.toContain('embedded pages')
   })
 })
 
@@ -168,9 +165,10 @@ describe('orchestration kernel', () => {
     expect(kernel).toContain(
       '`projection.attention` categories, `projection.attention.requiresAction`, and literal `projection.nextAction` argv'
     )
-    expect(kernel).toContain(
-      'An `inspect` `nextAction` on a `live` row with `attention.requiresAction` false is informational, not a command to re-run: keep waiting with `check --wait`'
-    )
+    // Unverifiable workers can still owe release; the guide must explain the action itself.
+    expect(kernel).toContain('A `none` `nextAction` has no argv to run')
+    expect(kernel).toContain('read `liveness.reason` and keep waiting with `check --wait`')
+    expect(kernel).toContain('Absence never earns an argv; settlement and pending work still do')
     expect(kernel).toContain('choose `worker-stop` or `worker-abandon`')
   })
 
@@ -380,6 +378,9 @@ describe('owned orchestration references', () => {
       expect(reference).toContain(group)
     }
     expect(reference).toContain('Dispatch lifecycle messages never target groups')
+    expect(squash(reference)).toContain("means the live Dispatches of the sender's own Run.")
+    expect(squash(reference)).toContain('A sender bound to no Run is refused')
+    expect(squash(reference)).toContain('A Run group excludes its owning coordinator')
     expect(reference).toContain('gate-create --task <task_id>')
     expect(reference).toContain("Do not create a gate merely to answer a worker's `ask`")
     expect(reference).toContain('successful `send` proves durable enqueue')

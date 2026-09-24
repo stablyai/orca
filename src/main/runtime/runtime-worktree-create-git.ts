@@ -2,6 +2,7 @@ import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-rev
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { Repo } from '../../shared/repo-types'
 import { getPRForBranch } from '../github/client'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import { gitExecFileAsync } from '../git/runner'
 import { listWorktrees } from '../git/worktree'
 import { computeValidatedBranchName } from '../ipc/worktree-logic'
@@ -20,7 +21,7 @@ export async function resolveCreateBranchName(
   sanitizedName: string,
   settings: { branchPrefix: string; branchPrefixCustom?: string },
   username: string | null,
-  gitOptions: { wslDistro?: string } = {}
+  gitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<string> {
   if (!branchNameOverride) {
     return computeValidatedBranchName(
@@ -43,7 +44,7 @@ export async function canCheckoutExistingLocalBranch(
   repoPath: string,
   branchName: string,
   baseBranch: string,
-  gitOptions: { wslDistro?: string } = {}
+  gitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<boolean> {
   let localHead = ''
   try {

@@ -134,6 +134,13 @@ export function projectStructuredPermission(
   }
   return {
     title: prompt.body.title,
+    prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
+    ...(prompt.body.displayName ? { displayName: prompt.body.displayName } : {}),
+    ...(prompt.body.description ? { description: prompt.body.description } : {}),
+    ...(prompt.body.decisionReason ? { decisionReason: prompt.body.decisionReason } : {}),
+    ...(prompt.body.blockedPath ? { blockedPath: prompt.body.blockedPath } : {}),
+    ...(prompt.body.matchedAskRule ? { matchedAskRule: prompt.body.matchedAskRule } : {}),
+    ...(prompt.body.subject ? { subject: prompt.body.subject } : {}),
     ...(prompt.body.detail ? { detail: prompt.body.detail } : {}),
     options: prompt.body.options.map((option) => ({
       label: option.label,
@@ -158,12 +165,14 @@ export function projectStructuredQuestion(
     return projectGroupedQuestion(
       prompt.body.questions,
       groupedDraft,
-      groupedQuestionPromptKey(prompt.itemId, prompt.revision)
+      groupedQuestionPromptKey(prompt.itemId, prompt.revision),
+      { itemId: prompt.itemId, expectedRevision: prompt.revision }
     )
   }
   const optionDescriptions = prompt.body.options.map((option) => option.description)
   return {
     question: prompt.body.question,
+    prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
     options: prompt.body.options.map((option) => option.label),
     ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: false,

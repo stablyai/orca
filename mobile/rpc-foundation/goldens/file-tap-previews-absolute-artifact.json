@@ -1,0 +1,122 @@
+{
+  "operation": "files.terminal-path-tap",
+  "family": "files.terminal-path-tap",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
+  "scenarioSha256": "f1844c2608ce90250fddfc78c0b35bb1bf3647598a5ab2914eca0d8cb4403a38",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "220e44211af6": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 10000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "exists": true,
+            "isDirectory": false,
+            "openTarget": {
+              "absolutePath": "/logs/run.txt",
+              "grantId": "grant-1",
+              "kind": "absolute-file"
+            }
+          }
+        }
+      }
+    },
+    "53fb9b1f36f9": {
+      "activeSessionTabId": "tab-source",
+      "failed": 0,
+      "switched": {
+        "$rpc": "null"
+      }
+    },
+    "561f3fedeb78": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+    },
+    "a4f3b56d5a81": {
+      "name": "push-preview-route",
+      "ordinal": 4,
+      "value": {
+        "params": {
+          "absolutePath": "/logs/run.txt",
+          "cwd": "/repo",
+          "grantId": "grant-1",
+          "hostId": "host-1",
+          "name": "run.txt",
+          "pathText": "src/app.ts",
+          "source": "terminalArtifact",
+          "terminal": "terminal-1",
+          "worktreeId": "workspace-1",
+          "worktreeName": "workspace"
+        },
+        "pathname": "/h/[hostId]/files/preview/[worktreeId]"
+      }
+    },
+    "c0978ed13409": {
+      "name": "open-feedback",
+      "ordinal": 3,
+      "value": {}
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "file-tap-previews-absolute-artifact",
+    "checkpoints": [
+      {
+        "id": "previewed",
+        "observation": {
+          "sender": ["220e44211af6"],
+          "payloads": ["561f3fedeb78"],
+          "settlements": {
+            "tap": "eb79a9b3682a"
+          },
+          "state": "53fb9b1f36f9",
+          "effects": ["c0978ed13409", "a4f3b56d5a81"]
+        }
+      }
+    ]
+  }
+}

@@ -24,11 +24,30 @@ truth. Everything else is derived from it by
 `config/scripts/regenerate-xterm-patches.mjs`, which is pinned to the exact
 upstream commit the published tarball was built from.
 
-`@xterm/addon-webgl`, `@xterm/addon-search` and `@xterm/addon-serialize` are
+`@xterm/addon-webgl`, `@xterm/addon-search`, `@xterm/addon-serialize` and `@xterm/addon-image` are
 generated the same way, from their own source patches under
 `config/patches/xterm-src/`. Their entries differ only in `packageDir` and build
-steps; everything below applies to all four. `@xterm/addon-ligatures` is the one
+steps; everything below applies to all five. `@xterm/addon-ligatures` is the one
 patch still written by hand — see [Known Gaps](#known-gaps).
+
+The image patch bounds pending Kitty decoders by their maximum WASM capacity
+and caps transmitted image blobs by byte size. Both use the configured storage
+budget; upstream's displayed-pixel budget does not cover these allocations.
+Byte-budget eviction drops unplaced payloads first, so a new upload cannot erase a
+visible image while abandoned blobs still hold budget; displayed images go only
+when that is not enough, because the cap is a hard bound. The incoming image is
+always stored, so the cap overshoots by at most one payload rather than dropping
+an image the protocol already acked as `OK`. Orca uses fixed 32 MB storage and
+8 MiB sequence limits, not arbitrary addon configurations.
+`config/scripts/xterm-image-memory-contract.test.mjs` exercises the installed
+bundle with unfinished uploads, chunk continuation, both eviction orders and
+disposal.
+The patch also bounds decompression before joining decoded chunks, validates PNG
+dimensions before native decoding, and closes stale asynchronous image results
+after reset, disable or disposal. `config/scripts/xterm-image-lifecycle-contract.test.mjs`
+exercises those boundaries against the installed addon. Font zoom scales visible
+tiles without creating enlarged full-image canvases;
+`config/scripts/xterm-image-resize-contract.test.mjs` checks allocation and tile mapping.
 
 ## Rules
 

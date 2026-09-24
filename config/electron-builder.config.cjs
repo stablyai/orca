@@ -7,15 +7,20 @@ const {
   verifyPackagedDaemonEntryBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
+  assertPackagedNativeVariantsInstalled,
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
+const {
+  MOBILE_WEB_BUNDLE_DIR,
+  assertMobileWebBundleBuilt
+} = require('./scripts/verify-packaged-mobile-web-bundle.cjs')
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
 const {
-  verifyPackagedNodePtyJobOwnership
+  verifyPackagedWindowsNodePty
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
@@ -146,6 +151,16 @@ const rpmElectronRuntimeDependencies = [
 // Keep in sync with isMarkdownDocumentName() in src/main/ipc/markdown-documents.ts and with
 // config/nsis/orca-installer-hooks.nsh, which registers the same set on Windows.
 const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
+
+// Why: the config must load on a host-only install without resolving unused Windows addons.
+// This is load-time tolerance only; beforePack enforces that the target's natives are installed.
+// Why one package: @vscode/windows-process-tree is the only os: win32 npm addon;
+// @orca/windows-registry is a workspace link present on every host, so its presence proves nothing.
+const windowsRuntimeResources = existsSync(
+  join(__dirname, '..', 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
+)
+  ? createPackagedRuntimeNodeModuleResources('win32')
+  : []
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -278,17 +293,13 @@ module.exports = {
       verifyStaticAppImagePackage(file, arch)
     }
   },
+  // electron-builder calls this with the context alone. The second parameter is the bundle root,
+  // so a test can point the guard at a scratch bundle instead of needing the repo's out/ built.
+  beforePack: (context, mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR) => {
+    assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
+    assertMobileWebBundleBuilt(mobileWebBundleDir)
+  },
   afterPack: async (context) => {
-    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
-    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
-    // Fail packaging if any bundled native binary exceeds the supported floor.
-    if (context.electronPlatformName === 'linux') {
-      // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
-      // so a cross-built slice could ship the host's pty.node and only fail at runtime.
-      verifyLinuxGlibcFloor(context.appOutDir, {
-        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
-      })
-    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(
@@ -326,6 +337,19 @@ module.exports = {
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
+    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
+    // Fail packaging if any bundled native binary exceeds the supported floor.
+    // Why after the prune: `pnpm install:release` widens the CPU set for cross-builds,
+    // so an arm64 slice can still carry the x64 @parcel/watcher until
+    // prunePackagedRuntimeNodeModules drops it.
+    if (context.electronPlatformName === 'linux') {
+      // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
+      // so a cross-built slice could ship the host's pty.node and only fail at runtime.
+      verifyLinuxGlibcFloor(context.appOutDir, {
+        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
+      })
+    }
     verifyPackagedMainRuntimeDeps(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
@@ -336,11 +360,7 @@ module.exports = {
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
     if (context.electronPlatformName === 'win32') {
-      if (process.platform === 'win32' && canExecuteTargetArch) {
-        verifyPackagedNodePtyJobOwnership(resourcesDir)
-      } else {
-        console.log('[verify-packaged-node-pty] skipped cross-platform or cross-arch package')
-      }
+      verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
     }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch
@@ -415,7 +435,7 @@ module.exports = {
     ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
       ...commonExtraResources,
-      ...createPackagedRuntimeNodeModuleResources('win32'),
+      ...windowsRuntimeResources,
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
@@ -642,7 +662,11 @@ module.exports = {
     provider: 'github',
     owner: 'stablyai',
     repo: devChannelRepo ?? 'orca',
-    releaseType: devChannelRepo ? 'prerelease' : 'release'
+    // Why draft on the main repo: `--publish always` otherwise creates a
+    // public GitHub release as soon as the first platform uploads, and
+    // /releases/latest serves a missing Windows exe. release-cut undrafts
+    // only after every required asset exists.
+    releaseType: devChannelRepo ? 'prerelease' : 'draft'
   }
 }
 

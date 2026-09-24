@@ -18,6 +18,7 @@ import { insertJournalRow } from '../agent-session-journal/journal-row-table'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 
 const SESSION = 'subscriber-session'
@@ -35,6 +36,26 @@ afterEach(async () => {
 })
 
 describe('AgentSessionSubscribers', () => {
+  it('bounds retained turn activity across session churn', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'activity-churn-journal')
+    })
+    const subscribers = new AgentSessionSubscribers()
+
+    for (let index = 0; index < MAX_RETAINED_SESSION_ACTIVITIES + 4; index += 1) {
+      subscribers.publish(`session-${index}`, journal, { turnId: `turn-${index}`, text: 'working' })
+    }
+
+    expect(subscribers.retainedActivityCountForTests).toBe(MAX_RETAINED_SESSION_ACTIVITIES)
+  })
+
   it('publishes the current fence when a resumed cursor is already caught up', async () => {
     const journal = await journals.open({
       identity: {
@@ -68,8 +89,54 @@ describe('AgentSessionSubscribers', () => {
           submissions: []
         },
         fence: 7,
+        hostNow: expect.any(Number),
         activity: null
       }
+    ])
+  })
+
+  it('stamps the host clock once per published frame', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'clock-journal')
+    })
+    let now = 1_000
+    const events: AgentSessionSubscribeEvent[] = []
+    const subscribers = new AgentSessionSubscribers({ now: () => (now += 1) })
+    const emit = (event: AgentSessionSubscribeEvent): void => {
+      events.push(event)
+    }
+    subscribers.open({ id: 'one', sessionId: SESSION, journal, fence: 1, emit })
+    subscribers.open({ id: 'two', sessionId: SESSION, journal, fence: 1, emit })
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'clocked' },
+      { kind: 'status', text: 'Clocked' },
+      { fence: 1 }
+    )
+    subscribers.publish(SESSION, journal)
+    subscribers.handoff(SESSION, 1, { owner: 'native' } as AgentSessionHandoffStatus)
+    subscribers.reset(SESSION, journal, 'epoch_changed', 1)
+
+    expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
+      1_001, 1_002,
+      // Both subscribers of one publication read the same clock sample.
+      1_003, 1_003, 1_004, 1_004, 1_005, 1_005
+    ])
+    expect(events.map((event) => event.type)).toEqual([
+      'snapshot',
+      'snapshot',
+      'batch',
+      'batch',
+      'batch',
+      'batch',
+      'reset',
+      'reset'
     ])
   })
 
@@ -101,6 +168,7 @@ describe('AgentSessionSubscribers', () => {
       type: 'batch',
       sessionId: SESSION,
       fence: 7,
+      hostNow: expect.any(Number),
       commands,
       batch: { cursor: journal.cursor(), items: [], removedItemIds: [], submissions: [] }
     })
@@ -166,7 +234,18 @@ describe('AgentSessionSubscribers', () => {
       sessions: new Map([
         [
           SESSION,
-          { journal, params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' } }
+          {
+            journal,
+            params: {
+              location: {
+                executionHostId: 'local',
+                wslDistro: null,
+                workspaceId: 'workspace-1',
+                workspaceKind: 'git-worktree'
+              },
+              provider: 'codex'
+            }
+          }
         ]
       ]),
       getRecord: () => null,
@@ -245,6 +324,7 @@ describe('AgentSessionSubscribers', () => {
         submissions: []
       },
       fence: 2,
+      hostNow: expect.any(Number),
       handoff
     })
   })
@@ -284,6 +364,7 @@ describe('AgentSessionSubscribers', () => {
       sessionId: SESSION,
       batch: { cursor, items: [], removedItemIds: [], submissions: [] },
       fence: 2,
+      hostNow: expect.any(Number),
       backgroundTasks
     })
 
@@ -330,6 +411,7 @@ describe('AgentSessionSubscribers', () => {
       sessionId: SESSION,
       batch: { cursor, items: [], removedItemIds: [], submissions: [] },
       fence: 1,
+      hostNow: expect.any(Number),
       activity: { turnId: 'turn-1', text: 'Inspecting the session wire' }
     })
 

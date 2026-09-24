@@ -74,6 +74,14 @@ export class DaemonServer {
     this.streamDataBatcher = new DaemonStreamDataBatcher(
       (clientId) => this.connections.get(clientId),
       {
+        onProducerBackpressureChanged: (sessionId, paused, onStallTimeout) =>
+          paused
+            ? this.host.pauseProducer(sessionId, 'stream', onStallTimeout)
+            : this.host.resumeProducer(sessionId, 'stream'),
+        isSessionAttachedToClient: (clientId, sessionId) => {
+          const owner = this.attachments.clientIdForSession(sessionId)
+          return owner === undefined || owner === clientId
+        },
         isSessionDroppable: (sessionId) =>
           BACKGROUND_STREAM_DROP_ENABLED && this.transientFactRelay.isBackgrounded(sessionId),
         salvageDroppedData: (dropped) => {
@@ -128,6 +136,7 @@ export class DaemonServer {
       onControlReplaced: (clientId) => {
         this.preparations.cancelForClient(clientId)
         this.historySeedTransfers.clearOwner(clientId)
+        this.streamDataBatcher.clear(clientId)
       },
       onClientDisconnected: (clientId) => {
         this.preparations.cancelForClient(clientId)
