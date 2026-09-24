@@ -30,6 +30,42 @@ function makeSnapshot(): unknown {
     rateLimits: {
       extensionField: 'limits-extra',
       claude: null,
+      cursor: {
+        provider: 'cursor',
+        session: null,
+        weekly: null,
+        buckets: [
+          {
+            name: 'Cursor Models',
+            usedPercent: 100,
+            windowMinutes: 43_200,
+            resetsAt: 400,
+            resetDescription: 'Sep 30'
+          },
+          {
+            name: 'Other Models',
+            usedPercent: 42,
+            windowMinutes: 43_200,
+            resetsAt: 400,
+            resetDescription: 'Sep 30'
+          },
+          {
+            name: 'Grok Bot',
+            usedPercent: 12,
+            windowMinutes: 10_080,
+            resetsAt: 500,
+            resetDescription: null
+          }
+        ],
+        planType: 'ultra',
+        usageMetadata: {
+          accountEmail: 'dev@example.com',
+          subscriptionStatus: 'active'
+        },
+        updatedAt: 100,
+        error: null,
+        status: 'ok'
+      },
       codex: {
         provider: 'codex',
         session: {
@@ -92,15 +128,41 @@ describe('decodeAccountsSnapshot', () => {
 
   it('defaults missing runtime targets for older host-only snapshots', () => {
     const raw = makeSnapshot() as {
-      rateLimits: { claudeTarget?: unknown; codexTarget?: unknown }
+      rateLimits: { claudeTarget?: unknown; codexTarget?: unknown; cursor?: unknown }
     }
     delete raw.rateLimits.claudeTarget
     delete raw.rateLimits.codexTarget
+    delete raw.rateLimits.cursor
 
     const snapshot = decodeAccountsSnapshot(raw)
 
     expect(snapshot.rateLimits.claudeTarget).toEqual({ runtime: 'host', wslDistro: null })
     expect(snapshot.rateLimits.codexTarget).toEqual({ runtime: 'host', wslDistro: null })
+    expect(snapshot.rateLimits.cursor).toBeUndefined()
+  })
+
+  it('decodes Cursor pools and signed-in identity as first-class fields', () => {
+    const snapshot = decodeAccountsSnapshot(makeSnapshot())
+
+    expect(snapshot.rateLimits.cursor?.buckets?.map((bucket) => bucket.name)).toEqual([
+      'Cursor Models',
+      'Other Models',
+      'Grok Bot'
+    ])
+    expect(snapshot.rateLimits.cursor?.usageMetadata?.accountEmail).toBe('dev@example.com')
+    expect(snapshot.rateLimits.cursor?.usageMetadata?.subscriptionStatus).toBe('active')
+    expect(snapshot.rateLimits.cursor?.planType).toBe('ultra')
+  })
+
+  it('accepts Cursor buckets without fabricated cycle duration', () => {
+    const raw = makeSnapshot() as {
+      rateLimits: { cursor: { buckets: Record<string, unknown>[] } }
+    }
+    delete raw.rateLimits.cursor.buckets[0]?.windowMinutes
+
+    const snapshot = decodeAccountsSnapshot(raw)
+
+    expect(snapshot.rateLimits.cursor?.buckets?.[0]).not.toHaveProperty('windowMinutes')
   })
 
   it.each([
@@ -117,7 +179,8 @@ describe('decodeAccountsSnapshot', () => {
       ['rateLimits', 'codex', 'rateLimitResetCredits', 'credits'],
       [{ status: '', expiresAt: 300, grantedAt: 50 }]
     ],
-    ['credit expiry', ['rateLimits', 'codex', 'rateLimitResetCredits', 'nextExpiresAt'], 'soon']
+    ['credit expiry', ['rateLimits', 'codex', 'rateLimitResetCredits', 'nextExpiresAt'], 'soon'],
+    ['Cursor provider identity', ['rateLimits', 'cursor', 'provider'], 'grok']
   ] satisfies Array<[string, string[], unknown]>)('rejects malformed %s', (_name, path, value) => {
     const snapshot = makeSnapshot()
     setPath(snapshot, path, value)

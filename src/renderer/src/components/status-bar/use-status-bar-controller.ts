@@ -6,7 +6,11 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
-import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
+import {
+  getVisibleUsageProvider,
+  isCursorStatusBarAvailable,
+  isUsageEmptyState
+} from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT, useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { observeStatusBarContainer } from './status-bar-container-observer'
@@ -99,7 +103,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -113,7 +117,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    grokAuthConfigured: rateLimits.grokAuthConfigured,
+    cursorAuthConfigured: rateLimits.cursorAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -122,6 +127,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
+  const cursorAvailable = isCursorStatusBarAvailable(cursor, rateLimits.cursorAuthConfigured)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -148,6 +155,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  const showCursor = cursorAvailable && visibleCursor !== null && statusBarItems.includes('cursor')
   // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -165,11 +173,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok
+    showGrok ||
+    showCursor
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -182,7 +191,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+    grok?.status === 'fetching' ||
+    cursor?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -201,7 +211,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
-    showGrok ? visibleGrok : null
+    showGrok ? visibleGrok : null,
+    showCursor ? visibleCursor : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 
   const handleManageAccounts = (): void => {
@@ -236,6 +247,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     anyVisible,
     compact,
     containerRefCallback,
+    cursorAvailable,
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,

@@ -1,12 +1,18 @@
 import { useAppStore } from '../../store'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import { isCursorStatusBarAvailable } from './status-bar-provider-visibility'
 
-/** Subscribes to detected-agent state and returns the toggles filtered to
- *  those whose underlying CLI is installed (or pre-detection). */
+/** Filters CLI toggles by detection and Cursor by credential or usage state. */
 export function useAvailableStatusBarToggles<T extends { id: StatusBarItem }>(
   toggles: readonly T[]
 ): T[] {
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  return toggles.filter((t) => isStatusBarItemAvailable(t.id, detectedAgentIds))
+  const cursor = useAppStore((s) => s.rateLimits.cursor)
+  const cursorAuthConfigured = useAppStore((s) => s.rateLimits.cursorAuthConfigured)
+  return toggles.filter((toggle) =>
+    toggle.id === 'cursor'
+      ? isCursorStatusBarAvailable(cursor, cursorAuthConfigured)
+      : isStatusBarItemAvailable(toggle.id, detectedAgentIds)
+  )
 }

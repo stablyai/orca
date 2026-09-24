@@ -54,7 +54,8 @@ const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
   'opencode-go',
   'kimi',
   'minimax',
-  'grok'
+  'grok',
+  'cursor'
 ]
 
 afterEach(() => {
@@ -166,6 +167,22 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageStatusLabel(kimi)).toBe('Run Kimi to refresh')
     expect(getProviderUsageErrorMessage(kimi)).toBe(
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  })
+
+  it('shows Cursor sign-in copy for an expired read-only session', () => {
+    const cursor = provider({
+      provider: 'cursor',
+      error: 'Cursor session expired. Sign in with Cursor, then retry usage.',
+      usageMetadata: {
+        failureKind: 'delegated-refresh-required',
+        source: 'oauth'
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(cursor)).toBe('Sign in with Cursor')
+    expect(getProviderUsageErrorMessage(cursor)).toBe(
+      'Cursor usage could not be refreshed. Agent sessions may still be signed in.'
     )
   })
 
@@ -343,6 +360,48 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('keeps Cursor named buckets without synthesizing a monthly window', () => {
+    const p: ProviderRateLimits = {
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      buckets: [
+        {
+          name: 'Cursor Models',
+          usedPercent: 100,
+          windowMinutes: 44_640,
+          resetsAt: 1_787_860_909_000,
+          resetDescription: null
+        },
+        {
+          name: 'Other Models',
+          usedPercent: 41.5,
+          windowMinutes: 44_640,
+          resetsAt: 1_787_860_909_000,
+          resetDescription: null
+        },
+        {
+          name: 'Grok Bot',
+          usedPercent: 12,
+          windowMinutes: 7_102,
+          resetsAt: 1_788_191_082_913,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getWindowSections(p).map((section) => section.label)).toEqual([
+      'Cursor Models',
+      'Other Models',
+      'Grok Bot',
+      'Weekly'
+    ])
+    expect(p.monthly).toBeUndefined()
+  })
+
   it('returns a separate Fable section when Claude reports Fable weekly usage', () => {
     const p: ProviderRateLimits = {
       provider: 'claude',
@@ -449,6 +508,32 @@ describe('getWindowSections', () => {
 })
 
 describe('ProviderPanel reset rendering', () => {
+  it('shows Cursor email, plan, and subscription status next to its buckets', () => {
+    const p = provider({
+      provider: 'cursor',
+      status: 'ok',
+      planType: 'ultra',
+      usageMetadata: {
+        accountEmail: 'dev@example.com',
+        subscriptionStatus: 'active'
+      },
+      buckets: [
+        {
+          name: 'Cursor Models',
+          usedPercent: 100,
+          windowMinutes: 43_200,
+          resetsAt: null,
+          resetDescription: 'Aug 27'
+        }
+      ]
+    })
+
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
+    expect(markup).toContain('dev@example.com')
+    expect(markup).toContain('ultra · active')
+    expect(markup).toContain('Cursor Models')
+  })
+
   it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
@@ -580,6 +665,11 @@ describe('barColor', () => {
 })
 
 describe('ProviderIcon', () => {
+  it('renders the Cursor agent icon for the cursor provider', () => {
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'cursor' }))
+    expect(markup).toContain('data-agent-icon="cursor"')
+  })
+
   it('renders the Antigravity agent icon for the antigravity provider', () => {
     const markup = renderToStaticMarkup(ProviderIcon({ provider: 'antigravity' }))
     expect(markup).toContain('data-agent-icon="antigravity"')

@@ -16,6 +16,7 @@ vi.mock('./settings-search-keywords', () => ({
 }))
 
 import {
+  getAccountsCursorSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
@@ -60,5 +61,17 @@ describe('getAccountsOpencodeSearchEntries', () => {
     expect(cookieEntry?.keywords).toEqual(
       expect.arrayContaining(['opencode', 'cookie', 'session', 'console', 'rate limit'])
     )
+  })
+})
+
+describe('getAccountsCursorSearchEntries', () => {
+  it('describes the read-only Cursor usage pools and is included in the pane index', () => {
+    const [entry] = getAccountsCursorSearchEntries()
+
+    expect(entry.title).toBe('Cursor Usage')
+    expect(entry.description).toContain('Cursor Models')
+    expect(entry.description).toContain('Grok Bot')
+    expect(entry.keywords).toEqual(expect.arrayContaining(['cursor', 'rate limit', 'status bar']))
+    expect(getAccountsPaneSearchEntries().map((item) => item.title)).toContain('Cursor Usage')
   })
 })
