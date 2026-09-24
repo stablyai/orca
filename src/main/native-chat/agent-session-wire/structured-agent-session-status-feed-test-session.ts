@@ -2,12 +2,12 @@ import type { AgentSessionHandleProvider } from '../../../shared/agent-session-p
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
-export function indexedStatusFeedSession(session: {
+export function indexedStatusFeedSession<P extends AgentSessionHandleProvider = 'codex'>(session: {
   journal: AgentSessionJournal
   hasProviderChild?: boolean
   providerChildPhase?: 'starting' | 'ready'
   fence?: number
-  provider?: AgentSessionHandleProvider
+  provider?: P
 }) {
   return {
     journal: session.journal,

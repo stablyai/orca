@@ -23,6 +23,7 @@ function renderStatus(startupPhase: 'starting' | 'ready' | null) {
       sessionId="session-1"
       agentLabel="Claude"
       startupPhase={startupPhase}
+      paneKey="pane-1"
       error={null}
       composerError={null}
       isVisible
