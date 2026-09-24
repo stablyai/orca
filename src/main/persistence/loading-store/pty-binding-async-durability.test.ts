@@ -23,6 +23,8 @@ const binding = {
 describe('durable asynchronous PTY binding', () => {
   it('acknowledges only after the binding reaches SQLite', async () => {
     const { store, authority, readState } = await fixture()
+    store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
+    await store.flushPendingOrThrowAsync()
     const gate = authority.pause()
     let acknowledged = false
     const pending = store.persistPtyBinding(binding).then((result) => {
@@ -32,6 +34,7 @@ describe('durable asynchronous PTY binding', () => {
     await gate.started.promise
     expect(acknowledged).toBe(false)
     expect(readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
+    expect(readState().workspaceSession.activeWorktreeIdsOnShutdown).toEqual([])
     gate.finish.resolve()
     expect(await pending).toBe(true)
     expect(
@@ -39,6 +42,20 @@ describe('durable asynchronous PTY binding', () => {
     ).toEqual({
       [binding.leafId]: binding.ptyId
     })
+    expect(readState().workspaceSession.activeWorktreeIdsOnShutdown).toEqual([binding.worktreeId])
+  })
+
+  it('repairs activity on an otherwise matching durable reattach', async () => {
+    const { store, authority, readState } = await fixture()
+    await store.persistPtyBinding(binding)
+    store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
+    await store.flushPendingOrThrowAsync()
+    authority.captures.length = 0
+    await store.persistPtyBinding(binding)
+    expect(readState().workspaceSession.activeWorktreeIdsOnShutdown).toEqual([binding.worktreeId])
+    expect(authority.captures).toHaveLength(1)
+    await store.persistPtyBinding(binding)
+    expect(authority.captures).toHaveLength(1)
   })
 
   it('evaluates membership refusal after an older write finishes', async () => {
@@ -64,6 +81,7 @@ describe('durable asynchronous PTY binding', () => {
   it('restores the binding after a known write failure', async () => {
     const { store, authority } = await fixture()
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
     const before = structuredClone(store.getWorkspaceSession())
     const gate = authority.pause()
     const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')

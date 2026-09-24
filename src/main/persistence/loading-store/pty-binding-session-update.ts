@@ -88,6 +88,16 @@ export function applyPtyBinding(
     ...session.defaultTerminalTabsAppliedByWorktreeId,
     [bindingWorktreeId]: true
   }
+  // Acknowledged spawns must survive a crash before the renderer records their activity.
+  if (
+    session.activeWorktreeIdsOnShutdown &&
+    !session.activeWorktreeIdsOnShutdown.includes(bindingWorktreeId)
+  ) {
+    session.activeWorktreeIdsOnShutdown = [
+      ...session.activeWorktreeIdsOnShutdown,
+      bindingWorktreeId
+    ]
+  }
   if (!isTerminalLeafId(args.leafId)) {
     // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
     advanceTopologyFence()
