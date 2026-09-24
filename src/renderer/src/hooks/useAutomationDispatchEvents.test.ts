@@ -29,6 +29,10 @@ const setupLaunch = {
   runnerScriptPath: '/tmp/setup.sh',
   envVars: { ORCA_WORKTREE_PATH: '/repo/worktree' }
 }
+const AUTOMATION_PROMPT = 'run this'
+const AGENT_TAB_ID = 'agent-tab'
+const AGENT_PANE_KEY = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
+const AGENT_PTY_ID = 'agent-pty'
 
 const createdWorktree = {
   id: 'wt-created',
@@ -78,7 +82,7 @@ function makeAutomation(overrides: Record<string, unknown> = {}) {
   return {
     id: 'automation-1',
     projectId: 'repo-1',
-    prompt: 'run this',
+    prompt: AUTOMATION_PROMPT,
     precheck: null,
     agentId: 'claude',
     workspaceMode: 'new_per_run',
@@ -99,6 +103,19 @@ function makeRun() {
     trigger: 'scheduled',
     workspaceId: null,
     workspaceDisplayName: null
+  }
+}
+
+function makeLaunchResult() {
+  return {
+    tabId: AGENT_TAB_ID,
+    paneKey: AGENT_PANE_KEY,
+    ptyId: AGENT_PTY_ID,
+    startupPlan: {},
+    terminalOwnership: {
+      finalize: mockFinalizeTerminalOwnership,
+      release: mockReleaseTerminalOwnership
+    }
   }
 }
 
@@ -204,16 +221,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     state.getKnownWorktreeById.mockReturnValue(undefined)
     mockCreateWorktree.mockResolvedValue({ worktree: createdWorktree, setup: setupLaunch })
     mockLaunchWorktreeBackgroundTerminals.mockResolvedValue(undefined)
-    mockLaunchAgentBackgroundSession.mockResolvedValue({
-      tabId: 'agent-tab',
-      paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-      ptyId: 'agent-pty',
-      startupPlan: {},
-      terminalOwnership: {
-        finalize: mockFinalizeTerminalOwnership,
-        release: mockReleaseTerminalOwnership
-      }
-    })
+    mockLaunchAgentBackgroundSession.mockResolvedValue(makeLaunchResult())
     mockOnDispatchRequested.mockReturnValue(() => {})
     mockSshNeedsPassphrasePrompt.mockResolvedValue(false)
     mockSshGetState.mockResolvedValue({ status: 'connected' })
@@ -540,7 +548,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
   it('finalizes a fresh non-reuse terminal only after completed result persistence', async () => {
     const order: string[] = []
-    let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
+    let launchArgs: { onAgentStatus?: (payload: { state: string; prompt?: string }) => void } = {}
     mockMarkDispatchResult.mockImplementation(
       async (result: { status: string; terminalPaneKey?: string | null }) => {
         // The retirement clear reuses status 'completed' but nulls the terminal
@@ -558,20 +566,12 @@ describe('useAutomationDispatchEvents setup launch', () => {
     })
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       launchArgs = args
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
-        }
-      }
+      return makeLaunchResult()
     })
 
     await registerAndDispatch()
-    launchArgs.onAgentStatus?.({ state: 'done' })
+    launchArgs.onAgentStatus?.({ state: 'working', prompt: AUTOMATION_PROMPT })
+    launchArgs.onAgentStatus?.({ state: 'done', prompt: AUTOMATION_PROMPT })
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
 
     expect(order).toEqual([
@@ -594,39 +594,39 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
   it('ignores a session-boundary done so a connecting agent cannot complete the run (STA-3386)', async () => {
     let launchArgs: {
-      onAgentStatus?: (payload: { state: string; sessionBoundary?: boolean }) => void
+      onAgentStatus?: (payload: {
+        state: string
+        prompt?: string
+        sessionBoundary?: boolean
+      }) => void
     } = {}
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       launchArgs = args
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
-        }
-      }
+      return makeLaunchResult()
     })
 
     await registerAndDispatch()
     // Why: Claude fires SessionStart (a sessionBoundary done) at launch, before the argv
     // prompt submits — treating it as run completion would close the tab on an empty run.
-    launchArgs.onAgentStatus?.({ state: 'done', sessionBoundary: true })
+    launchArgs.onAgentStatus?.({
+      state: 'done',
+      prompt: AUTOMATION_PROMPT,
+      sessionBoundary: true
+    })
     await Promise.resolve()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
 
-    launchArgs.onAgentStatus?.({ state: 'done' })
+    launchArgs.onAgentStatus?.({ state: 'working', prompt: AUTOMATION_PROMPT })
+    launchArgs.onAgentStatus?.({ state: 'done', prompt: AUTOMATION_PROMPT })
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 
   it('skips unchanged status and persists batched working→done→working output', async () => {
     const paneKey = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
 
-    await registerAndDispatch()
+    await registerAndDispatch(makeAutomation({ prompt: 'first turn' }))
     expect(countUnchangedObserverHistoryReads(state, latestStoreSubscriber)).toBe(0)
-    const transitionStartedAt = Date.now() + 1
+    const transitionStartedAt = Date.now() + 60_000
     state.agentStatusByPaneKey = {
       [paneKey]: {
         paneKey,
@@ -672,7 +672,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     mockObserveExistingAutomationSession.mockResolvedValue(() => {})
 
     await registerAndDispatch(makeAutomation({ reuseSession: true }))
-    const transitionStartedAt = Date.now() + 1
+    const transitionStartedAt = Date.now() + 60_000
     state.agentStatusByPaneKey = {
       [paneKey]: {
         paneKey,
@@ -709,8 +709,8 @@ describe('useAutomationDispatchEvents setup launch', () => {
     })
     mockObserveExistingAutomationSession.mockResolvedValue(() => {})
 
-    await registerAndDispatch(makeAutomation({ reuseSession: true }))
-    const workingStartedAt = Date.now() + 1
+    await registerAndDispatch(makeAutomation({ prompt: 'turn', reuseSession: true }))
+    const workingStartedAt = Date.now() + 60_000
     state.agentStatusByPaneKey = {
       [paneKey]: {
         paneKey,
@@ -750,27 +750,19 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
   it('consumes duplicate done and zero-exit completion through one finalizer', async () => {
     let launchArgs: {
-      onAgentStatus?: (payload: { state: string }) => void
+      onAgentStatus?: (payload: { state: string; prompt?: string }) => void
       onExit?: (ptyId: string, code: number) => void
     } = {}
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       launchArgs = args
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
-        }
-      }
+      return makeLaunchResult()
     })
 
     await registerAndDispatch()
-    launchArgs.onAgentStatus?.({ state: 'done' })
+    launchArgs.onAgentStatus?.({ state: 'working', prompt: AUTOMATION_PROMPT })
+    launchArgs.onAgentStatus?.({ state: 'done', prompt: AUTOMATION_PROMPT })
     launchArgs.onExit?.('agent-pty', 0)
-    launchArgs.onAgentStatus?.({ state: 'done' })
+    launchArgs.onAgentStatus?.({ state: 'done', prompt: AUTOMATION_PROMPT })
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
 
     expect(
@@ -785,16 +777,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     let onExit: ((ptyId: string, code: number) => void) | undefined
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       onExit = args.onExit
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
-        }
-      }
+      return makeLaunchResult()
     })
 
     await registerAndDispatch()
@@ -825,17 +808,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
       .mockRejectedValueOnce(new Error('completion persistence unavailable'))
       .mockResolvedValueOnce(undefined)
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
-      args.onAgentStatus?.({ state: 'done' })
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
-        }
-      }
+      args.onAgentStatus?.({ state: 'working', prompt: AUTOMATION_PROMPT })
+      args.onAgentStatus?.({ state: 'done', prompt: AUTOMATION_PROMPT })
+      return makeLaunchResult()
     })
 
     await registerAndDispatch()
@@ -848,27 +823,19 @@ describe('useAutomationDispatchEvents setup launch', () => {
   })
 
   it('diagnoses a late completed-persistence rejection once without terminal cleanup', async () => {
-    let onAgentStatus: ((payload: { state: string }) => void) | undefined
+    let onAgentStatus: ((payload: { state: string; prompt?: string }) => void) | undefined
     const persistenceError = new Error('late completion persistence unavailable')
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     mockMarkDispatchResult.mockResolvedValueOnce(undefined).mockRejectedValueOnce(persistenceError)
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       onAgentStatus = args.onAgentStatus
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
-        }
-      }
+      return makeLaunchResult()
     })
 
     await registerAndDispatch()
-    onAgentStatus?.({ state: 'done' })
-    onAgentStatus?.({ state: 'done' })
+    onAgentStatus?.({ state: 'working', prompt: AUTOMATION_PROMPT })
+    onAgentStatus?.({ state: 'done', prompt: AUTOMATION_PROMPT })
+    onAgentStatus?.({ state: 'done', prompt: AUTOMATION_PROMPT })
     await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledOnce())
 
     expect(errorSpy).toHaveBeenCalledWith(
