@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import {
+  conversationCommandBlocked,
+  type ConversationCommandAdmissionContext
+} from './structured-conversation-command-admission'
 import type { AgentSessionBackgroundTaskStops } from './structured-agent-session-adapter'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 const TARGETED: AgentSessionBackgroundTaskStops = { supportsTaskStop: true, supportsStopAll: true }
 const UNTARGETED: AgentSessionBackgroundTaskStops = {
@@ -12,19 +14,19 @@ const UNTARGETED: AgentSessionBackgroundTaskStops = {
 }
 const NO_STOP: AgentSessionBackgroundTaskStops = { supportsTaskStop: false, supportsStopAll: false }
 
-function contextWith(stops: AgentSessionBackgroundTaskStops | undefined): AgentSessionTurnContext {
+function contextWith(
+  stops: AgentSessionBackgroundTaskStops | undefined
+): ConversationCommandAdmissionContext {
+  const adapter = {
+    backgroundTaskStops: () => stops,
+    // The provider tracker's roster, claiming live work: admission must not consult it.
+    backgroundTaskState: () => ({ state: 'monitoring', tasks: [{ id: 'tracker-only' }] })
+  }
   return {
     sessionId: 'session-1',
-    journal: {
-      snapshot: () => ({ items: [] }),
-      submissions: () => []
-    },
-    adapter: {
-      backgroundTaskStops: () => stops,
-      // The provider tracker's roster, claiming live work: admission must not consult it.
-      backgroundTaskState: () => ({ state: 'monitoring', tasks: [{ id: 'tracker-only' }] })
-    }
-  } as unknown as AgentSessionTurnContext
+    journal: { snapshot: () => ({ items: [] }), submissions: () => [] },
+    adapter
+  }
 }
 
 function child(overrides: Partial<AgentChildWorkView> = {}): AgentChildWorkView {
