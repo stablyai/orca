@@ -61,39 +61,19 @@ describe('orca worktree set tags', () => {
   const setResult = (tags: string[]) =>
     okFixture('req_set', { worktree: { ...buildWorktree('/tmp/repo/feature', 'feature'), tags } })
 
-  it('adds and removes tags on top of the current set', async () => {
-    queueFixtures(
-      callMock,
-      capableStatus(),
-      okFixture('req_show', {
-        worktree: { ...buildWorktree('/tmp/repo/feature', 'feature'), tags: ['billing', 'old'] }
-      }),
-      setResult(['billing', 'api'])
-    )
+  it('sends --tag and --untag as host-side edits without reading the current set', async () => {
+    queueFixtures(callMock, capableStatus(), setResult(['billing', 'api']))
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
-      [
-        'worktree',
-        'set',
-        '--worktree',
-        target,
-        '--tag',
-        'api',
-        '--tag',
-        'Billing',
-        '--untag',
-        'OLD',
-        '--json'
-      ],
+      ['worktree', 'set', '--worktree', target, '--tag', 'api', '--untag', 'OLD', '--json'],
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: target })
-    expect(callMock).toHaveBeenCalledWith(
-      'worktree.set',
-      expect.objectContaining({ worktree: target, tags: ['billing', 'api'] })
-    )
+    expect(callMock).not.toHaveBeenCalledWith('worktree.show', expect.anything())
+    const setParams = callMock.mock.calls.find(([method]) => method === 'worktree.set')?.[1]
+    expect(setParams).toMatchObject({ worktree: target, addTags: ['api'], removeTags: ['OLD'] })
+    expect(setParams).not.toHaveProperty('tags')
   })
 
   it('replaces the whole set with --tags and clears it with null, without reading it first', async () => {

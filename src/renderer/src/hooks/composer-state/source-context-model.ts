@@ -13,6 +13,8 @@ export type ComposerSourceContextModel = {
   setNote: React.Dispatch<React.SetStateAction<string>>
   tags: string[]
   setTags: React.Dispatch<React.SetStateAction<string[]>>
+  tagDraft: string
+  setTagDraft: React.Dispatch<React.SetStateAction<string>>
   attachmentPaths: string[]
   setAttachmentPaths: React.Dispatch<React.SetStateAction<string[]>>
   normalizedInitialLinkedWorkItem: LinkedWorkItemSummary | null

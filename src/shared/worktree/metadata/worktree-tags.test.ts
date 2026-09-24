@@ -19,6 +19,12 @@ describe('normalizeWorktreeTag', () => {
     expect(normalizeWorktreeTag('   ')).toBe('')
   })
 
+  it('never splits a character outside the BMP at the length cap', () => {
+    const tag = normalizeWorktreeTag(`${'a'.repeat(MAX_WORKTREE_TAG_LENGTH - 1)}😀😀`)
+    expect(tag).toBe(`${'a'.repeat(MAX_WORKTREE_TAG_LENGTH - 1)}😀`)
+    expect(tag.isWellFormed()).toBe(true)
+  })
+
   it('caps the length without leaving trailing whitespace', () => {
     const tag = normalizeWorktreeTag(`${'a'.repeat(MAX_WORKTREE_TAG_LENGTH - 1)} tail`)
     expect(tag).toBe('a'.repeat(MAX_WORKTREE_TAG_LENGTH - 1))
@@ -48,6 +54,10 @@ describe('normalizeWorktreeTags', () => {
 describe('worktreeTagKey', () => {
   it('treats spelling variants as one tag', () => {
     expect(worktreeTagKey(' Billing  Migration')).toBe(worktreeTagKey('billing migration'))
+  })
+
+  it('does not depend on the host locale', () => {
+    expect(worktreeTagKey('CI')).toBe('ci')
   })
 })
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   collectWorkspaceTags,
   getTagSelectionState,
+  countAtTagLimit,
   planTagAdd,
   planTagDelete,
   planTagRename,
@@ -85,5 +86,16 @@ describe('planTagAdd', () => {
   it('adds the tag only where it is missing and never removes it', () => {
     expect(tagsById(planTagAdd([api, web, docs], 'Billing'))).toEqual({ docs: ['Billing'] })
     expect(planTagAdd([api, web], 'billing')).toEqual([])
+  })
+})
+
+describe('tag limit', () => {
+  const full = { id: 'full', tags: Array.from({ length: 32 }, (_, index) => `t${index}`) }
+
+  it('skips workspaces that already hold the maximum and reports them', () => {
+    expect(tagsById(planTagToggle([full, docs], 'extra'))).toEqual({ docs: ['extra'] })
+    expect(tagsById(planTagAdd([full, docs], 'extra'))).toEqual({ docs: ['extra'] })
+    expect(countAtTagLimit([full, docs], 'extra')).toBe(1)
+    expect(countAtTagLimit([full], 't0')).toBe(0)
   })
 })

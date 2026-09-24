@@ -1,4 +1,5 @@
 import {
+  MAX_WORKTREE_TAGS,
   compareWorktreeTags,
   normalizeWorktreeTags,
   worktreeTagKey
@@ -45,6 +46,16 @@ export function getTagSelectionState(
   return tagged === workspaces.length ? 'all' : 'some'
 }
 
+function isAtTagLimit(workspace: Taggable): boolean {
+  return normalizeWorktreeTags(workspace.tags).length >= MAX_WORKTREE_TAGS
+}
+
+/** Workspaces that lack the tag but cannot take another one. */
+export function countAtTagLimit(workspaces: readonly Taggable[], tag: string): number {
+  const key = worktreeTagKey(tag)
+  return workspaces.filter((workspace) => !hasTag(workspace, key) && isAtTagLimit(workspace)).length
+}
+
 /** Toggle across a selection: remove when every workspace has it, otherwise add to the rest. */
 export function planTagToggle<T extends Taggable>(
   workspaces: readonly T[],
@@ -61,7 +72,7 @@ export function planTagToggle<T extends Taggable>(
     const present = current.some((entry) => worktreeTagKey(entry) === key)
     if (remove && present) {
       updates.push({ workspace, tags: current.filter((entry) => worktreeTagKey(entry) !== key) })
-    } else if (!remove && !present) {
+    } else if (!remove && !present && current.length < MAX_WORKTREE_TAGS) {
       updates.push({ workspace, tags: normalizeWorktreeTags([...current, tag]) })
     }
   }
@@ -78,7 +89,7 @@ export function planTagAdd<T extends Taggable>(
     return []
   }
   return workspaces
-    .filter((workspace) => !hasTag(workspace, key))
+    .filter((workspace) => !hasTag(workspace, key) && !isAtTagLimit(workspace))
     .map((workspace) => ({
       workspace,
       tags: normalizeWorktreeTags([...normalizeWorktreeTags(workspace.tags), tag])

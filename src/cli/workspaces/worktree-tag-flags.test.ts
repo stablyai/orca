@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
-import { hasWorktreeTagFlags, resolveWorktreeTagFlags } from './worktree-tag-flags'
+import { hasWorktreeTagFlags, parseWorktreeTagFlags } from './worktree-tag-flags'
 
 function flags(entries: Record<string, string | string[]>): Map<string, string | boolean> {
   return new Map(
@@ -11,29 +11,31 @@ function flags(entries: Record<string, string | string[]>): Map<string, string |
   )
 }
 
-describe('resolveWorktreeTagFlags', () => {
-  it('adds to and removes from the current tags, matching case-insensitively', () => {
-    expect(
-      resolveWorktreeTagFlags(flags({ tag: ['api', 'BILLING'], untag: 'Old' }), ['billing', 'old'])
-    ).toEqual(['billing', 'api'])
+describe('parseWorktreeTagFlags', () => {
+  it('sends repeated --tag and --untag as host-side edits, not a replacement', () => {
+    expect(parseWorktreeTagFlags(flags({ tag: ['api', 'API'], untag: 'Old' }))).toEqual({
+      addTags: ['api'],
+      removeTags: ['Old']
+    })
   })
 
   it('replaces the set with a comma list', () => {
-    expect(resolveWorktreeTagFlags(flags({ tags: ' web , api ,' }), ['billing'])).toEqual([
-      'web',
-      'api'
-    ])
+    expect(parseWorktreeTagFlags(flags({ tags: ' web , api ,' }))).toEqual({
+      tags: ['web', 'api']
+    })
   })
 
   it('clears with null or an empty value', () => {
-    expect(resolveWorktreeTagFlags(flags({ tags: 'null' }), ['billing'])).toEqual([])
-    expect(resolveWorktreeTagFlags(flags({ tags: '' }), ['billing'])).toEqual([])
+    expect(parseWorktreeTagFlags(flags({ tags: 'null' }))).toEqual({ tags: [] })
+    expect(parseWorktreeTagFlags(flags({ tags: '' }))).toEqual({ tags: [] })
   })
 
-  it('applies --tag and --untag after a --tags replacement', () => {
-    expect(
-      resolveWorktreeTagFlags(flags({ tags: 'a,b', tag: 'c', untag: 'a' }), ['ignored'])
-    ).toEqual(['b', 'c'])
+  it('combines a replacement with edits for the host to apply in order', () => {
+    expect(parseWorktreeTagFlags(flags({ tags: 'a,b', tag: 'c', untag: 'a' }))).toEqual({
+      tags: ['a', 'b'],
+      addTags: ['c'],
+      removeTags: ['a']
+    })
   })
 })
 
