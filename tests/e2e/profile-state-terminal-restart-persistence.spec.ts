@@ -480,11 +480,17 @@ test.describe('SQLite candidate terminal restart persistence', () => {
     const repoPath = seededRepoPathOrSkip()
 
     const session = createRestartSession(testInfo)
+    const stderr: string[] = []
+    const launchOptions = {
+      onStderr: (chunk: string): void => {
+        stderr.push(chunk)
+      }
+    }
     let firstApp: ElectronApplication | null = null
     let secondApp: ElectronApplication | null = null
 
     try {
-      const firstLaunch = await session.launch()
+      const firstLaunch = await session.launch(launchOptions)
       firstApp = firstLaunch.app
       const { worktreeId, ptyId } = await bootstrapFirstLaunch(firstLaunch.page, repoPath)
 
@@ -534,8 +540,18 @@ test.describe('SQLite candidate terminal restart persistence', () => {
         })
         .toBe(true)
       firstApp = null
+      for (const suffix of ['', '-wal', '-shm']) {
+        const filename = `profile-state.db${suffix}`
+        const filePath = path.join(profileDirectory, filename)
+        if (existsSync(filePath)) {
+          await testInfo.attach(filename, {
+            body: readFileSync(filePath),
+            contentType: 'application/octet-stream'
+          })
+        }
+      }
 
-      const secondLaunch = await session.launch()
+      const secondLaunch = await session.launch(launchOptions)
       secondApp = secondLaunch.app
       await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
       expect(existsSync(legacyProfileState)).toBe(false)
@@ -561,6 +577,10 @@ test.describe('SQLite candidate terminal restart persistence', () => {
         await session.close(firstApp)
       }
       await session.dispose()
+      await testInfo.attach('restart-stderr', {
+        body: stderr.join(''),
+        contentType: 'text/plain'
+      })
     }
   })
 })
