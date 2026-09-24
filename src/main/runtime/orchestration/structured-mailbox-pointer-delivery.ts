@@ -256,14 +256,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       if (outcome.state === 'rejected') {
         db.deleteStructuredPointerOperation(mailboxHandle)
       }
-      this.retain(
-        mailboxHandle,
-        sessionId,
-        retainReasonForDispatch(
-          outcome.state as Exclude<StructuredDispatchState, 'accepted' | 'pending'>
-        ),
-        reservedTypes
-      )
+      this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
       return
     }
     db.markAsDelivered(staged)

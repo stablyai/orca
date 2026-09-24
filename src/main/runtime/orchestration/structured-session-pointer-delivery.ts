@@ -99,7 +99,9 @@ export function decideStructuredSessionPointerDelivery(input: {
  * `unknown` covers a dead provider child and a failed call alike — the adapters cannot tell them
  * apart — so it must retain. Treating it as delivered would drop mail whenever a child died mid-send.
  */
-export function structuredDispatchDelivered(state: StructuredDispatchState): boolean {
+export function structuredDispatchDelivered(
+  state: StructuredDispatchState
+): state is 'accepted' | 'pending' {
   return state === 'accepted' || state === 'pending'
 }
 
