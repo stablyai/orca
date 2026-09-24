@@ -21,10 +21,11 @@ describe('packaged Windows CLI launcher asset', () => {
     expect(source).toContain(
       'Environment.SetEnvironmentVariable("ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER", "1");'
     )
-    expect(source).toContain(
-      'string requestedCliCommand = Environment.GetEnvironmentVariable("ORCA_CLI_COMMAND");'
-    )
-    expect(source).toContain('requestedCliCommand == "orca-ide" ? "orca-ide" : "orca"')
+    // It names itself as the CLI entry and leaves the session's ORCA_CLI_COMMAND untouched, so the
+    // CLI can compare the two and hand off to the session's own launcher.
+    expect(source).toContain('"ORCA_CLI_SELF",')
+    expect(source).toContain('typeof(OrcaCliLauncher).Assembly.Location')
+    expect(source).not.toMatch(/SetEnvironmentVariable\(\s*"ORCA_CLI_COMMAND"/)
     expect(source).toContain('child.WaitForExit();')
     expect(source).toContain('return child.ExitCode;')
   })
