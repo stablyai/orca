@@ -62,7 +62,7 @@ describe('CLI imports of main-process modules', () => {
   it('finds the imports it is meant to guard', () => {
     // Why: a broken matcher would make the guard above vacuously pass.
     expect(findMainImports()).toContainEqual({
-      file: 'src/cli/profile-state-location.ts',
+      file: join('src', 'cli', 'profile-state-location.ts'),
       module: 'persistence/profile-state/profile-state-active-location'
     })
     expect(findMainImports().length).toBeGreaterThanOrEqual(2)
