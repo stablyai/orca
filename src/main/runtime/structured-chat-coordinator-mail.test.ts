@@ -317,6 +317,9 @@ afterEach(async () => {
 })
 
 // The session's own CLI by its env var: a bare `orca` can resolve elsewhere in a login shell.
+// Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
+const WAIT = { timeout: 10_000 }
+
 const POINTER =
   /You have 1 orchestration message\. Run `\\?"\$ORCA_CLI_COMMAND\\?" orchestration check --run run_/
 
@@ -328,7 +331,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(taskId)
 
     // No user action: the result itself sends the chat a turn through the host's send.
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1))
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     expect(chat.turns[0]!.text).toMatch(POINTER)
     expect(chat.turns[0]!.text).toContain(runId)
     await settleTurn(COORDINATOR, 0)
@@ -346,15 +349,16 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1))
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
 
     // A pending send is not an acknowledgement, so the mail is retained and retried on every edge
     // until the host confirms it: before the echo, and again at the turn's idle edge.
     runtime.deliverPendingMessagesForHandle(`run:${runId}`)
     await settleTurn(COORDINATOR, 0)
     runtime.deliverPendingMessagesForHandle(`run:${runId}`)
-    await vi.waitFor(() =>
-      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([])
+    await vi.waitFor(
+      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
+      WAIT
     )
     expect(chat.turns).toHaveLength(1)
     expect(userTexts(COORDINATOR)).toHaveLength(1)
@@ -366,7 +370,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1))
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     await settleTurn(COORDINATOR, 0)
     const first = await call('orchestration.check', {}, { sessionId: COORDINATOR })
     const heldDelivery = String(first.deliveryId)
@@ -378,7 +382,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       { sessionId: COORDINATOR }
     )
     await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(2))
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
     expect(chat.turns[1]!.text).toContain('1 new orchestration message')
     expect(chat.turns[1]!.text).toContain(`--ack ${heldDelivery}`)
     await settleTurn(COORDINATOR, 1)
@@ -407,9 +411,9 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     await finishWorker(taskId)
 
-    await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1))
+    await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
     const revived = connectionFor(COORDINATOR)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(1))
+    await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
     expect(revived.turns[0]!.text).toMatch(POINTER)
     await settleTurn(COORDINATOR, 0)
     expect(userTexts(COORDINATOR)).toEqual([expect.stringMatching(POINTER)])
@@ -457,7 +461,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     notify('turn/completed', { turn: { id: 'turn-1' } })
     await host.flushStreamedEvents(COORDINATOR)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(2))
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
     expect(chat.turns[1]!.text).toMatch(POINTER)
     expect(chat.turns[1]!.text).toContain(runId)
   })
@@ -474,7 +478,7 @@ describe('any live session is addressable by its id', () => {
     })
     expect(sent).toMatchObject({ message: { to_handle: `session:${PEER_CHAT}` } })
 
-    await vi.waitFor(() => expect(peer.turns).toHaveLength(1))
+    await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
     // Direct mail is not in a Run, so the pointer names no `--run`.
     expect(peer.turns[0]!.text).toContain('orchestration check`.')
     expect(peer.turns[0]!.text).toContain('$ORCA_CLI_COMMAND')
