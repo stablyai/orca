@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import {
+  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -170,5 +172,100 @@ describe('background-task stop capability at the RPC boundary', () => {
         await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client)
       ).toMatchObject({ ok: true, result: { page: { backgroundTasks: stoppable } } })
     }
+  })
+
+  it('advertises reading child views on remote requests and subscriptions', () => {
+    expect(CURRENT_CLIENT.clientCapabilities).toContain(
+      AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY
+    )
+  })
+})
+
+describe('child views at the RPC boundary', () => {
+  const view = (membership: 'live' | 'settled'): AgentChildWorkView => ({
+    id: `child-${membership}`,
+    providerId: `task-${membership}`,
+    kind: 'agent',
+    state: membership === 'live' ? 'working' : 'done',
+    membership,
+    ...(membership === 'settled' ? { outcome: 'succeeded' as const, settledAt: 2 } : {}),
+    firstObservedAt: 1,
+    observedAt: 2,
+    stoppable: true,
+    invocation: { invocationId: `toolu-${membership}`, generation: 1 }
+  })
+  const LIVE_ROW = { id: 'task-live', kind: 'agent', state: 'working' } as const
+  const SETTLED_ROW = { id: 'task-settled', kind: 'agent', state: 'done' } as const
+  /** Predates child views: reads any roster as live work. */
+  const PRE_VIEWS_CLIENT = {
+    ...STRUCTURED_CLIENT,
+    clientCapabilities: remoteRuntimeClientCapabilities(
+      STRUCTURED_CLIENT.clientCapabilities
+    ).filter((capability) => capability !== AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY)
+  }
+
+  async function historyFor(backgroundTasks: AgentSessionBackgroundTaskState, client: unknown) {
+    hostCalls.history.mockReturnValue({ ok: true, page: { items: [], backgroundTasks } })
+    return call(
+      'agentSession.history',
+      { sessionId: SESSION, direction: 'tail' },
+      client as typeof CURRENT_CLIENT
+    )
+  }
+
+  it('hands a reader that predates views no strip for a roster of finished children', async () => {
+    const finishedOnly: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      supportsTaskStop: true,
+      settledTasks: [SETTLED_ROW],
+      children: [view('settled')]
+    }
+    expect(await historyFor(finishedOnly, PRE_VIEWS_CLIENT)).toMatchObject({
+      ok: true,
+      result: { page: { backgroundTasks: null } }
+    })
+    expect(await historyFor(finishedOnly, CURRENT_CLIENT)).toMatchObject({
+      ok: true,
+      result: { page: { backgroundTasks: finishedOnly } }
+    })
+  })
+
+  it('hands a reader that predates views its live roster, without the views', async () => {
+    const mixed: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      supportsTaskStop: true,
+      tasks: [LIVE_ROW],
+      settledTasks: [SETTLED_ROW],
+      children: [view('live'), view('settled')]
+    }
+    const result = await historyFor(mixed, PRE_VIEWS_CLIENT)
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        page: {
+          backgroundTasks: {
+            state: 'monitoring',
+            supportsTaskStop: true,
+            tasks: [LIVE_ROW],
+            settledTasks: [SETTLED_ROW]
+          }
+        }
+      }
+    })
+    expect(JSON.stringify(result)).not.toContain('children')
+  })
+
+  // A reader draws a per-row stop only when the host offers a targeted one, so a roster with no
+  // targeted stop (a Codex child, a persistent command) has no dead button to withhold.
+  it('keeps unstoppable rows for a stop-only reader when no targeted stop is offered', async () => {
+    const codexRoster: AgentSessionBackgroundTaskState = {
+      state: 'monitoring',
+      supportsStopAll: false,
+      tasks: [{ id: 'codex-agent:thread-a', kind: 'agent', state: 'working', stoppable: false }]
+    }
+    expect(await historyFor(codexRoster, STOP_ONLY_CLIENT)).toMatchObject({
+      ok: true,
+      result: { page: { backgroundTasks: codexRoster } }
+    })
   })
 })

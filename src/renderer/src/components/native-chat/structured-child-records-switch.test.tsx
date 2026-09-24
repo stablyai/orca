@@ -257,6 +257,24 @@ describe('the switch: both surfaces read the host child records', () => {
     expect(row()).toMatchObject({ state: 'working' })
   })
 
+  // The live-entry builder copies fields one by one; an unchanged list keeps its identity so the
+  // rows derived from it do not re-render, and a changed one replaces it.
+  it("keeps the row's child list when a summary repeats it, and replaces it when it changes", async () => {
+    const children = [view('a')]
+    await mountWith(children)
+    const first = row().children
+    act(() => feed()({ type: 'status', session: summary({ children: structuredClone(children) }) }))
+    expect(row().children).toBe(first)
+    act(() =>
+      feed()({
+        type: 'status',
+        session: summary({ children: [{ ...children[0]!, lastMessage: 'Found 3 call sites' }] })
+      })
+    )
+    expect(row().children).not.toBe(first)
+    expect(row().children?.[0]?.lastMessage).toBe('Found 3 call sites')
+  })
+
   it('shows one child the same way on both surfaces, live, lost, and stale', async () => {
     const children = [
       view('a', {
