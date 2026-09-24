@@ -61,6 +61,20 @@ export function structuredSessionMailTarget(
 }
 
 /**
+ * The target of a `session:<id>` mailbox; `undefined` when the handle is not a session address at
+ * all, so other address forms keep their own resolution.
+ */
+export function structuredSessionAddressTarget(
+  mailboxHandle: string
+): StructuredPointerTarget | null | undefined {
+  if (!mailboxHandle.startsWith('session:')) {
+    return undefined
+  }
+  const actor = parseOrchestrationActor(mailboxHandle)
+  return actor ? structuredSessionMailTarget(actor.id, readAgentSessionRecordStore()) : null
+}
+
+/**
  * Every mailbox a session reads for itself: the Runs it coordinates and its own direct mail.
  * Re-derived from the database on each idle edge rather than remembered, so mail that arrived
  * while the session could not take it (closed, evicted, in the other view) is found again.

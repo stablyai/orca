@@ -80,6 +80,8 @@ function harness(options: {
   /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
   mailbox?: string
   dispatchId?: string | null
+  /** Models the host resuming an evicted session: the journal it re-attaches, or null if refused. */
+  wakeTo?: AgentJournalRenderItem[] | null
 }) {
   const mailbox = options.mailbox ?? 'dispatch:d1'
   const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
@@ -90,6 +92,14 @@ function harness(options: {
     state: options.dispatchState ?? ('accepted' as const)
   }))
   const sendMock = vi.mocked(send)
+  const released = vi.fn()
+  const wake = vi.fn(async () => {
+    if (!options.wakeTo) {
+      return null
+    }
+    journal = options.wakeTo
+    return released
+  })
   const stored = new Map<string, unknown>()
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
@@ -111,12 +121,15 @@ function harness(options: {
     host: {
       readGateFacts: () => (journal === null ? null : structuredSessionGateFacts(journal)),
       currentFence: () => 4,
-      send
+      send,
+      ...('wakeTo' in options ? { wake } : {})
     }
   })
   return {
     delivery,
     markAsDelivered,
+    released,
+    wake,
     send: sendMock,
     stored,
     setJournal: (next: AgentJournalRenderItem[] | null) => {
@@ -294,6 +307,44 @@ describe('structured mailbox pointer delivery', () => {
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send.mock.calls[2]![0].operationId).not.toBe(first)
+  })
+})
+
+describe('a session the host evicted', () => {
+  it('is woken for the delivery, sent the pointer, and handed back to the release clock', async () => {
+    // The coordinator case: a chat nobody is looking at is evicted 15s after its last turn, so a
+    // worker's result usually arrives to a session with no journal attached and no provider child.
+    const { delivery, send, wake, released, markAsDelivered } = harness({
+      journal: null,
+      mailbox: 'run:run_1',
+      dispatchId: null,
+      wakeTo: idleJournal()
+    })
+    expect(delivery.deliverForHandle('run:run_1')).toBe(true)
+    await flush()
+    expect(wake).toHaveBeenCalledWith(IDENTITY.sessionId)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(released).toHaveBeenCalledTimes(1)
+    expect(released.mock.invocationCallOrder[0]).toBeGreaterThan(send.mock.invocationCallOrder[0]!)
+  })
+
+  it('retains the mail when the session cannot be resumed', async () => {
+    const { delivery, send, markAsDelivered, setJournal } = harness({
+      journal: null,
+      mailbox: 'run:run_1',
+      dispatchId: null,
+      wakeTo: null
+    })
+    delivery.deliverForHandle('run:run_1')
+    await flush()
+    expect(send).not.toHaveBeenCalled()
+    expect(markAsDelivered).not.toHaveBeenCalled()
+    // Parked on the session, so its next re-attach retries.
+    setJournal(idleJournal())
+    delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -10,11 +10,11 @@ import type { StructuredPointerTarget } from './orchestration/structured-mailbox
 import {
   handleLessCoordinatorSessionId,
   readAgentSessionRecordStore,
+  structuredSessionAddressTarget,
   structuredSessionMailTarget,
   structuredSessionMailView,
   structuredSessionOwnedMailboxes
 } from './orchestration/structured-session-mail-target'
-import { parseOrchestrationActor } from '../../shared/orchestration-actor'
 import {
   resolveTerminalIdentityFromProbes,
   type RuntimeTerminalIdentity
@@ -196,28 +196,35 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   }
 
   /**
-   * A structured session went idle: retry what is parked on it, and re-derive the mailboxes it owns
-   * so mail it could not take earlier (evicted, closed, in its terminal view) is pointed again.
+   * Every structured session's status change reaches here. At its idle edge, retry what is parked
+   * on it and re-derive the mailboxes it owns, so mail it could not take earlier (evicted, closed,
+   * in its terminal view) is pointed again. Workers and chats alike: this is not per-dispatch.
    */
-  deliverStructuredSessionMail(sessionId: string): void {
-    this.notifyStructuredSessionJournalActivity(sessionId)
+  onStructuredSessionStatusForMail(summary: {
+    sessionId: string
+    status: 'working' | 'attention' | 'idle' | null
+  }): void {
+    if (summary.status === 'working' || summary.status === 'attention') {
+      return
+    }
+    this.notifyStructuredSessionJournalActivity(summary.sessionId)
     const db = this._orchestrationDb
-    for (const mailbox of db ? structuredSessionOwnedMailboxes(sessionId, db) : []) {
+    for (const mailbox of db ? structuredSessionOwnedMailboxes(summary.sessionId, db) : []) {
       this.deliverPendingMessagesForHandle(mailbox)
     }
   }
 
   /** The terminal of a session's terminal view, while a TUI owns it; the PTY lane types there. */
   getTerminalViewHandleForSession(sessionId: string): string | null {
-    if (structuredSessionMailView(sessionId, readAgentSessionRecordStore()) !== 'terminal-view') {
-      return null
-    }
-    for (const pty of this.ptysById.values()) {
-      if (pty.connected && agentSessionPtyWriteGate.boundSessionId(pty.ptyId) === sessionId) {
-        return pty.paneKey ? this.getTerminalHandleForPaneKey(pty.paneKey) : null
-      }
-    }
-    return null
+    const view = structuredSessionMailView(sessionId, readAgentSessionRecordStore())
+    const pty = [...this.ptysById.values()].find(
+      (candidate) =>
+        candidate.connected &&
+        agentSessionPtyWriteGate.boundSessionId(candidate.ptyId) === sessionId
+    )
+    return view === 'terminal-view' && pty?.paneKey
+      ? this.getTerminalHandleForPaneKey(pty.paneKey)
+      : null
   }
 
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
@@ -238,9 +245,9 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (mailboxHandle.startsWith('run:')) {
       return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
     }
-    const addressed = parseOrchestrationActor(mailboxHandle)
-    if (addressed) {
-      return structuredSessionMailTarget(addressed.id, readAgentSessionRecordStore())
+    const addressed = structuredSessionAddressTarget(mailboxHandle)
+    if (addressed !== undefined) {
+      return addressed
     }
     if (!mailboxHandle.startsWith('dispatch:')) {
       return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)

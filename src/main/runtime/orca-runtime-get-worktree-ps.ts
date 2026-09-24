@@ -165,10 +165,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       // Structured chat has no agent CLI hooks, so this projection is what the first-work
       // workspace rename listens to instead of `agentStatus:set`.
       onSessionStatusChanged: (summary, options) => {
-        // The idle edge is where a structured session can take orchestration mail, whatever it is.
-        if (summary.status !== 'working' && summary.status !== 'attention') {
-          this.deliverStructuredSessionMail(summary.sessionId)
-        }
+        this.onStructuredSessionStatusForMail(summary)
         void maybeAutoRenameWorkspaceOnFirstStructuredTurn(
           summary,
           options,
