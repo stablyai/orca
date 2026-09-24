@@ -7,6 +7,7 @@ import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activatio
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/workspace/creation/worktree-creation-agent-seeds'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
+import { getCreationWorktreeMeta } from './worktree-creation-meta'
 
 export async function completeWorktreeCreation(args: {
   creationId: string
@@ -63,10 +64,11 @@ export async function completeWorktreeCreation(args: {
     queueWorkspaceActivationTerminalFocus(args.worktreeId, args.activation)
   }
 
-  // Why: note persistence is cosmetic and should not delay the visible workspace handoff.
-  if (request.note) {
+  // Why: note and tag persistence are cosmetic and should not delay the visible workspace handoff.
+  const creationMeta = getCreationWorktreeMeta(request.note, request.tags)
+  if (Object.keys(creationMeta).length > 0) {
     try {
-      await useAppStore.getState().updateWorktreeMeta(args.worktreeId, { comment: request.note })
+      await useAppStore.getState().updateWorktreeMeta(args.worktreeId, creationMeta)
     } catch {
       console.error('Failed to update worktree meta after creation')
     }

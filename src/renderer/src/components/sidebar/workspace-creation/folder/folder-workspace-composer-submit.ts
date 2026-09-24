@@ -51,6 +51,7 @@ export async function submitFolderWorkspaceCreate({
   linkedWorkItem,
   linkedTaskSourceContext,
   note,
+  tags = [],
   quickAgent,
   launchChoice,
   launchInputs,
@@ -227,6 +228,17 @@ export async function submitFolderWorkspaceCreate({
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
   )
+  if (tags.length > 0) {
+    const folderWorktree = folderWorkspaceToWorktree(workspace)
+    // Why: same route the Tags menu uses, so tags land on the host that owns the folder.
+    void useAppStore
+      .getState()
+      .updateWorktreeMeta(
+        folderWorktree.id,
+        { tags },
+        { executionHostId: folderWorktree.hostId ?? 'local' }
+      )
+  }
   const launchFailed = isCancelled()
 
   const startup = buildFolderWorkspaceStartupPayload({

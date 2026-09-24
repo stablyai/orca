@@ -31,6 +31,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     loadHookCheckForRepo,
     name,
     note,
+    tags,
     prepareQuickSubmitSource,
     repoId,
     resolvedSetupDecision,
@@ -218,7 +219,8 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         submitBaseBranch,
         createDisplayName,
         pendingFirstAgentMessageRename,
-        trimmedNote
+        trimmedNote,
+        tags
       })
     },
     [
@@ -231,6 +233,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       loadHookCheckForRepo,
       name,
       note,
+      tags,
       prepareQuickSubmitSource,
       repoId,
       resolvedSetupDecision,
