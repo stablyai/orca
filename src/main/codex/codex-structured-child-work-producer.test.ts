@@ -148,7 +148,12 @@ describe('Codex structured child-work producer', () => {
 
   it('records the parent state today reads, frame by frame, while adding outcome and activity', async () => {
     const { adapter, send, records, byDescription, display } = await producer()
-    const steps: { frame: Frame; lead: 'working' | 'done'; check?: () => void }[] = [
+    const steps: {
+      frame: Frame
+      lead: 'working' | 'done'
+      childWaits?: true
+      check?: () => void
+    }[] = [
       { frame: turn('turn/started', THREAD_ID, 'p1'), lead: 'working' },
       // Codex reports the child's turn before its announcement.
       {
@@ -215,10 +220,18 @@ describe('Codex structured child-work producer', () => {
         check: () =>
           expect(byDescription('review')).toMatchObject({ membership: 'live', state: 'working' })
       },
+      // The legacy task list carries no child state, so only the records can say a child waits,
+      // and the shared fold ranks that wait above the parent's own state.
       {
         frame: status(REVIEWER, ['waitingOnApproval']),
         lead: 'done',
-        check: () => expect(byDescription('review')?.state).toBe('waiting')
+        childWaits: true,
+        check: () => {
+          expect(byDescription('review')?.state).toBe('waiting')
+          expect(agentChildWorkLiveness(adapter.backgroundTaskState('session-1')?.tasks)).toBe(
+            'working'
+          )
+        }
       },
       { frame: status(REVIEWER, []), lead: 'done' },
       {
@@ -302,10 +315,11 @@ describe('Codex structured child-work producer', () => {
       const recorded = agentChildWorkLiveness(
         records().filter((record) => record.membership === 'live')
       )
+      const expected = step.childWaits ? 'waiting' : legacy
       const fold = (childWorkLiveness: typeof legacy) =>
         foldAgentLeadStatus({ leadState: step.lead, childWorkLiveness })
-      expect({ index, parent: fold(recorded) }).toEqual({ index, parent: fold(legacy) })
-      expect({ index, liveness: recorded }).toEqual({ index, liveness: legacy })
+      expect({ index, parent: fold(recorded) }).toEqual({ index, parent: fold(expected) })
+      expect({ index, liveness: recorded }).toEqual({ index, liveness: expected })
       step.check?.()
     }
     await adapter.closeSession('session-1')
