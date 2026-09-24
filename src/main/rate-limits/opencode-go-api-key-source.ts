@@ -90,7 +90,7 @@ function selectCredentialKey(database: Database.Database): string | null {
   if (!tableExists(database, 'credential')) {
     return null
   }
-  // OpenCode 2 marks the chosen credential per integration with `active = 1`;
+  // OpenCode marks the chosen credential per integration with `active = 1`;
   // newest wins among the rest (packages/core/src/credential.ts).
   const rows: unknown[] = database
     .prepare(
@@ -115,11 +115,13 @@ function selectCredentialKey(database: Database.Database): string | null {
 }
 
 /**
- * Read the `opencode-go` key from OpenCode 2's credential table.
+ * Read the `opencode-go` key from OpenCode's `credential` table.
  *
  * OpenCode 2 imports `auth.json` into SQLite once (migration
  * `20260805200742_import_legacy_credentials`) and every later `/connect` writes
  * only there, so a fresh OpenCode 2 install has no `auth.json` entry at all.
+ * The table itself is not a version marker — 1.18.x creates it too (verified
+ * empty on a real 1.18.16 install), so probe it regardless of version.
  * @returns The key, or null when no database, table, or row carries one.
  */
 export async function readOpenCodeCredentialDatabaseGoKey(): Promise<string | null> {
@@ -158,7 +160,10 @@ export async function readOpenCodeCredentialDatabaseGoKey(): Promise<string | nu
  * Resolve the OpenCode Go API key in the documented precedence order.
  *
  * Settings override, then whatever OpenCode itself stored on `/connect` —
- * `auth.json` for 1.x, the credential table for 2.x — then `OPENCODE_API_KEY`.
+ * `auth.json`, then the `credential` table — then `OPENCODE_API_KEY`. Both
+ * stores are probed on every version: 1.18.x creates the `credential` table too,
+ * so its presence is not a 2.x marker, and a 2.x install that never ran the
+ * legacy import has no `auth.json` at all.
  * The stored key outranks the env var because OpenCode applies it after env,
  * and the env var is shared with the Zen provider.
  * @param input.settingsOverride - The key a user pasted into Orca's settings.
