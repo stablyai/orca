@@ -117,7 +117,7 @@ export function resolveBareOrchestrationRecipient(params: {
   }
 
   if (session) {
-    const refusal = refuseUndeliverableSessionRecipient(session, sessionStore)
+    const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db)
     return refusal
       ? refused(params.handle, refusal)
       : { ok: true, to: handle, runId: params.senderRunId }

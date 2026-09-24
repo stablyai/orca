@@ -447,7 +447,7 @@ describe('any live session is addressable by its id', () => {
         subject: 'ping'
       })
     )
-    expect(response).toMatchObject({ ok: false, error: { code: 'session_recipient_ended' } })
+    expect(response).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
     expect(db.getInbox(100)).toEqual([])
   })
 })

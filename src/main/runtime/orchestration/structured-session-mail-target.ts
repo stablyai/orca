@@ -10,6 +10,7 @@
 
 import { parseOrchestrationActor } from '../../../shared/orchestration-actor'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { agentSessionPtyWriteGate } from '../agent-session-pty-write-gate'
 import type { OrchestrationDb } from './db'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
@@ -19,6 +20,19 @@ import {
   type AgentSessionRecordReader
 } from './structured-session-mail-address'
 import type { RunRow } from './types'
+
+/** The live PTY the write gate binds to a session: its terminal view, when a TUI owns it. */
+export function findConnectedPtyBoundToSession<T extends { ptyId: string; connected: boolean }>(
+  ptys: Iterable<T>,
+  sessionId: string
+): T | undefined {
+  for (const pty of ptys) {
+    if (pty.connected && agentSessionPtyWriteGate.boundSessionId(pty.ptyId) === sessionId) {
+      return pty
+    }
+  }
+  return undefined
+}
 
 export function readAgentSessionRecordStore(): AgentSessionRecordReader | null {
   return getStructuredAgentSessionHost()?.deps.store ?? null
@@ -41,10 +55,11 @@ export function handleLessCoordinatorSessionId(
 /** Which view of the session takes a pointer now, or null when mail cannot reach it here. */
 export function structuredSessionMailView(
   sessionId: string,
-  store: AgentSessionRecordReader | null
+  db: OrchestrationDb | null | undefined,
+  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
 ): 'session-turn' | 'terminal-view' | null {
   const record = store?.getRecord(sessionId)
-  if (!store || !record || structuredSessionMailReach(store, record).kind !== 'reachable') {
+  if (!store || !record || structuredSessionMailReach(store, record, db).kind !== 'reachable') {
     return null
   }
   return structuredSessionDeliveryView(record)
@@ -53,9 +68,9 @@ export function structuredSessionMailView(
 /** The structured-lane target for a session whose native view takes the pointer. */
 export function structuredSessionMailTarget(
   sessionId: string,
-  store: AgentSessionRecordReader | null
+  db: OrchestrationDb | null | undefined
 ): StructuredPointerTarget | null {
-  return structuredSessionMailView(sessionId, store) === 'session-turn'
+  return structuredSessionMailView(sessionId, db) === 'session-turn'
     ? { sessionId, dispatchId: null }
     : null
 }
@@ -65,13 +80,14 @@ export function structuredSessionMailTarget(
  * all, so other address forms keep their own resolution.
  */
 export function structuredSessionAddressTarget(
-  mailboxHandle: string
+  mailboxHandle: string,
+  db: OrchestrationDb | null | undefined
 ): StructuredPointerTarget | null | undefined {
   if (!mailboxHandle.startsWith('session:')) {
     return undefined
   }
   const actor = parseOrchestrationActor(mailboxHandle)
-  return actor ? structuredSessionMailTarget(actor.id, readAgentSessionRecordStore()) : null
+  return actor ? structuredSessionMailTarget(actor.id, db) : null
 }
 
 /**

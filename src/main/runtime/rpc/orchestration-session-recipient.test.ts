@@ -6,16 +6,13 @@ import {
   structuredWorkerProcessIncarnation
 } from '../structured-worker-identity'
 import {
-  ADDRESS_X,
-  ADDRESS_Y,
+  ACTOR_X,
   createSessionCallerHarness,
   orchestrationRequest,
-  idOf,
-  resultOf,
+  PROVIDER_ID_X,
   SESSION_X,
   SESSION_Y,
   sessionRecord,
-  WORKER_HANDLE,
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
@@ -26,11 +23,15 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 type Row = Record<string, unknown>
 
-describe('mail sent to a session address reaches the mailbox that session reads', () => {
+describe('a send addressed to an agent session', () => {
   let h: SessionCallerHarness
+  let visible: string[]
 
   beforeEach(() => {
     h = createSessionCallerHarness(hostRef)
+    visible = [SESSION_X, SESSION_Y]
+    const host = hostRef.current as { deps: { store: Row } }
+    host.deps.store.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: visible })
   })
 
   afterEach(() => {
@@ -38,84 +39,97 @@ describe('mail sent to a session address reaches the mailbox that session reads'
     vi.restoreAllMocks()
   })
 
-  async function as(sessionId: string | undefined, method: string, params: Row): Promise<Row> {
-    return resultOf(await h.dispatch(orchestrationRequest(method, params, { sessionId })))
+  async function send(to: string): Promise<{ ok: boolean; result?: Row; error?: Row }> {
+    const response = await h.dispatch(
+      orchestrationRequest('orchestration.send', { from: 'term_worker', to, subject: 'hello' })
+    )
+    return response as never
   }
 
-  function sendFromTerminal(to: string): Promise<Row> {
-    return as(undefined, 'orchestration.send', { from: WORKER_HANDLE, to, subject: 'hello' })
-  }
+  it('stores mail to a live session that coordinates nothing at its own address, and points it', async () => {
+    // The refusal this replaces: "Terminal session:<id> has no live pane or durable Run/Dispatch
+    // mailbox." An agent's id is its public address, coordinator or not.
+    const deliver = vi.spyOn(h.runtime, 'deliverPendingMessagesForHandle')
+    const sent = await send(ACTOR_X)
+    expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: ACTOR_X } } })
+    await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith(ACTOR_X, expect.anything()))
+  })
 
-  it("files it under the chat's current Run, as a terminal coordinator's pane does", async () => {
-    await as(SESSION_X, 'orchestration.runCreate', { objective: 'first' })
-    const current = idOf(
-      (await as(SESSION_X, 'orchestration.runCreate', { objective: 'next' })).run
+  it('accepts a bare Orca session id and normalizes it', async () => {
+    expect(await send(SESSION_X)).toMatchObject({
+      ok: true,
+      result: { message: { to_handle: ACTOR_X } }
+    })
+  })
+
+  it('keeps routing a coordinating session to its Run mailbox', async () => {
+    const created = await h.dispatch(
+      orchestrationRequest('orchestration.runCreate', { objective: 'o' }, { sessionId: SESSION_X })
     )
-
-    const { message } = await sendFromTerminal(ADDRESS_X)
-
-    expect(message).toMatchObject({ to_handle: `run:${current}`, run_id: current })
-    expect(await as(SESSION_X, 'orchestration.check', {})).toMatchObject({
-      runId: current,
-      messages: [{ subject: 'hello' }]
+    const runId = ((created as { result: { run: { id: string } } }).result.run as { id: string }).id
+    expect(await send(ACTOR_X)).toMatchObject({
+      ok: true,
+      result: { message: { to_handle: `run:${runId}` } }
     })
   })
 
-  it('delivers it to a chat with no Run, which reads its direct mailbox', async () => {
-    const { message } = await sendFromTerminal(ADDRESS_X)
+  it.each([
+    [
+      'an unknown session',
+      () => `session:0b0b0b0b-1111-4222-8333-444444444444`,
+      'session_caller_unknown'
+    ],
+    ['a malformed session address', () => 'session:term_abc', 'session_caller_unknown'],
+    ['a provider id', () => `session:${PROVIDER_ID_X}`, 'session_caller_provider_id'],
+    ['a bare provider id', () => PROVIDER_ID_X, 'session_caller_provider_id']
+  ])('refuses %s before storing anything', async (_label, to, code) => {
+    const sent = await send(to())
+    expect(sent).toMatchObject({ ok: false, error: { code } })
+    expect(h.db.getInbox(100)).toEqual([])
+  })
 
-    expect(message).toMatchObject({ to_handle: ADDRESS_X })
-    expect(await as(SESSION_X, 'orchestration.check', {})).toMatchObject({
-      messages: [{ subject: 'hello' }]
+  it('refuses a session on another host', async () => {
+    h.records.set(SESSION_Y, sessionRecord(SESSION_Y, { location: { executionHostId: 'ssh:box' } }))
+    expect(await send(`session:${SESSION_Y}`)).toMatchObject({
+      ok: false,
+      error: { code: 'session_caller_host_boundary' }
     })
+    expect(h.db.getInbox(100)).toEqual([])
   })
 
-  it('refuses an Orca session this host does not run', async () => {
-    h.records.set(
-      SESSION_X,
-      sessionRecord(SESSION_X, { location: { executionHostId: 'ssh:devbox' } })
-    )
-    h.records.delete(SESSION_Y)
-
-    for (const to of [ADDRESS_X, ADDRESS_Y]) {
-      const response = await h.dispatch(
-        orchestrationRequest('orchestration.send', { from: WORKER_HANDLE, to, subject: 's' })
-      )
-      expect(response).toMatchObject({ ok: false, error: { code: 'terminal_not_found' } })
-    }
+  it('refuses a session whose chat was closed, naming why', async () => {
+    visible = [SESSION_X]
+    const sent = await send(`session:${SESSION_Y}`)
+    expect(sent).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
+    expect(String(sent.error?.message)).toContain('its chat was closed')
+    expect(h.db.getInbox(100)).toEqual([])
   })
 
-  it("routes a structured worker's session address to the Dispatch it is working", async () => {
-    const handle = mintStructuredWorkerHandle()
-    const paneKey = mintStructuredWorkerPaneKey(SESSION_Y)
-    structuredWorkerIdentities.register({
-      handle,
-      sessionId: SESSION_Y,
-      agent: 'claude',
-      paneKey,
+  it('refuses a structured worker whose worker identity is gone: nothing could ever read it', async () => {
+    // A Dispatch recorded the session as a worker; no registry entry or custody row maps it now.
+    const run = h.db.createRun({
+      objective: 'pty',
+      coordinatorHandle: 'term_c',
+      coordinatorPaneKey: 'tab_c:13131313-1313-4313-8313-131313131313'
+    })
+    h.db.createDispatchContext({
+      taskId: h.db.createTask({ runId: run.id, spec: 'work' }).id,
+      assigneeHandle: mintStructuredWorkerHandle(),
+      assigneePaneKey: mintStructuredWorkerPaneKey(SESSION_Y),
       processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
-      worktreeId: 'wt_1',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    const runId = idOf((await as(SESSION_X, 'orchestration.runCreate', { objective: 'o' })).run)
-    const dispatch = h.db.createDispatchContext({
-      taskId: h.db.createTask({ runId, spec: 'work' }).id,
-      assigneeHandle: handle,
-      assigneePaneKey: paneKey,
-      processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
-      creator: { kind: 'session', orcaSessionId: SESSION_X },
+      creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER
     })
+    structuredWorkerIdentities.clear()
+    const sent = await send(`session:${SESSION_Y}`)
+    expect(sent).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
+    expect(String(sent.error?.message)).toContain('worker identity')
+  })
 
-    const { message } = await as(SESSION_X, 'orchestration.send', {
-      to: ADDRESS_Y,
-      subject: 'to the worker'
-    })
-
-    expect(message).toMatchObject({ to_handle: `dispatch:${dispatch.id}`, run_id: runId })
-    expect(await as(SESSION_Y, 'orchestration.check', { peek: true })).toMatchObject({
-      dispatchId: dispatch.id,
-      messages: [{ subject: 'to the worker' }]
+  it('leaves a bare string that is no session a terminal handle, as before', async () => {
+    expect(await send('0b0b0b0b-1111-4222-8333-444444444444')).toMatchObject({
+      ok: false,
+      error: { code: 'terminal_not_found' }
     })
   })
 })

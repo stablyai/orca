@@ -13,6 +13,7 @@ import { formatOrchestrationActor } from '../../../shared/orchestration-actor'
 import { resolveStructuredWorkerIdentityForSession } from '../structured-worker-authority'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { OrchestrationDb } from './db'
+import { isRecordedStructuredWorkerActor } from './db/schema/structured-worker-actor-backfill'
 import type { OrchestrationCallerIdentity } from './orchestration-caller-identity'
 
 export type AgentSessionRecordReader = {
@@ -49,15 +50,25 @@ export function lookupOrcaAgentSession(
 export type StructuredSessionMailReach =
   | { kind: 'reachable' }
   | { kind: 'other-host' }
-  | { kind: 'ended'; reason: 'closed' }
+  | { kind: 'ended'; reason: 'closed' | 'worker-identity-lost' }
   | { kind: 'ended'; reason: 'replaced'; replacementSessionId: string }
 
 export function structuredSessionMailReach(
   store: AgentSessionRecordReader,
-  record: AgentSessionRecord
+  record: AgentSessionRecord,
+  db: OrchestrationDb | null | undefined
 ): StructuredSessionMailReach {
   if (!structuredWorkerHostScope(record.location)) {
     return { kind: 'other-host' }
+  }
+  const actor = formatOrchestrationActor({ kind: 'session', id: record.sessionId })
+  if (
+    db &&
+    !resolveStructuredWorkerIdentityForSession(record.sessionId, db) &&
+    isRecordedStructuredWorkerActor(db.db, actor)
+  ) {
+    // Why: it can no longer act (the caller resolver refuses it), so mail to it could never be read.
+    return { kind: 'ended', reason: 'worker-identity-lost' }
   }
   const command = record.conversationCommand
   if (

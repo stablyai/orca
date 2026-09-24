@@ -13,12 +13,14 @@ import {
   parseOrchestrationActor,
   sessionOrchestrationActor
 } from '../../../../../../shared/orchestration-actor'
-import { ORCHESTRATION_SESSION_RECIPIENT_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-recipient-codes'
+// The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
 import {
   lookupOrcaAgentSession,
   structuredSessionMailReach,
   type AgentSessionRecordReader
 } from '../../../../orchestration/structured-session-mail-address'
+import type { OrchestrationDb } from '../../../../orchestration/db'
 
 const SESSION_PREFIX = 'session:'
 
@@ -64,7 +66,8 @@ export function readSessionRecipient(
 /** Null when mail to this session can be stored and delivered here; otherwise why not. */
 export function refuseUndeliverableSessionRecipient(
   recipient: SessionRecipient,
-  store: AgentSessionRecordReader | null
+  store: AgentSessionRecordReader | null,
+  db: OrchestrationDb
 ): SessionRecipientRefusal | null {
   const { sessionId } = recipient
   if (!store) {
@@ -83,7 +86,7 @@ export function refuseUndeliverableSessionRecipient(
       message: `No Orca agent session ${sessionId} exists on this host. No message was sent.`
     }
   }
-  const reach = structuredSessionMailReach(store, found.record)
+  const reach = structuredSessionMailReach(store, found.record, db)
   if (reach.kind === 'other-host') {
     return {
       code: CODES.hostBoundary,
@@ -92,11 +95,13 @@ export function refuseUndeliverableSessionRecipient(
   }
   if (reach.kind === 'ended') {
     return {
-      code: CODES.ended,
+      code: CODES.notLive,
       message:
         reach.reason === 'replaced'
           ? `Agent session ${sessionId} was cleared and continues as session:${reach.replacementSessionId}. Send there instead. No message was sent.`
-          : `Agent session ${sessionId} has ended: its chat was closed. No message was sent.`
+          : reach.reason === 'worker-identity-lost'
+            ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. No message was sent.`
+            : `Agent session ${sessionId} has ended: its chat was closed. No message was sent.`
     }
   }
   return null
