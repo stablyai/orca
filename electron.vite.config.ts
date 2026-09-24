@@ -5,7 +5,10 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
-import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
+import {
+  CLI_MAIN_ENTRY_NAMES,
+  createPlainNodeEntryGuardPlugin
+} from './config/build-plugins/plain-node-entry-guard'
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
@@ -260,37 +263,8 @@ export const electronViteConfig: UserConfig = {
           'main-thread-hang-watchdog-entry': resolve(
             'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
           ),
-          // Why: electron-vite cleans out/main in dev. The dev CLI imports
-          // this path for `orca agent hooks ...`, so it must survive rebuilds.
-          'agent-hooks/managed-agent-hook-controls': resolve(
-            'src/main/agent-hooks/managed-agent-hook-controls.ts'
-          ),
-          'codex/managed-home-shell-preflight': resolve(
-            'src/main/codex/managed-home-shell-preflight.ts'
-          ),
-          // Why: account import mutates the user's macOS Keychain from the CLI.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
-          // Why: the dev CLI's offline profile-state commands load these paths after
-          // electron-vite cleans out/main; keep them as stable sidecar entries.
           ...Object.fromEntries(
-            [
-              'access',
-              'active-location',
-              'storage-classification',
-              'offline-settings',
-              'export-path',
-              'backup-path',
-              'database-recovery',
-              'domain-reader',
-              'recovery',
-              'recovery-command'
-            ].map((module) => [
-              `persistence/profile-state/profile-state-${module}`,
-              resolve(`src/main/persistence/profile-state/profile-state-${module}.ts`)
-            ])
-          ),
-          'startup/http1-compatibility-marker': resolve(
-            'src/main/startup/http1-compatibility-marker.ts'
+            CLI_MAIN_ENTRY_NAMES.map((module) => [module, resolve(`src/main/${module}.ts`)])
           )
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers

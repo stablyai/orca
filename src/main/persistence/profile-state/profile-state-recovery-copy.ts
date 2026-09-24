@@ -13,6 +13,7 @@ export function copyProfileStateRecoveryFile(source: string, target: string): vo
   copyProfileStateRecoveryFiles([{ source, target }])
 }
 
+/** Targets are staging files; callers validate, fsync and publish. */
 export function copyProfileStateRecoveryFiles(files: readonly RecoveryCopy[]): void {
   const clones: RecoveryCopy[] = []
   const names = new Set<string>()

@@ -83,7 +83,11 @@ export class PrimaryStateWriteOperations {
         runtime.profileStateAuthority.assertWritable()
       }
       const mutation = mutate()
-      if (mutation.persist === false) {
+      if (
+        mutation.persist === false ||
+        (mutation.persist === 'if-dirty' &&
+          runtime.lastDurableWriteGeneration >= runtime.writeGeneration)
+      ) {
         return mutation.value
       }
       runtime.writeGeneration++

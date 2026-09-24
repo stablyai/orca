@@ -136,8 +136,8 @@ export async function retirePersistedStablePaneOwner(
     const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
     const current = resolvePersistedStablePaneOwner(store, paneKey, worktreeId, connectionId)
     if (!current) {
-      // A prior stop may already have retired this pane while runtime retained its history.
-      return { value: true, persist: false }
+      // A renderer removal may still be waiting for its debounced write.
+      return { value: true, persist: 'if-dirty' }
     }
     if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
       return { value: false, persist: false }

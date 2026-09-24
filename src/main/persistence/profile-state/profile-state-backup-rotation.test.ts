@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -14,6 +15,11 @@ import {
 } from './profile-state-database'
 import { importProfileStateJson, readProfileStateSnapshot } from './profile-state-documents'
 import * as snapshots from './profile-state-database-snapshot'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof fsPromises>()
+  return { ...actual }
+})
 
 const directories: string[] = []
 const rotations: ProfileStateBackupRotation[] = []
@@ -159,9 +165,50 @@ describe('automatic SQLite recovery generations', () => {
   it('cancels a queued backup before opening a source after Store close', async () => {
     const { databasePath, rotation } = fixture()
     rotation.schedule()
+    expect(() => rotation.assertIdle()).toThrow('Flush pending')
     rotation.stop()
+    expect(() => rotation.assertIdle()).toThrow('Flush pending')
     await rotation.drain()
+    expect(() => rotation.assertIdle()).not.toThrow()
     expect(profileStateDatabaseBackups(databasePath)).toEqual([])
+  })
+
+  it('blocks synchronous quarantine until retention pruning finishes', async () => {
+    const { databasePath, rotation, clock } = fixture()
+    for (let generation = 0; generation < 5; generation++) {
+      rotation.schedule()
+      await rotation.drain()
+      clock.now += HOUR
+    }
+    const oldest = profileStateDatabaseBackups(databasePath)[4].path
+    const remove = fsPromises.rm
+    let begin: () => void = () => {}
+    let release: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      begin = resolve
+    })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.spyOn(fsPromises, 'rm').mockImplementation(async (path, options) => {
+      if (path === oldest) {
+        begin()
+        await gate
+      }
+      await remove(path, options)
+    })
+    rotation.schedule()
+    try {
+      await started
+      rotation.stop()
+      expect(profileStateDatabaseBackups(databasePath)).toHaveLength(6)
+      expect(() => rotation.assertIdle()).toThrow('Flush pending')
+    } finally {
+      release()
+      await rotation.drain()
+    }
+    expect(() => rotation.assertIdle()).not.toThrow()
+    expect(profileStateDatabaseBackups(databasePath)).toHaveLength(5)
   })
 
   it('owns an in-flight source until completion and blocks synchronous quarantine', async () => {
