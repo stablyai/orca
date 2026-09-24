@@ -29,7 +29,8 @@ export function ProjectGroupHeaderMenu({
   projectGroup,
   onRefreshProjectGroup,
   onRename,
-  onDelete
+  onDelete,
+  copy
 }: {
   groupId: string
   /** Owner host of the group row, so rename/delete route to the host that holds it. */
@@ -39,6 +40,8 @@ export function ProjectGroupHeaderMenu({
   onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  /** Overrides for headers that are not project groups, such as tag sections. */
+  copy?: { actionsLabel: string; renameLabel: string; deleteLabel: string }
 }): React.JSX.Element {
   const t = useTranslate()
   const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, onRefreshProjectGroup)
@@ -51,11 +54,12 @@ export function ProjectGroupHeaderMenu({
           size="icon-xs"
           className={REPO_HEADER_ACTION_BUTTON_CLASS}
           data-repo-header-action=""
-          aria-label={t(
-            'auto.components.sidebar.WorktreeList.79465e9034',
-            'Group actions for {{value0}}',
-            { value0: label }
-          )}
+          aria-label={
+            copy?.actionsLabel ??
+            t('auto.components.sidebar.WorktreeList.79465e9034', 'Group actions for {{value0}}', {
+              value0: label
+            })
+          }
           onClick={(event) => event.stopPropagation()}
           onKeyDown={stopRepoHeaderKeyboardToggle}
           onPointerDown={handleRepoHeaderActionPointerDown}
@@ -82,10 +86,12 @@ export function ProjectGroupHeaderMenu({
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
-          {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
+          {copy?.renameLabel ??
+            t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
-          {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
+          {copy?.deleteLabel ??
+            t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
