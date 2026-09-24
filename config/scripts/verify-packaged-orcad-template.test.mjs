@@ -11,6 +11,8 @@ import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs
 
 const require = createRequire(import.meta.url)
 const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
+const builderConfig = require('../electron-builder.config.cjs')
+const { getFileMatchers, copyFiles } = require('app-builder-lib/out/fileMatcher.js')
 const roots = []
 
 async function createFixture() {
@@ -25,6 +27,27 @@ afterEach(async () => {
 })
 
 describe('verifyPackagedOrcadTemplate', () => {
+  it.each(['mac', 'linux', 'win'])(
+    'preserves the template through the actual %s resource copier',
+    async (platform) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-template-copy-'))
+      roots.push(root)
+      await writeOrcadTemplateTestFixture(join(root, 'out'))
+      const resourcesDir = join(root, 'resources')
+      const extraResources = builderConfig[platform].extraResources.filter(
+        (resource) => typeof resource === 'object' && resource.to.startsWith('orcad-template')
+      )
+      const matchers = getFileMatchers({ extraResources }, 'extraResources', resourcesDir, {
+        macroExpander: (value) => value,
+        customBuildOptions: {},
+        defaultSrc: root,
+        globalOutDir: join(root, 'dist')
+      })
+      await copyFiles(matchers, undefined, false)
+      expect(() => verifyPackagedOrcadTemplate(resourcesDir)).not.toThrow()
+    }
+  )
+
   it('accepts the exact six-target packaged template', async () => {
     const fixture = await createFixture()
 

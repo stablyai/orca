@@ -47,21 +47,16 @@ export function readWindowsBunPtyGateRequest(path: string): WindowsBunPtyGateReq
     !('runtimeOptions' in request) ||
     typeof request.runtimeOptions !== 'object' ||
     request.runtimeOptions === null ||
-    Array.isArray(request.runtimeOptions) ||
-    Object.entries(request.runtimeOptions).some(
-      ([key, value]) =>
-        !WINDOWS_BUN_PTY_RUNTIME_OPTION_KEYS.some((option) => option === key) ||
-        typeof value !== 'string'
-    )
+    Array.isArray(request.runtimeOptions)
   ) {
     throw new Error('Invalid Windows PTY gate request')
   }
   const runtimeOptions: WindowsBunPtyGateRequest['runtimeOptions'] = {}
-  for (const key of WINDOWS_BUN_PTY_RUNTIME_OPTION_KEYS) {
-    const value: unknown = Reflect.get(request.runtimeOptions, key)
-    if (typeof value === 'string') {
-      runtimeOptions[key] = value
+  for (const [key, value] of Object.entries(request.runtimeOptions)) {
+    if ((key !== 'NODE_OPTIONS' && key !== 'BUN_OPTIONS') || typeof value !== 'string') {
+      throw new Error('Invalid Windows PTY gate request')
     }
+    runtimeOptions[key] = value
   }
   return {
     file: request.file,

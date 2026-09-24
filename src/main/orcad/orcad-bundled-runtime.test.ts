@@ -70,6 +70,7 @@ describe('bundled Orca runtime handoff', () => {
 
   it('refuses an adjacent runtime that reports the wrong Bun version', () => {
     fixture.realpath.mockReturnValue('/real/runtime')
+    vi.spyOn(process, 'versions', 'get').mockReturnValue({ ...process.versions, bun: '0.0.0' })
     expect(() => handoffToBundledOrcad()).toThrow(`must be Bun ${ORCAD_BUN_VERSION}`)
   })
 
@@ -86,7 +87,7 @@ describe('bundled Orca runtime handoff', () => {
         .find((candidate) => !oldListeners.get(signal)?.includes(candidate))
       expect(listener).toBeDefined()
       if (listener) {
-        Reflect.apply(listener, process, [])
+        listener.call(process, signal)
       }
       expect(child.kill).toHaveBeenLastCalledWith(signal)
     }

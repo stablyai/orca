@@ -78,7 +78,7 @@ class SyncDatabase {
 
   constructor(path: SqlitePath, options: SyncDatabaseOptions = {}) {
     if (options.fileMustExist && path !== ':memory:' && !existsSync(path)) {
-      throw new Error(`SQLite database does not exist: ${path}`)
+      throw new Error(`SQLite database does not exist: ${String(path)}`)
     }
     if (process.versions.bun) {
       this.db = new BunSqliteDatabase(path, options)
