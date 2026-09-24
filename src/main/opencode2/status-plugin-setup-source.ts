@@ -17,7 +17,12 @@ async function setupOpenCode2Status(ctx) {
   try {
     if (!ctx || typeof ctx.session?.hook !== "function" || typeof ctx.event?.subscribe !== "function") return noop;
     const controller = new AbortController();
-    const client = { session: { get: (input, options) => ctx.session.get(input, options) } };
+    // Why the envelope: OpenCode 2's plugin adapter unwraps a single-property
+    // { data } success schema, so ctx.session.get resolves to the bare record —
+    // but the shared lineage lookup only accepts result?.data?.id === sessionID.
+    // Without it, resolveRootSessionID returns null for every session and a
+    // subagent's work publishes as if it were the root's.
+    const client = { session: { get: async (input, options) => { const result = await ctx.session.get(input, options); return result && typeof result.id === "string" ? { data: result } : result; } } };
     const hooks = await OrcaOpenCodeStatusPlugin({ client });
     if (!hooks || typeof hooks.event !== "function") return noop;
     const promptRegistration = await ctx.session.hook("prompt", async (properties) => {

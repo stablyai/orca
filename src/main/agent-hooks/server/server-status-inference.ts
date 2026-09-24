@@ -6,6 +6,7 @@ import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listene
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
+  requiresDoubleEscapeInterrupt,
   type AgentInterruptInferenceRequest
 } from '../../../shared/agent-interrupt-intent'
 import {
@@ -45,11 +46,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       return false
     }
     // Why: these agents use the first Escape as a TUI cancel that can leave the turn running; only a double Escape infers an interrupt.
-    if (
-      (agentType === 'opencode' || agentType === 'copilot') &&
-      request.intent === 'plain-escape' &&
-      request.inputCount !== 2
-    ) {
+    if (requiresDoubleEscapeInterrupt(agentType, request.intent) && request.inputCount !== 2) {
       return false
     }
     const dismissesClaudeQuestion =
