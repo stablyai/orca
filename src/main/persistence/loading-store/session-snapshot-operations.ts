@@ -64,6 +64,11 @@ export class SessionSnapshotOperations {
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
+    if (
+      this[sessionSnapshotOperationsContext].sessions.isRuntimeHostWorkspaceSessionRetired(resolved)
+    ) {
+      return
+    }
     // Why: the debounced hot path sends only changed slices; scalar/UI patches skip terminal normalization, topology patches keep stale-PTY protections.
     let next: WorkspaceSessionState = {
       ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),

@@ -75,6 +75,13 @@ export class PtyBindingPersistenceOperations {
   persistPtyBinding(args: PersistPtyBindingArgs, hostId?: string | null): boolean {
     const runtime = this[ptyBindingPersistenceOperationsContext].runtime
     const resolvedHostId = resolveHostId(hostId)
+    if (
+      this[ptyBindingPersistenceOperationsContext].sessions.isRuntimeHostWorkspaceSessionRetired(
+        resolvedHostId
+      )
+    ) {
+      return false
+    }
     const session =
       this[ptyBindingPersistenceOperationsContext].sessions.getWorkspaceSession(resolvedHostId)
     const paneKey = `${args.tabId}:${args.leafId}`

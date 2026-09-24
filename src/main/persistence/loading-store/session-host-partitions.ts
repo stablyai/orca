@@ -4,6 +4,7 @@ import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobil
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
@@ -39,6 +40,7 @@ type SessionHostPartitionOperationsContext = {
   runtime: SessionHostPartitionOperationsRuntime
   scheduling: WriteSchedulingOperations
   bindingRecovery: TerminalBindingRecoveryOperations
+  retiredRuntimeHostIds: Set<ExecutionHostId>
 }
 
 export class SessionHostPartitionOperations {
@@ -49,7 +51,63 @@ export class SessionHostPartitionOperations {
     scheduling: WriteSchedulingOperations,
     bindingRecovery: TerminalBindingRecoveryOperations
   ) {
-    this[sessionHostPartitionOperationsContext] = { runtime, scheduling, bindingRecovery }
+    this[sessionHostPartitionOperationsContext] = {
+      runtime,
+      scheduling,
+      bindingRecovery,
+      retiredRuntimeHostIds: new Set()
+    }
+  }
+
+  isRuntimeHostWorkspaceSessionRetired(hostId: ExecutionHostId): boolean {
+    return this[sessionHostPartitionOperationsContext].retiredRuntimeHostIds.has(hostId)
+  }
+
+  deleteHostWorkspaceSession(hostId?: string | null): void {
+    const resolved = resolveHostId(hostId)
+    if (parseExecutionHostId(resolved)?.kind !== 'runtime') {
+      return
+    }
+    const context = this[sessionHostPartitionOperationsContext]
+    // Removed environment IDs are never reused; fence queued renderer saves until this Store closes.
+    context.retiredRuntimeHostIds.add(resolved)
+    const partitions = context.runtime.state.workspaceSessionsByHostId
+    if (!partitions || !Object.hasOwn(partitions, resolved)) {
+      return
+    }
+    const next = { ...partitions }
+    delete next[resolved]
+    context.runtime.state.workspaceSessionsByHostId = next
+    invalidateLocalWorktreeMetadataPruneInputs()
+    scheduleSave(context.scheduling)
+  }
+
+  pruneOrphanedRuntimeHostWorkspaceSessions(
+    knownEnvironmentIds: ReadonlySet<string>
+  ): ExecutionHostId[] {
+    const context = this[sessionHostPartitionOperationsContext]
+    const partitions = context.runtime.state.workspaceSessionsByHostId
+    const removed: ExecutionHostId[] = []
+    if (!partitions) {
+      return removed
+    }
+    const next = { ...partitions }
+    for (const key of Object.keys(partitions)) {
+      const hostId = normalizeExecutionHostId(key)
+      const parsed = hostId && parseExecutionHostId(hostId)
+      if (!hostId || parsed?.kind !== 'runtime' || knownEnvironmentIds.has(parsed.environmentId)) {
+        continue
+      }
+      context.retiredRuntimeHostIds.add(hostId)
+      delete next[hostId]
+      removed.push(hostId)
+    }
+    if (removed.length > 0) {
+      context.runtime.state.workspaceSessionsByHostId = next
+      invalidateLocalWorktreeMetadataPruneInputs()
+      scheduleSave(context.scheduling)
+    }
+    return removed
   }
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
@@ -175,6 +233,9 @@ export function setHostWorkspaceSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
 ): void {
+  if (owner.isRuntimeHostWorkspaceSessionRetired(hostId)) {
+    return
+  }
   const prior =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload

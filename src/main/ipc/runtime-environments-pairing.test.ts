@@ -102,12 +102,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    deleteHostWorkspaceSession: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-ipc-'))
     activeRuntimeEnvironmentId = null
     store = {
+      deleteHostWorkspaceSession: vi.fn(),
       getSettings: () => ({ activeRuntimeEnvironmentId }),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
@@ -210,6 +212,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     const disconnect = handler<{ selector: string }, unknown>('runtimeEnvironments:disconnect')
     await disconnect(null, { selector: 'desk' })
+    expect(store.deleteHostWorkspaceSession).not.toHaveBeenCalled()
     retryRemoteRuntimeSharedControlConnectionNowMock.mockClear()
     await retry(null, { selector: 'desk' })
 

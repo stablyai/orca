@@ -40,6 +40,29 @@ beforeEach(() => {
 })
 
 describe('runtime environment removal storage clearing', () => {
+  it('retires the canonical session partition only after the registry removal succeeds', () => {
+    const deleteHostWorkspaceSession = vi.fn()
+    const invalidateTransport = vi.fn()
+    registerRuntimeEnvironmentConnectivityHandlers({
+      store: { getSettings: () => ({}), deleteHostWorkspaceSession } as never,
+      getUserDataPath: () => '/tmp/orca-user-data',
+      invalidateTransport
+    })
+    removeEnvironmentMock.mockImplementationOnce(() => {
+      throw new Error('write failed')
+    })
+    expect(() => removeHandler()(null, { selector: 'desk' })).toThrow('write failed')
+    expect(deleteHostWorkspaceSession).not.toHaveBeenCalled()
+    expect(invalidateTransport).not.toHaveBeenCalled()
+
+    clearStorageMock.mockResolvedValue({ clearedPartitions: [], livePartitions: [] })
+    removeHandler()(null, { selector: 'desk' })
+    expect(deleteHostWorkspaceSession).toHaveBeenCalledExactlyOnceWith('runtime:environment-a')
+    expect(deleteHostWorkspaceSession.mock.invocationCallOrder[0]).toBeGreaterThan(
+      removeEnvironmentMock.mock.invocationCallOrder[1]
+    )
+  })
+
   it('clears client-hosted browser storage after the client host teardown settles', async () => {
     let finishTeardown = (): void => {}
     const teardown = new Promise<void>((resolve) => {
@@ -47,7 +70,7 @@ describe('runtime environment removal storage clearing', () => {
     })
     clearStorageMock.mockResolvedValue({ clearedPartitions: ['persist:one'], livePartitions: [] })
     registerRuntimeEnvironmentConnectivityHandlers({
-      store: { getSettings: () => ({}) } as never,
+      store: { getSettings: () => ({}), deleteHostWorkspaceSession: vi.fn() } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => teardown
     })
@@ -67,7 +90,7 @@ describe('runtime environment removal storage clearing', () => {
       .mockResolvedValueOnce({ clearedPartitions: [], livePartitions: ['persist:one'] })
       .mockResolvedValueOnce({ clearedPartitions: ['persist:one'], livePartitions: [] })
     registerRuntimeEnvironmentConnectivityHandlers({
-      store: { getSettings: () => ({}) } as never,
+      store: { getSettings: () => ({}), deleteHostWorkspaceSession: vi.fn() } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => Promise.resolve()
     })

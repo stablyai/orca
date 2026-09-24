@@ -82,6 +82,7 @@ function makeStore(repoPath: string) {
   return {
     getRepo: vi.fn((repoId: string) => (repoId === 'repo-1' ? repo : null)),
     getRepos: vi.fn(() => [repo]),
+    deleteHostWorkspaceSession: vi.fn(),
     getSettings: vi.fn(() => ({ activeRuntimeEnvironmentId })),
     updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
       activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
@@ -411,6 +412,9 @@ describe('registerEphemeralVmHandlers', () => {
     } as never)
     expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
     expect(listEnvironments(userDataPath)).toEqual([])
+    expect(store.deleteHostWorkspaceSession).toHaveBeenCalledExactlyOnceWith(
+      `runtime:${result.environment!.id}`
+    )
     expect(store.getSettings().activeRuntimeEnvironmentId).toBe(result.environment!.id)
     expect(store.updateSettings).toHaveBeenCalledTimes(1)
   })
