@@ -1,3 +1,4 @@
+import type { CliStatusCaller } from '../shared/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
@@ -136,8 +137,19 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
-    `graphState: ${status.graph.state}`
+    `graphState: ${status.graph.state}`,
+    ...(status.caller === undefined ? [] : [`caller: ${formatStatusCaller(status.caller)}`])
   ].join('\n')
+}
+
+function formatStatusCaller(caller: CliStatusCaller): string {
+  if (caller === null) {
+    return 'none'
+  }
+  if ('refusal' in caller) {
+    return `session:${caller.sessionId} (refused: ${caller.refusal.code})`
+  }
+  return `${caller.address}${caller.live ? '' : ' (not live)'}`
 }
 
 export function formatStatus(status: CliStatusResult): string {

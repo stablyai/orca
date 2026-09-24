@@ -17,7 +17,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'run-use'],
-    summary: 'Bind this coordinator terminal to an existing Run',
+    summary: 'Bind this coordinator to an existing Run',
     usage:
       'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
@@ -28,7 +28,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'run-current'],
-    summary: 'Show the Run bound to this coordinator terminal',
+    summary: 'Show the Run bound to this coordinator',
     usage: 'orca orchestration run-current [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'from'],
     identityFlagRoles: { from: 'caller' }
@@ -87,7 +87,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'check'],
-    summary: 'Check messages for a terminal',
+    summary: "Check this agent's messages",
     usage:
       'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
@@ -115,6 +115,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { terminal: 'caller' },
     notes: [
+      'The caller is this agent: session:<id> in a chat session, else the Orca terminal it runs in. Omit --terminal in both; pass only your own handle elsewhere.',
+      'A chat coordinator never uses --wait: Orca starts a turn in the chat when mail arrives, and that turn runs check.',
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
