@@ -4,13 +4,7 @@ import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
 import type { PtySpawnResult } from '../../../providers/types'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
-import { track } from '../../../telemetry/client'
-import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
-import {
-  agentKindSchema,
-  launchSourceSchema,
-  requestKindSchema
-} from '../../../../shared/telemetry-events'
+import { recordPtySpawnTelemetry } from '../pane/spawn-telemetry'
 import {
   shouldSkipCodexHomeEnvForWindowsShell,
   codexReattachedHomeRouteField
@@ -102,7 +96,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       launchAgent: ctx.result.launchAgent,
       incarnationId: ctx.result.incarnationId
     })
-    await registerPersistedPtySpawn(
+    const rejectedRegistration = registerPersistedPtySpawn(
       ctx.deps.runtime,
       ctx.deps.store,
       ctx.result.id,
@@ -126,6 +120,9 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ? shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd)
         : undefined
     )
+    if (rejectedRegistration) {
+      await rejectedRegistration
+    }
     ctx.pendingRegistrationPtyId = null
   } else if (ctx.pendingRegistrationPtyId) {
     ctx.deps.runtime?.cancelPendingPtyRegistration?.(
@@ -204,17 +201,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
   }
   // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
   if (args.telemetry && !ctx.stablePaneOwner) {
-    const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-    const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-    const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-    if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-      track('agent_started', {
-        agent_kind: agentKindParse.data,
-        launch_source: launchSourceParse.data,
-        request_kind: requestKindParse.data,
-        ...getCohortAtEmit()
-      })
-    }
+    recordPtySpawnTelemetry(args.telemetry)
   }
   const response = {
     ...ctx.result,

@@ -119,9 +119,9 @@ it('retains the binding when loss of contact supplies no process-exit proof', as
   runtime.beginPtyRegistration(binding.ptyId, binding.incarnationId)
   await store.persistPtyBinding(binding)
   await runtime.onPtyExit(binding.ptyId, -1, binding.incarnationId)
-  await expect(
+  expect(() =>
     registerPersistedPtySpawn(runtime, store, binding.ptyId, binding.worktreeId, null, binding)
-  ).rejects.toThrow('agent_session_exited_during_start')
+  ).toThrow('agent_session_exited_during_start')
   expect(
     readState().workspaceSession.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId[
       binding.leafId
@@ -137,14 +137,18 @@ it('does not settle rejected registration until its exit cleanup reaches SQLite'
   await runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, { providerExitObserved: true })
   const gate = authority.pause()
   let rejected = false
-  const pending = registerPersistedPtySpawn(
+  const cleanup = registerPersistedPtySpawn(
     runtime,
     store,
     binding.ptyId,
     binding.worktreeId,
     null,
     binding
-  ).catch((error: unknown) => {
+  )
+  if (!cleanup) {
+    throw new Error('exited registration did not start durable cleanup')
+  }
+  const pending = cleanup.catch((error: unknown) => {
     rejected = true
     throw error
   })
@@ -162,5 +166,14 @@ it('does not settle rejected registration until its exit cleanup reaches SQLite'
     readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[
       binding.leafId
     ]
+  ).toBeUndefined()
+})
+
+it('keeps successful registration synchronous through the remaining spawn publication', async () => {
+  const { store } = await fixture()
+  const runtime = new OrcaRuntimeService(store)
+  await store.persistPtyBinding(binding)
+  expect(
+    registerPersistedPtySpawn(runtime, store, binding.ptyId, binding.worktreeId, null, binding)
   ).toBeUndefined()
 })
