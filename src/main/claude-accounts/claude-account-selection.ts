@@ -6,10 +6,7 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
-import {
-  beginClaudeAccountHostMutation,
-  countClaudePinnedAccountUsers
-} from './claude-pinned-pty-registry'
+import { claimClaudeAccountForHostMutation } from './claude-account-host-mutation'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeSelectionTargetForAccount,
@@ -39,7 +36,7 @@ export class ClaudeAccountSelection {
     const account = this.requireAccount(accountId)
     // Why held to the end: the managed dir and Keychain item are deleted last, outside the auth
     // queue, and a pinned launch must not seed from them in between.
-    const endHostMutation = claimAccountForHostMutation(account, 'remove')
+    const endHostMutation = claimClaudeAccountForHostMutation(account, 'remove')
     try {
       return await this.removeClaimed(account)
     } finally {
@@ -98,7 +95,7 @@ export class ClaudeAccountSelection {
     const endHostMutation =
       accountId === null
         ? null
-        : claimAccountForHostMutation(this.requireAccount(accountId), 'select')
+        : claimClaudeAccountForHostMutation(this.requireAccount(accountId), 'select')
     try {
       return await this.selectClaimed(accountId, target)
     } finally {
@@ -206,25 +203,6 @@ export class ClaudeAccountSelection {
       })
     }
   }
-}
-
-// Why: selecting would materialize the account into ~/.claude and removing would delete the dir a
-// pinned Claude runs from; either way one refresh token would end up in two places or none. The
-// claim is one synchronous check-and-set against pinned reservations, so a launch reserving the
-// account concurrently is refused instead of racing past a check that already passed.
-function claimAccountForHostMutation(
-  account: ClaudeManagedAccount,
-  action: 'select' | 'remove'
-): () => void {
-  const release = beginClaudeAccountHostMutation(account.id)
-  if (release) {
-    return release
-  }
-  const users = countClaudePinnedAccountUsers(account.id)
-  const terminals = users === 1 ? '1 terminal' : `${users} terminals`
-  throw new Error(
-    `Claude account ${account.email} is in use by ${terminals} launched with --account. Close ${users === 1 ? 'it' : 'them'} before you ${action === 'select' ? 'switch to' : 'remove'} this account.`
-  )
 }
 
 function toClaudeAccountSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
