@@ -13,6 +13,11 @@ import {
   projectAgentChildWorkViews
 } from '../../shared/agent-status-child-work-view'
 import { createAgentStatusStore } from '../../shared/agent-status-store'
+import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
+import type {
+  AgentJournalItemBody,
+  AgentJournalProducerLinkage
+} from '../../shared/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
@@ -99,9 +104,12 @@ async function producer() {
       reconcileAgentChildWorkEvidence({ store, admission, parent, provider: 'codex', evidence })
     }
   })
+  const rows: { body: AgentJournalItemBody; linkage: AgentJournalProducerLinkage }[] = []
   const journal: StructuredAgentSessionEventSink = {
-    appendItem: (identity) =>
-      deliveries.push({ kind: 'journal', detail: JSON.stringify(identity) }),
+    appendItem: (identity, body, options) => {
+      deliveries.push({ kind: 'journal', detail: JSON.stringify(identity) })
+      rows.push({ body, linkage: agentJournalLinkageFields(options) })
+    },
     appendTombstone: () => {},
     publish: () => {}
   }
@@ -128,7 +136,10 @@ async function producer() {
     const view = views.find((candidate) => candidate.description === description)
     return view && deriveAgentChildDisplayState(view, agentChildWorkOwnedLiveness(views, view.id))
   }
-  return { adapter, codex, send, records, byDescription, display }
+  /** The producer stamp on the newest journal row that carries this text. */
+  const stampOf = (text: string) =>
+    rows.findLast((row) => JSON.stringify(row.body).includes(text))?.linkage
+  return { adapter, codex, send, records, byDescription, display, stampOf }
 }
 
 describe('Codex structured child-work producer', () => {
@@ -325,6 +336,35 @@ describe('Codex structured child-work producer', () => {
     await adapter.closeSession('session-1')
     expect(records()).toEqual([])
     expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
+  })
+
+  it("numbers a child's runs as the journal does: a row's attempt is its record's generation", async () => {
+    const { send, byDescription, stampOf } = await producer()
+    const says = (turnId: string, text: string) =>
+      item('item/completed', REVIEWER, turnId, { type: 'agentMessage', id: `msg-${text}`, text })
+    // The journal stamps a child row with its run only once it is past the first.
+    const runs = (text: string) => {
+      const stamp = stampOf(text)
+      return {
+        agentId: stamp?.agentId,
+        attempt: stamp ? (stamp.attempt ?? 1) : undefined,
+        generation: byDescription('review')?.invocation.generation
+      }
+    }
+    send(turn('turn/started', THREAD_ID, 'p1'))
+    // Codex reports the child's first turn before the spawn that announces it.
+    send(turn('turn/started', REVIEWER, 'r1'))
+    send(spawned(REVIEWER, 'review', 'p1'))
+    send(says('r1', 'run 1'))
+    expect(runs('run 1')).toEqual({ agentId: REVIEWER, attempt: 1, generation: 1 })
+    send(turn('turn/completed', REVIEWER, 'r1'))
+    // Each follow-up the parent sends is the child's next run, on both sides.
+    for (const run of [2, 3]) {
+      send(turn('turn/started', REVIEWER, `r${run}`))
+      send(says(`r${run}`, `run ${run}`))
+      expect(runs(`run ${run}`)).toEqual({ agentId: REVIEWER, attempt: run, generation: run })
+      send(turn('turn/completed', REVIEWER, `r${run}`))
+    }
   })
 
   it('drops the records when the provider exits unexpectedly', async () => {
