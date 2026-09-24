@@ -27,64 +27,98 @@ beforeEach(() => {
 })
 afterEach(() => setSecretStore(previousSecretStore))
 
-describe('Store secret retention across worker acknowledgements', () => {
-  it('does not restore ciphertext cleared while its commit acknowledgement was pending', async () => {
-    const { store, authority, readState } = await fixture()
-    store.updateSettings({ opencodeSessionCookie: 'durable' })
-    await store.flushPendingOrThrowAsync()
-    const gate = authority.pause()
-    store.updateSettings({ opencodeSessionCookie: 'in-flight' })
-    const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-    await gate.started.promise
-    store.updateSettings({ opencodeSessionCookie: '' })
-    encryptionAvailable = false
-    gate.finish.resolve()
-    await write
-    await store.flushPendingOrThrowAsync()
-    expect(readState().settings.opencodeSessionCookie).toBe('')
-    expect(store.getSettings().opencodeSessionCookie).toBe('')
-  })
+describe.each(['opencodeSessionCookie', 'opencodeGoApiKey'] as const)(
+  'Store %s retention across worker acknowledgements',
+  (setting) => {
+    it('does not restore ciphertext cleared while its commit acknowledgement was pending', async () => {
+      const { store, authority, readState } = await fixture()
+      store.updateSettings({ [setting]: 'durable' })
+      await store.flushPendingOrThrowAsync()
+      const gate = authority.pause()
+      store.updateSettings({ [setting]: 'in-flight' })
+      const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      await gate.started.promise
+      store.updateSettings({ [setting]: '' })
+      encryptionAvailable = false
+      gate.finish.resolve()
+      await write
+      await store.flushPendingOrThrowAsync()
+      expect(readState().settings[setting]).toBe('')
+      expect(store.getSettings()[setting]).toBe('')
+    })
 
-  it('retains confirmed ciphertext until a newer secret can be encrypted', async () => {
-    const { store, authority, readState } = await fixture()
-    store.updateSettings({ opencodeSessionCookie: 'durable' })
-    await store.flushPendingOrThrowAsync()
-    const gate = authority.pause()
-    store.updateSettings({ opencodeSessionCookie: 'in-flight' })
-    const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-    await gate.started.promise
-    store.updateSettings({ opencodeSessionCookie: 'newer' })
-    encryptionAvailable = false
-    gate.finish.resolve()
-    await write
-    await store.flushPendingOrThrowAsync()
-    expect(readState().settings.opencodeSessionCookie).toBe(ciphertext('in-flight'))
-    expect(store.getSettings().opencodeSessionCookie).toBe('newer')
-    encryptionAvailable = true
-    store.updateSettings({ theme: 'dark' })
-    await store.flushPendingOrThrowAsync()
-    expect(readState().settings.opencodeSessionCookie).toBe(ciphertext('newer'))
-  })
+    it('retains confirmed ciphertext until a newer secret can be encrypted', async () => {
+      const { store, authority, readState } = await fixture()
+      store.updateSettings({ [setting]: 'durable' })
+      await store.flushPendingOrThrowAsync()
+      const gate = authority.pause()
+      store.updateSettings({ [setting]: 'in-flight' })
+      const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      await gate.started.promise
+      store.updateSettings({ [setting]: 'newer' })
+      encryptionAvailable = false
+      gate.finish.resolve()
+      await write
+      await store.flushPendingOrThrowAsync()
+      expect(readState().settings[setting]).toBe(ciphertext('in-flight'))
+      expect(store.getSettings()[setting]).toBe('newer')
+      encryptionAvailable = true
+      store.updateSettings({ theme: 'dark' })
+      await store.flushPendingOrThrowAsync()
+      expect(readState().settings[setting]).toBe(ciphertext('newer'))
+    })
 
-  it('retains the earlier ciphertext after a failed write and retries newer plaintext', async () => {
-    const { store, authority, readState } = await fixture()
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    store.updateSettings({ opencodeSessionCookie: 'durable' })
-    await store.flushPendingOrThrowAsync()
-    const gate = authority.pause()
-    store.updateSettings({ opencodeSessionCookie: 'failed' })
-    const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-    const failure = expect(write).rejects.toThrow('disk refused')
-    await gate.started.promise
-    store.updateSettings({ opencodeSessionCookie: 'newer' })
-    encryptionAvailable = false
-    gate.finish.reject(new Error('disk refused'))
-    await failure
-    await store.flushPendingOrThrowAsync()
-    expect(readState().settings.opencodeSessionCookie).toBe(ciphertext('durable'))
-    encryptionAvailable = true
-    store.updateSettings({ theme: 'dark' })
-    await store.flushPendingOrThrowAsync()
-    expect(readState().settings.opencodeSessionCookie).toBe(ciphertext('newer'))
-  })
+    it('retains the earlier ciphertext after a failed write and retries newer plaintext', async () => {
+      const { store, authority, readState } = await fixture()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      store.updateSettings({ [setting]: 'durable' })
+      await store.flushPendingOrThrowAsync()
+      const gate = authority.pause()
+      store.updateSettings({ [setting]: 'failed' })
+      const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      const failure = expect(write).rejects.toThrow('disk refused')
+      await gate.started.promise
+      store.updateSettings({ [setting]: 'newer' })
+      encryptionAvailable = false
+      gate.finish.reject(new Error('disk refused'))
+      await failure
+      await store.flushPendingOrThrowAsync()
+      expect(readState().settings[setting]).toBe(ciphertext('durable'))
+      encryptionAvailable = true
+      store.updateSettings({ theme: 'dark' })
+      await store.flushPendingOrThrowAsync()
+      expect(readState().settings[setting]).toBe(ciphertext('newer'))
+    })
+  }
+)
+
+describe('worker protected settings serialization', () => {
+  it.each(['selective', 'complete'] as const)(
+    'encrypts both protected credentials in a %s write to SQLite',
+    async (mode) => {
+      const { store, authority, readState } = await fixture()
+      const selectiveWrite = vi.spyOn(authority, 'writeSerializedDomains')
+      const completeWrite = vi.spyOn(authority, 'writeCompleteSerializedDomains')
+      const secrets = {
+        opencodeSessionCookie: 'cookie-only-plaintext',
+        opencodeGoApiKey: 'api-key-only-plaintext'
+      }
+      store.updateSettings(secrets)
+      if (mode === 'complete') {
+        store.updateOnboarding({ outcome: 'completed' })
+      }
+      await store.flushPendingOrThrowAsync()
+      expect(selectiveWrite).toHaveBeenCalledTimes(mode === 'selective' ? 1 : 0)
+      expect(completeWrite).toHaveBeenCalledTimes(mode === 'complete' ? 1 : 0)
+      const persisted = readState()
+      expect(persisted.settings).toMatchObject({
+        opencodeSessionCookie: ciphertext(secrets.opencodeSessionCookie),
+        opencodeGoApiKey: ciphertext(secrets.opencodeGoApiKey)
+      })
+      for (const plaintext of Object.values(secrets)) {
+        expect(JSON.stringify(persisted)).not.toContain(plaintext)
+      }
+      expect(store.getSettings()).toMatchObject(secrets)
+    }
+  )
 })
