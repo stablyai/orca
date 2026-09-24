@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { useWorkspaceTagCommands } from '../../workspace-tags/use-workspace-tag-commands'
 import { ProjectGroupHeaderMenu } from './project-group-header-actions'
+import { stopRepoHeaderMenuEvent } from './header-event-guards'
 
 /** Rename or delete a tag everywhere it is used; deleting never touches the workspaces themselves. */
 export function TagHeaderMenu({ tag }: { tag: string }): React.JSX.Element {
@@ -50,22 +51,31 @@ export function TagHeaderMenu({ tag }: { tag: string }): React.JSX.Element {
           deleteLabel: translate('auto.components.sidebar.tagHeader.delete', 'Delete tag')
         }}
       />
-      <ProjectGroupNameDialog
-        open={renaming}
-        title={translate('auto.components.sidebar.tagHeader.renameTitle', 'Rename Tag')}
-        description={translate(
-          'auto.components.sidebar.tagHeader.renameDescription',
-          'Renames the tag on every workspace that has it. Using an existing name merges the two tags.'
-        )}
-        initialName={tag}
-        confirmLabel={translate('auto.components.sidebar.tagHeader.renameConfirm', 'Rename')}
-        nameLabel={translate('auto.components.sidebar.tagHeader.nameLabel', 'Tag Name')}
-        onOpenChange={setRenaming}
-        onSubmit={async (name) => {
-          await renameTag(tag, name)
-          setRenaming(false)
-        }}
-      />
+      {/* Why: React bubbles dialog events through this header, which treats Space/Enter as collapse. */}
+      <div
+        className="contents"
+        onKeyDown={stopRepoHeaderMenuEvent}
+        onPointerDown={stopRepoHeaderMenuEvent}
+        onMouseDown={stopRepoHeaderMenuEvent}
+        onClick={stopRepoHeaderMenuEvent}
+      >
+        <ProjectGroupNameDialog
+          open={renaming}
+          title={translate('auto.components.sidebar.tagHeader.renameTitle', 'Rename Tag')}
+          description={translate(
+            'auto.components.sidebar.tagHeader.renameDescription',
+            'Renames the tag on every workspace that has it. Using an existing name merges the two tags.'
+          )}
+          initialName={tag}
+          confirmLabel={translate('auto.components.sidebar.tagHeader.renameConfirm', 'Rename')}
+          nameLabel={translate('auto.components.sidebar.tagHeader.nameLabel', 'Tag Name')}
+          onOpenChange={setRenaming}
+          onSubmit={async (name) => {
+            await renameTag(tag, name)
+            setRenaming(false)
+          }}
+        />
+      </div>
     </>
   )
 }
