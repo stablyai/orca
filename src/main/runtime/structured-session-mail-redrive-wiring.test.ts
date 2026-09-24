@@ -42,5 +42,12 @@ describe("the runtime's own structured host install", () => {
       // The same callback's rename half needs a store this bare runtime does not have.
     }
     expect(redrive).toHaveBeenCalledWith(summary)
+
+    // A committed `/clear` is the replacement's adoption edge: its own first status edge came first.
+    installed.deps?.onConversationReplaced?.({
+      sessionId: 'claude_1234abcd',
+      replacementSessionId: 'clear-1234abcd'
+    })
+    expect(redrive).toHaveBeenCalledWith({ sessionId: 'clear-1234abcd', status: null })
   })
 })

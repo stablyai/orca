@@ -82,6 +82,8 @@ export type StructuredAgentSessionHostDeps = {
     summary: AgentSessionStatusSummary,
     options: { replay: boolean }
   ) => void
+  /** A committed `/clear` replaced `sessionId` with a new session that continues the conversation. */
+  onConversationReplaced?: (input: { sessionId: string; replacementSessionId: string }) => void
   /** The agent-status store every held session's projection is written to and, on close,
    *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,
    *  every reader of that store simply lists no structured session. */
