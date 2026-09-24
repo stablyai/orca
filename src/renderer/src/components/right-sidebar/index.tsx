@@ -27,6 +27,7 @@ import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
+import { IconThemeProvider } from './icon-theme-context'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -186,7 +187,7 @@ function RightSidebarInner(): React.JSX.Element {
           </div>
         )}
 
-        {panelContent}
+        <IconThemeProvider>{panelContent}</IconThemeProvider>
 
         {/* Resize handle on LEFT side */}
         <div

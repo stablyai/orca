@@ -8808,7 +8808,15 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Pourcentages d'utilisation",
-            "usagePercentageDisplayDescription": "Choisissez si les limites des fournisseurs affichent le pourcentage utilisé ou restant."
+            "usagePercentageDisplayDescription": "Choisissez si les limites des fournisseurs affichent le pourcentage utilisé ou restant.",
+            "iconTheme": {
+              "title": "Thème d'icônes",
+              "description": "Icônes de la barre latérale droite, de l'explorateur de fichiers et du contrôle de code source.",
+              "icons": "icônes",
+              "fileIcons": "icônes de fichiers",
+              "vscode": "VS Code",
+              "material": "material"
+            }
           }
         },
         "auto": {
@@ -10658,7 +10666,9 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Utilisé",
-          "usagePercentageDisplayRemaining": "Restant"
+          "usagePercentageDisplayRemaining": "Restant",
+          "iconThemeDefault": "Par défaut",
+          "iconThemeVscode": "VS Code"
         },
         "TerminalInteractionSection": {
           "567633ff50": "Le clic droit colle le presse-papiers dans le terminal. Control-clic pour ouvrir le menu contextuel.",

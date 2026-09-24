@@ -7985,7 +7985,15 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "사용량 백분율",
-            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다.",
+            "iconTheme": {
+              "title": "아이콘 테마",
+              "description": "오른쪽 사이드바, 파일 탐색기, 소스 제어에 표시되는 아이콘입니다.",
+              "icons": "아이콘",
+              "fileIcons": "파일 아이콘",
+              "vscode": "VS Code",
+              "material": "material"
+            }
           }
         },
         "auto": {
@@ -9881,7 +9889,9 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "사용",
-          "usagePercentageDisplayRemaining": "남음"
+          "usagePercentageDisplayRemaining": "남음",
+          "iconThemeDefault": "기본값",
+          "iconThemeVscode": "VS Code"
         },
         "TerminalInteractionSection": {
           "567633ff50": "우클릭하면 클립보드 내용을 터미널에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Control 클릭하세요.",

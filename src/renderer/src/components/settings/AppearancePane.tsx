@@ -36,6 +36,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { translate } from '@/i18n/i18n'
 import {
+  getIconThemeEntry,
   getLeftSidebarAppearanceEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
@@ -160,6 +161,7 @@ export function AppearancePane({
     ...getSidebarEntries(),
     ...getLayoutEntries(),
     getLeftSidebarAppearanceEntry(),
+    getIconThemeEntry(),
     getWorkspaceCardLayoutEntry()
   ]
 

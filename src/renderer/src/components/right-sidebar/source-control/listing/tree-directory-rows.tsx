@@ -1,6 +1,7 @@
 import React from 'react'
 import { ChevronDown, Folder, FolderOpen, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ThemedFolderIcon } from '../../icon-theme-context'
 import { translate } from '@/i18n/i18n'
 import type { DiscardAllArea } from '../commit/discard-all-sequence'
 import type {
@@ -43,11 +44,18 @@ function SourceControlTreeDirectoryHeader({
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
         />
-        {isCollapsed ? (
-          <Folder className="size-3 shrink-0" />
-        ) : (
-          <FolderOpen className="size-3 shrink-0" />
-        )}
+        <ThemedFolderIcon
+          name={node.name}
+          open={!isCollapsed}
+          className="size-4 shrink-0"
+          fallback={
+            isCollapsed ? (
+              <Folder className="size-3 shrink-0" />
+            ) : (
+              <FolderOpen className="size-3 shrink-0" />
+            )
+          }
+        />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
       </button>
       <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">

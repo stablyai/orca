@@ -33,6 +33,33 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
   ]
 }))
 
+export const getIconThemeEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate('auto.components.settings.appearance.search.iconTheme.title', 'Icon Theme'),
+  description: translate(
+    'auto.components.settings.appearance.search.iconTheme.description',
+    'Icons for the right sidebar, file explorer, and source control.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.iconTheme.icons',
+      'icons'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.iconTheme.fileIcons',
+      'file icons'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.iconTheme.vscode',
+      'VS Code'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.iconTheme.material',
+      'material'
+    ),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar')
+  ]
+}))
+
 export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
     'auto.components.settings.appearance.search.workspaceCardLayout.title',

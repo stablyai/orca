@@ -9322,6 +9322,14 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
+            },
+            "iconTheme": {
+              "title": "Icon Theme",
+              "description": "Icons for the right sidebar, file explorer, and source control.",
+              "icons": "icons",
+              "fileIcons": "file icons",
+              "vscode": "VS Code",
+              "material": "material"
             }
           }
         },
@@ -11324,7 +11332,9 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
-          "usagePercentageDisplayRemaining": "Remaining"
+          "usagePercentageDisplayRemaining": "Remaining",
+          "iconThemeDefault": "Default",
+          "iconThemeVscode": "VS Code"
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",

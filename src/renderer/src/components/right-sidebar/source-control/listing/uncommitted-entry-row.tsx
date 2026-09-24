@@ -1,6 +1,7 @@
 import React from 'react'
 import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '../../icon-theme-context'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -156,10 +157,14 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             )}
           />
         )}
-        {React.createElement(FileIcon, {
-          className: 'size-3.5 shrink-0',
-          style: { color: STATUS_COLORS[entry.status] }
-        })}
+        <ThemedFileIcon
+          name={entry.path}
+          className="size-4 shrink-0"
+          fallback={React.createElement(FileIcon, {
+            className: 'size-3.5 shrink-0',
+            style: { color: STATUS_COLORS[entry.status] }
+          })}
+        />
         <div className="min-w-0 flex-1 text-xs">
           <span className="min-w-0 block truncate">
             <span className="text-foreground">{fileName}</span>

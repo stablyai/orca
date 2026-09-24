@@ -8,6 +8,7 @@ import {
   type SourceControlRowOpenEvent
 } from '../listing/split-open'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '../../icon-theme-context'
 import { basename, dirname } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { formatGitHistoryTimestamp } from './git-history-format'
@@ -43,10 +44,14 @@ function CommitFileRow({
       onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
       onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
     >
-      {createElement(FileIcon, {
-        className: 'size-3.5 shrink-0',
-        style: { color: STATUS_COLORS[status] }
-      })}
+      <ThemedFileIcon
+        name={entry.path}
+        className="size-4 shrink-0"
+        fallback={createElement(FileIcon, {
+          className: 'size-3.5 shrink-0',
+          style: { color: STATUS_COLORS[status] }
+        })}
+      />
       <span className="min-w-0 flex-1 truncate">
         <span className="text-foreground">{fileName}</span>
         {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}

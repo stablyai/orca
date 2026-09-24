@@ -55,6 +55,10 @@ export type WorktreeVisibilityDefaults = {
   sourcePreferences?: WorktreeVisibilitySourcePreferences
 }
 
+/** Icon set for the right sidebar and its file lists. 'vscode' swaps in Codicons for
+ *  the activity bar and Material Icon Theme for files/folders; 'default' keeps lucide. */
+export type IconTheme = 'default' | 'vscode'
+
 export type GlobalSettings = {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
@@ -84,6 +88,8 @@ export type GlobalSettings = {
   leftSidebarTintOpacity?: number
   uiLanguage: UiLanguage
   appIcon: AppIconId
+  /** Optional so profiles saved before this setting existed read as 'default'. */
+  iconTheme?: IconTheme
   appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number

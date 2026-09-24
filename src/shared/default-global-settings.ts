@@ -46,6 +46,7 @@ export function buildDefaultSettings(args: {
     leftSidebarTintOpacity: DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
     uiLanguage: UI_LANGUAGE_SYSTEM,
     appIcon: DEFAULT_APP_ICON_ID,
+    iconTheme: 'default',
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,

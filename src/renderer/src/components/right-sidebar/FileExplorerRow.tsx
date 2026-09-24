@@ -3,6 +3,7 @@ import { ChevronRight, CircleSlash, Folder, FolderOpen, Link, Loader2 } from 'lu
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon, ThemedFolderIcon } from './icon-theme-context'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
@@ -196,10 +197,19 @@ export function FileExplorerRow({
               />
               {isLoading ? (
                 <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-              ) : isExpanded ? (
-                <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <Folder className="size-3 shrink-0 text-muted-foreground" />
+                <ThemedFolderIcon
+                  name={node.name}
+                  open={isExpanded}
+                  className="size-4 shrink-0"
+                  fallback={
+                    isExpanded ? (
+                      <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Folder className="size-3 shrink-0 text-muted-foreground" />
+                    )
+                  }
+                />
               )}
             </>
           ) : (
@@ -208,9 +218,13 @@ export function FileExplorerRow({
               {node.isSymlink ? (
                 <Link className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                React.createElement(FileIcon, {
-                  className: 'size-3 shrink-0 text-muted-foreground'
-                })
+                <ThemedFileIcon
+                  name={node.name}
+                  className="size-4 shrink-0"
+                  fallback={React.createElement(FileIcon, {
+                    className: 'size-3 shrink-0 text-muted-foreground'
+                  })}
+                />
               )}
             </>
           )}

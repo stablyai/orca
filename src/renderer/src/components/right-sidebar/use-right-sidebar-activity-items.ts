@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -14,7 +13,7 @@ import {
 } from '@/store/plugin-panels'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
-import { AgentSessionHistoryIcon } from './agent-session-history-icon'
+import { getRightSidebarActivityIcons } from './right-sidebar-activity-icons'
 import type { ActivityBarItem } from './activity-bar-buttons'
 
 export type RightSidebarActivityItems = {
@@ -46,6 +45,8 @@ export function useRightSidebarActivityItems({
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
+  const iconTheme = useAppStore((s) => s.settings?.iconTheme)
+  const icons = getRightSidebarActivityIcons(iconTheme)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
@@ -63,19 +64,19 @@ export function useRightSidebarActivityItems({
     () => [
       {
         id: 'explorer',
-        icon: Files,
+        icon: icons.explorer,
         title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
         shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
       },
       {
         id: 'vault',
-        icon: AgentSessionHistoryIcon,
+        icon: icons.vault,
         title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
         shortcut: ''
       },
       {
         id: 'workspaces',
-        icon: Workflow,
+        icon: icons.workspaces,
         title: translate(
           'auto.components.right.sidebar.index.folderWorkspaces',
           'Attached worktrees'
@@ -85,28 +86,28 @@ export function useRightSidebarActivityItems({
       },
       {
         id: 'pr-checks',
-        icon: ListChecks,
+        icon: icons.prChecks,
         title: translate('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
         shortcut: '',
         folderOnly: true
       },
       {
         id: 'source-control',
-        icon: GitBranch,
+        icon: icons.sourceControl,
         title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
         shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
         gitOnly: true
       },
       {
         id: 'checks',
-        icon: ListChecks,
+        icon: icons.checks,
         title: translate('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
         shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
         gitOnly: true
       },
       {
         id: 'ports',
-        icon: Plug,
+        icon: icons.ports,
         title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
@@ -118,6 +119,7 @@ export function useRightSidebarActivityItems({
     [
       checksShortcut,
       explorerShortcut,
+      icons,
       pluginPanelErrors,
       visiblePluginPanels,
       portsShortcut,

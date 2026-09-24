@@ -21,6 +21,7 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { IconThemeSetting } from './IconThemeSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
@@ -123,6 +124,12 @@ export function AppearanceWindowSidebarSection({
         >
           <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
+
+        <IconThemeSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          forceVisible={forceVisiblePrimary}
+        />
 
         <SearchableSetting
           title={statusBarTitle}
