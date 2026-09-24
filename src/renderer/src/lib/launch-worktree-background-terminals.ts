@@ -3,15 +3,11 @@ import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
-import { registerBackgroundPaneBuffer } from '@/lib/background-pane-exit-output'
 import { terminalPanePlacementRow } from '@/lib/terminal-pane-placement-row'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import {
-  buildSetupRunnerCommand,
-  getSetupRunnerCommandPlatformForPath
-} from '../../../shared/setup-runner-command'
+import { buildBackgroundSetupCommand } from '@/lib/setup-runner'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
@@ -22,6 +18,11 @@ import type {
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import {
+  collapseSetupSplit,
+  registerBackgroundPaneBuffer,
+  type SpawnedPane
+} from '@/lib/background-pane-exit-output'
 
 type BackgroundPane = {
   leafId: string
@@ -35,6 +36,7 @@ type BackgroundTab = {
 
 type BackgroundTerminalLaunch = {
   command?: string
+  closeOnSuccess?: boolean
   env?: Record<string, string>
   title?: string
   color?: string
@@ -97,17 +99,9 @@ function buildSplitLayout(
   }
 }
 
-function buildSetupCommand(setup: WorktreeSetupLaunch): string {
-  // Why: background setup tabs can launch later, so they must reuse the same shell chosen when the runner was written.
-  return buildSetupRunnerCommand(
-    setup.runnerScriptPath,
-    getSetupRunnerCommandPlatformForPath(setup.runnerScriptPath, 'posix'),
-    setup.shell
-  )
+function shouldCloseSetupOnSuccess(): boolean {
+  return useAppStore.getState().settings?.closeSetupTabOnSuccess === true
 }
-
-/** The id a background pane got, plus which lifetime of it this spawn owns. */
-type SpawnedPane = { ptyId: string; incarnationId?: string }
 
 async function spawnPane(args: {
   worktree: Worktree
@@ -183,7 +177,15 @@ async function createBackgroundTab(args: {
   }
   store.updateTabPtyId(tab.id, pane.ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, pane.ptyId))
-  registerBackgroundPaneBuffer(tab.id, leafId, pane)
+  registerBackgroundPaneBuffer(
+    tab.id,
+    leafId,
+    pane,
+    args.launch.closeOnSuccess
+      ? () =>
+          useAppStore.getState().closeTab(tab.id, { recordInteraction: false, reason: 'pty-exit' })
+      : undefined
+  )
   return { tabId: tab.id, primary: { leafId, ptyId: pane.ptyId } }
 }
 
@@ -207,7 +209,7 @@ async function addSetupSplit(args: {
       direction: args.direction,
       proposedRoot: buildSplitRoot(args.tab.primary.leafId, setupLeafId, args.direction)
     },
-    command: buildSetupCommand(args.setup),
+    command: buildBackgroundSetupCommand(args.setup, useAppStore.getState().settings),
     env: args.setup.envVars
   })
   if (
@@ -229,7 +231,14 @@ async function addSetupSplit(args: {
       getSetupTabTitle()
     )
   )
-  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPane)
+  registerBackgroundPaneBuffer(
+    args.tab.tabId,
+    setupLeafId,
+    setupPane,
+    shouldCloseSetupOnSuccess()
+      ? () => collapseSetupSplit(args.tab.tabId, args.tab.primary.leafId, setupPane.ptyId)
+      : undefined
+  )
 }
 
 function getDefaultTabLaunches(
@@ -302,8 +311,9 @@ export async function launchWorktreeBackgroundTerminals(
       connectionId,
       launch: {
         title: getSetupTabTitle(),
-        command: buildSetupCommand(args.setup),
-        env: args.setup.envVars
+        command: buildBackgroundSetupCommand(args.setup, useAppStore.getState().settings),
+        env: args.setup.envVars,
+        closeOnSuccess: shouldCloseSetupOnSuccess()
       }
     })
   }
