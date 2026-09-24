@@ -48,17 +48,18 @@ test.describe('Sidebar tag grouping', () => {
     // Create a new tag on the first workspace.
     await openTagsSubmenu(orcaPage, firstId)
     const search = orcaPage.getByRole('textbox', { name: 'Find or create a tag…' })
-    await search.fill('billing')
-    await expect(orcaPage.getByRole('menuitem', { name: 'Create “billing”' })).toBeVisible()
+    // Why type key by key: fill() bypasses keydown, which is where a menu can swallow Space.
+    await search.pressSequentially('billing team')
+    await expect(orcaPage.getByRole('menuitem', { name: 'Create “billing team”' })).toBeVisible()
     await search.press('Enter')
-    await expect(orcaPage.getByRole('menuitemcheckbox', { name: 'billing' })).toBeChecked()
+    await expect(orcaPage.getByRole('menuitemcheckbox', { name: 'billing team' })).toBeChecked()
     await captureEvidence(orcaPage, 'tag-submenu-created.png')
     await orcaPage.keyboard.press('Escape')
     await orcaPage.keyboard.press('Escape')
 
     // Reuse the existing tag on the second workspace.
     await openTagsSubmenu(orcaPage, secondId)
-    const existing = orcaPage.getByRole('menuitemcheckbox', { name: 'billing' })
+    const existing = orcaPage.getByRole('menuitemcheckbox', { name: 'billing team' })
     await expect(existing).not.toBeChecked()
     await existing.click()
     await expect(existing).toBeChecked()
@@ -67,7 +68,7 @@ test.describe('Sidebar tag grouping', () => {
 
     // Cards show their tags as chips, and the Tags card property hides them.
     const chips = worktreeRow(orcaPage, firstId).getByLabel('Tags', { exact: true })
-    await expect(chips).toContainText('billing')
+    await expect(chips).toContainText('billing team')
     await orcaPage.evaluate(() => {
       const state = window.__store!.getState()
       state.setWorktreeCardProperties(
@@ -79,10 +80,10 @@ test.describe('Sidebar tag grouping', () => {
       const state = window.__store!.getState()
       state.setWorktreeCardProperties([...state.worktreeCardProperties, 'tags'])
     })
-    await expect(chips).toContainText('billing')
+    await expect(chips).toContainText('billing team')
 
     await orcaPage.evaluate(() => window.__store!.getState().setGroupBy('tag'))
-    await expect(sidebarHeader(orcaPage, 'billing')).toBeAttached()
+    await expect(sidebarHeader(orcaPage, 'billing team')).toBeAttached()
     await expect(worktreeRow(orcaPage, firstId)).toBeVisible()
     await expect(worktreeRow(orcaPage, secondId)).toBeVisible()
     await captureEvidence(
@@ -92,22 +93,23 @@ test.describe('Sidebar tag grouping', () => {
     )
 
     // Rename from the section header; both workspaces follow.
-    await openHeaderMenu(orcaPage, 'billing')
+    await openHeaderMenu(orcaPage, 'billing team')
     await orcaPage.getByRole('menuitem', { name: 'Rename tag' }).click()
     const nameField = orcaPage.getByRole('textbox', { name: 'Tag Name' })
-    await nameField.fill('Payments')
+    await nameField.fill('')
+    await nameField.pressSequentially('Payments team')
     await orcaPage.getByRole('button', { name: 'Rename' }).click()
-    await expect(sidebarHeader(orcaPage, 'Payments')).toBeAttached()
-    await expect(sidebarHeader(orcaPage, 'billing')).toHaveCount(0)
+    await expect(sidebarHeader(orcaPage, 'Payments team')).toBeAttached()
+    await expect(sidebarHeader(orcaPage, 'billing team')).toHaveCount(0)
 
     // Delete removes it everywhere; the workspaces survive as untagged.
-    await openHeaderMenu(orcaPage, 'Payments')
+    await openHeaderMenu(orcaPage, 'Payments team')
     await orcaPage.getByRole('menuitem', { name: 'Delete tag' }).click()
     await expect(
       orcaPage.getByText('The tag is removed from 2 workspace(s).', { exact: false })
     ).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Delete tag' }).click()
-    await expect(sidebarHeader(orcaPage, 'Payments')).toHaveCount(0)
+    await expect(sidebarHeader(orcaPage, 'Payments team')).toHaveCount(0)
     await expect(worktreeRow(orcaPage, firstId)).toBeVisible()
 
     await openTagsSubmenu(orcaPage, firstId)
