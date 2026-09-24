@@ -567,6 +567,15 @@ describe('a /clear keeps the chat its orchestration address', () => {
       call('orchestration.runCurrent', {}, { sessionId: successor })
     ).resolves.toMatchObject({ run: { id: runId } })
     expect(db.getRunRaw(runId)!.coordinator_actor).toBe(`session:${COORDINATOR}`)
+    // What it sends carries the same address.
+    await openChat(PEER_CHAT)
+    await expect(
+      call(
+        'orchestration.send',
+        { to: `session:${PEER_CHAT}`, subject: 'hi' },
+        { sessionId: successor }
+      )
+    ).resolves.toMatchObject({ message: { from_handle: `session:${COORDINATOR}` } })
   })
 
   it('lands mail sent to any session of the conversation in the live one', async () => {
