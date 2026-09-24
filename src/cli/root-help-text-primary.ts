@@ -38,7 +38,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  environment list          List saved runtimes and optional provider state',
   '  environment show          Show one saved remote Orca runtime',
   '  environment destroy       Destroy a recipe-backed runtime and remove its pairing',
-  '  environment rm            Forget a manually paired remote Orca runtime',
+  '  environment rm            Same as destroy; manual pairings only forget local state',
   '',
   'Environment Recipes:',
   '  vm recipe doctor          Validate a per-workspace environment recipe',

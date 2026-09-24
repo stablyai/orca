@@ -232,6 +232,145 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = 0
   })
 
+  it('retains the pairing and reports the runtime when create rollback cleanup is skipped', async () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'orca-environment-create-rollback-'))
+    temporaryDirectories.push(repoPath)
+    writeFileSync(
+      join(repoPath, 'orca.yaml'),
+      ['environmentRecipes:', '  - id: cloud', '    name: Cloud', '    create: ./create.sh'].join(
+        '\n'
+      )
+    )
+    callMock.mockResolvedValue({
+      ok: true,
+      result: {
+        repos: [
+          {
+            id: 'repo-1',
+            path: repoPath,
+            displayName: 'repo',
+            badgeColor: '#000',
+            addedAt: 1
+          }
+        ]
+      },
+      _meta: { runtimeId: 'local' }
+    })
+    const environment = {
+      id: 'env-1',
+      name: 'cloud-live',
+      source: 'ephemeral-vm',
+      createdAt: 1,
+      updatedAt: 1,
+      lastUsedAt: null,
+      runtimeId: null,
+      endpoints: [],
+      preferredEndpointId: 'ws-env-1'
+    }
+    const runtime = {
+      id: 'runtime-needs-manual-cleanup',
+      recipeId: 'cloud',
+      status: 'running',
+      cleanupStatus: 'disabled',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        pairingCode: 'orca://pair?code=secret',
+        projectRoot: '/repo'
+      }
+    }
+    provisionEphemeralVmRuntimeMock.mockResolvedValue({
+      ok: true,
+      start: { ok: true, result: runtime.recipeResult, stdout: '', stderr: '' },
+      runtime
+    })
+    addEnvironmentFromPairingCodeMock.mockReturnValue(environment)
+    updateEphemeralVmRuntimeStatusMock.mockImplementationOnce(() => {
+      throw new Error('could not link runtime ownership')
+    })
+    cleanupEphemeralVmRuntimeMock.mockResolvedValue({
+      ok: true,
+      runtime,
+      skipped: true
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['environment', 'create', '--recipe', 'cloud', '--name', environment.name, '--json'],
+      repoPath
+    )
+
+    expect(removeEnvironmentMock).not.toHaveBeenCalled()
+    const printed = String(logSpy.mock.calls[0]?.[0])
+    expect(printed).toContain('runtime-needs-manual-cleanup')
+    expect(printed).toContain('may still be running')
+    expect(printed).toContain('pairing was retained')
+    expect(printed).not.toContain('secret')
+    process.exitCode = 0
+  })
+
+  it('reports skipped provider cleanup when rejecting an SSH recipe result', async () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'orca-environment-create-ssh-'))
+    temporaryDirectories.push(repoPath)
+    writeFileSync(
+      join(repoPath, 'orca.yaml'),
+      ['environmentRecipes:', '  - id: cloud', '    name: Cloud', '    create: ./create.sh'].join(
+        '\n'
+      )
+    )
+    callMock.mockResolvedValue({
+      ok: true,
+      result: {
+        repos: [
+          {
+            id: 'repo-1',
+            path: repoPath,
+            displayName: 'repo',
+            badgeColor: '#000',
+            addedAt: 1
+          }
+        ]
+      },
+      _meta: { runtimeId: 'local' }
+    })
+    const runtime = {
+      id: 'runtime-ssh-needs-cleanup',
+      recipeId: 'cloud',
+      status: 'running',
+      cleanupStatus: 'disabled',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          target: { label: 'cloud', host: 'example.test', port: 22, username: 'dev' },
+          projectRoot: '/repo'
+        }
+      }
+    }
+    provisionEphemeralVmRuntimeMock.mockResolvedValue({
+      ok: true,
+      start: { ok: true, result: runtime.recipeResult, stdout: '', stderr: '' },
+      runtime
+    })
+    cleanupEphemeralVmRuntimeMock.mockResolvedValue({
+      ok: true,
+      runtime,
+      skipped: true
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['environment', 'create', '--recipe', 'cloud', '--json'], repoPath)
+
+    const printed = String(logSpy.mock.calls[0]?.[0])
+    expect(printed).toContain('SSH recipes are not supported')
+    expect(printed).toContain('runtime-ssh-needs-cleanup')
+    expect(printed).toContain('may still be running')
+    process.exitCode = 0
+  })
+
   it('retains the pairing on destroy failure and removes it only after a successful retry', async () => {
     const environment = {
       id: 'env-1',
@@ -336,5 +475,52 @@ describe('orca cli worktree awareness', () => {
       error: { message: expect.stringContaining('lifecycle record is missing') }
     })
     process.exitCode = 0
+  })
+
+  it('reports forced removal of a recipe-managed environment as skipped cleanup', async () => {
+    const environment = {
+      id: 'env-1',
+      name: 'cloud-live',
+      source: 'ephemeral-vm',
+      createdAt: 1,
+      updatedAt: 1,
+      lastUsedAt: null,
+      runtimeId: null,
+      endpoints: [],
+      preferredEndpointId: 'ws-env-1'
+    }
+    const runtime = {
+      id: 'runtime-1',
+      recipeId: 'cloud',
+      repoId: 'repo-1',
+      runtimeEnvironmentId: environment.id,
+      status: 'running',
+      cleanupStatus: 'not_started',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        pairingCode: 'orca://pair?code=secret',
+        projectRoot: '/repo'
+      }
+    }
+    resolveEnvironmentMock.mockReturnValue(environment)
+    listEphemeralVmRuntimesMock.mockReturnValue([runtime])
+    removeEnvironmentMock.mockReturnValue(environment)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['environment', 'rm', '--environment', environment.name, '--force', '--json'],
+      '/repo'
+    )
+
+    expect(cleanupEphemeralVmRuntimeMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: {
+        providerCleanup: 'forced-skipped',
+        providerState: { runtimeId: runtime.id, status: 'running' }
+      }
+    })
   })
 })

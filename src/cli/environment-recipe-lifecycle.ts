@@ -81,9 +81,12 @@ export const createRecipeEnvironment: CommandHandler = async ({ client, flags, c
       recipe,
       runtimeId: provisioned.runtime.id
     })
-    const suffix = cleanup.ok
-      ? ''
-      : ` Automatic cleanup also failed: ${redactEphemeralVmRecipeDiagnosticText(cleanup.error)}`
+    const suffix = automaticCleanupFailureSuffix({
+      cleanup,
+      recipeId: recipe.id,
+      runtimeId: provisioned.runtime.id,
+      pairingRetained: false
+    })
     throw new RuntimeClientError(
       'invalid_argument',
       `SSH recipes are not supported by \`orca environment create\` yet; use the Orca desktop.${suffix}`
@@ -114,13 +117,6 @@ export const createRecipeEnvironment: CommandHandler = async ({ client, flags, c
       ].join('\n')
     )
   } catch (error) {
-    if (environment) {
-      try {
-        removeEnvironment(userDataPath, environment.id)
-      } catch {
-        // The provider cleanup below is the important rollback. A stale local row can be removed.
-      }
-    }
     const cleanup = await cleanupEphemeralVmRuntime({
       userDataPath,
       repoPath,
@@ -130,12 +126,22 @@ export const createRecipeEnvironment: CommandHandler = async ({ client, flags, c
       ok: false as const,
       error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
     }))
+    if (cleanup.ok && !cleanup.skipped && environment) {
+      try {
+        removeEnvironment(userDataPath, environment.id)
+      } catch {
+        // Provider cleanup already succeeded. A stale local pairing can be removed separately.
+      }
+    }
     const message = redactEphemeralVmRecipeDiagnosticText(
       error instanceof Error ? error.message : String(error)
     )
-    const suffix = cleanup.ok
-      ? ''
-      : ` Automatic cleanup also failed: ${redactEphemeralVmRecipeDiagnosticText(cleanup.error)}`
+    const suffix = automaticCleanupFailureSuffix({
+      cleanup,
+      recipeId: recipe.id,
+      runtimeId: provisioned.runtime.id,
+      pairingRetained: environment !== undefined
+    })
     throw new RuntimeClientError('runtime_error', `${message}${suffix}`)
   }
 }
@@ -151,14 +157,15 @@ export const removeEnvironmentWithProviderCleanup: CommandHandler = async ({
   const runtime = listEphemeralVmRuntimes(userDataPath).find(
     (entry) => entry.runtimeEnvironmentId === environment.id
   )
-  if (!runtime && environment.source === 'ephemeral-vm' && flags.get('force') !== true) {
+  const force = flags.get('force') === true
+  if (!runtime && environment.source === 'ephemeral-vm' && !force) {
     throw new RuntimeClientError(
       'invalid_argument',
       `Environment ${environment.name} is marked recipe-managed, but its lifecycle record is missing. Orca cannot prove provider cleanup. After manual cleanup, use \`orca environment rm --environment ${environment.name} --force\`.`
     )
   }
   let cleanedRuntime: EphemeralVmRuntimeRecord | undefined
-  if (runtime && flags.get('force') !== true) {
+  if (runtime && !force) {
     const repos = await client.call<RuntimeRepoList>('repo.list')
     const repo = runtime.repoId
       ? repos.result.repos.find((entry) => entry.id === runtime.repoId)
@@ -191,15 +198,22 @@ export const removeEnvironmentWithProviderCleanup: CommandHandler = async ({
     cleanedRuntime = cleanup.runtime
   }
   const removed = redactRuntimeEnvironment(removeEnvironment(userDataPath, environment.id))
+  const forcedManaged = force && (runtime !== undefined || environment.source === 'ephemeral-vm')
   const result = {
     removed,
-    providerCleanup: cleanedRuntime ? 'succeeded' : 'not-managed',
-    providerState: projectProviderState(cleanedRuntime)
+    providerCleanup: cleanedRuntime
+      ? 'succeeded'
+      : forcedManaged
+        ? 'forced-skipped'
+        : 'not-managed',
+    providerState: projectProviderState(cleanedRuntime ?? runtime)
   }
   printResult(localSuccess(result), json, () =>
     cleanedRuntime
       ? `Destroyed environment ${removed.name} (${removed.id}) and removed its pairing.`
-      : `Removed pairing ${removed.name} (${removed.id}). No recipe-managed provider resource was associated, so no provider cleanup ran.`
+      : forcedManaged
+        ? `Force-removed pairing ${removed.name} (${removed.id}). Recipe-managed provider cleanup was intentionally skipped; this command did not verify that the resource is gone.`
+        : `Removed pairing ${removed.name} (${removed.id}). No recipe-managed provider resource was associated, so no provider cleanup ran.`
   )
 }
 
@@ -259,6 +273,24 @@ function formatRecipeFailure(error: string, stderr: string, stdout: string): str
   const boundedDetail =
     detail.length <= maxDetailCharacters ? detail : `…${detail.slice(-maxDetailCharacters)}`
   return `${redactEphemeralVmRecipeDiagnosticText(error)}\nRecipe output:\n${boundedDetail}`
+}
+
+type AutomaticCleanupResult = { ok: true; skipped: boolean } | { ok: false; error: string }
+
+function automaticCleanupFailureSuffix(args: {
+  cleanup: AutomaticCleanupResult
+  recipeId: string
+  runtimeId: string
+  pairingRetained: boolean
+}): string {
+  const retention = args.pairingRetained ? ' The pairing was retained for recovery.' : ''
+  if (!args.cleanup.ok) {
+    return ` Automatic cleanup failed: ${redactEphemeralVmRecipeDiagnosticText(args.cleanup.error)}.${retention}`
+  }
+  if (args.cleanup.skipped) {
+    return ` Automatic cleanup was skipped because recipe ${args.recipeId} has no enabled destroy action. Provider runtime ${args.runtimeId} may still be running and must be cleaned up manually.${retention}`
+  }
+  return ''
 }
 
 function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
