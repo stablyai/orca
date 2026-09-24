@@ -10,6 +10,8 @@ import {
 } from '../runtime/structured-worker-identity'
 
 const DEV_CLI_BIN_FIRST = /^[^:;]*[\\/]cli[\\/]bin[:;]/
+// The dev launcher by absolute path: a login shell's profile cannot reorder it behind a global.
+const DEV_CLI_LAUNCHER = /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
 
 describe('buildCodexStructuredChildEnvironment', () => {
   it('keeps shell exports while pinned launch values win', () => {
@@ -32,7 +34,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-token',
       ORCA_AGENT_SESSION_ID: 'session-not-a-worker',
       ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: 'orca',
+      ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
       // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
       PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
     })
@@ -53,7 +55,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
       // Not a worker, so no handle: the id alone names this chat as a caller.
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: 'orca',
+      ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
       PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
     })
 
@@ -71,7 +73,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
       const env = buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
       expect(env.ORCA_AGENT_SESSION_ID).toBe(sessionId)
-      expect(env.ORCA_CLI_COMMAND).toBe('orca')
+      expect(env.ORCA_CLI_COMMAND).toMatch(DEV_CLI_LAUNCHER)
       // A pane key here would leak into hook-emitted agent statuses, which assume a PTY leaf.
       expect(env.ORCA_PANE_KEY).toBeUndefined()
     } finally {
@@ -130,7 +132,7 @@ describe('the spawned Codex child', () => {
     try {
       await expect(connection.request('test/env')).resolves.toEqual({
         sessionId,
-        cliCommand: 'orca',
+        cliCommand: expect.stringMatching(DEV_CLI_LAUNCHER),
         path: expect.stringMatching(DEV_CLI_BIN_FIRST)
       })
     } finally {

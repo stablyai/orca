@@ -13,11 +13,15 @@
  * handle-based surfaces outside orchestration; for orchestration the id wins and the host maps it
  * back to that handle, so the worker keeps one identity.
  *
- * `ORCA_CLI_COMMAND: 'orca'` is honest ONLY because of the PATH prepend below. Orca's Linux CLI
- * installs as `orca-ide` so it never claims GNOME Orca's /usr/bin/orca (stablyai/orca#7904), and
- * on packaged macOS/Windows the bundled launcher is reachable only from the app's own resources
- * dir. A PTY agent gets that treatment from `buildPtyHostEnv`; a structured session has no PTY, so
- * it applies the SAME function here rather than a second, drifting copy of the rule.
+ * The PATH prepend below makes bare `orca` this app's CLI, the SAME function `buildPtyHostEnv`
+ * applies, rather than a second, drifting copy of the rule. Orca's Linux CLI installs as `orca-ide`
+ * so it never claims GNOME Orca's /usr/bin/orca (stablyai/orca#7904), and on packaged macOS/Windows
+ * the bundled launcher is reachable only from the app's own resources dir.
+ *
+ * `ORCA_CLI_COMMAND` is the absolute launcher in that directory, because a provider can run each
+ * command in a login shell (Codex runs `zsh -lc`), whose profile rebuilds PATH and puts a global
+ * install — possibly an older Orca — ahead of this app's. The absolute path is what an agent resolves
+ * the CLI from, so it survives any shell's startup files, on every platform.
  *
  * Deliberately NOT `ORCA_PANE_KEY`. Claude structured sessions run hooks, and a pane key in their
  * environment starts flowing into hook-emitted agent-status payloads and the hook-attestation,
@@ -49,10 +53,9 @@ export function structuredSessionChildIdentityEnv(
     ...childEnv,
     ...(identity ? { ORCA_TERMINAL_HANDLE: identity.handle } : {}),
     [ORCA_AGENT_SESSION_ID_ENV]: sessionId,
-    [ORCA_STRUCTURED_SESSION_ENV]: '1',
-    ORCA_CLI_COMMAND: 'orca'
+    [ORCA_STRUCTURED_SESSION_ENV]: '1'
   }
-  applyOrcaCliPath(env)
+  env.ORCA_CLI_COMMAND = applyOrcaCliPath(env) ?? 'orca'
   return env
 }
 
@@ -72,12 +75,12 @@ export function withStructuredSessionTerminalViewEnv(
  * A host with no app environment installed — a plain-Node fork, or a unit test — has no userData
  * root to resolve, and inventing one would write a shim into the wrong directory.
  */
-function applyOrcaCliPath(env: Record<string, string>): void {
+function applyOrcaCliPath(env: Record<string, string>): string | null {
   if (!hasAppEnvironment()) {
-    return
+    return null
   }
   const app = getAppEnvironment()
-  prependOrcaCliDirToChildPath(env, {
+  return prependOrcaCliDirToChildPath(env, {
     isPackaged: app.isPackaged(),
     userDataPath: app.getPath('userData'),
     resourcesPath: process.resourcesPath ?? null

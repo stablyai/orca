@@ -72,7 +72,7 @@ describe('structuredSessionChildIdentityEnv', () => {
       ORCA_AGENT_SESSION_ID: SESSION_ID,
       // For a CLI that predates the id, which refuses on it instead of guessing a sibling.
       ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: 'orca'
+      ORCA_CLI_COMMAND: join(SHIM_DIR, 'orca')
     })
     // A chat names itself by its id alone: no handle, no pane key.
     expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
@@ -106,13 +106,13 @@ describe('structuredSessionChildIdentityEnv', () => {
       }
     })
 
-    it('on packaged Linux, through the bare-orca shim its ORCA_CLI_COMMAND assumes', () => {
+    it('on packaged Linux, through the bare-orca shim, named by absolute path', () => {
       // Without this the child's first `orca orchestration check` execs GNOME Orca — the CLI
       // installs as `orca-ide` on Linux (stablyai/orca#7904) — and the dispatch hangs to timeout.
       pinPlatform('linux')
       installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
       const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin:/bin' })
-      expect(env.ORCA_CLI_COMMAND).toBe('orca')
+      expect(env.ORCA_CLI_COMMAND).toBe(join(SHIM_DIR, 'orca'))
       expect(env.PATH).toBe(`${SHIM_DIR}:/usr/bin:/bin`)
     })
 
@@ -121,6 +121,7 @@ describe('structuredSessionChildIdentityEnv', () => {
       installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
       const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
       expect(env.PATH).toBe(`${join(RESOURCES, 'bin')}:/usr/bin`)
+      expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'orca'))
     })
 
     it('on packaged Windows, through the bundled CLI dir under the env block spelling', () => {
@@ -129,6 +130,8 @@ describe('structuredSessionChildIdentityEnv', () => {
       const env = structuredSessionChildIdentityEnv(SESSION_ID, { Path: 'C:\\Windows' })
       expect(env.Path).toBe(`${join(RESOURCES, 'bin')};C:\\Windows`)
       expect(env.PATH).toBeUndefined()
+      // The native launcher: `orca.cmd` refuses message bodies cmd.exe would mangle.
+      expect(env.ORCA_CLI_COMMAND).toBe(join(RESOURCES, 'bin', 'orca.exe'))
     })
 
     it('unpackaged, through the dev launcher dir', () => {
@@ -136,6 +139,7 @@ describe('structuredSessionChildIdentityEnv', () => {
       installFakeAppEnvironment({ isPackaged: () => false, getPath: () => USER_DATA })
       const env = structuredSessionChildIdentityEnv(SESSION_ID, { PATH: '/usr/bin' })
       expect(env.PATH).toBe(`${join(USER_DATA, 'cli', 'bin')}:/usr/bin`)
+      expect(env.ORCA_CLI_COMMAND).toBe(join(USER_DATA, 'cli', 'bin', 'orca-dev'))
     })
   })
 

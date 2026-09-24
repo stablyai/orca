@@ -36,7 +36,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       CODEX_HOME: '/codex/home',
       ORCA_AGENT_SESSION_ID: 'session-1',
       ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: 'orca',
+      ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/),
       // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
       PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
     })
