@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14, windows-2022]
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-2022, windows-11-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -39,4 +39,58 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
-      - run: pnpm test:bun:profile
+      - name: Build the native Windows process reader
+        if: runner.os == 'Windows'
+        run: node config/scripts/build-windows-process-tree-relay-addon.mjs
+      - run: pnpm build:orcad
+      - run: pnpm test:bun:profile --artifact
+
+  linux_glibc_floor:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    container: ubuntu:20.04
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - name: Install Ubuntu 20.04 prerequisites
+        run: apt-get update && apt-get install -y build-essential ca-certificates git python3 unzip
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Trust the checked-out workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: ./.github/actions/install-node-dependencies
+      - run: pnpm build:orcad
+      - run: pnpm test:bun:profile --artifact
+
+  linux_musl:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify native Alpine artifact and persistence
+        run: |
+          docker run --rm --init -i \
+            -e ORCA_BACKGROUND_LAUNCH=1 \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            node:24-alpine3.23 sh -s <<'BUN_QUALIFICATION'
+          set -eu
+          apk add --no-cache bash git libstdc++ python3 make g++
+          git config --global --add safe.directory /work
+          npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm build:orcad
+          pnpm test:bun:profile --artifact
+          BUN_QUALIFICATION

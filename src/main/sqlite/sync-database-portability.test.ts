@@ -54,6 +54,18 @@ describe('SQLite runtime contract', () => {
     expect(isSqliteAvailable()).toBe(true)
   })
 
+  it('enforces foreign keys by default', () => {
+    const db = open(':memory:')
+    db.exec(
+      'CREATE TABLE parents(id INTEGER PRIMARY KEY); CREATE TABLE children(parent INTEGER REFERENCES parents(id))'
+    )
+    expect(() => db.prepare('INSERT INTO children VALUES(?)').run(1)).toThrow()
+    expect(db.prepare('SELECT * FROM children').all()).toEqual([])
+    db.prepare('INSERT INTO parents VALUES(?)').run(1)
+    expect(db.prepare('INSERT INTO children VALUES(?)').run(1).changes).toBe(1)
+    expect(() => db.prepare('DELETE FROM parents WHERE id = ?').run(1)).toThrow()
+  })
+
   it('returns safe integers as numbers without changing other SQLite values', () => {
     const db = open(':memory:')
     const row = db

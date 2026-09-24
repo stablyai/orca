@@ -83,7 +83,7 @@ export class BunSqliteDatabase {
       if (!Number.isSafeInteger(timeout) || timeout < 0 || timeout > 2_147_483_647) {
         throw new RangeError('SQLite busy timeout must be a nonnegative 32-bit integer')
       }
-      this.database.exec(`PRAGMA busy_timeout = ${timeout}`)
+      this.database.exec(`PRAGMA foreign_keys = ON; PRAGMA busy_timeout = ${timeout}`)
     } catch (error) {
       this.database.close(true)
       throw error
