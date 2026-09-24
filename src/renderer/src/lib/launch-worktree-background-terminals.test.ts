@@ -9,7 +9,8 @@ const mockSetTabLayout = vi.fn()
 const mockUpdateTabPtyId = vi.fn()
 const mockClearTabPtyId = vi.fn()
 const mockCloseTab = vi.fn()
-const mockRegisterEagerPtyBuffer = vi.fn()
+const mockRegisterEagerPtyBuffer =
+  vi.fn<(ptyId: string, onExit: (ptyId: string, code: number) => void) => void>()
 const mockGetActiveRuntimeTarget = vi.fn()
 
 let uuidIndex = 0
@@ -19,8 +20,18 @@ const setupLaunch = {
   envVars: { ORCA_WORKTREE_PATH: '/repo/worktree' }
 }
 
+const initialSettings: {
+  activeRuntimeEnvironmentId: string | null
+  setupScriptLaunchMode: string
+  closeSetupTabOnSuccess?: boolean
+} = {
+  activeRuntimeEnvironmentId: null,
+  setupScriptLaunchMode: 'new-tab',
+  closeSetupTabOnSuccess: false
+}
+
 const state = {
-  settings: { activeRuntimeEnvironmentId: null as string | null, setupScriptLaunchMode: 'new-tab' },
+  settings: initialSettings,
   repos: [{ id: 'repo-1', connectionId: null as string | null }],
   worktreesByRepo: {
     'repo-1': [
@@ -65,12 +76,24 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   getActiveRuntimeTarget: mockGetActiveRuntimeTarget
 }))
 
+function setupBufferExitHandler(): (ptyId: string, code: number) => void {
+  const onExit = mockRegisterEagerPtyBuffer.mock.calls[1]?.[1]
+  if (!onExit) {
+    throw new Error('setup pane buffer was not registered')
+  }
+  return onExit
+}
+
 describe('launchWorktreeBackgroundTerminals', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
     uuidIndex = 0
-    state.settings = { activeRuntimeEnvironmentId: null, setupScriptLaunchMode: 'new-tab' }
+    state.settings = {
+      activeRuntimeEnvironmentId: null,
+      setupScriptLaunchMode: 'new-tab',
+      closeSetupTabOnSuccess: false
+    }
     state.repos = [{ id: 'repo-1', connectionId: null }]
     state.worktreesByRepo['repo-1'] = [
       {
@@ -194,6 +217,57 @@ describe('launchWorktreeBackgroundTerminals', () => {
         titlesByLeafId: { '00000000-0000-4000-8000-000000000002': 'Setup' }
       })
     )
+  })
+
+  it('closes a succeeded setup tab and keeps a failed one when auto-close is on', async () => {
+    state.settings.closeSetupTabOnSuccess = true
+    Object.assign(state, { terminalLayoutsByTabId: {} })
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+
+    await launchWorktreeBackgroundTerminals({ worktreeId: 'wt-1', setup: setupLaunch })
+
+    expect(mockSpawn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: 'bash /tmp/setup.sh && exit', tabId: 'tab-2' })
+    )
+    const setupExit = setupBufferExitHandler()
+    setupExit('pty-2', 1)
+    expect(mockCloseTab).not.toHaveBeenCalled()
+    setupExit('pty-2', 0)
+    expect(mockCloseTab).toHaveBeenCalledWith('tab-2', {
+      recordInteraction: false,
+      reason: 'pty-exit'
+    })
+  })
+
+  it('collapses a succeeded setup split back to the primary pane', async () => {
+    state.settings = {
+      activeRuntimeEnvironmentId: null,
+      setupScriptLaunchMode: 'split-vertical',
+      closeSetupTabOnSuccess: true
+    }
+    const primaryLeaf = '00000000-0000-4000-8000-000000000001'
+    const setupLeaf = '00000000-0000-4000-8000-000000000002'
+    Object.assign(state, {
+      terminalLayoutsByTabId: {
+        'tab-1': { ptyIdsByLeafId: { [primaryLeaf]: 'pty-1', [setupLeaf]: 'pty-2' } }
+      }
+    })
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+
+    await launchWorktreeBackgroundTerminals({ worktreeId: 'wt-1', setup: setupLaunch })
+    const setupExit = setupBufferExitHandler()
+    setupExit('pty-2', 0)
+
+    expect(mockSetTabLayout).toHaveBeenLastCalledWith('tab-1', {
+      root: { type: 'leaf', leafId: primaryLeaf },
+      activeLeafId: primaryLeaf,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [primaryLeaf]: 'pty-1' }
+    })
+    expect(mockClearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-2')
+    expect(mockCloseTab).not.toHaveBeenCalled()
   })
 
   it('spawns an initial terminal before a setup-only new-tab launch', async () => {

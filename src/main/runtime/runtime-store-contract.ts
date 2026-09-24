@@ -86,6 +86,7 @@ export type RuntimeStore = {
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
+    closeSetupTabOnSuccess?: GlobalSettings['closeSetupTabOnSuccess']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
