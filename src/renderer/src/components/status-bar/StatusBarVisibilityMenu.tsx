@@ -10,6 +10,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import { isProviderConfigured } from './status-bar-provider-visibility'
 import type { StatusBarController } from './use-status-bar-controller'
 
 export function StatusBarVisibilityMenu({
@@ -18,7 +19,13 @@ export function StatusBarVisibilityMenu({
   controller: StatusBarController
 }): React.JSX.Element {
   const {
+    antigravity,
+    claude,
+    codex,
     detectedAgentIds,
+    gemini,
+    grok,
+    kimi,
     menuOpen,
     menuPoint,
     recordFeatureInteraction,
@@ -38,7 +45,7 @@ export function StatusBarVisibilityMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="min-w-0 w-fit" sideOffset={0} align="start">
-        {isStatusBarItemAvailable('claude', detectedAgentIds) && (
+        {isStatusBarItemAvailable('claude', detectedAgentIds, isProviderConfigured(claude)) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('claude')}
             onCheckedChange={() => {
@@ -50,7 +57,7 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.3885eb74d8', 'Claude Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('codex', detectedAgentIds) && (
+        {isStatusBarItemAvailable('codex', detectedAgentIds, isProviderConfigured(codex)) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('codex')}
             onCheckedChange={() => {
@@ -62,7 +69,7 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.c0909c686e', 'Codex Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
+        {isStatusBarItemAvailable('gemini', detectedAgentIds, isProviderConfigured(gemini)) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('gemini')}
             onCheckedChange={() => {
@@ -74,7 +81,11 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
+        {isStatusBarItemAvailable(
+          'antigravity',
+          detectedAgentIds,
+          isProviderConfigured(antigravity)
+        ) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('antigravity')}
             onCheckedChange={() => {
@@ -99,7 +110,7 @@ export function StatusBarVisibilityMenu({
           <OpenCodeGoIcon size={14} />
           {translate('auto.components.status.bar.StatusBar.8c86cd77b0', 'OpenCode Go Usage')}
         </DropdownMenuCheckboxItem>
-        {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
+        {isStatusBarItemAvailable('kimi', detectedAgentIds, isProviderConfigured(kimi)) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('kimi')}
             onCheckedChange={() => {
@@ -121,7 +132,7 @@ export function StatusBarVisibilityMenu({
           <MiniMaxIcon size={14} />
           {translate('auto.components.status.bar.StatusBar.3bbf140864', 'MiniMax Usage')}
         </DropdownMenuCheckboxItem>
-        {isStatusBarItemAvailable('grok', detectedAgentIds) && (
+        {isStatusBarItemAvailable('grok', detectedAgentIds, isProviderConfigured(grok)) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('grok')}
             onCheckedChange={() => {

@@ -7,24 +7,29 @@ import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 // PATH detection reports the agent as missing. Pre-detection (null) keeps
 // the legacy behavior so the bar/toggle don't flicker on cold start, and
 // re-show automatically once the agent appears on PATH.
-const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
-  'claude',
-  'codex',
-  'gemini',
-  'kimi',
-  'antigravity',
-  'grok'
-])
+function isCliGatedStatusBarItem(id: StatusBarItem): id is TuiAgent {
+  return (
+    id === 'claude' ||
+    id === 'codex' ||
+    id === 'gemini' ||
+    id === 'kimi' ||
+    id === 'antigravity' ||
+    id === 'grok'
+  )
+}
 
 export function isStatusBarItemAvailable(
   id: StatusBarItem,
-  detectedAgentIds: TuiAgent[] | null
+  detectedAgentIds: TuiAgent[] | null,
+  hasProviderEvidence = false
 ): boolean {
-  if (!CLI_GATED_ITEMS.has(id)) {
+  if (!isCliGatedStatusBarItem(id)) {
     return true
   }
   if (detectedAgentIds === null) {
     return true
   }
-  return detectedAgentIds.includes(id as TuiAgent)
+  // Why: PATH detection is a cached negative snapshot. A later successful
+  // usage fetch proves a CLI was installed mid-session and must win over it.
+  return hasProviderEvidence || detectedAgentIds.includes(id)
 }
