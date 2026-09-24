@@ -37,6 +37,7 @@ export type RawProjectView = {
     nodes?: (RawProjectV2Field | null)[]
   }
   groupByFields?: { nodes?: (RawProjectV2Field | null)[] }
+  verticalGroupByFields?: { nodes?: (RawProjectV2Field | null)[] }
   sortByFields?: {
     nodes?: ({ direction?: string; field?: RawProjectV2Field | null } | null)[]
   }
@@ -79,6 +80,7 @@ export async function fetchProjectViewsPage(args: {
                 nodes { ...FieldConfig }
               }
               groupByFields(first:10) { nodes { ...FieldConfig } }
+              verticalGroupByFields(first:10) { nodes { ...FieldConfig } }
               sortByFields(first:10) {
                 nodes { direction field { ...FieldConfig } }
               }
@@ -189,6 +191,13 @@ export function finalizeView(
       groupByFields.push(n)
     }
   }
+  const verticalGroupByFields: GitHubProjectField[] = []
+  for (const f of raw.verticalGroupByFields?.nodes ?? []) {
+    const n = normalizeField(f)
+    if (n) {
+      verticalGroupByFields.push(n)
+    }
+  }
   const sortByFields: GitHubProjectSort[] = []
   for (const s of raw.sortByFields?.nodes ?? []) {
     if (!s || (s.direction !== 'ASC' && s.direction !== 'DESC')) {
@@ -210,6 +219,7 @@ export function finalizeView(
       filter: typeof raw.filter === 'string' ? raw.filter : '',
       fields,
       groupByFields,
+      verticalGroupByFields,
       sortByFields
     }
   }
