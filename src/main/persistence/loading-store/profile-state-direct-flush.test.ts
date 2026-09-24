@@ -68,7 +68,7 @@ function fixture(seedState?: unknown) {
 }
 
 describe('SQLite durability barriers with another selective write pending', () => {
-  it('commits a reset-credit claim before returning to its provider caller', () => {
+  it('commits a reset-credit claim before returning to its provider caller', async () => {
     const state = fixture()
     const ledger: CodexResetCreditAttemptLedger = {
       version: 1,
@@ -86,7 +86,7 @@ describe('SQLite durability barriers with another selective write pending', () =
       ]
     }
     state.pendSession()
-    state.store.replaceCodexResetCreditAttemptLedgerAndFlush(ledger)
+    await state.store.replaceCodexResetCreditAttemptLedgerAndFlush(ledger)
     expect(state.read('codexResetCreditAttemptLedger')).toMatchObject({
       kind: 'value',
       value: ledger

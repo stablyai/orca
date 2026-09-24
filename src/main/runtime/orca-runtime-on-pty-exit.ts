@@ -24,7 +24,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
        * as -1, so the numeric code alone cannot tell a dead process from a failed stop. */
       providerExitObserved?: boolean
     } = {}
-  ): void {
+  ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
@@ -216,13 +216,20 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
     }
+    let retirement: Promise<void> | undefined
     if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
       // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
       this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     } else {
       // Why: permanent process exit is absence, not a starting/sleeping tab.
       // Retire before publishing so paired clients never persist a ghost.
-      this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+      retirement = this.retireMobileSessionSurfacesForPty(
+        ptyId,
+        incarnationId,
+        exactSurfaces
+      ).catch((error) => {
+        console.error('[runtime] failed to publish terminal retirement:', error)
+      })
     }
 
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
@@ -253,6 +260,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       }
     }
     this.pruneDisconnectedPtyRecords()
+    return retirement
   }
 
   private notifyPtyExitListeners(ptyId: string): void {

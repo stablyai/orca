@@ -20,7 +20,8 @@ export class ProfileStateBackupRotation {
   constructor(
     private readonly databasePath: string,
     private readonly profileId: string,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly runBackup = runProfileStateBackup
   ) {}
 
   schedule(): void {
@@ -77,7 +78,7 @@ export class ProfileStateBackupRotation {
     )
     this.copying = true
     try {
-      await runProfileStateBackup({
+      await this.runBackup({
         databasePath: this.databasePath,
         profileId: this.profileId,
         targetPath: target

@@ -25,11 +25,13 @@ export type OrcadProfileStateStartup = {
 }
 
 /** Build the headless Store and publish its authority selection at one Node-only seam. */
-export function createOrcadProfileStateStartup(userDataPath: string): OrcadProfileStateStartup {
+export async function createOrcadProfileStateStartup(
+  userDataPath: string
+): Promise<OrcadProfileStateStartup> {
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(userDataPath)
   const authorityMode = orcadProfileStateAuthorityMode()
-  const result = createProfileStateStoreForStartup({
+  const result = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
@@ -37,7 +39,6 @@ export function createOrcadProfileStateStartup(userDataPath: string): OrcadProfi
     authorityMode,
     storageAuthority: 'runtime'
   })
-  initSshHostKeyStoreFile(profile.dataFile)
   const authority = {
     backend: result.backend,
     classification: result.classification,
@@ -45,6 +46,19 @@ export function createOrcadProfileStateStartup(userDataPath: string): OrcadProfi
     runtime: 'orcad' as const,
     migrated: result.migrated
   }
-  emitOrcadProfileStateAuthoritySelected(authority)
-  return { store: result.store, authority }
+  try {
+    initSshHostKeyStoreFile(profile.dataFile)
+    emitOrcadProfileStateAuthoritySelected(authority)
+    return { store: result.store, authority }
+  } catch (error) {
+    try {
+      await result.store.freezeWritesAsync()
+    } catch (closeError) {
+      console.error(
+        '[persistence] Failed to close profile persistence after startup failure:',
+        closeError
+      )
+    }
+    throw error
+  }
 }

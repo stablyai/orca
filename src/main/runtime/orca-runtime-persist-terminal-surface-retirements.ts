@@ -8,7 +8,8 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import { attachRetirementProofsToSnapshot } from './mobile-session-terminal-retirement-proof'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
+import { cloneWorkspaceSessionState } from '../persistence/restoring-sessions/session-owner-fields'
+import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 
 export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntimeWithTouchMobileSessionTabsForWorktree {
@@ -18,92 +19,77 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
    * against the local partition strands the real ghost and bumps a foreign host's epoch.
    * Returns null when nothing may be published because persistence is unavailable or failed.
    */
-  protected persistTerminalSurfaceRetirements(
+  protected async persistTerminalSurfaceRetirements(
     retiredSurfaces: readonly RetiredTerminalSurface[]
-  ): { accepted: RetiredTerminalSurface[]; unpersisted: RetiredTerminalSurface[] } | null {
-    const surfacesByHostId = new Map<ExecutionHostId, RetiredTerminalSurface[]>()
-    for (const surface of retiredSurfaces) {
-      const hostId =
-        this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ?? LOCAL_EXECUTION_HOST_ID
-      const bucket = surfacesByHostId.get(hostId)
-      if (bucket) {
-        bucket.push(surface)
-      } else {
-        surfacesByHostId.set(hostId, [surface])
-      }
+  ): Promise<{ accepted: RetiredTerminalSurface[]; unpersisted: RetiredTerminalSurface[] } | null> {
+    if (!this.store?.runDurableMutation) {
+      const hasPersistedSession = retiredSurfaces.some((surface) =>
+        this.store?.getWorkspaceSession?.(
+          this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ??
+            LOCAL_EXECUTION_HOST_ID
+        )
+      )
+      return hasPersistedSession ? null : { accepted: [], unpersisted: [...retiredSurfaces] }
     }
-    const accepted: RetiredTerminalSurface[] = []
-    const unpersisted: RetiredTerminalSurface[] = []
-    const pendingWrites: { hostId: ExecutionHostId; session: WorkspaceSessionState }[] = []
-    const originalSessions = new Map<ExecutionHostId, WorkspaceSessionState>()
-    const stagedSessions = new Map<ExecutionHostId, WorkspaceSessionState>()
-    for (const [hostId, surfaces] of surfacesByHostId) {
-      const session = this.store?.getWorkspaceSession?.(hostId)
-      if (!session) {
-        unpersisted.push(...surfaces)
-        continue
-      }
-      // Why: publishing absence before its host membership fence is durable lets a crash or
-      // stale renderer write resurrect the retired surface.
-      if (!this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
-        return null
-      }
-      originalSessions.set(hostId, session)
-      let nextSession = session
-      const acceptedForHost: RetiredTerminalSurface[] = []
-      for (const surface of surfaces) {
-        const candidate = retireTerminalSurfaceFromPersistence(nextSession, surface)
-        if (candidate !== nextSession) {
-          acceptedForHost.push(surface)
-          nextSession = candidate
-        }
-      }
-      if (acceptedForHost.length === 0) {
-        continue
-      }
-      accepted.push(...acceptedForHost)
-      pendingWrites.push({ hostId, session: nextSession })
-    }
-    if (pendingWrites.length > 0) {
-      try {
-        for (const write of pendingWrites) {
-          this.store?.setWorkspaceSession?.(write.session, write.hostId)
-          const staged = this.store?.getWorkspaceSession?.(write.hostId)
-          if (staged) {
-            stagedSessions.set(write.hostId, staged)
-          }
-        }
-        this.store?.flushOrThrow?.()
-      } catch (error) {
-        // setWorkspaceSession mutates the in-memory partition before the flush. Restore only
-        // fields still equal to our staged write so concurrent renderer updates survive.
-        for (const [hostId, original] of originalSessions) {
-          const staged = stagedSessions.get(hostId)
-          const current = this.store?.getWorkspaceSession?.(hostId)
-          if (!staged || !current) {
+    try {
+      return await this.store.runDurableMutation(() => {
+        const accepted: RetiredTerminalSurface[] = []
+        const unpersisted: RetiredTerminalSurface[] = []
+        const originals = new Map<ExecutionHostId, WorkspaceSessionState>()
+        const staged = new Map<ExecutionHostId, WorkspaceSessionState>()
+        for (const surface of retiredSurfaces) {
+          const hostId =
+            this.tryGetWorkspaceSessionHostIdForWorktree(surface.worktreeId) ??
+            LOCAL_EXECUTION_HOST_ID
+          const current = this.store.getWorkspaceSession?.(hostId)
+          if (!current) {
+            unpersisted.push(surface)
             continue
           }
-          const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(
-            original,
-            staged,
-            current
-          )
-          if (rolledBack !== current) {
-            this.store?.setWorkspaceSession?.(rolledBack, hostId)
+          if (!this.store.setWorkspaceSession) {
+            throw new Error('workspace_session_unavailable')
+          }
+          if (!originals.has(hostId)) {
+            originals.set(hostId, cloneWorkspaceSessionState(current))
+          }
+          const next = retireTerminalSurfaceFromPersistence(current, surface)
+          if (next !== current) {
+            this.store.setWorkspaceSession(next, hostId)
+            staged.set(hostId, cloneWorkspaceSessionState(this.store.getWorkspaceSession(hostId)))
+            accepted.push(surface)
           }
         }
-        console.error('[runtime] failed to persist terminal retirement:', error)
-        return null
-      }
+        return {
+          value: { accepted, unpersisted },
+          persist: staged.size > 0,
+          rollback: () => {
+            for (const [hostId, stagedSession] of staged) {
+              const current = this.store.getWorkspaceSession(hostId)
+              const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(
+                originals.get(hostId),
+                stagedSession,
+                current
+              )
+              if (rolledBack !== current) {
+                this.store.setWorkspaceSession(rolledBack, hostId)
+              }
+            }
+          }
+        }
+      })
+    } catch (error) {
+      console.error('[runtime] failed to persist terminal retirement:', error)
+      return null
     }
-    return { accepted, unpersisted }
   }
 
-  protected retireMobileSessionSurfacesForPty(
+  protected async retireMobileSessionSurfacesForPty(
     ptyId: string,
     incarnationId: string,
     exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
-  ): void {
+  ): Promise<void> {
+    // Physical cleanup already removed this generation; retirement must not recreate it.
+    const exitGeneration = this.ptyLifecycleGenerationById.get(ptyId)
     const terminalHandle =
       this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId) ?? undefined
     const retiredSurfaceByKey = new Map<string, RetiredTerminalSurface>()
@@ -135,8 +121,13 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
     if (retiredSurfaces.length === 0) {
       return
     }
-    const persisted = this.persistTerminalSurfaceRetirements(retiredSurfaces)
-    if (!persisted) {
+    const persisted = await this.persistTerminalSurfaceRetirements(retiredSurfaces)
+    const currentIncarnation = this.ptysById.get(ptyId)?.incarnationId
+    if (
+      !persisted ||
+      this.ptyLifecycleGenerationById.get(ptyId) !== exitGeneration ||
+      (currentIncarnation && currentIncarnation !== incarnationId)
+    ) {
       return
     }
     for (const surface of persisted.unpersisted) {

@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
+import {
+  ProfileStateIndeterminateWriteError,
+  withProfileStateWriteTransaction
+} from './profile-state-write-transaction'
 
 describe('profile state write transaction ownership', () => {
   it('rolls back a failed deferred commit and leaves the connection usable', () => {
@@ -41,4 +44,39 @@ describe('profile state write transaction ownership', () => {
       db.close()
     }
   })
+  it.each([false, true])(
+    'reports failed rollback as indeterminate after commit=%s',
+    (commitFirst) => {
+      const db = new Database(':memory:')
+      db.exec('CREATE TABLE writes (id INTEGER)')
+      const exec = db.exec.bind(db)
+      const injected = vi.spyOn(db, 'exec').mockImplementation((sql) => {
+        if (sql === 'ROLLBACK') {
+          throw new Error('injected rollback failure')
+        }
+        if (sql === 'COMMIT') {
+          if (commitFirst) {
+            exec(sql)
+          }
+          throw new Error('injected commit failure')
+        }
+        exec(sql)
+      })
+      try {
+        expect(() =>
+          withProfileStateWriteTransaction(db, () => db.exec('INSERT INTO writes VALUES (1)'))
+        ).toThrow(ProfileStateIndeterminateWriteError)
+        expect(db.isTransaction).toBe(!commitFirst)
+        if (db.isTransaction) {
+          exec('ROLLBACK')
+        }
+        expect(db.prepare('SELECT COUNT(*) AS count FROM writes').get()).toMatchObject({
+          count: commitFirst ? 1 : 0
+        })
+      } finally {
+        injected.mockRestore()
+        db.close()
+      }
+    }
+  )
 })

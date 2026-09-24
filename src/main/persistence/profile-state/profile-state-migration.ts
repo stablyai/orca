@@ -25,7 +25,7 @@ type ProfileStateMigrationOptions = {
 /** Publish an imported database only after its complete source has committed durably. */
 export function migrateProfileStateToSqlite(options: ProfileStateMigrationOptions): {
   authority: ProfileStateSqliteAuthority
-  initialState: ProfileStateAuthorityInitialState
+  initialState: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
 } {
   assertMigrationSourceUnchanged(options)
   assertNoRetainedProfileStateExports(options)

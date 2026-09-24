@@ -18,7 +18,12 @@ import { scheduleSave } from './write-scheduling'
 
 type SessionSnapshotOperationsRuntime = Pick<
   StoreRuntimeState,
-  'pendingSnapshotFileWork' | 'state' | 'terminalScrollbackSnapshotStorage'
+  | 'pendingSnapshotFileWork'
+  | 'profileMaintenancePending'
+  | 'quitFlushStarted'
+  | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'writesFrozen'
 >
 
 const sessionSnapshotOperationsContext = Symbol('SessionSnapshotOperations')
@@ -44,6 +49,7 @@ export class SessionSnapshotOperations {
   setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.assertSnapshotAdmission()
       setLocalWorkspaceSession(this, session)
       return
     }
@@ -56,6 +62,7 @@ export class SessionSnapshotOperations {
   ): void {
     const resolved = resolveHostId(hostId)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.assertSnapshotAdmission()
       setLocalWorkspaceSession(this, session, true)
       return
     }
@@ -88,6 +95,13 @@ export class SessionSnapshotOperations {
       this[sessionSnapshotOperationsContext].scheduling,
       resolved === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId']
     )
+  }
+
+  private assertSnapshotAdmission(): void {
+    const { runtime } = this[sessionSnapshotOperationsContext]
+    if (runtime.profileMaintenancePending || runtime.quitFlushStarted || runtime.writesFrozen) {
+      throw new Error('Profile maintenance or finalization is blocking new terminal snapshot work')
+    }
   }
 }
 

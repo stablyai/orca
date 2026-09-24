@@ -12,6 +12,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'dirtyProfileStateDomains'
   | 'firstPendingSaveAt'
   | 'pendingWrite'
+  | 'profileMaintenancePending'
   | 'quitFlushStarted'
   | 'writeGeneration'
   | 'writeTimer'
@@ -58,6 +59,9 @@ export function scheduleSave(
     return
   }
   owner[writeSchedulingOperationsContext].runtime.writeGeneration += 1
+  if (owner[writeSchedulingOperationsContext].runtime.profileMaintenancePending) {
+    return
+  }
   const now = Date.now()
   owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt ??= now
   if (owner[writeSchedulingOperationsContext].runtime.writeTimer) {
@@ -71,7 +75,7 @@ export function scheduleSave(
   owner[writeSchedulingOperationsContext].runtime.writeTimer = setTimeout(() => {
     owner[writeSchedulingOperationsContext].runtime.writeTimer = null
     owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt = null
-    void enqueueWrite(owner[writeSchedulingOperationsContext].writes)
+    void enqueueWrite(owner[writeSchedulingOperationsContext].writes).catch(() => {})
   }, delay)
 }
 

@@ -1,27 +1,19 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
-import { mkdir, readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
-import {
-  durableWriteTempPath,
-  writeFileDurable,
-  writeFileDurableSync
-} from '../../durable-file-write'
+import { existsSync } from 'node:fs'
 import type {
   ProfileStateAuthority,
   ProfileStateAuthorityInitialState,
-  ProfileStateDomainReplacement
+  ProfileStateDomainReplacement,
+  ProfileStateMaintenance
 } from '../loading-store/profile-state-authority'
 import {
-  acceptProfileStateJsonCompatibility,
   importProfileStateJson,
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateParsedSnapshot,
   readProfileStateRevision,
-  readProfileStateSnapshot,
-  stageProfileStateJsonCompatibility
+  readProfileStateSnapshot
 } from './profile-state-documents'
 import {
-  openProfileStateDatabase,
+  openWritableProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from './profile-state-database'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
@@ -33,12 +25,19 @@ import {
   parseProfileStateRoot,
   ProfileStateRevisionConflictError
 } from './profile-state-document-validation'
-import type { AutomationRun } from '../../../shared/automations-types'
+import { assertProfileStateRevisionOnDisk } from './profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
   type ProfileStateDatabaseQuarantine
 } from './profile-state-database-quarantine'
+import {
+  writeProfileStateAuthorityJsonExport,
+  writeProfileStateAuthorityCompatibilityExport,
+  writeProfileStateAuthorityCompatibilityExportAsync
+} from './profile-state-authority-exports'
+import { buildCompleteDocumentReplacements } from './profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
+import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 
 /**
  * Complete-document authority for the Store cutover.
@@ -50,8 +49,9 @@ import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
  * not rebuilt; Store callers can still opt into narrower dirty-domain writes.
  */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
+  private retired = false
   private observedRevision: number | undefined
-  private writableDatabase: ReturnType<typeof openProfileStateDatabase> | undefined
+  private writableDatabase: ReturnType<typeof openWritableProfileStateDatabase> | undefined
   private backupRotation: ProfileStateBackupRotation | undefined
 
   constructor(
@@ -59,8 +59,44 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     private readonly profileId: string
   ) {}
 
+  retireForWorker(): ProfileStateWriterInitialization {
+    this.assertActive()
+    if (this.observedRevision === undefined || this.backupRotation !== undefined) {
+      throw new Error('Profile state worker handoff requires an admitted bootstrap authority')
+    }
+    const initialization = {
+      databasePath: this.databasePath,
+      profileId: this.profileId,
+      revision: this.observedRevision
+    }
+    this.close()
+    this.retired = true
+    return initialization
+  }
+
+  initializeFromRevision(revision: number): void {
+    this.assertActive()
+    if (this.observedRevision !== undefined || !Number.isSafeInteger(revision) || revision < 0) {
+      throw new Error('Invalid profile state worker revision handoff')
+    }
+    assertProfileStateRevisionOnDisk(this.databasePath, this.profileId, revision)
+    this.observedRevision = revision
+    this.assertCurrentRevision()
+  }
+
+  get revision(): number {
+    this.assertActive()
+    if (this.observedRevision === undefined) {
+      throw new Error('Profile state authority has no admitted revision')
+    }
+    return this.observedRevision
+  }
+
   /** Keep the startup payload and write fence on the same accepted revision. */
-  readAcceptedState(rawJson: string): ProfileStateAuthorityInitialState | undefined {
+  readAcceptedState(
+    rawJson: string
+  ): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> | undefined {
+    this.assertActive()
     const opened = openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
       const snapshot = readAcceptedProfileStateParsedSnapshot(opened.db, rawJson)
@@ -73,7 +109,8 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     }
   }
 
-  readInitialState(): ProfileStateAuthorityInitialState {
+  readInitialState(): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> {
+    this.assertActive()
     if (!this.writableDatabase && !existsSync(this.databasePath)) {
       return this.createInitialState(0, undefined)
     }
@@ -93,6 +130,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   }
 
   readSerializedState(): string | undefined {
+    this.assertActive()
     if (!this.writableDatabase && !existsSync(this.databasePath)) {
       // Treat an absent database as the empty revision so a concurrent creator
       // cannot race this authority's first commit.
@@ -112,18 +150,22 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     }
   }
 
-  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): void {
+  writeSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[],
+    automationRunsAfter?: readonly unknown[]
+  ): void {
+    this.assertActive()
     if (this.observedRevision === undefined) {
       // Store normally reads before its first write. Establishing the revision
       // here keeps direct authority callers fenced too.
       this.readSerializedState()
     }
     const opened = this.openWritableDatabase()
-    const result = writeProfileStateDomains(opened.db, {
+    this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? 0,
-      replacements
-    })
-    this.observedRevision = result.revision
+      replacements,
+      automationRunsAfter
+    }).revision
   }
 
   assertCurrentRevision(): void {
@@ -135,21 +177,13 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
-    runs: readonly AutomationRun[]
+    runs: readonly unknown[]
   ): void {
-    if (this.observedRevision === undefined) {
-      this.readSerializedState()
-    }
-    const opened = this.openWritableDatabase()
-    const result = writeProfileStateDomains(opened.db, {
-      expectedRevision: this.observedRevision ?? 0,
-      replacements,
-      automationRunsAfter: runs
-    })
-    this.observedRevision = result.revision
+    this.writeSerializedDomains(replacements, runs)
   }
 
   writeSerializedState(payload: Buffer): void {
+    this.assertActive()
     const serialized = payload.toString('utf8')
     if (!Buffer.from(serialized, 'utf8').equals(payload)) {
       throw new Error('Profile state payload is not valid UTF-8')
@@ -167,6 +201,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   }
 
   writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): void {
+    this.assertActive()
     if (this.observedRevision === undefined) {
       this.readSerializedState()
     }
@@ -193,81 +228,83 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       })
       return
     }
-    const result = writeProfileStateDomains(opened.db, {
+    this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? currentRevision,
       replacements: complete
-    })
-    this.observedRevision = result.revision
+    }).revision
   }
 
   scheduleBackup(): void {
+    this.assertActive()
     this.backupRotation ??= new ProfileStateBackupRotation(this.databasePath, this.profileId)
     this.backupRotation.schedule()
   }
 
   async drainBackups(): Promise<void> {
+    this.assertActive()
     await this.backupRotation?.drain()
   }
 
-  /** Publish a durable JSON rollback/compatibility export without changing authority. */
   writeJsonExport(targetPath: string): number {
-    const opened = this.openWritableDatabase()
-    const snapshot = readProfileStateSnapshot(opened.db)
-    mkdirSync(dirname(targetPath), { recursive: true })
-    writeFileDurableSync(durableWriteTempPath(targetPath), targetPath, snapshot.json)
-    return snapshot.revision
+    return writeProfileStateAuthorityJsonExport(
+      this.openWritableDatabase().db,
+      targetPath,
+      this.observedRevision
+    )
   }
 
-  /** Stage both accepted versions before replacing canonical JSON for an older build. */
   writeJsonCompatibilityExport(targetPath: string): number | undefined {
-    const opened = this.openWritableDatabase()
-    const snapshot = readProfileStateSnapshot(opened.db)
-    if (snapshot.revision === 0) {
-      return undefined
-    }
-    const retained = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : undefined
-    stageProfileStateJsonCompatibility(opened.db, snapshot.json, snapshot.revision, retained)
-    mkdirSync(dirname(targetPath), { recursive: true })
-    writeFileDurableSync(durableWriteTempPath(targetPath), targetPath, snapshot.json)
-    acceptProfileStateJsonCompatibility(opened.db, snapshot.json, snapshot.revision)
-    return snapshot.revision
+    return writeProfileStateAuthorityCompatibilityExport(
+      this.openWritableDatabase().db,
+      targetPath,
+      this.observedRevision
+    )
   }
 
-  async writeJsonCompatibilityExportAsync(targetPath: string): Promise<number | undefined> {
-    const opened = this.openWritableDatabase()
-    const snapshot = readProfileStateSnapshot(opened.db)
-    if (snapshot.revision === 0) {
-      return undefined
-    }
-    const retained = await readFile(targetPath, 'utf8').catch((error: unknown) => {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return undefined
-      }
-      throw error
-    })
-    stageProfileStateJsonCompatibility(opened.db, snapshot.json, snapshot.revision, retained)
-    await mkdir(dirname(targetPath), { recursive: true })
-    await writeFileDurable(durableWriteTempPath(targetPath), targetPath, snapshot.json)
-    acceptProfileStateJsonCompatibility(opened.db, snapshot.json, snapshot.revision)
-    return snapshot.revision
+  writeJsonCompatibilityExportAsync(targetPath: string): Promise<number | undefined> {
+    return writeProfileStateAuthorityCompatibilityExportAsync(
+      this.openWritableDatabase().db,
+      targetPath,
+      this.observedRevision
+    )
   }
 
   quarantineDatabase(quarantineRoot?: string, reason?: string): ProfileStateDatabaseQuarantine {
+    this.assertActive()
     this.backupRotation?.assertIdle()
     this.close()
     return quarantineProfileStateDatabase(this.databasePath, this.profileId, quarantineRoot, reason)
   }
 
   close(): void {
+    this.assertActive()
     this.backupRotation?.stop()
     this.writableDatabase?.db.close()
     this.writableDatabase = undefined
   }
 
+  async pauseForMaintenance(): Promise<ProfileStateMaintenance> {
+    const revision = this.revision
+    await this.drainBackups()
+    this.close()
+    let consumed = false
+    return {
+      resume: async () => {
+        if (consumed) {
+          throw new Error('Profile maintenance resume has already been consumed')
+        }
+        consumed = true
+        assertProfileStateRevisionOnDisk(this.databasePath, this.profileId, revision)
+        this.assertCurrentRevision()
+        this.backupRotation = undefined
+      }
+    }
+  }
+
   private createInitialState(
     revision: number,
     value: Record<string, unknown> | undefined
-  ): ProfileStateAuthorityInitialState {
+  ): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> {
     let pending: { revision: number; value: Record<string, unknown> | undefined } | undefined = {
       revision,
       value
@@ -276,6 +313,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     return {
       authority: this,
       takeParsedState: () => {
+        this.assertActive()
         const snapshot = pending
         if (snapshot === undefined) {
           throw new Error('Profile state startup snapshot has already been consumed')
@@ -287,51 +325,15 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     }
   }
 
+  private assertActive(): void {
+    if (this.retired) {
+      throw new Error('Profile state authority was retired for worker ownership')
+    }
+  }
+
   private openWritableDatabase(): NonNullable<ProfileStateSqliteAuthority['writableDatabase']> {
-    if (this.writableDatabase) {
-      return this.writableDatabase
-    }
-    mkdirSync(dirname(this.databasePath), { recursive: true })
-    const opened = openProfileStateDatabase(this.databasePath, this.profileId)
-    if (opened.readOnly) {
-      opened.db.close()
-      throw new Error('Cannot write a future profile state schema')
-    }
-    this.writableDatabase = opened
-    return opened
+    this.assertActive()
+    this.writableDatabase ??= openWritableProfileStateDatabase(this.databasePath, this.profileId)
+    return this.writableDatabase
   }
-}
-
-function buildCompleteDocumentReplacements(
-  db: ReturnType<typeof openProfileStateDatabase>['db'],
-  replacements: readonly ProfileStateDomainReplacement[]
-): ProfileStateDomainReplacement[] {
-  const domains = new Set(replacements.map(({ domain }) => domain))
-  const incoming = new Set(domains)
-  for (const row of db
-    .prepare(`SELECT domain FROM profile_state_documents
-      UNION SELECT domain FROM profile_state_automation_runs_meta WHERE presence <> 'document'`)
-    .all()) {
-    if (isDomainRow(row)) {
-      domains.add(row.domain)
-    }
-  }
-
-  return [
-    ...replacements,
-    ...[...domains]
-      .filter((domain) => !incoming.has(domain))
-      .map((domain) => ({ domain, payload: null }))
-  ]
-}
-
-function isDomainRow(value: unknown): value is { domain: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    'domain' in value &&
-    typeof value.domain === 'string' &&
-    value.domain.length > 0
-  )
 }

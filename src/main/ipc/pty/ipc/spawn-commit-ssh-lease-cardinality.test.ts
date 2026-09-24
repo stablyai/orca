@@ -150,7 +150,7 @@ describe('the IPC spawn commit keeps one reattachable lease per SSH pane', () =>
       state: 'attached'
     })
     expect(bulkReattachPtyIds(store)).toEqual(['pty2:aaa:1', 'pty2:bbb:1'])
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: WORKTREE,
       tabId: TAB,
       leafId: TEST_LEAF_1,
@@ -226,7 +226,7 @@ describe('the IPC spawn commit keeps one reattachable lease per SSH pane', () =>
     })
     // Production's writer for an SSH pane binding, and the whole point: it updates ONLY the host
     // partition, so `local` is left naming the predecessor until the renderer republishes.
-    store.persistPtyBinding(
+    await store.persistPtyBinding(
       { worktreeId: WORKTREE, tabId: TAB, leafId: TEST_LEAF_1, ptyId: successor },
       hostId
     )

@@ -6,6 +6,7 @@ import { getGithubCacheFile } from './user-data-path'
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
+import { drainProfileStateOperations, runProfileStateFlush } from './profile-state-flush-lifetime'
 
 type WriteFlushBarrierOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -17,6 +18,9 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'githubCacheGeneration'
   | 'lastDurableWriteGeneration'
   | 'pendingGithubCacheWrite'
+  | 'pendingProfileFlushes'
+  | 'pendingProfileMaintenance'
+  | 'profileMaintenancePending'
   | 'profileStateAuthority'
   | 'quitFlushPromise'
   | 'quitFlushStarted'
@@ -31,6 +35,7 @@ const writeFlushBarrierOperationsContext = Symbol('WriteFlushBarrierOperations')
 type WriteFlushBarrierOperationsContext = {
   runtime: WriteFlushBarrierOperationsRuntime
   writes: PrimaryStateWriteOperations
+  bestEffortFinalFlush?: Promise<void>
 }
 
 export class WriteFlushBarrierOperations {
@@ -42,7 +47,17 @@ export class WriteFlushBarrierOperations {
 
   flush(): void {
     this[writeFlushBarrierOperationsContext].runtime.automationListProjectionCache = null
-    if (this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted) {
+    if (
+      this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted ||
+      this[writeFlushBarrierOperationsContext].runtime.profileMaintenancePending
+    ) {
+      return
+    }
+    if (this[writeFlushBarrierOperationsContext].runtime.profileStateAuthority?.asynchronous) {
+      this[writeFlushBarrierOperationsContext].runtime.writeGeneration++
+      void flushCurrentStateAsync(this, false, undefined, false).catch((error) =>
+        console.error('[persistence] Failed to flush state:', error)
+      )
       return
     }
     try {
@@ -59,22 +74,46 @@ export class WriteFlushBarrierOperations {
   }
 
   flushAsync(options: { exportJsonCompatibility?: boolean } = {}): Promise<void> {
+    const context = this[writeFlushBarrierOperationsContext]
+    context.bestEffortFinalFlush ??= this.flushFinalOrThrowAsync(options).catch((error) =>
+      console.error('[persistence] Failed to flush final state:', error)
+    )
+    return context.bestEffortFinalFlush
+  }
+
+  flushFinalOrThrowAsync(options: { exportJsonCompatibility?: boolean } = {}): Promise<void> {
     const { runtime } = this[writeFlushBarrierOperationsContext]
     if (runtime.quitFlushPromise) {
       return runtime.quitFlushPromise
     }
     runtime.quitFlushStarted = true
-    runtime.quitFlushPromise = flushCurrentStateAsync(this, true)
+    const maintenance = runtime.profileMaintenancePending
+    runtime.quitFlushPromise = (
+      maintenance
+        ? Promise.resolve(runtime.pendingProfileMaintenance)
+        : drainProfileStateOperations(runtime.pendingProfileFlushes).then(() =>
+            flushCurrentStateAsync(this, true)
+          )
+    )
       .then(async () => {
-        if (options.exportJsonCompatibility) {
+        if (options.exportJsonCompatibility && !maintenance) {
           await runtime.profileStateAuthority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
         }
       })
-      .catch((error) => console.error('[persistence] Failed to flush final state:', error))
+      .finally(async () => {
+        if (runtime.profileStateAuthority?.asynchronous) {
+          runtime.writesFrozen = true
+          await runtime.profileStateAuthority.close()
+        }
+      })
     return runtime.quitFlushPromise
   }
 
   flushPendingAsync(): Promise<void> {
+    const { runtime } = this[writeFlushBarrierOperationsContext]
+    if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {
+      return Promise.resolve()
+    }
     // Best-effort callers must not livelock while the live app keeps mutating state.
     return flushCurrentStateAsync(this, false, undefined, false).catch(() => {})
   }
@@ -84,6 +123,7 @@ export class WriteFlushBarrierOperations {
   ): Promise<void> {
     if (
       this[writeFlushBarrierOperationsContext].runtime.writesFrozen ||
+      this[writeFlushBarrierOperationsContext].runtime.profileMaintenancePending ||
       this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted
     ) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
@@ -101,24 +141,24 @@ export class WriteFlushBarrierOperations {
 export async function flushDurableStateOrThrowAsync(
   owner: WriteFlushBarrierOperations
 ): Promise<void> {
-  if (
-    owner[writeFlushBarrierOperationsContext].runtime.writesFrozen ||
-    owner[writeFlushBarrierOperationsContext].runtime.quitFlushStarted
-  ) {
+  const { runtime, writes } = owner[writeFlushBarrierOperationsContext]
+  if (runtime.writesFrozen || runtime.profileMaintenancePending || runtime.quitFlushStarted) {
     throw new Error('Cannot flush while persistence is finalized')
   }
-  for (;;) {
-    if (owner[writeFlushBarrierOperationsContext].runtime.writeTimer) {
-      clearTimeout(owner[writeFlushBarrierOperationsContext].runtime.writeTimer)
-      owner[writeFlushBarrierOperationsContext].runtime.writeTimer = null
+  return runProfileStateFlush(runtime, async () => {
+    for (;;) {
+      if (runtime.writeTimer) {
+        clearTimeout(runtime.writeTimer)
+        runtime.writeTimer = null
+      }
+      runtime.firstPendingSaveAt = null
+      const generation = runtime.writeGeneration
+      await enqueueWrite(writes)
+      if (generation === runtime.writeGeneration) {
+        break
+      }
     }
-    owner[writeFlushBarrierOperationsContext].runtime.firstPendingSaveAt = null
-    const generation = owner[writeFlushBarrierOperationsContext].runtime.writeGeneration
-    await enqueueWrite(owner[writeFlushBarrierOperationsContext].writes)
-    if (generation === owner[writeFlushBarrierOperationsContext].runtime.writeGeneration) {
-      break
-    }
-  }
+  })
 }
 
 export async function flushCurrentStateAsync(
@@ -126,55 +166,55 @@ export async function flushCurrentStateAsync(
   final: boolean,
   signal?: AbortSignal,
   drainToStableGeneration = true,
-  requireInitialGenerationDurable = false
+  requireInitialGenerationDurable = false,
+  fullCheckpoint = final
 ): Promise<void> {
-  const requiredDurableGeneration = requireInitialGenerationDurable
-    ? owner[writeFlushBarrierOperationsContext].runtime.writeGeneration
-    : null
-  for (;;) {
-    if (signal?.aborted) {
-      throw new Error('Persistence flush aborted')
-    }
-    if (owner[writeFlushBarrierOperationsContext].runtime.writeTimer) {
-      clearTimeout(owner[writeFlushBarrierOperationsContext].runtime.writeTimer)
-      owner[writeFlushBarrierOperationsContext].runtime.writeTimer = null
-    }
-    owner[writeFlushBarrierOperationsContext].runtime.firstPendingSaveAt = null
-    const generation = owner[writeFlushBarrierOperationsContext].runtime.writeGeneration
-    try {
-      await enqueueWrite(owner[writeFlushBarrierOperationsContext].writes, {
-        fullCheckpoint: final
-      })
-    } finally {
-      await (final
-        ? owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushAsync()
-        : owner[writeFlushBarrierOperationsContext].runtime.activeViewPreference.flushPendingAsync(
-            signal
-          ))
-      await writeGithubCacheSnapshotAsync(owner, final, signal)
-      if (final || drainToStableGeneration) {
-        await owner[
-          writeFlushBarrierOperationsContext
-        ].runtime.profileStateAuthority?.drainBackups?.()
+  const { runtime, writes } = owner[writeFlushBarrierOperationsContext]
+  return runProfileStateFlush(runtime, async () => {
+    const requiredDurableGeneration = requireInitialGenerationDurable
+      ? runtime.writeGeneration
+      : null
+    for (;;) {
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
       }
-    }
-    if (signal?.aborted) {
-      throw new Error('Persistence flush aborted')
-    }
-    if (!drainToStableGeneration) {
-      if (
-        requiredDurableGeneration === null ||
-        owner[writeFlushBarrierOperationsContext].runtime.lastDurableWriteGeneration >=
-          requiredDurableGeneration
-      ) {
+      if (runtime.writeTimer) {
+        clearTimeout(runtime.writeTimer)
+        runtime.writeTimer = null
+      }
+      runtime.firstPendingSaveAt = null
+      const generation = runtime.writeGeneration
+      try {
+        await enqueueWrite(writes, {
+          fullCheckpoint,
+          signal
+        })
+      } finally {
+        await (final
+          ? runtime.activeViewPreference.flushAsync()
+          : runtime.activeViewPreference.flushPendingAsync(signal))
+        await writeGithubCacheSnapshotAsync(owner, final, signal)
+        if (final || drainToStableGeneration) {
+          await runtime.profileStateAuthority?.drainBackups?.()
+        }
+      }
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
+      }
+      if (!drainToStableGeneration) {
+        if (
+          requiredDurableGeneration === null ||
+          runtime.lastDurableWriteGeneration >= requiredDurableGeneration
+        ) {
+          break
+        }
+        continue
+      }
+      if (generation === runtime.writeGeneration) {
         break
       }
-      continue
     }
-    if (generation === owner[writeFlushBarrierOperationsContext].runtime.writeGeneration) {
-      break
-    }
-  }
+  })
 }
 
 export async function writeGithubCacheSnapshotAsync(
@@ -182,39 +222,28 @@ export async function writeGithubCacheSnapshotAsync(
   drainToStableGeneration = true,
   signal?: AbortSignal
 ): Promise<void> {
-  if (!owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty) {
+  const { runtime } = owner[writeFlushBarrierOperationsContext]
+  if (!runtime.githubCacheDirty) {
     return
   }
-  const previousWrite =
-    owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite ??
-    owner[writeFlushBarrierOperationsContext].runtime.staleGithubCacheTempCleanup
+  const previousWrite = runtime.pendingGithubCacheWrite ?? runtime.staleGithubCacheTempCleanup
   const nextWrite = previousWrite
     .then(async () => {
-      while (owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty) {
+      while (runtime.githubCacheDirty) {
         if (signal?.aborted) {
           throw new Error('GitHub cache flush aborted')
         }
-        const generation = owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
-        const cacheFile = getGithubCacheFile(
-          owner[writeFlushBarrierOperationsContext].runtime.dataFile
-        )
+        const generation = runtime.githubCacheGeneration
+        const cacheFile = getGithubCacheFile(runtime.dataFile)
         const tmpFile = durableWriteTempPath(cacheFile)
         let renamed = false
         try {
-          await writeFile(
-            tmpFile,
-            JSON.stringify(owner[writeFlushBarrierOperationsContext].runtime.state.githubCache),
-            'utf-8'
-          )
-          if (
-            generation === owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
-          ) {
+          await writeFile(tmpFile, JSON.stringify(runtime.state.githubCache), 'utf-8')
+          if (generation === runtime.githubCacheGeneration) {
             await rename(tmpFile, cacheFile)
             renamed = true
-            if (
-              generation === owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
-            ) {
-              owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty = false
+            if (generation === runtime.githubCacheGeneration) {
+              runtime.githubCacheDirty = false
             }
           }
         } finally {
@@ -234,34 +263,31 @@ export async function writeGithubCacheSnapshotAsync(
       console.warn('[persistence] Failed to write github cache snapshot:', err)
     })
     .finally(() => {
-      if (owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite === nextWrite) {
-        owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite = null
+      if (runtime.pendingGithubCacheWrite === nextWrite) {
+        runtime.pendingGithubCacheWrite = null
       }
     })
-  owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite = nextWrite
+  runtime.pendingGithubCacheWrite = nextWrite
   await nextWrite
 }
 
 export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations): void {
-  if (!owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty) {
+  const { runtime } = owner[writeFlushBarrierOperationsContext]
+  if (!runtime.githubCacheDirty) {
     return
   }
-  if (owner[writeFlushBarrierOperationsContext].runtime.pendingGithubCacheWrite) {
+  if (runtime.pendingGithubCacheWrite) {
     void writeGithubCacheSnapshotAsync(owner)
     return
   }
-  const cacheFile = getGithubCacheFile(owner[writeFlushBarrierOperationsContext].runtime.dataFile)
-  const generation = owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration
+  const cacheFile = getGithubCacheFile(runtime.dataFile)
+  const generation = runtime.githubCacheGeneration
   const tmpFile = durableWriteTempPath(cacheFile)
   try {
-    writeFileSync(
-      tmpFile,
-      JSON.stringify(owner[writeFlushBarrierOperationsContext].runtime.state.githubCache),
-      'utf-8'
-    )
+    writeFileSync(tmpFile, JSON.stringify(runtime.state.githubCache), 'utf-8')
     renameSync(tmpFile, cacheFile)
-    if (generation === owner[writeFlushBarrierOperationsContext].runtime.githubCacheGeneration) {
-      owner[writeFlushBarrierOperationsContext].runtime.githubCacheDirty = false
+    if (generation === runtime.githubCacheGeneration) {
+      runtime.githubCacheDirty = false
     }
   } catch (err) {
     try {

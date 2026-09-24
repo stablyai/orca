@@ -139,7 +139,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(profile.profileDirectory)
   const profileStateAuthorityMode = desktopProfileStateAuthorityMode()
-  const profileState = createProfileStateStoreForStartup({
+  const profileState = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,

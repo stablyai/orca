@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
 import type {
@@ -139,7 +139,13 @@ async function runBeforeProfileRelaunch(
   }
 }
 
-function scheduleProfileRelaunch(reason: Extract<AppRelaunchReason, `profile-${string}`>): void {
+function scheduleProfileRelaunch(
+  reason: Extract<AppRelaunchReason, `profile-${string}`>,
+  sender: WebContents
+): void {
+  if (!sender.isDestroyed()) {
+    sender.send('app:restart-committed')
+  }
   setTimeout(() => {
     relaunchApp(reason)
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
@@ -179,7 +185,7 @@ export function registerOrcaProfileHandlers(
 
   ipcMain.handle(
     'orcaProfiles:switch',
-    async (_event, args: SwitchOrcaProfileArgs): Promise<SwitchOrcaProfileResult> => {
+    async (event, args: SwitchOrcaProfileArgs): Promise<SwitchOrcaProfileResult> => {
       const profileId = profileIdFromArgs(args)
       const current = getOrcaProfileListState()
       if (profileId === current.activeProfileId) {
@@ -199,11 +205,16 @@ export function registerOrcaProfileHandlers(
       }
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
-      await flushActiveProfileBeforeFileMutation(store)
+      const maintenance = await flushActiveProfileBeforeFileMutation(store)
+      try {
+        setActiveOrcaProfile(profileId)
+      } catch (error) {
+        await maintenance.resume()
+        throw error
+      }
       await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-      setActiveOrcaProfile(profileId)
 
-      scheduleProfileRelaunch('profile-switch')
+      scheduleProfileRelaunch('profile-switch', event.sender)
 
       return { status: 'relaunching' }
     }
@@ -212,7 +223,7 @@ export function registerOrcaProfileHandlers(
   ipcMain.handle(
     'orcaProfiles:transferProject',
     async (
-      _event,
+      event,
       rawArgs: TransferOrcaProfileProjectArgs
     ): Promise<TransferOrcaProfileProjectResult> => {
       const args = transferProjectArgsFromUnknown(rawArgs)
@@ -223,27 +234,29 @@ export function registerOrcaProfileHandlers(
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
         // Why: transfer before any relaunch side effect so a duplicate-target
         // or validation failure cannot strand the app in a quitting state.
-        await flushActiveProfileBeforeFileMutation(store)
         const result = await transferActiveProfileProject(
           args,
           getProfileUserDataPath(),
           store,
           async () => {
             await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-            scheduleProfileRelaunch('profile-transfer')
+            scheduleProfileRelaunch('profile-transfer', event.sender)
           }
         )
         if (result.status === 'transferred') {
-          store.freezeWrites()
           await runBeforeProfileRelaunch(options.onBeforeRelaunch)
           setActiveOrcaProfile(args.targetProfileId)
-          scheduleProfileRelaunch('profile-transfer')
+          scheduleProfileRelaunch('profile-transfer', event.sender)
           return { ...result, willRelaunch: true }
         }
         return result
       }
-      await flushActiveProfileBeforeFileMutation(store)
-      return transferOrcaProfileProject(args, getProfileUserDataPath())
+      const maintenance = await flushActiveProfileBeforeFileMutation(store)
+      try {
+        return transferOrcaProfileProject(args, getProfileUserDataPath())
+      } finally {
+        await maintenance.resume()
+      }
     }
   )
 

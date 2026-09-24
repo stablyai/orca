@@ -11,10 +11,13 @@ import {
 export function writeToDiskSync(
   context: PrimaryStateWriteOperationsContext,
   opts: { force?: boolean; skipBackupRotation?: boolean; expectedGeneration?: number } = {}
-): void {
+): boolean {
   const { runtime, serialization, backups } = context
   if (runtime.writesFrozen) {
-    return
+    return false
+  }
+  if (runtime.profileStateAuthority?.asynchronous) {
+    throw new Error('Live profile persistence requires an awaited flush')
   }
   const isCurrent =
     opts.expectedGeneration === undefined
@@ -29,7 +32,7 @@ export function writeToDiskSync(
   )
   if (selective.handled) {
     if (selective.aborted) {
-      return
+      return false
     }
     if (selective.consumedAutomationRuns) {
       runtime.pendingAutomationRunsAfter = undefined
@@ -38,23 +41,23 @@ export function writeToDiskSync(
     runtime.protectedSecrets.commitRetentionUpdates(selective.protectedSecretUpdates)
     markPrimaryStateWriteDurable(runtime, opts.expectedGeneration ?? runtime.writeGeneration)
     runtime.profileStateAuthority?.scheduleBackup?.()
-    return
+    return true
   }
   const built = serialization.buildStateToSave(
     runtime.profileStateAuthority?.writeCompleteSerializedDomains !== undefined
   )
   const { stateHash, protectedSecretUpdates } = built
+  if (isCurrent && !isCurrent()) {
+    return false
+  }
   // Why: matching hash means the file already holds this state; force overrides an async rename race.
   if (!opts.force && canReuseDurableProfileState(runtime, stateHash)) {
     runtime.dirtyProfileStateDomains = new Set()
     runtime.pendingAutomationRunsAfter = undefined
     markPrimaryStateWriteDurable(runtime, opts.expectedGeneration ?? runtime.writeGeneration)
-    return
+    return true
   }
   if (runtime.profileStateAuthority) {
-    if (isCurrent && !isCurrent()) {
-      return
-    }
     if (built.domains && runtime.profileStateAuthority.writeCompleteSerializedDomains) {
       runtime.profileStateAuthority.writeCompleteSerializedDomains(built.domains)
     } else {
@@ -70,7 +73,7 @@ export function writeToDiskSync(
     }
     markPrimaryStateWriteDurable(runtime, opts.expectedGeneration ?? runtime.writeGeneration)
     runtime.profileStateAuthority.scheduleBackup?.()
-    return
+    return true
   }
   const dataFile = runtime.dataFile
   const payload = built.payload
@@ -88,4 +91,5 @@ export function writeToDiskSync(
   if (!opts.skipBackupRotation && backups.shouldRotateBackups(now, dataFile)) {
     backups.rotateBackupsSync(dataFile)
   }
+  return true
 }

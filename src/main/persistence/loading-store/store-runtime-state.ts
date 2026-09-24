@@ -19,13 +19,19 @@ import type {
   AutomationListProjectionCache,
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
-import type { ProfileStateAuthority } from './profile-state-authority'
+import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
 import type { AutomationRun } from '../../../shared/automations-types'
+
+export type DurableProfileStateMutation<T> = {
+  value: T
+  persist?: boolean
+  rollback?: () => void
+}
 
 export type StoreRuntimeOptions = {
   dataFile?: string
   storageAuthority?: AutomationStorageAuthority
-  profileStateAuthority?: ProfileStateAuthority
+  profileStateAuthority?: ProfileStatePersistenceAuthority
 }
 
 /** Mutable coordination state shared only with this Store's private collaborators. */
@@ -33,7 +39,7 @@ export class StoreRuntimeState {
   state!: PersistedState
   readonly dataFile: string
   readonly storageAuthority: AutomationStorageAuthority
-  readonly profileStateAuthority: ProfileStateAuthority | undefined
+  readonly profileStateAuthority: ProfileStatePersistenceAuthority | undefined
   automationListProjectionCache: AutomationListProjectionCache | null = null
   activeViewPreference!: ActiveViewPreference
   readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
@@ -45,6 +51,9 @@ export class StoreRuntimeState {
   inFlightAsyncTmpFile: string | null = null
   backupRotationInFlight = false
   writesFrozen = false
+  profileMaintenancePending = false
+  pendingProfileMaintenance: Promise<void> | null = null
+  readonly pendingProfileFlushes = new Set<Promise<void>>()
   quitFlushStarted = false
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
@@ -61,6 +70,7 @@ export class StoreRuntimeState {
   readonly protectedSecrets = new ProtectedSecretPersistence()
   loadNeedsSave = false
   flushOrThrow!: () => void
+  runDurableMutation!: <T>(mutate: () => DurableProfileStateMutation<T>) => Promise<T>
   settingsChangeListeners = new Set<
     (
       updates: Partial<GlobalSettings>,

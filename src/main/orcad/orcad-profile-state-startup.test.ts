@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createProfileStateStoreForStartupMock,
@@ -33,15 +33,19 @@ vi.mock('./orcad-profile-state-telemetry', () => ({
 
 const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
 
+beforeEach(() => {
+  vi.resetAllMocks()
+  ensureActiveOrcaProfileMock.mockReturnValue({
+    dataFile: '/tmp/profile/orca-data.json',
+    stateDatabaseFile: '/tmp/profile/profile-state.db',
+    profile: { id: 'profile-1' }
+  })
+  orcadProfileStateAuthorityModeMock.mockReturnValue('sqlite-candidate')
+})
+
 describe('orcad profile-state startup', () => {
-  it('selects the capable authority once and publishes bounded metadata', () => {
+  it('selects the capable authority once and publishes bounded metadata', async () => {
     const store = { getSettings: vi.fn() }
-    ensureActiveOrcaProfileMock.mockReturnValue({
-      dataFile: '/tmp/profile/orca-data.json',
-      stateDatabaseFile: '/tmp/profile/profile-state.db',
-      profile: { id: 'profile-1' }
-    })
-    orcadProfileStateAuthorityModeMock.mockReturnValue('sqlite-candidate')
     createProfileStateStoreForStartupMock.mockReturnValue({
       store,
       authority: { readSerializedState: vi.fn() },
@@ -50,7 +54,7 @@ describe('orcad profile-state startup', () => {
       migrated: true
     })
 
-    const result = createOrcadProfileStateStartup('/tmp/user-data')
+    const result = await createOrcadProfileStateStartup('/tmp/user-data')
 
     expect(initOrcaProfilePathsMock).toHaveBeenCalledOnce()
     expect(ensureActiveOrcaProfileMock).toHaveBeenCalledWith('/tmp/user-data')
@@ -73,5 +77,39 @@ describe('orcad profile-state startup', () => {
       migrated: true
     })
     expect(emitMock).toHaveBeenCalledWith(result.authority)
+  })
+
+  it('publishes nothing before the profile writer is ready', async () => {
+    let refuse = (_error: Error) => {}
+    createProfileStateStoreForStartupMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          refuse = reject
+        })
+    )
+    const startup = createOrcadProfileStateStartup('/tmp/user-data')
+    const failure = new Error('writer startup refused')
+    const rejected = expect(startup).rejects.toBe(failure)
+    expect(initSshHostKeyStoreFileMock).not.toHaveBeenCalled()
+    expect(emitMock).not.toHaveBeenCalled()
+    refuse(failure)
+    await rejected
+  })
+
+  it('closes a ready writer if sidecar initialization fails', async () => {
+    const store = { freezeWritesAsync: vi.fn(async () => {}) }
+    createProfileStateStoreForStartupMock.mockResolvedValueOnce({
+      store,
+      backend: 'sqlite',
+      classification: 'sqlite-only',
+      migrated: false
+    })
+    const failure = new Error('sidecar initialization refused')
+    initSshHostKeyStoreFileMock.mockImplementationOnce(() => {
+      throw failure
+    })
+    await expect(createOrcadProfileStateStartup('/tmp/user-data')).rejects.toBe(failure)
+    expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
+    expect(emitMock).not.toHaveBeenCalled()
   })
 })

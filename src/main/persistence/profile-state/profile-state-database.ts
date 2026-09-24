@@ -7,7 +7,8 @@ import {
   PROFILE_STATE_DATABASE_SCHEMA_VERSION,
   PROFILE_STATE_META_PROFILE_ID
 } from './profile-state-database-schema'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import {
   PROFILE_STATE_DATABASE_FILE_NAME,
   profileStateDatabaseFile
@@ -58,6 +59,19 @@ export type OpenProfileStateDatabase = {
 }
 
 export { PROFILE_STATE_DATABASE_FILE_NAME, profileStateDatabaseFile }
+
+export function openWritableProfileStateDatabase(
+  databasePath: string,
+  profileId: string
+): OpenProfileStateDatabase {
+  mkdirSync(dirname(databasePath), { recursive: true })
+  const opened = openProfileStateDatabase(databasePath, profileId)
+  if (opened.readOnly) {
+    opened.db.close()
+    throw new Error('Cannot write a future profile state schema')
+  }
+  return opened
+}
 
 /**
  * Open the database belonging to one profile.
