@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { OrchestrationDb } from '../../../../orchestration/db'
 import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
 
 const sent = vi.hoisted((): { preambles: string[] } => ({ preambles: [] }))
@@ -36,6 +37,7 @@ function structuredSession(agent: 'claude' | 'codex' = 'claude'): StructuredSess
 }
 
 const args = {
+  db: new OrchestrationDb(':memory:'),
   dispatchId: 'ctx_1',
   dispatchDepth: 1,
   taskId: 'task_1',
@@ -51,6 +53,10 @@ describe('deliverWorkerDispatchPreamble tells each worker its own address', () =
     sent.preambles = []
   })
 
+  afterAll(() => {
+    args.db.close()
+  })
+
   it('names a structured worker by the session it was started as', async () => {
     const prompts: string[] = []
     await deliverWorkerDispatchPreamble({
@@ -64,8 +70,9 @@ describe('deliverWorkerDispatchPreamble tells each worker its own address', () =
     expect(sent.preambles).toHaveLength(1)
     expect(sent.preambles[0]).toContain(`Your orchestration address is: session:${SESSION}\n`)
     expect(sent.preambles[0]).toContain(
-      '"$ORCA_CLI_COMMAND" orchestration send --from structworker_1'
+      `"$ORCA_CLI_COMMAND" orchestration send --from session:${SESSION}`
     )
+    expect(sent.preambles[0]).not.toContain('structworker_1')
   })
 
   it("renders the CLI in the worker's own shell: PowerShell for Codex on Windows", async () => {

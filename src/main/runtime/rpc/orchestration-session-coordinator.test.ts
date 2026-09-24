@@ -244,6 +244,8 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
 
   it("wakes the previous coordinator's waiting check as fenced when another session takes over", async () => {
     const runId = await runCreate(SESSION_X)
+    // A terminal view: only a PTY-held session may block in check --wait.
+    h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { runtimeKind: 'tui' } }))
     const waiter = vi.spyOn(h.runtime, 'waitForMessage')
     const waiting = h.dispatch(
       orchestrationRequest(
