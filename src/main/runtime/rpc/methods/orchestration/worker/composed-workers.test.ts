@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
@@ -165,6 +165,35 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('keeps missing-agent behavior when the RuntimeStore has no defaults', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'worker without configured defaults' })
+
+      expect(runtime.getOrchestrationWorkerLaunchDefaults()).toEqual({
+        agent: null,
+        models: {},
+        efforts: {}
+      })
+      await expect(
+        call('orchestration.workerStart', { task: task.id, from: 'term_coord' })
+      ).rejects.toMatchObject({ code: 'agent_unconfigured' })
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    })
+
+    it('returns empty worker defaults when the RuntimeStore settings omit them', () => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements getSettings, the only member getOrchestrationWorkerLaunchDefaults reaches.
+      const runtimeWithoutWorkerSettings = new OrcaRuntimeService({
+        getSettings: () => ({})
+      } as never)
+
+      expect(runtimeWithoutWorkerSettings.getOrchestrationWorkerLaunchDefaults()).toEqual({
+        agent: null,
+        models: {},
+        efforts: {}
+      })
+    })
+
     it('applies and reports opaque per-invocation model preferences', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -202,6 +231,108 @@ describe('orchestration RPC methods', () => {
       expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
         launch: result.launch
       })
+    })
+
+    it('applies stored worker launch defaults when flags are omitted', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
+        agent: 'codex',
+        models: { codex: 'gpt-5.6-luna' },
+        efforts: { codex: 'max' }
+      })
+      const task = db.createTask({ spec: 'use worker launch defaults' })
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC returns an untyped envelope; this names only the fields asserted below.
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord'
+      })) as {
+        dispatchId: string
+        state: string
+        launch: {
+          requested: { agent: string; model: string; effort: string }
+          effective: { agent: string; model: string; effort: string }
+        }
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        launch: {
+          requested: { agent: 'codex', model: 'gpt-5.6-luna', effort: 'max' },
+          effective: { agent: 'codex', model: 'gpt-5.6-luna', effort: 'max' }
+        }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({
+          startupAgent: 'codex',
+          launchPreferences: { model: 'gpt-5.6-luna', effort: 'max' }
+        })
+      )
+      expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
+        launch: result.launch
+      })
+    })
+
+    it('judges the worker-start mode on the resolved defaults, not the bare flags', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: getClientSettings returns every client setting; the mode decision reads only these three.
+      vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        experimentalStructuredNativeChat: true
+      } as ReturnType<typeof runtime.getClientSettings>)
+      vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
+        agent: 'claude',
+        models: {},
+        efforts: {}
+      })
+      const task = db.createTask({ spec: 'the stored agent decides the mode' })
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC returns an untyped envelope; this names only the fields asserted below.
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord'
+      })) as { mode: { mode: string; preferred: string; reason: string } }
+
+      // Why: the resolved agent is the only launch field the mode receipt reads. Judging the
+      // bare flags would report agent_without_structured_session for every launch that leaves
+      // --agent to the stored default.
+      expect(result.mode).toMatchObject({ mode: 'terminal', preferred: 'structured' })
+      expect(result.mode.reason).not.toBe('agent_without_structured_session')
+    })
+
+    it('drops an incompatible stored effort when the model is explicit', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
+        agent: 'codex',
+        models: { codex: 'gpt-5.6-sol' },
+        efforts: { codex: 'max' }
+      })
+      const task = db.createTask({ spec: 'explicit model wins over defaults' })
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC returns an untyped envelope; this names only the fields asserted below.
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex',
+        model: 'gpt-5.5'
+      })) as {
+        state: string
+        launch: { requested: { model: string; effort: string | null } }
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        launch: { requested: { model: 'gpt-5.5', effort: null } }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({ launchPreferences: { model: 'gpt-5.5' } })
+      )
     })
 
     it('rejects launch preferences for an existing terminal before creating a Dispatch', async () => {
@@ -388,6 +519,11 @@ describe('orchestration RPC methods', () => {
       setup()
       mockCurrentWorkerStart()
       const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+      vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
+        agent: 'codex',
+        models: { codex: 'gpt-5.6-sol' },
+        efforts: { codex: 'high' }
+      })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       const task = db.createTask({ spec: 'reuse exact worker' })
 
