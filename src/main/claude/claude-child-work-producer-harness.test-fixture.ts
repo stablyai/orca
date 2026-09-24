@@ -14,6 +14,13 @@ import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subj
 import { AgentHookServer } from '../agent-hooks/server'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
+import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
+import {
+  applyJournalRow,
+  createJournalReducerState,
+  renderJournalState
+} from '../native-chat/agent-session-journal/journal-reducer'
+import { buildJournalItemRow } from '../native-chat/agent-session-journal/journal-row-builders'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import {
   fakeClaude,
@@ -136,12 +143,20 @@ export async function producer(host?: AgentHookServer) {
       }
     }
   })
+  // A real reducer behind the sink, so a test can project the session's own status from its rows.
+  const rows = createJournalReducerState('session-1', 'epoch-1')
+  let seq = 0
   const journal: StructuredAgentSessionEventSink = {
-    appendItem: (identity, _body, options) => {
+    appendItem: (identity, body, options) => {
       deliveries.push({ kind: 'journal', detail: JSON.stringify(identity) })
       if (options?.agentId !== undefined) {
         stamps.push(options)
       }
+      const linkage = agentJournalLinkageFields(options)
+      applyJournalRow(
+        rows,
+        buildJournalItemRow({ state: rows, identity, body, seq: ++seq, fence: 7, ts: seq, linkage })
+      )
     },
     appendTombstone: () => {},
     // Production's journal publication is what republishes the parent's own row.
@@ -169,6 +184,7 @@ export async function producer(host?: AgentHookServer) {
     host ? host.getStructuredChildWork(parent) : store.getChildren(parent)
   const byDescription = (description: string) =>
     records().find((record) => record.description === description)
+  const journalItems = () => renderJournalState(rows).items
   return {
     adapter,
     claude,
@@ -179,6 +195,7 @@ export async function producer(host?: AgentHookServer) {
     byDescription,
     evidenceLog,
     stamps,
-    ingested
+    ingested,
+    journalItems
   }
 }

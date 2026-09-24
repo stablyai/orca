@@ -181,7 +181,8 @@ export type AgentSessionStatusSummary = {
   sessionId: string
   workspaceId: string
   agent: AgentSessionRecord['provider']
-  /** Null until the journal holds a persisted user or assistant message. */
+  /** The session's own agent's status; a subagent's pending prompt is that child's `waiting`, not
+   *  this `attention`. Null until the journal holds a persisted user or assistant message. */
   status: StructuredAgentSessionProjectedStatus | null
   /** Present only while this host has the provider child executing the session. */
   hostExecutionOwned?: true

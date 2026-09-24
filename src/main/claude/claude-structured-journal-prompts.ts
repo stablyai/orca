@@ -1,6 +1,7 @@
 import type {
   AgentJournalApprovalItem,
   AgentJournalItemIdentity,
+  AgentJournalProducerLinkage,
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -59,21 +60,20 @@ export class ClaudeJournalPrompts {
         sessionId: string
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
       }) => ClaudeQuestionItem[]
+      /** The agent that raised the prompt, as a row's producer linkage; empty for the session's own. */
+      producerOf?: (
+        prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']
+      ) => AgentJournalProducerLinkage
     }
   ) {}
 
   /**
-   * Prompt rows carry NO producer linkage, and cannot.
-   *
-   * A prompt is not a transcript frame: it reaches Orca through the SDK's
-   * permission callback, whose options carry a request id and the tool awaiting
-   * approval and no parent reference of any kind. So when a subagent asks, the
-   * row cannot name it — unattributable at this site, not deliberately root.
-   *
-   * No reader is wrong because of it. A pending prompt projects the session as
-   * `attention` whoever raised it, which is the truth: the USER has to answer.
+   * A prompt row carries the linkage of the agent that raised it. The permission callback names the
+   * subagent that asked (or the tool call it gates names one), so a subagent's request is its own row,
+   * not the session's: the session's own agent is not the one waiting on the user.
    */
   handle(event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void {
+    const producer = this.deps.producerOf?.(event.prompt) ?? {}
     const items: ClaudeJournalPrompt[] = []
     if (event.prompt.kind === 'question') {
       for (const question of (this.deps.questionItems ?? claudeQuestionItems)({
@@ -81,7 +81,7 @@ export class ClaudeJournalPrompts {
         prompt: event.prompt
       })) {
         items.push(question)
-        this.deps.sink.appendItem(question.identity, question.body)
+        this.deps.sink.appendItem(question.identity, question.body, producer)
         this.deps.bindPromptItemId?.(agentJournalItemKey(question.identity), event.prompt.promptKey)
       }
     } else {
@@ -91,7 +91,7 @@ export class ClaudeJournalPrompts {
       })
       const body = claudeApprovalItem(event.prompt)
       items.push({ identity, body })
-      this.deps.sink.appendItem(identity, body)
+      this.deps.sink.appendItem(identity, body, producer)
       this.deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
     }
     this.deletePrompt(event.prompt.promptKey)

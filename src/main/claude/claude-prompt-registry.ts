@@ -80,6 +80,15 @@ function questionId(question: Record<string, unknown>, index: number): string {
   )
 }
 
+/** The subagent that raised a request: the one the provider names, or, from a CLI that names none,
+ *  the child that owns the tool call it gates. Null when the session's own agent asked. */
+export function claudePromptAskingChild(
+  prompt: Pick<ClaudePendingPrompt, 'agentId' | 'toolUseId'>,
+  ownerOf: ((toolUseId: string) => string | null) | undefined
+): string | null {
+  return prompt.agentId ?? ownerOf?.(prompt.toolUseId) ?? null
+}
+
 /** Session-local callback ownership; none of this state is reconstructed from the transcript. */
 export class ClaudePromptRegistry {
   private readonly prompts = new Map<string, ClaudePendingPrompt>()

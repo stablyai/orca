@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
+import { projectStructuredAgentSessionStatus } from '../../shared/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../shared/structured-agent-session-agent-status'
 import { producer } from './claude-child-work-producer-harness.test-fixture'
 import {
@@ -56,6 +56,31 @@ function requestFromWire(
       ...(agentId ? { agentID: agentId } : {})
     }
   )
+}
+
+/** Replays a capture up to its permission request and raises it, as the SDK would. */
+async function askedAt(name: string, options: { withoutAgentId?: boolean } = {}) {
+  const harness = await producer()
+  const events = capturedScenario(name)
+  const request = events.findIndex((event) => event.frame.type === 'control_request')
+  for (const { frame } of events.slice(0, request)) {
+    harness.send({ ...frame, session_id: PROVIDER_SESSION_ID })
+  }
+  requestFromWire(harness.claude.connections[0]!, events[request]!.frame, options)
+  return harness
+}
+
+function subagentTaskId(name: string): string {
+  const started = capturedScenario(name).find((event) => event.frame.subtype === 'task_started')
+  return text(started?.frame.task_id)
+}
+
+/** The parent row as the host folds it: the session's own status, projected from its journal as the
+ *  status summary projects it, plus its children's records. */
+function parentRow(harness: Awaited<ReturnType<typeof producer>>) {
+  const status = projectStructuredAgentSessionStatus(harness.journalItems(), [], null, 'main-agent')
+  const row = structuredAgentSessionAgentStatus({ status, childWork: harness.records() })
+  return { sessionStatus: status, state: row.state, mainAgent: row.mainAgent }
 }
 
 /** Replays one capture and returns the subagent's record state after each event, labelled. */
@@ -135,24 +160,34 @@ describe('a Claude subagent waiting on a permission request', () => {
     })
   })
 
-  it("feeds the parent row's fold a waiting child, under the session's own attention", async () => {
-    const harness = await producer()
-    const events = capturedScenario('fg-allow')
-    const request = events.findIndex((event) => event.frame.type === 'control_request')
-    for (const { frame } of events.slice(0, request)) {
-      harness.send({ ...frame, session_id: PROVIDER_SESSION_ID })
-    }
-    expect(agentChildWorkLiveness(harness.records())).toBe('working')
-    requestFromWire(harness.claude.connections[0]!, events[request]!.frame)
-    const childWork = harness.records()
-    expect(agentChildWorkLiveness(childWork)).toBe('waiting')
-    // The pending request is also the session's attention, which keeps its own `blocked`.
-    expect(structuredAgentSessionAgentStatus({ status: 'attention', childWork }).state).toBe(
-      'blocked'
-    )
-    expect(structuredAgentSessionAgentStatus({ status: 'working', childWork }).state).toBe(
-      'waiting'
-    )
+  it('reads the parent row waiting while its subagent asks, with its own state unchanged', async () => {
+    const harness = await askedAt('fg-allow')
+    const approval = harness.journalItems().find((item) => item.body.kind === 'approval')
+    // The prompt row names the subagent that raised it, as its other rows do.
+    expect(approval?.agentId).toBe(subagentTaskId('fg-allow'))
+    expect(parentRow(harness)).toEqual({
+      sessionStatus: 'working',
+      state: 'waiting',
+      mainAgent: { state: 'working' }
+    })
+  })
+
+  it('names the subagent on its prompt row through the tool call when the CLI does not', async () => {
+    const harness = await askedAt('fg-allow', { withoutAgentId: true })
+    const approval = harness.journalItems().find((item) => item.body.kind === 'approval')
+    expect(approval?.agentId).toBe(subagentTaskId('fg-allow'))
+    expect(parentRow(harness).state).toBe('waiting')
+  })
+
+  it("keeps the parent row blocked when the session's own agent asks", async () => {
+    const harness = await askedAt('main-allow')
+    const approval = harness.journalItems().find((item) => item.body.kind === 'approval')
+    expect(approval?.agentId).toBeUndefined()
+    expect(parentRow(harness)).toEqual({
+      sessionStatus: 'attention',
+      state: 'blocked',
+      mainAgent: { state: 'blocked' }
+    })
   })
 
   it('goes back to working when the request is denied', async () => {
