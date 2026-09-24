@@ -8,6 +8,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import {
   DEFAULT_WORKSPACE_STATUSES,
+  MAIN_WORKTREE_WORKSPACE_STATUS_ID,
   getWorkspaceStatus
 } from '../../../../shared/workspace-statuses'
 import {
@@ -87,9 +88,14 @@ export function resolveDashboardCardContext(
       : DEFAULT_WORKSPACE_STATUSES
   const workspaceStatusId = getWorkspaceStatus(worktree, statuses)
   const review = resolveReview(state, repo, worktree)
+  const taskStatus = statuses.find((status) => status.id === workspaceStatusId)
   return {
-    workspaceStatus:
-      statuses.find((status) => status.id === workspaceStatusId) ?? DEFAULT_WORKSPACE_STATUSES[0],
+    workspaceStatus: worktree.isMainWorktree
+      ? {
+          id: MAIN_WORKTREE_WORKSPACE_STATUS_ID,
+          label: worktree.displayName
+        }
+      : (taskStatus ?? DEFAULT_WORKSPACE_STATUSES[0]),
     review,
     hasReview: hasLinkedReview(worktree) || review !== undefined
   }

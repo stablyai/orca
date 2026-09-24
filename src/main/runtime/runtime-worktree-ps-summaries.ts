@@ -52,7 +52,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
       parentWorktreeId: worktree.parentWorktreeId,
       childWorktreeIds: worktree.childWorktreeIds,
       displayName: worktree.displayName,
-      workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+      workspaceStatus:
+        worktree.workspaceStatus ?? meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
       sortOrder: meta?.sortOrder ?? 0,
       ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
       lastActivityAt: worktree.lastActivityAt,

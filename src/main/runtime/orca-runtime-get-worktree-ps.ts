@@ -27,6 +27,7 @@ import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agen
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { settleListedWorkspaceStatuses } from '../worktree/settle-listed-workspace-status'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner {
   async getWorktreePs(
@@ -43,7 +44,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       sourceDefaultsSupported,
       visibilitySettings
     )
-    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
+    const visibleWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
       this.isRuntimeWorktreeVisible(
         worktree,
         visibilitySourceMatchersByRepoId.get(worktree.repoId),
@@ -51,6 +52,13 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         visibilitySettings
       )
     )
+    const resolvedWorktrees = this.store
+      ? await settleListedWorkspaceStatuses({
+          store: this.store,
+          worktrees: visibleWorktrees,
+          orchestrationDb: this.peekOrchestrationDb?.() ?? null
+        }).catch(() => visibleWorktrees)
+      : visibleWorktrees
     // Why: worktree.ps backs the mobile sidebar, so it must use the same
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)

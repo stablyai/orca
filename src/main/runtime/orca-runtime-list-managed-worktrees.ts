@@ -20,14 +20,32 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import { settleListedWorkspaceStatuses } from '../worktree/settle-listed-workspace-status'
 
 export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
-  listManagedWorktrees(
+  async listManagedWorktrees(
     repoSelector?: string,
     limit = DEFAULT_WORKTREE_LIST_LIMIT,
     sourceDefaultsSupported = true
   ): Promise<RuntimeWorktreeListResult> {
-    return this.managedWorktreeQueries.list(repoSelector, limit, sourceDefaultsSupported)
+    const page = await this.managedWorktreeQueries.list(
+      repoSelector,
+      limit,
+      sourceDefaultsSupported
+    )
+    if (!this.store) {
+      return page
+    }
+    try {
+      const worktrees = await settleListedWorkspaceStatuses({
+        store: this.store,
+        worktrees: page.worktrees,
+        orchestrationDb: this.peekOrchestrationDb?.() ?? null
+      })
+      return { ...page, worktrees }
+    } catch {
+      return page
+    }
   }
 
   listRetiredWorktreeNames(repoSelector: string) {

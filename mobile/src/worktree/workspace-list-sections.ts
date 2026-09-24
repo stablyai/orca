@@ -185,6 +185,9 @@ export function buildSections(
     const renderableWorkspaceStatuses = coerceMobileWorkspaceStatuses(workspaceStatuses)
     const byStatus = new Map<string, Worktree[]>()
     for (const w of canonicalGroupWorktrees) {
+      if (w.isMainWorktree) {
+        continue
+      }
       const key = getMobileWorkspaceStatus(w, renderableWorkspaceStatuses)
       const list = byStatus.get(key)
       if (list) {
@@ -206,6 +209,29 @@ export function buildSections(
           )
         )
       }
+    }
+    const mainByRepo = new Map<string, Worktree[]>()
+    for (const worktree of canonicalGroupWorktrees) {
+      if (!worktree.isMainWorktree) {
+        continue
+      }
+      const items = mainByRepo.get(worktree.repoId)
+      if (items) {
+        items.push(worktree)
+      } else {
+        mainByRepo.set(worktree.repoId, [worktree])
+      }
+    }
+    for (const [repoId, items] of mainByRepo) {
+      sections.push(
+        makeSection(
+          `repo:${repoId}`,
+          items[0]?.repo || 'Unknown',
+          items,
+          undefined,
+          collapsedGroups
+        )
+      )
     }
   } else if (groupMode === 'prStatus') {
     const byGroup = new Map<string, Worktree[]>()

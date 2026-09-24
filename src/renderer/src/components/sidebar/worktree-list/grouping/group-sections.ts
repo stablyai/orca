@@ -93,16 +93,15 @@ export function appendOrderedGroups(
           }
         : groupBy === 'workspace-status'
           ? (() => {
-              const workspaceStatus =
-                getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
-                workspaceStatuses[0]?.id ??
-                'in-progress'
-              const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
-              const meta = getWorkspaceStatusVisualMeta(definition ?? workspaceStatus)
+              const workspaceStatus = getWorkspaceStatusFromGroupKey(key, workspaceStatuses)
+              const definition = workspaceStatus
+                ? workspaceStatuses.find((status) => status.id === workspaceStatus)
+                : undefined
+              const meta = getWorkspaceStatusVisualMeta(definition ?? workspaceStatus ?? 'todo')
               return {
                 type: 'header' as const,
                 key,
-                label: definition?.label ?? workspaceStatus,
+                label: definition?.label ?? group.label,
                 count: group.items.length + folderPairs.length,
                 tone: meta.tone,
                 icon: meta.icon,

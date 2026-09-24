@@ -88,6 +88,11 @@ export function buildOrderedGroups(args: {
       key = grouping.key
       label = grouping.label
       repo = grouping.repo
+    } else if (groupBy === 'workspace-status' && w.isMainWorktree) {
+      const grouping = getProjectGroupingForRepo(w.repoId, repoMap, projectIndex)
+      key = grouping.key
+      label = grouping.label
+      repo = grouping.repo
     } else if (groupBy === 'workspace-status') {
       const workspaceStatus = getWorkspaceStatus(w, workspaceStatuses)
       key = getWorkspaceStatusGroupKey(workspaceStatus)
@@ -220,6 +225,11 @@ export function buildOrderedGroups(args: {
       const key = getWorkspaceStatusGroupKey(status.id)
       const group = grouped.get(key)
       if (group) {
+        orderedGroups.push([key, group])
+      }
+    }
+    for (const [key, group] of grouped) {
+      if (!key.startsWith('workspace-status:')) {
         orderedGroups.push([key, group])
       }
     }

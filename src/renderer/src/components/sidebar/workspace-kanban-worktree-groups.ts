@@ -34,7 +34,10 @@ export function groupWorkspaceKanbanWorktrees(params: {
     if (!visibleWorktreeIds.has(getWorktreeHostIdentity(worktree))) {
       continue
     }
-    grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))!.push(worktree)
+    const lane = grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))
+    if (lane) {
+      lane.push(worktree)
+    }
   }
 
   for (const items of grouped.values()) {

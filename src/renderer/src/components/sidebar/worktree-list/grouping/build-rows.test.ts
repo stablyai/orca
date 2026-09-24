@@ -347,6 +347,23 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: folderWorktree.id } })
   })
 
+  it('keeps a main checkout out of the in-progress lane', () => {
+    const main = {
+      ...worktree,
+      id: 'wt-main',
+      path: repo.path,
+      isMainWorktree: true,
+      displayName: repo.displayName,
+      workspaceStatus: 'in-progress' as const
+    }
+    const rows = buildRows('workspace-status', [main], repoMap, null, new Set())
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual(['orca'])
+    expect(
+      rows.some((row) => row.type === 'header' && row.key === 'workspace-status:in-progress')
+    ).toBe(false)
+  })
+
   it('emits assigned workspace statuses as sections in groupBy workspace-status', () => {
     const review = { ...worktree, id: 'wt-review', workspaceStatus: 'in-review' as const }
     const rows = buildRows('workspace-status', [review], repoMap, null, new Set())

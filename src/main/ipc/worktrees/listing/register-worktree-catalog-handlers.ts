@@ -28,6 +28,8 @@ import {
   readAllWorktreeMetaForRepo
 } from '../../../persistence/host-qualified-worktree-meta'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { settleListedWorkspaceStatuses } from '../../../worktree/settle-listed-workspace-status'
 
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
 
@@ -53,6 +55,20 @@ async function mapWithConcurrency<T, R>(
 
 export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): void {
   const { store } = context
+
+  async function publishWorkspaceStatuses<T extends Worktree>(
+    worktrees: readonly T[]
+  ): Promise<T[]> {
+    try {
+      return await settleListedWorkspaceStatuses({
+        store,
+        worktrees,
+        orchestrationDb: context.runtime.peekOrchestrationDb()
+      })
+    } catch {
+      return [...worktrees]
+    }
+  }
 
   ipcMain.handle('worktrees:listAll', async () => {
     const repos = store.getRepos()
@@ -156,7 +172,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       }
     })
 
-    return results.flat()
+    return publishWorkspaceStatuses(results.flat())
   })
 
   ipcMain.handle('worktrees:listRetiredNames', async (_event, args: { repoId: string }) => {
@@ -189,7 +205,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       let metadataPrune: DetectedWorktreeMetadataPrune | undefined
       let hygieneDue: boolean | undefined
       if (isFolderRepo(repo)) {
-        return listVisibleFolderWorkspaces(store, repo)
+        return publishWorkspaceStatuses(listVisibleFolderWorkspaces(store, repo))
       } else if (repo.connectionId) {
         const provider = getSshGitProvider(repo.connectionId)
         if (!provider) {
@@ -198,7 +214,9 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
             `${repo.connectionId}:${repo.id}`,
             `[worktrees] SSH git provider unavailable; skipping worktree list for repo "${repo.displayName}" (${repo.id}) at ${repo.path} on connection ${repo.connectionId}`
           )
-          return listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
+          return publishWorkspaceStatuses(
+            listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
+          )
         }
         loggedUnavailableSshGitProviders.delete(`${repo.connectionId}:${repo.id}`)
         try {
@@ -210,7 +228,9 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
             `[worktrees] failed to list worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
             err
           )
-          return listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
+          return publishWorkspaceStatuses(
+            listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
+          )
         }
       } else {
         const scan = await listDetectedGitWorktrees(store, repo)
@@ -228,9 +248,11 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       const metadata = allMeta ?? readAllWorktreeMetaForRepo(store, repo)
-      return buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
-        .filter((worktree) => worktree.visible)
-        .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))
+      return publishWorkspaceStatuses(
+        buildDetectedGitWorktrees(store, repo, gitWorktrees, metadata)
+          .filter((worktree) => worktree.visible)
+          .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree, metadata))
+      )
     } catch (err) {
       warnOnce(
         loggedWorktreeListFailures,

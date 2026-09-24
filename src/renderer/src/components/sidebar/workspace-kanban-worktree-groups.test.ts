@@ -40,6 +40,23 @@ function visibleIdentities(worktrees: readonly Worktree[]): Set<string> {
 }
 
 describe('groupWorkspaceKanbanWorktrees', () => {
+  it('leaves a main checkout out of the task lanes', () => {
+    const main = worktree({
+      id: 'main',
+      displayName: 'repo',
+      isMainWorktree: true,
+      workspaceStatus: 'doing'
+    })
+    const grouped = groupWorkspaceKanbanWorktrees({
+      worktrees: [main],
+      visibleWorktreeIds: visibleIdentities([main]),
+      workspaceStatuses: statuses,
+      sortBy: 'recent'
+    })
+
+    expect([...grouped.values()].flat()).toEqual([])
+  })
+
   it('uses manualOrder inside lanes when Manual sort is active', () => {
     const worktrees = [
       worktree({

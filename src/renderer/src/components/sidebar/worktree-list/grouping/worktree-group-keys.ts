@@ -22,6 +22,13 @@ export function getGroupKeyForWorktree(
     return ALL_GROUP_KEY
   }
   if (groupBy === 'workspace-status') {
+    if (worktree.isMainWorktree) {
+      return getProjectGroupingForRepo(
+        worktree.repoId,
+        repoMap,
+        buildProjectGroupingIndex(projectGrouping)
+      ).key
+    }
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
   }
   if (groupBy === 'repo') {

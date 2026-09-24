@@ -15,6 +15,13 @@ type WorkspaceStatusNormalizationOptions = {
 }
 
 export const DEFAULT_WORKSPACE_STATUS_ID: WorkspaceStatus = 'in-progress'
+/** Board column a finished non-main worktree moves to. Matches the default "Done" lane. */
+export const COMPLETED_WORKSPACE_STATUS_ID: WorkspaceStatus = 'completed'
+/**
+ * Main checkouts are the repository, not a task card. This id is intentionally
+ * absent from {@link DEFAULT_WORKSPACE_STATUSES} so status lanes do not claim them.
+ */
+export const MAIN_WORKTREE_WORKSPACE_STATUS_ID: WorkspaceStatus = 'repository'
 export const DEFAULT_WORKSPACE_STATUS_COLOR_ID = 'neutral'
 export const DEFAULT_WORKSPACE_STATUS_ICON_ID = 'circle-dot'
 export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308
@@ -260,9 +267,13 @@ export function getDefaultWorkspaceStatusId(
 }
 
 export function getWorkspaceStatus(
-  worktree: Pick<Worktree, 'workspaceStatus'>,
+  worktree: Pick<Worktree, 'workspaceStatus'> & { isMainWorktree?: boolean },
   statuses: readonly WorkspaceStatusDefinition[]
 ): WorkspaceStatus {
+  // A main checkout is not a task, so an unknown id must not fall back to in-progress.
+  if (worktree.isMainWorktree) {
+    return MAIN_WORKTREE_WORKSPACE_STATUS_ID
+  }
   return worktree.workspaceStatus && isWorkspaceStatusId(worktree.workspaceStatus, statuses)
     ? worktree.workspaceStatus
     : getDefaultWorkspaceStatusId(statuses)

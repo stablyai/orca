@@ -1,3 +1,4 @@
+import { MAIN_WORKTREE_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import type { GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
@@ -88,6 +89,9 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       capture: { source: 'manual-action', confidence: 'explicit' },
       createdAt
     })
+  }
+  if (worktree.isMainWorktree && persisted.workspaceStatus !== undefined) {
+    persisted.workspaceStatus = MAIN_WORKTREE_WORKSPACE_STATUS_ID
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   const executionHostId = worktree.identity?.executionHostId ?? worktree.hostId

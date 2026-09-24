@@ -174,6 +174,11 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
 
   protected _orchestrationDb: OrchestrationDb | null = null
 
+  /** The open orchestration database, without creating one just to read task status. */
+  peekOrchestrationDb(): OrchestrationDb | null {
+    return this._orchestrationDb
+  }
+
   protected readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
     getDb: () => this._orchestrationDb,
     getLeaf: (leafKey) => this.leaves.get(leafKey),
