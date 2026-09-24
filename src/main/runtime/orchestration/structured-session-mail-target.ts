@@ -8,7 +8,10 @@
  * Exactly one view answers for a session at a time, so the two lanes never both claim a mailbox.
  */
 
-import { parseOrchestrationActor } from '../../../shared/orchestration-actor'
+import {
+  formatOrchestrationActor,
+  parseOrchestrationActor
+} from '../../../shared/orchestration-actor'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { agentSessionPtyWriteGate } from '../agent-session-pty-write-gate'
 import type { OrchestrationDb } from './db'
@@ -91,6 +94,60 @@ export function structuredSessionAddressTarget(
 }
 
 /**
+ * `/clear` replaces a chat with a new Orca session and the conversation continues there, so what
+ * the old session coordinated and was sent follows it: its Runs are rebound through the ordinary
+ * bind (a coordinator takeover: generation bump, fenced deliveries, rerouted coordinator mail), and
+ * its unread direct mail is re-addressed. Re-derived on the successor's status edges rather than
+ * fired once at the clear, so nothing between the clear and the rebind can strand it. Returns the
+ * Runs it rebound.
+ */
+export function adoptClearedPredecessorMail(
+  sessionId: string,
+  db: OrchestrationDb,
+  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+): string[] {
+  const records = store?.listRecords() ?? []
+  const lineage = new Set([sessionId])
+  const predecessors: string[] = []
+  for (let grew = true; grew;) {
+    grew = false
+    for (const record of records) {
+      const cleared = record.conversationCommand
+      if (
+        cleared?.command === 'clear' &&
+        cleared.phase === 'committed' &&
+        cleared.replacementSessionId !== undefined &&
+        lineage.has(cleared.replacementSessionId) &&
+        !lineage.has(record.sessionId)
+      ) {
+        lineage.add(record.sessionId)
+        predecessors.push(record.sessionId)
+        grew = true
+      }
+    }
+  }
+  const successor = formatOrchestrationActor({ kind: 'session', id: sessionId })
+  const rebound: string[] = []
+  for (const predecessor of predecessors) {
+    const actor = formatOrchestrationActor({ kind: 'session', id: predecessor })
+    for (const run of db.runsBoundToCoordinator({ actor, terminalHandle: null, paneKey: null })) {
+      if (
+        db.bindRun({
+          runId: run.id,
+          coordinatorHandle: null,
+          coordinatorPaneKey: null,
+          coordinatorActor: successor
+        })
+      ) {
+        rebound.push(run.id)
+      }
+    }
+    db.readdressUnreadSessionMail(actor, successor)
+  }
+  return rebound
+}
+
+/**
  * Every mailbox a session reads for itself: the Runs it coordinates and its own direct mail.
  * Re-derived from the database on each idle edge rather than remembered, so mail that arrived
  * while the session could not take it (closed, evicted, in the other view) is found again.
@@ -102,4 +159,17 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
     mailboxes.push(identity.address)
   }
   return mailboxes
+}
+
+/** What a session's idle edge owes its mail: Runs adopted from a `/clear` predecessor, then every
+ *  mailbox the session owns, re-derived. */
+export function structuredSessionIdleEdgeMail(
+  sessionId: string,
+  db: OrchestrationDb | null
+): { reboundRunIds: string[]; mailboxes: string[] } {
+  if (!db) {
+    return { reboundRunIds: [], mailboxes: [] }
+  }
+  const reboundRunIds = adoptClearedPredecessorMail(sessionId, db)
+  return { reboundRunIds, mailboxes: structuredSessionOwnedMailboxes(sessionId, db) }
 }

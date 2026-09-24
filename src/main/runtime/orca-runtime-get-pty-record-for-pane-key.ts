@@ -12,8 +12,8 @@ import {
   findConnectedPtyBoundToSession,
   structuredSessionAddressTarget,
   structuredSessionMailTarget,
-  structuredSessionMailView,
-  structuredSessionOwnedMailboxes
+  structuredSessionIdleEdgeMail,
+  structuredSessionMailView
 } from './orchestration/structured-session-mail-target'
 import {
   resolveTerminalIdentityFromProbes,
@@ -208,10 +208,9 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       return
     }
     this.notifyStructuredSessionJournalActivity(summary.sessionId)
-    const db = this._orchestrationDb
-    for (const mailbox of db ? structuredSessionOwnedMailboxes(summary.sessionId, db) : []) {
-      this.deliverPendingMessagesForHandle(mailbox)
-    }
+    const idle = structuredSessionIdleEdgeMail(summary.sessionId, this._orchestrationDb)
+    idle.reboundRunIds.forEach((runId) => this.cancelMessageWaiters(`run:${runId}`))
+    idle.mailboxes.forEach((mailbox) => this.deliverPendingMessagesForHandle(mailbox))
   }
 
   /** The terminal of a session's terminal view, while a TUI owns it; the PTY lane types there. */

@@ -196,7 +196,8 @@ describe('the idle edge of a structured session', () => {
     const delivered: string[] = []
     const runtime = probe({
       deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn()
+      notifyStructuredSessionJournalActivity: vi.fn(),
+      cancelMessageWaiters: vi.fn()
     })
     runtime.onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'working' })
     expect(delivered).toEqual([])
@@ -210,8 +211,96 @@ describe('the idle edge of a structured session', () => {
     const delivered: string[] = []
     probe({
       deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn()
+      notifyStructuredSessionJournalActivity: vi.fn(),
+      cancelMessageWaiters: vi.fn()
     }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
     expect(delivered).toEqual([CHAT_ACTOR])
+  })
+})
+
+describe('a coordinator chat replaced by /clear', () => {
+  const SUCCESSOR = 'clear-0123456789abcdef0123456789abcdef01234567'
+  const SUCCESSOR_ACTOR = `session:${SUCCESSOR}`
+
+  function clearedInto(successor: string): AgentSessionRecord {
+    return chatRecord(
+      { claimStatus: 'released', ownerProcess: null },
+      {
+        conversationCommand: {
+          command: 'clear',
+          state: 'completed',
+          replacementSessionId: successor,
+          operationId: 'op',
+          callerKey: 'caller',
+          phase: 'committed'
+        }
+      }
+    )
+  }
+
+  it("hands the predecessor's Runs and unread mail to the session that replaced it", () => {
+    // The strand this pins: the Run still named the pre-/clear session, so its results were pointed
+    // at nobody and the new chat — acting as its own new id — could not see the Run at all.
+    const store = installStore(clearedInto(SUCCESSOR))
+    const successorRecord = agentSessionRecordFixture(
+      agentSessionLeaseFixture({ sessionId: SUCCESSOR, runtimeKind: 'native' })
+    )
+    store.records.set(SUCCESSOR, successorRecord)
+    store.visible.sessionIds.push(SUCCESSOR)
+    const runId = chatCoordinatedRun()
+    const generation = db.getRunRaw(runId)!.consumer_generation
+    const direct = db.insertMessage({
+      from: 'term_peer',
+      to: CHAT_ACTOR,
+      subject: 'hi',
+      type: 'status'
+    })
+    db.markAsDelivered([direct.id])
+    const delivered: string[] = []
+    const cancelMessageWaiters = vi.fn()
+    const runtime = probe({
+      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
+      notifyStructuredSessionJournalActivity: vi.fn(),
+      cancelMessageWaiters
+    })
+
+    runtime.onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: null })
+
+    // The ordinary bind: a coordinator takeover, with its generation bump.
+    expect(db.getRunRaw(runId)).toMatchObject({
+      coordinator_handle: null,
+      coordinator_actor: SUCCESSOR_ACTOR,
+      consumer_generation: generation + 1
+    })
+    expect(
+      db.getCurrentRunForCoordinator({
+        actor: SUCCESSOR_ACTOR,
+        terminalHandle: null,
+        paneKey: null
+      })?.id
+    ).toBe(runId)
+    expect(cancelMessageWaiters).toHaveBeenCalledWith(`run:${runId}`)
+    // Re-addressed and not yet pointed: its old pointer went to a session nobody runs.
+    expect(db.getMessageById(direct.id)).toMatchObject({
+      to_handle: SUCCESSOR_ACTOR,
+      delivered_at: null,
+      read: 0
+    })
+    expect(delivered).toEqual(expect.arrayContaining([`run:${runId}`, SUCCESSOR_ACTOR]))
+
+    // Idempotent: a later edge finds nothing left to adopt.
+    runtime.onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: 'idle' })
+    expect(db.getRunRaw(runId)!.consumer_generation).toBe(generation + 1)
+  })
+
+  it('leaves Runs alone for a session nothing was cleared into', () => {
+    installStore(chatRecord())
+    const runId = chatCoordinatedRun()
+    probe({
+      deliverPendingMessagesForHandle: vi.fn(),
+      notifyStructuredSessionJournalActivity: vi.fn(),
+      cancelMessageWaiters: vi.fn()
+    }).onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: 'idle' })
+    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(CHAT_ACTOR)
   })
 })
