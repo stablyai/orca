@@ -68,6 +68,23 @@ export function planTagToggle<T extends Taggable>(
   return updates
 }
 
+/** Add a tag to every workspace that lacks it; never removes (drag-and-drop onto a tag). */
+export function planTagAdd<T extends Taggable>(
+  workspaces: readonly T[],
+  tag: string
+): WorkspaceTagUpdate<T>[] {
+  const key = worktreeTagKey(tag)
+  if (!key) {
+    return []
+  }
+  return workspaces
+    .filter((workspace) => !hasTag(workspace, key))
+    .map((workspace) => ({
+      workspace,
+      tags: normalizeWorktreeTags([...normalizeWorktreeTags(workspace.tags), tag])
+    }))
+}
+
 /** Rename everywhere; renaming onto an existing tag merges the two. */
 export function planTagRename<T extends Taggable>(
   workspaces: readonly T[],
