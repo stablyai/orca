@@ -432,16 +432,15 @@ describe('orca cli worktree awareness', () => {
 
   it.each([
     [['--unread', '--read'], 'Choose either --unread or --read'],
-    [['--read', 'yes'], '--read takes no value']
-  ])('rejects %j on worktree.set before RPC', async (flags, message) => {
+    [['--read', 'yes'], '--read takes no value'],
+    [['--unread=false'], '--unread takes no value']
+  ])('rejects %j on worktree.set before resolving selectors', async (flags, message) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const priorExitCode = process.exitCode
 
-    await main(
-      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', ...flags, '--json'],
-      '/tmp/repo'
-    )
+    // `active` resolves through worktree.list, so any RPC here means validation ran too late.
+    await main(['worktree', 'set', '--worktree', 'active', ...flags, '--json'], '/tmp/repo')
 
     expect(callMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(message)

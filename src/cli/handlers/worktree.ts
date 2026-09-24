@@ -256,6 +256,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
     assertParentWorktreeFlagsCompatible(flags)
+    const isUnread = getOptionalWorktreeUnreadFlag(flags)
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
@@ -266,7 +267,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
-      isUnread: getOptionalWorktreeUnreadFlag(flags),
+      isUnread,
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })
