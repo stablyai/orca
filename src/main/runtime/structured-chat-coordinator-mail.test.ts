@@ -513,6 +513,42 @@ describe('any live session is addressable by its id', () => {
     expect(checked).toMatchObject({ count: 1, messages: [{ subject: 'ping' }] })
   })
 
+  it('leaves a /clear predecessor nothing to read or acknowledge of its replacement`s mail', async () => {
+    // The clear's tail: the old chat is still live after adoption moved its unread mail. A direct
+    // mailbox is consume-on-read and holds no replayable batch, so the old session's `check` sees
+    // only its own address, and there is no delivery for a stale `--ack` to name.
+    const predecessor = await openChat(PEER_CHAT)
+    await openChat(COORDINATOR)
+    await call('orchestration.send', {
+      from: 'term_worker',
+      to: `session:${PEER_CHAT}`,
+      subject: 'read'
+    })
+    await vi.waitFor(() => expect(predecessor.turns).toHaveLength(1), WAIT)
+    await settleTurn(PEER_CHAT, 0)
+    await expect(call('orchestration.check', {}, { sessionId: PEER_CHAT })).resolves.toMatchObject({
+      count: 1
+    })
+    await call('orchestration.send', {
+      from: 'term_worker',
+      to: `session:${PEER_CHAT}`,
+      subject: 'moved'
+    })
+
+    db.readdressUnreadSessionMail(`session:${PEER_CHAT}`, `session:${COORDINATOR}`)
+
+    await expect(call('orchestration.check', {}, { sessionId: PEER_CHAT })).resolves.toMatchObject({
+      count: 0
+    })
+    expect(db.db.prepare('SELECT mailbox_handle FROM deliveries').all()).toEqual([])
+    await expect(
+      call('orchestration.check', {}, { sessionId: COORDINATOR })
+    ).resolves.toMatchObject({
+      count: 1,
+      messages: [{ subject: 'moved' }]
+    })
+  })
+
   it('refuses mail to a chat that was closed, before storing it', async () => {
     await openChat(PEER_CHAT)
     await host.setSessionTabVisibility(PEER_CHAT, false)

@@ -293,6 +293,60 @@ describe('a coordinator chat replaced by /clear', () => {
     expect(db.getRunRaw(runId)!.consumer_generation).toBe(generation + 1)
   })
 
+  it('follows a chain of clears to the session at its end', () => {
+    // CHAT was cleared into MIDDLE, which was cleared into SUCCESSOR before any edge adopted.
+    const MIDDLE = 'clear-fedcba9876543210fedcba9876543210fedcba98'
+    const store = installStore(clearedInto(MIDDLE))
+    store.records.set(MIDDLE, {
+      ...agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId: MIDDLE,
+          runtimeKind: 'native',
+          claimStatus: 'released',
+          ownerProcess: null
+        })
+      ),
+      conversationCommand: {
+        command: 'clear',
+        state: 'completed',
+        replacementSessionId: SUCCESSOR,
+        operationId: 'op-2',
+        callerKey: 'caller',
+        phase: 'committed'
+      }
+    })
+    store.records.set(
+      SUCCESSOR,
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({ sessionId: SUCCESSOR, runtimeKind: 'native' })
+      )
+    )
+    const runId = chatCoordinatedRun()
+    const fromFirst = db.insertMessage({
+      from: 'term_peer',
+      to: CHAT_ACTOR,
+      subject: 'a',
+      type: 'status'
+    })
+    const fromMiddle = db.insertMessage({
+      from: 'term_peer',
+      to: `session:${MIDDLE}`,
+      subject: 'b',
+      type: 'status'
+    })
+    const delivered: string[] = []
+    probe({
+      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
+      notifyStructuredSessionJournalActivity: vi.fn(),
+      cancelMessageWaiters: vi.fn()
+    }).onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: 'idle' })
+
+    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(SUCCESSOR_ACTOR)
+    expect(db.getMessageById(fromFirst.id)!.to_handle).toBe(SUCCESSOR_ACTOR)
+    expect(db.getMessageById(fromMiddle.id)!.to_handle).toBe(SUCCESSOR_ACTOR)
+    expect(delivered).toEqual(expect.arrayContaining([`run:${runId}`, SUCCESSOR_ACTOR]))
+  })
+
   it('leaves Runs alone for a session nothing was cleared into', () => {
     installStore(chatRecord())
     const runId = chatCoordinatedRun()
