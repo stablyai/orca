@@ -1,6 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTouchMobileSessionTabsForWorktree } from './orca-runtime-touch-mobile-session-tabs-for-worktree'
 import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import { isDeliberateTerminalExit } from '../../shared/terminal-exit-cause'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../shared/runtime-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -99,10 +101,13 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
     return { accepted, unpersisted }
   }
 
+  /** Publishes a dead PTY's surfaces as absent, and records the pane when the close was final. */
   protected retireMobileSessionSurfacesForPty(
     ptyId: string,
     incarnationId: string,
-    exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
+    exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[],
+    exitCause?: TerminalExitCause,
+    opts?: { reversibleStop?: boolean }
   ): void {
     const terminalHandle =
       this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId) ?? undefined
@@ -134,6 +139,17 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
     const retiredSurfaces = [...retiredSurfaceByKey.values()]
     if (retiredSurfaces.length === 0) {
       return
+    }
+    // Why gated on a deliberate close: a shell the user exited by hand retires the surface too, and
+    // on a headless host nothing republishes it, so recording that would refuse its restart-in-place.
+    // Why a reversible stop is excluded: worktree sleep and pane hibernation close the PTY but keep
+    // the pane, and the wake replays exactly these ids.
+    // Why before the handle-keyed proofs below: a create replaying these ids must be refused even
+    // for a pane no client ever addressed by handle, which publishes no proof.
+    if (exitCause && isDeliberateTerminalExit(exitCause) && opts?.reversibleStop !== true) {
+      for (const surface of retiredSurfaces) {
+        this.retiredTerminalPanes.record(surface.worktreeId, surface.parentTabId, surface.leafId)
+      }
     }
     const persisted = this.persistTerminalSurfaceRetirements(retiredSurfaces)
     if (!persisted) {

@@ -13,6 +13,7 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 
 export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
+  /** Settles every piece of runtime state a dead PTY owned, and decides why it died. */
   onPtyExit(
     ptyId: string,
     exitCode: number,
@@ -40,7 +41,9 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.stopRequestedPtyIds.has(ptyId) && !stopNeverConfirmed
         ? OPERATOR_CLOSE_EXIT_CAUSE
         : observedCause
+    const reversibleStop = this.reversibleStopRequestedPtyIds.has(ptyId)
     this.stopRequestedPtyIds.delete(ptyId)
+    this.reversibleStopRequestedPtyIds.delete(ptyId)
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&
       pty?.connectionId != null &&
@@ -224,7 +227,9 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     } else {
       // Why: permanent process exit is absence, not a starting/sleeping tab.
       // Retire before publishing so paired clients never persist a ghost.
-      this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+      this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces, exitCause, {
+        reversibleStop
+      })
     }
 
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []

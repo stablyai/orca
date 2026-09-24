@@ -77,4 +77,45 @@ describe('remote runtime pty transport host absence evidence', () => {
       expect.objectContaining({ method: 'terminal.create' })
     )
   })
+
+  // #21341: the host refuses a create hinting a pane it retired. That refusal is host evidence the
+  // surface is gone, so the pane settles instead of showing the raw token, and nothing re-attempts.
+  it('settles the pane without retrying when terminal.create answers tab_not_found', async () => {
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'terminal.create') {
+        return { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
+      }
+      return { ok: true, result: {} }
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'host-tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      onPtyExit
+    })
+
+    const onError = vi.fn()
+    const onExit = vi.fn()
+    const onDisconnect = vi.fn()
+    const onRecoveryStateChange = vi.fn()
+    const result = await transport.connect({
+      url: '',
+      callbacks: { onError, onExit, onDisconnect, onRecoveryStateChange }
+    })
+
+    expect(result).toBeUndefined()
+    expect(onError).not.toHaveBeenCalled()
+    // The create never minted a pty id, so this settle is the pane's only exit signal.
+    expect(onExit).toHaveBeenCalledWith(0)
+    expect(onDisconnect).toHaveBeenCalled()
+    expect(onRecoveryStateChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'ended' })
+    )
+    expect(
+      runtimeCall.mock.calls.filter((call) => call[0]?.method === 'terminal.create')
+    ).toHaveLength(1)
+    expect(runtimeCall).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'status.get' }))
+  })
 })

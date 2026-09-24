@@ -206,6 +206,7 @@ describe('registerPtyHandlers', () => {
     const shutdown = vi.fn(async () => undefined)
     const runtime = {
       setPtyController: vi.fn(),
+      markPtyStopRequested: vi.fn(),
       onPtyExit: vi.fn()
     }
     setLocalPtyProvider({
@@ -239,6 +240,8 @@ describe('registerPtyHandlers', () => {
       immediate: true,
       keepHistory: true
     })
+    // keepHistory is pane hibernation, which means to bring this pane back under the same ids.
+    expect(runtime.markPtyStopRequested).toHaveBeenCalledWith('local-pty', { reversible: true })
     expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1, undefined)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: 'local-pty',
@@ -340,6 +343,10 @@ describe('registerPtyHandlers', () => {
       providerExitObserved: true
     })
     expect(runtime.markPtyStopRequested).toHaveBeenCalledTimes(2)
+    // An ordinary tab close gives the pane up for good; only hibernation passes keepHistory.
+    expect(runtime.markPtyStopRequested).toHaveBeenNthCalledWith(1, 'local-pty', {
+      reversible: false
+    })
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
       [['pty:exit', { id: 'local-pty', code: -1 }]]
     )

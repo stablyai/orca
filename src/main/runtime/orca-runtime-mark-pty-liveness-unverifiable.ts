@@ -39,9 +39,18 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
    * indistinguishable from a natural finish. The intent is the only thing that
    * separates "the operator closed it" from "the agent died", so it is recorded
    * where it is known rather than reconstructed afterwards (STA-4603).
+   *
+   * `reversible` marks a stop the user expects to undo (worktree sleep, pane hibernation): still an
+   * operator close, but the pane survives it, so its ids must stay adoptable. A later irreversible
+   * request over the same PTY wins — that caller is giving the pane up for good.
    */
-  markPtyStopRequested(ptyId: string): void {
+  markPtyStopRequested(ptyId: string, opts?: { reversible?: boolean }): void {
     this.stopRequestedPtyIds.add(ptyId)
+    if (opts?.reversible === true) {
+      this.reversibleStopRequestedPtyIds.add(ptyId)
+    } else {
+      this.reversibleStopRequestedPtyIds.delete(ptyId)
+    }
   }
 
   isPtyStopRequested(ptyId: string): boolean {

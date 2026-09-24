@@ -86,6 +86,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     // A stop intent belongs to one process incarnation; never let it label a
     // replacement process when the provider reports a generation reset.
     this.stopRequestedPtyIds.delete(ptyId)
+    this.reversibleStopRequestedPtyIds.delete(ptyId)
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())

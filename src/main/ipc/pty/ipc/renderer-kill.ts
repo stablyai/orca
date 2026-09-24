@@ -41,7 +41,11 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
       // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
       throw new Error('Invalid PTY provider id')
     }
-    runtime?.markPtyStopRequested?.(args.id)
+    // Why stated rather than inferred: this IPC serves both the ordinary tab close and pane
+    // hibernation, and only hibernation passes keepHistory. Recording a replayable kill for a
+    // hibernating pane would destroy it on the next handshake.
+    const reversible = args.keepHistory === true
+    runtime?.markPtyStopRequested?.(args.id, { reversible })
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
@@ -50,10 +54,6 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
     if (startupPromise) {
       await startupPromise
     }
-    // Why stated rather than inferred: this IPC serves both the ordinary tab close and pane
-    // hibernation, and only hibernation passes keepHistory. Recording a replayable kill for a
-    // hibernating pane would destroy it on the next handshake.
-    const reversible = args.keepHistory === true
     const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
     if (!provider && connectionId) {
       // Why: detached SSH PTYs intentionally keep ownership after their

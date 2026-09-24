@@ -5,6 +5,7 @@ import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
+import { resolveHintedTerminalPaneIdentity } from './retired-terminal-pane-hint-gate'
 
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -34,14 +35,13 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       let preAllocatedHandle =
         launchOpts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
-      const hintedTabId = launchOpts.tabId?.trim()
-      const canAdoptPaneIdentity =
-        hintedTabId !== undefined &&
-        dependencies.isValidHostTerminalTabId(hintedTabId) &&
-        launchOpts.leafId !== undefined &&
-        dependencies.isTerminalLeafId(launchOpts.leafId)
-      let tabId = canAdoptPaneIdentity ? (hintedTabId as string) : dependencies.randomUUID()
-      let leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : dependencies.randomUUID()
+      // Refuses a hint naming a pane this host retired instead of adopting it on id format alone.
+      let { tabId, leafId } = resolveHintedTerminalPaneIdentity(launchOpts, {
+        worktreeId: workspace.id,
+        retiredPanes: this.retiredTerminalPanes,
+        isSurfacePublished: (hintedTab, hintedLeaf) =>
+          this.mobileSessionSnapshotHasSurface(workspace.id, hintedTab, hintedLeaf)
+      })
       let paneKey = dependencies.makePaneKey(tabId, leafId)
       const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
         worktreeId: workspace.id,

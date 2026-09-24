@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
+import { RetiredTerminalPaneLedger } from './retired-terminal-pane-ledger'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
@@ -95,6 +96,10 @@ export class OrcaRuntimeWithRuntimeId {
   protected tabs = new Map<string, RuntimeSyncedTab>()
 
   protected mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+
+  // Why not the snapshot's retirement proofs: those are keyed by a terminal handle a
+  // renderer-created pane may never have been issued. See retired-terminal-pane-ledger.ts.
+  protected readonly retiredTerminalPanes = new RetiredTerminalPaneLedger()
 
   /** Single host writer for mobile session snapshots; versions are total-order stamps. */
   protected storeMobileSessionSnapshot(

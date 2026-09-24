@@ -8,6 +8,7 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 
 export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+  /** Admits a spawned PTY into the runtime graph and binds it to the pane the caller claimed. */
   registerPty(
     ptyId: string,
     worktreeId: string,
@@ -143,6 +144,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
+      // Why here and not at the create's hint gate: a pane a live PTY backs may never be refused,
+      // and only this binding proves the spawn between the two actually landed.
+      this.retiredTerminalPanes.forget(worktreeId, binding.tabId, binding.leafId)
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
     }
   }

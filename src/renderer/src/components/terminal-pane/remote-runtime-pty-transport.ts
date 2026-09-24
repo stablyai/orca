@@ -2408,7 +2408,22 @@ export function createRemoteRuntimePtyTransport(
         if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
           connecting = false
           const message = runtimeTerminalErrorMessage(error)
-          if (isRemoteTerminalGoneMessage(message)) {
+          // Load-bearing order: a host refusal settles quietly, so it is classified ahead of the
+          // generic gone and retry branches below, which would surface or replay it instead.
+          if (isMissingHostSessionSurfaceError(error)) {
+            // The host refusing to create under this pane's ids is its own evidence the surface is
+            // gone, so settle rather than surface it. Not folded into isRemoteTerminalGoneMessage:
+            // that also classifies the subscribe path, which may still re-resolve the same pane.
+            const settledPtyId = remotePtyId
+            retireRemoteTerminalId()
+            if (!settledPtyId) {
+              // A create that never minted a pty id leaves retireRemoteTerminalId nothing to
+              // notify, so the pane would sit blank with no exit overlay. Same settle the stream's
+              // own end handler publishes.
+              storedCallbacks.onExit?.(0)
+              storedCallbacks.onDisconnect?.()
+            }
+          } else if (isRemoteTerminalGoneMessage(message)) {
             recovery.cancel()
             handleRemoteTerminalError(error)
           } else if (

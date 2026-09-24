@@ -38,6 +38,10 @@ import type { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
   protected readonly stopRequestedPtyIds = new Set<string>()
 
+  // Subset of the above whose stop is meant to be undone (worktree sleep, pane hibernation), so the
+  // exit must not retire the pane the user expects to wake back into.
+  protected readonly reversibleStopRequestedPtyIds = new Set<string>()
+
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
 
   protected readonly terminalAgentPresence = new RuntimeTerminalAgentPresence({

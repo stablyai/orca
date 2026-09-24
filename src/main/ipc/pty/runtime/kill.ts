@@ -231,7 +231,7 @@ export async function stopAndWaitPtyFromRuntimeController(
     sendPtyExitToRenderer,
     finishPtyShutdown
   } = deps
-  runtime?.markPtyStopRequested?.(ptyId)
+  runtime?.markPtyStopRequested?.(ptyId, { reversible: opts?.keepHistory === true })
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId

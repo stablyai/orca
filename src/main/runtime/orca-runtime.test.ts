@@ -51,6 +51,7 @@ await import('./orca-runtime-tests/terminal-creation-and-readiness-part-09.spec'
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-10.spec')
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-11.spec')
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-12.spec')
+await import('./orca-runtime-tests/terminal-create-retired-pane-hint.spec')
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery.spec')
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-02.spec')
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-03.spec')

@@ -206,11 +206,15 @@ describe('undelivered SSH stops', () => {
     )
     setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-e')
-    const { stopAndWait } = install(store)
+    const { stopAndWait, runtime } = install(store)
 
     try {
       await expect(stopAndWait(SCOPED_PTY_ID, { keepHistory: true })).resolves.toBe(false)
       expect(store.recordSshRemotePtyKillIntent).not.toHaveBeenCalled()
+      // Same reversibility the runtime needs, so the slept pane's ids stay adoptable on wake.
+      expect(runtime.markPtyStopRequested).toHaveBeenCalledWith(SCOPED_PTY_ID, {
+        reversible: true
+      })
     } finally {
       unregisterSshPtyProvider('ssh-1')
       deletePtyOwnership(SCOPED_PTY_ID)
