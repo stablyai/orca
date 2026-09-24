@@ -19,6 +19,7 @@ export type SectionHeaderRowContext = {
   projectGroups: readonly ProjectGroup[]
   highlightedRevealRowKey: string | null
   dragOverStatus: WorkspaceStatus | null
+  dragOverTagSection: string | null
   pinDragOver: boolean
   headerDrag: WorktreeSidebarHeaderDrag
   getCachedFolderWorkspacePathStatus: (request: {
