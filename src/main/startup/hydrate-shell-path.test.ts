@@ -213,6 +213,7 @@ describe('hydrateShellPath', () => {
   // Why: on Windows the probe is PowerShell or Git Bash, so these argv are never produced.
   it.skipIf(process.platform === 'win32')(
     'keeps the POSIX login probe for bash and zsh',
+    /** bash and zsh still receive `-ilc` and `printf "$PATH"`. */
     async () => {
       await captureProbeEnv('/bin/zsh')
 
@@ -225,6 +226,7 @@ describe('hydrateShellPath', () => {
 
   it.skipIf(process.platform === 'win32')(
     'asks nushell to join $env.PATH instead of printing the literal "$PATH"',
+    /** Nushell receives `-l -c` and a colon-separated reply becomes PATH segments. */
     async () => {
       const proc = createMockShellProcess()
       spawnMock.mockReturnValue(proc)
