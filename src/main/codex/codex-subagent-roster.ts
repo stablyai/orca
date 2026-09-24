@@ -1,6 +1,8 @@
 // The Codex subagent roster: one journal row per spawn group, revised in place.
 //
-// Activity supplies membership; child turn events supply execution state.
+// A spawn announcement supplies membership — a `subAgentActivity` item, or in
+// Codex's default multi-agent mode the finished `spawnAgent` call — and child
+// turn events supply execution state.
 //
 // KNOWN LIMITATION: `groups` is process-local and is never seeded from the
 // journal, while the row's identity is keyed on the group id alone. So once a
@@ -24,9 +26,8 @@ import type {
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
-  codexSubagentLabel,
-  isCodexRootAgentActivity,
   readCodexSubagentActivity,
+  readCodexSubagentAnnouncement,
   readCodexThreadTokenTotal
 } from './codex-subagent-activity'
 import {
@@ -106,32 +107,34 @@ export class CodexSubagentRoster {
     })
   }
 
-  /** Consume a `subAgentActivity` item. Returns null when the item is not one. */
+  /** The label a registered helper's row carries. */
+  helperLabel(agentThreadId: string): string | null {
+    return this.executions.label(agentThreadId)
+  }
+
+  /** Consume an item that announces a child. Null means the item is not this roster's to render:
+   *  a `subAgentActivity` item renders as the roster row alone, while a spawn call keeps its own
+   *  row, so it is claimed only to hand back a refused write. */
   handleItem(input: {
     threadId: string
     turnId: string | null
     item: CodexThreadItem
   }): StructuredAgentSessionSinkAdmission | null {
-    const activity = readCodexSubagentActivity(input.item)
-    if (!activity) {
-      return null
-    }
+    const claimed = readCodexSubagentActivity(input.item) ? ADMITTED : null
+    const announcement = readCodexSubagentAnnouncement(input.item)
     // The root node is the parent turn itself, not a child it spawned.
-    if (
-      activity.agentThreadId === this.deps.primaryThreadId() ||
-      isCodexRootAgentActivity(activity)
-    ) {
-      return ADMITTED
+    if (!announcement || announcement.agentThreadId === this.deps.primaryThreadId()) {
+      return claimed
     }
     const child = this.executions.register(
-      activity.agentThreadId,
-      codexSubagentLabel(activity),
-      activity.kind === 'started' || activity.kind === 'interacted' ? input.turnId : undefined,
-      // Only `started` names the spawner: other kinds ride whichever agent acted.
-      activity.kind === 'started' ? input.threadId : undefined
+      announcement.agentThreadId,
+      announcement.label,
+      announcement.namesParentTurn ? input.turnId : undefined,
+      // Only a spawn names the spawner: other announcements ride whichever agent acted.
+      announcement.spawned ? input.threadId : undefined
     )
     if (!child?.execution) {
-      return ADMITTED
+      return claimed
     }
     const group =
       this.executionGroup(child.agentThreadId, child.execution.turnId) ??
@@ -139,7 +142,8 @@ export class CodexSubagentRoster {
     if (!group.entries.has(child.agentThreadId)) {
       this.recordExecution(group, child, child.execution)
     }
-    return this.write(group)
+    const admission = this.write(group)
+    return claimed || !admission.accepted ? admission : null
   }
 
   handleTurnEvent(event: {

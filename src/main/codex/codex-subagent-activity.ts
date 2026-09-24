@@ -6,12 +6,19 @@
 //   * `agentPath` is a tree path (`/root`, `/root/list_directory`); the trailing
 //     segment is a semantic task name and the only label available. There is no
 //     `thread/started` for a child, so nickname/role/depth do not exist.
-//   * `agentsStates` on `collabAgentToolCall` arrived empty (`{}`) throughout the
-//     probe, so nothing here reads it; child turn events own execution state.
+//   * Codex's DEFAULT multi-agent mode sends no `subAgentActivity` at all; a
+//     helper appears only as the `collabAgentToolCall` that spawned it (read in
+//     `codex-collab-agent-tool-call.ts`). Either item announces the same child,
+//     keyed by its thread id, and child turn events own its execution state.
 //   * `thread/tokenUsage/updated` reports a per-thread RUNNING TOTAL, so the
 //     latest frame replaces the previous one — it is never accumulated.
 
-import type { CodexThreadItem } from './codex-structured-item-translation'
+import {
+  codexCollabHelperLabel,
+  codexCollabSpawnedThread,
+  readCodexCollabAgentToolCall
+} from './codex-collab-agent-tool-call'
+import type { CodexThreadItem } from './codex-thread-item-identity'
 
 export const CODEX_SUBAGENT_ITEM_TYPE = 'subAgentActivity'
 export const CODEX_TOKEN_USAGE_METHOD = 'thread/tokenUsage/updated'
@@ -83,6 +90,44 @@ export function isCodexRootAgentActivity(activity: CodexSubagentActivity): boole
 export function codexSubagentLabel(activity: CodexSubagentActivity): string | null {
   const trailing = codexSubagentPathSegments(activity.agentPath).at(-1)?.trim()
   return trailing !== undefined && trailing.length > 0 ? trailing : null
+}
+
+/** A child the item says exists, from either wire shape Codex announces one with. */
+export type CodexSubagentAnnouncement = {
+  agentThreadId: string
+  label: string | null
+  /** The item's turn is the one the child was spawned or messaged from. */
+  namesParentTurn: boolean
+  /** The item is the spawn itself, so the thread that carried it spawned the child. */
+  spawned: boolean
+}
+
+/** The child a `subAgentActivity` item (the tree root excluded) or a finished `spawnAgent` call
+ *  announces. Both name the child by its thread id, so a session sending both announces one. */
+export function readCodexSubagentAnnouncement(
+  item: CodexThreadItem
+): CodexSubagentAnnouncement | null {
+  const activity = readCodexSubagentActivity(item)
+  if (activity) {
+    return isCodexRootAgentActivity(activity)
+      ? null
+      : {
+          agentThreadId: activity.agentThreadId,
+          label: codexSubagentLabel(activity),
+          namesParentTurn: activity.kind === 'started' || activity.kind === 'interacted',
+          spawned: activity.kind === 'started'
+        }
+  }
+  const call = readCodexCollabAgentToolCall(item)
+  const spawned = call && codexCollabSpawnedThread(call)
+  return call && spawned
+    ? {
+        agentThreadId: spawned,
+        label: codexCollabHelperLabel(call.prompt),
+        namesParentTurn: true,
+        spawned: true
+      }
+    : null
 }
 
 export type CodexThreadTokenTotal = { threadId: string; totalTokens: number }

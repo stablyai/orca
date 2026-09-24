@@ -1,9 +1,9 @@
 import type { NativeChatSubagentState } from '../../shared/native-chat-types'
+import { readCodexSubagentAnnouncement } from './codex-subagent-activity'
 import {
-  codexSubagentLabel,
-  isCodexRootAgentActivity,
-  readCodexSubagentActivity
-} from './codex-subagent-activity'
+  codexCollabClosedThread,
+  readCodexCollabAgentToolCall
+} from './codex-collab-agent-tool-call'
 import { codexChildTurnState } from './codex-subagent-executions'
 import { readRecord } from './codex-item-field-readers'
 import { readCodexThreadItem } from './codex-structured-item-translation'
@@ -16,7 +16,7 @@ export type CodexBackgroundTaskFrame =
       agentThreadId: string
       label: string | null
       parentTurnId: string | null | undefined
-      /** The reporting thread, for a `started` activity: the agent that spawned the child. */
+      /** The reporting thread, for a spawn: the agent that spawned the child. */
       spawnerThreadId: string | undefined
     }
   | {
@@ -26,14 +26,15 @@ export type CodexBackgroundTaskFrame =
       state: NativeChatSubagentState
     }
   | {
-      /** A child turn that ended with no `turn/completed`. No `turnId`: the one it is running. */
+      /** A child turn that ended with no `turn/completed`. No `turnId`: the one it is running.
+       *  `threadId` is the child's, which for a `closeAgent` is not the thread that sent it. */
       kind: 'turn-ended'
       threadId: string
       turnId: string | null
       state: CodexChildTurnEnding
     }
 
-type CodexChildTurnEnding = Extract<NativeChatSubagentState, 'failed' | 'unverifiable'>
+type CodexChildTurnEnding = Extract<NativeChatSubagentState, 'failed' | 'stopped' | 'unverifiable'>
 
 export type CodexBackgroundTaskEvent = {
   method: string
@@ -88,23 +89,25 @@ export function readCodexBackgroundTaskFrame(
     return null
   }
   const item = readCodexThreadItem(readRecord(event.params).item)
-  const activity = item && readCodexSubagentActivity(item)
-  if (
-    !activity ||
-    activity.agentThreadId === primaryThreadId ||
-    isCodexRootAgentActivity(activity)
-  ) {
+  if (!item) {
+    return null
+  }
+  const call = readCodexCollabAgentToolCall(item)
+  const closed = call && codexCollabClosedThread(call)
+  if (closed && closed !== primaryThreadId) {
+    // The caller shut the helper down: whatever turn it was running is over, stopped by its caller.
+    return { kind: 'turn-ended', threadId: closed, turnId: null, state: 'stopped' }
+  }
+  const announcement = readCodexSubagentAnnouncement(item)
+  if (!announcement || announcement.agentThreadId === primaryThreadId) {
     return null
   }
   return {
     kind: 'subagent',
-    agentThreadId: activity.agentThreadId,
-    label: codexSubagentLabel(activity),
-    parentTurnId:
-      activity.kind === 'started' || activity.kind === 'interacted'
-        ? readCodexTurnId(event.params)
-        : undefined,
-    // Only `started` names the spawner: other kinds ride whichever agent acted.
-    spawnerThreadId: activity.kind === 'started' ? event.threadId : undefined
+    agentThreadId: announcement.agentThreadId,
+    label: announcement.label,
+    parentTurnId: announcement.namesParentTurn ? readCodexTurnId(event.params) : undefined,
+    // Only a spawn names the spawner: other announcements ride whichever agent acted.
+    spawnerThreadId: announcement.spawned ? event.threadId : undefined
   }
 }

@@ -83,6 +83,8 @@ const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   ['grep', 'search'],
   ['glob', 'search'],
   ['task', 'subAgentActivity'],
+  // Codex's call that starts a helper. Its other agent calls (wait, message, close) run none.
+  ['spawn_agent', 'subAgentActivity'],
   ['webfetch', 'webSearch'],
   ['todowrite', 'todoList'],
   ['update_plan', 'todoList'],
