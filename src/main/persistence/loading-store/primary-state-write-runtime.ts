@@ -6,6 +6,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'backupRotationInFlight'
   | 'dataFile'
   | 'dirtyProfileStateDomains'
+  | 'durableMutationPhase'
   | 'flushOrThrow'
   | 'runDurableMutation'
   | 'firstPendingSaveAt'
