@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { ClaudeEnvPatch } from './environment'
@@ -26,7 +25,8 @@ export class ClaudeRuntimePathResolver {
 
   private resolveConfigPath(configDir: string, inheritedConfigDir: string | null): string {
     const colocatedConfigPath = join(configDir, '.claude.json')
-    if (inheritedConfigDir || existsSync(colocatedConfigPath)) {
+    // Why: Claude only reads the colocated file when CLAUDE_CONFIG_DIR is set.
+    if (inheritedConfigDir) {
       return colocatedConfigPath
     }
     return join(homedir(), '.claude.json')
