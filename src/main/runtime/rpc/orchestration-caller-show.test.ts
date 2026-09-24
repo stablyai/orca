@@ -167,8 +167,8 @@ describe('orchestration.callerShow: the caller learns its own address from the h
         await h.dispatch(orchestrationRequest('orchestration.sessionAddress', { sessionId }))
       )
       const acting = resultOf(await h.dispatch(callerShow({ sessionId })))
-      // One derivation: whatever address the host gives the conversation, the copy is the actor's.
-      expect(shown.address).toMatch(/^session:/)
+      // One derivation: the conversation's root, which the successor copies and acts as too.
+      expect(shown.address).toBe(ACTOR_X)
       expect(acting.caller).toMatchObject({ kind: 'session', address: shown.address })
     }
   })
