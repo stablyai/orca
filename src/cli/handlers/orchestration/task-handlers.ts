@@ -37,6 +37,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration task-list': async ({ flags, client, cwd, json }) => {
     const brief = flags.has('brief')
+    const worktree = getOptionalStringFlag(flags, 'worktree')
     const run = getOptionalStringFlag(flags, 'run')
     const callerTerminalHandle = run
       ? undefined
@@ -50,18 +51,28 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         status: string
         assignee_handle?: string | null
         dispatch_id?: string | null
+        worktree_id?: string | null
+        branch?: string | null
         spec_truncated?: boolean
       }[]
       count: number
       runId?: string
       legacyReadOnly?: boolean
+      worktreeFilterApplied?: string
     }>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
       ready: flags.has('ready') ? true : undefined,
       brief: brief ? true : undefined,
       run,
+      worktree,
       callerTerminalHandle
     })
+    if (worktree && result.result.worktreeFilterApplied !== worktree) {
+      throw new RuntimeClientError(
+        'unsupported_operation',
+        'This runtime does not support task worktree filtering. Update the runtime and retry.'
+      )
+    }
     // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.
     const needsClientAbbreviation =
       brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
