@@ -20,6 +20,7 @@ import type { AgentPermissionGlobalSettings } from './agent-launch/permissions/t
 import type { TerminalColorOverrideGlobalSettings } from './terminal-themes/terminal-color-overrides'
 import type { WindowMaterialSettings } from './window-material'
 import type { EditorSaveSettings } from './editor-save-settings'
+import type { SetupAutoCloseSettings } from './agent-launch/startup/setup-runner-command'
 import type { NestedWorkerDepthSettings } from './orchestration/workers/nested-worker-depth'
 import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/agent-workspace-trust-decision'
@@ -48,6 +49,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   TerminalScrollSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
+  SetupAutoCloseSettings &
   EditorSaveSettings &
   BrowserPasswordsGlobalSettings &
   NestedWorkerDepthSettings &
