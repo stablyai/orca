@@ -24,6 +24,7 @@ import {
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
+import { registerPersistedPtySpawn } from '../pane/spawn-registration'
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
@@ -101,7 +102,9 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       launchAgent: ctx.result.launchAgent,
       incarnationId: ctx.result.incarnationId
     })
-    ctx.deps.runtime?.registerPty(
+    await registerPersistedPtySpawn(
+      ctx.deps.runtime,
+      ctx.deps.store,
       ctx.result.id,
       args.worktreeId,
       args.connectionId ?? null,
