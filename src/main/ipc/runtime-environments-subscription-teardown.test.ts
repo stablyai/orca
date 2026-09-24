@@ -1,3 +1,7 @@
+vi.mock('../runtime/runtime-workspace-session-namespace-custody', () => ({
+  hasMainOwnedRuntimeSessionNamespace: () => false
+}))
+
 import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -89,6 +93,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let activeRuntimeEnvironmentId: string | null
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
+    removeRuntimeWorkspaceSessionPartition: ReturnType<typeof vi.fn>
     updateSettings: ReturnType<typeof vi.fn>
   }
 
@@ -97,6 +102,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      removeRuntimeWorkspaceSessionPartition: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })

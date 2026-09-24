@@ -1,0 +1,246 @@
+===================================================================
+--- a/src/main/ipc/renderer-shutdown-checkpoint.ts
++++ b/src/main/ipc/renderer-shutdown-checkpoint.ts
+@@ -0,0 +1,1 @@
++import { canCreateRendererSessionPartition } from './renderer-workspace-session-admission'
+@@ -49,0 +51,1 @@
++    let admissionOk = true
+@@ -52,1 +54,11 @@
+-        store.stageWorkspaceSessionBeforeUnload(state, hostId)
++        let admitted: boolean
++        try {
++          admitted = canCreateRendererSessionPartition(store, hostId)
++        } catch (error) {
++          console.error('[app] Failed to establish runtime session partition authority:', error)
++          admissionOk = false
++          continue
++        }
++        if (admitted) {
++          store.stageWorkspaceSessionBeforeUnload(state, hostId)
++        }
+@@ -59,2 +71,4 @@
+-    pendingCheckpoint = ok ? flushStagedStateWithDeadline(store) : Promise.resolve({ ok: false })
+-    event.returnValue = { ok }
++    pendingCheckpoint = ok
++      ? flushStagedStateWithDeadline(store).then((result) => ({ ok: result.ok && admissionOk }))
++      : Promise.resolve({ ok: false })
++    event.returnValue = { ok: ok && admissionOk }
+===================================================================
+--- /dev/null
++++ b/src/main/ipc/renderer-workspace-session-admission.ts
+@@ -0,0 +1,18 @@
++import { app } from 'electron'
++import { parseExecutionHostId } from '../../shared/execution-host'
++import { listEnvironments } from '../../shared/runtime-environment-store'
++import type { Store } from '../persistence'
++import { hasMainOwnedRuntimeSessionNamespace } from '../runtime/runtime-workspace-session-namespace-custody'
++
++export function canCreateRendererSessionPartition(store: Store, hostId?: string | null): boolean {
++  const parsed = parseExecutionHostId(hostId)
++  if (parsed?.kind !== 'runtime' || store.getWorkspaceSessionHostIds().includes(parsed.id)) {
++    return true
++  }
++  if (hasMainOwnedRuntimeSessionNamespace(store, parsed.id)) {
++    return true
++  }
++  return listEnvironments(app.getPath('userData')).some(
++    (entry) => entry.id === parsed.environmentId
++  )
++}
+===================================================================
+--- a/src/main/ipc/runtime-environment-connectivity-handlers.ts
++++ b/src/main/ipc/runtime-environment-connectivity-handlers.ts
+@@ -0,0 +1,2 @@
++import { hasMainOwnedRuntimeSessionNamespace } from '../runtime/runtime-workspace-session-namespace-custody'
++import { toRuntimeExecutionHostId } from '../../shared/execution-host'
+@@ -107,0 +110,2 @@
++      const hostId = toRuntimeExecutionHostId(environment.id)
++      const preserveMainNamespace = hasMainOwnedRuntimeSessionNamespace(store, hostId)
+@@ -124,0 +129,3 @@
++      if (!preserveMainNamespace) {
++        store.removeRuntimeWorkspaceSessionPartition(hostId)
++      }
+===================================================================
+--- a/src/main/ipc/session.ts
++++ b/src/main/ipc/session.ts
+@@ -0,0 +1,1 @@
++import { canCreateRendererSessionPartition } from './renderer-workspace-session-admission'
+@@ -23,1 +24,3 @@
+-    store.setWorkspaceSession(args, hostId)
++    if (isRendererSessionAdmitted(store, hostId)) {
++      store.setWorkspaceSession(args, hostId)
++    }
+@@ -27,1 +30,3 @@
+-    store.patchWorkspaceSession(args, hostId)
++    if (isRendererSessionAdmitted(store, hostId)) {
++      store.patchWorkspaceSession(args, hostId)
++    }
+@@ -41,1 +46,11 @@
+-    store.setWorkspaceSession(args, hostId)
++    let admitted = false
++    let admissionOk = true
++    try {
++      admitted = canCreateRendererSessionPartition(store, hostId)
++    } catch (error) {
++      console.error('[session] Failed to establish runtime session partition authority:', error)
++      admissionOk = false
++    }
++    if (admitted) {
++      store.setWorkspaceSession(args, hostId)
++    }
+@@ -43,1 +58,1 @@
+-    event.returnValue = true
++    event.returnValue = admissionOk
+@@ -53,0 +69,9 @@
++
++function isRendererSessionAdmitted(store: Store, hostId?: string | null): boolean {
++  try {
++    return canCreateRendererSessionPartition(store, hostId)
++  } catch (error) {
++    console.error('[session] Failed to establish runtime session partition authority:', error)
++    return false
++  }
++}
+===================================================================
+--- a/src/main/persistence/loading-store/session-host-partitions.ts
++++ b/src/main/persistence/loading-store/session-host-partitions.ts
+@@ -6,0 +7,1 @@
++  parseExecutionHostId,
+@@ -14,1 +15,5 @@
+-import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
++import {
++  collectTerminalScrollbackSnapshotRefs,
++  deleteTerminalScrollbackSnapshotSync,
++  readTerminalScrollbackSnapshotSync
++} from '../../terminal-scrollback-snapshots'
+@@ -34,1 +39,5 @@
+-  'state' | 'terminalScrollbackSnapshotStorage'
++  | 'state'
++  | 'terminalScrollbackSnapshotStorage'
++  | 'flushOrThrow'
++  | 'writesFrozen'
++  | 'quitFlushStarted'
+@@ -82,0 +92,19 @@
++  removeRuntimeWorkspaceSessionPartition(hostId: ExecutionHostId): boolean {
++    if (
++      parseExecutionHostId(hostId)?.kind !== 'runtime' ||
++      !hasPersistedWorkspaceSession(this, hostId)
++    ) {
++      return false
++    }
++    const prior = this.getWorkspaceSession(hostId)
++    const partitions = {
++      ...this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId
++    }
++    delete partitions[hostId]
++    this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = partitions
++    invalidateLocalWorktreeMetadataPruneInputs()
++    scheduleSave(this[sessionHostPartitionOperationsContext].scheduling)
++    releaseRemovedHostScrollbackSnapshots(this, prior)
++    return true
++  }
++
+@@ -219,0 +248,34 @@
++
++function releaseRemovedHostScrollbackSnapshots(
++  owner: SessionHostPartitionOperations,
++  prior: WorkspaceSessionState
++): void {
++  const { runtime } = owner[sessionHostPartitionOperationsContext]
++  const refs = collectTerminalScrollbackSnapshotRefs(prior)
++  if (refs.size === 0 || runtime.writesFrozen || runtime.quitFlushStarted) {
++    return
++  }
++  for (const hostId of owner.getWorkspaceSessionHostIds()) {
++    for (const ref of collectTerminalScrollbackSnapshotRefs(owner.getWorkspaceSession(hostId))) {
++      refs.delete(ref)
++    }
++  }
++  if (refs.size === 0) {
++    return
++  }
++  try {
++    // Never remove files while the durable profile can still reference them.
++    runtime.flushOrThrow()
++  } catch (error) {
++    console.warn(
++      '[terminal-scrollback] Retaining removed host snapshots after save failure:',
++      error
++    )
++    return
++  }
++  // Legacy fallback files can still belong to another profile.
++  const storage = { ...runtime.terminalScrollbackSnapshotStorage, fallbackSnapshotRoot: null }
++  for (const ref of refs) {
++    deleteTerminalScrollbackSnapshotSync(ref, storage)
++  }
++}
+===================================================================
+--- a/src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.ts
++++ b/src/main/runtime/runtime-legacy-worker-terminal-recovery-persistence.ts
+@@ -77,0 +78,3 @@
++        if (store.getWorkspaceSessionHostIds?.().includes(hostId) === false) {
++          continue
++        }
+===================================================================
+--- /dev/null
++++ b/src/main/runtime/runtime-workspace-session-namespace-custody.ts
+@@ -0,0 +1,58 @@
++import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
++import { inferFolderWorkspacePathConnection } from '../project-groups/folder-workspace-path-status'
++import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
++import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
++import { parseWorkspaceKey } from '../../shared/workspace-scope'
++import type { Store } from '../persistence'
++
++export function hasMainOwnedRuntimeSessionNamespace(store: Store, hostId: string): boolean {
++  if (parseExecutionHostId(hostId)?.kind !== 'runtime') {
++    return false
++  }
++  const repos = store.getRepos()
++  const folders = store.getFolderWorkspaces()
++  if (repos.some((repo) => getRepoExecutionHostId(repo) === hostId)) {
++    return true
++  }
++  if (folders.some((folder) => parseExecutionHostId(folder.executionHostId)?.id === hostId)) {
++    return true
++  }
++
++  const controller = new RuntimeWorkspaceSessionController({
++    getStore: () => store,
++    resolveFolderConnectionId: (workspace) => {
++      const connection = inferFolderWorkspacePathConnection({
++        folderPath: workspace.folderPath,
++        projectGroupId: workspace.projectGroupId,
++        connectionId: workspace.connectionId ?? null,
++        projectGroups: store.getProjectGroups(),
++        repos
++      })
++      if (connection.kind === 'ambiguous') {
++        throw new Error('folder_workspace_connection_ambiguous')
++      }
++      return connection.kind === 'ssh' ? connection.connectionId : null
++    },
++    hasRuntimeOwnedPtyCandidate: () => false
++  })
++  for (const workspaceId of Object.keys(store.getWorkspaceSession(hostId).tabsByWorktree)) {
++    const scope = parseWorkspaceKey(workspaceId)
++    const catalogHost =
++      scope?.type === 'folder'
++        ? folders.find((folder) => folder.id === scope.folderWorkspaceId)?.executionHostId
++        : (() => {
++            const repo = store.getRepo(
++              getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : workspaceId)
++            )
++            return repo ? getRepoExecutionHostId(repo) : null
++          })()
++    // Only a current runtime-owned catalog row can exercise the controller's legacy alias fallback.
++    if (
++      parseExecutionHostId(catalogHost)?.kind === 'runtime' &&
++      controller.tryGetHostId(workspaceId) === hostId
++    ) {
++      return true
++    }
++  }
++  return false
++}

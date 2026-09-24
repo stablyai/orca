@@ -1,3 +1,4 @@
+import { canCreateRendererSessionPartition } from './renderer-workspace-session-admission'
 import { ipcMain } from 'electron'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
@@ -49,7 +50,9 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
     let ok = true
     try {
       for (const { state, hostId } of args.sessions) {
-        store.stageWorkspaceSessionBeforeUnload(state, hostId)
+        if (isShutdownSessionAdmitted(store, hostId)) {
+          store.stageWorkspaceSessionBeforeUnload(state, hostId)
+        }
       }
       store.updateUI(args.ui)
     } catch (error) {
@@ -64,4 +67,15 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
     'app:await-before-unload-checkpoint',
     (): Promise<ShutdownCheckpointResult> => pendingCheckpoint
   )
+}
+
+// Why fail open: this is the last save before the window closes, so an unrelated host's ambiguous
+// custody verdict must not be allowed to discard the staged state.
+function isShutdownSessionAdmitted(store: Store, hostId?: string | null): boolean {
+  try {
+    return canCreateRendererSessionPartition(store, hostId)
+  } catch (error) {
+    console.error('[app] Staging session state after partition authority failure:', error)
+    return true
+  }
 }

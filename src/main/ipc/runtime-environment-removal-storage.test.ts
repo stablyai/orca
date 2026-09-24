@@ -1,3 +1,7 @@
+vi.mock('../runtime/runtime-workspace-session-namespace-custody', () => ({
+  hasMainOwnedRuntimeSessionNamespace: () => false
+}))
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, clearStorageMock, removeEnvironmentMock, resolveEnvironmentMock } = vi.hoisted(
@@ -47,7 +51,8 @@ describe('runtime environment removal storage clearing', () => {
     })
     clearStorageMock.mockResolvedValue({ clearedPartitions: ['persist:one'], livePartitions: [] })
     registerRuntimeEnvironmentConnectivityHandlers({
-      store: { getSettings: () => ({}) } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked custody path uses only these Store methods.
+      store: { getSettings: () => ({}), removeRuntimeWorkspaceSessionPartition: vi.fn() } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => teardown
     })
@@ -67,7 +72,8 @@ describe('runtime environment removal storage clearing', () => {
       .mockResolvedValueOnce({ clearedPartitions: [], livePartitions: ['persist:one'] })
       .mockResolvedValueOnce({ clearedPartitions: ['persist:one'], livePartitions: [] })
     registerRuntimeEnvironmentConnectivityHandlers({
-      store: { getSettings: () => ({}) } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked custody path uses only these Store methods.
+      store: { getSettings: () => ({}), removeRuntimeWorkspaceSessionPartition: vi.fn() } as never,
       getUserDataPath: () => '/tmp/orca-user-data',
       invalidateTransport: () => Promise.resolve()
     })

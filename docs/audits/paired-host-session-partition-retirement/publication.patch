@@ -1,0 +1,3216 @@
+===================================================================
+--- a/src/main/agent-hooks/server.ts
++++ b/src/main/agent-hooks/server.ts
+@@ -44,0 +45,1 @@
++    agentHookServer._resetCanonicalStatusForTests()
+===================================================================
+--- a/src/main/agent-hooks/server/server-ingest-structured.ts
++++ b/src/main/agent-hooks/server/server-ingest-structured.ts
+@@ -2,1 +2,1 @@
+-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
++import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+@@ -3,0 +4,5 @@
++  parseAgentStatusSubject,
++  serializeAgentStatusSubject,
++  type AgentStatusStructuredSessionSubject
++} from '../../../shared/agent-status-subject'
++import {
+@@ -7,0 +13,1 @@
++import { structuredStatusLegacyEvent } from './server-structured-status-row'
+@@ -10,5 +15,0 @@
+-/**
+- * Structured (native chat) sessions have no PTY and no hook script, so nothing else reaches this
+- * store for them. The host projects each session's journal into a summary; this is where that
+- * summary becomes the same row every other agent has, keyed by the pane key the renderer derives.
+- */
+@@ -16,3 +17,15 @@
+-  ingestStructuredStatus(summary: AgentSessionStatusSummary): void {
+-    const paneKey = structuredStatusPaneKey(summary.sessionId)
+-    // No persisted turn yet: the chat shows nothing, so neither does any status reader.
++  ingestStructuredStatus(
++    summary: AgentSessionStatusSummary,
++    subject: AgentStatusStructuredSessionSubject
++  ): void {
++    const parsed = parseAgentStatusSubject(subject)
++    if (
++      !parsed ||
++      parsed.kind !== 'structured-session' ||
++      parsed.sessionId !== summary.sessionId ||
++      parsed.workspaceId !== summary.workspaceId ||
++      !Number.isFinite(summary.updatedAt) ||
++      summary.updatedAt < 0
++    ) {
++      throw new Error('Structured status does not match its trusted owner subject')
++    }
+@@ -20,1 +33,1 @@
+-      this.dropStructuredStatus(summary.sessionId)
++      this.dropStructuredStatus(parsed)
+@@ -23,2 +36,7 @@
+-    if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
+-      return
++    const previous = this.canonicalStatusStore.getParent(parsed)
++    const priorStatus = previous?.status
++    const state = structuredAgentSessionStatusState(summary.status)
++    const tabId = structuredAgentSessionTabId(parsed.sessionId)
++    const paneKey = structuredAgentSessionPaneKey(tabId, parsed.sessionId)
++    if (this.state.lastStatusByPaneKey.has(paneKey)) {
++      throw new Error('Structured status address conflicts with legacy evidence')
+@@ -26,2 +44,9 @@
+-    const payload: ParsedAgentStatusPayload = {
+-      state: structuredAgentSessionStatusState(summary.status),
++    const snapshot = this.canonicalStatusStore.getSnapshot()
++    const status: AgentStatusIpcPayload = {
++      paneKey,
++      tabId,
++      worktreeId: parsed.workspaceId,
++      connectionId: null,
++      structuredHost: summary.hostExecutionOwned ? 'owned' : 'held',
++      ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
++      state,
+@@ -35,1 +60,12 @@
+-        : {})
++        : {}),
++      receivedAt: Math.max(Date.now(), priorStatus?.receivedAt ?? 0),
++      evidenceObservedAt: summary.updatedAt,
++      stateStartedAt: priorStatus?.state === state ? priorStatus.stateStartedAt : summary.updatedAt,
++      observation: {
++        origin: 'structured',
++        kind: 'transition',
++        authorityId: snapshot.epoch,
++        incarnation: 0,
++        revision: snapshot.revision + 1,
++        observedAt: summary.updatedAt
++      }
+@@ -37,15 +73,23 @@
+-    // The journal clock stamps the evidence so a restart's republish does not read as fresh work.
+-    this.applyNormalizedStatus(
+-      {
+-        paneKey,
+-        tabId: structuredAgentSessionTabId(summary.sessionId),
+-        worktreeId: summary.workspaceId,
+-        connectionId: null,
+-        structuredHost: summary.hostExecutionOwned ? 'owned' : 'held',
+-        ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
+-        payload
+-      },
+-      undefined,
+-      'structured',
+-      summary.updatedAt
+-    )
++    const publication = this.canonicalStatusStore.applyMutation({
++      parent: { subject: parsed, status, firstObservedAt: previous?.firstObservedAt ?? Date.now() }
++    })
++    if (!publication) {
++      return
++    }
++    const key = serializeAgentStatusSubject(parsed)
++    const subjects =
++      this.canonicalSubjectsByPane.get(paneKey) ??
++      new Map<string, AgentStatusStructuredSessionSubject>()
++    subjects.set(key, parsed)
++    this.canonicalSubjectsByPane.set(paneKey, subjects)
++    if (!this.canonicalListingOrder.has(key)) {
++      this.canonicalListingOrder.set(key, this.nextStatusListingOrder())
++    }
++    const committed = this.canonicalStatusStore.getParent(parsed)?.status
++    if (!committed) {
++      throw new Error('Committed structured status is missing')
++    }
++    const after = structuredStatusLegacyEvent(committed)
++    this.commitStatusRowMutation(priorStatus && structuredStatusLegacyEvent(priorStatus), after)
++    this.notifyStatusChangeListeners()
++    this.emitEnrichedStatus(after)
+@@ -54,5 +98,28 @@
+-  /** The host no longer holds the session; its last projection is history the journal keeps.
+-   *  `dropStatusEntry`, not `clearPaneState`: the renderer's own bridge still owns this pane key,
+-   *  so a pane-status-clear would make main a second writer for it. */
+-  dropStructuredStatus(sessionId: string): void {
+-    this.dropStatusEntry(structuredStatusPaneKey(sessionId), { preserveResumeIdentity: false })
++  /** Pane cleanup never resolves a canonical subject; only its owning feed can forget this row. */
++  dropStructuredStatus(subject: AgentStatusStructuredSessionSubject): void {
++    const parsed = parseAgentStatusSubject(subject)
++    if (!parsed || parsed.kind !== 'structured-session') {
++      throw new Error('Structured status removal requires its exact owner subject')
++    }
++    const previous = this.canonicalStatusStore.getParent(parsed)
++    if (!previous) {
++      return
++    }
++    const publication = this.canonicalStatusStore.applyMutation({
++      removeParent: parsed
++    })
++    if (!publication) {
++      return
++    }
++    const key = serializeAgentStatusSubject(parsed)
++    this.canonicalListingOrder.delete(key)
++    if (previous.status) {
++      const subjects = this.canonicalSubjectsByPane.get(previous.status.paneKey)
++      subjects?.delete(key)
++      if (subjects?.size === 0) {
++        this.canonicalSubjectsByPane.delete(previous.status.paneKey)
++      }
++      this.commitStatusRowMutation(structuredStatusLegacyEvent(previous.status), undefined)
++      this.notifyStatusChangeListeners()
++      this.emitStatusDropped(previous.status.paneKey)
++    }
+@@ -61,6 +127,0 @@
+-
+-// The DERIVED pane key the renderer publishes, never the orchestration bearer handle or the minted
+-// worker pane key: both of those are credentials.
+-function structuredStatusPaneKey(sessionId: string): string {
+-  return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
+-}
+===================================================================
+--- a/src/main/agent-hooks/server/server-lifecycle.ts
++++ b/src/main/agent-hooks/server/server-lifecycle.ts
+@@ -119,2 +119,4 @@
+-          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
++          if (enriched) {
++            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
++            this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
++          }
+@@ -214,0 +217,1 @@
++    this.resetCanonicalStatus()
+===================================================================
+--- a/src/main/agent-hooks/server/server-listeners.ts
++++ b/src/main/agent-hooks/server/server-listeners.ts
+@@ -7,1 +7,4 @@
+-import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
++import {
++  getLegacyStatusListingOrder,
++  type HookListenerState
++} from '../../../shared/agent-hook-listener/listener-state'
+@@ -17,0 +21,2 @@
++import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
++import { structuredStatusLegacyEvent } from './server-structured-status-row'
+@@ -18,0 +24,3 @@
++// Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
++const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
++
+@@ -19,0 +28,41 @@
++  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
++    this.onAgentStatus?.(enriched)
++    for (const listener of this.enrichedStatusListeners) {
++      try {
++        listener(enriched)
++      } catch (err) {
++        console.error('[agent-hooks] enriched status listener threw', err)
++      }
++    }
++  }
++
++  getCanonicalStatusSnapshot() {
++    return this.canonicalStatusStore.getSnapshot()
++  }
++
++  _resetCanonicalStatusForTests(): void {
++    this.resetCanonicalStatus()
++  }
++
++  private combinedStatusEntries(): EnrichedAgentHookEventPayload[] {
++    const rows: { entry: EnrichedAgentHookEventPayload; order: number }[] = []
++    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
++      rows.push({
++        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
++        entry: entry as EnrichedAgentHookEventPayload,
++        order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
++      })
++    }
++    for (const parent of this.canonicalStatusStore.getSnapshot().parents) {
++      if (!parent.status) {
++        continue
++      }
++      rows.push({
++        entry: structuredStatusLegacyEvent(parent.status),
++        order:
++          this.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
++          UNORDERED_STATUS_ROW
++      })
++    }
++    return rows.sort((a, b) => a.order - b.order).map(({ entry }) => entry)
++  }
+@@ -37,1 +86,1 @@
+-    for (const payload of this.state.lastStatusByPaneKey.values()) {
++    for (const payload of this.combinedStatusEntries()) {
+@@ -39,2 +88,1 @@
+-        // Why: cache always holds enriched payloads; the map's declared type is the bare shape only because the shared module never reads it.
+-        listener({ ...(payload as EnrichedAgentHookEventPayload), isReplay: true })
++        listener({ ...payload, isReplay: true })
+@@ -156,3 +204,1 @@
+-    return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
+-      toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
+-    )
++    return this.combinedStatusEntries().map(toAgentStatusIpcPayload)
+@@ -167,2 +213,13 @@
+-    const entry = this.state.lastStatusByPaneKey.get(paneKey)
+-    return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
++    const legacy = this.state.lastStatusByPaneKey.get(paneKey)
++    if (legacy) {
++      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
++      return [toAgentStatusIpcPayload(legacy as EnrichedAgentHookEventPayload)]
++    }
++    const rows: AgentStatusIpcPayload[] = []
++    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
++      const status = this.canonicalStatusStore.getParent(subject)?.status
++      if (status) {
++        rows.push(status)
++      }
++    }
++    return rows
+@@ -187,2 +244,2 @@
+-    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+-      const enriched = entry as EnrichedAgentHookEventPayload
++    for (const enriched of this.combinedStatusEntries()) {
++      const paneKey = enriched.paneKey
+@@ -204,1 +261,2 @@
+-          observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
++          observedInCurrentRuntime:
++            Boolean(enriched.structuredHost) || this.runtimeObservedStatusPaneKeys.has(paneKey)
+===================================================================
+--- a/src/main/agent-hooks/server/server-state.ts
++++ b/src/main/agent-hooks/server/server-state.ts
+@@ -2,1 +2,1 @@
+-import { randomBytes } from 'node:crypto'
++import { randomBytes, randomUUID } from 'node:crypto'
+@@ -5,0 +6,1 @@
++  canAdmitLegacyAgentStatusEntry,
+@@ -23,0 +25,3 @@
++import { createAgentStatusStore, type AgentStatusStore } from '../../../shared/agent-status-store'
++import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
++import type { AgentStatusStructuredSessionSubject } from '../../../shared/agent-status-subject'
+@@ -47,0 +52,32 @@
++  protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
++    return canAdmitLegacyAgentStatusEntry(
++      this.state,
++      'main-status-update',
++      entry,
++      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
++    )
++  }
++
++  // Why: the epoch is minted on first canonical use, so constructing the server — which happens at
++  // import time for the module singleton — owes nothing to a live crypto implementation.
++  private canonicalStatusStoreInstance: AgentStatusStore | null = null
++  protected get canonicalStatusStore(): AgentStatusStore {
++    this.canonicalStatusStoreInstance ??= createAgentStatusStore({
++      epoch: randomUUID(),
++      mode: 'authority'
++    })
++    return this.canonicalStatusStoreInstance
++  }
++  protected readonly canonicalListingOrder = new Map<string, number>()
++  protected readonly canonicalSubjectsByPane = new Map<
++    string,
++    Map<string, AgentStatusStructuredSessionSubject>
++  >()
++  private statusListingOrder = 0
++  protected nextStatusListingOrder = (): number => ++this.statusListingOrder
++
++  protected resetCanonicalStatus(): void {
++    this.canonicalStatusStoreInstance = null
++    this.canonicalListingOrder.clear()
++    this.canonicalSubjectsByPane.clear()
++  }
+@@ -76,1 +112,4 @@
+-  protected state: HookListenerState = createHookListenerState()
++  protected state: HookListenerState = createHookListenerState({
++    nextListingOrder: this.nextStatusListingOrder,
++    isCanonicalPaneKey: (paneKey) => this.canonicalSubjectsByPane.has(paneKey)
++  })
+@@ -172,1 +211,1 @@
+-  ): EnrichedAgentHookEventPayload
++  ): EnrichedAgentHookEventPayload | undefined
+===================================================================
+--- a/src/main/agent-hooks/server/server-status-inference.ts
++++ b/src/main/agent-hooks/server/server-status-inference.ts
+@@ -113,0 +114,3 @@
++    if (!inferred) {
++      return false
++    }
+@@ -174,0 +178,3 @@
++    if (!inferred) {
++      return false
++    }
+===================================================================
+--- a/src/main/agent-hooks/server/server-status-retries.ts
++++ b/src/main/agent-hooks/server/server-status-retries.ts
+@@ -80,1 +80,3 @@
+-    this.scheduleCodexSubagentPoll(source, body, next)
++    if (next) {
++      this.scheduleCodexSubagentPoll(source, body, next)
++    }
+===================================================================
+--- a/src/main/agent-hooks/server/server-status-update.ts
++++ b/src/main/agent-hooks/server/server-status-update.ts
+@@ -32,1 +32,4 @@
+-  ): EnrichedAgentHookEventPayload {
++  ): EnrichedAgentHookEventPayload | undefined {
++    if (!this.canWriteLegacyStatusRow(payload)) {
++      return undefined
++    }
+@@ -75,1 +78,3 @@
+-      this.writeLegacyStatusRow(enriched)
++      if (!this.writeLegacyStatusRow(enriched)) {
++        return undefined
++      }
+@@ -128,1 +133,3 @@
+-        this.writeLegacyStatusRow(previous)
++        if (!this.writeLegacyStatusRow(previous)) {
++          return undefined
++        }
+@@ -227,1 +234,3 @@
+-    this.writeLegacyStatusRow(enriched)
++    if (!this.writeLegacyStatusRow(enriched)) {
++      return undefined
++    }
+@@ -243,0 +253,3 @@
++    if (!this.canWriteLegacyStatusRow(previous)) {
++      return
++    }
+@@ -269,1 +281,3 @@
+-    this.writeLegacyStatusRow(refreshed)
++    if (!this.writeLegacyStatusRow(refreshed)) {
++      return
++    }
+@@ -294,15 +308,2 @@
+-  // Why: every status emit must reach plugins too, so a new early-return path
+-  // upstream cannot silently leave the plugin tap behind the main-window fanout.
+-  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
+-    this.onAgentStatus?.(enriched)
+-    for (const listener of this.enrichedStatusListeners) {
+-      try {
+-        listener(enriched)
+-      } catch (err) {
+-        console.error('[agent-hooks] enriched status listener threw', err)
+-      }
+-    }
+-  }
+-
+-  private writeLegacyStatusRow(entry: EnrichedAgentHookEventPayload): void {
+-    admitLegacyAgentStatus(
++  private writeLegacyStatusRow(entry: EnrichedAgentHookEventPayload): boolean {
++    return admitLegacyAgentStatus(
+===================================================================
+--- /dev/null
++++ b/src/main/agent-hooks/server/server-structured-status-row.ts
+@@ -0,0 +1,24 @@
++import {
++  pickParsedAgentStatusPayload,
++  type AgentStatusIpcPayload
++} from '../../../shared/agent-status-types'
++import type { EnrichedAgentHookEventPayload } from './server-types'
++
++/** Canonical rows supply legacy fanout without retaining a writable pane copy. */
++export function structuredStatusLegacyEvent(
++  row: AgentStatusIpcPayload
++): EnrichedAgentHookEventPayload {
++  return {
++    paneKey: row.paneKey,
++    tabId: row.tabId,
++    worktreeId: row.worktreeId,
++    connectionId: row.connectionId,
++    receivedAt: row.receivedAt,
++    stateStartedAt: row.stateStartedAt,
++    evidenceObservedAt: row.evidenceObservedAt,
++    structuredHost: row.structuredHost,
++    ...(row.providerSession ? { providerSession: row.providerSession } : {}),
++    ...(row.observation ? { observation: row.observation } : {}),
++    payload: pickParsedAgentStatusPayload(row)
++  }
++}
+===================================================================
+--- a/src/main/ports/advertised-url-parsing.ts
++++ b/src/main/ports/advertised-url-parsing.ts
+@@ -2,1 +1,0 @@
+-import { ownRetainedString } from '../../shared/own-retained-string'
+@@ -49,1 +48,1 @@
+-      this.raw = ownRetainedString(chunk.slice(-PER_PTY_BUFFER_LIMIT))
++      this.raw = chunk.slice(-PER_PTY_BUFFER_LIMIT)
+===================================================================
+--- a/src/main/ports/advertised-url-watcher.ts
++++ b/src/main/ports/advertised-url-watcher.ts
+@@ -23,1 +22,0 @@
+-import { ownRetainedString } from '../../shared/own-retained-string'
+@@ -144,5 +143,1 @@
+-      const combined = prior + chunk
+-      const merged =
+-        combined.length > PENDING_PRE_BIND_LIMIT
+-          ? ownRetainedString(combined.slice(-PENDING_PRE_BIND_LIMIT))
+-          : combined
++      const merged = (prior + chunk).slice(-PENDING_PRE_BIND_LIMIT)
+===================================================================
+--- a/src/main/providers/working-directory-validation.ts
++++ b/src/main/providers/working-directory-validation.ts
+@@ -165,1 +165,12 @@
+-  return waitForWorkingDirectoryValidation(validation, cwd, signal)
++  const shared = validation
++  // The shared probe outlives this caller; keep it from surfacing as unhandled.
++  void shared.catch(() => {})
++  return new Promise<void>((resolve, reject) => {
++    const onAbort = (): void => reject(new WorkingDirectoryValidationAbortedError(cwd))
++    if (signal.aborted) {
++      onAbort()
++      return
++    }
++    signal.addEventListener('abort', onAbort, { once: true })
++    shared.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
++  })
+@@ -194,49 +204,0 @@
+-
+-type WorkingDirectoryWaiterHolder = {
+-  waiter: {
+-    signal: AbortSignal
+-    onAbort: () => void
+-    resolve: () => void
+-    reject: (error: unknown) => void
+-  } | null
+-}
+-
+-function takeWorkingDirectoryWaiter(
+-  holder: WorkingDirectoryWaiterHolder
+-): WorkingDirectoryWaiterHolder['waiter'] {
+-  const waiter = holder.waiter
+-  holder.waiter = null
+-  waiter?.signal.removeEventListener('abort', waiter.onAbort)
+-  return waiter
+-}
+-
+-// Keep reaction order while an abandoned caller's signal and resolver become collectible.
+-function observeWorkingDirectoryValidation(
+-  promise: Promise<void>,
+-  holder: WorkingDirectoryWaiterHolder
+-): void {
+-  void promise.then(
+-    () => takeWorkingDirectoryWaiter(holder)?.resolve(),
+-    (error: unknown) => takeWorkingDirectoryWaiter(holder)?.reject(error)
+-  )
+-}
+-
+-function waitForWorkingDirectoryValidation(
+-  shared: Promise<void>,
+-  cwd: string,
+-  signal: AbortSignal
+-): Promise<void> {
+-  return new Promise<void>((resolve, reject) => {
+-    const holder: WorkingDirectoryWaiterHolder = { waiter: null }
+-    const onAbort = (): void => {
+-      takeWorkingDirectoryWaiter(holder)?.reject(new WorkingDirectoryValidationAbortedError(cwd))
+-    }
+-    holder.waiter = { signal, onAbort, resolve, reject }
+-    if (signal.aborted) {
+-      onAbort()
+-      return
+-    }
+-    signal.addEventListener('abort', onAbort, { once: true })
+-    observeWorkingDirectoryValidation(shared, holder)
+-  })
+-}
+===================================================================
+--- a/src/shared/agent-hook-listener/listener-state.ts
++++ b/src/shared/agent-hook-listener/listener-state.ts
+@@ -121,0 +122,9 @@
++export function canAdmitLegacyAgentStatusEntry(
++  state: HookListenerState,
++  caller: AgentStatusLegacyIngressCaller,
++  entry: AgentHookEventPayload,
++  mode: AgentStatusLegacyAdmissionMode
++): boolean {
++  return legacyStatusAdapter(state).canAdmit(caller, mode, entry)
++}
++
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-child-work-alias.ts
+@@ -0,0 +1,214 @@
++import {
++  agentChildWorkFencesEqual,
++  type AgentChildWorkId,
++  type AgentChildWorkInvocationFence,
++  type AgentChildWorkKind
++} from './agent-status-child-work'
++import { parseAgentChildWorkInvocationFence } from './agent-status-child-work-codec'
++import {
++  deserializeAgentStatusSubject,
++  parseAgentStatusSubject,
++  serializeAgentStatusSubject,
++  type AgentStatusSubject
++} from './agent-status-subject'
++
++const CHILD_ALIAS_KEY_PREFIX = 'agent-child-work-alias-v1:'
++const MAX_ALIAS_PART_LENGTH = 512
++
++export type AgentChildWorkAliasKind = 'task_id' | 'tool_use_id'
++
++export type AgentChildWorkAliasIdentity = Pick<
++  AgentChildWorkAliasInput,
++  'parent' | 'provider' | 'segmentId' | 'kind' | 'aliasKind' | 'alias'
++>
++
++export type AgentChildWorkAliasInput = {
++  parent: AgentStatusSubject
++  provider: string
++  segmentId: string
++  kind: AgentChildWorkKind
++  aliasKind: AgentChildWorkAliasKind
++  alias: string
++  childWorkId: AgentChildWorkId
++  fence: AgentChildWorkInvocationFence
++}
++
++export type AgentChildWorkAliasRecord = AgentChildWorkAliasInput & {
++  revision: number
++}
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value)
++}
++
++function hasOnlyKeys(
++  record: Record<string, unknown>,
++  required: readonly string[],
++  optional: readonly string[] = []
++): boolean {
++  const keys = Object.keys(record)
++  return (
++    required.every((key) => Object.hasOwn(record, key)) &&
++    keys.every((key) => required.includes(key) || optional.includes(key))
++  )
++}
++
++function isBoundedString(value: unknown): value is string {
++  if (
++    typeof value !== 'string' ||
++    value.length === 0 ||
++    value.length > MAX_ALIAS_PART_LENGTH ||
++    value !== value.trim()
++  ) {
++    return false
++  }
++  for (let index = 0; index < value.length; index += 1) {
++    const code = value.charCodeAt(index)
++    if (code <= 0x1f || code === 0x7f) {
++      return false
++    }
++  }
++  return true
++}
++
++function isRevision(value: unknown): value is number {
++  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
++}
++
++function isKind(value: unknown): value is AgentChildWorkKind {
++  return (
++    value === 'agent' ||
++    value === 'workflow' ||
++    value === 'command' ||
++    value === 'monitor' ||
++    value === 'unknown'
++  )
++}
++
++export function parseAgentChildWorkAliasInput(value: unknown): AgentChildWorkAliasInput | null {
++  if (
++    !isRecord(value) ||
++    !hasOnlyKeys(value, [
++      'parent',
++      'provider',
++      'segmentId',
++      'kind',
++      'aliasKind',
++      'alias',
++      'childWorkId',
++      'fence'
++    ]) ||
++    !isBoundedString(value.provider) ||
++    !isBoundedString(value.segmentId) ||
++    !isKind(value.kind) ||
++    (value.aliasKind !== 'task_id' && value.aliasKind !== 'tool_use_id') ||
++    !isBoundedString(value.alias) ||
++    !isBoundedString(value.childWorkId)
++  ) {
++    return null
++  }
++  const parent = parseAgentStatusSubject(value.parent)
++  const fence = parseAgentChildWorkInvocationFence(value.fence)
++  if (!parent || !fence) {
++    return null
++  }
++  return {
++    parent,
++    provider: value.provider,
++    segmentId: value.segmentId,
++    kind: value.kind,
++    aliasKind: value.aliasKind,
++    alias: value.alias,
++    childWorkId: value.childWorkId,
++    fence
++  }
++}
++
++export function parseAgentChildWorkAliasRecord(value: unknown): AgentChildWorkAliasRecord | null {
++  if (!isRecord(value) || !isRevision(value.revision)) {
++    return null
++  }
++  const input = { ...value }
++  delete input.revision
++  const parsed = parseAgentChildWorkAliasInput(input)
++  return parsed ? { ...parsed, revision: value.revision } : null
++}
++
++export function serializeAgentChildWorkAliasKey(alias: AgentChildWorkAliasIdentity): string {
++  const parsed = parseAgentChildWorkAliasInput({
++    parent: alias.parent,
++    provider: alias.provider,
++    segmentId: alias.segmentId,
++    kind: alias.kind,
++    aliasKind: alias.aliasKind,
++    alias: alias.alias,
++    childWorkId: 'key-only',
++    fence: { invocationId: 'key-only', generation: 0 }
++  })
++  if (!parsed) {
++    throw new Error('Invalid agent child-work alias')
++  }
++  return `${CHILD_ALIAS_KEY_PREFIX}${JSON.stringify([
++    serializeAgentStatusSubject(parsed.parent),
++    parsed.provider,
++    parsed.segmentId,
++    parsed.kind,
++    parsed.aliasKind,
++    parsed.alias
++  ])}`
++}
++
++export function deserializeAgentChildWorkAliasKey(
++  value: string
++): AgentChildWorkAliasIdentity | null {
++  if (!value.startsWith(CHILD_ALIAS_KEY_PREFIX)) {
++    return null
++  }
++  let tuple: unknown
++  try {
++    tuple = JSON.parse(value.slice(CHILD_ALIAS_KEY_PREFIX.length))
++  } catch {
++    return null
++  }
++  if (!Array.isArray(tuple) || tuple.length !== 6) {
++    return null
++  }
++  const [parentKey, provider, segmentId, kind, aliasKind, alias] = tuple
++  if (typeof parentKey !== 'string') {
++    return null
++  }
++  const parent = deserializeAgentStatusSubject(parentKey)
++  const parsed = parseAgentChildWorkAliasInput({
++    parent,
++    provider,
++    segmentId,
++    kind,
++    aliasKind,
++    alias,
++    childWorkId: 'key-only',
++    fence: { invocationId: 'key-only', generation: 0 }
++  })
++  if (!parsed) {
++    return null
++  }
++  const identity = {
++    parent: parsed.parent,
++    provider: parsed.provider,
++    segmentId: parsed.segmentId,
++    kind: parsed.kind,
++    aliasKind: parsed.aliasKind,
++    alias: parsed.alias
++  }
++  return serializeAgentChildWorkAliasKey(identity) === value ? identity : null
++}
++
++export function agentChildWorkAliasesMatch(
++  left: AgentChildWorkAliasInput,
++  right: AgentChildWorkAliasInput
++): boolean {
++  return (
++    serializeAgentChildWorkAliasKey(left) === serializeAgentChildWorkAliasKey(right) &&
++    left.childWorkId === right.childWorkId &&
++    agentChildWorkFencesEqual(left.fence, right.fence)
++  )
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-child-work-binding.ts
+@@ -0,0 +1,56 @@
++import {
++  deserializeAgentChildWorkAliasKey,
++  parseAgentChildWorkAliasInput,
++  serializeAgentChildWorkAliasKey,
++  type AgentChildWorkAliasInput
++} from './agent-status-child-work-alias'
++
++const BINDING_PREFIX = 'agent-child-work-binding-v1:'
++
++/** One alias may name several proven lifetimes; the binding, not the alias, is a row key. */
++export function serializeAgentChildWorkBindingKey(binding: AgentChildWorkAliasInput): string {
++  const { parent, provider, segmentId, kind, aliasKind, alias, childWorkId, fence } = binding
++  const parsed = parseAgentChildWorkAliasInput({
++    parent,
++    provider,
++    segmentId,
++    kind,
++    aliasKind,
++    alias,
++    childWorkId,
++    fence
++  })
++  if (!parsed) {
++    throw new Error('Invalid child-work binding')
++  }
++  return `${BINDING_PREFIX}${JSON.stringify([
++    serializeAgentChildWorkAliasKey(parsed),
++    parsed.childWorkId,
++    parsed.fence.invocationId,
++    parsed.fence.generation
++  ])}`
++}
++
++export function deserializeAgentChildWorkBindingKey(
++  value: string
++): AgentChildWorkAliasInput | null {
++  if (!value.startsWith(BINDING_PREFIX)) {
++    return null
++  }
++  let tuple: unknown
++  try {
++    tuple = JSON.parse(value.slice(BINDING_PREFIX.length))
++  } catch {
++    return null
++  }
++  if (!Array.isArray(tuple) || tuple.length !== 4 || typeof tuple[0] !== 'string') {
++    return null
++  }
++  const alias = deserializeAgentChildWorkAliasKey(tuple[0])
++  const parsed = parseAgentChildWorkAliasInput({
++    ...alias,
++    childWorkId: tuple[1],
++    fence: { invocationId: tuple[2], generation: tuple[3] }
++  })
++  return parsed && serializeAgentChildWorkBindingKey(parsed) === value ? parsed : null
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-child-work-codec.ts
+@@ -0,0 +1,273 @@
++import {
++  AGENT_CHILD_WORK_INVOCATION_HISTORY_MAX,
++  AGENT_CHILD_WORK_KINDS,
++  AGENT_CHILD_WORK_MEMBERSHIPS,
++  AGENT_CHILD_WORK_OUTCOMES,
++  AGENT_CHILD_WORK_STATES,
++  agentChildWorkFencesEqual,
++  type AgentChildWorkInput,
++  type AgentChildWorkInvocationFence,
++  type AgentChildWorkInvocationHistory,
++  type AgentChildWorkKind,
++  type AgentChildWorkMembership,
++  type AgentChildWorkOutcome,
++  type AgentChildWorkProviderTiming,
++  type AgentChildWorkProvenance,
++  type AgentChildWorkRecord,
++  type AgentChildWorkState
++} from './agent-status-child-work'
++import { parseAgentStatusSubject } from './agent-status-subject'
++
++const MAX_ID_LENGTH = 256
++const MAX_LABEL_LENGTH = 512
++const MAX_DESCRIPTION_LENGTH = 8_000
++const CHILD_WORK_KIND_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_KINDS)
++const CHILD_WORK_STATE_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_STATES)
++const CHILD_WORK_MEMBERSHIP_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_MEMBERSHIPS)
++const CHILD_WORK_OUTCOME_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_OUTCOMES)
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value)
++}
++
++function hasOnlyKeys(
++  record: Record<string, unknown>,
++  required: readonly string[],
++  optional: readonly string[] = []
++): boolean {
++  const keys = Object.keys(record)
++  return (
++    required.every((key) => Object.hasOwn(record, key)) &&
++    keys.every((key) => required.includes(key) || optional.includes(key))
++  )
++}
++
++function isBoundedString(value: unknown, maxLength = MAX_ID_LENGTH): value is string {
++  if (
++    typeof value !== 'string' ||
++    value.length === 0 ||
++    value.length > maxLength ||
++    value !== value.trim()
++  ) {
++    return false
++  }
++  for (let index = 0; index < value.length; index += 1) {
++    const code = value.charCodeAt(index)
++    if (code <= 0x1f || code === 0x7f) {
++      return false
++    }
++  }
++  return true
++}
++
++function isTimestamp(value: unknown): value is number {
++  return typeof value === 'number' && Number.isFinite(value) && value >= 0
++}
++
++function isRevision(value: unknown): value is number {
++  return Number.isSafeInteger(value) && typeof value === 'number' && value >= 0
++}
++
++function isKind(value: unknown): value is AgentChildWorkKind {
++  return typeof value === 'string' && CHILD_WORK_KIND_SET.has(value)
++}
++
++function isState(value: unknown): value is AgentChildWorkState {
++  return typeof value === 'string' && CHILD_WORK_STATE_SET.has(value)
++}
++
++function isMembership(value: unknown): value is AgentChildWorkMembership {
++  return typeof value === 'string' && CHILD_WORK_MEMBERSHIP_SET.has(value)
++}
++
++function isOutcome(value: unknown): value is AgentChildWorkOutcome {
++  return typeof value === 'string' && CHILD_WORK_OUTCOME_SET.has(value)
++}
++
++export function parseAgentChildWorkInvocationFence(
++  value: unknown
++): AgentChildWorkInvocationFence | null {
++  if (
++    !isRecord(value) ||
++    !hasOnlyKeys(value, ['invocationId', 'generation']) ||
++    !isBoundedString(value.invocationId) ||
++    !isRevision(value.generation)
++  ) {
++    return null
++  }
++  return { invocationId: value.invocationId, generation: value.generation }
++}
++
++function parseProviderTiming(value: unknown): AgentChildWorkProviderTiming | null {
++  if (!isRecord(value) || !hasOnlyKeys(value, [], ['startedAt', 'completedAt'])) {
++    return null
++  }
++  if (
++    (value.startedAt !== undefined && !isTimestamp(value.startedAt)) ||
++    (value.completedAt !== undefined && !isTimestamp(value.completedAt))
++  ) {
++    return null
++  }
++  return {
++    ...(isTimestamp(value.startedAt) ? { startedAt: value.startedAt } : {}),
++    ...(isTimestamp(value.completedAt) ? { completedAt: value.completedAt } : {})
++  }
++}
++
++function parseProvenance(value: unknown): AgentChildWorkProvenance | null {
++  if (
++    !isRecord(value) ||
++    !hasOnlyKeys(value, ['source', 'producerId']) ||
++    (value.source !== 'hook' &&
++      value.source !== 'structured-session' &&
++      value.source !== 'restore' &&
++      value.source !== 'transport') ||
++    !isBoundedString(value.producerId)
++  ) {
++    return null
++  }
++  return { source: value.source, producerId: value.producerId }
++}
++
++function parseInvocationHistory(value: unknown): AgentChildWorkInvocationHistory[] | null {
++  if (!Array.isArray(value) || value.length > AGENT_CHILD_WORK_INVOCATION_HISTORY_MAX) {
++    return null
++  }
++  const history: AgentChildWorkInvocationHistory[] = []
++  for (const candidate of value) {
++    if (
++      !isRecord(candidate) ||
++      !hasOnlyKeys(candidate, ['fence'], ['outcome', 'settledAt']) ||
++      (candidate.outcome !== undefined && !isOutcome(candidate.outcome)) ||
++      (candidate.settledAt !== undefined && !isTimestamp(candidate.settledAt))
++    ) {
++      return null
++    }
++    const fence = parseAgentChildWorkInvocationFence(candidate.fence)
++    if (!fence) {
++      return null
++    }
++    history.push({
++      fence,
++      ...(isOutcome(candidate.outcome) ? { outcome: candidate.outcome } : {}),
++      ...(isTimestamp(candidate.settledAt) ? { settledAt: candidate.settledAt } : {})
++    })
++  }
++  return history
++}
++
++function parseOptionalLabel(value: unknown, maxLength = MAX_LABEL_LENGTH): string | null {
++  return value === undefined ? '' : isBoundedString(value, maxLength) ? value : null
++}
++
++export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | null {
++  if (
++    !isRecord(value) ||
++    !hasOnlyKeys(
++      value,
++      [
++        'childWorkId',
++        'parent',
++        'provider',
++        'kind',
++        'state',
++        'membership',
++        'firstObservedAt',
++        'observedAt',
++        'stoppable',
++        'invocation',
++        'provenance'
++      ],
++      [
++        'outcome',
++        'name',
++        'description',
++        'agentType',
++        'model',
++        'totalTokens',
++        'providerTiming',
++        'previousInvocations'
++      ]
++    ) ||
++    !isBoundedString(value.childWorkId) ||
++    !isBoundedString(value.provider) ||
++    !isKind(value.kind) ||
++    !isState(value.state) ||
++    !isMembership(value.membership) ||
++    (value.outcome !== undefined && !isOutcome(value.outcome)) ||
++    (value.outcome !== undefined && value.membership !== 'settled') ||
++    !isTimestamp(value.firstObservedAt) ||
++    !isTimestamp(value.observedAt) ||
++    value.firstObservedAt > value.observedAt ||
++    typeof value.stoppable !== 'boolean' ||
++    (value.totalTokens !== undefined &&
++      (typeof value.totalTokens !== 'number' ||
++        !Number.isSafeInteger(value.totalTokens) ||
++        value.totalTokens < 0))
++  ) {
++    return null
++  }
++  const parent = parseAgentStatusSubject(value.parent)
++  const invocation = parseAgentChildWorkInvocationFence(value.invocation)
++  const provenance = parseProvenance(value.provenance)
++  const timing =
++    value.providerTiming === undefined ? undefined : parseProviderTiming(value.providerTiming)
++  const history =
++    value.previousInvocations === undefined
++      ? undefined
++      : parseInvocationHistory(value.previousInvocations)
++  const labels = {
++    name: parseOptionalLabel(value.name),
++    description: parseOptionalLabel(value.description, MAX_DESCRIPTION_LENGTH),
++    agentType: parseOptionalLabel(value.agentType),
++    model: parseOptionalLabel(value.model)
++  }
++  if (!parent || !invocation || !provenance || timing === null || history === null) {
++    return null
++  }
++  if (Object.values(labels).includes(null)) {
++    return null
++  }
++  const historyFenceKeys = history?.map(
++    (entry) => `${entry.fence.invocationId}\0${entry.fence.generation}`
++  )
++  if (
++    history &&
++    historyFenceKeys &&
++    (new Set(historyFenceKeys).size !== historyFenceKeys.length ||
++      history.some((entry) => agentChildWorkFencesEqual(entry.fence, invocation)))
++  ) {
++    return null
++  }
++  return {
++    childWorkId: value.childWorkId,
++    parent,
++    provider: value.provider,
++    kind: value.kind,
++    state: value.state,
++    membership: value.membership,
++    ...(isOutcome(value.outcome) ? { outcome: value.outcome } : {}),
++    ...(labels.name ? { name: labels.name } : {}),
++    ...(labels.description ? { description: labels.description } : {}),
++    ...(labels.agentType ? { agentType: labels.agentType } : {}),
++    ...(labels.model ? { model: labels.model } : {}),
++    ...(typeof value.totalTokens === 'number' ? { totalTokens: value.totalTokens } : {}),
++    ...(timing ? { providerTiming: timing } : {}),
++    firstObservedAt: value.firstObservedAt,
++    observedAt: value.observedAt,
++    stoppable: value.stoppable,
++    invocation,
++    ...(history ? { previousInvocations: history } : {}),
++    provenance
++  }
++}
++
++export function parseAgentChildWorkRecord(value: unknown): AgentChildWorkRecord | null {
++  if (!isRecord(value) || !isRevision(value.revision)) {
++    return null
++  }
++  const input = { ...value }
++  delete input.revision
++  const parsed = parseAgentChildWorkInput(input)
++  return parsed ? { ...parsed, revision: value.revision } : null
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-child-work.ts
+@@ -0,0 +1,88 @@
++import { agentStatusSubjectsEqual, type AgentStatusSubject } from './agent-status-subject'
++
++export const AGENT_CHILD_WORK_KINDS = [
++  'agent',
++  'workflow',
++  'command',
++  'monitor',
++  'unknown'
++] as const
++export const AGENT_CHILD_WORK_STATES = [
++  'working',
++  'monitoring',
++  'waiting',
++  'blocked',
++  'done',
++  'idle',
++  'unverifiable'
++] as const
++export const AGENT_CHILD_WORK_MEMBERSHIPS = ['live', 'settled'] as const
++export const AGENT_CHILD_WORK_OUTCOMES = ['succeeded', 'failed', 'cancelled', 'unknown'] as const
++export const AGENT_CHILD_WORK_INVOCATION_HISTORY_MAX = 32
++
++export type AgentChildWorkId = string
++export type AgentChildWorkKind = (typeof AGENT_CHILD_WORK_KINDS)[number]
++export type AgentChildWorkState = (typeof AGENT_CHILD_WORK_STATES)[number]
++export type AgentChildWorkMembership = (typeof AGENT_CHILD_WORK_MEMBERSHIPS)[number]
++export type AgentChildWorkOutcome = (typeof AGENT_CHILD_WORK_OUTCOMES)[number]
++
++export type AgentChildWorkInvocationFence = {
++  invocationId: string
++  generation: number
++}
++
++export type AgentChildWorkInvocationHistory = {
++  fence: AgentChildWorkInvocationFence
++  outcome?: AgentChildWorkOutcome
++  settledAt?: number
++}
++
++export type AgentChildWorkProviderTiming = {
++  startedAt?: number
++  completedAt?: number
++}
++
++export type AgentChildWorkProvenance = {
++  source: 'hook' | 'structured-session' | 'restore' | 'transport'
++  producerId: string
++}
++
++export type AgentChildWorkInput = {
++  childWorkId: AgentChildWorkId
++  parent: AgentStatusSubject
++  provider: string
++  kind: AgentChildWorkKind
++  state: AgentChildWorkState
++  membership: AgentChildWorkMembership
++  outcome?: AgentChildWorkOutcome
++  name?: string
++  description?: string
++  agentType?: string
++  model?: string
++  totalTokens?: number
++  providerTiming?: AgentChildWorkProviderTiming
++  firstObservedAt: number
++  observedAt: number
++  stoppable: boolean
++  invocation: AgentChildWorkInvocationFence
++  previousInvocations?: AgentChildWorkInvocationHistory[]
++  provenance: AgentChildWorkProvenance
++}
++
++export type AgentChildWorkRecord = AgentChildWorkInput & {
++  revision: number
++}
++
++export function agentChildWorkFencesEqual(
++  left: AgentChildWorkInvocationFence,
++  right: AgentChildWorkInvocationFence
++): boolean {
++  return left.invocationId === right.invocationId && left.generation === right.generation
++}
++
++export function agentChildWorkBelongsTo(
++  child: Pick<AgentChildWorkInput, 'parent'>,
++  parent: AgentStatusSubject
++): boolean {
++  return agentStatusSubjectsEqual(child.parent, parent)
++}
+===================================================================
+--- a/src/shared/agent-status-legacy-adapter.ts
++++ b/src/shared/agent-status-legacy-adapter.ts
+@@ -71,0 +72,5 @@
++  canAdmit(
++    caller: AgentStatusLegacyIngressCaller,
++    mode: AgentStatusLegacyAdmissionMode,
++    entry: AgentHookEventPayload
++  ): boolean
+@@ -142,0 +148,4 @@
++  const canAdmit: AgentStatusLegacyAdapter['canAdmit'] = (caller, mode, entry) =>
++    entry.structuredHost === undefined &&
++    !isCanonicalPaneKey(entry.paneKey) &&
++    canAdmitLegacyAgentStatus(caller, mode)
+@@ -145,0 +155,1 @@
++    canAdmit,
+@@ -147,1 +157,1 @@
+-      if (isCanonicalPaneKey(entry.paneKey) || !canAdmitLegacyAgentStatus(caller, mode)) {
++      if (!canAdmit(caller, mode, entry)) {
+@@ -150,1 +160,1 @@
+-      if (!listingOrderByPaneKey.has(entry.paneKey)) {
++      if (!listingOrderByPaneKey.has(entry.paneKey) || admitOptions.moveToEnd) {
+@@ -184,1 +193,0 @@
+-        const sourceOrder = listingOrderByPaneKey.get(key)
+@@ -193,2 +202,2 @@
+-        } else if (sourceOrder !== undefined) {
+-          listingOrderByPaneKey.set(movedKey, sourceOrder)
++        } else {
++          listingOrderByPaneKey.set(movedKey, nextListingOrder())
+===================================================================
+--- a/src/shared/agent-status-run-alias-index.ts
++++ b/src/shared/agent-status-run-alias-index.ts
+@@ -10,0 +11,1 @@
++import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
+@@ -16,1 +17,1 @@
+-const MAX_RUN_IDS_PER_ALIAS = 256
++const MAX_RUN_IDS_PER_ALIAS = AGENT_STATUS_STORE_LIMITS.parents
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-byte-budget.ts
+@@ -0,0 +1,65 @@
++import type { AgentChildWorkAliasRecord } from './agent-status-child-work-alias'
++import type { AgentChildWorkRecord } from './agent-status-child-work'
++import {
++  AGENT_STATUS_STORE_LIMITS,
++  AGENT_STATUS_STORE_SNAPSHOT_VERSION,
++  type AgentStatusFactRecord,
++  type AgentStatusStoreSnapshot,
++  type AgentStatusTombstoneRecord
++} from './agent-status-store-contract'
++import type { AgentStatusParentRecord } from './agent-status-store-parent'
++import type { AgentStatusStoreState } from './agent-status-store-state'
++import { measureUtf8ByteLength } from './utf8-byte-limits'
++
++/** Either the snapshot header or a single owner/record measured while accumulating the budget. */
++type AgentStatusStoreByteBudgetRecord =
++  | AgentStatusStoreSnapshot
++  | AgentStatusParentRecord
++  | AgentChildWorkRecord
++  | AgentChildWorkAliasRecord
++  | AgentStatusFactRecord
++  | AgentStatusTombstoneRecord
++
++const recordBytes = new WeakMap<AgentStatusStoreByteBudgetRecord, number>()
++
++function serializedBytes(record: AgentStatusStoreByteBudgetRecord): number {
++  const cached = recordBytes.get(record)
++  if (cached !== undefined) {
++    return cached
++  }
++  const bytes = measureUtf8ByteLength(JSON.stringify(record)).byteLength
++  if (Object.isFrozen(record)) {
++    recordBytes.set(record, bytes)
++  }
++  return bytes
++}
++
++/** Enforce the complete snapshot budget before commit without allocating a full snapshot. */
++export function agentStatusStoreFitsByteBudget(state: AgentStatusStoreState): boolean {
++  let bytes = serializedBytes({
++    version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,
++    epoch: state.epoch,
++    revision: state.revision,
++    parents: [],
++    children: [],
++    aliases: [],
++    facts: [],
++    tombstones: []
++  })
++  for (const records of [
++    state.parents,
++    state.children,
++    state.aliases,
++    state.facts,
++    state.tombstones
++  ]) {
++    bytes += Math.max(0, records.size - 1)
++    for (const record of records.values()) {
++      bytes += serializedBytes(record)
++      if (bytes > AGENT_STATUS_STORE_LIMITS.serializedBytes) {
++        return false
++      }
++    }
++  }
++  return bytes <= AGENT_STATUS_STORE_LIMITS.serializedBytes
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-child-queries.ts
+@@ -0,0 +1,34 @@
++import {
++  serializeAgentChildWorkAliasKey,
++  type AgentChildWorkAliasInput,
++  type AgentChildWorkAliasRecord
++} from './agent-status-child-work-alias'
++import { deserializeAgentChildWorkBindingKey } from './agent-status-child-work-binding'
++import {
++  deepFreezeAgentStatusStoreValue,
++  type AgentStatusStoreState
++} from './agent-status-store-state'
++
++/** Retired bindings fence delayed observations even after their child/history is removed. */
++export function resolveAgentStatusChildBindings(
++  state: AgentStatusStoreState,
++  aliases: AgentChildWorkAliasInput[]
++): AgentChildWorkAliasRecord[] {
++  const keys = new Set(aliases.map(serializeAgentChildWorkAliasKey))
++  const matches: AgentChildWorkAliasRecord[] = []
++  for (const alias of state.aliases.values()) {
++    if (keys.has(serializeAgentChildWorkAliasKey(alias))) {
++      matches.push(alias)
++    }
++  }
++  for (const tombstone of state.tombstones.values()) {
++    if (tombstone.entity !== 'alias' || state.aliases.has(tombstone.key)) {
++      continue
++    }
++    const alias = deserializeAgentChildWorkBindingKey(tombstone.key)
++    if (alias && keys.has(serializeAgentChildWorkAliasKey(alias))) {
++      matches.push(deepFreezeAgentStatusStoreValue({ ...alias, revision: tombstone.revision }))
++    }
++  }
++  return matches
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-codec.ts
+@@ -0,0 +1,284 @@
++import {
++  parseAgentChildWorkAliasInput,
++  parseAgentChildWorkAliasRecord
++} from './agent-status-child-work-alias'
++import {
++  parseAgentChildWorkInput,
++  parseAgentChildWorkRecord
++} from './agent-status-child-work-codec'
++import {
++  AGENT_STATUS_STORE_LIMITS,
++  AGENT_STATUS_STORE_SNAPSHOT_VERSION,
++  type AgentStatusStoreMutation,
++  type AgentStatusStoreSnapshot,
++  type AgentStatusTombstoneEntity,
++  type AgentStatusTombstoneInput,
++  type AgentStatusTombstoneRecord
++} from './agent-status-store-contract'
++import {
++  parseAgentStatusFactIdentity,
++  parseAgentStatusFactInput,
++  parseAgentStatusFactRecord
++} from './agent-status-store-fact-codec'
++import {
++  parseAgentStatusParentInput,
++  parseAgentStatusParentRecord
++} from './agent-status-store-parent'
++import { parseAgentStatusSubject } from './agent-status-subject'
++import { measureUtf8ByteLength } from './utf8-byte-limits'
++
++const MAX_EPOCH_LENGTH = 256
++const MAX_TOMBSTONE_KEY_LENGTH = 32_768
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value)
++}
++
++function hasOnlyKeys(
++  record: Record<string, unknown>,
++  required: readonly string[],
++  optional: readonly string[] = []
++): boolean {
++  const keys = Object.keys(record)
++  return (
++    required.every((key) => Object.hasOwn(record, key)) &&
++    keys.every((key) => required.includes(key) || optional.includes(key))
++  )
++}
++
++function isRevision(value: unknown): value is number {
++  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
++}
++
++function isWithinSerializedLimit(value: unknown): boolean {
++  try {
++    return !measureUtf8ByteLength(JSON.stringify(value), {
++      stopAfterBytes: AGENT_STATUS_STORE_LIMITS.serializedBytes
++    }).exceededLimit
++  } catch {
++    return false
++  }
++}
++
++function isBoundedKey(value: unknown, maxLength: number): value is string {
++  if (
++    typeof value !== 'string' ||
++    value.length === 0 ||
++    value.length > maxLength ||
++    value !== value.trim()
++  ) {
++    return false
++  }
++  for (let index = 0; index < value.length; index += 1) {
++    const code = value.charCodeAt(index)
++    if (code <= 0x1f || code === 0x7f) {
++      return false
++    }
++  }
++  return true
++}
++
++export function isAgentStatusStoreEpoch(value: unknown): value is string {
++  return isBoundedKey(value, MAX_EPOCH_LENGTH)
++}
++
++function isTombstoneEntity(value: unknown): value is AgentStatusTombstoneEntity {
++  return value === 'parent' || value === 'child' || value === 'alias' || value === 'fact'
++}
++
++export function parseAgentStatusTombstoneInput(value: unknown): AgentStatusTombstoneInput | null {
++  if (
++    !isRecord(value) ||
++    !hasOnlyKeys(value, ['entity', 'key']) ||
++    !isTombstoneEntity(value.entity) ||
++    !isBoundedKey(value.key, MAX_TOMBSTONE_KEY_LENGTH)
++  ) {
++    return null
++  }
++  return { entity: value.entity, key: value.key }
++}
++
++export function parseAgentStatusTombstoneRecord(value: unknown): AgentStatusTombstoneRecord | null {
++  if (!isRecord(value) || !isRevision(value.revision)) {
++    return null
++  }
++  const input = { ...value }
++  delete input.revision
++  const tombstone = parseAgentStatusTombstoneInput(input)
++  return tombstone ? { ...tombstone, revision: value.revision } : null
++}
++
++function parseArray<T>(
++  value: unknown,
++  parser: (candidate: unknown) => T | null,
++  maxLength: number
++): T[] | null {
++  if (!Array.isArray(value) || value.length > maxLength) {
++    return null
++  }
++  const parsed: T[] = []
++  for (const candidate of value) {
++    const item = parser(candidate)
++    if (!item) {
++      return null
++    }
++    parsed.push(item)
++  }
++  return parsed
++}
++
++function parseMutationArray<T>(
++  value: unknown,
++  parser: (candidate: unknown) => T | null
++): T[] | null {
++  return parseArray(value, parser, AGENT_STATUS_STORE_LIMITS.mutationEntries)
++}
++
++function parseStringArray(value: unknown): string[] | null {
++  return parseMutationArray(value, (candidate) =>
++    isBoundedKey(candidate, MAX_TOMBSTONE_KEY_LENGTH) ? candidate : null
++  )
++}
++
++export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreMutation | null {
++  const optionalKeys = [
++    'parent',
++    'removeParent',
++    'children',
++    'removeChildren',
++    'aliases',
++    'removeAliases',
++    'facts',
++    'removeFacts',
++    'tombstones'
++  ]
++  if (
++    !isWithinSerializedLimit(value) ||
++    !isRecord(value) ||
++    !hasOnlyKeys(value, [], optionalKeys) ||
++    Object.keys(value).length === 0
++  ) {
++    return null
++  }
++  const parent = value.parent === undefined ? undefined : parseAgentStatusParentInput(value.parent)
++  const removeParent =
++    value.removeParent === undefined ? undefined : parseAgentStatusSubject(value.removeParent)
++  const children =
++    value.children === undefined
++      ? undefined
++      : parseMutationArray(value.children, parseAgentChildWorkInput)
++  const removeChildren =
++    value.removeChildren === undefined ? undefined : parseStringArray(value.removeChildren)
++  const aliases =
++    value.aliases === undefined
++      ? undefined
++      : parseMutationArray(value.aliases, parseAgentChildWorkAliasInput)
++  const removeAliases =
++    value.removeAliases === undefined ? undefined : parseStringArray(value.removeAliases)
++  const facts =
++    value.facts === undefined
++      ? undefined
++      : parseMutationArray(value.facts, parseAgentStatusFactInput)
++  const removeFacts =
++    value.removeFacts === undefined
++      ? undefined
++      : parseMutationArray(value.removeFacts, parseAgentStatusFactIdentity)
++  const tombstones =
++    value.tombstones === undefined
++      ? undefined
++      : parseMutationArray(value.tombstones, parseAgentStatusTombstoneInput)
++  const parsedValues = [
++    parent,
++    removeParent,
++    children,
++    removeChildren,
++    aliases,
++    removeAliases,
++    facts,
++    removeFacts,
++    tombstones
++  ]
++  const sourceValues = optionalKeys.map((key) => value[key])
++  if (sourceValues.some((item, index) => item !== undefined && !parsedValues[index])) {
++    return null
++  }
++  const mutationEntryCount = [
++    children,
++    removeChildren,
++    aliases,
++    removeAliases,
++    facts,
++    removeFacts,
++    tombstones
++  ].reduce((sum, items) => sum + (items?.length ?? 0), 0)
++  if (mutationEntryCount > AGENT_STATUS_STORE_LIMITS.mutationEntries) {
++    return null
++  }
++  return {
++    ...(parent ? { parent } : {}),
++    ...(removeParent ? { removeParent } : {}),
++    ...(children ? { children } : {}),
++    ...(removeChildren ? { removeChildren } : {}),
++    ...(aliases ? { aliases } : {}),
++    ...(removeAliases ? { removeAliases } : {}),
++    ...(facts ? { facts } : {}),
++    ...(removeFacts ? { removeFacts } : {}),
++    ...(tombstones ? { tombstones } : {})
++  }
++}
++
++export function parseAgentStatusStoreSnapshot(value: unknown): AgentStatusStoreSnapshot | null {
++  const keys = [
++    'version',
++    'epoch',
++    'revision',
++    'parents',
++    'children',
++    'aliases',
++    'facts',
++    'tombstones'
++  ]
++  if (
++    !isWithinSerializedLimit(value) ||
++    !isRecord(value) ||
++    !hasOnlyKeys(value, keys) ||
++    value.version !== AGENT_STATUS_STORE_SNAPSHOT_VERSION ||
++    !isAgentStatusStoreEpoch(value.epoch) ||
++    !isRevision(value.revision)
++  ) {
++    return null
++  }
++  const parents = parseArray(
++    value.parents,
++    parseAgentStatusParentRecord,
++    AGENT_STATUS_STORE_LIMITS.parents
++  )
++  const children = parseArray(
++    value.children,
++    parseAgentChildWorkRecord,
++    AGENT_STATUS_STORE_LIMITS.children
++  )
++  const aliases = parseArray(
++    value.aliases,
++    parseAgentChildWorkAliasRecord,
++    AGENT_STATUS_STORE_LIMITS.aliases
++  )
++  const facts = parseArray(value.facts, parseAgentStatusFactRecord, AGENT_STATUS_STORE_LIMITS.facts)
++  const tombstones = parseArray(
++    value.tombstones,
++    parseAgentStatusTombstoneRecord,
++    AGENT_STATUS_STORE_LIMITS.tombstones
++  )
++  return parents && children && aliases && facts && tombstones
++    ? {
++        version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,
++        epoch: value.epoch,
++        revision: value.revision,
++        parents,
++        children,
++        aliases,
++        facts,
++        tombstones
++      }
++    : null
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-contract.ts
+@@ -0,0 +1,62 @@
++import type {
++  AgentChildWorkAliasInput,
++  AgentChildWorkAliasRecord
++} from './agent-status-child-work-alias'
++import type { AgentChildWorkInput, AgentChildWorkRecord } from './agent-status-child-work'
++import type { AgentStatusParentInput, AgentStatusParentRecord } from './agent-status-store-parent'
++import type { AgentStatusSubject } from './agent-status-subject'
++
++export const AGENT_STATUS_STORE_SNAPSHOT_VERSION = 1 as const
++export const AGENT_STATUS_STORE_LIMITS = {
++  parents: 2_048,
++  children: 8_192,
++  aliases: 16_384,
++  facts: 16_384,
++  tombstones: 1_024,
++  mutationEntries: 2_048,
++  serializedBytes: 16 * 1024 * 1024
++} as const
++
++export const AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS = 4_096
++
++export type AgentStatusFactValue = string | number | boolean | null
++
++export type AgentStatusFactInput = {
++  subject: AgentStatusSubject
++  key: string
++  value: AgentStatusFactValue
++}
++
++export type AgentStatusFactRecord = AgentStatusFactInput & { revision: number }
++export type AgentStatusFactIdentity = Pick<AgentStatusFactInput, 'subject' | 'key'>
++export type AgentStatusTombstoneEntity = 'parent' | 'child' | 'alias' | 'fact'
++
++export type AgentStatusTombstoneInput = {
++  entity: AgentStatusTombstoneEntity
++  key: string
++}
++
++export type AgentStatusTombstoneRecord = AgentStatusTombstoneInput & { revision: number }
++
++export type AgentStatusStoreMutation = {
++  parent?: AgentStatusParentInput
++  removeParent?: AgentStatusSubject
++  children?: AgentChildWorkInput[]
++  removeChildren?: string[]
++  aliases?: AgentChildWorkAliasInput[]
++  removeAliases?: string[]
++  facts?: AgentStatusFactInput[]
++  removeFacts?: AgentStatusFactIdentity[]
++  tombstones?: AgentStatusTombstoneInput[]
++}
++
++export type AgentStatusStoreSnapshot = {
++  version: typeof AGENT_STATUS_STORE_SNAPSHOT_VERSION
++  epoch: string
++  revision: number
++  parents: AgentStatusParentRecord[]
++  children: AgentChildWorkRecord[]
++  aliases: AgentChildWorkAliasRecord[]
++  facts: AgentStatusFactRecord[]
++  tombstones: AgentStatusTombstoneRecord[]
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-fact-codec.ts
+@@ -0,0 +1,119 @@
++import type {
++  AgentStatusFactIdentity,
++  AgentStatusFactInput,
++  AgentStatusFactRecord,
++  AgentStatusFactValue
++} from './agent-status-store-contract'
++import {
++  deserializeAgentStatusSubject,
++  parseAgentStatusSubject,
++  serializeAgentStatusSubject
++} from './agent-status-subject'
++
++const MAX_FACT_KEY_LENGTH = 256
++const MAX_FACT_STRING_LENGTH = 4_096
++const FACT_KEY_PREFIX = 'agent-status-fact-v1:'
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value)
++}
++
++function hasExactKeys(record: Record<string, unknown>, expected: readonly string[]): boolean {
++  const keys = Object.keys(record)
++  return keys.length === expected.length && keys.every((key) => expected.includes(key))
++}
++
++function isRevision(value: unknown): value is number {
++  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
++}
++
++function isFactKey(value: unknown): value is string {
++  if (
++    typeof value !== 'string' ||
++    value.length === 0 ||
++    value.length > MAX_FACT_KEY_LENGTH ||
++    value !== value.trim()
++  ) {
++    return false
++  }
++  for (let index = 0; index < value.length; index += 1) {
++    const code = value.charCodeAt(index)
++    if (code <= 0x1f || code === 0x7f) {
++      return false
++    }
++  }
++  return true
++}
++
++function parseFactValue(value: unknown): AgentStatusFactValue | undefined {
++  if (value === null || typeof value === 'boolean') {
++    return value
++  }
++  if (typeof value === 'string') {
++    return value.length <= MAX_FACT_STRING_LENGTH ? value : undefined
++  }
++  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
++}
++
++export function parseAgentStatusFactInput(value: unknown): AgentStatusFactInput | null {
++  if (!isRecord(value) || !hasExactKeys(value, ['subject', 'key', 'value'])) {
++    return null
++  }
++  const subject = parseAgentStatusSubject(value.subject)
++  const factValue = parseFactValue(value.value)
++  if (!subject || !isFactKey(value.key) || factValue === undefined) {
++    return null
++  }
++  return { subject, key: value.key, value: factValue }
++}
++
++export function parseAgentStatusFactRecord(value: unknown): AgentStatusFactRecord | null {
++  if (!isRecord(value) || !isRevision(value.revision)) {
++    return null
++  }
++  const input = { ...value }
++  delete input.revision
++  const fact = parseAgentStatusFactInput(input)
++  return fact ? { ...fact, revision: value.revision } : null
++}
++
++export function parseAgentStatusFactIdentity(value: unknown): AgentStatusFactIdentity | null {
++  if (!isRecord(value) || !hasExactKeys(value, ['subject', 'key'])) {
++    return null
++  }
++  const subject = parseAgentStatusSubject(value.subject)
++  return subject && isFactKey(value.key) ? { subject, key: value.key } : null
++}
++
++export function serializeAgentStatusFactKey(fact: AgentStatusFactIdentity): string {
++  const parsed = parseAgentStatusFactIdentity({ subject: fact.subject, key: fact.key })
++  if (!parsed) {
++    throw new Error('Invalid agent status fact identity')
++  }
++  return `${FACT_KEY_PREFIX}${JSON.stringify([
++    serializeAgentStatusSubject(parsed.subject),
++    parsed.key
++  ])}`
++}
++
++export function deserializeAgentStatusFactKey(value: string): AgentStatusFactIdentity | null {
++  if (!value.startsWith(FACT_KEY_PREFIX)) {
++    return null
++  }
++  let tuple: unknown
++  try {
++    tuple = JSON.parse(value.slice(FACT_KEY_PREFIX.length))
++  } catch {
++    return null
++  }
++  if (!Array.isArray(tuple) || tuple.length !== 2) {
++    return null
++  }
++  const [subjectKey, key] = tuple
++  if (typeof subjectKey !== 'string') {
++    return null
++  }
++  const subject = deserializeAgentStatusSubject(subjectKey)
++  const parsed = parseAgentStatusFactIdentity({ subject, key })
++  return parsed && serializeAgentStatusFactKey(parsed) === value ? parsed : null
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-mutation.ts
+@@ -0,0 +1,263 @@
++import { parseAgentChildWorkAliasRecord } from './agent-status-child-work-alias'
++import {
++  deserializeAgentChildWorkBindingKey,
++  serializeAgentChildWorkBindingKey
++} from './agent-status-child-work-binding'
++import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
++import type {
++  AgentStatusStoreMutation,
++  AgentStatusTombstoneEntity
++} from './agent-status-store-contract'
++import {
++  AGENT_STATUS_STORE_LIMITS,
++  AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS
++} from './agent-status-store-contract'
++import { parseAgentStatusFactRecord } from './agent-status-store-fact-codec'
++import { parseAgentStatusParentRecord } from './agent-status-store-parent'
++import {
++  agentStatusFactMapKey,
++  agentStatusTombstoneMapKey,
++  cloneAgentStatusStoreState,
++  deepFreezeAgentStatusStoreValue,
++  validateAgentStatusStoreState,
++  type AgentStatusStoreState
++} from './agent-status-store-state'
++import {
++  agentStatusSubjectsEqual,
++  deserializeAgentStatusSubject,
++  serializeAgentStatusSubject,
++  type AgentStatusSubject
++} from './agent-status-subject'
++
++function addTombstone(
++  state: AgentStatusStoreState,
++  entity: AgentStatusTombstoneEntity,
++  key: string,
++  revision: number
++): void {
++  const record = deepFreezeAgentStatusStoreValue({ entity, key, revision })
++  const mapKey = agentStatusTombstoneMapKey(entity, key)
++  state.tombstones.delete(mapKey)
++  state.tombstones.set(mapKey, record)
++}
++
++function compactTombstones(state: AgentStatusStoreState): void {
++  for (const [key, tombstone] of state.tombstones) {
++    if (
++      state.tombstones.size <= AGENT_STATUS_STORE_LIMITS.tombstones &&
++      state.revision - tombstone.revision < AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS
++    ) {
++      break
++    }
++    state.tombstones.delete(key)
++  }
++}
++
++function removeAlias(state: AgentStatusStoreState, key: string, revision: number): void {
++  state.aliases.delete(key)
++  addTombstone(state, 'alias', key, revision)
++}
++
++function removeFact(state: AgentStatusStoreState, key: string, revision: number): void {
++  state.facts.delete(key)
++  addTombstone(state, 'fact', key, revision)
++}
++
++function removeChild(
++  state: AgentStatusStoreState,
++  childWorkId: string,
++  revision: number,
++  removedChildWorkIds: Set<string>
++): void {
++  state.children.delete(childWorkId)
++  addTombstone(state, 'child', childWorkId, revision)
++  removedChildWorkIds.add(childWorkId)
++}
++
++function removeAliasesForChildren(
++  state: AgentStatusStoreState,
++  removedChildWorkIds: ReadonlySet<string>,
++  revision: number
++): void {
++  for (const [key, alias] of state.aliases) {
++    if (removedChildWorkIds.has(alias.childWorkId)) {
++      removeAlias(state, key, revision)
++    }
++  }
++}
++
++function removeParent(
++  state: AgentStatusStoreState,
++  subject: AgentStatusSubject,
++  revision: number,
++  removedChildWorkIds: Set<string>
++): void {
++  const key = serializeAgentStatusSubject(subject)
++  state.parents.delete(key)
++  addTombstone(state, 'parent', key, revision)
++  for (const child of state.children.values()) {
++    if (agentStatusSubjectsEqual(child.parent, subject)) {
++      removeChild(state, child.childWorkId, revision, removedChildWorkIds)
++    }
++  }
++  for (const [factMapKey, fact] of state.facts) {
++    if (agentStatusSubjectsEqual(fact.subject, subject)) {
++      removeFact(state, factMapKey, revision)
++    }
++  }
++}
++
++function applyExplicitTombstone(
++  state: AgentStatusStoreState,
++  tombstone: { entity: AgentStatusTombstoneEntity; key: string },
++  revision: number,
++  removedChildWorkIds: Set<string>
++): boolean {
++  if (tombstone.entity === 'parent') {
++    const subject = deserializeAgentStatusSubject(tombstone.key)
++    if (!subject) {
++      return false
++    }
++    removeParent(state, subject, revision, removedChildWorkIds)
++    return true
++  }
++  if (tombstone.entity === 'child') {
++    removeChild(state, tombstone.key, revision, removedChildWorkIds)
++  } else if (tombstone.entity === 'alias') {
++    if (!deserializeAgentChildWorkBindingKey(tombstone.key)) {
++      return false
++    }
++    removeAlias(state, tombstone.key, revision)
++  } else {
++    removeFact(state, tombstone.key, revision)
++  }
++  addTombstone(state, tombstone.entity, tombstone.key, revision)
++  return true
++}
++
++function upsertParent(
++  state: AgentStatusStoreState,
++  input: NonNullable<AgentStatusStoreMutation['parent']>,
++  revision: number
++): boolean {
++  const key = serializeAgentStatusSubject(input.subject)
++  const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('parent', key))
++  if (tombstone && tombstone.revision >= revision) {
++    return false
++  }
++  const previous = state.parents.get(key)
++  const record = parseAgentStatusParentRecord({
++    ...input,
++    ...(input.firstObservedAt === undefined && previous?.firstObservedAt !== undefined
++      ? { firstObservedAt: previous.firstObservedAt }
++      : {}),
++    revision
++  })
++  if (!record) {
++    return false
++  }
++  state.parents.set(key, deepFreezeAgentStatusStoreValue(record))
++  return true
++}
++
++function upsertChildren(
++  state: AgentStatusStoreState,
++  children: NonNullable<AgentStatusStoreMutation['children']>,
++  revision: number
++): boolean {
++  for (const input of children) {
++    const previous = state.children.get(input.childWorkId)
++    if (
++      state.tombstones.has(agentStatusTombstoneMapKey('child', input.childWorkId)) ||
++      !state.parents.has(serializeAgentStatusSubject(input.parent)) ||
++      (previous !== undefined && previous.firstObservedAt !== input.firstObservedAt) ||
++      (previous !== undefined && input.observedAt < previous.observedAt)
++    ) {
++      return false
++    }
++    const record = parseAgentChildWorkRecord({ ...input, revision })
++    if (!record) {
++      return false
++    }
++    state.children.set(input.childWorkId, deepFreezeAgentStatusStoreValue(record))
++  }
++  return true
++}
++
++function upsertAliases(
++  state: AgentStatusStoreState,
++  aliases: NonNullable<AgentStatusStoreMutation['aliases']>,
++  revision: number
++): boolean {
++  for (const input of aliases) {
++    const record = parseAgentChildWorkAliasRecord({ ...input, revision })
++    if (!record) {
++      return false
++    }
++    state.aliases.set(
++      serializeAgentChildWorkBindingKey(record),
++      deepFreezeAgentStatusStoreValue(record)
++    )
++  }
++  return true
++}
++
++function upsertFacts(
++  state: AgentStatusStoreState,
++  facts: NonNullable<AgentStatusStoreMutation['facts']>,
++  revision: number
++): boolean {
++  for (const input of facts) {
++    const record = parseAgentStatusFactRecord({ ...input, revision })
++    if (!record || !state.parents.has(serializeAgentStatusSubject(record.subject))) {
++      return false
++    }
++    state.facts.set(agentStatusFactMapKey(record), deepFreezeAgentStatusStoreValue(record))
++  }
++  return true
++}
++
++export function applyAgentStatusStoreMutation(
++  current: AgentStatusStoreState,
++  mutation: AgentStatusStoreMutation,
++  revision: number
++): AgentStatusStoreState | null {
++  const next = cloneAgentStatusStoreState(current)
++  next.revision = revision
++  const removedChildWorkIds = new Set<string>()
++  if (mutation.removeParent) {
++    removeParent(next, mutation.removeParent, revision, removedChildWorkIds)
++  }
++  for (const childWorkId of mutation.removeChildren ?? []) {
++    removeChild(next, childWorkId, revision, removedChildWorkIds)
++  }
++  for (const key of mutation.removeAliases ?? []) {
++    if (!deserializeAgentChildWorkBindingKey(key)) {
++      return null
++    }
++    removeAlias(next, key, revision)
++  }
++  for (const identity of mutation.removeFacts ?? []) {
++    removeFact(next, agentStatusFactMapKey(identity), revision)
++  }
++  for (const tombstone of mutation.tombstones ?? []) {
++    if (!applyExplicitTombstone(next, tombstone, revision, removedChildWorkIds)) {
++      return null
++    }
++  }
++  removeAliasesForChildren(next, removedChildWorkIds, revision)
++  if (mutation.parent && !upsertParent(next, mutation.parent, revision)) {
++    return null
++  }
++  if (mutation.children && !upsertChildren(next, mutation.children, revision)) {
++    return null
++  }
++  if (mutation.aliases && !upsertAliases(next, mutation.aliases, revision)) {
++    return null
++  }
++  if (mutation.facts && !upsertFacts(next, mutation.facts, revision)) {
++    return null
++  }
++  compactTombstones(next)
++  return validateAgentStatusStoreState(next) ? next : null
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-parent.ts
+@@ -0,0 +1,117 @@
++import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
++import { parseAgentStatusPtyRunRecord, type AgentStatusPtyRunRecord } from './agent-status-run'
++import { parseAgentStatusIpcPayloadCopy } from './agent-status-store-status-codec'
++import { parseAgentStatusSubject, type AgentStatusSubject } from './agent-status-subject'
++
++export type AgentStatusParentInput = {
++  subject: AgentStatusSubject
++  status?: AgentStatusIpcPayload
++  run?: AgentStatusPtyRunRecord
++  firstObservedAt?: number
++}
++
++export type AgentStatusParentRecord = AgentStatusParentInput & { revision: number }
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value)
++}
++
++function hasOnlyKeys(
++  record: Record<string, unknown>,
++  required: readonly string[],
++  optional: readonly string[] = []
++): boolean {
++  const keys = Object.keys(record)
++  return (
++    required.every((key) => Object.hasOwn(record, key)) &&
++    keys.every((key) => required.includes(key) || optional.includes(key))
++  )
++}
++
++function isTimestamp(value: unknown): value is number {
++  return typeof value === 'number' && Number.isFinite(value) && value >= 0
++}
++
++function isRevision(value: unknown): value is number {
++  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
++}
++
++function isParentScopeConsistent(parent: AgentStatusParentInput): boolean {
++  const { subject, status, run } = parent
++  if (run && (subject.kind !== 'pty-run' || run.runId !== subject.runId)) {
++    return false
++  }
++  if (
++    subject.kind !== 'pty-run' &&
++    (status?.runId !== undefined || status?.executionId !== undefined)
++  ) {
++    return false
++  }
++  if (status?.worktreeId !== undefined && status.worktreeId !== subject.workspaceId) {
++    return false
++  }
++  if (subject.kind === 'pty' && status?.paneKey !== subject.paneKey) {
++    return false
++  }
++  if (subject.kind === 'pty-run' && status?.runId !== undefined && status.runId !== subject.runId) {
++    return false
++  }
++  if (run && status?.paneKey !== undefined && status.paneKey !== run.paneKey) {
++    return false
++  }
++  if (
++    run &&
++    status?.executionId !== undefined &&
++    status.executionId !== run.attachment.executionId
++  ) {
++    return false
++  }
++  if (
++    run &&
++    status?.providerAlias &&
++    run.providerSessions.length > 0 &&
++    !run.providerSessions.some(
++      (session) =>
++        session.provider === status.providerAlias?.provider &&
++        session.sessionKeyKind === status.providerAlias.sessionKeyKind &&
++        session.providerId === status.providerAlias.providerId
++    )
++  ) {
++    return false
++  }
++  return true
++}
++
++export function parseAgentStatusParentInput(value: unknown): AgentStatusParentInput | null {
++  if (
++    !isRecord(value) ||
++    !hasOnlyKeys(value, ['subject'], ['status', 'run', 'firstObservedAt']) ||
++    (value.firstObservedAt !== undefined && !isTimestamp(value.firstObservedAt))
++  ) {
++    return null
++  }
++  const subject = parseAgentStatusSubject(value.subject)
++  const status =
++    value.status === undefined ? undefined : parseAgentStatusIpcPayloadCopy(value.status)
++  const run = value.run === undefined ? undefined : parseAgentStatusPtyRunRecord(value.run)
++  if (!subject || (value.status !== undefined && !status) || (value.run !== undefined && !run)) {
++    return null
++  }
++  const parent: AgentStatusParentInput = {
++    subject,
++    ...(status ? { status } : {}),
++    ...(run ? { run } : {}),
++    ...(isTimestamp(value.firstObservedAt) ? { firstObservedAt: value.firstObservedAt } : {})
++  }
++  return isParentScopeConsistent(parent) ? parent : null
++}
++
++export function parseAgentStatusParentRecord(value: unknown): AgentStatusParentRecord | null {
++  if (!isRecord(value) || !isRevision(value.revision)) {
++    return null
++  }
++  const input = { ...value }
++  delete input.revision
++  const parent = parseAgentStatusParentInput(input)
++  return parent ? { ...parent, revision: value.revision } : null
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-run-index.ts
+@@ -0,0 +1,31 @@
++import {
++  serializeAgentStatusProviderAliasKey,
++  type AgentStatusRunAliasIndex
++} from './agent-status-run-alias-index'
++import type { AgentStatusParentRecord } from './agent-status-store-parent'
++
++export function deriveAgentStatusStoreRunAliasIndex(
++  parents: Iterable<AgentStatusParentRecord>
++): AgentStatusRunAliasIndex {
++  const index: AgentStatusRunAliasIndex = new Map()
++  for (const parent of parents) {
++    if (parent.subject.kind !== 'pty-run' || !parent.run) {
++      continue
++    }
++    for (const session of parent.run.providerSessions) {
++      const key = serializeAgentStatusProviderAliasKey({
++        executionHostId: parent.subject.executionHostId,
++        wslDistro: parent.subject.wslDistro,
++        workspaceId: parent.subject.workspaceId,
++        workspaceKind: parent.subject.workspaceKind,
++        provider: session.provider,
++        sessionKeyKind: session.sessionKeyKind,
++        providerId: session.providerId
++      })
++      const runIds = index.get(key) ?? new Set<string>()
++      runIds.add(parent.run.runId)
++      index.set(key, runIds)
++    }
++  }
++  return index
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-state.ts
+@@ -0,0 +1,266 @@
++import {
++  parseAgentChildWorkAliasRecord,
++  type AgentChildWorkAliasRecord
++} from './agent-status-child-work-alias'
++import {
++  deserializeAgentChildWorkBindingKey,
++  serializeAgentChildWorkBindingKey
++} from './agent-status-child-work-binding'
++import {
++  agentChildWorkBelongsTo,
++  agentChildWorkFencesEqual,
++  type AgentChildWorkRecord
++} from './agent-status-child-work'
++import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
++import { agentStatusStoreFitsByteBudget } from './agent-status-store-byte-budget'
++import {
++  AGENT_STATUS_STORE_LIMITS,
++  AGENT_STATUS_STORE_SNAPSHOT_VERSION,
++  AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
++  type AgentStatusFactIdentity,
++  type AgentStatusFactRecord,
++  type AgentStatusStoreSnapshot,
++  type AgentStatusTombstoneEntity,
++  type AgentStatusTombstoneRecord
++} from './agent-status-store-contract'
++import {
++  parseAgentStatusStoreSnapshot,
++  parseAgentStatusTombstoneRecord
++} from './agent-status-store-codec'
++import {
++  deserializeAgentStatusFactKey,
++  parseAgentStatusFactRecord,
++  serializeAgentStatusFactKey
++} from './agent-status-store-fact-codec'
++import {
++  parseAgentStatusParentRecord,
++  type AgentStatusParentRecord
++} from './agent-status-store-parent'
++import { deserializeAgentStatusSubject, serializeAgentStatusSubject } from './agent-status-subject'
++
++export type AgentStatusStoreState = {
++  epoch: string
++  revision: number
++  parents: Map<string, AgentStatusParentRecord>
++  children: Map<string, AgentChildWorkRecord>
++  aliases: Map<string, AgentChildWorkAliasRecord>
++  facts: Map<string, AgentStatusFactRecord>
++  tombstones: Map<string, AgentStatusTombstoneRecord>
++}
++
++export function deepFreezeAgentStatusStoreValue<T>(value: T): T {
++  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
++    return value
++  }
++  for (const nested of Object.values(value)) {
++    deepFreezeAgentStatusStoreValue(nested)
++  }
++  return Object.freeze(value)
++}
++
++export function agentStatusFactMapKey(fact: AgentStatusFactIdentity): string {
++  return serializeAgentStatusFactKey(fact)
++}
++
++export function agentStatusTombstoneMapKey(
++  entity: AgentStatusTombstoneEntity,
++  key: string
++): string {
++  return `${entity}\0${key}`
++}
++
++export function createEmptyAgentStatusStoreState(epoch: string): AgentStatusStoreState {
++  return {
++    epoch,
++    revision: 0,
++    parents: new Map(),
++    children: new Map(),
++    aliases: new Map(),
++    facts: new Map(),
++    tombstones: new Map()
++  }
++}
++
++export function cloneAgentStatusStoreState(state: AgentStatusStoreState): AgentStatusStoreState {
++  return {
++    epoch: state.epoch,
++    revision: state.revision,
++    parents: new Map(state.parents),
++    children: new Map(state.children),
++    aliases: new Map(state.aliases),
++    facts: new Map(state.facts),
++    tombstones: new Map(state.tombstones)
++  }
++}
++
++function snapshotCandidateFromAgentStatusStoreState(state: AgentStatusStoreState) {
++  return {
++    version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,
++    epoch: state.epoch,
++    revision: state.revision,
++    parents: [...state.parents.values()],
++    children: [...state.children.values()],
++    aliases: [...state.aliases.values()],
++    facts: [...state.facts.values()],
++    tombstones: [...state.tombstones.values()]
++  }
++}
++
++function hasMatchingFence(child: AgentChildWorkRecord, alias: AgentChildWorkAliasRecord): boolean {
++  if (agentChildWorkFencesEqual(child.invocation, alias.fence)) {
++    return true
++  }
++  return (
++    child.previousInvocations?.some((entry) =>
++      agentChildWorkFencesEqual(entry.fence, alias.fence)
++    ) === true
++  )
++}
++
++export function validateAgentStatusStoreState(state: AgentStatusStoreState): boolean {
++  if (
++    state.parents.size > AGENT_STATUS_STORE_LIMITS.parents ||
++    state.children.size > AGENT_STATUS_STORE_LIMITS.children ||
++    state.aliases.size > AGENT_STATUS_STORE_LIMITS.aliases ||
++    state.facts.size > AGENT_STATUS_STORE_LIMITS.facts ||
++    state.tombstones.size > AGENT_STATUS_STORE_LIMITS.tombstones
++  ) {
++    return false
++  }
++  for (const [key, parent] of state.parents) {
++    if (
++      key !== serializeAgentStatusSubject(parent.subject) ||
++      parent.revision > state.revision ||
++      (state.tombstones.get(agentStatusTombstoneMapKey('parent', key))?.revision ?? -1) >=
++        parent.revision
++    ) {
++      return false
++    }
++  }
++  for (const [childWorkId, child] of state.children) {
++    if (
++      childWorkId !== child.childWorkId ||
++      child.revision > state.revision ||
++      !state.parents.has(serializeAgentStatusSubject(child.parent)) ||
++      state.tombstones.has(agentStatusTombstoneMapKey('child', childWorkId))
++    ) {
++      return false
++    }
++  }
++  for (const [key, alias] of state.aliases) {
++    const child = state.children.get(alias.childWorkId)
++    const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('alias', key))
++    if (
++      key !== serializeAgentChildWorkBindingKey(alias) ||
++      alias.revision > state.revision ||
++      !child ||
++      !agentChildWorkBelongsTo(child, alias.parent) ||
++      child.provider !== alias.provider ||
++      child.kind !== alias.kind ||
++      !hasMatchingFence(child, alias) ||
++      (tombstone !== undefined && tombstone.revision >= alias.revision)
++    ) {
++      return false
++    }
++  }
++  for (const [key, fact] of state.facts) {
++    const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('fact', key))
++    if (
++      key !== agentStatusFactMapKey(fact) ||
++      fact.revision > state.revision ||
++      !state.parents.has(serializeAgentStatusSubject(fact.subject)) ||
++      (tombstone !== undefined && tombstone.revision >= fact.revision)
++    ) {
++      return false
++    }
++  }
++  for (const item of state.tombstones.values()) {
++    if (
++      item.revision > state.revision ||
++      (item.entity === 'parent' && !deserializeAgentStatusSubject(item.key)) ||
++      (item.entity === 'alias' && !deserializeAgentChildWorkBindingKey(item.key)) ||
++      (item.entity === 'fact' && !deserializeAgentStatusFactKey(item.key))
++    ) {
++      return false
++    }
++  }
++  return agentStatusStoreFitsByteBudget(state)
++}
++
++export function snapshotFromAgentStatusStoreState(
++  state: AgentStatusStoreState
++): AgentStatusStoreSnapshot {
++  const snapshot = parseAgentStatusStoreSnapshot(snapshotCandidateFromAgentStatusStoreState(state))
++  if (!snapshot) {
++    throw new Error('Agent status store produced an invalid snapshot')
++  }
++  return deepFreezeAgentStatusStoreValue(snapshot)
++}
++
++export function agentStatusStoreStateFromSnapshot(
++  snapshot: AgentStatusStoreSnapshot,
++  epoch: string
++): AgentStatusStoreState | null {
++  const state = createEmptyAgentStatusStoreState(epoch)
++  state.revision = snapshot.revision
++  for (const parent of snapshot.parents) {
++    const record = parseAgentStatusParentRecord(parent)
++    if (!record) {
++      return null
++    }
++    const key = serializeAgentStatusSubject(record.subject)
++    if (state.parents.has(key)) {
++      return null
++    }
++    state.parents.set(key, deepFreezeAgentStatusStoreValue(record))
++  }
++  for (const child of snapshot.children) {
++    const record = parseAgentChildWorkRecord(child)
++    if (!record || state.children.has(record.childWorkId)) {
++      return null
++    }
++    state.children.set(record.childWorkId, deepFreezeAgentStatusStoreValue(record))
++  }
++  for (const alias of snapshot.aliases) {
++    const record = parseAgentChildWorkAliasRecord(alias)
++    if (!record) {
++      return null
++    }
++    const key = serializeAgentChildWorkBindingKey(record)
++    if (state.aliases.has(key)) {
++      return null
++    }
++    state.aliases.set(key, deepFreezeAgentStatusStoreValue(record))
++  }
++  for (const fact of snapshot.facts) {
++    const record = parseAgentStatusFactRecord(fact)
++    if (!record) {
++      return null
++    }
++    const key = agentStatusFactMapKey(record)
++    if (state.facts.has(key)) {
++      return null
++    }
++    state.facts.set(key, deepFreezeAgentStatusStoreValue(record))
++  }
++  for (const tombstone of [...snapshot.tombstones].sort(
++    (left, right) => left.revision - right.revision
++  )) {
++    const record = parseAgentStatusTombstoneRecord(tombstone)
++    if (!record) {
++      return null
++    }
++    const key = agentStatusTombstoneMapKey(record.entity, record.key)
++    if (state.tombstones.has(key)) {
++      return null
++    }
++    state.tombstones.set(key, deepFreezeAgentStatusStoreValue(record))
++  }
++  for (const [key, tombstone] of state.tombstones) {
++    if (state.revision - tombstone.revision < AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS) {
++      break
++    }
++    state.tombstones.delete(key)
++  }
++  return validateAgentStatusStoreState(state) ? state : null
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store-status-codec.ts
+@@ -0,0 +1,245 @@
++import { normalizeAgentProviderSession } from './agent-session-resume'
++import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
++import {
++  isAgentStatusExecutionId,
++  isAgentStatusRunId,
++  parseAgentStatusProviderAlias
++} from './agent-status-run'
++import { normalizeAgentStatusPayload } from './agent-status-types'
++import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
++import { measureUtf8ByteLength } from './utf8-byte-limits'
++
++const MAX_STATUS_BYTES = 256 * 1024
++const MAX_ID_LENGTH = 4_096
++const STATUS_STRUCTURE_LIMITS = { structuralTokens: 16_384, nestingDepth: 24 } as const
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value)
++}
++
++function hasOnlyKeys(
++  record: Record<string, unknown>,
++  required: readonly string[],
++  optional: readonly string[] = []
++): boolean {
++  const keys = Object.keys(record)
++  return (
++    required.every((key) => Object.hasOwn(record, key)) &&
++    keys.every((key) => required.includes(key) || optional.includes(key))
++  )
++}
++
++function isTimestamp(value: unknown): value is number {
++  return typeof value === 'number' && Number.isFinite(value) && value >= 0
++}
++
++function isRevision(value: unknown): value is number {
++  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
++}
++
++function isBoundedString(value: unknown): value is string {
++  return (
++    typeof value === 'string' &&
++    value.length > 0 &&
++    value.length <= MAX_ID_LENGTH &&
++    !value.includes('\0')
++  )
++}
++
++function copyJsonRecord(value: unknown): Record<string, unknown> | null {
++  let serialized: string
++  try {
++    serialized = JSON.stringify(value)
++  } catch {
++    return null
++  }
++  if (measureUtf8ByteLength(serialized, { stopAfterBytes: MAX_STATUS_BYTES }).exceededLimit) {
++    return null
++  }
++  try {
++    assertJsonTextStructureWithinLimits(serialized, STATUS_STRUCTURE_LIMITS)
++    const parsed: unknown = JSON.parse(serialized)
++    return isRecord(parsed) ? parsed : null
++  } catch {
++    return null
++  }
++}
++
++function parseObservation(value: unknown): Record<string, unknown> | null {
++  if (
++    !isRecord(value) ||
++    !hasOnlyKeys(
++      value,
++      ['origin', 'authorityId', 'incarnation', 'revision', 'observedAt'],
++      ['boundary', 'kind']
++    ) ||
++    (value.origin !== 'hook' &&
++      value.origin !== 'osc' &&
++      value.origin !== 'title' &&
++      value.origin !== 'process' &&
++      value.origin !== 'launch' &&
++      value.origin !== 'orchestration' &&
++      value.origin !== 'structured') ||
++    !isBoundedString(value.authorityId) ||
++    !isRevision(value.incarnation) ||
++    !isRevision(value.revision) ||
++    !isTimestamp(value.observedAt) ||
++    (value.boundary !== undefined && value.boundary !== true) ||
++    (value.kind !== undefined &&
++      value.kind !== 'transition' &&
++      value.kind !== 'snapshot' &&
++      value.kind !== 'identity-only')
++  ) {
++    return null
++  }
++  return {
++    origin: value.origin,
++    authorityId: value.authorityId,
++    incarnation: value.incarnation,
++    revision: value.revision,
++    observedAt: value.observedAt,
++    ...(value.boundary === true ? { boundary: true } : {}),
++    ...(value.kind !== undefined ? { kind: value.kind } : {})
++  }
++}
++
++function parseOrchestration(value: unknown): Record<string, unknown> | null {
++  if (!isRecord(value) || !isBoundedString(value.taskId) || !isBoundedString(value.dispatchId)) {
++    return null
++  }
++  const optionalStrings = [
++    'taskTitle',
++    'displayName',
++    'parentTerminalHandle',
++    'parentPaneKey',
++    'coordinatorHandle',
++    'orchestrationRunId'
++  ]
++  if (optionalStrings.some((key) => value[key] !== undefined && !isBoundedString(value[key]))) {
++    return null
++  }
++  if (
++    value.dispatchStatus !== undefined &&
++    value.dispatchStatus !== 'pending' &&
++    value.dispatchStatus !== 'dispatched' &&
++    value.dispatchStatus !== 'completed' &&
++    value.dispatchStatus !== 'failed' &&
++    value.dispatchStatus !== 'circuit_broken'
++  ) {
++    return null
++  }
++  if (value.attention !== undefined && !isRecord(value.attention)) {
++    return null
++  }
++  return { ...value }
++}
++
++function copyOptionalString(
++  source: Record<string, unknown>,
++  target: Record<string, unknown>,
++  key: string
++): boolean {
++  const value = source[key]
++  if (value === undefined) {
++    return true
++  }
++  if (!isBoundedString(value)) {
++    return false
++  }
++  target[key] = value
++  return true
++}
++
++export function parseAgentStatusIpcPayloadCopy(value: unknown): AgentStatusIpcPayload | null {
++  const copied = copyJsonRecord(value)
++  const payload = normalizeAgentStatusPayload(copied)
++  if (
++    !copied ||
++    !payload ||
++    !isBoundedString(copied.paneKey) ||
++    (copied.connectionId !== null && !isBoundedString(copied.connectionId)) ||
++    !isTimestamp(copied.receivedAt) ||
++    !isTimestamp(copied.stateStartedAt) ||
++    (copied.evidenceObservedAt !== undefined && !isTimestamp(copied.evidenceObservedAt))
++  ) {
++    return null
++  }
++  const parsed: Record<string, unknown> = {
++    ...payload,
++    paneKey: copied.paneKey,
++    connectionId: copied.connectionId,
++    receivedAt: copied.receivedAt,
++    stateStartedAt: copied.stateStartedAt
++  }
++  for (const key of [
++    'launchToken',
++    'terminalHandle',
++    'tabId',
++    'worktreeId',
++    'promptInteractionKey'
++  ]) {
++    if (!copyOptionalString(copied, parsed, key)) {
++      return null
++    }
++  }
++  if (copied.runId !== undefined) {
++    if (!isAgentStatusRunId(copied.runId)) {
++      return null
++    }
++    parsed.runId = copied.runId
++  }
++  if (copied.executionId !== undefined) {
++    if (!isAgentStatusExecutionId(copied.executionId)) {
++      return null
++    }
++    parsed.executionId = copied.executionId
++  }
++  if (copied.providerAlias !== undefined) {
++    const providerAlias = parseAgentStatusProviderAlias(copied.providerAlias)
++    if (!providerAlias) {
++      return null
++    }
++    parsed.providerAlias = providerAlias
++  }
++  if (isTimestamp(copied.evidenceObservedAt)) {
++    parsed.evidenceObservedAt = copied.evidenceObservedAt
++  }
++  if (copied.providerSession !== undefined) {
++    const providerSession = normalizeAgentProviderSession(copied.providerSession)
++    if (!providerSession) {
++      return null
++    }
++    parsed.providerSession = providerSession
++  }
++  if (copied.orchestration !== undefined) {
++    const orchestration = parseOrchestration(copied.orchestration)
++    if (!orchestration) {
++      return null
++    }
++    parsed.orchestration = orchestration
++  }
++  if (copied.observation !== undefined) {
++    const observation = parseObservation(copied.observation)
++    if (!observation) {
++      return null
++    }
++    parsed.observation = observation
++  }
++  if (copied.providerSessionOnly === true) {
++    parsed.providerSessionOnly = true
++  } else if (copied.providerSessionOnly !== undefined && copied.providerSessionOnly !== false) {
++    return null
++  }
++  if (copied.restoredUnconfirmed === true) {
++    parsed.restoredUnconfirmed = true
++  } else if (copied.restoredUnconfirmed !== undefined && copied.restoredUnconfirmed !== false) {
++    return null
++  }
++  if (copied.structuredHost === 'held' || copied.structuredHost === 'owned') {
++    parsed.structuredHost = copied.structuredHost
++  } else if (copied.structuredHost !== undefined) {
++    return null
++  }
++  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Every required and optional field is rebuilt from its canonical parser above.
++  return parsed as AgentStatusIpcPayload
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-store.ts
+@@ -0,0 +1,189 @@
++import { agentChildWorkBelongsTo, type AgentChildWorkRecord } from './agent-status-child-work'
++import {
++  serializeAgentChildWorkAliasKey,
++  type AgentChildWorkAliasIdentity,
++  type AgentChildWorkAliasInput,
++  type AgentChildWorkAliasRecord
++} from './agent-status-child-work-alias'
++import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
++import { resolveAgentStatusChildBindings } from './agent-status-store-child-queries'
++import type { AgentStatusStoreSnapshot } from './agent-status-store-contract'
++import {
++  isAgentStatusStoreEpoch,
++  parseAgentStatusStoreMutation,
++  parseAgentStatusStoreSnapshot
++} from './agent-status-store-codec'
++import { applyAgentStatusStoreMutation } from './agent-status-store-mutation'
++import type { AgentStatusRunAliasIndex } from './agent-status-run-alias-index'
++import {
++  parseAgentStatusParentRecord,
++  type AgentStatusParentRecord
++} from './agent-status-store-parent'
++import {
++  agentStatusStoreStateFromSnapshot,
++  createEmptyAgentStatusStoreState,
++  deepFreezeAgentStatusStoreValue,
++  snapshotFromAgentStatusStoreState
++} from './agent-status-store-state'
++import { deriveAgentStatusStoreRunAliasIndex } from './agent-status-store-run-index'
++import {
++  parseAgentStatusSubject,
++  serializeAgentStatusSubject,
++  type AgentStatusSubject
++} from './agent-status-subject'
++import {
++  parseAgentStatusTransportEnvelope,
++  type AgentStatusMutationEnvelope
++} from './agent-status-transport-envelope'
++
++export type AgentStatusStoreMode = 'authority' | 'replica'
++
++export type AgentStatusStore = {
++  getParent(subject: AgentStatusSubject): AgentStatusParentRecord | null
++  getChildren(subject: AgentStatusSubject): AgentChildWorkRecord[]
++  getChild(childWorkId: string): AgentChildWorkRecord | null
++  getAlias(identity: AgentChildWorkAliasIdentity): AgentChildWorkAliasRecord | null
++  getAliasesForChild(childWorkId: string): AgentChildWorkAliasRecord[]
++  getRunAliasIndex(): AgentStatusRunAliasIndex
++  resolveChildAliases(aliases: AgentChildWorkAliasInput[]): AgentChildWorkAliasRecord[]
++  getSnapshot(): AgentStatusStoreSnapshot
++  applyMutation(mutation: unknown): AgentStatusMutationEnvelope | null
++  applySnapshot(snapshot: unknown): boolean
++  applyTransportEnvelope(envelope: unknown): boolean
++}
++
++export type CreateAgentStatusStoreOptions = {
++  epoch: string
++  mode: AgentStatusStoreMode
++}
++
++export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): AgentStatusStore {
++  if (!isAgentStatusStoreEpoch(options.epoch)) {
++    throw new Error('Invalid agent status store epoch')
++  }
++  let state = createEmptyAgentStatusStoreState(options.epoch)
++  let snapshotApplied = options.mode === 'authority'
++
++  const store: AgentStatusStore = {
++    resolveChildAliases(aliases) {
++      return resolveAgentStatusChildBindings(state, aliases)
++    },
++    getParent(subject) {
++      const parsed = parseAgentStatusSubject(subject)
++      if (!parsed) {
++        return null
++      }
++      const record = state.parents.get(serializeAgentStatusSubject(parsed))
++      return record ? deepFreezeAgentStatusStoreValue(parseAgentStatusParentRecord(record)) : null
++    },
++    getChildren(subject) {
++      const parsed = parseAgentStatusSubject(subject)
++      if (!parsed) {
++        return []
++      }
++      const children = [...state.children.values()]
++        .filter((child) => agentChildWorkBelongsTo(child, parsed))
++        .map((child) => parseAgentChildWorkRecord(child))
++        .filter((child): child is AgentChildWorkRecord => child !== null)
++      return deepFreezeAgentStatusStoreValue(children)
++    },
++    getChild(childWorkId) {
++      return state.children.get(childWorkId) ?? null
++    },
++    getAlias(identity) {
++      return state.aliases.get(serializeAgentChildWorkAliasKey(identity)) ?? null
++    },
++    getAliasesForChild(childWorkId) {
++      return deepFreezeAgentStatusStoreValue(
++        [...state.aliases.values()].filter((alias) => alias.childWorkId === childWorkId)
++      )
++    },
++    getRunAliasIndex() {
++      return deriveAgentStatusStoreRunAliasIndex(state.parents.values())
++    },
++    getSnapshot() {
++      return snapshotFromAgentStatusStoreState(state)
++    },
++    applyMutation(value) {
++      if (options.mode !== 'authority') {
++        return null
++      }
++      const mutation = parseAgentStatusStoreMutation(value)
++      if (!mutation || state.revision === Number.MAX_SAFE_INTEGER) {
++        return null
++      }
++      const previousRevision = state.revision
++      const next = applyAgentStatusStoreMutation(state, mutation, previousRevision + 1)
++      if (!next) {
++        return null
++      }
++      state = next
++      return deepFreezeAgentStatusStoreValue({
++        type: 'mutation',
++        epoch: state.epoch,
++        previousRevision,
++        revision: state.revision,
++        mutation
++      })
++    },
++    applySnapshot(value) {
++      const snapshot = parseAgentStatusStoreSnapshot(value)
++      if (!snapshot) {
++        return false
++      }
++      if (options.mode === 'authority') {
++        if (state.revision !== 0) {
++          return false
++        }
++        const restored = agentStatusStoreStateFromSnapshot(snapshot, options.epoch)
++        if (!restored) {
++          return false
++        }
++        state = restored
++        snapshotApplied = true
++        return true
++      }
++      if (
++        snapshotApplied &&
++        snapshot.epoch === state.epoch &&
++        snapshot.revision <= state.revision
++      ) {
++        return false
++      }
++      const mirrored = agentStatusStoreStateFromSnapshot(snapshot, snapshot.epoch)
++      if (!mirrored) {
++        return false
++      }
++      state = mirrored
++      snapshotApplied = true
++      return true
++    },
++    applyTransportEnvelope(value) {
++      if (options.mode !== 'replica') {
++        return false
++      }
++      const envelope = parseAgentStatusTransportEnvelope(value)
++      if (!envelope) {
++        return false
++      }
++      if (envelope.type === 'snapshot') {
++        return store.applySnapshot(envelope.snapshot)
++      }
++      if (
++        !snapshotApplied ||
++        envelope.epoch !== state.epoch ||
++        envelope.previousRevision !== state.revision ||
++        envelope.revision !== state.revision + 1
++      ) {
++        return false
++      }
++      const next = applyAgentStatusStoreMutation(state, envelope.mutation, envelope.revision)
++      if (!next) {
++        return false
++      }
++      state = next
++      return true
++    }
++  }
++  return store
++}
+===================================================================
+--- /dev/null
++++ b/src/shared/agent-status-transport-envelope.ts
+@@ -0,0 +1,113 @@
++import {
++  AGENT_STATUS_STORE_LIMITS,
++  type AgentStatusStoreMutation,
++  type AgentStatusStoreSnapshot
++} from './agent-status-store-contract'
++import {
++  isAgentStatusStoreEpoch,
++  parseAgentStatusStoreMutation,
++  parseAgentStatusStoreSnapshot
++} from './agent-status-store-codec'
++import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
++import { measureUtf8ByteLength } from './utf8-byte-limits'
++
++const ENVELOPE_STRUCTURE_LIMITS = {
++  structuralTokens: 512 * 1024,
++  nestingDepth: 40
++} as const
++
++export type AgentStatusSnapshotEnvelope = {
++  type: 'snapshot'
++  snapshot: AgentStatusStoreSnapshot
++}
++
++export type AgentStatusMutationEnvelope = {
++  type: 'mutation'
++  epoch: string
++  previousRevision: number
++  revision: number
++  mutation: AgentStatusStoreMutation
++}
++
++export type AgentStatusTransportEnvelope = AgentStatusSnapshotEnvelope | AgentStatusMutationEnvelope
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value)
++}
++
++function hasExactKeys(record: Record<string, unknown>, expected: readonly string[]): boolean {
++  const keys = Object.keys(record)
++  return keys.length === expected.length && keys.every((key) => expected.includes(key))
++}
++
++function isRevision(value: unknown): value is number {
++  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
++}
++
++export function parseAgentStatusTransportEnvelope(
++  value: unknown
++): AgentStatusTransportEnvelope | null {
++  if (!isRecord(value)) {
++    return null
++  }
++  if (value.type === 'snapshot' && hasExactKeys(value, ['type', 'snapshot'])) {
++    const snapshot = parseAgentStatusStoreSnapshot(value.snapshot)
++    return snapshot ? { type: 'snapshot', snapshot } : null
++  }
++  if (
++    value.type !== 'mutation' ||
++    !hasExactKeys(value, ['type', 'epoch', 'previousRevision', 'revision', 'mutation']) ||
++    !isAgentStatusStoreEpoch(value.epoch) ||
++    !isRevision(value.previousRevision) ||
++    !isRevision(value.revision) ||
++    value.revision !== value.previousRevision + 1
++  ) {
++    return null
++  }
++  const mutation = parseAgentStatusStoreMutation(value.mutation)
++  return mutation
++    ? {
++        type: 'mutation',
++        epoch: value.epoch,
++        previousRevision: value.previousRevision,
++        revision: value.revision,
++        mutation
++      }
++    : null
++}
++
++export function serializeAgentStatusTransportEnvelope(
++  envelope: AgentStatusTransportEnvelope
++): string {
++  const parsed = parseAgentStatusTransportEnvelope(envelope)
++  if (!parsed) {
++    throw new Error('Invalid agent status transport envelope')
++  }
++  const serialized = JSON.stringify(parsed)
++  if (
++    measureUtf8ByteLength(serialized, {
++      stopAfterBytes: AGENT_STATUS_STORE_LIMITS.serializedBytes
++    }).exceededLimit
++  ) {
++    throw new Error('Agent status transport envelope exceeds its serialized-byte limit')
++  }
++  return serialized
++}
++
++export function deserializeAgentStatusTransportEnvelope(
++  serialized: string
++): AgentStatusTransportEnvelope | null {
++  if (
++    measureUtf8ByteLength(serialized, {
++      stopAfterBytes: AGENT_STATUS_STORE_LIMITS.serializedBytes
++    }).exceededLimit
++  ) {
++    return null
++  }
++  try {
++    assertJsonTextStructureWithinLimits(serialized, ENVELOPE_STRUCTURE_LIMITS)
++    return parseAgentStatusTransportEnvelope(JSON.parse(serialized))
++  } catch {
++    return null
++  }
++}
+===================================================================
+--- a/src/shared/protocol-version.ts
++++ b/src/shared/protocol-version.ts
+@@ -132,0 +133,5 @@
++// Why: an older host strips terminal.create's unknown `shell` and answers with a terminal running
++// the host default shell. That reply is indistinguishable from success, so a client asking for a
++// shell must refuse rather than create the wrong one.
++export const TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY =
++  'terminal.create-shell-selection.v1' as const
+@@ -232,0 +238,16 @@
++/**
++ * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
++ * surface, instead of each client routing for itself.
++ *
++ * Negotiated rather than assumed because a client that cannot see it must keep using
++ * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
++ * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
++ * requested, so a host that quietly routed that call to a structured session would hand an old
++ * client a response with no handle and no error.
++ *
++ * Advertising it is a statement that the client understands EITHER outcome, since the host is what
++ * picks: a structured session it can open, or a terminal agent. A client that renders only one of
++ * the two keeps using the surface-specific methods.
++ */
++export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v1' as const
++
+@@ -242,1 +263,2 @@
+-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
++  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
++  AGENT_LAUNCH_RUNTIME_CAPABILITY
+@@ -298,0 +321,1 @@
++  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+@@ -336,1 +359,2 @@
+-  NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY
++  NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
++  AGENT_LAUNCH_RUNTIME_CAPABILITY
+===================================================================
+--- a/src/shared/runtime-rpc-call-queue.ts
++++ b/src/shared/runtime-rpc-call-queue.ts
+@@ -33,1 +33,1 @@
+-  foreground: (QueuedRuntimeCall<unknown> | undefined)[]
++  foreground: QueuedRuntimeCall<unknown>[]
+@@ -35,1 +35,1 @@
+-  background: (QueuedRuntimeCall<unknown> | undefined)[]
++  background: QueuedRuntimeCall<unknown>[]
+@@ -205,1 +204,0 @@
+-    queue.foreground[queue.foregroundHead] = undefined
+@@ -217,1 +215,0 @@
+-    queue.background[queue.backgroundHead] = undefined
+@@ -228,1 +226,2 @@
+-    // Head indexes avoid repeated shifts; compaction bounds the consumed prefix.
++    // Why: large remote-runtime refresh bursts can queue many calls;
++    // head indexes avoid O(n) shift costs while compaction releases closures.
+===================================================================
+--- a/src/shared/structured-agent-session-live-turn.ts
++++ b/src/shared/structured-agent-session-live-turn.ts
+@@ -8,1 +8,2 @@
+-  AgentJournalToolCallItem
++  AgentJournalToolCallItem,
++  AgentJournalTurnLifecycle
+@@ -23,0 +25,21 @@
++/** The same verdict for reduced items a caller holds unordered, so a reader that already has them
++ *  need not render and sort a whole snapshot to ask. Sequence is the ordering key the render pass
++ *  sorts on, and ties resolve to the later-reduced item exactly as that stable sort would. */
++export function activeStructuredAgentSessionTurnIdBySequence(
++  items: Iterable<AgentJournalRenderItem>
++): string | null {
++  let newestSequence = 0
++  let newest: AgentJournalTurnLifecycle | null = null
++  for (const item of items) {
++    if (item.sequence < newestSequence) {
++      continue
++    }
++    const turn = readAgentJournalTurn(item.body)
++    if (turn) {
++      newestSequence = item.sequence
++      newest = turn
++    }
++  }
++  return newest?.state === 'running' ? newest.turnId : null
++}
++
+===================================================================
+--- a/src/shared/tui-agent-launch-defaults.ts
++++ b/src/shared/tui-agent-launch-defaults.ts
+@@ -25,0 +26,15 @@
++/**
++ * Whether the configured arguments carry this agent's permission-bypass flag.
++ *
++ * The Agent Permissions toggle has no storage of its own — it writes and reads this flag inside
++ * the arguments string — so presence at a token boundary, not whole-string equality, is what
++ * "Yolo" means. A terminal launch applies the flag wherever else the user has written in the field.
++ */
++export function tuiAgentArgsBypassPermissions(
++  agent: TuiAgent,
++  value: string | null | undefined
++): boolean {
++  const bypassArg = YOLO_TUI_AGENT_ARGS[agent]
++  return typeof value === 'string' && bypassArg !== undefined && argPattern(bypassArg).test(value)
++}
++
+@@ -95,0 +111,14 @@
++/**
++ * Whether this agent's *resolved* launch arguments ask for a permission bypass.
++ *
++ * Resolved, not configured: an untouched Arguments field falls back to the default Orca ships,
++ * which is the bypass flag, so bypass is the posture a user gets until they choose otherwise.
++ * Choosing Manual stores an empty string, which owns the key and so beats that default.
++ */
++export function resolvedTuiAgentArgsBypassPermissions(
++  agent: TuiAgent,
++  configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
++): boolean {
++  return tuiAgentArgsBypassPermissions(agent, resolveTuiAgentLaunchArgs(agent, configuredArgs))
++}
++
+===================================================================
+--- a/src/shared/windows-terminal-shell.ts
++++ b/src/shared/windows-terminal-shell.ts
+@@ -56,0 +57,44 @@
++
++/**
++ * Shell names a caller may request for a single Windows terminal, keyed by accepted spelling and
++ * mapped to the one canonical spelling every downstream consumer keys on.
++ *
++ * The relay owns the spawn and has always refused anything outside this set, but the set lived
++ * only there — so a bad value from `terminal create --shell` surfaced as a spawn-time throw with
++ * no way for the CLI to answer before the round trip. Shared so the RPC boundary and the relay
++ * agree on the same names.
++ *
++ * Why canonicalize: `resolveWindowsShellStartupFamily`, the launch-arg builders, and the Git Bash
++ * path resolver all exact-match the `.exe` spelling, so a bare `cmd` accepted here would spawn cmd
++ * yet quote its startup command for PowerShell. `pwsh` and `powershell` are different binaries and
++ * are never collapsed into each other.
++ */
++const WINDOWS_SHELL_OVERRIDE_CANONICAL_NAMES: ReadonlyMap<string, string> = new Map([
++  ['powershell.exe', 'powershell.exe'],
++  ['powershell', 'powershell.exe'],
++  ['pwsh.exe', 'pwsh.exe'],
++  ['pwsh', 'pwsh.exe'],
++  ['cmd.exe', 'cmd.exe'],
++  ['cmd', 'cmd.exe'],
++  ['wsl.exe', 'wsl.exe'],
++  ['wsl', 'wsl.exe'],
++  // Why: both spellings classify as a POSIX startup family, so rejecting them here made the relay
++  // the one host that hard-failed a setting the local and daemon PTYs accept.
++  ['bash.exe', 'bash.exe'],
++  ['bash', 'bash.exe'],
++  [WINDOWS_GIT_BASH_SHELL, WINDOWS_GIT_BASH_SHELL]
++])
++
++/** Canonical spelling for an accepted override (case-insensitive), or undefined when refused. */
++export function canonicalizeWindowsShellOverride(shell: string): string | undefined {
++  return WINDOWS_SHELL_OVERRIDE_CANONICAL_NAMES.get(shell.toLowerCase())
++}
++
++export function isSupportedWindowsShellOverride(shell: string): boolean {
++  return canonicalizeWindowsShellOverride(shell) !== undefined
++}
++
++/** Sorted for a stable error message; callers list these when refusing a value. */
++export function listSupportedWindowsShellOverrides(): string[] {
++  return [...WINDOWS_SHELL_OVERRIDE_CANONICAL_NAMES.keys()].sort()
++}
+===================================================================
+--- a/src/shared/workspace-session-terminal-buffers.ts
++++ b/src/shared/workspace-session-terminal-buffers.ts
+@@ -8,1 +7,0 @@
+-import { ownRetainedString } from './own-retained-string'
+@@ -57,3 +56,1 @@
+-  return ownRetainedString(
+-    clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
+-  )
++  return clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text

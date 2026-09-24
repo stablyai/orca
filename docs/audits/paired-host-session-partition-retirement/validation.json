@@ -1,0 +1,52 @@
+{
+  "scope": "Explicit GUI unpair of an unowned session partition; no incident-scale RSS claim",
+  "publicationBaselineCommit": "718ead7ea9f6296d69ceb7d1460a3579116fe85f",
+  "sourceProof": "Exact source graphs reconstructed and fenced; publication before graph independently matched against the named prerequisite commit.",
+  "permanentTests": {
+    "passed": 94,
+    "failed": 0,
+    "suites": 10,
+    "command": "ORCA_BACKGROUND_LAUNCH=1 node_modules/.bin/vitest run --config config/vitest.config.ts src/main/ipc/renderer-shutdown-checkpoint.test.ts src/main/ipc/runtime-environment-removal-storage.test.ts src/main/ipc/runtime-environment-session-retirement.test.ts src/main/ipc/runtime-environments-capability-cache.test.ts src/main/ipc/runtime-environments-pairing.test.ts src/main/ipc/runtime-environments-subscription-teardown.test.ts src/main/runtime/runtime-workspace-session-namespace-custody.test.ts src/main/persistence/loading-store/removed-host-scrollback-snapshots.test.ts src/main/persistence/loading-store/store-runtime-authored-session-writes.test.ts src/main/persistence/loading-store/workspace-session-partitions.test.ts"
+  },
+  "baselinePermanentControl": {
+    "passed": 7,
+    "expectedFailures": 15,
+    "command": "ORCA_BACKGROUND_LAUNCH=1 node_modules/.bin/vitest run --config docs/audits/paired-host-session-partition-retirement/before.config.mjs"
+  },
+  "portableProof": {
+    "node": {
+      "report": "node-results.json",
+      "cases": 78,
+      "passed": true
+    },
+    "electron": {
+      "report": "electron-results.json",
+      "cases": 78,
+      "passed": true
+    }
+  },
+  "typecheck": {
+    "node": "passed: pnpm tc:node",
+    "web": "passed: node_modules/.bin/tsc --noEmit -p config/tsconfig.tc.web.json"
+  },
+  "reviewFixes": [
+    "Async admission failures resolve without writing; actual Store errors still reject.",
+    "Removed host snapshot files are deleted only after durable profile removal; shared and legacy fallback refs are retained.",
+    "Save failures, frozen writes, and final shutdown preserve snapshot files.",
+    "The diff package is an explicit pinned development dependency.",
+    "Removed an unrelated unused NativeChatMessage type import that blocked CI."
+  ],
+  "sourceHashes": {
+    "src/main/ipc/session.ts": "e12a10a36f3f5eb7a4fb8444ac84b48d1fab7c843d9bf565485345537ce42392",
+    "src/main/persistence/loading-store/session-host-partitions.ts": "70787f5565f614e0860ab3da5079aae0ca6e70fe479ed36fd4ad215185b9959c",
+    "src/main/ipc/runtime-environment-session-retirement.test.ts": "2e669982f037d363da5509affaa1b8109bc25c249ef895f26a69362475b17db5",
+    "src/main/persistence/loading-store/removed-host-scrollback-snapshots.test.ts": "a98791d5c5354b3ee1649027baea4b5ed430848534cb1d6181f23a44e43cfb2f"
+  },
+  "limitations": [
+    "Unpair is not an atomic pairing-file/profile-file transaction.",
+    "Shared legacy fallback snapshots remain because other profiles can use them.",
+    "No remote processes are terminated or declared exited.",
+    "CLI removal and historical orphan sweeping are outside this GUI boundary.",
+    "An explicitly unpaired host loses its saved session partition; remove/re-add already assigns a new identity."
+  ]
+}

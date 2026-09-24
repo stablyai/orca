@@ -1,3 +1,4 @@
+import { canCreateRendererSessionPartition } from './renderer-workspace-session-admission'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type {
@@ -21,11 +22,15 @@ export function registerSessionHandlers(store: Store): void {
   })
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
-    store.setWorkspaceSession(args, hostId)
+    if (isRendererSessionAdmitted(store, hostId)) {
+      store.setWorkspaceSession(args, hostId)
+    }
   })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    store.patchWorkspaceSession(args, hostId)
+    if (isRendererSessionAdmitted(store, hostId)) {
+      store.patchWorkspaceSession(args, hostId)
+    }
   })
 
   ipcMain.handle('session:flush', () => {
@@ -39,7 +44,9 @@ export function registerSessionHandlers(store: Store): void {
   // data (including terminal scrollback buffers) is persisted to disk
   // before the window closes — regardless of before-quit ordering.
   ipcMain.on('session:set-sync', (event, args: WorkspaceSessionState, hostId?: string | null) => {
-    store.setWorkspaceSession(args, hostId)
+    if (isRendererSessionAdmitted(store, hostId)) {
+      store.setWorkspaceSession(args, hostId)
+    }
     store.flush()
     event.returnValue = true
   })
@@ -51,4 +58,15 @@ export function registerSessionHandlers(store: Store): void {
         typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
     }
   )
+}
+
+// Why fail open: an ambiguity raised by an unrelated workspace must never silently drop a user's
+// session write. A resurrected partition is recoverable on the next unpair; a lost save is not.
+function isRendererSessionAdmitted(store: Store, hostId?: string | null): boolean {
+  try {
+    return canCreateRendererSessionPartition(store, hostId)
+  } catch (error) {
+    console.error('[session] Admitting session write after partition authority failure:', error)
+    return true
+  }
 }

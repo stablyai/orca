@@ -75,6 +75,9 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
       return dispatchIds
     } catch (error) {
       for (const [hostId, original] of originals) {
+        if (store.getWorkspaceSessionHostIds?.().includes(hostId) === false) {
+          continue
+        }
         const stagedSession = staged.get(hostId)
         const current = store.getWorkspaceSession(hostId)
         if (!stagedSession || !current) {
