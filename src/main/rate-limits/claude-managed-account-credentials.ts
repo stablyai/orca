@@ -13,6 +13,8 @@ import {
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from '../claude-accounts/managed-auth-path'
+import { countClaudePinnedAccountUsers } from '../claude-accounts/claude-pinned-pty-registry'
+import { hasPendingPinnedClaudeSeed } from '../claude-accounts/claude-pinned-credentials'
 
 export type InactiveClaudeAccount = {
   id: string
@@ -97,6 +99,11 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccount): s
   }
 }
 
+/** True while a `--account` launch owns this account's credentials (live, starting, or unread). */
+export function isClaudeAccountHeldByPinnedLaunch(accountId: string): boolean {
+  return countClaudePinnedAccountUsers(accountId) > 0 || hasPendingPinnedClaudeSeed(accountId)
+}
+
 export async function withClaudeManagedPreviewKeychainCredentials<T>(
   location: ClaudeManagedCredentialsLocation,
   credentialsJson: string,
@@ -109,7 +116,10 @@ export async function withClaudeManagedPreviewKeychainCredentials<T>(
   try {
     return await operation()
   } finally {
-    await deleteActiveClaudeKeychainCredentialsStrict(location.managedAuthPath).catch(() => {})
+    // Why: a pinned launch that started mid-preview now runs from this same scoped item.
+    if (!isClaudeAccountHeldByPinnedLaunch(location.accountId)) {
+      await deleteActiveClaudeKeychainCredentialsStrict(location.managedAuthPath).catch(() => {})
+    }
   }
 }
 

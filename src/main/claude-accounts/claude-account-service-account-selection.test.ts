@@ -485,4 +485,68 @@ describe('ClaudeAccountService credential capture', () => {
       wslDistro: 'Ubuntu'
     })
   })
+
+  it('refuses to switch to or remove an account pinned by --account terminals', async () => {
+    setPlatform('linux')
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
+    rmSync(tempDir, { recursive: true, force: true })
+    const pinnedAuthPath = join(tempDir, 'claude-accounts', 'account-2', 'auth')
+    mkdirSync(pinnedAuthPath, { recursive: true })
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'account-2',
+          email: 'pinned@example.com',
+          managedAuthPath: pinnedAuthPath,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: null
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const registry = await import('./claude-pinned-pty-registry')
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    registry.markPinnedClaudePtySpawned('pinned-pty-1', 'account-2')
+    registry.markPinnedClaudePtySpawned('pinned-pty-2', 'account-2')
+    try {
+      await expect(service.selectAccount('account-2')).rejects.toThrow(
+        'in use by 2 terminals launched with --account'
+      )
+      await expect(service.removeAccount('account-2')).rejects.toThrow(/before you remove/)
+      expect(runtimeAuth.syncForCurrentSelection).not.toHaveBeenCalled()
+      expect(settings.activeClaudeManagedAccountId).toBeNull()
+      expect(settings.claudeManagedAccounts).toHaveLength(1)
+
+      registry.markPinnedClaudePtyExited('pinned-pty-1')
+      registry.markPinnedClaudePtyExited('pinned-pty-2')
+      await service.selectAccount('account-2')
+      expect(settings.activeClaudeManagedAccountId).toBe('account-2')
+    } finally {
+      registry._internals.reset()
+    }
+  })
 })

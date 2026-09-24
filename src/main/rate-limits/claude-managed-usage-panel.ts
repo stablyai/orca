@@ -3,6 +3,7 @@ import type { NetworkProxySettings } from '../../shared/network-proxy'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { fetchViaPty } from './claude-pty'
 import {
+  isClaudeAccountHeldByPinnedLaunch,
   readStagedClaudeManagedPreviewCredentials,
   withClaudeManagedPreviewKeychainCredentials,
   writeClaudeManagedCredentialsJson,
@@ -104,7 +105,11 @@ export async function fetchClaudeManagedUsagePanelSupplement(input: {
         return null
       }
       const refreshed = await readStagedClaudeManagedPreviewCredentials(input.location)
-      if (refreshed && refreshed !== input.credentialsJson) {
+      if (
+        refreshed &&
+        refreshed !== input.credentialsJson &&
+        !isClaudeAccountHeldByPinnedLaunch(input.account.id)
+      ) {
         await writeClaudeManagedCredentialsJson(input.location, refreshed)
       }
       return cliLimits

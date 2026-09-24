@@ -6,6 +6,7 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
+import { countClaudePinnedAccountUsers } from './claude-pinned-pty-registry'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeSelectionTargetForAccount,
@@ -33,6 +34,7 @@ export class ClaudeAccountSelection {
 
   async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    assertNotPinnedByLiveTerminals(account, 'remove')
     const settings = this.store.getSettings()
     const nextAccounts = settings.claudeManagedAccounts.filter((entry) => entry.id !== accountId)
     const nextSelection = removeClaudeAccountIdFromSelection(
@@ -80,6 +82,7 @@ export class ClaudeAccountSelection {
     let effectiveTarget = target
     if (accountId !== null) {
       const account = this.requireAccount(accountId)
+      assertNotPinnedByLiveTerminals(account, 'select')
       const accountTarget = getClaudeSelectionTargetForAccount(account)
       const requestedTarget = normalizeClaudeAccountSelectionTarget(target ?? accountTarget)
       const normalizedAccountTarget = normalizeClaudeAccountSelectionTarget(accountTarget)
@@ -173,6 +176,22 @@ export class ClaudeAccountSelection {
       })
     }
   }
+}
+
+// Why: selecting would materialize the account into ~/.claude and removing would delete the dir a
+// pinned Claude runs from; either way one refresh token would end up in two places or none.
+function assertNotPinnedByLiveTerminals(
+  account: ClaudeManagedAccount,
+  action: 'select' | 'remove'
+): void {
+  const users = countClaudePinnedAccountUsers(account.id)
+  if (users === 0) {
+    return
+  }
+  const terminals = users === 1 ? '1 terminal' : `${users} terminals`
+  throw new Error(
+    `Claude account ${account.email} is in use by ${terminals} launched with --account. Close ${users === 1 ? 'it' : 'them'} before you ${action === 'select' ? 'switch to' : 'remove'} this account.`
+  )
 }
 
 function toClaudeAccountSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
