@@ -67,6 +67,7 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     }
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
+      this.headlessServeRuntime = true
       this.rendererGeneration = null
     }
 
