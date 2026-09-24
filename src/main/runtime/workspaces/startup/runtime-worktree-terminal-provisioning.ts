@@ -2,10 +2,14 @@ import { randomUUID } from 'node:crypto'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import { buildObservedSetupCommand } from '../../orchestration/workers/launch/setup-completion-signal'
-import { buildSetupRunnerCommand } from '../../../../shared/agent-launch/startup/setup-runner-command'
+import {
+  applySetupAutoCloseSetting,
+  buildSetupRunnerCommand
+} from '../../../../shared/agent-launch/startup/setup-runner-command'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { DefaultTerminalTab } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 type TerminalResult = { handle: string }
 type TerminalSurfacing = Pick<
@@ -41,6 +45,8 @@ export type WorktreeTerminalProvisioningHost = {
     worktreeId: string,
     tabs: DefaultTerminalTab[]
   ) => Promise<readonly { tabId: string }[] | null>
+  // Read only for the setup auto-close setting; absent means off.
+  getSettings?: () => ReturnType<RuntimeStore['getSettings']>
   getPtyId: (handle: string) => string | undefined
   recordSetupCompletionToken: (ptyId: string, token: string) => void
 }
@@ -251,14 +257,18 @@ export async function provisionWorktreeTerminals(
               args.setup.shell
             )
           : null
-      const command =
+      const command = applySetupAutoCloseSetting(
         args.wrappedSetup?.command ??
-        observed?.command ??
-        buildSetupRunnerCommand(
-          args.setup.runnerScriptPath,
-          args.setupCommandPlatform,
-          args.setup.shell
-        )
+          observed?.command ??
+          buildSetupRunnerCommand(
+            args.setup.runnerScriptPath,
+            args.setupCommandPlatform,
+            args.setup.shell
+          ),
+        args.setupCommandPlatform,
+        args.setup.shell,
+        host.getSettings?.()
+      )
       const env = { ...args.setup.envVars, ...observed?.env }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
         ...(args.setup.cwd ? { cwd: args.setup.cwd } : {}),
