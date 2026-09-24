@@ -1799,10 +1799,6 @@ export class SshRelaySession {
       }
       const pending = this.pendingPtyReattaches.get(payload.id)
       if (pending && this.activePtyConsumerOwner()?.outputFlowControl) {
-        if (pending.livePassthrough) {
-          void this.acceptPtyData(payload).catch(() => {})
-          return
-        }
         this.quarantineReattachData(pending, payload)
         return
       }
@@ -2074,6 +2070,12 @@ export class SshRelaySession {
   }
 
   private quarantineReattachData(pending: PendingPtyReattach, payload: SshPtyDataPayload): void {
+    if (pending.livePassthrough) {
+      if (this.ownsPtyRecoveryAttempt(payload.id, pending)) {
+        void this.acceptPtyData(payload).catch(() => {})
+      }
+      return
+    }
     this.observePrivateRecoveryFrame(pending, payload)
     if (pending.restoreRequired) {
       return
