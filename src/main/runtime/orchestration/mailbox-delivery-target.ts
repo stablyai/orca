@@ -31,8 +31,11 @@ export class OrchestrationMailboxDeliveryTarget {
     const remote =
       dispatchId && !dispatch ? db?.getRemoteDispatchAttachment?.(dispatchId) : undefined
     const paneKey = dispatch?.assignee_pane_key ?? remote?.pane_key
+    const run = runId ? db?.getRun?.(runId) : undefined
+    const runPaneKey = run?.coordinator_pane_key
     const ownerHandle = runId
-      ? db?.getRun(runId)?.coordinator_handle
+      ? ((runPaneKey ? this.deps.getTerminalHandleForPaneKey(runPaneKey) : null) ??
+        run?.coordinator_handle)
       : ((paneKey ? this.deps.getTerminalHandleForPaneKey(paneKey) : null) ??
         dispatch?.assignee_handle ??
         remote?.terminal_handle)
