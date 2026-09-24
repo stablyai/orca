@@ -14,7 +14,6 @@ const BACKUP_RETRY_MS = 60 * 1000
 export class ProfileStateBackupRotation {
   private pending: Promise<void> | undefined
   private stopped = false
-  private copying = false
   private nextAttemptAt = 0
 
   constructor(
@@ -54,7 +53,7 @@ export class ProfileStateBackupRotation {
   }
 
   assertIdle(): void {
-    if (this.copying) {
+    if (this.pending) {
       throw new Error('Flush pending profile state backups before quarantining the database')
     }
   }
@@ -76,16 +75,11 @@ export class ProfileStateBackupRotation {
       this.databasePath,
       createProfileStateDatabaseBackupId(now)
     )
-    this.copying = true
-    try {
-      await this.runBackup({
-        databasePath: this.databasePath,
-        profileId: this.profileId,
-        targetPath: target
-      })
-    } finally {
-      this.copying = false
-    }
+    await this.runBackup({
+      databasePath: this.databasePath,
+      profileId: this.profileId,
+      targetPath: target
+    })
     this.nextAttemptAt = this.now() + BACKUP_INTERVAL_MS
     for (const backup of (await this.regularBackups()).slice(BACKUP_COUNT)) {
       await rm(backup.path, { force: true })

@@ -811,7 +811,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     store.freezeWrites()
   })
 
-  it('freezes Store writes before quarantining the SQLite database family', () => {
+  it('freezes Store writes before quarantining the SQLite database family', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-quarantine-'))
     temporaryDirectories.push(directory)
     const dataFile = join(directory, 'orca-data.json')
@@ -822,6 +822,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const store = new Store({ dataFile, profileStateAuthority: authority })
     store.updateSettings({ theme: 'dark' })
     store.flushOrThrow()
+    await authority.drainBackups()
     const sourceBytes = readFileSync(databasePath)
     writeFileSync(`${databasePath}-wal`, 'wal-preservation-sentinel')
 

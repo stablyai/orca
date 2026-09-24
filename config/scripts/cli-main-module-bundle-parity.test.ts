@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { electronViteConfig } from '../../electron.vite.config'
+import { GUARDED_ENTRY_NAMES } from '../build-plugins/plain-node-entry-guard'
 
 const REPO_ROOT = resolve(__dirname, '..', '..')
 const CLI_ROOT = join(REPO_ROOT, 'src', 'cli')
@@ -19,7 +20,7 @@ function listCliSourceFiles(dir: string): string[] {
 }
 
 // Why: `import type` is erased by tsc, so it needs no emitted module at runtime.
-const VALUE_IMPORT_FROM_MAIN = /(?<!\btype\s)from '\.\.\/\.\.\/main\/([^']+)'/g
+const VALUE_IMPORT_FROM_MAIN = /(?<!\btype\s)from '(?:\.\.\/)+main\/([^']+)'/g
 
 function findMainImports(): { file: string; module: string }[] {
   return listCliSourceFiles(CLI_ROOT).flatMap((file) => {
@@ -53,8 +54,17 @@ describe('CLI imports of main-process modules', () => {
     expect(missing).toEqual([])
   })
 
+  it('guards every CLI main module against Electron imports', () => {
+    const guarded = new Set<string>(GUARDED_ENTRY_NAMES)
+    expect(findMainImports().filter(({ module }) => !guarded.has(module))).toEqual([])
+  })
+
   it('finds the imports it is meant to guard', () => {
     // Why: a broken matcher would make the guard above vacuously pass.
+    expect(findMainImports()).toContainEqual({
+      file: 'src/cli/profile-state-location.ts',
+      module: 'persistence/profile-state/profile-state-active-location'
+    })
     expect(findMainImports().length).toBeGreaterThanOrEqual(2)
     expect(Object.keys(findElectronViteMainEntries()).length).toBeGreaterThanOrEqual(2)
   })

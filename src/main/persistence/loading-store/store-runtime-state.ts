@@ -24,7 +24,8 @@ import type { AutomationRun } from '../../../shared/automations-types'
 
 export type DurableProfileStateMutation<T> = {
   value: T
-  persist?: boolean
+  /** 'if-dirty' fences an existing change without rewriting an already durable generation. */
+  persist?: boolean | 'if-dirty'
   rollback?: () => void
 }
 

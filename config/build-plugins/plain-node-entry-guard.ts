@@ -16,15 +16,33 @@ type OutputChunk = Rollup.OutputChunk
 // electron, and smoke-loads daemon-entry under plain Node to prove its module
 // graph still resolves.
 
-// Entries executed as plain Node (ELECTRON_RUN_AS_NODE / no electron runtime):
-// forked daemon, parcel-watcher, WSL filesystem and computer sidecars, and the CLI-run
-// agent-hooks entry. require("electron") throws MODULE_NOT_FOUND in all of them.
+// The CLI loads these paths after electron-vite replaces out/main.
+export const CLI_MAIN_ENTRY_NAMES = [
+  'agent-hooks/managed-agent-hook-controls',
+  'codex/managed-home-shell-preflight',
+  'claude-accounts/keychain',
+  ...[
+    'access',
+    'active-location',
+    'storage-classification',
+    'offline-settings',
+    'export-path',
+    'backup-path',
+    'database-recovery',
+    'domain-reader',
+    'recovery',
+    'recovery-command'
+  ].map((module) => `persistence/profile-state/profile-state-${module}`),
+  'startup/http1-compatibility-marker'
+] as const
+
+// Plain-Node processes and CLI modules cannot load Electron's API.
 const PLAIN_NODE_ENTRY_NAMES = [
   'daemon-entry',
   'parcel-watcher-process-entry',
   'computer-sidecar',
   'wsl-transcript-fs-process-entry',
-  'agent-hooks/managed-agent-hook-controls'
+  ...CLI_MAIN_ENTRY_NAMES
 ] as const
 
 // Entries executed as worker threads of the main process. Electron's module is
