@@ -164,7 +164,11 @@ const ACTIVE_OLD = JSON.stringify(
 describe('orcad install lock ownership', () => {
   const remoteDir = `/home/u/.orca-remote/orcad-${NEW_VERSION}`
   const install = (signal?: AbortSignal) =>
-    installOrcadBundle(options({ signal }), NEW_VERSION, remoteDir)
+    installOrcadBundle(
+      { ...options({ signal }), localOrcadDir: '/local/out/orcad' },
+      NEW_VERSION,
+      remoteDir
+    )
 
   beforeEach(() => {
     vi.clearAllMocks()

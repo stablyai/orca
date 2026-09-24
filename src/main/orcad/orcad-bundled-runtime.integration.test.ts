@@ -3,7 +3,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
 import { shellEscape } from '../ssh/ssh-connection-utils'
 
 let directory = ''
@@ -52,6 +52,19 @@ afterEach(async () => {
 })
 
 describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle', () => {
+  it('refuses a partial installation before launching its adjacent runtime', async () => {
+    await rm(join(directory, '.build-target'))
+    const result = await runProcess({
+      program: process.execPath,
+      args: [join(directory, 'orcad.js')],
+      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+      timeoutMs: 5_000
+    })
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('bundled Orca runtime target is missing')
+    expect(result.stdout).not.toContain('ready:')
+  })
+
   it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)(
     'forwards %s to the actual child and mirrors its exit',
     async (signal) => {

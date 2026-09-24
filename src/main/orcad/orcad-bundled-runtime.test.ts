@@ -58,6 +58,13 @@ describe('bundled Orca runtime handoff', () => {
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
+  it('refuses a remaining bundled runtime without its target marker', () => {
+    fixture.exists.mockImplementation((path) => !path.endsWith('.build-target'))
+    expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime target is missing')
+    expect(fixture.realpath).not.toHaveBeenCalled()
+    expect(fixture.spawn).not.toHaveBeenCalled()
+  })
+
   it('accepts only the pinned version when already executing the bundled runtime', () => {
     fixture.realpath.mockReturnValue('/real/runtime')
     vi.spyOn(process, 'versions', 'get').mockReturnValue({

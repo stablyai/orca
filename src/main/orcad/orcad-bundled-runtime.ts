@@ -12,11 +12,16 @@ export function handoffToBundledOrcad(): boolean {
     return false
   }
   const directory = dirname(resolve(script))
-  if (!existsSync(join(directory, ORCAD_BUILD_TARGET_FILENAME))) {
+  const runtime = join(directory, orcadBunRuntimeFilename(process.platform))
+  const hasTarget = existsSync(join(directory, ORCAD_BUILD_TARGET_FILENAME))
+  const hasRuntime = existsSync(runtime)
+  if (!hasTarget && !hasRuntime) {
     return false
   }
-  const runtime = join(directory, orcadBunRuntimeFilename(process.platform))
-  if (!existsSync(runtime)) {
+  if (!hasTarget) {
+    throw new Error('The bundled Orca runtime target is missing')
+  }
+  if (!hasRuntime) {
     throw new Error('The bundled Orca runtime is missing')
   }
   if (realpathSync(process.execPath) === realpathSync(runtime)) {
