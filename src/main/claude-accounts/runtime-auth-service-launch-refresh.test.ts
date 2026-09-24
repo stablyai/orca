@@ -412,6 +412,9 @@ describe('ClaudeRuntimeAuthService', () => {
 
       expect(readManagedCredentialsForTest('account-2', managedAuthPath2)).toBe(twoRotated)
       expect(testState.legacyKeychainCredentials).toBe(expired)
+      expect(
+        readFileSync(join(testState.fakeHomeDir, '.claude', '.credentials.json'), 'utf-8')
+      ).toBe(expired)
     } finally {
       markClaudePtyExited('pty-live-1')
       vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
