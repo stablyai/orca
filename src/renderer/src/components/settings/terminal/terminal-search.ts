@@ -29,6 +29,7 @@ import {
 } from './platform/terminal-windows-search'
 import {
   getManageSessionsSearchEntries,
+  getTerminalSetupScriptSearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -147,6 +148,7 @@ export function getTerminalPaneSearchEntries(platform: {
         ]
       : []),
     ...getTerminalRightClickToPasteSearchEntry(),
+    ...getTerminalSetupScriptSearchEntries(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),
     ...(platform.isMac

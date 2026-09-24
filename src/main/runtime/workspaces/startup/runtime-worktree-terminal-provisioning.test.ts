@@ -91,7 +91,7 @@ describe('default tabs beside the agent a create started', () => {
 
 const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
 
-function createHost(): {
+function createHost(settings: Record<string, unknown> = {}): {
   host: WorktreeTerminalProvisioningHost
   titles: () => (string | undefined)[]
 } {
@@ -104,6 +104,9 @@ function createHost(): {
       createTerminal,
       setTabTitle: vi.fn(async () => {}),
       setTabColor: vi.fn(async () => {}),
+      getSettings: () =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: provisioning reads only the optional keys each test supplies.
+        settings as ReturnType<NonNullable<WorktreeTerminalProvisioningHost['getSettings']>>,
       getPtyId: () => undefined,
       recordSetupCompletionToken: vi.fn()
     },
@@ -230,5 +233,23 @@ describe("a create's E9 origin", () => {
     for (const call of automation.createTerminal.mock.calls) {
       expect(call[1]).not.toHaveProperty('wslUserAct')
     }
+  })
+})
+
+describe('provisionWorktreeTerminals setup auto-close', () => {
+  it('makes host-created setup terminals exit their shell on success only when enabled', async () => {
+    const off = createHost({}).host
+    await provisionWithSetup(off)
+    expect(off.createTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ command: 'bash /repo/.orca/setup.sh' })
+    )
+
+    const on = createHost({ closeSetupTabOnSuccess: true }).host
+    await provisionWithSetup(on)
+    expect(on.createTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ command: 'bash /repo/.orca/setup.sh && exit' })
+    )
   })
 })

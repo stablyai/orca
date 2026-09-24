@@ -20996,6 +20996,12 @@
         "scrollOnUserInput": "Scroll to Bottom on Input",
         "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place."
       },
+      "TerminalSetupScript": {
+        "title": "Workspace Setup Script",
+        "description": "The repository setup script runs in a background \"Setup\" tab when a new workspace is created.",
+        "closeOnSuccess": "Close Setup Tab When It Succeeds",
+        "closeOnSuccessDescription": "Close the Setup tab once the script exits successfully. A failed setup stays open so you can read the error."
+      },
       "terminal": {
         "clipboard": {
           "search": {
