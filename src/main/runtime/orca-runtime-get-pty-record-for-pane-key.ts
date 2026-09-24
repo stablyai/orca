@@ -11,9 +11,9 @@ import {
   handleLessCoordinatorSessionId,
   findConnectedPtyBoundToSession,
   structuredSessionAddressTarget,
+  structuredSessionMailDestination,
   structuredSessionMailTarget,
-  structuredSessionIdleEdgeMail,
-  structuredSessionMailView
+  structuredSessionIdleEdgeMailboxes
 } from './orchestration/structured-session-mail-target'
 import {
   resolveTerminalIdentityFromProbes,
@@ -208,18 +208,19 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       return
     }
     this.notifyStructuredSessionJournalActivity(summary.sessionId)
-    const idle = structuredSessionIdleEdgeMail(summary.sessionId, this._orchestrationDb)
-    idle.reboundRunIds.forEach((runId) => this.cancelMessageWaiters(`run:${runId}`))
-    idle.mailboxes.forEach((mailbox) => this.deliverPendingMessagesForHandle(mailbox))
+    const openDb = () => this.getOrchestrationDb()
+    const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
+    structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
   }
 
   /** The terminal of a session's terminal view, while a TUI owns it; the PTY lane types there. */
   getTerminalViewHandleForSession(sessionId: string): string | null {
-    const view = structuredSessionMailView(sessionId, this._orchestrationDb)
-    const pty = findConnectedPtyBoundToSession(this.ptysById.values(), sessionId)
-    return view === 'terminal-view' && pty?.paneKey
-      ? this.getTerminalHandleForPaneKey(pty.paneKey)
-      : null
+    const destination = structuredSessionMailDestination(sessionId, this._orchestrationDb)
+    const pty =
+      destination?.view === 'terminal-view'
+        ? findConnectedPtyBoundToSession(this.ptysById.values(), destination.sessionId)
+        : undefined
+    return pty?.paneKey ? this.getTerminalHandleForPaneKey(pty.paneKey) : null
   }
 
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */

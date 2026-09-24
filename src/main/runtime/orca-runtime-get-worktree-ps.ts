@@ -164,9 +164,6 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
       // Structured chat has no agent CLI hooks, so this projection is what the first-work
       // workspace rename listens to instead of `agentStatus:set`.
-      // The replacement's first status edge precedes the commit, so the commit is the adoption edge.
-      onConversationReplaced: ({ replacementSessionId }) =>
-        this.onStructuredSessionStatusForMail({ sessionId: replacementSessionId, status: null }),
       onSessionStatusChanged: (summary, options) => {
         this.onStructuredSessionStatusForMail(summary)
         void maybeAutoRenameWorkspaceOnFirstStructuredTurn(

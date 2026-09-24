@@ -229,52 +229,6 @@ describe('host conversation commands', () => {
     expect(adapter.dispatch).not.toHaveBeenCalled()
   })
 
-  it('reports the replacement only once the clear has committed', async () => {
-    // Orchestration moves the old session's Runs to its replacement at this edge; the
-    // replacement's own first status edge fires before the commit and cannot see it yet.
-    let phaseAtReport: string | undefined
-    const replaced = vi.fn(() => {
-      phaseAtReport = store.getRecord(HOST_TEST_SESSION)?.conversationCommand?.phase
-    })
-    host.deps.onConversationReplaced = replaced
-    const result = await host.conversationCommand(caller, commandParams('clear'))
-    expect(result.ok && result.value.replacementSessionId).toBeTruthy()
-    expect(replaced).toHaveBeenCalledTimes(1)
-    expect(replaced).toHaveBeenCalledWith({
-      sessionId: HOST_TEST_SESSION,
-      replacementSessionId: result.ok ? result.value.replacementSessionId : undefined
-    })
-    expect(phaseAtReport).toBe('committed')
-  })
-
-  it('keeps a committed clear committed when the replacement observer throws', async () => {
-    // Adoption is bookkeeping behind a commit the user already has; the idle edge re-derives it.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    host.deps.onConversationReplaced = vi.fn(() => {
-      throw new Error('adoption failed')
-    })
-    const result = await host.conversationCommand(caller, commandParams('clear'))
-    expect(result).toMatchObject({ ok: true, value: { phase: 'committed' } })
-    expect(result.ok && result.value.replacementSessionId).toBeTruthy()
-    expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand?.phase).toBe('committed')
-    expect(warn).toHaveBeenCalledWith(
-      '[structured-conversation-command] replacement observer failed',
-      expect.any(Error)
-    )
-  })
-
-  it('reports no replacement for a compaction or a refused clear', async () => {
-    const replaced = vi.fn()
-    host.deps.onConversationReplaced = replaced
-    await host.conversationCommand(caller, commandParams('compact'))
-    vi.spyOn(host, 'attach').mockResolvedValueOnce({
-      ok: false,
-      refusal: { code: 'structured_agent_session_unsupported', message: 'Unavailable' }
-    })
-    await host.conversationCommand(caller, commandParams('clear'))
-    expect(replaced).not.toHaveBeenCalled()
-  })
-
   it('leaves the source usable when replacement creation is definitely refused', async () => {
     vi.spyOn(host, 'attach').mockResolvedValueOnce({
       ok: false,

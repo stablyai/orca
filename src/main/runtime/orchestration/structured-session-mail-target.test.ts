@@ -15,6 +15,7 @@ const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
   await import('../orca-runtime-get-pty-record-for-pane-key')
 const { OrchestrationDb } = await import('./db')
 const { agentSessionPtyWriteGate } = await import('../agent-session-pty-write-gate')
+const { sessionOrchestrationIdentity } = await import('./structured-session-mail-address')
 
 const CHAT = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 const CHAT_ACTOR = `session:${CHAT}`
@@ -112,7 +113,7 @@ describe('a Run whose coordinator is a chat (a session actor, no handle)', () =>
     expect(probe().target(`run:${runId}`)).toBeNull()
   })
 
-  it('does not deliver to a chat that was closed, replaced by /clear, or runs on another host', () => {
+  it('does not deliver to a chat that was closed, cleared into no known session, or runs on another host', () => {
     const runId = chatCoordinatedRun()
     installStore(chatRecord(), false)
     expect(probe().target(`run:${runId}`)).toBeNull()
@@ -218,143 +219,173 @@ describe('the idle edge of a structured session', () => {
   })
 })
 
-describe('a coordinator chat replaced by /clear', () => {
-  const SUCCESSOR = 'clear-0123456789abcdef0123456789abcdef01234567'
-  const SUCCESSOR_ACTOR = `session:${SUCCESSOR}`
+describe('the idle edge after a restart, before any orchestration call', () => {
+  it('opens the orchestration database itself, so mail stored before the restart is redriven', () => {
+    // The strand this pins: the edge read the raw database field, null until the first
+    // orchestration RPC opened it, so a restarted chat's idle edges silently redrove nothing.
+    installStore(chatRecord())
+    const runId = chatCoordinatedRun()
+    const delivered: string[] = []
+    probe({
+      _orchestrationDb: null,
+      getOrchestrationDb: () => db,
+      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
+      notifyStructuredSessionJournalActivity: vi.fn()
+    }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
+    expect(delivered).toEqual([`run:${runId}`])
+  })
 
-  function clearedInto(successor: string): AgentSessionRecord {
-    return chatRecord(
-      { claimStatus: 'released', ownerProcess: null },
-      {
-        conversationCommand: {
-          command: 'clear',
-          state: 'completed',
-          replacementSessionId: successor,
-          operationId: 'op',
-          callerKey: 'caller',
-          phase: 'committed'
-        }
-      }
+  it('says so when the database cannot be opened, instead of skipping silently', () => {
+    installStore(chatRecord())
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const deliver = vi.fn()
+    probe({
+      _orchestrationDb: null,
+      getOrchestrationDb: () => {
+        throw new Error('userData unavailable')
+      },
+      deliverPendingMessagesForHandle: deliver,
+      notifyStructuredSessionJournalActivity: vi.fn()
+    }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
+    expect(deliver).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(
+      '[orchestration] skipped a structured session mail edge: no database',
+      { sessionId: CHAT, error: 'userData unavailable' }
     )
+    warn.mockRestore()
+  })
+})
+
+describe('a coordinator chat continued by /clear', () => {
+  const MIDDLE = 'clear-fedcba9876543210fedcba9876543210fedcba98'
+  const SUCCESSOR = 'clear-0123456789abcdef0123456789abcdef01234567'
+
+  function sessionRecord(sessionId: string, clearedInto?: string): AgentSessionRecord {
+    const record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        sessionId,
+        runtimeKind: 'native',
+        ...(clearedInto ? { claimStatus: 'released' as const, ownerProcess: null } : {})
+      })
+    )
+    return clearedInto
+      ? {
+          ...record,
+          conversationCommand: {
+            command: 'clear',
+            state: 'completed',
+            replacementSessionId: clearedInto,
+            operationId: `op-${sessionId}`,
+            callerKey: 'caller',
+            phase: 'committed'
+          }
+        }
+      : record
   }
 
-  it("hands the predecessor's Runs and unread mail to the session that replaced it", () => {
-    // The strand this pins: the Run still named the pre-/clear session, so its results were pointed
-    // at nobody and the new chat — acting as its own new id — could not see the Run at all.
-    const store = installStore(clearedInto(SUCCESSOR))
-    const successorRecord = agentSessionRecordFixture(
-      agentSessionLeaseFixture({ sessionId: SUCCESSOR, runtimeKind: 'native' })
+  /** CHAT cleared into each of `chain` in turn; the last one is live and its tab is open. */
+  function installLineage(...chain: string[]): void {
+    const lineage = [CHAT, ...chain]
+    const store = installStore(null)
+    lineage.forEach((sessionId, index) =>
+      store.records.set(sessionId, sessionRecord(sessionId, lineage[index + 1]))
     )
-    store.records.set(SUCCESSOR, successorRecord)
-    store.visible.sessionIds.push(SUCCESSOR)
+    store.visible.sessionIds.push(lineage.at(-1)!)
+  }
+
+  function idleEdge(sessionId: string): string[] {
+    const delivered: string[] = []
+    probe({
+      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
+      notifyStructuredSessionJournalActivity: vi.fn()
+    }).onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
+    return delivered
+  }
+
+  function runCreatedBy(sessionId: string): string {
+    return db.createRun({
+      objective: 'o',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorActor: sessionOrchestrationIdentity(sessionId, db).actor
+    }).id
+  }
+
+  it("never unbinds the successor's own Run", () => {
+    // The strand this pins: the successor's own run-create, then its idle edge rebinding the
+    // predecessor's Run through an exclusive bind, which unbound the Run the successor created.
+    installLineage(SUCCESSOR)
+    chatCoordinatedRun()
+    const ownRun = runCreatedBy(SUCCESSOR)
+    const generation = db.getRunRaw(ownRun)!.consumer_generation
+
+    expect(idleEdge(SUCCESSOR)).toContain(`run:${ownRun}`)
+    idleEdge(SUCCESSOR)
+
+    const successor = sessionOrchestrationIdentity(SUCCESSOR, db)
+    expect(db.getRunRaw(ownRun)).toMatchObject({
+      coordinator_actor: successor.actor,
+      consumer_generation: generation
+    })
+    expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(ownRun)
+  })
+
+  it('keeps a Run bound, unrewritten, across a chain of clears, and delivers it to the live end', () => {
+    installLineage(MIDDLE)
     const runId = chatCoordinatedRun()
     const generation = db.getRunRaw(runId)!.consumer_generation
+    idleEdge(MIDDLE)
+    installLineage(MIDDLE, SUCCESSOR)
+    expect(idleEdge(SUCCESSOR)).toContain(`run:${runId}`)
+
+    expect(db.getRunRaw(runId)).toMatchObject({
+      coordinator_actor: CHAT_ACTOR,
+      consumer_generation: generation
+    })
+    for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
+      expect(db.getCurrentRunForCoordinator(sessionOrchestrationIdentity(member, db))?.id).toBe(
+        runId
+      )
+    }
+    expect(probe().target(`run:${runId}`)).toEqual({ sessionId: SUCCESSOR, dispatchId: null })
+  })
+
+  it('keeps the Run a middle session created bound after the next clear', () => {
+    // The chain strand: adopting each predecessor's Run in turn unbound all but the last adopted.
+    installLineage(MIDDLE)
+    runCreatedBy(CHAT)
+    const middleRun = runCreatedBy(MIDDLE)
+    const generation = db.getRunRaw(middleRun)!.consumer_generation
+    installLineage(MIDDLE, SUCCESSOR)
+    idleEdge(SUCCESSOR)
+
+    const successor = sessionOrchestrationIdentity(SUCCESSOR, db)
+    expect(db.getRunRaw(middleRun)).toMatchObject({
+      coordinator_actor: successor.actor,
+      consumer_generation: generation
+    })
+    expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(middleRun)
+  })
+
+  it('reaches the live session through any spelling of the conversation, and stores one', () => {
+    installLineage(MIDDLE, SUCCESSOR)
+    for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
+      expect(sessionOrchestrationIdentity(member, db)).toMatchObject({
+        actor: CHAT_ACTOR,
+        address: CHAT_ACTOR
+      })
+      expect(probe().target(`session:${member}`)).toEqual({
+        sessionId: SUCCESSOR,
+        dispatchId: null
+      })
+    }
     const direct = db.insertMessage({
       from: 'term_peer',
       to: CHAT_ACTOR,
       subject: 'hi',
       type: 'status'
     })
-    db.markAsDelivered([direct.id])
-    const delivered: string[] = []
-    const cancelMessageWaiters = vi.fn()
-    const runtime = probe({
-      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn(),
-      cancelMessageWaiters
-    })
-
-    runtime.onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: null })
-
-    // The ordinary bind: a coordinator takeover, with its generation bump.
-    expect(db.getRunRaw(runId)).toMatchObject({
-      coordinator_handle: null,
-      coordinator_actor: SUCCESSOR_ACTOR,
-      consumer_generation: generation + 1
-    })
-    expect(
-      db.getCurrentRunForCoordinator({
-        actor: SUCCESSOR_ACTOR,
-        terminalHandle: null,
-        paneKey: null
-      })?.id
-    ).toBe(runId)
-    expect(cancelMessageWaiters).toHaveBeenCalledWith(`run:${runId}`)
-    // Re-addressed and not yet pointed: its old pointer went to a session nobody runs.
-    expect(db.getMessageById(direct.id)).toMatchObject({
-      to_handle: SUCCESSOR_ACTOR,
-      delivered_at: null,
-      read: 0
-    })
-    expect(delivered).toEqual(expect.arrayContaining([`run:${runId}`, SUCCESSOR_ACTOR]))
-
-    // Idempotent: a later edge finds nothing left to adopt.
-    runtime.onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: 'idle' })
-    expect(db.getRunRaw(runId)!.consumer_generation).toBe(generation + 1)
-  })
-
-  it('follows a chain of clears to the session at its end', () => {
-    // CHAT was cleared into MIDDLE, which was cleared into SUCCESSOR before any edge adopted.
-    const MIDDLE = 'clear-fedcba9876543210fedcba9876543210fedcba98'
-    const store = installStore(clearedInto(MIDDLE))
-    store.records.set(MIDDLE, {
-      ...agentSessionRecordFixture(
-        agentSessionLeaseFixture({
-          sessionId: MIDDLE,
-          runtimeKind: 'native',
-          claimStatus: 'released',
-          ownerProcess: null
-        })
-      ),
-      conversationCommand: {
-        command: 'clear',
-        state: 'completed',
-        replacementSessionId: SUCCESSOR,
-        operationId: 'op-2',
-        callerKey: 'caller',
-        phase: 'committed'
-      }
-    })
-    store.records.set(
-      SUCCESSOR,
-      agentSessionRecordFixture(
-        agentSessionLeaseFixture({ sessionId: SUCCESSOR, runtimeKind: 'native' })
-      )
-    )
-    const runId = chatCoordinatedRun()
-    const fromFirst = db.insertMessage({
-      from: 'term_peer',
-      to: CHAT_ACTOR,
-      subject: 'a',
-      type: 'status'
-    })
-    const fromMiddle = db.insertMessage({
-      from: 'term_peer',
-      to: `session:${MIDDLE}`,
-      subject: 'b',
-      type: 'status'
-    })
-    const delivered: string[] = []
-    probe({
-      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn(),
-      cancelMessageWaiters: vi.fn()
-    }).onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: 'idle' })
-
-    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(SUCCESSOR_ACTOR)
-    expect(db.getMessageById(fromFirst.id)!.to_handle).toBe(SUCCESSOR_ACTOR)
-    expect(db.getMessageById(fromMiddle.id)!.to_handle).toBe(SUCCESSOR_ACTOR)
-    expect(delivered).toEqual(expect.arrayContaining([`run:${runId}`, SUCCESSOR_ACTOR]))
-  })
-
-  it('leaves Runs alone for a session nothing was cleared into', () => {
-    installStore(chatRecord())
-    const runId = chatCoordinatedRun()
-    probe({
-      deliverPendingMessagesForHandle: vi.fn(),
-      notifyStructuredSessionJournalActivity: vi.fn(),
-      cancelMessageWaiters: vi.fn()
-    }).onStructuredSessionStatusForMail({ sessionId: SUCCESSOR, status: 'idle' })
-    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(CHAT_ACTOR)
+    expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ACTOR])
+    expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ACTOR, read: 0 })
   })
 })

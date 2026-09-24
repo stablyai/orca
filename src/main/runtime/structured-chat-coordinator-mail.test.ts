@@ -282,6 +282,36 @@ async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string 
   return { runId, taskId: idOf(task.task) }
 }
 
+/** `/clear` as the chat surface runs it: the conversation continues in a new session. */
+async function clearChat(sessionId: string): Promise<string> {
+  const command = 'clear' as const
+  const cleared = await host.conversationCommand(
+    { callerKey: 'test-surface' },
+    {
+      command,
+      envelope: {
+        sessionId,
+        clientOperationId: operationId(),
+        expectedRuntimeFence: host.deps.store.getRecord(sessionId)!.lease.runtimeFence,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.conversationCommand',
+          sessionId,
+          fields: { command }
+        })
+      }
+    }
+  )
+  const successor = cleared.ok ? cleared.value.replacementSessionId : undefined
+  if (!successor) {
+    throw new Error(`clear failed: ${JSON.stringify(cleared)}`)
+  }
+  // The surface swaps the tab over to the session that continues the chat.
+  await host.setSessionTabVisibility(sessionId, false)
+  await host.setSessionTabVisibility(successor, true)
+  threadBySession.set(successor, codex.connections.at(-1)!.threadId!)
+  return successor
+}
+
 beforeEach(async () => {
   operations = 0
   root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
@@ -493,6 +523,74 @@ describe('a worker result reaches the structured chat that coordinates it', () =
   })
 })
 
+describe('a /clear keeps the chat its orchestration address', () => {
+  it("delivers the conversation's Run to the session that continues it, and acts as it", async () => {
+    await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    const generation = db.getRunRaw(runId)!.consumer_generation
+    const successor = await clearChat(COORDINATOR)
+    const next = connectionFor(successor)
+
+    await expect(
+      call('orchestration.runCurrent', {}, { sessionId: successor })
+    ).resolves.toMatchObject({ run: { id: runId } })
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(next.turns).toHaveLength(1), WAIT)
+    expect(next.turns[0]!.text).toMatch(POINTER)
+    await settleTurn(successor, 0)
+    await expect(call('orchestration.check', {}, { sessionId: successor })).resolves.toMatchObject({
+      runId,
+      count: 1,
+      messages: [{ type: 'worker_done' }]
+    })
+    // Nothing was rewritten: the Run is bound exactly as the first session bound it.
+    expect(db.getRunRaw(runId)).toMatchObject({
+      coordinator_actor: `session:${COORDINATOR}`,
+      consumer_generation: generation
+    })
+  })
+
+  it("stores the successor's own Run under the conversation's address, through a chain of clears", async () => {
+    await openChat(COORDINATOR)
+    const middle = await clearChat(COORDINATOR)
+    const created = await call(
+      'orchestration.runCreate',
+      { objective: 'next' },
+      { sessionId: middle }
+    )
+    const runId = idOf(created.run)
+    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(`session:${COORDINATOR}`)
+    const successor = await clearChat(middle)
+    runtime.onStructuredSessionStatusForMail({ sessionId: successor, status: 'idle' })
+
+    await expect(
+      call('orchestration.runCurrent', {}, { sessionId: successor })
+    ).resolves.toMatchObject({ run: { id: runId } })
+    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(`session:${COORDINATOR}`)
+  })
+
+  it('lands mail sent to any session of the conversation in the live one', async () => {
+    await openChat(PEER_CHAT)
+    const middle = await clearChat(PEER_CHAT)
+    const successor = await clearChat(middle)
+    const next = connectionFor(successor)
+
+    for (const [index, spelling] of [PEER_CHAT, middle, successor].entries()) {
+      const sent = await call('orchestration.send', {
+        from: 'term_worker',
+        to: `session:${spelling}`,
+        subject: `ping ${index}`
+      })
+      expect(sent).toMatchObject({ message: { to_handle: `session:${PEER_CHAT}` } })
+      await vi.waitFor(() => expect(next.turns).toHaveLength(index + 1), WAIT)
+      await settleTurn(successor, index)
+    }
+    await expect(call('orchestration.check', {}, { sessionId: successor })).resolves.toMatchObject({
+      count: 3
+    })
+  })
+})
+
 describe('any live session is addressable by its id', () => {
   it('lands mail sent to `session:<id>` as a turn in that chat, which a flagless check reads', async () => {
     const peer = await openChat(PEER_CHAT)
@@ -511,42 +609,6 @@ describe('any live session is addressable by its id', () => {
     await settleTurn(PEER_CHAT, 0)
     const checked = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
     expect(checked).toMatchObject({ count: 1, messages: [{ subject: 'ping' }] })
-  })
-
-  it('leaves a /clear predecessor nothing to read or acknowledge of its replacement`s mail', async () => {
-    // The clear's tail: the old chat is still live after adoption moved its unread mail. A direct
-    // mailbox is consume-on-read and holds no replayable batch, so the old session's `check` sees
-    // only its own address, and there is no delivery for a stale `--ack` to name.
-    const predecessor = await openChat(PEER_CHAT)
-    await openChat(COORDINATOR)
-    await call('orchestration.send', {
-      from: 'term_worker',
-      to: `session:${PEER_CHAT}`,
-      subject: 'read'
-    })
-    await vi.waitFor(() => expect(predecessor.turns).toHaveLength(1), WAIT)
-    await settleTurn(PEER_CHAT, 0)
-    await expect(call('orchestration.check', {}, { sessionId: PEER_CHAT })).resolves.toMatchObject({
-      count: 1
-    })
-    await call('orchestration.send', {
-      from: 'term_worker',
-      to: `session:${PEER_CHAT}`,
-      subject: 'moved'
-    })
-
-    db.readdressUnreadSessionMail(`session:${PEER_CHAT}`, `session:${COORDINATOR}`)
-
-    await expect(call('orchestration.check', {}, { sessionId: PEER_CHAT })).resolves.toMatchObject({
-      count: 0
-    })
-    expect(db.db.prepare('SELECT mailbox_handle FROM deliveries').all()).toEqual([])
-    await expect(
-      call('orchestration.check', {}, { sessionId: COORDINATOR })
-    ).resolves.toMatchObject({
-      count: 1,
-      messages: [{ subject: 'moved' }]
-    })
   })
 
   it('refuses mail to a chat that was closed, before storing it', async () => {

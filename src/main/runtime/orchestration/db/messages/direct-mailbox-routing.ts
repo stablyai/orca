@@ -179,25 +179,6 @@ export type DirectMailboxRoutingMethods = {
   routeUnreadDirectMessagesToDispatchMailbox: typeof routeUnreadDirectMessagesToDispatchMailbox
   routeUnreadDispatchMailboxToRunMailbox: typeof routeUnreadDispatchMailboxToRunMailbox
   getLatestUnreadMessageSequence: typeof getLatestUnreadMessageSequence
-  readdressUnreadSessionMail: typeof readdressUnreadSessionMail
-}
-
-/**
- * Moves a session's unread direct mail to the session that replaced it, as not yet pointed: the
- * pointer, if any, went to a session nobody will run again. Read and acknowledgment state stay.
- */
-export function readdressUnreadSessionMail(
-  this: OrchestrationDb,
-  fromAddress: string,
-  toAddress: string
-): number {
-  const result = this.db
-    .prepare(
-      `UPDATE messages SET to_handle = ?, delivered_at = NULL
-       WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
-    )
-    .run(toAddress, fromAddress)
-  return Number(result.changes)
 }
 
 export function attachDirectMailboxRouting(ctor: { prototype: object }): void {
@@ -208,7 +189,6 @@ export function attachDirectMailboxRouting(ctor: { prototype: object }): void {
     routeUnreadDirectMessagesToRunMailbox,
     routeUnreadDirectMessagesToDispatchMailbox,
     routeUnreadDispatchMailboxToRunMailbox,
-    getLatestUnreadMessageSequence,
-    readdressUnreadSessionMail
+    getLatestUnreadMessageSequence
   })
 }

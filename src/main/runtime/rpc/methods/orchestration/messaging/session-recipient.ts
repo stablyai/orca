@@ -3,9 +3,10 @@
  * this host can be addressed, not only one that coordinates a Run: an agent's id is its public
  * address, and a user telling one agent to message another's id is a supported workflow.
  *
- * Mail that no Run or Dispatch owns is stored at `session:<id>` and pointed at the session as a
- * turn. A released lease is not a refusal (delivery resumes an evicted chat); a closed or replaced
- * chat, another host, and an unknown id are, before anything is stored.
+ * Mail that no Run or Dispatch owns is stored at the conversation's `session:<root id>` and pointed
+ * at its live session as a turn, so any session of a `/clear` lineage is a valid spelling. A
+ * released lease is not a refusal (delivery resumes an evicted chat); a closed chat, another host,
+ * and an unknown id are, before anything is stored.
  */
 
 import {
@@ -98,8 +99,8 @@ export function refuseUndeliverableSessionRecipient(
     return {
       code: CODES.notLive,
       message:
-        reach.reason === 'replaced'
-          ? `Agent session ${sessionId} was cleared and continues as session:${reach.replacementSessionId}. Send there instead. No message was sent.`
+        reach.reason === 'continuation-missing'
+          ? `Agent session ${sessionId} was cleared, and this host has no record of the session that continues it. No message was sent.`
           : reach.reason === 'worker-identity-lost'
             ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. No message was sent.`
             : `Agent session ${sessionId} has ended: its chat was closed. No message was sent.`

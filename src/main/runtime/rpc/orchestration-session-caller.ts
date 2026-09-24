@@ -19,7 +19,6 @@ import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lea
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isOrcaSessionId, parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
@@ -153,10 +152,10 @@ async function readSessionRecord(
   runtime: OrcaRuntimeService,
   sessionId: string
 ): Promise<AgentSessionRecord> {
-  let store: ReturnType<typeof sessionRecordStore>
+  let store: ReturnType<typeof readAgentSessionRecordStore>
   try {
     await runtime.ensureStructuredAgentSessionHost()
-    store = sessionRecordStore()
+    store = readAgentSessionRecordStore()
   } catch {
     store = null
   }
@@ -183,10 +182,6 @@ async function readSessionRecord(
     `No Orca agent session ${sessionId} exists on this host. No effects were applied.`,
     NO_EFFECTS
   )
-}
-
-function sessionRecordStore(): AgentSessionRecordReader | null {
-  return getStructuredAgentSessionHost()?.deps.store ?? null
 }
 
 function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): void {
