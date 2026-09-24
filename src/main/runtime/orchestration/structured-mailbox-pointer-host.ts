@@ -9,6 +9,7 @@
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-delivery'
+import { structuredSessionCliInvocation } from './cli-command'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
@@ -79,6 +80,14 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 
     readGateFacts(sessionId) {
       return readStructuredSessionGateFacts(sessionId)
+    },
+
+    cliInvocation(sessionId) {
+      const provider = getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.provider
+      return structuredSessionCliInvocation({
+        platform: process.platform,
+        provider: provider ?? 'claude'
+      })
     },
 
     currentFence(sessionId) {

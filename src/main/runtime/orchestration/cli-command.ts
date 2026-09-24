@@ -4,12 +4,27 @@ import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 
 export type OrchestrationCliCommand = 'orca' | 'orca-dev' | 'orca-ide'
 
+/** The CLI invocation text a structured session's shell can run, one form per shell family. */
+export type StructuredSessionCliInvocation = '"$ORCA_CLI_COMMAND"' | '& $env:ORCA_CLI_COMMAND'
+
 /**
- * How text addressed to a structured session names this app's CLI. Its env carries the absolute
- * launcher in `ORCA_CLI_COMMAND`; a bare `orca` can resolve elsewhere once a login shell (Codex runs
- * `zsh -lc`) rebuilds PATH ahead of the directory Orca prepended.
+ * How text addressed to a structured session invokes this app's CLI, in the shell that session's
+ * commands actually run in. The env carries the absolute launcher in `ORCA_CLI_COMMAND`; a bare
+ * `orca` can resolve elsewhere once a profile-loading shell rebuilds PATH ahead of Orca's entry.
+ *
+ * - Codex on Windows runs PowerShell (pwsh, else Windows PowerShell) and loads its profile, so the
+ *   env var is read as `$env:…` and invoked with `&`. Codex falls back to cmd only when no
+ *   PowerShell exists at all, which Orca cannot see from here.
+ * - Claude on Windows runs its commands in Git Bash; macOS and Linux shells are POSIX for both.
  */
-export const STRUCTURED_SESSION_CLI_COMMAND = '"$ORCA_CLI_COMMAND"'
+export function structuredSessionCliInvocation(session: {
+  platform: NodeJS.Platform
+  provider: 'claude' | 'codex'
+}): StructuredSessionCliInvocation {
+  return session.platform === 'win32' && session.provider === 'codex'
+    ? '& $env:ORCA_CLI_COMMAND'
+    : '"$ORCA_CLI_COMMAND"'
+}
 
 export function resolveTerminalOrchestrationCliCommand(args: {
   connectionId: string | null

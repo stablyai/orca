@@ -15,7 +15,7 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
-import { STRUCTURED_SESSION_CLI_COMMAND } from './cli-command'
+import type { StructuredSessionCliInvocation } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
@@ -62,6 +62,8 @@ export type StructuredMailboxPointerHost = {
   }) => Promise<StructuredPointerSendOutcome>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
+  /** How this session's shell invokes this app's CLI; see `structuredSessionCliInvocation`. */
+  cliInvocation: (sessionId: string) => StructuredSessionCliInvocation
   /**
    * Holds the session for one attempt, resuming its provider child if the host evicted it; the
    * returned release hands it back to the host's release clock. Null when it cannot be resumed.
@@ -225,7 +227,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           text: formatMessagePointer(
             unread.length,
             mailboxHandle,
-            STRUCTURED_SESSION_CLI_COMMAND
+            this.deps.host.cliInvocation(sessionId)
           ).trim()
         }
       ]
