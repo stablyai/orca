@@ -1,6 +1,5 @@
 import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
 import { formatAgentTypeLabel } from '../../../shared/agent-type-label'
-import { formatNativeChatDuration } from '../../../shared/native-chat-turn-status'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { backgroundTaskStateReason } from '@/components/native-chat/background-task-roster'
 import { translate } from '@/i18n/i18n'
@@ -12,6 +11,11 @@ export type AgentChildRowText = {
   lead: string
   /** Follows the separator; '' when there is nothing more to say. */
   trail: string
+}
+
+/** How long this child has been silent, on the reader's clock the model measured it on. */
+export function agentChildRowNoUpdateLabel(row: AgentChildRowModel, now: number): string {
+  return agentNoUpdateLabel({ updatedAt: row.recencyAt }, now)
 }
 
 /** The words for a row's detail, reusing the phrasing a CLI agent row uses for the same fact. */
@@ -33,7 +37,7 @@ export function agentChildRowDetailText(row: AgentChildRowModel, now: number): s
     case 'ended':
       return translate('components.agentChildRow.ended', 'Ended')
     case 'no-update':
-      return agentNoUpdateLabel({ updatedAt: row.recencyAt }, now)
+      return agentChildRowNoUpdateLabel(row, now)
     case 'role':
       return formatAgentTypeLabel(detail.agentType)
     case 'reason':
@@ -62,14 +66,4 @@ export function agentChildRowText(row: AgentChildRowModel, now: number): AgentCh
     return { lead: detail, trail: detail === name ? '' : name }
   }
   return { lead: name, trail: detail }
-}
-
-/** "ended 3m ago" for a settled row whose host reported when; null otherwise. */
-export function agentChildRowEndedLabel(row: AgentChildRowModel, now: number): string | null {
-  if (!row.settled || row.settledAt === undefined) {
-    return null
-  }
-  return translate('components.agentChildRow.endedAgo', 'ended {{value0}} ago', {
-    value0: formatNativeChatDuration((now - row.settledAt) / 1000)
-  })
 }

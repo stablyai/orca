@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agentChildRowContextForParent,
   buildAgentChildRowModels,
   buildLegacyAgentChildRowModels,
+  buildLegacyTaskRowModels,
   flattenAgentChildRowModels,
   type AgentChildRowContext,
   type AgentChildRowModel
@@ -11,7 +13,8 @@ import type { AgentChildWorkView } from './agent-status-child-work-view'
 const FRESH: AgentChildRowContext = {
   parentEvidenceFresh: true,
   transportObservation: 'live',
-  parentObservedAt: 900
+  parentObservedAt: 900,
+  hostClockOffsetMs: 0
 }
 const STALE: AgentChildRowContext = { ...FRESH, parentEvidenceFresh: false }
 const LOST: AgentChildRowContext = { ...FRESH, transportObservation: 'unverifiable' }
@@ -268,5 +271,114 @@ describe('buildLegacyAgentChildRowModels', () => {
       STALE
     )
     expect(rows.map((row) => row.displayState)).toEqual(['unverifiable', 'unverifiable', 'idle'])
+  })
+})
+
+describe('buildLegacyTaskRowModels', () => {
+  it('keeps the state the host decided and says only its reason', () => {
+    const rows = buildLegacyTaskRowModels(
+      [
+        { id: 'w', kind: 'agent', description: 'Review', state: 'working', startedAt: 10 },
+        { id: 'q', kind: 'agent', description: 'Approve', state: 'waiting' },
+        { id: 'u', kind: 'agent', description: 'Lost', state: 'unverifiable' },
+        { id: 'm', kind: 'monitor', description: 'tail -f log' },
+        { id: 'c', kind: 'command', description: 'npm test', stoppable: false }
+      ],
+      [{ id: 'd', kind: 'agent', description: 'Done', totalTokens: 900 }]
+    )
+    expect(rows.map((row) => [row.id, row.displayState, row.detail])).toEqual([
+      ['d', 'done', null],
+      ['w', 'working', null],
+      ['q', 'waiting', { kind: 'reason', state: 'waiting' }],
+      ['u', 'unverifiable', { kind: 'reason', state: 'unverifiable' }],
+      ['m', 'monitoring', null],
+      ['c', 'working', null]
+    ])
+    expect(rows.map((row) => row.canStop)).toEqual([true, true, true, true, true, false])
+    expect(rows[0]).toMatchObject({ settled: true, totalTokens: 900 })
+  })
+
+  it('lets a resumed live task replace its retained settled row', () => {
+    const rows = buildLegacyTaskRowModels(
+      [{ id: 'r', kind: 'agent', state: 'working' }],
+      [{ id: 'r', kind: 'agent', state: 'done' }]
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ settled: false, displayState: 'working' })
+  })
+})
+
+describe('one label rule for every shape a host publishes', () => {
+  it.each(['task', ' Subagent ', 'unknown', '   '])(
+    'skips the placeholder %j on all three',
+    (label) => {
+      const [fromView] = buildAgentChildRowModels(
+        [view('a', { description: label, agentType: 'Explore' })],
+        FRESH
+      )
+      const [fromSnapshot] = buildLegacyAgentChildRowModels(
+        [{ id: 'a', state: 'working', startedAt: 10, description: label, agentType: 'Explore' }],
+        FRESH
+      )
+      const [fromRoster] = buildLegacyTaskRowModels(
+        [{ id: 'a', kind: 'agent', state: 'working', description: label, name: 'Explore' }],
+        []
+      )
+      expect([fromView.name, fromSnapshot.name, fromRoster.name]).toEqual([
+        'Explore',
+        'Explore',
+        'Explore'
+      ])
+    }
+  )
+
+  it('leaves a row with no usable label unnamed on all three', () => {
+    const [fromSnapshot] = buildLegacyAgentChildRowModels(
+      [{ id: 'a', state: 'working', startedAt: 10, description: 'task' }],
+      FRESH
+    )
+    const [fromRoster] = buildLegacyTaskRowModels(
+      [{ id: 'a', kind: 'agent', state: 'working', description: 'task' }],
+      []
+    )
+    expect([only([view('a', { description: 'task', agentType: undefined })]).name]).toEqual([''])
+    expect([fromSnapshot.name, fromRoster.name]).toEqual(['', ''])
+  })
+})
+
+describe('agentChildRowContextForParent: the reader clock', () => {
+  const MIRRORED_PARENT = {
+    // The host's clock runs 20 minutes ahead of this machine's.
+    updatedAt: 1_200_000 + 20 * 60_000,
+    evidenceObservedAt: 1_190_000 + 20 * 60_000,
+    mirroredEvidenceReceivedAt: 1_190_000
+  }
+
+  it("measures a mirrored parent on this machine's receipt clock, never the host's", () => {
+    const context = agentChildRowContextForParent(MIRRORED_PARENT, false)
+    expect(context).toMatchObject({ parentObservedAt: 1_190_000, hostClockOffsetMs: -20 * 60_000 })
+    const [legacy] = buildLegacyAgentChildRowModels(
+      [{ id: 'a', state: 'working', startedAt: 10 }],
+      context
+    )
+    expect(legacy.recencyAt).toBe(1_190_000)
+    // A view's own host stamp moves onto the reader clock; its host-clock age is kept.
+    const [child] = buildAgentChildRowModels(
+      [view('a', { observedAt: 1_100_000 + 20 * 60_000 })],
+      context
+    )
+    expect(child.recencyAt).toBe(1_100_000)
+    expect(child.observedAt).toBe(1_100_000 + 20 * 60_000)
+  })
+
+  it('leaves a parent observed on this machine on its own clock', () => {
+    expect(
+      agentChildRowContextForParent({ updatedAt: 500, evidenceObservedAt: 400 }, true)
+    ).toEqual({
+      parentEvidenceFresh: true,
+      transportObservation: 'live',
+      parentObservedAt: 400,
+      hostClockOffsetMs: 0
+    })
   })
 })

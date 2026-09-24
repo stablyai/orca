@@ -15,7 +15,10 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-import { agentChildRowMessageLine } from '@/components/agent-child-row-text'
+import {
+  agentChildRowMessageLine,
+  agentChildRowNoUpdateLabel
+} from '@/components/agent-child-row-text'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -23,6 +26,13 @@ function formatTimeAgo(ts: number, now: number): string {
     return 'just now'
   }
   return `${formatCompactDuration(delta)} ago`
+}
+
+// A child row's silence is the model's, on the clock its compact row and the strip read.
+function rowNoUpdateLabel(agent: DashboardAgentRowData, now: number): string {
+  return agent.childRow
+    ? agentChildRowNoUpdateLabel(agent.childRow, now)
+    : agentNoUpdateLabel(agent.entry, now)
 }
 
 function stateDotTooltipLabel(
@@ -35,9 +45,7 @@ function stateDotTooltipLabel(
   }
   // Why: report the observation, not a verdict on the agent — the elapsed gap is what
   // lets the user apply context Orca has no way to know (a long build, a slow download).
-  return dotState === 'unverifiable'
-    ? agentNoUpdateLabel(agent.entry, now)
-    : agentStateLabel(dotState)
+  return dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : agentStateLabel(dotState)
 }
 
 type Props = {
@@ -165,7 +173,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.
-  const noUpdateLabel = dotState === 'unverifiable' ? agentNoUpdateLabel(agent.entry, now) : null
+  const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 

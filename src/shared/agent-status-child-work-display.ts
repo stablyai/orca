@@ -1,4 +1,5 @@
 import { foldAgentLeadStatus } from './agent-lead-status-fold'
+import type { AgentSessionBackgroundTaskRunState } from './agent-session-background-task-wire'
 import type { AgentChildWorkId, AgentChildWorkOutcome } from './agent-status-child-work'
 import {
   agentChildWorkLiveness,
@@ -87,4 +88,27 @@ export function deriveAgentChildDisplayState(
     return folded.workingMode ?? folded.stateName
   }
   return view.membership === 'live' ? 'idle' : SETTLED_DISPLAY_STATE[view.outcome ?? 'unknown']
+}
+
+/**
+ * A display state in the run-state words a host publishes and every older reader already speaks:
+ * a failure reads as `blocked`, a cancel as `idle`. The row's own dot keeps the real outcome.
+ */
+export function agentChildRunStateFor(
+  displayState: AgentChildDisplayState
+): AgentSessionBackgroundTaskRunState {
+  switch (displayState) {
+    case 'failed':
+      return 'blocked'
+    case 'interrupted':
+      return 'idle'
+    case 'working':
+    case 'monitoring':
+    case 'waiting':
+    case 'blocked':
+    case 'done':
+    case 'idle':
+    case 'unverifiable':
+      return displayState
+  }
 }

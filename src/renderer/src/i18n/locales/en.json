@@ -18064,8 +18064,7 @@
       }
     },
     "agentChildRow": {
-      "ended": "Ended",
-      "endedAgo": "ended {{value0}} ago"
+      "ended": "Ended"
     }
   },
   "dashboardPopout": {

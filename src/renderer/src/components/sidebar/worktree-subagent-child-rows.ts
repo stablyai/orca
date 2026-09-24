@@ -8,7 +8,10 @@ import {
   flattenAgentChildRowModels,
   type AgentChildRowModel
 } from '../../../../shared/agent-child-row-model'
-import type { AgentChildDisplayState } from '../../../../shared/agent-status-child-work-display'
+import {
+  agentChildRunStateFor,
+  type AgentChildDisplayState
+} from '../../../../shared/agent-status-child-work-display'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 /** Row-identity key for an in-process subagent child row. The NUL separator
@@ -21,21 +24,9 @@ function subagentRowKey(parentPaneKey: string, subagentId: string): string {
 
 /** The lifecycle word every reader of a CLI row already understands; the row's own dot says more. */
 function agentRowStateFor(displayState: AgentChildDisplayState): AgentRowState {
-  switch (displayState) {
-    case 'working':
-    case 'monitoring':
-      return 'working'
-    case 'failed':
-      return 'blocked'
-    case 'interrupted':
-      return 'idle'
-    case 'waiting':
-    case 'blocked':
-    case 'done':
-    case 'idle':
-    case 'unverifiable':
-      return displayState
-  }
+  const runState = agentChildRunStateFor(displayState)
+  // A CLI row carries monitoring as `working` plus its `workingMode`.
+  return runState === 'monitoring' ? 'working' : runState
 }
 
 function childDashboardRow(

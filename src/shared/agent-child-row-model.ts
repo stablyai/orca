@@ -1,3 +1,17 @@
+/**
+ * One row model for every surface that lists child work (the sidebar's child rows and the chat
+ * strip), with one builder per shape a host may publish. All three name a row with one label rule
+ * (`usableAgentChildLabel`) and decide what it says with one detail rule (`agentChildRowDetail`):
+ *  - `buildAgentChildRowModels`: the host's child views (`children`), the source of record.
+ *  - `buildLegacyAgentChildRowModels`: the `subagents` snapshot.
+ *  - `buildLegacyTaskRowModels`: the session feed's `tasks` / `settledTasks` roster.
+ *
+ * The two legacy builders exist only for hosts that publish no views, and each is deleted, not
+ * migrated, when its last publisher is gone: the snapshot builder once CLI panes publish
+ * `children` and no supported paired host predates that; the roster builder once no supported
+ * paired host predates child views on the session feed.
+ */
+import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
 import type { AgentChildWorkKind } from './agent-status-child-work'
 import { resolveAgentChildWorkFreshness } from './agent-status-child-work-freshness'
 import {
@@ -6,6 +20,10 @@ import {
   type AgentChildDisplayState
 } from './agent-status-child-work-display'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
+import {
+  agentStatusAuthorityObservedAt,
+  agentStatusEvidenceObservedAt
+} from './agent-status-freshness'
 import type { AgentStatusEntry, AgentSubagentSnapshot } from './agent-status-types'
 
 /** What a child row says beside its name. Surfaces format it; they never decide it. */
@@ -41,7 +59,8 @@ export type AgentChildRowModel = {
   firstObservedAt: number
   /** Last evidence for THIS child. Absent from a host that reports none. */
   observedAt?: number
-  /** The clock a "no update" reading measures: the child's own, else its parent's. */
+  /** The reader-clock time a "no update" reading measures from: the child's own evidence, else
+   *  its parent's. */
   recencyAt: number
   settledAt?: number
   totalTokens?: number
@@ -55,27 +74,38 @@ export type AgentChildRowContext = {
   /** A stale parent makes every live claim beneath it unverifiable. */
   parentEvidenceFresh: boolean
   transportObservation: 'live' | 'unverifiable'
-  /** The parent's evidence clock: recency for a child whose host reports no clock of its own. */
+  /** The parent's last evidence on the READER's clock (its receipt time when mirrored from another
+   *  host): recency for a child whose host reports no clock of its own. */
   parentObservedAt: number
+  /** Reader clock minus the host's, at that evidence; 0 for a parent observed on this machine. Moves
+   *  a child's host-stamped clock onto the reader's, so no age subtracts across two machines. */
+  hostClockOffsetMs: number
 }
 
 /** The context a parent row gives its children. Every surface that lists one parent's children
  *  builds it here, from the same parent row, so a lost child reads the same everywhere. */
 export function agentChildRowContextForParent(
-  parent: Pick<AgentStatusEntry, 'updatedAt' | 'subagentObservation'>,
+  parent: Pick<
+    AgentStatusEntry,
+    'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt' | 'subagentObservation'
+  >,
   parentEvidenceFresh: boolean
 ): AgentChildRowContext {
+  // The parent row decays on this same clock, so a child's silence reads the same as its parent's.
+  const parentObservedAt = agentStatusEvidenceObservedAt(parent)
   return {
     parentEvidenceFresh,
     transportObservation: parent.subagentObservation ?? 'live',
-    parentObservedAt: parent.updatedAt
+    parentObservedAt,
+    hostClockOffsetMs: parentObservedAt - agentStatusAuthorityObservedAt(parent)
   }
 }
 
 /** Provider strings that carry no identity; the next label wins. */
 const PLACEHOLDER_LABELS = new Set(['unknown', 'untitled', 'task', 'subagent'])
 
-function usableLabel(value: string | undefined): string | undefined {
+/** A provider label that names the child, or undefined for an empty or placeholder one. */
+export function usableAgentChildLabel(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
   return trimmed && !PLACEHOLDER_LABELS.has(trimmed.toLowerCase()) ? trimmed : undefined
 }
@@ -102,6 +132,8 @@ function withFreshness(
 }
 
 type AgentChildRowDetailSource = {
+  /** `run-state`: the host reported only the child's run state (the legacy task roster). */
+  evidence: 'child' | 'run-state'
   kind: AgentChildWorkKind
   name: string
   agentType?: string
@@ -129,6 +161,13 @@ function agentChildRowDetail(
   source: AgentChildRowDetailSource,
   displayState: AgentChildDisplayState
 ): AgentChildRowDetail | null {
+  if (source.evidence === 'run-state') {
+    return displayState === 'waiting' ||
+      displayState === 'blocked' ||
+      displayState === 'unverifiable'
+      ? { kind: 'reason', state: displayState }
+      : null
+  }
   switch (displayState) {
     case 'unverifiable':
       return { kind: 'no-update' }
@@ -157,7 +196,10 @@ function agentChildRowDetail(
 
 function viewName(view: AgentChildWorkView): string {
   return (
-    usableLabel(view.description) ?? usableLabel(view.name) ?? usableLabel(view.agentType) ?? ''
+    usableAgentChildLabel(view.description) ??
+    usableAgentChildLabel(view.name) ??
+    usableAgentChildLabel(view.agentType) ??
+    ''
   )
 }
 
@@ -185,6 +227,7 @@ function rowFromView(
     ...(view.model !== undefined ? { model: view.model } : {}),
     detail: agentChildRowDetail(
       {
+        evidence: 'child',
         kind: view.kind,
         name,
         agentType: view.agentType,
@@ -196,7 +239,7 @@ function rowFromView(
     ),
     firstObservedAt: view.firstObservedAt,
     observedAt: view.observedAt,
-    recencyAt: view.observedAt,
+    recencyAt: view.observedAt + context.hostClockOffsetMs,
     ...(view.settledAt !== undefined ? { settledAt: view.settledAt } : {}),
     ...(view.totalTokens !== undefined ? { totalTokens: view.totalTokens } : {}),
     canStop: !settled && view.stoppable && view.providerId !== undefined,
@@ -243,7 +286,8 @@ export function buildLegacyAgentChildRowModels(
       deriveAgentChildDisplayState({ state: subagent.state, membership: 'live' }, null),
       context
     )
-    const name = subagent.description ?? subagent.agentType ?? ''
+    const name =
+      usableAgentChildLabel(subagent.description) ?? usableAgentChildLabel(subagent.agentType) ?? ''
     return {
       id: subagent.id,
       providerId: subagent.id,
@@ -253,7 +297,7 @@ export function buildLegacyAgentChildRowModels(
       ...(subagent.agentType !== undefined ? { agentType: subagent.agentType } : {}),
       ...(subagent.model !== undefined ? { model: subagent.model } : {}),
       detail: agentChildRowDetail(
-        { kind: 'agent', name, agentType: subagent.agentType, settled: false },
+        { evidence: 'child', kind: 'agent', name, agentType: subagent.agentType, settled: false },
         displayState
       ),
       firstObservedAt: subagent.startedAt,
@@ -263,6 +307,65 @@ export function buildLegacyAgentChildRowModels(
       owned: []
     }
   })
+}
+
+function legacyTaskDisplayState(
+  task: AgentSessionBackgroundTask,
+  settled: boolean
+): AgentChildDisplayState {
+  if (task.state) {
+    return task.state
+  }
+  if (settled) {
+    return 'done'
+  }
+  return task.kind === 'monitor' ? 'monitoring' : 'working'
+}
+
+// The host decided each row's state; the row keeps it.
+function legacyTaskRow(task: AgentSessionBackgroundTask, settled: boolean): AgentChildRowModel {
+  const displayState = legacyTaskDisplayState(task, settled)
+  const name = usableAgentChildLabel(task.description) ?? usableAgentChildLabel(task.name) ?? ''
+  const startedAt = task.startedAt ?? 0
+  return {
+    id: task.id,
+    providerId: task.id,
+    kind: task.kind,
+    displayState,
+    name,
+    detail: agentChildRowDetail(
+      { evidence: 'run-state', kind: task.kind, name, settled },
+      displayState
+    ),
+    firstObservedAt: startedAt,
+    recencyAt: startedAt,
+    ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
+    // Absent means stoppable: a host predating the field published only rows its stop could act on.
+    canStop: task.stoppable !== false,
+    settled,
+    owned: []
+  }
+}
+
+/**
+ * Rows from a host that publishes only the session feed's task roster (a host predating child
+ * views): flat, each with the run state the host decided and no clock beyond its start.
+ */
+export function buildLegacyTaskRowModels(
+  tasks: readonly AgentSessionBackgroundTask[],
+  settledTasks: readonly AgentSessionBackgroundTask[]
+): AgentChildRowModel[] {
+  // Older hosts can retain a previous turn beside its resumed live task; the live row wins.
+  const rows = new Map<string, AgentChildRowModel>()
+  for (const [roster, settled] of [
+    [settledTasks, true],
+    [tasks, false]
+  ] as const) {
+    for (const task of roster) {
+      rows.set(task.id, legacyTaskRow(task, settled))
+    }
+  }
+  return [...rows.values()]
 }
 
 /** Every row of a tree, owners before what they own. */

@@ -5,6 +5,7 @@ import {
   agentChildRowContextForParent,
   type AgentChildRowContext
 } from '../../../shared/agent-child-row-model'
+import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -132,13 +133,14 @@ function sidebarRows(parent: AgentStatusEntry, parentIsFresh = true): RenderedRo
 }
 
 function stripRows(
-  children: AgentChildWorkView[],
-  childRowContext?: AgentChildRowContext
+  children: AgentChildWorkView[] | undefined,
+  childRowContext?: AgentChildRowContext,
+  tasks: AgentSessionBackgroundTask[] = []
 ): RenderedRow[] {
   const root = mount(
     renderToStaticMarkup(
       <NativeChatBackgroundTasksStatus
-        tasks={[]}
+        tasks={tasks}
         settledTasks={[]}
         childViews={children}
         childRowContext={childRowContext}
@@ -349,6 +351,83 @@ describe('a child reads the same in the sidebar and the chat strip', () => {
   })
 })
 
+describe('one child reads the same from every shape a host publishes', () => {
+  it('names and details it identically from views, the subagents snapshot and the task roster', () => {
+    // A placeholder description falls through to the child's real label on every path.
+    const children = [view('child', { description: 'task', agentType: 'Explore' })]
+    const snapshotParent: AgentStatusEntry = {
+      ...parentWith([]),
+      children: undefined,
+      subagents: [
+        {
+          id: 'child',
+          state: 'working',
+          startedAt: NOW - 5 * MINUTE,
+          description: 'task',
+          agentType: 'Explore'
+        }
+      ]
+    }
+    const roster: AgentSessionBackgroundTask[] = [
+      { id: 'child', kind: 'agent', description: 'task', name: 'Explore', state: 'working' }
+    ]
+    const expected: RenderedRow = { dot: 'Working', lead: 'Explore', trail: '' }
+    expect(sidebarRows(parentWith(children))).toEqual([expected])
+    expect(sidebarRows(snapshotParent)).toEqual([expected])
+    expect(stripRows(children)).toEqual([expected])
+    expect(stripRows(undefined, undefined, roster)).toEqual([expected])
+  })
+})
+
+describe('a mirrored parent and its children read one silence', () => {
+  const SKEW = 20 * MINUTE
+  // The host's clock runs 20 minutes ahead; this machine received its last word 3 minutes ago.
+  function mirroredParent(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
+    return {
+      ...parentWith([]),
+      state: 'working',
+      updatedAt: NOW - 3 * MINUTE + SKEW,
+      mirroredEvidenceReceivedAt: NOW - 3 * MINUTE,
+      ...overrides
+    }
+  }
+
+  it('times a snapshot child on the receipt clock the parent decays on', () => {
+    const parent = mirroredParent({
+      children: undefined,
+      subagents: [
+        { id: 'child', state: 'working', startedAt: NOW - 9 * MINUTE, description: 'Audit' }
+      ]
+    })
+    expect(sidebarRows(parent, false)[0].trail).toBe('No update in 3m')
+  })
+
+  it('times a view child by its own host-clock age, never across machines', () => {
+    const children = [view('child', { observedAt: NOW - 5 * MINUTE + SKEW })]
+    const parent = mirroredParent({ children })
+    expect(sidebarRows(parent, false)[0].trail).toBe('No update in 5m')
+    expect(stripRows(children, agentChildRowContextForParent(parent, false))[0].trail).toBe(
+      'No update in 5m'
+    )
+    const [agent] = buildSubagentChildRows({ parentEntry: parent, tab, parentIsFresh: false })
+    const full = mount(
+      renderToStaticMarkup(
+        <TooltipProvider>
+          <DashboardAgentRow
+            agent={agent}
+            now={NOW}
+            onActivate={() => {}}
+            onDismiss={() => {}}
+            stateDotSize="sm"
+            hideExpand
+          />
+        </TooltipProvider>
+      )
+    )
+    expect(full.textContent).toContain('No update in 5m')
+  })
+})
+
 describe('a lost or stale parent reads the same on both surfaces', () => {
   const children = [
     view('child', {
@@ -408,7 +487,7 @@ describe('sibling child rows keep their own clocks', () => {
     ])
   })
 
-  it('times a settled child from when it ended', () => {
+  it('times a settled child from when it ended in the sidebar, and freezes its run in the strip', () => {
     const [agent] = buildSubagentChildRows({
       parentEntry: parentWith([settled('succeeded')]),
       tab,
@@ -440,7 +519,8 @@ describe('sibling child rows keep their own clocks', () => {
         />
       )
     )
-    expect(strip.querySelector('li')?.textContent).toContain('ended 3m 0s ago')
+    // Ran from 5m ago until it settled 3m ago; a finished row never ticks.
+    expect(strip.querySelector('li')?.textContent).toMatch(/2m 0s$/)
   })
 })
 

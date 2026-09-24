@@ -7,14 +7,15 @@ import type {
 } from '../../../../shared/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
-import { agentChildRowEndedLabel, agentChildRowName } from '@/components/agent-child-row-text'
+import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'
 import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
 import { backgroundTasksHeaderContent } from './background-task-header-content'
 import {
-  backgroundTaskElapsedLabel,
   backgroundTaskGroupLabel,
+  backgroundTaskRowElapsedLabel,
+  backgroundTaskRowTicks,
   buildBackgroundTaskGroups,
   buildBackgroundTaskGroupsFromViews,
   formatBackgroundTaskTokens,
@@ -70,11 +71,6 @@ function kindIconTone(kind: AgentSessionBackgroundTask['kind'], dimmed: boolean)
   return dimmed ? `${tone}/40` : tone
 }
 
-/** A still-growing clock on finished work would lie: settled rows say when they ended instead. */
-function rowHasClock(row: AgentChildRowModel): boolean {
-  return row.settled ? row.settledAt !== undefined : row.firstObservedAt > 0
-}
-
 function BackgroundTaskRow(props: {
   row: AgentChildRowModel
   now: number
@@ -86,9 +82,7 @@ function BackgroundTaskRow(props: {
   const Icon = KIND_ICONS[row.kind]
   const meta = [
     row.totalTokens !== undefined ? formatBackgroundTaskTokens(row.totalTokens) : null,
-    row.settled
-      ? agentChildRowEndedLabel(row, now)
-      : backgroundTaskElapsedLabel(row.firstObservedAt, now)
+    backgroundTaskRowElapsedLabel(row, now)
   ]
     .filter((part): part is string => part !== null)
     .join(' · ')
@@ -154,8 +148,8 @@ function BackgroundTaskRow(props: {
   )
 }
 
-function groupsHaveClock(rows: readonly AgentChildRowModel[]): boolean {
-  return rows.some((row) => rowHasClock(row) || groupsHaveClock(row.owned))
+function rowsTick(rows: readonly AgentChildRowModel[]): boolean {
+  return rows.some((row) => backgroundTaskRowTicks(row) || rowsTick(row.owned))
 }
 
 export function NativeChatBackgroundTasksStatus(props: {
@@ -199,8 +193,9 @@ export function NativeChatBackgroundTasksStatus(props: {
   )
   const singleLiveCommand =
     groups.length === 1 && groups[0].kind === 'command' && groups[0].tasks.length === 1
-  const hasElapsed = groups.some((group) => groupsHaveClock(group.tasks.map((entry) => entry.row)))
-  const now = useNow(1_000, props.isVisible && hasElapsed && (expanded || singleLiveCommand))
+  // Settled rows are frozen, so a strip of only finished work never wakes the 1 Hz tick.
+  const ticks = groups.some((group) => rowsTick(group.tasks.map((entry) => entry.row)))
+  const now = useNow(1_000, props.isVisible && ticks && (expanded || singleLiveCommand))
   const header = backgroundTasksHeaderContent(groups, { narrow, now })
   const headerText = `${header.segments.map((segment) => segment.text).join(' · ')}${header.detail ? `${header.segments.length > 0 ? ' — ' : ''}${header.detail}` : ''}`
   return (
