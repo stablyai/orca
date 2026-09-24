@@ -167,6 +167,53 @@ describe('profile state Store authority factory', () => {
     expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
   })
 
+  it.each([0, 1, 2, 3, 4])(
+    'requires selected recovery when only legacy backup slot %s remains',
+    (slot) => {
+      const options = createOptions()
+      const backup = `${options.dataFile}.bak.${slot}`
+      const source = '{"settings":{"theme":"dark"},"futureDomain":{"preserved":true}}'
+      writeFileSync(backup, source)
+
+      expect(() =>
+        createProfileStateStore({ ...options, authorityMode: 'sqlite-candidate' })
+      ).toThrow('restore a selected backup')
+      expect(existsSync(options.databaseFile)).toBe(false)
+      expect(existsSync(options.dataFile)).toBe(false)
+      expect(readFileSync(backup, 'utf8')).toBe(source)
+
+      restoreProfileStateJsonExport({
+        maintenance: acquireProfileStateMaintenance(dirname(dirname(options.directory))),
+        databasePath: options.databaseFile,
+        dataFile: options.dataFile,
+        profileId: options.profileId,
+        exportPath: backup
+      })
+      const recovered = createProfileStateStore({ ...options, authorityMode: 'sqlite-candidate' })
+      expect(recovered.backend).toBe('sqlite')
+      expect(JSON.parse(recovered.store.prepareProfileStateExport().json)).toMatchObject({
+        settings: { theme: 'dark' },
+        futureDomain: { preserved: true }
+      })
+      expect(readFileSync(backup, 'utf8')).toBe(source)
+    }
+  )
+
+  it.each(['legacy', 'sqlite-established'] as const)(
+    'preserves admitted %s recovery from a missing JSON primary',
+    (authorityMode) => {
+      const options = createOptions()
+      const source = '{"settings":{"theme":"dark"}}'
+      writeFileSync(`${options.dataFile}.bak.0`, source)
+
+      const recovered = createProfileStateStore({ ...options, authorityMode })
+      expect(recovered.backend).toBe('json')
+      expect(recovered.store.getSettings().theme).toBe('dark')
+      expect(existsSync(options.databaseFile)).toBe(false)
+      expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
+    }
+  )
+
   it('uses one explicit candidate policy to migrate JSON and construct a SQLite Store', () => {
     const options = createOptions()
     const source = JSON.stringify({ settings: { theme: 'dark' }, unknownDomain: { keep: true } })

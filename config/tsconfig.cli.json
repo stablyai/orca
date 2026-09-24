@@ -51,6 +51,7 @@
     "../src/main/persistence/profile-state/profile-state-automation-runs-writer.ts",
     "../src/main/persistence/profile-state/profile-state-offline-settings.ts",
     "../src/main/persistence/profile-state/profile-state-export-path.ts",
+    "../src/main/persistence/profile-state/profile-state-legacy-backup-path.ts",
     "../src/main/persistence/profile-state/profile-state-backup-path.ts",
     "../src/main/persistence/profile-state/profile-state-backup-rotation.ts",
     "../src/main/persistence/profile-state/profile-state-backup-job.ts",

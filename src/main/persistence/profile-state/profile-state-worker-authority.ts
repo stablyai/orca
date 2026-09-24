@@ -95,6 +95,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   close(): Promise<void> {
+    this.writer.stopAdmission()
     this.closing ??= this.finishClose()
     return this.closing
   }

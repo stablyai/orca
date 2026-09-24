@@ -73,6 +73,14 @@ const EXPECTED_CHECKPOINT = {
 }
 
 describe('complete profile state checkpoints', () => {
+  it('does not retain a save timer after writes are frozen', () => {
+    const { store } = fixture()
+    store.freezeWrites()
+    const setTimer = vi.spyOn(globalThis, 'setTimeout')
+    scheduleSave(store)
+    expect(setTimer).not.toHaveBeenCalled()
+  })
+
   it.each(['sync', 'async'] as const)(
     'rejects a stale %s checkpoint even when the local hash is unchanged',
     async (mode) => {

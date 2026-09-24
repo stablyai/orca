@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TEST_LEAF_1 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
 
@@ -95,6 +95,60 @@ describe('durable asynchronous PTY binding', () => {
     })
   })
 
+  it.each(['tab title', 'pane title'] as const)(
+    'rolls back a failed replacement while preserving a newer %s',
+    async (edit) => {
+      const { store, authority, readState } = await fixture()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await store.persistPtyBinding(binding)
+      const gate = authority.pause()
+      const rejected = expect(
+        store.persistPtyBinding({
+          ...binding,
+          ptyId: 'failed-replacement',
+          incarnationId: 'failed-incarnation',
+          expectedBinding: binding
+        })
+      ).rejects.toThrow('disk refused')
+      await gate.started.promise
+      const session = store.getWorkspaceSession()
+      const tab = session.tabsByWorktree[binding.worktreeId].find(
+        (candidate) => candidate.id === binding.tabId
+      )
+      if (!tab) {
+        throw new Error('binding did not create its terminal row')
+      }
+      if (edit === 'tab title') {
+        tab.customTitle = 'new title'
+      } else {
+        session.terminalLayoutsByTabId[binding.tabId].titlesByLeafId = {
+          [binding.leafId]: 'new title'
+        }
+      }
+      gate.finish.reject(
+        new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
+      )
+      await rejected
+      await store.flushPendingOrThrowAsync()
+      const persisted = readState().workspaceSession
+      expect(persisted.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId).toEqual({
+        [binding.leafId]: binding.ptyId
+      })
+      expect(persisted.terminalPtyIncarnationsByPaneKey[`${binding.tabId}:${binding.leafId}`]).toBe(
+        binding.incarnationId
+      )
+      if (edit === 'tab title') {
+        expect(persisted.tabsByWorktree[binding.worktreeId]).toContainEqual(
+          expect.objectContaining({ id: binding.tabId, customTitle: 'new title' })
+        )
+      } else {
+        expect(persisted.terminalLayoutsByTabId[binding.tabId].titlesByLeafId).toEqual({
+          [binding.leafId]: 'new title'
+        })
+      }
+    }
+  )
+
   it('rolls back a failed binding while retaining an unrelated newer navigation edit', async () => {
     const { store, authority } = await fixture()
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -108,6 +162,47 @@ describe('durable asynchronous PTY binding', () => {
     await rejected
     expect(store.getWorkspaceSession().activeRepoId).toBe('newer-repo')
     expect(store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
+  })
+
+  it('retains a newer root sibling when rolling back a failed leaf replacement', async () => {
+    const { store, authority, readState } = await fixture()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await store.persistPtyBinding(binding)
+    const gate = authority.pause()
+    const rejected = expect(
+      store.persistPtyBinding({ ...binding, ptyId: 'failed-replacement' })
+    ).rejects.toThrow('disk refused')
+    await gate.started.promise
+    const session = store.getWorkspaceSession()
+    const tab = session.tabsByWorktree[binding.worktreeId].find(
+      (candidate) => candidate.id === binding.tabId
+    )
+    if (!tab) {
+      throw new Error('binding did not create its terminal row')
+    }
+    const layout = session.terminalLayoutsByTabId[binding.tabId]
+    layout.root = {
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', leafId: TEST_LEAF_2 },
+      second: { type: 'leaf', leafId: binding.leafId }
+    }
+    layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
+    tab.ptyId = 'new-root-pty'
+    gate.finish.reject(
+      new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
+    )
+    await rejected
+    await store.flushPendingOrThrowAsync()
+    const persisted = readState().workspaceSession
+    expect(persisted.terminalLayoutsByTabId[binding.tabId].root).toEqual(layout.root)
+    expect(persisted.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId).toEqual({
+      [binding.leafId]: binding.ptyId,
+      [TEST_LEAF_2]: 'new-root-pty'
+    })
+    expect(persisted.tabsByWorktree[binding.worktreeId]).toContainEqual(
+      expect.objectContaining({ id: binding.tabId, ptyId: 'new-root-pty' })
+    )
   })
 
   it('removes a failed new binding while retaining a newer sibling tab', async () => {

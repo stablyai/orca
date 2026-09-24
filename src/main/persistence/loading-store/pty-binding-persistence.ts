@@ -1,7 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
+import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../restoring-sessions/workspace-session-write-rollback'
+import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
 import { cloneWorkspaceSessionState } from '../restoring-sessions/session-owner-fields'
 
 import type { PtyBindingSourceExpectation } from './store'
@@ -154,18 +155,29 @@ function writePtyBinding(
     const boundSession = cloneWorkspaceSessionState(session)
     return () => {
       const current = sessions.getWorkspaceSession(resolvedHostId)
-      const ownerState = (value: WorkspaceSessionState) => ({
-        tab: value.tabsByWorktree[bindingWorktreeId]?.find((tab) => tab.id === args.tabId),
-        layout: value.terminalLayoutsByTabId[args.tabId],
-        incarnation: value.terminalPtyIncarnationsByPaneKey?.[paneKey]
-      })
+      const ownerState = (value: WorkspaceSessionState) => {
+        const tab = value.tabsByWorktree[bindingWorktreeId]?.find((tab) => tab.id === args.tabId)
+        return {
+          createdAt: tab?.createdAt,
+          generation: tab?.generation,
+          worktreeId: tab?.worktreeId,
+          ptyId: isTerminalLeafId(args.leafId)
+            ? value.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
+            : tab?.ptyId,
+          incarnation: value.terminalPtyIncarnationsByPaneKey?.[paneKey]
+        }
+      }
+      // Presentation edits do not replace the binding that must be rolled back.
       if (!isDeepStrictEqual(ownerState(current), ownerState(boundSession))) {
         return
       }
-      const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(
+      const rolledBack = rollbackFailedPtyBinding(
         sessionBeforeBinding,
         boundSession,
-        current
+        current,
+        bindingWorktreeId,
+        args.tabId,
+        args.leafId
       )
       if (rolledBack !== current) {
         restore(rolledBack)

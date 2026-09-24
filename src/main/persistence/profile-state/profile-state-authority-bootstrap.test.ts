@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
@@ -275,6 +275,29 @@ describe('profile state authority bootstrap', () => {
     expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
     expect(readdirSync(dirname(options.dataFile))).toEqual(['orca-data.json'])
   })
+
+  it.each(['legacy-backup', 'sqlite-export'])(
+    'preserves a %s created while an empty database is being initialized',
+    (artifact) => {
+      const options = { ...paths(createDirectory()), allowEmptyProfileState: true }
+      const path =
+        artifact === 'legacy-backup'
+          ? `${options.dataFile}.bak.0`
+          : profileStateJsonExportPath(options.dataFile, 1)
+      const source = '{"settings":{"theme":"dark"}}'
+      const originalClose = Database.prototype.close
+      vi.spyOn(Database.prototype, 'close').mockImplementationOnce(function (this: Database) {
+        originalClose.call(this)
+        writeFileSync(path, source)
+      })
+
+      expect(() => bootstrapProfileStateAuthority(options)).toThrow()
+      expect(existsSync(options.databaseFile)).toBe(false)
+      expect(existsSync(options.dataFile)).toBe(false)
+      expect(readFileSync(path, 'utf8')).toBe(source)
+      expect(readdirSync(dirname(path))).toEqual([basename(path)])
+    }
+  )
 
   it.each(['-wal', '-shm', '-journal'])(
     'treats an orphaned SQLite %s sidecar as authority evidence with or without JSON',

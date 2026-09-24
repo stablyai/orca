@@ -50,11 +50,10 @@ export function createProfileStateWriterRequest(
   timeoutMs: number,
   onTimeout: () => void
 ): PendingProfileStateWriterRequest {
-  let resolve: PendingProfileStateWriterRequest['resolve'] = () => {}
-  let reject: PendingProfileStateWriterRequest['reject'] = () => {}
-  const promise = new Promise<SuccessfulProfileStateWriterResponse>((accept, refuse) => {
-    resolve = accept
-    reject = refuse
-  })
-  return { id, command, promise, resolve, reject, timer: setTimeout(onTimeout, timeoutMs) }
+  return {
+    id,
+    command,
+    ...Promise.withResolvers<SuccessfulProfileStateWriterResponse>(),
+    timer: setTimeout(onTimeout, timeoutMs)
+  }
 }

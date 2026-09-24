@@ -6,6 +6,7 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 import { profileStateJsonMatchesAcceptance } from './profile-state-documents'
+import { isRecord, parseProfileStateRoot } from './profile-state-document-validation'
 import {
   isProfileStateSqliteAvailable,
   openProfileStateDatabase,
@@ -16,7 +17,7 @@ import {
   readProfileStateDomainsWithRevisionFromDatabase
 } from './profile-state-domain-reader'
 import { writeProfileStateDomain } from './profile-state-domain-writes'
-import { assertNoRetainedProfileStateExports } from './profile-state-recovery-required'
+import { assertProfileStateCanInitialize } from './profile-state-recovery-required'
 import { classifyProfileStateStorage } from './profile-state-storage-classification'
 
 export type ProfileStateOfflineLocation = {
@@ -41,7 +42,7 @@ export function readAgentHookSettingsFromProfileState(
 ): AgentHookSettings {
   const classification = classifyProfileStateStorage(location.dataFile, location.databaseFile)
   if (classification === 'json-only' || classification === 'neither') {
-    assertNoRetainedProfileStateExports(location)
+    assertProfileStateCanInitialize(location)
     return readAgentHookSettingsFromJson(location.dataFile)
   }
 
@@ -107,9 +108,9 @@ export function updateAgentHookSettingsFromProfileState(
     return updateAgentHookSettingsInProfileState(location, enabled)
   }
 
-  assertNoRetainedProfileStateExports(location)
+  assertProfileStateCanInitialize(location)
   const state = existsSync(location.dataFile)
-    ? parseRootState(readFileSync(location.dataFile, 'utf8'))
+    ? parseProfileStateRoot(readFileSync(location.dataFile, 'utf8'))
     : structuredClone(getDefaultPersistedState(homedir()))
   const persistedSettings = isRecord(state.settings) ? state.settings : {}
   const settings = {
@@ -184,7 +185,7 @@ function readAgentHookSettingsFromJson(dataFile: string): AgentHookSettings {
 }
 
 function readAgentHookSettingsFromSnapshot(raw: string): AgentHookSettings {
-  const state = parseRootState(raw)
+  const state = parseProfileStateRoot(raw)
   return readAgentHookSettingsFromSettingsValue(state.settings)
 }
 
@@ -196,21 +197,6 @@ function readAgentHookSettingsFromSettingsValue(value: unknown): AgentHookSettin
   }
 }
 
-function parseRootState(raw: string): Record<string, unknown> {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch (error) {
-    throw new Error(
-      `Profile state JSON is invalid: ${error instanceof Error ? error.message : String(error)}`
-    )
-  }
-  if (!isRecord(parsed)) {
-    throw new Error('Profile state JSON root must be an object')
-  }
-  return parsed
-}
-
 function writeJsonProfileState(dataFile: string, state: Record<string, unknown>): void {
   mkdirSync(dirname(dataFile), { recursive: true })
   writeFileDurableSync(
@@ -218,8 +204,4 @@ function writeJsonProfileState(dataFile: string, state: Record<string, unknown>)
     dataFile,
     `${JSON.stringify(state, null, 2)}\n`
   )
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

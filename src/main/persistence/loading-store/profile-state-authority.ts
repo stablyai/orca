@@ -1,3 +1,4 @@
+import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { AutomationRun } from '../../../shared/automations-types'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 
@@ -108,11 +109,14 @@ export type ProfileStateDomainReplacement = {
   payload: string | null
 }
 
+export type ProfileStateStartupPaneAlias = Omit<LegacyPaneKeyAliasEntry, 'ptyId'>
+
 /** A startup read paired with the authority that observed its revision. */
 export type ProfileStateAuthorityInitialState<
   Authority extends ProfileStatePersistenceAuthority = ProfileStateAuthority
 > = {
   readonly authority: Authority
+  readonly unboundPaneAliases?: readonly ProfileStateStartupPaneAlias[]
 } & (
   | { readonly serializedState: string | undefined; readonly takeParsedState?: never }
   | {
