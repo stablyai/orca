@@ -3798,7 +3798,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "unlimitedUsage": "Unlimited"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3985,6 +3986,7 @@
                 "cookie": "MiniMax session cookie expired. Replace it in Settings."
               }
             },
+            "unlimitedUsage": "Unlimited usage",
             "usage": {
               "noSubscription": {
                 "label": "No subscription"
@@ -4018,7 +4020,8 @@
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: only the tightest window",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "unlimitedUsage": "Unlimited"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
