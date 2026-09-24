@@ -462,7 +462,8 @@ describe('registerPtyHandlers', () => {
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca (the GNOME screen reader) in Orca terminals (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
-          expect(env.ORCA_CLI_COMMAND).toBeUndefined()
+          // The same absolute spelling a structured session gets, so a terminal view keeps it too.
+          expect(env.ORCA_CLI_COMMAND).toBe(join(shimDir, 'orca'))
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,
@@ -479,6 +480,7 @@ describe('registerPtyHandlers', () => {
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.PATH.split(delimiter)[0]).toBe(join('/tmp/orca-resources', 'bin'))
+          expect(env.ORCA_CLI_COMMAND?.startsWith(join('/tmp/orca-resources', 'bin'))).toBe(true)
         } finally {
           if (resourcesPathDescriptor) {
             Object.defineProperty(process, 'resourcesPath', resourcesPathDescriptor)
