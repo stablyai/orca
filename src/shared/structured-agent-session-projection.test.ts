@@ -103,6 +103,23 @@ describe('structured agent session status projection', () => {
     })
   })
 
+  it('names the call a tool row output answers, so a run pairs it by id', () => {
+    const projected = projectStructuredItemToNativeChat(
+      item('wait', 1, {
+        kind: 'tool-call',
+        name: 'wait_agent',
+        callId: 'call-wait',
+        input: null,
+        state: 'completed',
+        output: { head: 'CHILD_REPLY', digest: 'd', byteLength: 11, truncated: false }
+      })
+    )
+    expect(projected?.blocks).toEqual([
+      expect.objectContaining({ type: 'tool-call', callId: 'call-wait' }),
+      { type: 'tool-result', output: 'CHILD_REPLY', isError: false, callId: 'call-wait' }
+    ])
+  })
+
   it('projects running, attention, and completed lifecycle states', () => {
     const running = item('running', 1, {
       kind: 'status',

@@ -43,6 +43,23 @@ describe('pairNativeChatToolResults', () => {
     expect(pairedResults.has(orphan)).toBe(false)
   })
 
+  it('gives a result that names its call to that call, past one that finished with no output', () => {
+    const named = (name: string, callId: string): NativeChatToolCallBlock => ({
+      ...call(name),
+      callId
+    })
+    const [spawn, wait, shell] = [named('spawn', 's'), named('wait', 'w'), named('shell', 'x')]
+    const [waited, ran]: NativeChatToolResultBlock[] = [
+      { ...result('CHILD_REPLY'), callId: 'w' },
+      { ...result('CHILD_DONE'), callId: 'x' }
+    ]
+    const { resultByCall } = pairNativeChatToolResults([spawn, wait, waited, shell, ran])
+
+    expect(resultByCall.has(spawn)).toBe(false)
+    expect(resultByCall.get(wait)).toBe(waited)
+    expect(resultByCall.get(shell)).toBe(ran)
+  })
+
   it('ignores blocks that are neither a call nor a result', () => {
     const text: NativeChatBlock = { type: 'text', text: 'hi' }
     const [a, ra] = [call('a'), result('r')]

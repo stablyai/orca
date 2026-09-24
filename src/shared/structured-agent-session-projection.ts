@@ -83,7 +83,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
               {
                 type: 'tool-result' as const,
                 output: boundedText(body.output),
-                isError: body.state === 'failed'
+                isError: body.state === 'failed',
+                // The call and its output are one journal row, so the result names its call.
+                ...(body.callId !== undefined ? { callId: body.callId } : {})
               }
             ]
           : [])
