@@ -64,6 +64,7 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
 let db: InstanceType<typeof OrchestrationDb>
 
 function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a prototype-only probe; every field the methods read is assigned below.
   return Object.assign(Object.create(MailTargetProbe.prototype), {
     _orchestrationDb: db,
     ptysById: new Map(),

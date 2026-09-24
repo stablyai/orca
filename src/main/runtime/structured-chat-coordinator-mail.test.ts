@@ -23,6 +23,7 @@ import { OrchestrationDb } from './orchestration/db'
 import type { RpcRequest } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
+import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -43,6 +44,7 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
 function fakeCodex() {
   const connections: FakeConnection[] = []
   let turnCounter = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a fake answering the JSON-RPC calls the adapter makes, as the shipped integration test does.
   const openConnection = (async (_launch, handlers = {}) => {
     const connection: FakeConnection = {
       handlers,
@@ -51,7 +53,7 @@ function fakeCodex() {
       pid: 4321,
       closed: false,
       request: async (method, params) => {
-        const input = (params ?? {}) as Record<string, unknown>
+        const input = isRecord(params) ? params : {}
         if (method === 'thread/start') {
           connection.threadId = `thread-${connections.length}`
           return { thread: { id: connection.threadId } }
@@ -131,7 +133,7 @@ function attachParams(sessionId: string) {
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.attach',
         sessionId,
-        fields: attachFingerprintFields({ ...params, envelope } as never)
+        fields: attachFingerprintFields({ ...params, envelope })
       })
     }
   }
@@ -174,7 +176,7 @@ async function call(
   if (!response.ok) {
     throw new Error(`${method} failed: ${JSON.stringify(response)}`)
   }
-  return response.result as Record<string, unknown>
+  return resultOf(response)
 }
 
 async function openChat(sessionId: string): Promise<FakeConnection> {
@@ -265,7 +267,7 @@ async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string 
       sessionId: COORDINATOR
     }
   )
-  const runId = (created.run as { id: string }).id
+  const runId = idOf(created.run)
   const task = await call(
     'orchestration.taskCreate',
     { spec: 'build it' },
@@ -273,7 +275,7 @@ async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string 
       sessionId: COORDINATOR
     }
   )
-  return { runId, taskId: (task.task as { id: string }).id }
+  return { runId, taskId: idOf(task.task) }
 }
 
 beforeEach(async () => {

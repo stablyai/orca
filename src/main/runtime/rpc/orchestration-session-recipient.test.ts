@@ -8,7 +8,10 @@ import {
 import {
   ACTOR_X,
   createSessionCallerHarness,
+  idOf,
+  isRecord,
   orchestrationRequest,
+  resultOf,
   PROVIDER_ID_X,
   SESSION_X,
   SESSION_Y,
@@ -30,8 +33,15 @@ describe('a send addressed to an agent session', () => {
   beforeEach(() => {
     h = createSessionCallerHarness(hostRef)
     visible = [SESSION_X, SESSION_Y]
-    const host = hostRef.current as { deps: { store: Row } }
-    host.deps.store.getVisibleSessionTabIndex = () => ({ present: true, sessionIds: visible })
+    hostRef.current = {
+      deps: {
+        store: {
+          getRecord: (sessionId: string) => h.records.get(sessionId) ?? null,
+          listRecords: () => [...h.records.values()],
+          getVisibleSessionTabIndex: () => ({ present: true, sessionIds: visible })
+        }
+      }
+    }
   })
 
   afterEach(() => {
@@ -39,11 +49,18 @@ describe('a send addressed to an agent session', () => {
     vi.restoreAllMocks()
   })
 
-  async function send(to: string): Promise<{ ok: boolean; result?: Row; error?: Row }> {
-    const response = await h.dispatch(
+  async function send(to: string): Promise<Row> {
+    const response: unknown = await h.dispatch(
       orchestrationRequest('orchestration.send', { from: 'term_worker', to, subject: 'hello' })
     )
-    return response as never
+    if (!isRecord(response)) {
+      throw new Error('expected an RPC response object')
+    }
+    return response
+  }
+
+  function errorMessage(response: Row): string {
+    return isRecord(response.error) ? String(response.error.message) : ''
   }
 
   it('stores mail to a live session that coordinates nothing at its own address, and points it', async () => {
@@ -66,7 +83,7 @@ describe('a send addressed to an agent session', () => {
     const created = await h.dispatch(
       orchestrationRequest('orchestration.runCreate', { objective: 'o' }, { sessionId: SESSION_X })
     )
-    const runId = ((created as { result: { run: { id: string } } }).result.run as { id: string }).id
+    const runId = idOf(resultOf(created).run)
     expect(await send(ACTOR_X)).toMatchObject({
       ok: true,
       result: { message: { to_handle: `run:${runId}` } }
@@ -101,7 +118,7 @@ describe('a send addressed to an agent session', () => {
     visible = [SESSION_X]
     const sent = await send(`session:${SESSION_Y}`)
     expect(sent).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
-    expect(String(sent.error?.message)).toContain('its chat was closed')
+    expect(errorMessage(sent)).toContain('its chat was closed')
     expect(h.db.getInbox(100)).toEqual([])
   })
 
@@ -123,7 +140,7 @@ describe('a send addressed to an agent session', () => {
     structuredWorkerIdentities.clear()
     const sent = await send(`session:${SESSION_Y}`)
     expect(sent).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
-    expect(String(sent.error?.message)).toContain('worker identity')
+    expect(errorMessage(sent)).toContain('worker identity')
   })
 
   it('leaves a bare string that is no session a terminal handle, as before', async () => {

@@ -238,6 +238,7 @@ describe('structured worker dispatch preamble', () => {
     submission: Record<string, unknown>,
     settlesTo?: Record<string, unknown>
   ) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preamble reads only these host members.
     return {
       deps: { store: { getRecord: () => ({ lease: { runtimeFence: 7 } }) } },
       send: async () => ({ ok: true, value: { clientMessageId: 'c1', submission } }),
