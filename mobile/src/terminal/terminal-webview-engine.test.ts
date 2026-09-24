@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Script } from 'node:vm'
@@ -259,5 +260,25 @@ describe('terminal WebView bundled engine', () => {
   it('answers native readiness probes from the live document', () => {
     expect(terminalHtmlSource).toContain("if (msg.type === 'ping')")
     expect(terminalHtmlSource).toContain("notify(scope, { type: 'pong', pingId: msg.id })")
+  })
+
+  it('records the desktop webgl atlas patch in the mobile lockfile', () => {
+    const mobileRoot = join(import.meta.dirname, '../..')
+    const repoRoot = join(import.meta.dirname, '../../..')
+    const patchFile = '@xterm__addon-webgl@0.20.0-beta.299.patch'
+    const desktopPatch = readFileSync(join(repoRoot, 'config/patches', patchFile), 'utf8')
+    const mobilePatch = readFileSync(join(mobileRoot, 'patches', patchFile), 'utf8')
+    // Why: any 64-hex regex accepts a stale self-consistent copy; pin to desktop.
+    const desktopHash = createHash('sha256').update(desktopPatch, 'utf8').digest('hex')
+
+    expect(createHash('sha256').update(mobilePatch, 'utf8').digest('hex')).toBe(desktopHash)
+
+    const lockfile = readFileSync(join(mobileRoot, 'pnpm-lock.yaml'), 'utf8')
+    expect(lockfile).toContain(`@xterm/addon-webgl@0.20.0-beta.299(patch_hash=${desktopHash})`)
+    expect(lockfile).toContain(`'@xterm/addon-webgl@0.20.0-beta.299':\n    hash: ${desktopHash}\n`)
+  })
+
+  it('bundles the webgl GLSL fallback for an out-of-range texpage', () => {
+    expect(XTERM_ENGINE_JS).toContain('else { outColor = vec4(0.0, 0.0, 0.0, 0.0); }')
   })
 })
