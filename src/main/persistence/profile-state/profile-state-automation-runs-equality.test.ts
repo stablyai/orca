@@ -57,6 +57,57 @@ describe('automation history replacement equality', () => {
     }
   )
 
+  it.each([
+    {
+      payload: '[{"id":"ignored","id":"run","extension":{"value":1,"value":2}}, {"id":"next"}]',
+      presence: 'array'
+    },
+    { payload: '[{"id":"same"},{"id":"same","extension":true}]', presence: 'document' },
+    { payload: '[{"extension":true}]', presence: 'document' },
+    { payload: '[]', presence: 'array' },
+    { payload: 'null', presence: 'null' },
+    { payload: null, presence: 'absent' }
+  ])('preserves canonical JSON and storage transitions for $payload', ({ payload, presence }) => {
+    const { db } = fixture()
+
+    expect(
+      writeProfileStateDomains(db, {
+        expectedRevision: 1,
+        replacements: [{ domain: 'automationRuns', payload }]
+      })
+    ).toEqual({ changed: true, revision: 2, changedDomains: ['automationRuns'] })
+    expect(JSON.parse(readProfileStateSnapshot(db).json)).toEqual({
+      settings: {},
+      ...(payload === null ? {} : { automationRuns: JSON.parse(payload) })
+    })
+    expect(db.prepare('SELECT presence FROM profile_state_automation_runs_meta').get()).toEqual({
+      presence
+    })
+    if (presence === 'array' || presence === 'null') {
+      expect(
+        db.prepare('SELECT content_hash FROM profile_state_automation_runs_meta').get()
+      ).toEqual({
+        content_hash: hashProfileStateJson(JSON.stringify(JSON.parse(payload ?? 'null')))
+      })
+    }
+  })
+
+  it('derives prepared history from the checked payload instead of caller metadata', () => {
+    const { db } = fixture()
+    const replacement = {
+      domain: 'automationRuns',
+      payload: '[{"id":"actual"}]',
+      automationRunsValue: [{ id: 'forged' }]
+    }
+
+    writeProfileStateDomains(db, { expectedRevision: 1, replacements: [replacement] })
+
+    expect(JSON.parse(readProfileStateSnapshot(db).json)).toEqual({
+      settings: {},
+      automationRuns: [{ id: 'actual' }]
+    })
+  })
+
   it('fences a stale caller even when its history still matches', () => {
     const { db, payload } = fixture()
     writeProfileStateDomains(db, {

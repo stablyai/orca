@@ -13,12 +13,6 @@ export type AutomationRunsPresence =
   | typeof AUTOMATION_RUNS_NULL
   | typeof AUTOMATION_RUNS_ARRAY
 
-export type AutomationRunsReplacement = {
-  payload: string | null
-  domainVersion: number
-  now?: () => number
-}
-
 export type AutomationRunsMeta = {
   presence: AutomationRunsPresence
   domainVersion: number
@@ -46,10 +40,10 @@ export type AutomationRunIdentity = {
 }
 
 export type ParsedAutomationRunsReplacement =
-  | { presence: typeof AUTOMATION_RUNS_ABSENT; payload: null; runs?: undefined }
-  | { presence: typeof AUTOMATION_RUNS_NULL; payload: 'null'; runs?: undefined }
+  | { presence: typeof AUTOMATION_RUNS_ABSENT; contentHash: ''; runs?: undefined }
+  | { presence: typeof AUTOMATION_RUNS_NULL; contentHash: string; runs?: undefined }
   | {
       presence: typeof AUTOMATION_RUNS_ARRAY
-      payload: string
+      contentHash: string
       runs: readonly AutomationRunPayload[]
     }

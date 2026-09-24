@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { copyProfileStateRecoveryFile } from './profile-state-recovery-copy'
+import { copyProfileStateRecoveryFiles } from './profile-state-recovery-copy'
 
 export type ProfileStateDatabaseQuarantine = {
   directory: string
@@ -33,32 +33,41 @@ export function quarantineProfileStateDatabase(
   }
 
   const directory = join(quarantineRoot, `profile-state-corrupt-${Date.now()}-${randomUUID()}`)
-  const copiedFiles: string[] = []
+  const targets = new Set<string>()
   mkdirSync(directory, { recursive: true, mode: 0o700 })
   try {
+    const copies: { source: string; target: string }[] = []
     for (const sourcePath of sourceFiles) {
       const targetName =
         sourcePath === databasePath
           ? 'profile-state.db'
           : `profile-state.db${sourcePath.slice(databasePath.length)}`
       const targetPath = join(directory, targetName)
-      copyProfileStateRecoveryFile(sourcePath, targetPath)
-      hardenSqliteDatabaseFiles(targetPath)
-      fsyncFileSync(targetPath)
-      copiedFiles.push(targetPath)
+      copies.push({ source: sourcePath, target: targetPath })
+      targets.add(targetPath)
     }
     for (const sourcePath of new Set(recoveryFiles)) {
       const targetPath = join(directory, basename(sourcePath))
-      if (existsSync(targetPath) || basename(sourcePath) === 'manifest.json') {
+      if (
+        targets.has(targetPath) ||
+        existsSync(targetPath) ||
+        basename(sourcePath) === 'manifest.json'
+      ) {
         throw new Error('Profile recovery artifact name conflicts with the quarantine manifest')
       }
-      copyProfileStateRecoveryFile(sourcePath, targetPath)
-      hardenSqliteDatabaseFiles(targetPath)
-      fsyncFileSync(targetPath)
-      copiedFiles.push(targetPath)
+      copies.push({ source: sourcePath, target: targetPath })
+      targets.add(targetPath)
     }
-    hardenSqliteDatabaseFiles(join(directory, 'profile-state.db'))
+    copyProfileStateRecoveryFiles(copies)
     const manifestPath = join(directory, 'manifest.json')
+    // Let the destination filesystem detect case or Unicode aliases of the manifest name.
+    if (existsSync(manifestPath)) {
+      throw new Error('Profile recovery artifact name conflicts with the quarantine manifest')
+    }
+    for (const { target } of copies) {
+      hardenSqliteDatabaseFiles(target)
+      fsyncFileSync(target)
+    }
     writeFileDurableSync(
       durableWriteTempPath(manifestPath),
       manifestPath,
@@ -72,7 +81,7 @@ export function quarantineProfileStateDatabase(
       })
     )
     bestEffortFsyncDirectorySync(directory)
-    return { directory, manifestPath, copiedFiles }
+    return { directory, manifestPath, copiedFiles: [...targets] }
   } catch (error) {
     rmSync(directory, { recursive: true, force: true })
     throw error

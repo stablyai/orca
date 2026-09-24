@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { hashProfileStatePayload, isRecord } from './profile-state-document-validation'
 import {
   AUTOMATION_RUNS_ABSENT,
@@ -11,7 +12,7 @@ export function parseAutomationRunsReplacement(
   payload: string | null
 ): ParsedAutomationRunsReplacement | undefined {
   if (payload === null) {
-    return { presence: AUTOMATION_RUNS_ABSENT, payload: null }
+    return parseAutomationRunsValue(undefined)
   }
   let parsed: unknown
   try {
@@ -19,28 +20,30 @@ export function parseAutomationRunsReplacement(
   } catch {
     return undefined
   }
-  if (parsed === null) {
-    return { presence: AUTOMATION_RUNS_NULL, payload: 'null' }
+  return parseAutomationRunsValue(parsed)
+}
+
+export function parseAutomationRunsValue(
+  value: unknown
+): ParsedAutomationRunsReplacement | undefined {
+  if (value === undefined) {
+    return { presence: AUTOMATION_RUNS_ABSENT, contentHash: '' }
   }
-  if (!Array.isArray(parsed)) {
+  if (value === null) {
+    return { presence: AUTOMATION_RUNS_NULL, contentHash: hashProfileStatePayload('null') }
+  }
+  if (!Array.isArray(value)) {
     return undefined
   }
-  const runs = parseAutomationRunValues(parsed)
-  if (runs === undefined) {
-    return undefined
-  }
-  return {
-    presence: AUTOMATION_RUNS_ARRAY,
-    payload: `[${runs.map((run) => run.payload).join(',')}]`,
-    runs
-  }
+  return parseAutomationRunValues(value)
 }
 
 export function parseAutomationRunValues(
   values: readonly unknown[]
-): AutomationRunPayload[] | undefined {
+): ParsedAutomationRunsReplacement | undefined {
   const ids = new Set<string>()
   const runs: AutomationRunPayload[] = []
+  const aggregate = createHash('sha256').update('[')
   for (const [ordinal, value] of values.entries()) {
     if (!isRecord(value) || typeof value.id !== 'string' || ids.has(value.id)) {
       return undefined
@@ -49,6 +52,10 @@ export function parseAutomationRunValues(
     if (runPayload === undefined) {
       return undefined
     }
+    if (ordinal > 0) {
+      aggregate.update(',')
+    }
+    aggregate.update(runPayload, 'utf8')
     ids.add(value.id)
     runs.push({
       id: value.id,
@@ -57,14 +64,9 @@ export function parseAutomationRunValues(
       contentHash: hashProfileStatePayload(runPayload)
     })
   }
-  return runs
-}
-
-export function hashAutomationRunsReplacement(
-  replacement: ParsedAutomationRunsReplacement
-): string {
-  if (replacement.presence === AUTOMATION_RUNS_ABSENT) {
-    return ''
+  return {
+    presence: AUTOMATION_RUNS_ARRAY,
+    contentHash: aggregate.update(']').digest('hex'),
+    runs
   }
-  return hashProfileStatePayload(replacement.payload)
 }

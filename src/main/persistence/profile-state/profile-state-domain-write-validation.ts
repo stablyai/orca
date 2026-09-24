@@ -9,6 +9,8 @@ import type {
 export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
   domainVersion: number
   payloadHash: string | null
+  // Keep the checked history value only for this write so normalization does not parse it again.
+  automationRunsValue?: unknown
   automationRuns?: AutomationRunsWritePreparation
 }
 
@@ -42,17 +44,21 @@ export function prepareProfileStateDomainMutation(
 ): PreparedProfileStateMutation {
   const payloadHash =
     replacement.payload === null ? null : hashProfileStateJson(replacement.payload)
+  let parsed: unknown
   if (replacement.payload !== null) {
     try {
-      JSON.parse(replacement.payload)
+      parsed = JSON.parse(replacement.payload)
     } catch {
       throw new Error(`Profile state domain payload is invalid JSON: ${replacement.domain}`)
     }
   }
   return {
-    ...replacement,
+    domain: replacement.domain,
+    payload: replacement.payload,
+    now: replacement.now,
     domainVersion: replacement.domainVersion ?? PROFILE_STATE_DOCUMENT_VERSION,
-    payloadHash
+    payloadHash,
+    automationRunsValue: replacement.domain === 'automationRuns' ? parsed : undefined
   }
 }
 

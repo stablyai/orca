@@ -84,7 +84,14 @@ function snapshot(path: string) {
 
 const boundaries = [
   ...(process.platform === 'darwin'
-    ? ['clone:1:before', 'clone:1:after', 'clone:2:after', 'clone:3:after']
+    ? [
+        'clone:1:before',
+        'clone:1:after',
+        'clone:2:before',
+        'clone:2:after',
+        'clone:3:after',
+        'clone:4:after'
+      ]
     : []),
   'primary',
   'sqlite-publish:before',

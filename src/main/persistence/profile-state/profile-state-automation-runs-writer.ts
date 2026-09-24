@@ -1,17 +1,17 @@
 import type Database from '../../sqlite/sync-database'
+import type { PreparedProfileStateMutation } from './profile-state-domain-write-validation'
 import {
   AUTOMATION_RUNS_ARRAY,
   AUTOMATION_RUNS_DOMAIN,
   PROFILE_STATE_AUTOMATION_RUNS_META_TABLE,
   PROFILE_STATE_AUTOMATION_RUNS_TABLE,
-  type AutomationRunsReplacement,
   type AutomationRunIdentity,
   type ParsedAutomationRunsReplacement
 } from './profile-state-automation-runs-model'
 import {
-  hashAutomationRunsReplacement,
   parseAutomationRunValues,
-  parseAutomationRunsReplacement
+  parseAutomationRunsReplacement,
+  parseAutomationRunsValue
 } from './profile-state-automation-runs-payload'
 import { parseAutomationRunIdentity } from './profile-state-automation-runs-validation'
 import {
@@ -44,18 +44,16 @@ export function rebuildProfileStateAutomationRunsProjection(
 
 export function prepareProfileStateAutomationRunsReplacement(
   db: Database.Database,
-  replacement: AutomationRunsReplacement,
+  replacement: PreparedProfileStateMutation,
   actualRevision: number
 ): AutomationRunsWritePreparation | undefined {
   const current = readCurrentAutomationRunsState(db, actualRevision)
-  const incoming = parseAutomationRunsReplacement(replacement.payload)
+  const incoming = parseAutomationRunsValue(replacement.automationRunsValue)
   if (incoming === undefined) {
     return undefined
   }
   return {
-    changed:
-      current.presence !== incoming.presence ||
-      current.contentHash !== hashAutomationRunsReplacement(incoming),
+    changed: current.presence !== incoming.presence || current.contentHash !== incoming.contentHash,
     incoming,
     domainVersion: replacement.domainVersion,
     now: replacement.now
@@ -69,20 +67,13 @@ export function prepareProfileStateAutomationRunsDelta(
   now: () => number,
   actualRevision: number
 ): AutomationRunsWritePreparation | undefined {
-  const runs = parseAutomationRunValues(after)
-  if (runs === undefined) {
+  const incoming = parseAutomationRunValues(after)
+  if (incoming === undefined) {
     return undefined
-  }
-  const incoming: ParsedAutomationRunsReplacement = {
-    presence: AUTOMATION_RUNS_ARRAY,
-    payload: `[${runs.map((run) => run.payload).join(',')}]`,
-    runs
   }
   const current = readCurrentAutomationRunsState(db, actualRevision)
   return {
-    changed:
-      current.presence !== incoming.presence ||
-      current.contentHash !== hashAutomationRunsReplacement(incoming),
+    changed: current.presence !== incoming.presence || current.contentHash !== incoming.contentHash,
     incoming,
     domainVersion,
     now
@@ -156,7 +147,7 @@ function applyIncomingAutomationRuns(
     domainVersion,
     nextRevision,
     now,
-    hashAutomationRunsReplacement(incoming)
+    incoming.contentHash
   )
   compactAutomationRunsDocument(db)
 }
