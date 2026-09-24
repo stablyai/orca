@@ -209,7 +209,9 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission'
+  // status-unavailable: foreground membership could not be read (e.g. pre-v11
+  // daemon); keep fail-closed but do not claim the pane has no agent (#12946).
+  refusedReason?: 'no-agent' | 'permission' | 'status-unavailable'
   /**
    * Present only when a durable agent-session lease refused the write. Additive and optional: an
    * old client sees the `accepted: false` it already handles and ignores this field.
