@@ -111,15 +111,18 @@ export function createLspJsonRpcClient(
   async function answerServerRequest(frame: LspJsonRpcMessage): Promise<void> {
     let result: unknown
     try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: answerServerRequest runs only for server-request frames; the union type can't express "method present."
       result = await handlers.onServerRequest(frame.method as string, frame.params)
     } catch (error) {
       respondWithError(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: server-request frames always carry an id; this path is reached only for such frames.
         frame.id as number | string,
         -32603,
         error instanceof Error ? error.message : String(error)
       )
       return
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: server-request frames always carry an id; this path is reached only for such frames.
     respond(frame.id as number | string, result ?? null)
   }
 

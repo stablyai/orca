@@ -175,6 +175,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
     }
     if (method === 'textDocument/publishDiagnostics') {
       // v1 keeps diagnostics only for version alignment — no IPC, no UI (spec §1).
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: publishDiagnostics params are the wire-deserialized LSP payload; `uri`/`version` are read through optional chaining and typeof-checked before use.
       const p = params as { uri?: string; version?: number | null } | null
       if (p?.uri && typeof p.version === 'number') {
         const doc = documents.get(lspUriToNativePath(p.uri))
@@ -185,6 +186,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
       return
     }
     if (method === 'window/logMessage') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: logMessage params are the wire-deserialized LSP payload; `message` is read through optional chaining for the log line.
       log(`[clangd/log] ${(params as { message?: string } | null)?.message ?? ''}`)
       return
     }
@@ -199,6 +201,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
       'initialize',
       buildClangdInitializeParams(options.rootPath, process.pid),
       { timeoutMs: INITIALIZE_TIMEOUT_MS }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the initialize result is the wire-deserialized LSP InitializeResult; `positionEncoding` is verified against utf-16 (throws otherwise) and `serverInfo.version` is read through optional chaining.
     )) as { capabilities?: { positionEncoding?: string }; serverInfo?: { version?: string } } | null
 
     const encoding = result?.capabilities?.positionEncoding

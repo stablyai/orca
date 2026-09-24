@@ -51,6 +51,7 @@ export function answerClangdServerRequest(
 ): unknown {
   if (method === 'workspace/configuration') {
     // No clangd config file support in v1: answer null per item.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: workspace/configuration params are the wire-deserialized LSP payload; only `items` is read and each is answered null, so an unknown shape degrades to an empty list.
     const items = (params as { items?: unknown[] } | null)?.items ?? []
     return items.map(() => null)
   }
@@ -72,6 +73,7 @@ export function createClangdProgressTracker(): ClangdProgressTracker {
   const titles = new Map<string | number, string>()
   return {
     reduce(params: unknown): string | null | undefined {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: $/progress params are the wire-deserialized LSP payload; every field is read through optional chaining, so an unknown shape yields undefined.
       const p = params as {
         token?: string | number
         value?: { kind?: string; title?: string; message?: string; percentage?: number }
@@ -111,6 +113,7 @@ export function mapClangdDefinitionResult(
 ): LanguageServerDefinitionLocation[] {
   const raw = Array.isArray(result) ? result : result ? [result] : []
   const locations: LanguageServerDefinitionLocation[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the definition result is normalized to an array above; each item is validated (uri/range present) before use, so a malformed item is skipped.
   for (const item of raw as RawLocation[]) {
     if (!item?.uri || !item.range?.start || !item.range.end) {
       continue
@@ -130,6 +133,7 @@ export function mapClangdDefinitionResult(
 
 /** LSP hover result (all legal content shapes) -> semantic hover or null. */
 export function mapClangdHoverResult(result: unknown): LanguageServerHoverContent | null {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hover result is the wire-deserialized LSP payload; `contents` is read through optional chaining and re-narrowed by typeof/Array.isArray below.
   const contents = (result as { contents?: unknown } | null)?.contents
   if (typeof contents === 'string') {
     return { kind: 'plaintext', value: contents }
@@ -137,12 +141,18 @@ export function mapClangdHoverResult(result: unknown): LanguageServerHoverConten
   if (Array.isArray(contents)) {
     const value = contents
       .map((entry) =>
-        typeof entry === 'string' ? entry : String((entry as { value?: string })?.value ?? '')
+        typeof entry === 'string'
+          ? entry
+          : String(
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hover `contents` array entries are LSP string|MarkedString; typeof narrows the string variant, this handles the object's `value`.
+              (entry as { value?: string })?.value ?? ''
+            )
       )
       .filter(Boolean)
       .join('\n\n')
     return value ? { kind: 'plaintext', value } : null
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: at this point `contents` is neither string nor array (guarded above), so it is the MarkupContent object variant; `value` is checked before use.
   const markup = contents as { kind?: string; value?: string } | null
   if (!markup?.value) {
     return null
