@@ -5,6 +5,11 @@ import {
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
 import { countClaudePinnedAccountUsers } from './claude-pinned-pty-registry'
+import {
+  clearPendingPinnedClaudeSeed,
+  listPendingPinnedClaudeSeedAccountIds,
+  readPinnedClaudeSeedMarker
+} from './claude-pinned-credentials'
 import { ClaudeRuntimeAuthSync } from './runtime-auth/runtime-auth-sync'
 import type {
   ClaudeLaunchAuthOptions,
@@ -117,6 +122,29 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
       return this.getPreparation(target)
     }
     return this.preparePinnedClaudeLaunch(account.id, target)
+  }
+
+  /**
+   * Startup pass over the seed markers found by the raw-path scan: drops flags whose dir is not
+   * Orca-owned or has no marker (they would suppress refresh until restart), and reads back
+   * crashed pinned sessions no surviving PTY still holds.
+   */
+  async revalidatePinnedSeedMarkers(): Promise<void> {
+    await this.serializeMutation(async () => {
+      const accounts = this.store.getSettings().claudeManagedAccounts
+      for (const accountId of listPendingPinnedClaudeSeedAccountIds()) {
+        const account = this.getActiveAccount(accounts, accountId)
+        const configDir =
+          account && account.managedAuthRuntime !== 'wsl'
+            ? await this.getOwnedManagedAuthPath(account)
+            : null
+        if (!account || !configDir || readPinnedClaudeSeedMarker(configDir) === null) {
+          clearPendingPinnedClaudeSeed(accountId)
+        } else if (countClaudePinnedAccountUsers(accountId) === 0) {
+          await this.reconcilePinnedKeychainCredentials(account, configDir, { strict: false })
+        }
+      }
+    })
   }
 
   private initializeLastSyncedState(): void {

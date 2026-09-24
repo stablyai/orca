@@ -13,7 +13,7 @@ import {
   testState
 } from './runtime-auth-service-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 vi.mock('electron', () => createElectronMock())
@@ -379,5 +379,27 @@ describe('ClaudeRuntimeAuthService pinned --account launches', () => {
     endFetch?.()
     await expect(prepared).resolves.toMatchObject({ pinnedAccountId: 'acct-b' })
     expect(keychain.scoped.get(fixture.pinnedDir)).toBe(fixture.pinnedCredentials)
+  })
+
+  it('drops startup seed flags it cannot prove and reads back provable ones', async () => {
+    const fixture = await setUpTwoAccounts()
+    await fixture.service.prepareForClaudeLaunch({ runtime: 'host' }, { accountId: 'acct-b' })
+    fixture.registry._internals.reset()
+    const credentials = await import('./claude-pinned-credentials')
+    const refreshed = createClaudeCredentialsJson('pinned@example.com', 'pinned-rotated')
+    keychain.scoped.set(fixture.pinnedDir, refreshed)
+    // A flag the raw-path scan set for an account whose dir Orca does not own any more.
+    const strayDir = join(testState.userDataDir, 'stray')
+    mkdirSync(strayDir, { recursive: true })
+    writeFileSync(join(strayDir, '.orca-pinned-keychain-seed'), 'hash\n')
+    credentials.notePinnedClaudeSeedMarker('acct-a', strayDir)
+    expect(credentials.hasPendingPinnedClaudeSeed('acct-a')).toBe(true)
+
+    await fixture.service.revalidatePinnedSeedMarkers()
+
+    expect(credentials.hasPendingPinnedClaudeSeed('acct-a')).toBe(false)
+    expect(credentials.hasPendingPinnedClaudeSeed('acct-b')).toBe(false)
+    expect(readManagedCredentialsForTest('acct-b', fixture.pinnedPath)).toBe(refreshed)
+    expect(existsSync(markerPath(fixture))).toBe(false)
   })
 })

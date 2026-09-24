@@ -53,6 +53,14 @@ export function notePinnedClaudeSeedMarker(accountId: string, configDir: string)
   }
 }
 
+export function listPendingPinnedClaudeSeedAccountIds(): string[] {
+  return [...pendingSeedAccountIds]
+}
+
+export function clearPendingPinnedClaudeSeed(accountId: string): void {
+  pendingSeedAccountIds.delete(accountId)
+}
+
 export async function seedPinnedClaudeKeychainCredentials(args: {
   accountId: string
   configDir: string

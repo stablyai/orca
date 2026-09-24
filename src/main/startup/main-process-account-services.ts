@@ -82,6 +82,12 @@ export function initializeMainProcessAccountServices(): void {
     }
   }
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  // Why: the scan above reads raw paths synchronously; ownership is only provable asynchronously.
+  void state.claudeRuntimeAuth
+    .revalidatePinnedSeedMarkers()
+    .catch((error) =>
+      console.warn('[claude-runtime-auth] Could not revalidate pinned Claude seed markers:', error)
+    )
   onClaudePinnedAccountDrained((accountId) => {
     void state.claudeRuntimeAuth
       ?.reconcilePinnedAccountCredentials(accountId)
