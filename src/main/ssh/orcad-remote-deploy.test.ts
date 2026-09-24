@@ -21,6 +21,12 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
+import { installOrcadBundle } from './orcad-remote-install'
+import {
+  abandonInstall,
+  finalizeInstall,
+  isRemoteInstallComplete
+} from './ssh-relay-versioned-install'
 import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { finalizeInstall } from './ssh-relay-versioned-install'
@@ -154,6 +160,77 @@ function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOption
 const ACTIVE_OLD = JSON.stringify(
   withActivatedVersion(emptyOrcadActivationRecord(), OLD_VERSION, null, new Date(0))
 )
+
+describe('orcad install lock ownership', () => {
+  const remoteDir = `/home/u/.orca-remote/orcad-${NEW_VERSION}`
+  const install = (signal?: AbortSignal) =>
+    installOrcadBundle(options({ signal }), NEW_VERSION, remoteDir)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(isRemoteInstallComplete).mockReset().mockResolvedValue(false)
+  })
+
+  it('leaves another install lock alone when the initial probe is complete', async () => {
+    vi.mocked(isRemoteInstallComplete).mockResolvedValueOnce(true)
+    await install()
+    expect(acquireInstallLock).not.toHaveBeenCalled()
+    expect(abandonInstall).not.toHaveBeenCalled()
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+  })
+
+  it('releases its lock when another installer completed while acquisition waited', async () => {
+    vi.mocked(isRemoteInstallComplete).mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    await install()
+    expect(acquireInstallLock).toHaveBeenCalledOnce()
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(abandonInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host)
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(finalizeInstall).not.toHaveBeenCalled()
+  })
+
+  it('publishes a complete install before releasing its lock once', async () => {
+    await install()
+    expect(uploadRelayDirectory).toHaveBeenCalledOnce()
+    expect(finalizeInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host, {
+      signal: undefined,
+      releaseLock: false
+    })
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(vi.mocked(finalizeInstall).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(abandonInstall).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('releases a failed upload without publishing it or replacing its error', async () => {
+    const error = new Error('upload interrupted')
+    vi.mocked(uploadRelayDirectory).mockRejectedValueOnce(error)
+    await expect(install()).rejects.toBe(error)
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(finalizeInstall).not.toHaveBeenCalled()
+  })
+
+  it('releases its lock without reusing an aborted operation signal', async () => {
+    const controller = new AbortController()
+    const error = new Error('deployment canceled')
+    vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
+      controller.abort(error)
+      controller.signal.throwIfAborted()
+    })
+    await expect(install(controller.signal)).rejects.toBe(error)
+    expect(abandonInstall).toHaveBeenCalledOnce()
+    expect(abandonInstall).toHaveBeenCalledWith(expect.anything(), remoteDir, options().host)
+    expect(finalizeInstall).not.toHaveBeenCalled()
+  })
+
+  it('does not release a lock when acquisition failed', async () => {
+    const error = new Error('lock held by another client')
+    vi.mocked(acquireInstallLock).mockRejectedValueOnce(error)
+    await expect(install()).rejects.toBe(error)
+    expect(abandonInstall).not.toHaveBeenCalled()
+    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+  })
+})
 
 describe('deployOrcad', () => {
   it.each(['', '{"type":"orca_profile_state_ready","revision":0}'])(

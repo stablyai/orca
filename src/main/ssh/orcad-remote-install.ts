@@ -56,10 +56,11 @@ export async function installOrcadBundle(
       fullVersion,
       { signal: options.signal }
     )
-    await finalizeInstall(options.conn, remoteDir, options.host, { signal: options.signal })
-  } catch (error) {
-    // Leave a recoverable partial rather than a dir that probes complete.
+    await finalizeInstall(options.conn, remoteDir, options.host, {
+      signal: options.signal,
+      releaseLock: false
+    })
+  } finally {
     await abandonInstall(options.conn, remoteDir, options.host)
-    throw error
   }
 }
