@@ -459,7 +459,7 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
-          cursor: provider('unavailable', { provider: 'grok' })
+          cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings()
       )
@@ -478,7 +478,7 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
-          cursor: provider('unavailable', { provider: 'grok' })
+          cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -512,7 +512,7 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
-          cursor: provider('unavailable', { provider: 'grok' })
+          cursor: provider('unavailable', { provider: 'cursor' })
         },
         usageSettings()
       )

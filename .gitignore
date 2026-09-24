@@ -122,6 +122,7 @@ docs/**
 !docs/reference/agent-session-search-contract.md
 !docs/reference/agent-status-store.md
 !docs/reference/antigravity-readiness-evidence.md
+!docs/reference/cursor-usage-credentials.md
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/ime-regression-checklist.md

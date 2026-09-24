@@ -4013,7 +4013,8 @@
               "expired": {
                 "label": "Sign-in expired",
                 "message": "Run cursor-agent login in a terminal on the computer running Orca, then retry usage."
-              }
+              },
+              "plan": "Plan"
             }
           },
           "SshTargetStatusRow": {

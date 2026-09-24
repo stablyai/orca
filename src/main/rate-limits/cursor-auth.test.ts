@@ -58,7 +58,16 @@ const options = {
   desktopStateDbPath: DESKTOP_DB
 }
 
+const originalPlatform = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+}
+
 beforeEach(() => {
+  // Why: the keychain source is macOS-only by an explicit platform check, so
+  // these cases must pin the platform rather than inherit the CI runner's.
+  setPlatform('darwin')
   keychainState.token = null
   keychainState.error = null
   files().clear()
@@ -66,6 +75,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  setPlatform(originalPlatform)
   vi.restoreAllMocks()
 })
 
@@ -149,6 +159,20 @@ describe('readCursorAuthSession', () => {
     files().set(CLI_AUTH, '{ not json')
     const result = await readCursorAuthSession(options)
     expect(result).toEqual({ status: 'error', error: 'Cursor CLI auth file is invalid' })
+  })
+
+  it('never reads the keychain off macOS and falls through to the CLI file', async () => {
+    setPlatform('linux')
+    keychainState.token = jwt('auth0|user_keychain')
+    files().set(CLI_AUTH, JSON.stringify({ accessToken: jwt('auth0|user_file') }))
+    const result = await readCursorAuthSession(options)
+    expect(result.status === 'ok' && result.session.source).toBe('cli')
+  })
+
+  it('reports signed out off macOS when only a keychain session exists', async () => {
+    setPlatform('win32')
+    keychainState.token = jwt('auth0|user_keychain')
+    expect(await readCursorAuthSession(options)).toEqual({ status: 'missing' })
   })
 
   it('skips a stored token that carries no subject', async () => {
