@@ -41,8 +41,7 @@ describe('getRecoveredHistorySeedSegments', () => {
       restoreInfo({ pendingEscapeTailAnsi: '\x1b[3' })
     )
     expect(segments).toEqual([
-      `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h`,
-      'user@host ~ $ \x1b[?1003h',
+      `${RESET_GRAPHIC_RENDITION}user@host ~ $ \x1b[?1003h`,
       MOUSE_OFF,
       '\x1b[3'
     ])
@@ -114,15 +113,15 @@ describe('getRecoveredHistorySeedSegments', () => {
     }
   })
 
-  it('does not touch the live-session reattach payload (mobile scroll gestures)', () => {
-    // Why: only recovery seeding knows the arming TUI is dead; live reattach
-    // snapshots must keep re-arming or an alt-screen TUI loses scroll forever.
-    expect(buildRehydrateSequences(ARMED_MODES)).toBe('\x1b[?1003h\x1b[?1006h')
+  it('does not re-arm mouse tracking on live-session rehydrate (#18424)', () => {
+    // Why: the owning TUI re-asserts DECSET on startup; restoring it from a
+    // checkpoint whose TUI did not come back types SGR reports into readline.
+    expect(buildRehydrateSequences(ARMED_MODES)).toBe('')
   })
 
   it('grounds the pen before re-entering the alternate screen', () => {
     expect(buildRehydrateSequences({ ...ARMED_MODES, alternateScreen: true })).toBe(
-      `${RESET_GRAPHIC_RENDITION}\x1b[?1049h\x1b[?1003h\x1b[?1006h`
+      `${RESET_GRAPHIC_RENDITION}\x1b[?1049h`
     )
   })
 })

@@ -1,6 +1,25 @@
 import type { TerminalModes } from './types'
 import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
 
+// Why: older checkpoints baked these into the stored rehydrateSequences string.
+// Strip on restore so a dead TUI's DECSET cannot reach a replacement shell.
+const MOUSE_REHYDRATE_ENABLE_SEQUENCES = [
+  '\x1b[?9h',
+  '\x1b[?1000h',
+  '\x1b[?1002h',
+  '\x1b[?1003h',
+  '\x1b[?1006h',
+  '\x1b[?1016h'
+] as const
+
+export function omitMouseTrackingFromRehydrateSequences(sequences: string): string {
+  let result = sequences
+  for (const sequence of MOUSE_REHYDRATE_ENABLE_SEQUENCES) {
+    result = result.replaceAll(sequence, '')
+  }
+  return result
+}
+
 // Why no kitty flags here: rehydrateSequences feeds renderer xterms, and
 // POST_REPLAY_REATTACH_RESET's deliberate kitty reset (stale CSI-u Ctrl+C
 // hazard) must stay authoritative. modes.kittyKeyboardFlags exists for
@@ -19,30 +38,8 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
   if (modes.applicationCursor) {
     seqs.push('\x1b[?1h')
   }
-  // Why: mobile alt-screen scroll gestures need xterm's mouse mode restored
-  // from cold snapshots; OpenCode/OpenTUI enables scrollable panes this way.
-  switch (modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none') {
-    case 'x10':
-      seqs.push('\x1b[?9h')
-      break
-    case 'vt200':
-      seqs.push('\x1b[?1000h')
-      break
-    case 'drag':
-      seqs.push('\x1b[?1002h')
-      break
-    case 'any':
-      seqs.push('\x1b[?1003h')
-      break
-    case 'none':
-      break
-  }
-  // Why: xterm tracks the mouse protocol and SGR encoding as independent
-  // modes, so snapshots must preserve the encoding even when reporting is off.
-  if (modes.sgrMousePixelsMode) {
-    seqs.push('\x1b[?1016h')
-  } else if (modes.sgrMouseMode) {
-    seqs.push('\x1b[?1006h')
-  }
+  // Why omitted: restoring DECSET 1003/1006 without the TUI that owned them
+  // types SGR motion reports into readline (#18424). Live TUIs re-assert on
+  // startup; alt-screen frame restore still carries mouse for a live owner.
   return seqs.join('')
 }
