@@ -30,9 +30,24 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
+  // Why: lineage may cross repos, so the old and new parents' repos list a changed child set too.
+  const changedRepoIds = new Set([worktree.repoId])
+  const previousParentId = lineage
+    ? args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId
+    : undefined
+  const previousParentRepoId = previousParentId
+    ? splitWorktreeId(previousParentId)?.repoId
+    : undefined
+  if (previousParentRepoId) {
+    changedRepoIds.add(previousParentRepoId)
+  }
   if (lineage?.parentWorktree) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
+    const parentRepoId = parseIdSelectorRepoId(lineage.parentWorktree)
+    if (parentRepoId && parentRepoId !== worktree.repoId) {
+      args.ports.invalidateScan(parentRepoId)
+    }
   }
   const clearPushTarget =
     Object.hasOwn(metaUpdates, 'pushTarget') && metaUpdates.pushTarget === null
@@ -57,6 +72,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   } else if (lineage?.parentWorktree) {
     const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
     args.ports.validateParent(worktree, parent)
+    changedRepoIds.add(parent.repoId)
     if (!worktree.instanceId || !parent.instanceId) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_MISSING',
@@ -98,7 +114,9 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   }
   // Why: CLI callers need an explicit push for metadata changed outside the renderer's optimistic update path.
   args.ports.invalidateResolved()
-  args.ports.notifyChanged(worktree.repoId)
+  for (const repoId of changedRepoIds) {
+    args.ports.notifyChanged(repoId)
+  }
   return args.ports.showWorktree(`id:${worktree.id}`)
 }
 
@@ -130,6 +148,10 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
     args.notifyChanged(repoId)
   }
   return { updated: updates.length }
+}
+
+function parseIdSelectorRepoId(selector: string): string | undefined {
+  return selector.startsWith('id:') ? splitWorktreeId(selector.slice(3))?.repoId : undefined
 }
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {

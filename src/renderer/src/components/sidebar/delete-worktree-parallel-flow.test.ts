@@ -247,6 +247,59 @@ describe('runWorktreeDeletesInParallel', () => {
     )
   })
 
+  // Why (#8886): lineage spans repos, so a child checkout can live inside another repo's parent.
+  it('deletes a nested child from another repo before, and never in parallel with, its parent', async () => {
+    const child = deferredDeleteResult()
+    mocks.state.removeWorktree.mockImplementation(({ id }: { id: string }) =>
+      id === 'repo-b::/ws/parent/child' ? child.promise : Promise.resolve({ ok: true })
+    )
+
+    const run = runDeletesForCurrentWorktrees([
+      { id: 'repo-a::/ws/parent', displayName: 'parent', repoId: 'repo-a', path: '/ws/parent' },
+      {
+        id: 'repo-b::/ws/parent/child',
+        displayName: 'child',
+        repoId: 'repo-b',
+        path: '/ws/parent/child'
+      }
+    ])
+    await vi.waitFor(() => expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1))
+    expect(mocks.state.removeWorktree.mock.calls[0]?.[0]).toEqual({
+      id: 'repo-b::/ws/parent/child',
+      executionHostId: null
+    })
+
+    child.resolve({ ok: true })
+    await run
+
+    expect(mocks.state.removeWorktree.mock.calls.map(([target]) => target.id)).toEqual([
+      'repo-b::/ws/parent/child',
+      'repo-a::/ws/parent'
+    ])
+  })
+
+  it('keeps a parent whose nested child from another repo failed to delete', async () => {
+    mocks.state.removeWorktree.mockImplementation(({ id }: { id: string }) =>
+      Promise.resolve(
+        id === 'repo-b::/ws/parent/child' ? { ok: false, error: 'locked' } : { ok: true }
+      )
+    )
+
+    await runDeletesForCurrentWorktrees([
+      { id: 'repo-a::/ws/parent', displayName: 'parent', repoId: 'repo-a', path: '/ws/parent' },
+      {
+        id: 'repo-b::/ws/parent/child',
+        displayName: 'child',
+        repoId: 'repo-b',
+        path: '/ws/parent/child'
+      }
+    ])
+
+    expect(mocks.state.removeWorktree.mock.calls.map(([target]) => target.id)).toEqual([
+      'repo-b::/ws/parent/child'
+    ])
+  })
+
   it('passes confirmed force to each delete', async () => {
     await runDeletesForCurrentWorktrees(
       [

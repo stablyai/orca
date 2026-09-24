@@ -28,6 +28,26 @@ function isStrictDescendantPath(parentPath: string, childPath: string): boolean 
   )
 }
 
+/** Why: lineage spans repos, so a checkout nested under another repo's target must share its ordered queue. */
+function mergeGroupsWithNestedPaths<T extends Pick<Worktree, 'hostId' | 'path'>>(
+  groups: readonly T[][]
+): T[][] {
+  const nests = (a: T, b: T): boolean =>
+    a.hostId === b.hostId &&
+    (isStrictDescendantPath(a.path, b.path) || isStrictDescendantPath(b.path, a.path))
+  let merged: T[][] = []
+  for (const group of groups) {
+    const overlapping = merged.filter((existing) =>
+      existing.some((left) => group.some((right) => nests(left, right)))
+    )
+    merged = [
+      ...merged.filter((existing) => !overlapping.includes(existing)),
+      [...overlapping.flat(), ...group]
+    ]
+  }
+  return merged
+}
+
 function clearWorktreeDeleteTargetState(target: Pick<Worktree, 'id' | 'hostId'>): void {
   const state = useAppStore.getState()
   if (target.hostId) {
@@ -68,7 +88,8 @@ export async function runWorktreeDeletesInParallel(
       groups.set(groupIdentity, [target])
     }
   }
-  for (const group of groups.values()) {
+  const orderedGroups = mergeGroupsWithNestedPaths([...groups.values()])
+  for (const group of orderedGroups) {
     // Children must leave first or Git rejects their registered ancestor.
     group.sort((a, b) => b.path.length - a.path.length)
   }
@@ -105,7 +126,7 @@ export async function runWorktreeDeletesInParallel(
   let groupResults: WorktreeRemovalTarget[][]
   try {
     groupResults = await Promise.all(
-      Array.from(groups.values()).map(async (group) => {
+      orderedGroups.map(async (group) => {
         const deletedInGroup: WorktreeRemovalTarget[] = []
         const failedInGroup: (typeof group)[number][] = []
         for (const target of group) {

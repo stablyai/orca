@@ -218,7 +218,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     expect(result.lineageChildrenByParentId.size).toBe(0)
   })
 
-  it('rejects nested descendants across host or project boundaries', () => {
+  it('rejects cross-host descendants but attaches cross-repo and cross-project ones', () => {
     const parent = makeWorktree({
       id: 'repo-1::/parent',
       instanceId: 'parent',
@@ -235,6 +235,12 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       instanceId: 'project-child',
       projectId: 'project-2'
     })
+    const repoChild = makeWorktree({
+      id: 'repo-2::/repo-child',
+      repoId: 'repo-2',
+      instanceId: 'repo-child',
+      hostId: LOCAL_EXECUTION_HOST_ID
+    })
 
     const result = getAttachedWorktreesForFolderWorkspace({
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
@@ -243,12 +249,16 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
       worktreeLineageById: {
         [hostChild.id]: makeWorktreeLineage(hostChild, parent),
-        [projectChild.id]: makeWorktreeLineage(projectChild, parent)
+        [projectChild.id]: makeWorktreeLineage(projectChild, parent),
+        [repoChild.id]: makeWorktreeLineage(repoChild, parent)
       },
-      worktreesByRepo: { 'repo-1': [parent, hostChild, projectChild] }
+      worktreesByRepo: { 'repo-1': [parent, hostChild, projectChild], 'repo-2': [repoChild] }
     })
 
-    expect(result.lineageChildrenByParentId.size).toBe(0)
+    expect(result.lineageChildrenByParentId.get(parent.id)?.map((child) => child.id)).toEqual([
+      projectChild.id,
+      repoChild.id
+    ])
   })
 
   it('does not attach cyclic legacy descendants', () => {

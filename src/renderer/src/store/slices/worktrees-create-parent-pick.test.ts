@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { worktreeWorkspaceKey, folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -103,6 +104,43 @@ describe('createWorktree composer parent pick', () => {
     expect(toast.warning).toHaveBeenCalledWith(
       'Created without nesting under "parent-wt"',
       expect.objectContaining({ description: expect.any(String) })
+    )
+  })
+
+  it.each([
+    ['keeps a same-host parent from another repo', {}, true],
+    ['drops a parent whose repo is on another host', { connectionId: 'box' }, false]
+  ])('%s (#8886)', async (_label, parentRepoHost, kept) => {
+    const parent = makeWorktree({
+      id: 'repo2::/path/parent',
+      repoId: 'repo2',
+      path: '/path/parent',
+      instanceId: 'parent-instance'
+    })
+    const store = createTestStore()
+    const repo = (id: string): Repo => ({
+      id,
+      path: `/${id}`,
+      displayName: id,
+      badgeColor: '#000',
+      addedAt: 0
+    })
+    const state: Partial<AppState> = {
+      repos: [repo('repo1'), { ...repo('repo2'), ...parentRepoHost }],
+      worktreesByRepo: { repo1: [], repo2: [parent] }
+    }
+    store.setState(state)
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: makeWorktree({ id: 'repo1::/path/child', repoId: 'repo1', path: '/path/child' })
+    })
+
+    await createWithParentPick(store, parent.id)
+
+    const parentWorkspace = { parentWorkspace: worktreeWorkspaceKey(parent.id) }
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      kept
+        ? expect.objectContaining(parentWorkspace)
+        : expect.not.objectContaining({ parentWorkspace: expect.anything() })
     )
   })
 

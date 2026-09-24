@@ -106,7 +106,7 @@ describe('getWorkspaceDeleteLineage', () => {
     expect(lineage.deleteAllTargets).toEqual([parent])
   })
 
-  it('rejects cross-repo, cross-host, and cross-project descendants', () => {
+  it('rejects cross-host descendants but keeps cross-repo and cross-project ones', () => {
     const parent: Worktree = {
       ...makeWorktree('parent', '/workspaces/parent'),
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -126,8 +126,12 @@ describe('getWorkspaceDeleteLineage', () => {
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, ...children], lineageById)
 
-    expect(lineage.descendants).toEqual([])
-    expect(lineage.deleteAllTargets).toEqual([parent])
+    // Each target keeps its own repoId, so its removal is routed to its own repo (#8886).
+    expect(lineage.descendants.map((child) => [child.id, child.repoId])).toEqual([
+      [children[0].id, 'repo-2'],
+      [children[2].id, children[2].repoId]
+    ])
+    expect(lineage.deleteAllTargets).toEqual([children[0], children[2], parent])
   })
 
   it('does not traverse cyclic projected lineage', () => {

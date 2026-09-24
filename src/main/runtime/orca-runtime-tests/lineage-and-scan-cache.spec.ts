@@ -578,29 +578,12 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it.each([
-    {
-      boundary: 'repository',
-      childRepoId: 'repo-child',
-      parentRepoId: 'repo-parent',
-      childMeta: {},
-      parentMeta: {}
-    },
-    {
-      boundary: 'known host',
-      childRepoId: TEST_REPO_ID,
-      parentRepoId: TEST_REPO_ID,
-      childMeta: { hostId: 'runtime:child-host' as const },
-      parentMeta: { hostId: 'runtime:parent-host' as const }
-    },
-    {
-      boundary: 'known project',
-      childRepoId: TEST_REPO_ID,
-      parentRepoId: TEST_REPO_ID,
-      childMeta: { projectId: 'project-child' },
-      parentMeta: { projectId: 'project-parent' }
-    }
-  ])('rejects manual lineage writes across a $boundary boundary', async (scenario) => {
+  function createBoundaryScenario(scenario: {
+    childRepoId: string
+    parentRepoId: string
+    childMeta: Partial<WorktreeMeta>
+    parentMeta: Partial<WorktreeMeta>
+  }) {
     const repos = [...new Set([scenario.childRepoId, scenario.parentRepoId])].map((id) => ({
       id,
       path: join(tmpdir(), id),
@@ -618,8 +601,12 @@ describe('OrcaRuntimeService', () => {
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance', ...scenario.childMeta }),
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance', ...scenario.parentMeta })
     }
-    const setWorktreeLineage = vi.fn()
-    const setWorkspaceLineage = vi.fn()
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const setWorktreeLineage = vi.fn((worktreeId: string, lineage: WorktreeLineage) => {
+      lineageById[worktreeId] = lineage
+      return lineage
+    })
+    const setWorkspaceLineage = vi.fn((lineage: WorkspaceLineage) => lineage)
     const runtimeStore = {
       ...store,
       getRepos: () => repos,
@@ -630,7 +617,8 @@ describe('OrcaRuntimeService', () => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       },
-      getWorktreeLineage: () => undefined,
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
+      getAllWorktreeLineage: () => lineageById,
       setWorktreeLineage,
       setWorkspaceLineage
     }
@@ -639,18 +627,67 @@ describe('OrcaRuntimeService', () => {
       ...(repoPath === parentRepoPath ? [makeWorktreeInfo(parentPath)] : [])
     ])
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+    return { runtime, childId, parentId, setWorktreeLineage, setWorkspaceLineage }
+  }
+
+  it('rejects manual lineage writes across a known host boundary', async () => {
+    const { runtime, childId, parentId, setWorktreeLineage, setWorkspaceLineage } =
+      createBoundaryScenario({
+        childRepoId: TEST_REPO_ID,
+        parentRepoId: TEST_REPO_ID,
+        childMeta: { hostId: 'runtime:child-host' },
+        parentMeta: { hostId: 'runtime:parent-host' }
+      })
 
     await expect(
       runtime.updateManagedWorktreeMeta(`id:${childId}`, {
         lineage: { parentWorktree: `id:${parentId}` }
       })
-    ).rejects.toThrow(
-      'Parent worktree must belong to the same repository, execution host, and project.'
-    )
+    ).rejects.toThrow('Parent worktree must belong to the same execution host.')
 
     expect(setWorktreeLineage).not.toHaveBeenCalled()
     expect(setWorkspaceLineage).not.toHaveBeenCalled()
   })
+
+  it.each([
+    {
+      boundary: 'repository',
+      childRepoId: 'repo-child',
+      parentRepoId: 'repo-parent',
+      childMeta: {},
+      parentMeta: {}
+    },
+    {
+      boundary: 'project',
+      childRepoId: TEST_REPO_ID,
+      parentRepoId: TEST_REPO_ID,
+      childMeta: { projectId: 'project-child' },
+      parentMeta: { projectId: 'project-parent' }
+    }
+  ])(
+    'accepts and reads back manual lineage across a $boundary on one host (#8886)',
+    async (scenario) => {
+      const { runtime, childId, parentId, setWorktreeLineage } = createBoundaryScenario(scenario)
+
+      await expect(
+        runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+          lineage: { parentWorktree: `id:${parentId}` }
+        })
+      ).resolves.toMatchObject({ id: childId, parentWorktreeId: parentId })
+
+      expect(setWorktreeLineage).toHaveBeenCalledWith(
+        childId,
+        expect.objectContaining({ parentWorktreeId: parentId })
+      )
+      await expect(runtime.showManagedWorktree(`id:${parentId}`)).resolves.toMatchObject({
+        childWorktreeIds: [childId]
+      })
+      const listed = await runtime.listManagedWorktrees(undefined, 10)
+      expect(listed.worktrees.find((worktree) => worktree.id === childId)).toMatchObject({
+        parentWorktreeId: parentId
+      })
+    }
+  )
 
   it('clears workspace lineage when manually removing a parent', async () => {
     const childPath = '/tmp/worktree-child'
