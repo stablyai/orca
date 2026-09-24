@@ -37,7 +37,10 @@ export async function createLiveProfileStateStore(
         dataFile: options.dataFile,
         storageAuthority: options.storageAuthority,
         profileStateAuthority: authority,
-        initialAuthorityState
+        initialAuthorityState: {
+          ...initialAuthorityState,
+          unboundPaneAliases: initial.unboundPaneAliases
+        }
       })
     }
   } catch (error) {

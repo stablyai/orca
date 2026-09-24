@@ -13,28 +13,13 @@ import {
   createStoreDomains,
   installStoreDomainContexts,
   STORE_DOMAIN_OPERATION_CLASSES,
-  type StoreDomains
+  type StoreDomains,
+  type StoreDomainOperations
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { scheduleSave } from './write-scheduling'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
-import type { ProjectCollectionOperations } from './project-collection-operations'
-import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
-import type { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
-import type { SparsePresetPersistence } from './sparse-preset-persistence'
-import type { AutomationPersistence } from './automation-persistence'
-import type { MetadataLineageOperations } from './metadata-lineage-operations'
-import type { ProfilePreferences } from './profile-preferences'
-import type { SessionHostPartitionOperations } from './session-host-partitions'
-import type { SessionSnapshotOperations } from './session-snapshot-operations'
-import type { PtyBindingPersistenceOperations } from './pty-binding-persistence'
-import type { SshProfileOperations } from './ssh-profile-operations'
-import type { RetiredWorktreeNamePersistence } from './retired-worktree-name-persistence'
-import type { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
-import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/profile-state-versioned-export'
 import {
@@ -46,6 +31,7 @@ import {
 import type {
   AsyncProfileStateAuthority,
   ProfileStateAuthorityInitialState,
+  ProfileStateStartupPaneAlias,
   ProfileStatePersistenceAuthority,
   ProfileStateMaintenance
 } from './profile-state-authority'
@@ -53,6 +39,7 @@ import type {
 export type StoreOptions = StoreRuntimeOptions & {
   /** Storage-form JSON supplied by a read-only profile migration/import boundary. */
   serializedState?: string
+  collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
   /** Reuse the authority's validated startup read without retaining a cached copy. */
   initialAuthorityState?: ProfileStateAuthorityInitialState<ProfileStatePersistenceAuthority>
 }
@@ -89,7 +76,9 @@ export class Store {
     }
     const initial = options.initialAuthorityState
     const parsedState = initial?.takeParsedState?.()
+    const imported = options.serializedState !== undefined
     this.runtime = new StoreRuntimeState(options)
+    this.runtime.writesFrozen = imported
     this.domains = createStoreDomains(this.runtime)
     installStoreDomainContexts(this, this.domains)
     this.runtime.flushOrThrow = () => this.flushOrThrow()
@@ -111,7 +100,10 @@ export class Store {
     } else {
       loaded = this.domains.loader.load()
     }
-    const normalized = normalizePersistedPaneIdentityState(loaded)
+    const normalized = normalizePersistedPaneIdentityState(loaded, {
+      registerAliases: !imported,
+      collectUnboundPaneAlias: options.collectUnboundPaneAlias
+    })
     this.state = normalized.state
     this.runtime.state = this.state
     this.runtime.activeViewPreference = new ActiveViewPreference(
@@ -123,32 +115,38 @@ export class Store {
     // Load is the only place an orphaned repo id can be swept: every removal path needs the repo to
     // still be registered, so rows outlive their owner without one (#17776).
     const sweptRepoIds = this.domains.repos.sweepDeregisteredRepoResidue()
-    for (const entry of normalized.migrationUnsupportedEntries) {
-      setMigrationUnsupportedPty(entry)
-    }
-    for (const entry of normalized.legacyPaneKeyAliasEntries) {
-      registerPersistedPaneKeyAlias(entry)
-    }
-    setMigrationUnsupportedPtyPersistenceListener((entries) => {
-      this.state.migrationUnsupportedPtyEntries = entries
-      scheduleSave(this.domains.scheduling)
-    })
-    agentHookServer.setPaneKeyAliasPersistenceListener((entries) => {
-      this.state.legacyPaneKeyAliasEntries = entries
-      scheduleSave(this.domains.scheduling)
-    })
-    if (
-      normalized.changed ||
-      this.runtime.loadNeedsSave ||
-      adaptedProjectGroups ||
-      sweptRepoIds.length > 0
-    ) {
-      scheduleSave(this.domains.scheduling)
-    }
-    // An imported source is not a legacy JSON authority. The caller must
-    // commit through its database/export boundary instead of writing a file.
-    if (options.serializedState !== undefined) {
-      this.freezeWrites()
+    // Imported snapshots cannot own the live hook server or write their source file.
+    if (!imported) {
+      for (const entry of initial?.unboundPaneAliases ?? []) {
+        agentHookServer.registerPaneKeyAlias(
+          entry.legacyPaneKey,
+          entry.stablePaneKey,
+          undefined,
+          entry.updatedAt
+        )
+      }
+      for (const entry of normalized.migrationUnsupportedEntries) {
+        setMigrationUnsupportedPty(entry)
+      }
+      for (const entry of normalized.legacyPaneKeyAliasEntries) {
+        registerPersistedPaneKeyAlias(entry)
+      }
+      setMigrationUnsupportedPtyPersistenceListener((entries) => {
+        this.state.migrationUnsupportedPtyEntries = entries
+        scheduleSave(this.domains.scheduling)
+      })
+      agentHookServer.setPaneKeyAliasPersistenceListener((entries) => {
+        this.state.legacyPaneKeyAliasEntries = entries
+        scheduleSave(this.domains.scheduling)
+      })
+      if (
+        normalized.changed ||
+        this.runtime.loadNeedsSave ||
+        adaptedProjectGroups ||
+        sweptRepoIds.length > 0
+      ) {
+        scheduleSave(this.domains.scheduling)
+      }
     }
   }
 
@@ -312,24 +310,7 @@ export class Store {
 }
 
 // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging derives Store's prototype API directly from the exact concrete domain classes installed below
-export interface Store
-  extends
-    WriteSchedulingOperations,
-    PrimaryStateWriteOperations,
-    ProjectCollectionOperations,
-    RepoLifecycleOperations,
-    MobileTabSelectionPersistence,
-    SparsePresetPersistence,
-    AutomationPersistence,
-    MetadataLineageOperations,
-    ProfilePreferences,
-    SessionHostPartitionOperations,
-    SessionSnapshotOperations,
-    PtyBindingPersistenceOperations,
-    SshProfileOperations,
-    RetiredWorktreeNamePersistence,
-    SshLeaseRecoveryOperations,
-    WriteFlushBarrierOperations {}
+export interface Store extends StoreDomainOperations {}
 
 for (const OperationClass of STORE_DOMAIN_OPERATION_CLASSES) {
   const descriptors = Object.getOwnPropertyDescriptors(OperationClass.prototype)

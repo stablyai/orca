@@ -27,8 +27,7 @@ export class ProfileStateWriterConnection {
   private failure: Error | undefined
   private draining = false
   private closePromise: Promise<void> | undefined
-  private readonly exited: Promise<void>
-  private markExited: () => void = () => {}
+  private readonly exit = Promise.withResolvers<void>()
   private didExit = false
   private closeAcknowledged = false
   private readonly timeoutMs: number
@@ -41,9 +40,6 @@ export class ProfileStateWriterConnection {
   ) {
     this.initialRevision = initialization.revision
     this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS
-    this.exited = new Promise((resolve) => {
-      this.markExited = resolve
-    })
     const pending = this.createPending(0, 'initialize')
     this.active = pending
     this.ready = pending.promise.then(() => {})
@@ -68,7 +64,7 @@ export class ProfileStateWriterConnection {
       )
       worker.once('exit', (code) => {
         this.didExit = true
-        this.markExited()
+        this.exit.resolve()
         if (!this.closeAcknowledged || code !== 0) {
           this.fault(
             new ProfileStateWriterError(
@@ -81,7 +77,7 @@ export class ProfileStateWriterConnection {
       })
     } catch (cause) {
       this.didExit = true
-      this.markExited()
+      this.exit.resolve()
       this.fault(
         new ProfileStateWriterError(
           'profile-state-writer-unavailable',
@@ -102,11 +98,15 @@ export class ProfileStateWriterConnection {
         this.dispatchedOutcome()
       )
     )
-    await this.exited
+    await this.exit.promise
+  }
+
+  stopAdmission(): void {
+    this.draining = true
   }
 
   close(): Promise<void> {
-    this.draining = true
+    this.stopAdmission()
     this.closePromise ??= this.finishClose()
     return this.closePromise
   }
@@ -139,7 +139,7 @@ export class ProfileStateWriterConnection {
           this.timeoutMs
         )
         try {
-          await this.exited
+          await this.exit.promise
         } finally {
           clearTimeout(timer)
         }
@@ -148,7 +148,7 @@ export class ProfileStateWriterConnection {
         throw this.failure
       }
     } else {
-      await this.exited
+      await this.exit.promise
     }
   }
 
@@ -267,14 +267,13 @@ export class ProfileStateWriterConnection {
     return this.active?.command === 'initialize' ? 'known-failure' : 'indeterminate'
   }
 
-  private invalidResponse(): Error {
+  private invalidResponse(): void {
     const error = new ProfileStateWriterError(
       'profile-state-writer-protocol',
       'Invalid profile state writer response',
       this.dispatchedOutcome()
     )
     this.fault(error)
-    return error
   }
 
   private fault(error: Error): void {

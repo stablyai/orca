@@ -46,27 +46,25 @@ export class WriteFlushBarrierOperations {
   }
 
   flush(): void {
-    this[writeFlushBarrierOperationsContext].runtime.automationListProjectionCache = null
-    if (
-      this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted ||
-      this[writeFlushBarrierOperationsContext].runtime.profileMaintenancePending
-    ) {
+    const { runtime, writes } = this[writeFlushBarrierOperationsContext]
+    runtime.automationListProjectionCache = null
+    if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
       return
     }
-    if (this[writeFlushBarrierOperationsContext].runtime.profileStateAuthority?.asynchronous) {
-      this[writeFlushBarrierOperationsContext].runtime.writeGeneration++
+    if (runtime.profileStateAuthority?.asynchronous) {
+      runtime.writeGeneration++
       void flushCurrentStateAsync(this, false, undefined, false).catch((error) =>
         console.error('[persistence] Failed to flush state:', error)
       )
       return
     }
     try {
-      this[writeFlushBarrierOperationsContext].writes.flushOrThrow()
+      writes.flushOrThrow()
     } catch (err) {
       console.error('[persistence] Failed to flush state:', err)
     }
     try {
-      this[writeFlushBarrierOperationsContext].writes.flushActiveViewPreferenceOrThrow()
+      writes.flushActiveViewPreferenceOrThrow()
     } catch (err) {
       console.error('[active-view] Failed to flush preference:', err)
     }
@@ -121,11 +119,8 @@ export class WriteFlushBarrierOperations {
   flushPendingOrThrowAsync(
     options: { signal?: AbortSignal; drainToStableGeneration?: boolean } = {}
   ): Promise<void> {
-    if (
-      this[writeFlushBarrierOperationsContext].runtime.writesFrozen ||
-      this[writeFlushBarrierOperationsContext].runtime.profileMaintenancePending ||
-      this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted
-    ) {
+    const { runtime } = this[writeFlushBarrierOperationsContext]
+    if (runtime.writesFrozen || runtime.profileMaintenancePending || runtime.quitFlushStarted) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
     return flushCurrentStateAsync(

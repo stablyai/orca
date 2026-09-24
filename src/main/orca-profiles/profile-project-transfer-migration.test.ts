@@ -141,6 +141,42 @@ describe('profile transfer migration', () => {
     expect(existsSync(paths('target').databaseFile)).toBe(true)
   })
 
+  it.each(['copy', 'move'] as const)(
+    '%s refuses an apparently empty target that retains a legacy JSON backup',
+    (mode) => {
+      writeState('source', true, [repo])
+      const sourceRevision = readProfileStateWithRevision('source', directory).revision
+      const targetJson = writeState('target', false)
+      const target = paths('target')
+      writeFileSync(`${target.dataFile}.bak.0`, targetJson)
+      rmSync(target.dataFile)
+
+      expect(() => transfer(mode)).toThrow('restore a selected backup')
+      expect(readProfileStateWithRevision('source', directory)).toMatchObject({
+        revision: sourceRevision,
+        state: { repos: [repo] }
+      })
+      expect(existsSync(target.dataFile)).toBe(false)
+      expect(existsSync(target.databaseFile)).toBe(false)
+      expect(readFileSync(`${target.dataFile}.bak.0`, 'utf8')).toBe(targetJson)
+    }
+  )
+
+  it.each(['[]', '7', '"invalid"', 'true'])(
+    'refuses a non-object JSON target (%s) without replacing its contents',
+    (raw) => {
+      writeState('source', false, [repo])
+      writeState('target', false)
+      const target = paths('target')
+      writeFileSync(target.dataFile, raw)
+
+      expect(() => transfer()).toThrow('Profile state JSON root must be an object')
+      expect(readFileSync(target.dataFile, 'utf8')).toBe(raw)
+      expect(existsSync(target.databaseFile)).toBe(false)
+      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
+    }
+  )
+
   it('migrates a JSON source before moving into SQLite and retains its exact rollback bytes', () => {
     const sourceJson = writeState('source', false, [repo])
     writeState('target', true)

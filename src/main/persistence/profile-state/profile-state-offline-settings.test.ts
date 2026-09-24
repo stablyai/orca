@@ -97,6 +97,18 @@ describe.each(['read', 'update'] as const)('offline settings %s recovery', (oper
     }
   })
 
+  it.each([0, 1, 2, 3, 4])('refuses defaults when only legacy backup %s remains', (slot) => {
+    const location = createLocation()
+    const backup = `${location.dataFile}.bak.${slot}`
+    const source = '{"settings":{"agentStatusHooksEnabled":false}}'
+    writeFileSync(backup, source)
+
+    expect(() => run(location)).toThrow('restore a selected backup')
+    expect(existsSync(location.dataFile)).toBe(false)
+    expect(existsSync(location.databaseFile)).toBe(false)
+    expect(readFileSync(backup, 'utf8')).toBe(source)
+  })
+
   it('fails closed when retained exports cannot be enumerated', () => {
     const location = createLocation()
     vi.spyOn(exportPaths, 'profileStateJsonExportPaths').mockImplementation(() => {

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { hasStateBackup } from './profile-state-legacy-backup-path'
 import { profileStateJsonExportPaths } from './profile-state-export-path'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 
@@ -5,6 +7,25 @@ type ProfileStateRecoveryLocation = {
   dataFile: string
   databaseFile: string
   profileId: string
+}
+
+export class ProfileStateAuthorityBootstrapError extends Error {
+  readonly code = 'ambiguous-profile-state' as const
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'ProfileStateAuthorityBootstrapError'
+  }
+}
+
+/** Never establish a new authority over evidence that the primary was lost. */
+export function assertProfileStateCanInitialize(options: ProfileStateRecoveryLocation): void {
+  assertNoRetainedProfileStateExports(options)
+  if (!existsSync(options.dataFile) && hasStateBackup(options.dataFile)) {
+    throw new ProfileStateAuthorityBootstrapError(
+      `Legacy profile JSON is missing while its .bak.0–.bak.4 backups remain. Stop Orca and restore a selected backup to ${options.dataFile} before reopening.`
+    )
+  }
 }
 
 /** Startup can surface this error with the exact artifacts an explicit rollback may use. */

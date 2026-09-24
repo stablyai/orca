@@ -7,7 +7,6 @@ import {
 import type { UpdateStatus } from '../shared/update-status-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
-  ORCA_APP_RESTART_COMMITTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
@@ -39,7 +38,6 @@ export function registerRendererRestartIpcRelays(
   })
   ipcRenderer.on('app:restart-committed', () => {
     appRestartState(eventTarget).committed = true
-    eventTarget.dispatchEvent(new Event(ORCA_APP_RESTART_COMMITTED_EVENT))
   })
   ipcRenderer.on('window:unload-prevented', () => {
     // A quit veto cannot reopen a profile whose maintenance has already committed.
@@ -82,10 +80,6 @@ export async function prepareAndInvokeAppRestart<T>(
     throw new Error('App restart preparation is already in progress')
   }
   state.pending = true
-  const markCommitted = (): void => {
-    state.committed = true
-  }
-  eventTarget.addEventListener(ORCA_APP_RESTART_COMMITTED_EVENT, markCommitted)
   try {
     if (!state.committed) {
       await prepareRendererForAppRestart(eventTarget, {
@@ -109,6 +103,5 @@ export async function prepareAndInvokeAppRestart<T>(
     }
   } finally {
     state.pending = false
-    eventTarget.removeEventListener(ORCA_APP_RESTART_COMMITTED_EVENT, markCommitted)
   }
 }

@@ -4,8 +4,8 @@ import { dirname } from 'node:path'
 import { publishFileDurableSync } from '../../durable-file-write'
 import { openProfileStateDatabase } from './profile-state-database'
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
-import { profileStateJsonExportPath } from './profile-state-export-path'
-import { assertNoRetainedProfileStateExports } from './profile-state-recovery-required'
+import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
+import { assertProfileStateCanInitialize } from './profile-state-recovery-required'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import {
   classifyProfileStateStorage,
@@ -28,15 +28,13 @@ export function migrateProfileStateToSqlite(options: ProfileStateMigrationOption
   initialState: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
 } {
   assertMigrationSourceUnchanged(options)
-  assertNoRetainedProfileStateExports(options)
   mkdirSync(dirname(options.databaseFile), { recursive: true })
   const temporaryDatabaseFile = `${options.databaseFile}.migration.${process.pid}.${randomUUID()}.tmp`
   let published = false
   try {
     const opened = openProfileStateDatabase(temporaryDatabaseFile, options.profileId)
-    let revision: number
     try {
-      revision = importProfileStateJson(
+      importProfileStateJson(
         opened.db,
         options.serializedState,
         options.expectedLegacyJson === undefined
@@ -55,7 +53,7 @@ export function migrateProfileStateToSqlite(options: ProfileStateMigrationOption
     published = true
     const authority = new ProfileStateSqliteAuthority(options.databaseFile, options.profileId)
     try {
-      authority.writeJsonExport(profileStateJsonExportPath(options.dataFile, revision))
+      writeVersionedProfileStateExport(options.dataFile, (path) => authority.writeJsonExport(path))
       const initialState = authority.readInitialState()
       return { authority, initialState }
     } catch (error) {
@@ -72,6 +70,7 @@ export function migrateProfileStateToSqlite(options: ProfileStateMigrationOption
 }
 
 function assertMigrationSourceUnchanged(options: ProfileStateMigrationOptions): void {
+  assertProfileStateCanInitialize(options)
   const expectedClassification = options.expectedLegacyJson === undefined ? 'neither' : 'json-only'
   if (
     classifyProfileStateStorage(options.dataFile, options.databaseFile) !== expectedClassification

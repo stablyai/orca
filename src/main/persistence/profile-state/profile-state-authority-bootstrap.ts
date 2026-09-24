@@ -2,13 +2,23 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { publishFileDurableSync } from '../../durable-file-write'
-import type { ProfileStateAuthorityInitialState } from '../loading-store/profile-state-authority'
+import type {
+  ProfileStateAuthorityInitialState,
+  ProfileStateStartupPaneAlias
+} from '../loading-store/profile-state-authority'
 import { Store } from '../loading-store/store'
 import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profile-state-database'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
-import { ProfileStateRecoveryRequiredError } from './profile-state-recovery-required'
-export { ProfileStateRecoveryRequiredError } from './profile-state-recovery-required'
+import {
+  assertProfileStateCanInitialize,
+  ProfileStateAuthorityBootstrapError,
+  ProfileStateRecoveryRequiredError
+} from './profile-state-recovery-required'
+export {
+  ProfileStateAuthorityBootstrapError,
+  ProfileStateRecoveryRequiredError
+} from './profile-state-recovery-required'
 import {
   classifyProfileStateStorage,
   profileStateDatabaseFiles,
@@ -37,15 +47,6 @@ export type ProfileStateAuthorityBootstrapOptions = {
   allowEmptyProfileState?: boolean
 }
 
-export class ProfileStateAuthorityBootstrapError extends Error {
-  readonly code = 'ambiguous-profile-state' as const
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'ProfileStateAuthorityBootstrapError'
-  }
-}
-
 /** Normalize legacy state once, then hand one validated authority to Store. */
 export function bootstrapProfileStateAuthority(
   options: ProfileStateAuthorityBootstrapOptions
@@ -61,6 +62,9 @@ export function bootstrapProfileStateAuthority(
     throw new ProfileStateAuthorityBootstrapError(
       'SQLite profile state is present but this runtime cannot validate it'
     )
+  }
+  if (classification === 'json-only' || classification === 'neither') {
+    assertProfileStateCanInitialize(options)
   }
   if (classification === 'json-only') {
     return migrateJsonOnlyProfile(options)
@@ -110,6 +114,7 @@ function createEmptyProfileStateDatabase({
         'Profile state storage changed while creating an empty database'
       )
     }
+    assertProfileStateCanInitialize({ dataFile, databaseFile, profileId })
     if (!publishFileDurableSync(temporaryDatabaseFile, databaseFile)) {
       throw new ProfileStateAuthorityBootstrapError(
         'Profile state storage changed while creating an empty database'
@@ -131,7 +136,12 @@ function migrateJsonOnlyProfile(
   const rawJson = readFileSync(options.dataFile, 'utf8')
   // serializedState makes malformed input fail closed and prevents backup
   // recovery or a normalization write from changing the legacy source.
-  const store = new Store({ dataFile: options.dataFile, serializedState: rawJson })
+  const unboundPaneAliases: ProfileStateStartupPaneAlias[] = []
+  const store = new Store({
+    dataFile: options.dataFile,
+    serializedState: rawJson,
+    collectUnboundPaneAlias: (entry) => unboundPaneAliases.push(entry)
+  })
   const prepared = store.prepareProfileStateExport()
   const migrated = migrateProfileStateToSqlite({
     ...options,
@@ -139,5 +149,10 @@ function migrateJsonOnlyProfile(
     serializedState: prepared.json
   })
   prepared.commit()
-  return { classification: 'json-only', ...migrated, migrated: true }
+  return {
+    classification: 'json-only',
+    ...migrated,
+    initialState: { ...migrated.initialState, unboundPaneAliases },
+    migrated: true
+  }
 }

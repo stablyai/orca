@@ -26,7 +26,8 @@ import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from '../persistence/profile-state/profile-state-database'
-import { assertNoRetainedProfileStateExports } from '../persistence/profile-state/profile-state-recovery-required'
+import { parseProfileStateRoot } from '../persistence/profile-state/profile-state-document-validation'
+import { assertProfileStateCanInitialize } from '../persistence/profile-state/profile-state-recovery-required'
 import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/profile-state-storage-classification'
 
 export type TransferProfileState = PersistedState
@@ -61,7 +62,7 @@ export function profileStateStorage(profileId: string, userDataPath: string): Pr
     return 'sqlite'
   }
   if (!hasDatabase) {
-    assertNoRetainedProfileStateExports({ dataFile, databaseFile, profileId })
+    assertProfileStateCanInitialize({ dataFile, databaseFile, profileId })
   }
   return hasDatabase ? 'sqlite' : 'json'
 }
@@ -117,7 +118,7 @@ function parseProfileState(rawJson: string | undefined): TransferProfileState {
   if (rawJson === undefined) {
     return structuredClone(getDefaultPersistedState(homedir()))
   }
-  return normalizeProfileProjectState(JSON.parse(rawJson))
+  return normalizeProfileProjectState(parseProfileStateRoot(rawJson))
 }
 
 export function normalizeProfileProjectState(
