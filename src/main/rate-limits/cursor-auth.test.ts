@@ -41,8 +41,11 @@ vi.mock('./cursor-desktop-state-db', () => ({
 
 import { readCursorAuthSession, readCursorCliIdentity } from './cursor-auth'
 
+type JwtSegment = Record<string, unknown>
+
 function jwt(sub: string): string {
-  const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url')
+  const encode = (value: JwtSegment): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url')
   return `${encode({ alg: 'RS256' })}.${encode({ sub, exp: 2_000_000_000 })}.signature`
 }
 

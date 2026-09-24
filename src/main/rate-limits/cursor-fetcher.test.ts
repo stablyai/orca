@@ -8,8 +8,11 @@ import { fetchCursorRateLimits } from './cursor-fetcher'
 import type { CursorAuthReadResult } from './cursor-auth'
 import { parseCursorSessionToken } from './cursor-session-token'
 
+type JwtSegment = Record<string, unknown>
+
 function jwt(exp: number): string {
-  const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url')
+  const encode = (value: JwtSegment): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url')
   return `${encode({ alg: 'RS256' })}.${encode({ sub: 'auth0|user_1', exp })}.signature`
 }
 

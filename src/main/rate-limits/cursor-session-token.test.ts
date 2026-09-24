@@ -5,8 +5,11 @@ import {
   parseCursorSessionToken
 } from './cursor-session-token'
 
+type JwtSegment = Record<string, unknown>
+
 function jwt(payload: Record<string, unknown>): string {
-  const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url')
+  const encode = (value: JwtSegment): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url')
   return `${encode({ alg: 'RS256' })}.${encode(payload)}.signature`
 }
 

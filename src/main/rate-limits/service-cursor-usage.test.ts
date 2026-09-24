@@ -27,8 +27,11 @@ vi.mock('./cursor-fetcher', () => ({ fetchCursorRateLimits: vi.fn() }))
 vi.mock('./cursor-auth', () => ({ readCursorAuthSession: vi.fn() }))
 vi.mock('../minimax/minimax-cookie-store', () => ({ hasMiniMaxSessionCookie: vi.fn(() => false) }))
 
+type JwtSegment = Record<string, unknown>
+
 function jwt(): string {
-  const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url')
+  const encode = (value: JwtSegment): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url')
   return `${encode({ alg: 'RS256' })}.${encode({ sub: 'auth0|user_1', exp: 4_000_000_000 })}.sig`
 }
 
