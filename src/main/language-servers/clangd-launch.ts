@@ -144,15 +144,38 @@ function messageForGate(kind: ClangdVersionGateKind, major: number | null): stri
     : `clangd ${major} is below the supported floor of ${CLANGD_VERSION_GATE_MINIMUM}. ${CLANGD_INSTALL_HINT}`
 }
 
+export type ClangdLaunchOptions = {
+  /** Explicit dir resolved by the compile-db strategy; null means single-file. */
+  compileCommandsDir?: string | null
+  env?: NodeJS.ProcessEnv
+}
+
+/**
+ * Build the clangd argv. When `compileCommandsDir` is supplied it is used as-is
+ * (the S3 db strategy resolves it); otherwise S1 detection probes for a
+ * pre-existing db. Explicit `--compile-commands-dir` beats clangd's ancestor
+ * walk, which would latch onto a stray root-level db (spike findings §8).
+ */
 export function buildClangdLaunch(
   worktreeRoot: string,
-  env: NodeJS.ProcessEnv = process.env
+  optionsOrEnv: ClangdLaunchOptions | NodeJS.ProcessEnv = {}
 ): ClangdLaunchPlan {
+  const opts = isLaunchOptions(optionsOrEnv) ? optionsOrEnv : { env: optionsOrEnv }
+  const env = opts.env ?? process.env
+  const compileCommandsDir =
+    opts.compileCommandsDir !== undefined
+      ? opts.compileCommandsDir
+      : detectExistingCompileCommandsDir(worktreeRoot)
   const args: string[] = []
-  const compileCommandsDir = detectExistingCompileCommandsDir(worktreeRoot)
   if (compileCommandsDir) {
     args.push(`--compile-commands-dir=${compileCommandsDir}`)
   }
   args.push('--log=info')
   return { program: resolveClangdProgram(env), args }
+}
+
+function isLaunchOptions(
+  value: ClangdLaunchOptions | NodeJS.ProcessEnv
+): value is ClangdLaunchOptions {
+  return typeof value === 'object' && value !== null && 'compileCommandsDir' in value
 }

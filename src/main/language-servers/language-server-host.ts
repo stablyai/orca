@@ -1,13 +1,23 @@
 // Language-server host (spec §4 + §6): session management keyed by worktree
 // root, document routing, and S2 lifecycle — prewarm-on-didOpen, 10min idle
 // shutdown, LRU cap-3 + toast, clangd version gate (PATH probe, <12 refuses).
-import { buildClangdLaunch, resolveClangdVersionGate } from './clangd-launch'
+// S3 (ticket 13): the D9 compile-db strategy runs at session start — detect
+// an existing db, else CMake-generate one; on failure degrade + .clangd
+// fallback. clangd is pointed at the resolved dir explicitly (no symlink).
+import { buildClangdLaunch, resolveClangdProgram } from './clangd-launch'
 import { openClangdSession, type ClangdSession } from './clangd-session'
 import { normalizeNativeFilePath } from './uri-mapping'
+import { resolveSessionCompileDb } from './language-server-session-db'
 import {
-  LANGUAGE_SERVER_IDLE_TIMEOUT_MS,
+  clearIdleTimer,
+  evictLeastRecentlyUsed,
+  maybeArmIdleTimer,
+  touchSession
+} from './language-server-session-lifecycle'
+import {
   LANGUAGE_SERVER_MAX_CONCURRENT_SESSIONS,
   type ClangdVersionGate,
+  type CompileDbStrategyFactory,
   type LanguageServerHost,
   type LanguageServerHostEvents,
   type SessionEntry
@@ -24,24 +34,21 @@ export {
 export function createLanguageServerHost(
   events: LanguageServerHostEvents = {},
   openSession: typeof openClangdSession = openClangdSession,
-  versionGate: ClangdVersionGate | null = null
+  versionGate: ClangdVersionGate | null = null,
+  dbStrategyFactory: CompileDbStrategyFactory | null = null
 ): LanguageServerHost {
   const sessionsByKey = new Map<string, SessionEntry>()
   const sessionKeyByDocument = new Map<string, string>()
   const log = (line: string): void => events.onLog?.(line)
 
-  function clearIdleTimer(entry: SessionEntry): void {
-    if (entry.idleTimer) {
-      clearTimeout(entry.idleTimer)
-      entry.idleTimer = null
-    }
-  }
   function dropSession(key: string): void {
     const entry = sessionsByKey.get(key)
     if (!entry) {
       return
     }
     clearIdleTimer(entry)
+    entry.dbStrategy?.dispose()
+    entry.dbStrategy = null
     sessionsByKey.delete(key)
     for (const [docPath, ownerKey] of sessionKeyByDocument) {
       if (ownerKey === key) {
@@ -50,28 +57,6 @@ export function createLanguageServerHost(
     }
   }
 
-  /** LRU eviction: stop the least-recently-active live session + toast. */
-  async function evictLeastRecentlyUsed(): Promise<void> {
-    let victim: SessionEntry | null = null
-    for (const entry of sessionsByKey.values()) {
-      if (entry.startPromise || entry.session?.died) {
-        continue
-      }
-      if (!victim || entry.lastActivityMs < victim.lastActivityMs) {
-        victim = entry
-      }
-    }
-    if (!victim) {
-      return
-    }
-    const victimKey = victim.key
-    log(`[language-servers] evicting ${victimKey} (lru-cap)`)
-    dropSession(victimKey)
-    await victim.session?.stop().catch(() => {})
-    events.onToast?.(
-      `Language server for ${victimKey.split(/[\\/]/).pop() ?? victimKey} was stopped to stay under the 3-session limit.`
-    )
-  }
   function ensureSession(worktreeRoot: string): Promise<ClangdSession> {
     const key = normalizeNativeFilePath(worktreeRoot)
     const existing = sessionsByKey.get(key)
@@ -90,12 +75,12 @@ export function createLanguageServerHost(
         return Promise.resolve(existing.session)
       }
     }
-    const launch = buildClangdLaunch(key)
+    const program = resolveClangdProgram()
     const startPromise = (async () => {
       // Version gate (spec D7): probe before spawning. <12/absent -> reject,
       // 12-15 -> suggest-upgrade, >=16 -> ok.
       if (versionGate) {
-        const gate = await versionGate(launch.program)
+        const gate = await versionGate(program)
         const gateEntry = sessionsByKey.get(key)
         if (gateEntry) {
           gateEntry.gate = gate
@@ -118,8 +103,23 @@ export function createLanguageServerHost(
         (entry) => entry.session && !entry.session.died
       ).length
       if (liveCount >= LANGUAGE_SERVER_MAX_CONCURRENT_SESSIONS) {
-        await evictLeastRecentlyUsed()
+        await evictLeastRecentlyUsed(sessionsByKey, events, log, dropSession)
       }
+      // D9 compile-db strategy (spec §6): detect or CMake-generate the db
+      // before spawn; on failure clangd still starts in single-file mode.
+      const { resolution: dbResolution, strategy } = await resolveSessionCompileDb(
+        key,
+        events,
+        log,
+        dbStrategyFactory
+      )
+      const strategyEntry = sessionsByKey.get(key)
+      if (strategyEntry) {
+        strategyEntry.dbStrategy = strategy
+      } else {
+        strategy.dispose()
+      }
+      const launch = buildClangdLaunch(key, { compileCommandsDir: dbResolution.compileCommandsDir })
       log(
         `[language-servers] starting clangd for ${key}: ${launch.program} ${launch.args.join(' ')}`
       )
@@ -148,7 +148,8 @@ export function createLanguageServerHost(
       openDocuments: new Set(),
       lastActivityMs: Date.now(),
       idleTimer: null,
-      gate: null
+      gate: null,
+      dbStrategy: null
     }
     sessionsByKey.set(key, entry)
     startPromise
@@ -176,32 +177,20 @@ export function createLanguageServerHost(
     return entry.session
   }
 
-  function touchSession(key: string): void {
+  function touchSessionLocal(key: string): void {
     const entry = sessionsByKey.get(key)
     if (entry) {
-      entry.lastActivityMs = Date.now()
-      clearIdleTimer(entry)
+      touchSession(entry)
     }
   }
 
   /** Arm the idle timer when a worktree's open C/C++ doc count drops to 0. */
-  function maybeArmIdleTimer(key: string): void {
+  function maybeArmIdleTimerLocal(key: string): void {
     const entry = sessionsByKey.get(key)
     if (!entry?.session || entry.session.died || entry.openDocuments.size > 0) {
       return
     }
-    clearIdleTimer(entry)
-    entry.idleTimer = setTimeout(() => {
-      void (async () => {
-        if (entry.openDocuments.size > 0) {
-          return
-        }
-        log(`[language-servers] idle timeout — shutting down ${key}`)
-        dropSession(key)
-        await entry.session?.stop().catch(() => {})
-      })()
-    }, LANGUAGE_SERVER_IDLE_TIMEOUT_MS)
-    entry.idleTimer.unref?.()
+    maybeArmIdleTimer(key, entry, log, dropSession)
   }
 
   return {
@@ -235,7 +224,7 @@ export function createLanguageServerHost(
       }
       try {
         const normalized = session.didChange(normalizeNativeFilePath(filePath), version, changes)
-        touchSession(sessionKeyByDocument.get(normalizeNativeFilePath(filePath)) ?? '')
+        touchSessionLocal(sessionKeyByDocument.get(normalizeNativeFilePath(filePath)) ?? '')
         return { ok: true as const, version: normalized }
       } catch (error) {
         return { ok: false as const, error: error instanceof Error ? error.message : String(error) }
@@ -262,7 +251,7 @@ export function createLanguageServerHost(
         const entry = sessionsByKey.get(ownerKey)
         if (entry) {
           entry.openDocuments.delete(key)
-          maybeArmIdleTimer(ownerKey)
+          maybeArmIdleTimerLocal(ownerKey)
         }
       }
       return { ok: true as const }
@@ -288,6 +277,8 @@ export function createLanguageServerHost(
       await Promise.all(
         entries.map(async (entry) => {
           clearIdleTimer(entry)
+          entry.dbStrategy?.dispose()
+          entry.dbStrategy = null
           const session = entry.startPromise
             ? await entry.startPromise.catch(() => null)
             : entry.session
@@ -298,22 +289,10 @@ export function createLanguageServerHost(
   }
 }
 
-let hostSingleton: LanguageServerHost | null = null
-
-/** Process-wide host. Events bind at first creation; later events are ignored. */
-export function getLanguageServerHost(events: LanguageServerHostEvents = {}): LanguageServerHost {
-  if (hostSingleton) {
-    return hostSingleton
-  }
-  hostSingleton = createLanguageServerHost(
-    { onLog: (line) => console.log(line), ...events },
-    openClangdSession,
-    resolveClangdVersionGate
-  )
-  return hostSingleton
-}
-
-/** Test seam: reset the process-wide singleton. */
-export function resetLanguageServerHostForTests(): void {
-  hostSingleton = null
-}
+// Re-export the process-wide singleton + test reset so existing importers
+// (the IPC facade) keep resolving from this module's path. The singleton
+// itself lives in language-server-host-singleton.ts (keeps this file lean).
+export {
+  getLanguageServerHost,
+  resetLanguageServerHostForTests
+} from './language-server-host-singleton'

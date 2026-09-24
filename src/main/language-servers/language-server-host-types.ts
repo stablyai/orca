@@ -3,6 +3,8 @@
 // idle timer, LRU cap) lives in language-server-host.ts.
 import type { ClangdSession } from './clangd-session'
 import type { ClangdVersionGateResult } from './clangd-launch'
+import type { CompileDbStrategy } from './compile-db/compile-db-strategy-types'
+export type { CompileDbStrategy } from './compile-db/compile-db-strategy-types'
 import type {
   LanguageServerDefinitionLocation,
   LanguageServerDocumentChange,
@@ -27,6 +29,20 @@ export type LanguageServerHostEvents = {
 
 /** A probe that classifies the resolved clangd binary; injected for tests. */
 export type ClangdVersionGate = (program: string) => Promise<ClangdVersionGateResult>
+
+/** Factory for the per-worktree compile-db strategy; injected for tests. */
+export type CompileDbStrategyFactory = (
+  worktreeRoot: string,
+  hooks: CompileDbStrategyHooks
+) => CompileDbStrategy
+
+/** Hooks the db strategy routes degraded/toast/status through (mirror host events). */
+export type CompileDbStrategyHooks = {
+  onStatus?: (text: string | null) => void
+  onDegraded?: (message: string | null) => void
+  onToast?: (message: string) => void
+  onLog?: (line: string) => void
+}
 
 export type LanguageServerHost = {
   openDocument(args: {
@@ -66,4 +82,6 @@ export type SessionEntry = {
   idleTimer: ReturnType<typeof setTimeout> | null
   /** Version-gate verdict cached so a reject doesn't re-probe every didOpen. */
   gate: ClangdVersionGateResult | null
+  /** Compile-db strategy for this worktree; disposed on session drop. */
+  dbStrategy: CompileDbStrategy | null
 }
