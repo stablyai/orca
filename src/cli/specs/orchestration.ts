@@ -3,6 +3,25 @@ import { GLOBAL_FLAGS } from '../args'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
+  ...[
+    {
+      path: ['orchestration', 'subscribe'],
+      summary: 'Opt this terminal into idle mailbox pointer submission'
+    },
+    {
+      path: ['orchestration', 'unsubscribe'],
+      summary: 'Stop mailbox pointer submission for this terminal'
+    },
+    {
+      path: ['orchestration', 'subscription', 'status'],
+      summary: 'Inspect this terminal mailbox subscription and latest wake result'
+    }
+  ].map(({ path, summary }) => ({
+    path,
+    summary,
+    usage: `orca ${path.join(' ')}${path.at(-1) === 'status' ? '' : ' [--retry-request <id>]'} [--json]`,
+    allowedFlags: path.at(-1) === 'status' ? [...GLOBAL_FLAGS] : [...GLOBAL_FLAGS, 'retry-request']
+  })),
   {
     path: ['orchestration', 'run-create'],
     summary: 'Create and bind a lightweight orchestration Run',

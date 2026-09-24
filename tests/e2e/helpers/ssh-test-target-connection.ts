@@ -11,6 +11,7 @@ type SshTestConnectionOptions = {
   remotePath: string
   displayName: string
   seedInitialTab?: boolean
+  credential?: string
 }
 
 export async function connectSshTestTarget(
@@ -19,13 +20,16 @@ export async function connectSshTestTarget(
   options: SshTestConnectionOptions
 ): Promise<ConnectedSshTestTarget> {
   return page.evaluate(
-    async ({ target, remotePath, displayName, seedInitialTab }) => {
+    async ({ target, remotePath, displayName, seedInitialTab, credential }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
       }
       const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
-        void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
+        void window.api.ssh.submitCredential({
+          requestId: request.requestId,
+          value: credential ?? null
+        })
       })
       try {
         const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
@@ -149,7 +153,8 @@ export async function connectSshTestTarget(
       target,
       remotePath: options.remotePath,
       displayName: options.displayName,
-      seedInitialTab: options.seedInitialTab ?? true
+      seedInitialTab: options.seedInitialTab ?? true,
+      credential: options.credential
     }
   )
 }

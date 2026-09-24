@@ -1,3 +1,4 @@
+import { ORCHESTRATION_SUBSCRIPTION_METHODS } from './orchestration/messaging/subscription-methods'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration/runs/runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration/worker/worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration/federation/federation-methods'
@@ -11,6 +12,7 @@ import { ORCHESTRATION_GATE_METHODS } from './orchestration/gates/gates'
 import { ORCHESTRATION_RESET_METHODS } from './orchestration/runs/reset-methods'
 
 export const ORCHESTRATION_METHODS = [
+  ...ORCHESTRATION_SUBSCRIPTION_METHODS,
   ...ORCHESTRATION_RUN_METHODS,
   ...ORCHESTRATION_WORKER_METHODS,
   ...ORCHESTRATION_FEDERATION_METHODS,

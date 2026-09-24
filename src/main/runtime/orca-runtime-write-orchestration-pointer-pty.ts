@@ -69,7 +69,17 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       return null
     }
     const processIncarnation = this.getTerminalProcessIncarnation(terminalHandle)
-    return processIncarnation ? { leaf, terminalHandle, processIncarnation } : null
+    if (!processIncarnation) {
+      return null
+    }
+    const title = getLatestLeafTitle(leaf, this.tabs.get(leaf.tabId)?.title ?? null)
+    const paneKey = isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null
+    return {
+      leaf,
+      terminalHandle,
+      processIncarnation,
+      ...this.resolvePaneAgentIdentityField(pty?.launchAgent, pty?.foregroundAgent, title, paneKey)
+    }
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {

@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto'
-import { isTerminalPromptMutation } from '../../../shared/orchestration-rpc-contract'
+import {
+  isTerminalMailboxSubscriptionMutation,
+  isTerminalPromptMutation
+} from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
@@ -73,6 +76,9 @@ export function shouldObserveCompletedMutation(
   params: unknown,
   receipt: unknown
 ): boolean {
+  if (isTerminalMailboxSubscriptionMutation(method)) {
+    return true
+  }
   if (readMutationReplayNudge(receipt) || readWorkerDoneReplayNudge(method, params, receipt)) {
     return true
   }

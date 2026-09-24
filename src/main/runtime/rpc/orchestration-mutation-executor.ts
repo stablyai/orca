@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   isDurableMutation,
+  isTerminalMailboxSubscriptionMutation,
   isTerminalPromptMutation
 } from '../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -62,7 +63,16 @@ export class OrchestrationMutationExecutor {
     const callerFingerprint =
       callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
     const stableParams = replayStableCallerParams(this.runtime, params)
-    const basePayloadHash = hashCanonical({ method: request.method, params: stableParams })
+    const terminalSubscriptionBinding = isTerminalMailboxSubscriptionMutation(request.method)
+      ? this.runtime.getTerminalMailboxSubscriptionBinding(
+          request.orchestrationCompatibilityEvidence
+        )
+      : undefined
+    const basePayloadHash = hashCanonical({
+      method: request.method,
+      params: stableParams,
+      ...(terminalSubscriptionBinding ? { terminalSubscriptionBinding } : {})
+    })
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()
     const isPromptMutation = isTerminalPromptMutation(request.method, params)
@@ -157,6 +167,9 @@ export class OrchestrationMutationExecutor {
         invoke({
           identity,
           recordReceipt: (result) => {
+            if (isTerminalMailboxSubscriptionMutation(request.method)) {
+              return
+            }
             db.completeMutationReceipt({
               ...identity,
               receipt: JSON.stringify(attachMutationReceipt(result, requestId, true))
@@ -171,9 +184,14 @@ export class OrchestrationMutationExecutor {
       try {
         const observed = await replayObservation
         const replayed = attachMutationReceipt(observed, requestId, true)
-        db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(replayed) })
+        if (!isTerminalMailboxSubscriptionMutation(request.method)) {
+          db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(replayed) })
+        }
         return replayed
-      } catch {
+      } catch (error) {
+        if (isTerminalMailboxSubscriptionMutation(request.method)) {
+          throw error
+        }
         // The original mutation is already durable; an observation-only replay
         // must not turn a completed request into a retry or resend opportunity.
         return attachMutationReceipt(receipt, requestId, true)
