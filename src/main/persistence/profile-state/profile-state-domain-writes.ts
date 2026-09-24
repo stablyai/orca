@@ -15,7 +15,6 @@ import {
   prepareProfileStateAutomationRunsDelta,
   prepareProfileStateAutomationRunsReplacement
 } from './profile-state-automation-runs'
-import type { AutomationRun } from '../../../shared/automations-types'
 import { isRecord, validateProfileStateDocumentRow } from './profile-state-document-validation'
 import { assertProfileStateDocumentRevision } from './profile-state-revision'
 import {
@@ -51,7 +50,7 @@ export type ProfileStateDomainTransaction = {
   expectedRevision: number
   replacements: readonly ProfileStateDomainMutation[]
   /** Changed run projection supplied by Store for selective row updates. */
-  automationRunsAfter?: readonly AutomationRun[]
+  automationRunsAfter?: readonly unknown[]
 }
 
 export type ProfileStateDomainWriteResult = {

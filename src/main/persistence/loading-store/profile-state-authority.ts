@@ -1,14 +1,14 @@
 import type { AutomationRun } from '../../../shared/automations-types'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 
-/**
- * The primary profile-state boundary used by Store.
- *
- * The legacy implementation is still the default. Keeping this contract
- * independent of SQLite lets the Node 18 orcad bundle load Store without
- * eagerly loading a newer runtime's `node:sqlite` module.
- */
+export type ProfileStateMaintenance = {
+  /** Re-admit the unchanged profile before permitting any new persistence work. */
+  resume(): Promise<void>
+}
+
+/** Keep offline/compatibility persistence loadable without eagerly importing SQLite. */
 export type ProfileStateAuthority = {
+  readonly asynchronous?: false
   /** Return storage-form JSON, or undefined when this authority has no state yet. */
   readSerializedState(): string | undefined
 
@@ -59,7 +59,48 @@ export type ProfileStateAuthority = {
 
   /** Release any process-local database handle before a profile is switched or removed. */
   close?: () => void
+
+  /** Only a clean maintenance close may provide an explicit resume capability. */
+  pauseForMaintenance?: () => Promise<ProfileStateMaintenance>
 }
+
+export type AsyncProfileStateAuthority = Omit<
+  ProfileStateAuthority,
+  | 'asynchronous'
+  | 'assertCurrentRevision'
+  | 'writeSerializedDomains'
+  | 'writeSerializedAutomationRuns'
+  | 'writeSerializedState'
+  | 'writeCompleteSerializedDomains'
+  | 'writeJsonExport'
+  | 'writeJsonCompatibilityExport'
+  | 'quarantineDatabase'
+  | 'close'
+> & {
+  readonly asynchronous: true
+  assertWritable(): void
+  abort(): Promise<void>
+  assertCurrentRevision(): Promise<void>
+  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void>
+  writeSerializedAutomationRuns(
+    replacements: readonly ProfileStateDomainReplacement[],
+    runs: readonly AutomationRun[]
+  ): Promise<void>
+  writeSerializedState(payload: Buffer): Promise<void>
+  writeCompleteSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[]
+  ): Promise<void>
+  writeJsonExport(targetPath: string): Promise<number>
+  writeLatestJsonExport(dataFile: string): Promise<number | undefined>
+  writeJsonCompatibilityExport(targetPath: string): Promise<number | undefined>
+  quarantineDatabase(
+    quarantineRoot?: string,
+    reason?: string
+  ): Promise<ProfileStateDatabaseQuarantine>
+  close(): Promise<void>
+}
+
+export type ProfileStatePersistenceAuthority = ProfileStateAuthority | AsyncProfileStateAuthority
 
 export type ProfileStateDomainReplacement = {
   domain: string
@@ -68,8 +109,10 @@ export type ProfileStateDomainReplacement = {
 }
 
 /** A startup read paired with the authority that observed its revision. */
-export type ProfileStateAuthorityInitialState = {
-  readonly authority: ProfileStateAuthority
+export type ProfileStateAuthorityInitialState<
+  Authority extends ProfileStatePersistenceAuthority = ProfileStateAuthority
+> = {
+  readonly authority: Authority
 } & (
   | { readonly serializedState: string | undefined; readonly takeParsedState?: never }
   | {

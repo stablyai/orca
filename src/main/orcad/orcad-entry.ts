@@ -166,7 +166,7 @@ async function startOrcadRuntime(
 
   let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   let profileStoreForShutdown:
-    | { flushPendingOrThrowAsync(): Promise<void>; freezeWrites(): void }
+    | { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> }
     | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
@@ -198,7 +198,7 @@ async function startOrcadRuntime(
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   const { store: profileStore, authority: profileStateAuthority } =
-    createOrcadProfileStateStartup(runtimeUserDataPath)
+    await createOrcadProfileStateStartup(runtimeUserDataPath)
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`

@@ -329,7 +329,7 @@ describe('CodexAccountService config sync', () => {
       limits
     })!
     const store = createStore(settings)
-    store.replaceCodexResetCreditAttemptLedgerAndFlush({
+    await store.replaceCodexResetCreditAttemptLedgerAndFlush({
       version: 1,
       attempts: [
         {
@@ -379,7 +379,7 @@ describe('CodexAccountService config sync', () => {
       limits
     })!
     const store = createStore(settings)
-    store.replaceCodexResetCreditAttemptLedgerAndFlush({
+    await store.replaceCodexResetCreditAttemptLedgerAndFlush({
       version: 1,
       attempts: [
         {
@@ -438,7 +438,7 @@ describe('CodexAccountService config sync', () => {
       limits
     })!
     const store = createStore(settings)
-    store.replaceCodexResetCreditAttemptLedgerAndFlush({
+    await store.replaceCodexResetCreditAttemptLedgerAndFlush({
       version: 1,
       attempts: [
         {
@@ -459,9 +459,9 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
-    vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
+    vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockRejectedValueOnce(
+      new Error('disk full')
+    )
 
     await expect(service.removeAccount('account-1')).rejects.toThrow('disk full')
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')

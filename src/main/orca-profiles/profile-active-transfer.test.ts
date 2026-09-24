@@ -138,7 +138,7 @@ describe('active profile transfer recovery', () => {
       const reopen = vi.fn(async () => {
         const retained = snapshot('source')
         store.updateSettings({ theme: 'light' })
-        store.flushOrThrow()
+        expect(() => store.flushOrThrow()).toThrow('final persistence')
         expect(snapshot('source')).toEqual(retained)
       })
 
@@ -188,7 +188,7 @@ describe('active profile transfer recovery', () => {
       })
     ).rejects.toThrow('reopen failed')
     store.updateSettings({ theme: 'light' })
-    store.flushOrThrow()
+    expect(() => store.flushOrThrow()).toThrow('final persistence')
     expect(snapshot('source')).toEqual(before)
     interrupted.mockRestore()
     expect(moveIntents.recoverPendingProfileProjectMoves(directory)).toBe(1)
@@ -207,7 +207,7 @@ describe('active profile transfer recovery', () => {
     )
     const recovered = snapshot('source')
     store.updateSettings({ theme: 'light' })
-    store.flushOrThrow()
+    expect(() => store.flushOrThrow()).toThrow('final persistence')
     expect(snapshot('source')).toEqual(recovered)
     expect(reopen).toHaveBeenCalledOnce()
   })
@@ -225,7 +225,7 @@ describe('active profile transfer recovery', () => {
       'Profile move intent is unreadable'
     )
     store.updateSettings({ theme: 'light' })
-    store.flushOrThrow()
+    expect(() => store.flushOrThrow()).toThrow('final persistence')
     expect(snapshot('source')).toEqual(before)
     expect(reopen).toHaveBeenCalledOnce()
   })

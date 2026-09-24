@@ -1,5 +1,6 @@
 import type { AutomationStorageAuthority } from '../scheduling-automations/automation-owner-projection'
 import type { ProfileStateAuthorityInitialState } from '../loading-store/profile-state-authority'
+import type { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { Store } from '../loading-store/store'
 import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 import {
@@ -43,6 +44,21 @@ export type ProfileStateStoreFactoryResult = {
 export function createProfileStateStore(
   options: ProfileStateStoreFactoryOptions
 ): ProfileStateStoreFactoryResult {
+  const { initialState, ...prepared } = prepareProfileStateStore(options)
+  return {
+    ...prepared,
+    store: initialState ? createSqliteStore(options, initialState) : createLegacyStore(options)
+  }
+}
+
+type PreparedProfileStateStore = Omit<ProfileStateStoreFactoryResult, 'store'> & {
+  initialState?: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
+}
+
+/** Admission is shared by live worker startup and synchronous offline operations. */
+export function prepareProfileStateStore(
+  options: ProfileStateStoreFactoryOptions
+): PreparedProfileStateStore {
   const authorityMode = options.authorityMode ?? 'legacy'
   const classification = classifyProfileStateStorage(options.dataFile, options.databaseFile)
   if (classification === 'json-only' || classification === 'neither') {
@@ -55,7 +71,6 @@ export function createProfileStateStore(
       )
     }
     return {
-      store: createLegacyStore(options),
       backend: 'json',
       classification,
       migrated: false
@@ -67,7 +82,6 @@ export function createProfileStateStore(
     (classification === 'neither' || classification === 'json-only')
   ) {
     return {
-      store: createLegacyStore(options),
       backend: 'json',
       classification,
       migrated: false
@@ -81,7 +95,6 @@ export function createProfileStateStore(
   const authority = bootstrap.authority
   if (authority === undefined) {
     return {
-      store: createLegacyStore(options),
       backend: 'json',
       classification: bootstrap.classification,
       migrated: bootstrap.migrated
@@ -89,7 +102,7 @@ export function createProfileStateStore(
   }
 
   return {
-    store: createSqliteStore(options, bootstrap.initialState),
+    initialState: bootstrap.initialState,
     backend: 'sqlite',
     classification: bootstrap.classification,
     migrated: bootstrap.migrated

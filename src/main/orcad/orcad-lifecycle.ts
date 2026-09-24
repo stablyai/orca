@@ -35,12 +35,12 @@ export async function startOrcadWithLifecycle<T extends object>(
 }
 
 export async function flushOrcadProfileStoreForShutdown(store: {
-  flushPendingOrThrowAsync(): Promise<void>
-  freezeWrites(): void
+  flushFinalOrThrowAsync(): Promise<void>
+  freezeWritesAsync(): Promise<void>
 }): Promise<void> {
   try {
-    await store.flushPendingOrThrowAsync()
+    await store.flushFinalOrThrowAsync()
   } finally {
-    store.freezeWrites()
+    await store.freezeWritesAsync()
   }
 }

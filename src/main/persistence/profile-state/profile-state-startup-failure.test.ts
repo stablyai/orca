@@ -7,6 +7,8 @@ import {
   formatProfileStateStartupFailure,
   profileStateStartupFailureClass
 } from './profile-state-startup-failure'
+import { ProfileStateWriterError } from './profile-state-writer-errors'
+import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
 
 describe('profile-state startup failure formatting', () => {
   it('prints recovery paths and the offline rollback command', () => {
@@ -56,5 +58,24 @@ describe('profile-state startup failure formatting', () => {
   it('leaves unrelated startup errors on the existing fatal path', () => {
     expect(formatProfileStateStartupFailure(new Error('unrelated startup failure'))).toBeUndefined()
     expect(profileStateStartupFailureClass(new Error('unrelated startup failure'))).toBeUndefined()
+  })
+
+  it('reports a missing writer without exposing its cause or suggesting database rollback', () => {
+    const error = new ProfileStateWriterError(
+      'profile-state-writer-unavailable',
+      'Profile state writer could not start',
+      'known-failure',
+      { cause: new Error('private runtime path') }
+    )
+    expect(profileStateStartupFailureClass(error)).toBe('writer-unavailable')
+    expect(formatProfileStateStartupFailure(error)).toBe(
+      'Orca could not start profile persistence. Restart Orca; if the problem continues, repair or reinstall this build.'
+    )
+  })
+
+  it('reports an admission race as a conflicting writer', () => {
+    const error = new ProfileStateRevisionConflictError(2, 3)
+    expect(profileStateStartupFailureClass(error)).toBe('revision-conflict')
+    expect(formatProfileStateStartupFailure(error)).toContain('Close other Orca processes')
   })
 })

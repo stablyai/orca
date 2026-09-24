@@ -388,7 +388,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     reloaded.freezeWrites()
   })
 
-  it('writes a PTY rebind through the workspace-session domain', () => {
+  it('writes a PTY rebind through the workspace-session domain', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-pty-domain-write-'))
     temporaryDirectories.push(directory)
     const dataFile = join(directory, 'orca-data.json')
@@ -416,7 +416,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     }
 
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId,
         tabId,
         leafId,
@@ -441,7 +441,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
       throw new Error('fixture did not produce a normalized remote PTY binding')
     }
     expect(
-      store.persistPtyBinding(
+      await store.persistPtyBinding(
         {
           worktreeId: remoteWorktreeId,
           tabId: remoteTabId,

@@ -11,7 +11,11 @@ type ProfileStateAuthorityFailure = {
   message: string
 }
 
-export type ProfileStateStartupFailureClass = 'recovery-required' | 'ambiguous-authority'
+export type ProfileStateStartupFailureClass =
+  | 'recovery-required'
+  | 'ambiguous-authority'
+  | 'revision-conflict'
+  | 'writer-unavailable'
 
 /** Return the bounded failure class used by startup breadcrumbs and support diagnostics. */
 export function profileStateStartupFailureClass(
@@ -22,6 +26,14 @@ export function profileStateStartupFailureClass(
   }
   if (isProfileStateAuthorityFailure(error)) {
     return 'ambiguous-authority'
+  }
+  if (isRecord(error) && typeof error.code === 'string') {
+    if (error.code === 'profile-state-revision-conflict') {
+      return 'revision-conflict'
+    }
+    if (error.code.startsWith('profile-state-writer-')) {
+      return 'writer-unavailable'
+    }
   }
   return undefined
 }
@@ -52,6 +64,14 @@ export function formatProfileStateStartupFailure(error: unknown): string | undef
 
   if (isProfileStateAuthorityFailure(error)) {
     return `Orca cannot safely choose a profile-state authority: ${error.message}`
+  }
+
+  const failureClass = profileStateStartupFailureClass(error)
+  if (failureClass === 'revision-conflict') {
+    return 'The active profile changed while Orca was starting. Close other Orca processes using this profile, then restart Orca.'
+  }
+  if (failureClass === 'writer-unavailable') {
+    return 'Orca could not start profile persistence. Restart Orca; if the problem continues, repair or reinstall this build.'
   }
 
   return undefined

@@ -2,10 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { publishFileDurableSync } from '../../durable-file-write'
-import type {
-  ProfileStateAuthority,
-  ProfileStateAuthorityInitialState
-} from '../loading-store/profile-state-authority'
+import type { ProfileStateAuthorityInitialState } from '../loading-store/profile-state-authority'
 import { Store } from '../loading-store/store'
 import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profile-state-database'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
@@ -25,7 +22,10 @@ export type ProfileStateAuthorityBootstrapResult = {
   classification: ProfileStateStorageClassification
   migrated: boolean
 } & (
-  | { authority: ProfileStateAuthority; initialState: ProfileStateAuthorityInitialState }
+  | {
+      authority: ProfileStateSqliteAuthority
+      initialState: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
+    }
   | { authority: undefined; initialState?: never }
 )
 

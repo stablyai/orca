@@ -1,8 +1,13 @@
 import type { Store } from '../persistence'
+import type { ProfileStateMaintenance } from '../persistence/loading-store/profile-state-authority'
+import type { ProfileStateMaintenanceOptions } from '../persistence/loading-store/profile-state-maintenance'
 
 const PROFILE_PERSISTENCE_TIMEOUT_MS = 20_000
 
-export async function flushActiveProfileBeforeFileMutation(store: Store): Promise<void> {
+export async function flushActiveProfileBeforeFileMutation(
+  store: Pick<Store, 'beginProfileMaintenance'>,
+  options: Pick<ProfileStateMaintenanceOptions, 'flush'> = {}
+): Promise<ProfileStateMaintenance> {
   const controller = new AbortController()
   let timeout: ReturnType<typeof setTimeout> | null = null
   const deadline = new Promise<never>((_resolve, reject) => {
@@ -12,7 +17,10 @@ export async function flushActiveProfileBeforeFileMutation(store: Store): Promis
     }, PROFILE_PERSISTENCE_TIMEOUT_MS)
   })
   try {
-    await Promise.race([store.flushPendingOrThrowAsync({ signal: controller.signal }), deadline])
+    return await Promise.race([
+      store.beginProfileMaintenance({ ...options, signal: controller.signal }),
+      deadline
+    ])
   } finally {
     if (timeout) {
       clearTimeout(timeout)

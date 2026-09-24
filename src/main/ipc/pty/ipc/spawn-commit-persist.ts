@@ -23,7 +23,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
 }> {
   const args = ctx.args
   try {
-    ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+    ctx.stablePaneBindingPersisted = await persistAdmittedStablePaneBinding({
       store: ctx.deps.store,
       owner: ctx.stablePaneOwner,
       result: ctx.result,
@@ -101,7 +101,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
   if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
     ptySizes.delete(ctx.effectiveSessionAppId)
   }
-  // Why: patch the load-bearing ptyId binding synchronously so a force-quit in the renderer's ~450 ms debounce window can't orphan daemon history or an SSH relay lease (Issue #217).
+  // Persist the binding before acknowledging spawn so the renderer debounce cannot orphan history.
   if (
     ctx.deps.store &&
     typeof args.worktreeId === 'string' &&
@@ -119,10 +119,11 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         origin: spawnCommitBindingOrigin(ctx.result)
       }
-      if (args.connectionId) {
-        ctx.deps.store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
-      } else {
-        ctx.deps.store.persistPtyBinding(binding)
+      const persisted = args.connectionId
+        ? await ctx.deps.store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+        : await ctx.deps.store.persistPtyBinding(binding)
+      if (persisted === false) {
+        throw new Error('terminal_pane_owner_changed')
       }
     } catch (err) {
       console.error('[pty] failed to persist PTY binding after spawn:', err)

@@ -249,6 +249,9 @@ export const electronViteConfig: UserConfig = {
           'profile-state-backup-worker-entry': resolve(
             'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
           ),
+          'profile-state-writer-worker-entry': resolve(
+            'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts'
+          ),
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),

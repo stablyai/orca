@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
@@ -17,13 +17,10 @@ import {
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { scheduleSave } from './write-scheduling'
-import {
-  durableWriteTempPath,
-  renameDurableSync,
-  writeFileDurableSync
-} from '../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
+import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
 import type { ProjectCollectionOperations } from './project-collection-operations'
 import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import type { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
@@ -39,14 +36,25 @@ import type { RetiredWorktreeNamePersistence } from './retired-worktree-name-per
 import type { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
-import { profileStateJsonExportPath } from '../profile-state/profile-state-export-path'
-import type { ProfileStateAuthorityInitialState } from './profile-state-authority'
+import { writeVersionedProfileStateExport } from '../profile-state/profile-state-versioned-export'
+import {
+  beginProfileStateMaintenance,
+  freezeProfileStateWrites,
+  freezeProfileStateWritesAsync,
+  type ProfileStateMaintenanceOptions
+} from './profile-state-maintenance'
+import type {
+  AsyncProfileStateAuthority,
+  ProfileStateAuthorityInitialState,
+  ProfileStatePersistenceAuthority,
+  ProfileStateMaintenance
+} from './profile-state-authority'
 
 export type StoreOptions = StoreRuntimeOptions & {
   /** Storage-form JSON supplied by a read-only profile migration/import boundary. */
   serializedState?: string
   /** Reuse the authority's validated startup read without retaining a cached copy. */
-  initialAuthorityState?: ProfileStateAuthorityInitialState
+  initialAuthorityState?: ProfileStateAuthorityInitialState<ProfileStatePersistenceAuthority>
 }
 
 export type PreparedProfileStateExport = {
@@ -85,6 +93,7 @@ export class Store {
     this.domains = createStoreDomains(this.runtime)
     installStoreDomainContexts(this, this.domains)
     this.runtime.flushOrThrow = () => this.flushOrThrow()
+    this.runtime.runDurableMutation = (mutate) => this.runDurableMutation(mutate)
     let loaded: PersistedState
     if (options.profileStateAuthority !== undefined) {
       if (initial !== undefined) {
@@ -174,6 +183,9 @@ export class Store {
     this.runtime.dirtyProfileStateDomains = null
     this.flushOrThrow()
     const authority = this.runtime.profileStateAuthority
+    if (authority?.asynchronous) {
+      throw new Error('Live profile exports require an awaited export')
+    }
     if (authority?.writeJsonExport) {
       return authority.writeJsonExport(targetPath)
     }
@@ -188,53 +200,72 @@ export class Store {
   /** Publish the latest SQLite revision as a durable, versioned rollback export. */
   writeLatestProfileStateJsonExport(): number | undefined {
     const authority = this.runtime.profileStateAuthority
+    if (authority?.asynchronous) {
+      throw new Error('Live profile exports require an awaited export')
+    }
     if (!authority?.writeJsonExport) {
       return undefined
     }
     this.runtime.dirtyProfileStateDomains = null
     this.flushOrThrow()
 
-    const stagingPath = `${this.runtime.dataFile}.sqlite-export.pending.${process.pid}.${Date.now()}.tmp`
-    let published = false
-    try {
-      const revision = authority.writeJsonExport(stagingPath)
-      if (revision === 0) {
-        rmSync(stagingPath, { force: true })
-        published = true
-        return undefined
-      }
-      const targetPath = profileStateJsonExportPath(this.runtime.dataFile, revision)
-      mkdirSync(dirname(targetPath), { recursive: true })
-      if (existsSync(targetPath)) {
-        const staged = readFileSync(stagingPath)
-        const existing = readFileSync(targetPath)
-        if (!staged.equals(existing)) {
-          throw new Error(
-            `Profile state export revision ${revision} already exists with different content`
-          )
-        }
-        rmSync(stagingPath, { force: true })
-      } else {
-        renameDurableSync(stagingPath, targetPath)
-      }
-      published = true
-      return revision
-    } finally {
-      if (!published) {
-        rmSync(stagingPath, { force: true })
-      }
-    }
+    const writeExport = authority.writeJsonExport.bind(authority)
+    return writeVersionedProfileStateExport(this.runtime.dataFile, writeExport)
   }
 
   /** Publish canonical JSON for a pre-update older-build compatibility window. */
   writeLatestProfileStateJsonCompatibilityExport(): number | undefined {
     const authority = this.runtime.profileStateAuthority
+    if (authority?.asynchronous) {
+      throw new Error('Live profile exports require an awaited export')
+    }
     if (!authority?.writeJsonCompatibilityExport) {
       return undefined
     }
     this.runtime.dirtyProfileStateDomains = null
     this.flushOrThrow()
     return authority.writeJsonCompatibilityExport(this.runtime.dataFile)
+  }
+
+  writeLatestProfileStateJsonExportAsync(): Promise<number | undefined> {
+    if (!this.runtime.profileStateAuthority?.asynchronous) {
+      return Promise.resolve(this.writeLatestProfileStateJsonExport())
+    }
+    return this.enqueueProfileExport((authority) =>
+      authority.writeLatestJsonExport(this.runtime.dataFile)
+    )
+  }
+
+  writeLatestProfileStateJsonCompatibilityExportAsync(): Promise<number | undefined> {
+    if (!this.runtime.profileStateAuthority?.asynchronous) {
+      return Promise.resolve(this.writeLatestProfileStateJsonCompatibilityExport())
+    }
+    return this.enqueueProfileExport((authority) =>
+      authority.writeJsonCompatibilityExport(this.runtime.dataFile)
+    )
+  }
+
+  private enqueueProfileExport(
+    exportState: (authority: AsyncProfileStateAuthority) => Promise<number | undefined>
+  ): Promise<number | undefined> {
+    if (
+      this.runtime.writesFrozen ||
+      this.runtime.quitFlushStarted ||
+      this.runtime.profileMaintenancePending
+    ) {
+      return Promise.reject(new Error('Cannot export finalized profile persistence'))
+    }
+    const authority = this.runtime.profileStateAuthority
+    if (!authority?.asynchronous) {
+      return Promise.resolve(undefined)
+    }
+    return enqueuePrimaryStateOperation(this.domains.writes, async () => {
+      this.runtime.dirtyProfileStateDomains = null
+      if (!(await writeToDiskAsync(this.domains.writes))) {
+        throw new Error('Profile state changed while preparing its export')
+      }
+      return exportState(authority)
+    })
   }
 
   /** Freeze writes, then preserve the SQLite family for an explicit recovery decision. */
@@ -244,6 +275,9 @@ export class Store {
   ): ProfileStateDatabaseQuarantine {
     this.freezeWrites()
     const authority = this.runtime.profileStateAuthority
+    if (authority?.asynchronous) {
+      throw new Error('Live profile quarantine requires an awaited close')
+    }
     if (!authority?.quarantineDatabase) {
       throw new Error('SQLite profile-state quarantine is unavailable')
     }
@@ -251,12 +285,29 @@ export class Store {
   }
 
   freezeWrites(): void {
-    this.runtime.writesFrozen = true
-    if (this.runtime.writeTimer) {
-      clearTimeout(this.runtime.writeTimer)
-      this.runtime.writeTimer = null
+    freezeProfileStateWrites(this.runtime)
+  }
+
+  beginProfileMaintenance(
+    options?: ProfileStateMaintenanceOptions
+  ): Promise<ProfileStateMaintenance> {
+    return beginProfileStateMaintenance(this.runtime, this.domains, options)
+  }
+
+  freezeWritesAsync(): Promise<void> {
+    return freezeProfileStateWritesAsync(this.runtime)
+  }
+
+  async quarantineProfileStateDatabaseAsync(
+    quarantineRoot?: string,
+    reason?: string
+  ): Promise<ProfileStateDatabaseQuarantine> {
+    await this.beginProfileMaintenance({ flush: false })
+    const authority = this.runtime.profileStateAuthority
+    if (!authority?.quarantineDatabase) {
+      throw new Error('SQLite profile-state quarantine is unavailable')
     }
-    this.runtime.profileStateAuthority?.close?.()
+    return authority.quarantineDatabase(quarantineRoot, reason)
   }
 }
 

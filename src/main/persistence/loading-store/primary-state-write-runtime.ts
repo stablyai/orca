@@ -7,6 +7,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'dataFile'
   | 'dirtyProfileStateDomains'
   | 'flushOrThrow'
+  | 'runDurableMutation'
   | 'firstPendingSaveAt'
   | 'inFlightAsyncTmpFile'
   | 'lastDurableWriteGeneration'
@@ -14,6 +15,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'pendingSnapshotFileWork'
   | 'pendingAutomationRunsAfter'
   | 'pendingWrite'
+  | 'profileMaintenancePending'
   | 'profileStateAuthority'
   | 'protectedSecrets'
   | 'quitFlushStarted'
@@ -39,6 +41,9 @@ export function canReuseDurableProfileState(
     return false
   }
   const authority = runtime.profileStateAuthority
+  if (authority?.asynchronous) {
+    throw new Error('Live profile persistence requires an awaited revision check')
+  }
   if (authority && !authority.assertCurrentRevision) {
     return false
   }

@@ -1,11 +1,11 @@
 import type { AutomationStorageAuthority } from '../scheduling-automations/automation-owner-projection'
 import { isProfileStateSqliteAvailable } from './profile-state-database'
-import {
-  createProfileStateStore,
-  type ProfileStateStoreAuthorityMode,
-  type ProfileStateStoreFactoryOptions,
-  type ProfileStateStoreFactoryResult
+import type {
+  ProfileStateStoreAuthorityMode,
+  ProfileStateStoreFactoryOptions,
+  ProfileStateStoreFactoryResult
 } from './profile-state-store-factory'
+import { createLiveProfileStateStore } from './profile-state-live-store-factory'
 
 /** Runtime roots sharing the profile-state selection boundary. */
 export type ProfileStateStartupRuntime = 'desktop' | 'orcad'
@@ -48,9 +48,9 @@ export function orcadProfileStateAuthorityMode(
 }
 
 /** Construct both runtimes through the same validated authority boundary. */
-export function createProfileStateStoreForStartup(
+export async function createProfileStateStoreForStartup(
   options: ProfileStateStartupAuthorityOptions
-): ProfileStateStoreFactoryResult {
+): Promise<ProfileStateStoreFactoryResult> {
   if (
     options.runtime === 'orcad' &&
     options.authorityMode === 'sqlite-candidate' &&
@@ -58,5 +58,5 @@ export function createProfileStateStoreForStartup(
   ) {
     throw new ProfileStateStartupAuthorityError()
   }
-  return createProfileStateStore(options)
+  return createLiveProfileStateStore(options)
 }

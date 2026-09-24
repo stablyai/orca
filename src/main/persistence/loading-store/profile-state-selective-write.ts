@@ -1,5 +1,9 @@
 import type { ProtectedSecretRetentionUpdate } from '../../protected-secret-persistence'
-import type { ProfileStateAuthority } from './profile-state-authority'
+import type {
+  ProfileStateAuthority,
+  ProfileStateDomainReplacement,
+  ProfileStatePersistenceAuthority
+} from './profile-state-authority'
 import { buildProfileStateDomainReplacements } from './profile-state-authority-writes'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 import type { AutomationRun } from '../../../shared/automations-types'
@@ -11,6 +15,13 @@ export type SelectiveProfileStateWriteResult = {
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
 }
 
+export type PreparedSelectiveProfileStateWrite = {
+  replacements: ProfileStateDomainReplacement[]
+  automationRuns: readonly AutomationRun[] | undefined
+  consumedAutomationRuns: boolean
+  protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+}
+
 export function writeSelectiveProfileState(
   authority: ProfileStateAuthority | undefined,
   serialization: StateSerializationSecretHandlingOperations,
@@ -18,18 +29,55 @@ export function writeSelectiveProfileState(
   pendingAutomationRunsAfter: readonly AutomationRun[] | undefined,
   isCurrent?: () => boolean
 ): SelectiveProfileStateWriteResult {
-  if (
-    !authority ||
-    dirtyDomains === null ||
-    dirtyDomains.size === 0 ||
-    !authority.writeSerializedDomains
-  ) {
+  const prepared = prepareSelectiveProfileStateWrite(
+    authority,
+    serialization,
+    dirtyDomains,
+    pendingAutomationRunsAfter
+  )
+  if (!prepared) {
     return {
       handled: false,
       aborted: false,
       consumedAutomationRuns: false,
       protectedSecretUpdates: []
     }
+  }
+  if (isCurrent && !isCurrent()) {
+    return {
+      handled: true,
+      aborted: true,
+      consumedAutomationRuns: false,
+      protectedSecretUpdates: []
+    }
+  }
+  if (prepared.automationRuns !== undefined) {
+    authority?.writeSerializedAutomationRuns?.(prepared.replacements, prepared.automationRuns)
+  } else {
+    authority?.writeSerializedDomains?.(prepared.replacements)
+  }
+  dirtyDomains?.clear()
+  return {
+    handled: true,
+    aborted: false,
+    consumedAutomationRuns: prepared.consumedAutomationRuns,
+    protectedSecretUpdates: prepared.protectedSecretUpdates
+  }
+}
+
+export function prepareSelectiveProfileStateWrite(
+  authority: ProfileStatePersistenceAuthority | undefined,
+  serialization: StateSerializationSecretHandlingOperations,
+  dirtyDomains: ReadonlySet<string> | null,
+  pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
+): PreparedSelectiveProfileStateWrite | undefined {
+  if (
+    !authority ||
+    dirtyDomains === null ||
+    dirtyDomains.size === 0 ||
+    !authority.writeSerializedDomains
+  ) {
+    return undefined
   }
   const useAutomationDelta =
     pendingAutomationRunsAfter !== undefined &&
@@ -39,34 +87,12 @@ export function writeSelectiveProfileState(
     : dirtyDomains
   const built = serialization.buildStateDomainsToSave(serializableDomains)
   if (built === undefined) {
-    return {
-      handled: false,
-      aborted: false,
-      consumedAutomationRuns: false,
-      protectedSecretUpdates: []
-    }
+    return undefined
   }
   const { payload, protectedSecretUpdates } = built
-  if (isCurrent && !isCurrent()) {
-    return {
-      handled: true,
-      aborted: true,
-      consumedAutomationRuns: false,
-      protectedSecretUpdates: []
-    }
-  }
-  if (useAutomationDelta) {
-    authority.writeSerializedAutomationRuns?.(
-      buildProfileStateDomainReplacements(payload, serializableDomains),
-      pendingAutomationRunsAfter
-    )
-  } else {
-    authority.writeSerializedDomains(buildProfileStateDomainReplacements(payload, dirtyDomains))
-  }
-  dirtyDomains.clear()
   return {
-    handled: true,
-    aborted: false,
+    replacements: buildProfileStateDomainReplacements(payload, serializableDomains),
+    automationRuns: useAutomationDelta ? pendingAutomationRunsAfter : undefined,
     consumedAutomationRuns: pendingAutomationRunsAfter !== undefined,
     protectedSecretUpdates
   }

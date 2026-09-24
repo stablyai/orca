@@ -28,7 +28,7 @@ type CodexAccountSelectionDependencies = {
   lifecycle: CodexAccountServiceLifecycle
   resolveSystemDefault: () => CodexSystemDefaultIdentity
   removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
-  discardResetAttempts: (accountId: string) => void
+  discardResetAttempts: (accountId: string) => Promise<void>
 }
 
 export class CodexAccountSelection {
@@ -86,7 +86,7 @@ export class CodexAccountSelection {
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
     this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
-    this.dependencies.discardResetAttempts(accountId)
+    await this.dependencies.discardResetAttempts(accountId)
     const accountTarget = getCodexSelectionTargetForAccount(account)
     this.startQuotaRefresh(
       getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId

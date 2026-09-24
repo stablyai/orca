@@ -11,7 +11,9 @@ import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-sessi
 import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
+import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
+import { cloneWorkspaceSessionState } from '../persistence/restoring-sessions/session-owner-fields'
+import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../persistence/restoring-sessions/workspace-session-write-rollback'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   // Why: headless serve backs browser panes with offscreen WebContents that live
@@ -78,44 +80,74 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
-  protected commitHeadlessTerminalTabRetirement(
+  protected captureTerminalTabRetirement(worktreeId: string, tabId: string) {
+    const originalHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    return captureAcknowledgedTerminalTabRetirement(worktreeId, tabId, () => {
+      const resolvedHostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      const resolvedSession = this.store?.getWorkspaceSession?.(resolvedHostId)
+      // Emptying the last tab may reroute the worktree to its catalog host.
+      const hostId = resolvedSession?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)
+        ? resolvedHostId
+        : originalHostId
+      return {
+        hostId,
+        session: this.store?.getWorkspaceSession?.(hostId) ?? null,
+        snapshot: this.mobileSessionTabsByWorktree.get(worktreeId),
+        incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId
+      }
+    })
+  }
+
+  protected async commitHeadlessTerminalTabRetirement(
     worktreeId: string,
     parentTabId: string,
     options: { allowMissing?: boolean; force?: boolean } = {}
-  ): string[] {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (!session || !this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
+  ): Promise<string[]> {
+    if (!this.store?.setWorkspaceSession || !this.store.runDurableMutation) {
       throw new Error('workspace_session_unavailable')
     }
-    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId, {
-      force: options.force
-    })
-    if (result.pinned) {
-      throw new Error('terminal_tab_pinned')
-    }
-    if (!result.closed) {
-      if (!options.allowMissing) {
+    const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, parentTabId)
+    return this.store.runDurableMutation(() => {
+      if (!acknowledgeRetirement().matches) {
+        throw new Error('terminal_pane_owner_changed')
+      }
+      const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      const currentSession = this.store.getWorkspaceSession(hostId)
+      if (!currentSession) {
+        throw new Error('workspace_session_unavailable')
+      }
+      const session = cloneWorkspaceSessionState(currentSession)
+      const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId, {
+        force: options.force
+      })
+      if (result.pinned) {
+        throw new Error('terminal_tab_pinned')
+      }
+      if (!result.closed && !options.allowMissing) {
         throw new Error('tab_not_found')
       }
-    }
-    const persisted = result.closed
-      ? advanceTerminalTopologyRevision(result.session, worktreeId)
-      : session
-    this.setWorkspaceSessionForWorktree(worktreeId, persisted)
-    const staged = this.getWorkspaceSessionForWorktree(worktreeId)
-    try {
-      this.store.flushOrThrow()
-    } catch (error) {
-      const current = this.getWorkspaceSessionForWorktree(worktreeId)
-      if (staged && current) {
-        const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
-        if (rolledBack !== current) {
-          this.setWorkspaceSessionForWorktree(worktreeId, rolledBack)
+      const persisted = result.closed
+        ? advanceTerminalTopologyRevision(result.session, worktreeId)
+        : session
+      this.store.setWorkspaceSession(persisted, hostId)
+      const staged = cloneWorkspaceSessionState(this.store.getWorkspaceSession(hostId))
+      return {
+        value: result.ptyIdsToKill,
+        rollback: () => {
+          const current = this.store.getWorkspaceSession(hostId)
+          if (current) {
+            const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(
+              session,
+              staged,
+              current
+            )
+            if (rolledBack !== current) {
+              this.store.setWorkspaceSession(rolledBack, hostId)
+            }
+          }
         }
       }
-      throw error
-    }
-    return result.ptyIdsToKill
+    })
   }
 
   protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {

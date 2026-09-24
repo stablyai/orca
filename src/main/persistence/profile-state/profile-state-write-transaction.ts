@@ -1,5 +1,17 @@
 import type Database from '../../sqlite/sync-database'
 
+export class ProfileStateIndeterminateWriteError extends Error {
+  readonly code = 'profile-state-write-indeterminate' as const
+
+  constructor(
+    cause: unknown,
+    readonly rollbackError: unknown
+  ) {
+    super('Profile state write failed without a confirmed rollback', { cause })
+    this.name = 'ProfileStateIndeterminateWriteError'
+  }
+}
+
 /** Own the write transaction; joining a caller's transaction would weaken its revision fence. */
 export function withProfileStateWriteTransaction<T>(db: Database.Database, write: () => T): T {
   if (db.isTransaction) {
@@ -13,8 +25,8 @@ export function withProfileStateWriteTransaction<T>(db: Database.Database, write
   } catch (error) {
     try {
       db.exec('ROLLBACK')
-    } catch {
-      // Preserve the write failure if rollback is unavailable.
+    } catch (rollbackError) {
+      throw new ProfileStateIndeterminateWriteError(error, rollbackError)
     }
     throw error
   }

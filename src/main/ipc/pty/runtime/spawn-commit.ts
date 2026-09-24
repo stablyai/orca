@@ -41,7 +41,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
   try {
-    ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+    ctx.stablePaneBindingPersisted = await persistAdmittedStablePaneBinding({
       store: ctx.hostSessionBinding?.store,
       owner: ctx.stablePaneOwner,
       result: ctx.result,
@@ -164,11 +164,11 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         origin: spawnCommitBindingOrigin(ctx.result, ctx.hostSessionBinding.expectedSourceBinding)
       }
       const persisted = args.connectionId
-        ? ctx.hostSessionBinding.store.persistPtyBinding(
+        ? await ctx.hostSessionBinding.store.persistPtyBinding(
             binding,
             toSshExecutionHostId(args.connectionId)
           )
-        : ctx.hostSessionBinding.store.persistPtyBinding(binding)
+        : await ctx.hostSessionBinding.store.persistPtyBinding(binding)
       if (persisted === false) {
         throw new Error('terminal_split_source_not_found')
       }

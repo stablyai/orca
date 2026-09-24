@@ -15,6 +15,9 @@ import type { StateSerializationSecretHandlingOperations } from './state-seriali
 import type { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import { writeToDiskSync } from './primary-state-write-sync'
+import { writeProfileStateInWorker } from './primary-state-write-worker'
+import type { DurableProfileStateMutation } from './store-runtime-state'
+import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -31,8 +34,11 @@ export class PrimaryStateWriteOperations {
   flushOrThrow(): void {
     const context = this[primaryStateWriteOperationsContext]
     const { runtime } = context
-    if (runtime.quitFlushStarted) {
+    if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
       throw new Error('Cannot synchronously flush after final persistence has started')
+    }
+    if (runtime.profileStateAuthority?.asynchronous) {
+      throw new Error('Live profile persistence requires an awaited flush')
     }
     if (runtime.writeTimer) {
       clearTimeout(runtime.writeTimer)
@@ -61,7 +67,44 @@ export class PrimaryStateWriteOperations {
   }
 
   flushActiveViewPreferenceOrThrow(): void {
+    if (this[primaryStateWriteOperationsContext].runtime.profileMaintenancePending) {
+      throw new Error('Cannot flush active-view persistence during profile maintenance')
+    }
     this[primaryStateWriteOperationsContext].runtime.activeViewPreference.flushOrThrow()
+  }
+
+  runDurableMutation<T>(mutate: () => DurableProfileStateMutation<T>): Promise<T> {
+    const { runtime } = this[primaryStateWriteOperationsContext]
+    if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {
+      return Promise.reject(new Error('Cannot mutate finalized profile persistence'))
+    }
+    return enqueuePrimaryStateOperation(this, async () => {
+      if (runtime.profileStateAuthority?.asynchronous) {
+        runtime.profileStateAuthority.assertWritable()
+      }
+      const mutation = mutate()
+      if (mutation.persist === false) {
+        return mutation.value
+      }
+      runtime.writeGeneration++
+      const requiredGeneration = runtime.writeGeneration
+      try {
+        const captured = runtime.profileStateAuthority?.asynchronous
+          ? await writeToDiskAsync(this)
+          : writeToDiskSync(this[primaryStateWriteOperationsContext], {
+              expectedGeneration: requiredGeneration
+            })
+        if (!captured || runtime.lastDurableWriteGeneration < requiredGeneration) {
+          throw new Error('Profile mutation changed while preparing its durable snapshot')
+        }
+      } catch (error) {
+        if (profileStateWriterFailureOutcome(error) !== 'indeterminate') {
+          mutation.rollback?.()
+        }
+        throw error
+      }
+      return mutation.value
+    })
   }
 
   getCodexResetCreditAttemptLedger(): CodexResetCreditAttemptLedger {
@@ -70,45 +113,72 @@ export class PrimaryStateWriteOperations {
     )
   }
 
-  replaceCodexResetCreditAttemptLedgerAndFlush(ledger: CodexResetCreditAttemptLedger): void {
+  replaceCodexResetCreditAttemptLedgerAndFlush(
+    ledger: CodexResetCreditAttemptLedger
+  ): Promise<void> {
     const { runtime } = this[primaryStateWriteOperationsContext]
-    if (runtime.writesFrozen) {
-      throw new Error('Cannot persist Codex reset-credit attempts while writes are frozen')
-    }
     const next = parseCodexResetCreditAttemptLedger(ledger)
-    const previous = runtime.state.codexResetCreditAttemptLedger
-      ? structuredClone(runtime.state.codexResetCreditAttemptLedger)
-      : undefined
-    runtime.state.codexResetCreditAttemptLedger = next
-    runtime.dirtyProfileStateDomains?.add('codexResetCreditAttemptLedger')
-    try {
-      runtime.flushOrThrow()
-    } catch (error) {
-      // Why: callers use a successful return as the durability barrier before
-      // handing a scarce-credit mutation to the provider.
-      runtime.state.codexResetCreditAttemptLedger = previous
-      throw error
-    }
+    return this.runDurableMutation(() => {
+      const previous = runtime.state.codexResetCreditAttemptLedger
+      runtime.state.codexResetCreditAttemptLedger = next
+      runtime.dirtyProfileStateDomains?.add('codexResetCreditAttemptLedger')
+      return {
+        value: undefined,
+        rollback: () => {
+          if (runtime.state.codexResetCreditAttemptLedger === next) {
+            runtime.state.codexResetCreditAttemptLedger = previous
+          }
+        }
+      }
+    })
   }
 }
 
 export function enqueueWrite(
   owner: PrimaryStateWriteOperations,
-  options: { fullCheckpoint?: boolean } = {}
+  options: { fullCheckpoint?: boolean; signal?: AbortSignal } = {}
 ): Promise<void> {
+  return enqueuePrimaryStateOperation(owner, async () => {
+    const { runtime } = owner[primaryStateWriteOperationsContext]
+    const { signal } = options
+    if (signal?.aborted) {
+      throw new Error('Persistence flush aborted')
+    }
+    // A queued predecessor can clear dirty domains before this checkpoint runs.
+    if (options.fullCheckpoint) {
+      runtime.dirtyProfileStateDomains = null
+    }
+    const authority = runtime.profileStateAuthority
+    const abort = () => {
+      if (authority?.asynchronous) {
+        void authority
+          .abort()
+          .catch((error) =>
+            console.error('[persistence] Failed to stop aborted profile writer:', error)
+          )
+      }
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+    try {
+      await writeToDiskAsync(owner)
+    } finally {
+      signal?.removeEventListener('abort', abort)
+    }
+  })
+}
+
+export function enqueuePrimaryStateOperation<T>(
+  owner: PrimaryStateWriteOperations,
+  operation: () => Promise<T>
+): Promise<T> {
   const { runtime } = owner[primaryStateWriteOperationsContext]
   const previousWrite = Promise.all([
     runtime.pendingWrite ?? runtime.staleTempCleanup,
     runtime.pendingSnapshotFileWork ?? Promise.resolve()
   ]).then(() => {})
-  const write = previousWrite.then(() => {
-    // A queued predecessor can clear dirty domains before this checkpoint runs.
-    if (options.fullCheckpoint) {
-      runtime.dirtyProfileStateDomains = null
-    }
-    return writeToDiskAsync(owner)
-  })
+  const write = previousWrite.then(operation)
   const trackedWrite = write
+    .then(() => {})
     .catch((err) => {
       console.error('[persistence] Failed to write state:', err)
     })
@@ -121,16 +191,21 @@ export function enqueueWrite(
   return write
 }
 
-export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Promise<void> {
+export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Promise<boolean> {
   const { runtime, serialization, backups } = owner[primaryStateWriteOperationsContext]
   if (runtime.writesFrozen) {
-    return
+    return false
   }
   const gen = runtime.writeGeneration
+  if (runtime.profileStateAuthority?.asynchronous) {
+    return writeProfileStateInWorker(
+      owner[primaryStateWriteOperationsContext],
+      runtime.profileStateAuthority
+    )
+  }
   if (runtime.profileStateAuthority) {
     // SQL commits are synchronous so both entry points share the same generation fence.
-    writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
-    return
+    return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
   }
   const built = serialization.buildStateToSave()
   const { stateHash, protectedSecretUpdates } = built
@@ -139,7 +214,7 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     runtime.dirtyProfileStateDomains = new Set()
     runtime.pendingAutomationRunsAfter = undefined
     markPrimaryStateWriteDurable(runtime, gen)
-    return
+    return true
   }
   const dataFile = runtime.dataFile
   const payload = built.payload
@@ -161,7 +236,7 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     }
     // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
     if (runtime.writeGeneration !== gen) {
-      return
+      return false
     }
     runtime.inFlightAsyncTmpFile = tmpFile
     try {
@@ -197,13 +272,14 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     }
   }
   if (!renamed) {
-    return
+    return false
   }
   // Why (#1158): rotate only after the primary rename while this write still owns its generation.
   if (runtime.writeGeneration !== gen) {
-    return
+    return true
   }
   await backups.rotateBackupsAsync(dataFile)
+  return true
 }
 
 export function installPrimaryStateWriteOperationsContext(
