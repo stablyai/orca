@@ -116,9 +116,11 @@ describe('RateLimitService Cursor usage', () => {
       session: null,
       weekly: null,
       updatedAt: Date.now(),
-      error: 'Cursor usage request failed',
+      error: 'Cursor sign-in expired — run `cursor-agent login` again',
       status: 'error',
-      usageMetadata: { source: 'cli', authProvenance: 'account-b' }
+      // Why this exact shape: it is what cursor-fetcher returns for a readable but
+      // rejected session, which is the failure an account switch actually hits.
+      usageMetadata: { source: 'cli', failureKind: 'stale-token', authProvenance: 'account-b' }
     })
     await service.refresh()
     expect(service.getState().cursor?.session).toBeNull()

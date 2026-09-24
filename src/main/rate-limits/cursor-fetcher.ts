@@ -74,6 +74,10 @@ async function fetchDashboardJson(
   signal?: AbortSignal
 ): Promise<FetchOutcome> {
   const source = usageSource(session)
+  // Why on failures too: the account-switch guard downstream can only drop a
+  // previous account's figures when the fresh result names an account, and a
+  // switch whose first refresh 401s or 5xxs is exactly when it must.
+  const provenance = accountFingerprint(session)
   const requestSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
     : AbortSignal.timeout(API_TIMEOUT_MS)
@@ -89,7 +93,12 @@ async function fetchDashboardJson(
     return {
       kind: 'result',
       result: result('error', EXPIRED_MESSAGE, {
-        usageMetadata: { source, credentialSource: session.source, failureKind: 'stale-token' }
+        usageMetadata: {
+          source,
+          credentialSource: session.source,
+          authProvenance: provenance,
+          failureKind: 'stale-token'
+        }
       })
     }
   }
@@ -101,6 +110,7 @@ async function fetchDashboardJson(
         usageMetadata: {
           source,
           credentialSource: session.source,
+          authProvenance: provenance,
           failureKind: 'rate-limited',
           ...(Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
             ? { retryAtMs: Date.now() + retryAfterSeconds * 1000 }
@@ -113,7 +123,12 @@ async function fetchDashboardJson(
     return {
       kind: 'result',
       result: result('error', `Cursor usage request failed (HTTP ${res.status})`, {
-        usageMetadata: { source, credentialSource: session.source, failureKind: 'server' }
+        usageMetadata: {
+          source,
+          credentialSource: session.source,
+          authProvenance: provenance,
+          failureKind: 'server'
+        }
       })
     }
   }
@@ -123,7 +138,12 @@ async function fetchDashboardJson(
     return {
       kind: 'result',
       result: result('error', 'Cursor usage response could not be parsed', {
-        usageMetadata: { source, credentialSource: session.source, failureKind: 'parse' }
+        usageMetadata: {
+          source,
+          credentialSource: session.source,
+          authProvenance: provenance,
+          failureKind: 'parse'
+        }
       })
     }
   }
@@ -147,6 +167,7 @@ function credentialFailure(readResult: CursorAuthReadResult): ProviderRateLimits
       usageMetadata: {
         source: usageSource(readResult.session),
         credentialSource: readResult.session.source,
+        authProvenance: accountFingerprint(readResult.session),
         failureKind: 'stale-token'
       }
     })

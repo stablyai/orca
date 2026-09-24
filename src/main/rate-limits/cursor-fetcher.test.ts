@@ -129,6 +129,36 @@ describe('fetchCursorRateLimits', () => {
     expect(limits.error).toContain('cursor-agent login')
   })
 
+  it('names the account on failures too, so an account switch can clear stale figures', async () => {
+    // Why: the service drops a previous account's numbers only when the fresh
+    // result names an account. A switch whose first refresh fails is exactly when
+    // that matters, so every failure holding a readable session carries it.
+    const ok = jsonResponse(SUMMARY)
+    netFetchMock.mockResolvedValueOnce(ok)
+    const success = await fetchCursorRateLimits({ authReadResult: session() })
+    const fingerprint = success.usageMetadata?.authProvenance
+    expect(fingerprint).toBeTruthy()
+
+    for (const [status, headers] of [
+      [401, {}],
+      [429, { 'retry-after': '60' }],
+      [503, {}]
+    ] as const) {
+      netFetchMock.mockResolvedValueOnce(jsonResponse({}, status, headers))
+      const failure = await fetchCursorRateLimits({ authReadResult: session() })
+      expect(failure.status).toBe('error')
+      expect(failure.usageMetadata?.authProvenance).toBe(fingerprint)
+    }
+
+    const expired = await fetchCursorRateLimits({ authReadResult: session(1_000) })
+    expect(expired.usageMetadata?.authProvenance).toBe(fingerprint)
+  })
+
+  it('leaves the account unnamed when no session could be read', async () => {
+    const missing = await fetchCursorRateLimits({ authReadResult: { status: 'missing' } })
+    expect(missing.usageMetadata?.authProvenance).toBeUndefined()
+  })
+
   it('reports a server failure with its status code', async () => {
     netFetchMock.mockResolvedValueOnce(jsonResponse({}, 503))
     const limits = await fetchCursorRateLimits({ authReadResult: session() })
