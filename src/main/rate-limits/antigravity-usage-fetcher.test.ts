@@ -217,6 +217,8 @@ describe('fetchAntigravityRateLimits version gate', () => {
     ])
     for (const [spec] of vi.mocked(runProcess).mock.calls) {
       expect(spec.signal).toBe(controller.signal)
+      // Why: a timed-out/aborted agy must take its descendants with it, not just the root.
+      expect(spec.terminationBarrier).toBe(true)
     }
   })
 

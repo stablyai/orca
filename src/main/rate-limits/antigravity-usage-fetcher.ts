@@ -121,9 +121,17 @@ function runAgy(
   timeoutMs: number,
   signal: AbortSignal | undefined
 ): Promise<ProcessResult | null> {
-  return runProcess({ program, args, timeoutMs, maxOutputBytes: 1024 * 1024, signal }).catch(
-    () => null
-  )
+  // Why terminationBarrier: the old execFileCaptureToTermination default killed the whole
+  // tree on timeout/abort; without it only the root dies, orphaning agy descendants (Windows
+  // cmd.exe behind a .cmd shim, POSIX groups).
+  return runProcess({
+    program,
+    args,
+    timeoutMs,
+    maxOutputBytes: 1024 * 1024,
+    signal,
+    terminationBarrier: true
+  }).catch(() => null)
 }
 
 /** Reads native Antigravity quota via version-gated `agy --print /usage`. */
