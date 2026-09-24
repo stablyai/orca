@@ -14,24 +14,53 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
+import { pathToFileURL } from 'node:url'
+import process from 'node:process'
+
+const ROOT = join(import.meta.dirname, '..', '..')
+const RELAY_ARTIFACTS_TS = join(ROOT, 'src/shared/relay-artifacts.ts')
+
+/**
+ * Why esbuild and not a direct import: the repo declares Node 24, whose type stripping
+ * loads `src/shared/relay-artifacts.ts` natively, but Node 22 distro builds (compiled
+ * without strip-types) reject the extension. esbuild is already this script's bundler,
+ * so transforming the tiny module costs nothing and keeps the script runnable on both.
+ */
+async function loadRelayArtifacts() {
+  const result = await build({
+    entryPoints: [RELAY_ARTIFACTS_TS],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    write: false,
+    logLevel: 'silent'
+  })
+  const tempDir = mkdtempSync(join(tmpdir(), 'relay-artifacts-load-'))
+  const tempModule = join(tempDir, 'relay-artifacts.cjs')
+  writeFileSync(tempModule, result.outputFiles[0].text)
+  try {
+    return await import(pathToFileURL(tempModule).href)
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true })
+  }
+}
+
+const {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
   RELAY_WINDOWS_PROCESS_TREE_FILENAME,
   relayOptionalArtifactFilenames,
   isWindowsRelayPlatform,
   relayArtifactFilenames
-} from '../../src/shared/relay-artifacts.ts'
-
-const __dirname = import.meta.dirname
-// Why: the script lives under config/scripts, so go two levels up to reach the repo root.
-const ROOT = join(__dirname, '..', '..')
+} = await loadRelayArtifacts()
 const RELAY_ENTRY = join(ROOT, 'src', 'relay', 'relay.ts')
 const WATCHER_ENTRY = join(ROOT, 'src', 'main', 'ipc', 'parcel-watcher-process-entry.ts')
 const AI_VAULT_SERVICE_ENTRY = join(ROOT, 'src', 'relay', 'ai-vault-service-entry.ts')

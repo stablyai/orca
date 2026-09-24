@@ -8,7 +8,7 @@ type RepoRemoteClientNotifier = Pick<OrcaRuntimeService, 'notifyReposChangedForR
 // Why: notifyReposChanged is module-level and cannot close over a handler argument (#11994).
 let repoRemoteClientNotifier: RepoRemoteClientNotifier | null = null
 
-export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier): void {
+export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier | null): void {
   repoRemoteClientNotifier = notifier
 }
 

@@ -292,7 +292,10 @@ describe('ssh remote command builders', () => {
         const output = await runShellCommand(listRelayBaseDirsCommand(posix, root))
         const entries = output.trim().split('\n')
 
-        expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+        // Why no order assertion: nothing in the pipeline sorts, so entry order is the
+        // filesystem's (find's) choice and differs across hosts. The contract is the set
+        // plus the bounded size.
+        expect([...entries].sort()).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
         expect(Buffer.byteLength(output)).toBeLessThan(1_024)
         expect(entries.length).toBeLessThanOrEqual(MAX_RELAY_GC_LISTING_ENTRIES)
       } finally {

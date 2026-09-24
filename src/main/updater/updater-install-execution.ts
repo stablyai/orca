@@ -8,9 +8,9 @@ import { getLinuxPackageType } from '../linux-update-package-type'
 import { LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE } from '../linux-package-downloaded-status'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
-import { UpdaterPackageRecovery } from './updater-package-recovery'
+import { UpdaterServeInstallHandoff } from './updater-serve-install-handoff'
 
-export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
+export abstract class UpdaterInstallExecution extends UpdaterServeInstallHandoff {
   protected async performQuitAndInstall(): Promise<void> {
     if (this.quitAndInstallInProgress) {
       recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
@@ -24,6 +24,12 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
 
     const pendingVersion = this.getPendingInstallVersion()
     if (this.deferHeadlessServeInstall('install', pendingVersion)) {
+      return
+    }
+    // Why before the deb/rpm gate: the supervised branch never reaches the native installer.
+    // Linux only: darwin keeps the native handoff flow, since MacUpdater ignores quitAndInstall args anyway.
+    if (process.platform === 'linux' && this.updateInstallMode === 'supervised-headless-serve') {
+      await this.performSupervisedServeInstall(pendingVersion)
       return
     }
     const linuxPackageType = getLinuxPackageType()

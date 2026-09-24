@@ -59,16 +59,19 @@ describe('Claude effort reporting', () => {
   })
 
   it.each([
-    [
-      'the provider stops reporting it',
-      { applied: { effort: 'high' }, effective: {}, sources: {} }
-    ],
-    ['the payload carries no effective block', { applied: { effort: 'high' } }],
+    ['the provider stops reporting it', { applied: {}, effective: {}, sources: {} }],
+    ['the payload carries neither applied.effort nor effective.effortLevel', { sources: {} }],
     ['the request failed outright', null]
   ])('reports no effort when %s', (_case, settings) => {
     // Never defaulted: an effort nothing measured would be worse than a blank
     // pill, and this is the assertion that goes red if the key is renamed.
     expect(readClaudeSettingsEffort(settings)).toBeNull()
+  })
+
+  it('prefers applied.effort, the key the current CLI contract names', () => {
+    // 2.1.263 answers applied.effort and no longer sets effective.effortLevel;
+    // a reader that only checked effective blanked the pill on it.
+    expect(readClaudeSettingsEffort({ applied: { effort: 'high' }, effective: {} })).toBe('high')
   })
 
   it('publishes the effort from get_settings, which system/init never carries', async () => {

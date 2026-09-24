@@ -219,6 +219,7 @@ const LINUX_PACKAGE_PREFIXES = [
   'config/docker/headless-pairing/',
   'config/docker/headless-serve-shutdown/',
   'config/docker/daemon-shutdown-descendants/',
+  'config/docker/headless-serve-update/',
   'config/scripts/run-linux-cli-launch-contract',
   'config/scripts/run-headless-linux-pairing-docker',
   'config/scripts/run-daemon-shutdown-descendants-docker',
