@@ -52,6 +52,7 @@ export class StoreRuntimeState {
   inFlightAsyncTmpFile: string | null = null
   backupRotationInFlight = false
   writesFrozen = false
+  durableMutationPhase: 'mutate' | 'rollback' | null = null
   profileMaintenancePending = false
   pendingProfileMaintenance: Promise<void> | null = null
   readonly pendingProfileFlushes = new Set<Promise<void>>()

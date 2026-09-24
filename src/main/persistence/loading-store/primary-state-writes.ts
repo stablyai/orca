@@ -82,7 +82,7 @@ export class PrimaryStateWriteOperations {
       if (runtime.profileStateAuthority?.asynchronous) {
         runtime.profileStateAuthority.assertWritable()
       }
-      const mutation = mutate()
+      const mutation = this.runAdmittedMutationCallback('mutate', mutate)
       if (
         mutation.persist === false ||
         (mutation.persist === 'if-dirty' &&
@@ -103,12 +103,25 @@ export class PrimaryStateWriteOperations {
         }
       } catch (error) {
         if (profileStateWriterFailureOutcome(error) !== 'indeterminate') {
-          mutation.rollback?.()
+          if (mutation.rollback) {
+            this.runAdmittedMutationCallback('rollback', mutation.rollback)
+          }
         }
         throw error
       }
       return mutation.value
     })
+  }
+
+  private runAdmittedMutationCallback<T>(phase: 'mutate' | 'rollback', callback: () => T): T {
+    const { runtime } = this[primaryStateWriteOperationsContext]
+    // Finalization drains admitted mutations; the disk wait must not admit new snapshots.
+    runtime.durableMutationPhase = phase
+    try {
+      return callback()
+    } finally {
+      runtime.durableMutationPhase = null
+    }
   }
 
   getCodexResetCreditAttemptLedger(): CodexResetCreditAttemptLedger {
