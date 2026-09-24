@@ -10,6 +10,13 @@ export function normalizeWorktreeTag(raw: unknown): string {
   return raw.trim().replace(/\s+/g, ' ').slice(0, MAX_WORKTREE_TAG_LENGTH).trim()
 }
 
+const TAG_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base' })
+
+/** Display order for tags: alphabetical, ignoring case and accents. */
+export function compareWorktreeTags(left: string, right: string): number {
+  return TAG_COLLATOR.compare(left, right)
+}
+
 /** Case-insensitive identity, so `Billing` and `billing` are one tag. */
 export function worktreeTagKey(tag: string): string {
   return normalizeWorktreeTag(tag).toLocaleLowerCase()

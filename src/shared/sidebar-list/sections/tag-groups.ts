@@ -1,4 +1,8 @@
-import { normalizeWorktreeTags, worktreeTagKey } from '../../worktree/metadata/worktree-tags'
+import {
+  compareWorktreeTags,
+  normalizeWorktreeTags,
+  worktreeTagKey
+} from '../../worktree/metadata/worktree-tags'
 
 export const TAG_GROUP_PREFIX = 'tag:'
 // Why no `tag:` prefix: a user tag can never collide with the Untagged section.
@@ -32,5 +36,5 @@ export function compareTagSections(
   if (left.key === UNTAGGED_GROUP_KEY || right.key === UNTAGGED_GROUP_KEY) {
     return Number(left.key === UNTAGGED_GROUP_KEY) - Number(right.key === UNTAGGED_GROUP_KEY)
   }
-  return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
+  return compareWorktreeTags(left.label, right.label)
 }

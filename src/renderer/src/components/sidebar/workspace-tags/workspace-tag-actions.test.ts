@@ -1,0 +1,81 @@
+import { describe, expect, it } from 'vitest'
+import {
+  collectWorkspaceTags,
+  getTagSelectionState,
+  planTagDelete,
+  planTagRename,
+  planTagToggle
+} from './workspace-tag-actions'
+
+const api = { id: 'api', tags: ['Billing', 'backend'] }
+const web = { id: 'web', tags: ['billing'] }
+const docs = { id: 'docs' }
+
+function tagsById(updates: { workspace: { id: string }; tags: string[] }[]) {
+  return Object.fromEntries(updates.map((update) => [update.workspace.id, update.tags]))
+}
+
+describe('collectWorkspaceTags', () => {
+  it('lists each tag once, alphabetically, with how many workspaces use it', () => {
+    expect(collectWorkspaceTags([web, api, docs])).toEqual([
+      { tag: 'backend', count: 1 },
+      { tag: 'billing', count: 2 }
+    ])
+  })
+
+  it('forgets a tag once no workspace carries it', () => {
+    expect(collectWorkspaceTags([docs])).toEqual([])
+  })
+})
+
+describe('getTagSelectionState', () => {
+  it('reports all, some, or none across a selection, ignoring case', () => {
+    expect(getTagSelectionState([api, web], 'BILLING')).toBe('all')
+    expect(getTagSelectionState([api, web], 'backend')).toBe('some')
+    expect(getTagSelectionState([docs], 'backend')).toBe('none')
+  })
+})
+
+describe('planTagToggle', () => {
+  it('adds the tag to every selected workspace that lacks it', () => {
+    expect(tagsById(planTagToggle([api, docs], 'backend'))).toEqual({ docs: ['backend'] })
+  })
+
+  it('removes the tag from all when every selected workspace has it', () => {
+    expect(tagsById(planTagToggle([api, web], 'billing'))).toEqual({
+      api: ['backend'],
+      web: []
+    })
+  })
+
+  it('ignores a blank tag', () => {
+    expect(planTagToggle([docs], '   ')).toEqual([])
+  })
+})
+
+describe('planTagRename', () => {
+  it('renames the tag on every workspace, keeping other tags in place', () => {
+    expect(tagsById(planTagRename([api, web, docs], 'billing', 'Payments'))).toEqual({
+      api: ['Payments', 'backend'],
+      web: ['Payments']
+    })
+  })
+
+  it('merges into an existing tag without duplicating it', () => {
+    expect(tagsById(planTagRename([api], 'billing', 'Backend'))).toEqual({ api: ['Backend'] })
+  })
+
+  it('skips workspaces whose tags would not change', () => {
+    expect(planTagRename([api], 'Billing', 'Billing')).toEqual([])
+    expect(planTagRename([api], 'billing', '  ')).toEqual([])
+  })
+})
+
+describe('planTagDelete', () => {
+  it('removes the tag everywhere and leaves untagged workspaces alone', () => {
+    expect(tagsById(planTagDelete([api, web, docs], 'Billing'))).toEqual({
+      api: ['backend'],
+      web: []
+    })
+  })
+})
