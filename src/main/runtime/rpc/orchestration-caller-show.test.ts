@@ -116,6 +116,38 @@ describe('orchestration.callerShow: the caller learns its own address from the h
     expect(probe).toHaveBeenCalledTimes(2)
   })
 
+  it('answers the reminted handle, as the coordinator verbs act, when the carried one went stale', async () => {
+    vi.spyOn(h.runtime, 'resolveTerminalIdentity').mockImplementation((handle) => ({
+      handle,
+      live: handle === 'term_new'
+    }))
+    const resolvePane = vi.spyOn(h.runtime, 'resolveTerminalPane').mockImplementation((paneKey) => {
+      if (paneKey !== 'tab_1:leaf_1') {
+        throw new Error('terminal_not_found')
+      }
+      return { handle: 'term_new', tabId: 'tab_1', leafId: 'leaf_1', ptyId: null, connected: true }
+    })
+
+    const reminted = await h.dispatch(
+      callerShow({ evidence: { terminalHandle: 'term_old', paneKey: 'tab_1:leaf_1' } })
+    )
+    const paneOnly = await h.dispatch(callerShow({ evidence: { paneKey: 'tab_1:leaf_1' } }))
+    const gone = await h.dispatch(
+      callerShow({ evidence: { terminalHandle: 'term_old', paneKey: 'tab_gone:leaf' } })
+    )
+
+    expect(resultOf(reminted)).toEqual({
+      caller: { kind: 'terminal', address: 'term_new', live: true }
+    })
+    expect(resultOf(paneOnly)).toEqual({
+      caller: { kind: 'terminal', address: 'term_new', live: true }
+    })
+    expect(resultOf(gone)).toEqual({
+      caller: { kind: 'terminal', address: 'term_old', live: false }
+    })
+    expect(resolvePane).toHaveBeenCalledTimes(3)
+  })
+
   it('answers null for a caller whose environment carries no identity', async () => {
     const response = await h.dispatch(callerShow({}))
 

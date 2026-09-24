@@ -170,9 +170,23 @@ describe.skipIf(process.platform === 'win32')('orca status reports its caller ad
     expect(JSON.parse(await status(true)).result).not.toHaveProperty('caller')
   })
 
-  it('reports no caller, without asking the host, for a process with no identity', async () => {
+  it('lets the host decide that a process carries no identity', async () => {
+    callerShowReply = { result: { caller: null } }
+
     expect(await statusCaller()).toBeNull()
-    expect(received.map((request) => request.method)).toEqual(['status.get'])
+    expect(callerShowRequests()).toHaveLength(1)
     expect(await status(false)).toContain('caller: none')
+  })
+
+  it('asks the host about a process that carries only a pane key', async () => {
+    process.env.ORCA_PANE_KEY = 'tab_1:leaf_1'
+    callerShowReply = {
+      result: { caller: { kind: 'terminal', address: 'term_reminted', live: true } }
+    }
+
+    expect(await statusCaller()).toEqual({ kind: 'terminal', address: 'term_reminted', live: true })
+    expect(callerShowRequests()[0]?.orchestrationCompatibilityEvidence).toEqual({
+      paneKey: 'tab_1:leaf_1'
+    })
   })
 })
