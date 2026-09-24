@@ -158,6 +158,7 @@ ORCA terminal create --worktree active --command "codex" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
+ORCA terminal set-pane-title --terminal <handle> --title "New Name" --json
 ORCA terminal switch --terminal <handle> --json
 ORCA terminal close --terminal <handle> --json
 ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
@@ -166,6 +167,7 @@ ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
 Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
+- `terminal rename` sets the TAB title. After a split, panes share a tab, so rename cannot address one pane; use `terminal set-pane-title` to set ONE pane's title. Pass `--title ""` to clear it back to the automatic pane title.
 - Use `terminal close --terminal <handle>` to close one terminal. Use `terminal close --worktree <selector> --all` to stop every terminal process in exactly that workspace and durably remove its terminal tabs, layouts, and agent-resume records.
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.

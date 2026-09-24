@@ -239,6 +239,9 @@ export type UiCommandEventApi = {
   onCloseTerminal: (
     callback: (data: { tabId: string; paneRuntimeId?: number }) => void
   ) => () => void
+  onSetPaneTitle: (
+    callback: (data: { tabId: string; leafId: string; title: string | null }) => void
+  ) => () => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void

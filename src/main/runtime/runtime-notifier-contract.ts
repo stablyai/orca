@@ -118,6 +118,10 @@ export type RuntimeNotifier = {
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
   closeTerminal(tabId: string, paneRuntimeId?: number): void
+  // Why: `renameTerminal` names the tab, but split panes share one tabId, so a single pane title needs its own push.
+  // Optional like the other renderer-backed pushes: only the real window bridge owns pane titles, and a
+  // host without one falls back to the headless layout write in OrcaRuntimeWithResolveWorktreeRemovalTarget.
+  setPaneTitle?(tabId: string, leafId: string, title: string | null): void
   closeTerminalTab?(
     tabId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }

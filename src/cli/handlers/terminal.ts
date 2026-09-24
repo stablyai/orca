@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -16,6 +17,7 @@ import {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
@@ -24,7 +26,8 @@ import {
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import {
   annotateOmittedHostScope,
@@ -146,6 +149,17 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       title: getOptionalStringFlag(flags, 'title') ?? null
     })
     printResult(result, json, formatTerminalRename)
+  },
+  'terminal set-pane-title': async ({ flags, client, cwd, json }) => {
+    // Why empty-allowed: --title "" clears the pane title while a missing flag is an error.
+    const result = await client.call<{ paneTitle: RuntimeTerminalSetPaneTitle }>(
+      'terminal.setPaneTitle',
+      {
+        terminal: await getTerminalHandle(flags, cwd, client),
+        title: getRequiredStringFlagAllowingEmpty(flags, 'title')
+      }
+    )
+    printResult(result, json, formatTerminalSetPaneTitle)
   },
   'terminal create': async ({ flags, client, cwd, json }) => {
     if (client.isRemote && !flags.has('worktree')) {

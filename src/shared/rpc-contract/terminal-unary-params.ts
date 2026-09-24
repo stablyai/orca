@@ -99,6 +99,13 @@ export const TerminalRename = TerminalHandle.extend({
   })
 })
 
+// Why: `terminal.rename` writes the TAB title, but split panes share one tabId, so it cannot name
+// one pane. This is the pane-scoped sibling: not optional, because an omitted title would be
+// ambiguous between "leave it" and "clear it" — the CLI's empty string states the reset outright.
+export const TerminalSetPaneTitle = TerminalHandle.extend({
+  title: z.string()
+})
+
 export const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),

@@ -505,6 +505,7 @@ import {
   TerminalResolveActive,
   TerminalResolvePane,
   TerminalSend,
+  TerminalSetPaneTitle,
   TerminalSplit,
   TerminalStopExact,
   TerminalWait
@@ -1144,6 +1145,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.send': TerminalSend,
   'terminal.setAutoRestoreFit': TerminalSetAutoRestoreFit,
   'terminal.setDisplayMode': TerminalSetDisplayMode,
+  'terminal.setPaneTitle': TerminalSetPaneTitle,
   'terminal.show': TerminalHandle,
   'terminal.sleep': TerminalCloseAll,
   'terminal.split': TerminalSplit,

@@ -149,6 +149,18 @@ export type RuntimeSyncedLeaf = {
   parked?: boolean
 }
 
+/**
+ * Receipt for `terminal.setPaneTitle`, the pane-scoped sibling of `RuntimeTerminalRename`.
+ * `leafId` is the durable pane identity the renderer resolves to a numeric pane id; `title` is the
+ * trimmed value, or null when the pane fell back to its automatic title.
+ */
+export type RuntimeTerminalSetPaneTitle = {
+  handle: string
+  tabId: string
+  leafId: string
+  title: string | null
+}
+
 export type RuntimeSyncWindowGraph = {
   tabs: RuntimeSyncedTab[]
   leaves: RuntimeSyncedLeaf[]

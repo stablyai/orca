@@ -88,6 +88,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  terminal wait             Wait for a terminal condition (exit, tui-idle)',
   '  terminal create           Create a terminal session in a worktree',
   '  terminal rename           Set or clear the title of a terminal tab',
+  '  terminal set-pane-title   Set or clear the title of one terminal pane',
   '  terminal split            Split an existing terminal pane',
   '  terminal switch           Bring a terminal tab to the foreground',
   '  terminal focus            Alias for terminal switch',

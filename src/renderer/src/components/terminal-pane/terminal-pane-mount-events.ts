@@ -1,5 +1,11 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { CLOSE_TERMINAL_PANE_EVENT, type CloseTerminalPaneDetail } from '@/constants/terminal'
+import {
+  CLOSE_TERMINAL_PANE_EVENT,
+  SET_TERMINAL_PANE_TITLE_EVENT,
+  type CloseTerminalPaneDetail,
+  type SetTerminalPaneTitleDetail
+} from '@/constants/terminal'
+import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
@@ -23,6 +29,10 @@ export function installTerminalPaneMountEvents(args: {
     worktreeId: string
     isActive: boolean
     managerRef: React.RefObject<PaneManager | null>
+    setPaneTitles: React.Dispatch<React.SetStateAction<Record<number, string>>>
+    paneTitlesRef: React.RefObject<Record<number, string>>
+    removePaneTitle: (paneId: number) => void
+    removedTitleLeafIdsRef: React.RefObject<Set<string>>
     persistLayoutSnapshot: () => void
     syncCanExpandState: () => void
     queueResizeAll: (focusActive: boolean) => void
@@ -110,9 +120,34 @@ export function installTerminalPaneMountEvents(args: {
     deps.persistLayoutSnapshot()
   }
 
+  const onSetPaneTitle = (event: Event): void => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a window CustomEvent's detail is untyped at the Event boundary; the sole dispatcher sets SetTerminalPaneTitleDetail.
+    const detail = (event as CustomEvent<SetTerminalPaneTitleDetail>).detail
+    if (!detail?.tabId || detail.tabId !== deps.tabId) {
+      return
+    }
+    // Why: numeric pane ids are reused after replay/teardown, so a stale leaf must not rename a sibling.
+    const resolution = resolveLeafIdForManager(deps.tabId, detail.leafId, deps.managerRef.current)
+    if (resolution.status !== 'resolved') {
+      return
+    }
+    const paneId = resolution.numericPaneId
+    const title = detail.title
+    if (title) {
+      deps.setPaneTitles((previous) => ({ ...previous, [paneId]: title }))
+      deps.paneTitlesRef.current = { ...deps.paneTitlesRef.current, [paneId]: title }
+      deps.removedTitleLeafIdsRef.current.delete(detail.leafId)
+    } else {
+      deps.removePaneTitle(paneId)
+    }
+    deps.persistLayoutSnapshot()
+  }
+
   window.addEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+  window.addEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
   return () => {
     unregisterTerminalPaneSplitRequestHandler()
     window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+    window.removeEventListener(SET_TERMINAL_PANE_TITLE_EVENT, onSetPaneTitle)
   }
 }
