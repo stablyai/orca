@@ -3,8 +3,10 @@
 //
 // Codex's default multi-agent mode reports a helper ONLY this way; it emits no `subAgentActivity`.
 // Shapes are from the app-server's generated schema (0.155) and a live default-mode session:
-//   * `spawnAgent` starts with `receiverThreadIds: []`. The helper's thread id first appears on the
-//     call's completion, beside the `prompt` it was given.
+//   * `spawnAgent` starts with `receiverThreadIds: []`. The helper's thread id first appears when
+//     the call ends, beside the `prompt` it was given — even when the call ends `failed`.
+//   * Codex core also knows each receiver's nickname and role, but the app-server item does not
+//     carry them yet; `readCodexSubagentAnnouncement` is where they would be adopted.
 //   * The item names no nickname or task path, so the prompt is the only text that tells one
 //     helper from another.
 //   * `agentsStates` is the caller's last-known snapshot of each receiver. The helper's own turn
@@ -57,14 +59,14 @@ export function readCodexCollabAgentToolCall(
   }
 }
 
-/** The helper a finished `spawnAgent` created. A spawn Codex refused names none. */
+/** The helper a `spawnAgent` created, whatever the call's status: Codex reports `failed` for a
+ *  helper that errored at birth, yet names the thread it created, and that thread can still run.
+ *  A spawn in progress, or one that created nothing, names no receiver. */
 export function codexCollabSpawnedThread(call: CodexCollabAgentToolCall): string | null {
-  return call.tool === 'spawnAgent' && call.status === 'completed'
-    ? (call.receiverThreadIds[0] ?? null)
-    : null
+  return call.tool === 'spawnAgent' ? (call.receiverThreadIds[0] ?? null) : null
 }
 
-/** The helper a finished `closeAgent` shut down. */
+/** The helper a finished `closeAgent` shut down. A failed close left it running. */
 export function codexCollabClosedThread(call: CodexCollabAgentToolCall): string | null {
   return call.tool === 'closeAgent' && call.status === 'completed'
     ? (call.receiverThreadIds[0] ?? null)

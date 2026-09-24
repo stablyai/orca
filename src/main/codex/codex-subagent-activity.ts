@@ -102,7 +102,7 @@ export type CodexSubagentAnnouncement = {
   spawned: boolean
 }
 
-/** The child a `subAgentActivity` item (the tree root excluded) or a finished `spawnAgent` call
+/** The child a `subAgentActivity` item (the tree root excluded) or an ended `spawnAgent` call
  *  announces. Both name the child by its thread id, so a session sending both announces one. */
 export function readCodexSubagentAnnouncement(
   item: CodexThreadItem

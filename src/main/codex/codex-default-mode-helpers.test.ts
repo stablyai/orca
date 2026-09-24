@@ -323,6 +323,75 @@ describe('Codex default-mode helpers', () => {
     })
   })
 
+  it('registers a helper whose spawn call failed but created its thread, as Codex reports an errored one', async () => {
+    const run = await session()
+    // The shape Codex builds for a helper that errored at birth: the call fails, yet names the
+    // thread it created, and that thread can still run.
+    const spawnFailedWithThread = collab('item/completed', {
+      id: 'call-failed-spawn',
+      tool: 'spawnAgent',
+      status: 'failed',
+      receiverThreadIds: [HELPER],
+      prompt: PROMPT,
+      model: 'gpt-5.5',
+      reasoningEffort: 'medium',
+      agentsStates: { [HELPER]: { status: 'errored', message: null } }
+    })
+    run.send(
+      turn('turn/started', THREAD_ID, PARENT_TURN),
+      spawnFailedWithThread,
+      turn('turn/started', HELPER, HELPER_TURN),
+      helperShell('item/started')
+    )
+    expect(run.agents()).toEqual([
+      expect.objectContaining({ membership: 'live', state: 'working', description: LABEL })
+    ])
+    // Its command is the helper's, not a bare command of the session's own.
+    expect(run.strip()).toEqual([
+      { id: `codex-agent:${HELPER}`, kind: 'agent', description: LABEL }
+    ])
+    expect(run.rosterRows()).toEqual([
+      expect.objectContaining({
+        agents: [expect.objectContaining({ id: HELPER, state: 'working' })]
+      })
+    ])
+  })
+
+  it('registers nothing for a spawn that created no thread', async () => {
+    const run = await session()
+    run.send(
+      turn('turn/started', THREAD_ID, PARENT_TURN),
+      collab('item/completed', {
+        id: 'call-refused-spawn',
+        tool: 'spawnAgent',
+        status: 'failed',
+        receiverThreadIds: [],
+        prompt: PROMPT
+      })
+    )
+    expect(run.agents()).toEqual([])
+    expect(run.strip()).toEqual([])
+    expect(run.rosterRows()).toEqual([])
+  })
+
+  it('leaves a helper running when its caller failed to close it', async () => {
+    const run = await session()
+    run.send(
+      turn('turn/started', THREAD_ID, PARENT_TURN),
+      spawnCompleted,
+      turn('turn/started', HELPER, HELPER_TURN),
+      collab('item/completed', {
+        id: 'call-close-failed',
+        tool: 'closeAgent',
+        status: 'failed',
+        receiverThreadIds: [HELPER],
+        agentsStates: { [HELPER]: { status: 'notFound', message: null } }
+      })
+    )
+    expect(run.agents()).toEqual([expect.objectContaining({ membership: 'live' })])
+    expect(run.strip()).toHaveLength(1)
+  })
+
   it('ends a running helper its caller closed as cancelled, in the strip and the record together', async () => {
     const run = await session()
     run.send(
