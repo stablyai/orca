@@ -110,9 +110,7 @@ describe('startup ordering', () => {
     expect(entrySource).toContain('formatProfileStateStartupFailure')
     expect(entrySource).toContain('const message = formatProfileStateStartupFailure(error)')
     expect(entrySource).toContain('presentProfileStateStartupRecoveryDialog')
-    expect(entrySource).toContain(
-      "!state.isServeMode && process.env.ORCA_BACKGROUND_LAUNCH !== '1'"
-    )
+    expect(entrySource).toContain('!state.isServeMode && !isBackgroundLaunch()')
     expect(entrySource).toContain(
       "console.warn('[profile-state] Recovery dialog failed; exiting safely:'"
     )

@@ -66,6 +66,13 @@ export async function launchProfileStateRecovery(
   }
   throw new RuntimeClientError(
     'runtime_error',
-    'Orca recovery did not complete successfully. Inspect retained recovery artifacts before retrying.'
+    'Orca recovery did not complete successfully. Inspect retained recovery artifacts before retrying.',
+    {
+      exitCode: response.code,
+      signal: response.signal,
+      timedOut: response.timedOut,
+      outputTruncated: response.outputTruncated ?? false,
+      stderr: response.stderr.trim().slice(-4096)
+    }
   )
 }

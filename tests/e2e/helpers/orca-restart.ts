@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
+import { runProcess, type ProcessResult } from '../../../src/shared/child-process/run-process'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
@@ -51,6 +52,7 @@ type RestartSession = {
   userDataDir: string
   seedCodexResumeRollout: (sessionId: string, cwd: string) => string
   launch: (options?: LaunchOptions) => Promise<LaunchedOrca>
+  launchUntilExit: (executablePath: string) => Promise<ProcessResult>
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
@@ -211,6 +213,24 @@ export function createRestartSession(
     await closeElectronAppForE2E(app)
   }
 
+  // Startup refusals exit before a renderer exists; capture their output from process creation.
+  const launchUntilExit = async (executablePath: string): Promise<ProcessResult> => {
+    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
+    return runProcess({
+      program: executablePath,
+      args: getOrcaElectronLaunchArgs(mainPath, false),
+      env: {
+        ...homeIsolation.env,
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_E2E_HEADLESS: '1',
+        ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
+      },
+      timeoutMs: 30_000,
+      detached: process.platform !== 'win32',
+      terminationBarrier: true
+    })
+  }
+
   const dispose = async (): Promise<void> => {
     await cleanupE2EDaemons(userDataDir)
     if (process.env.ORCA_E2E_PRESERVE_RESTART_PROFILE === '1') {
@@ -222,7 +242,7 @@ export function createRestartSession(
     }
   }
 
-  return { userDataDir, seedCodexResumeRollout, launch, close, dispose }
+  return { userDataDir, seedCodexResumeRollout, launch, launchUntilExit, close, dispose }
 }
 
 /**

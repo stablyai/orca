@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { electronViteConfig } from '../../electron.vite.config'
 
 const REPO_ROOT = resolve(__dirname, '..', '..')
 const CLI_ROOT = join(REPO_ROOT, 'src', 'cli')
@@ -30,12 +31,12 @@ function findMainImports(): { file: string; module: string }[] {
   })
 }
 
-function findElectronViteMainEntries(): Set<string> {
-  const config = readFileSync(join(REPO_ROOT, 'electron.vite.config.ts'), 'utf-8')
-  return new Set(
-    // Why: entries wrap across lines once the path is long, so allow whitespace.
-    [...config.matchAll(/resolve\(\s*'src\/main\/([^']+)\.ts'\s*\)/g)].map((match) => match[1])
-  )
+function findElectronViteMainEntries(): Record<string, string> {
+  const input = electronViteConfig.main?.build?.rollupOptions?.input
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Expected named main-process inputs')
+  }
+  return input
 }
 
 describe('CLI imports of main-process modules', () => {
@@ -45,7 +46,9 @@ describe('CLI imports of main-process modules', () => {
   // final-artifact runtime verifier.
   it('has an electron-vite entry for every main module the CLI imports', () => {
     const entries = findElectronViteMainEntries()
-    const missing = findMainImports().filter(({ module }) => !entries.has(module))
+    const missing = findMainImports().filter(
+      ({ module }) => entries[module] !== join(REPO_ROOT, 'src', 'main', `${module}.ts`)
+    )
 
     expect(missing).toEqual([])
   })
@@ -53,6 +56,6 @@ describe('CLI imports of main-process modules', () => {
   it('finds the imports it is meant to guard', () => {
     // Why: a broken matcher would make the guard above vacuously pass.
     expect(findMainImports().length).toBeGreaterThanOrEqual(2)
-    expect(findElectronViteMainEntries().size).toBeGreaterThanOrEqual(2)
+    expect(Object.keys(findElectronViteMainEntries()).length).toBeGreaterThanOrEqual(2)
   })
 })
