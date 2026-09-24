@@ -399,7 +399,12 @@ const WorktreeList = React.memo(function WorktreeList({
         onDropWorktreesOnWorkspaceBoard={statusMutations.dropWorktreesOnWorkspaceBoard}
         workspaceBoardOpen={workspaceBoardOpen}
         onWorktreeCardClick={onWorktreeCardClick}
-        onWorkspaceBoardDragPreviewStart={onWorkspaceBoardDragPreviewStart}
+        // Why: a tag-mode drag means "tag this"; auto-opening the status board competes with the tag sections.
+        onWorkspaceBoardDragPreviewStart={
+          groupBy === 'tag'
+            ? NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+            : onWorkspaceBoardDragPreviewStart
+        }
         onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
         onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
         shouldShowWorkspaceBoardDropIndicator={

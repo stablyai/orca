@@ -50,6 +50,8 @@ test('dragging a workspace onto a tag section adds that tag', async ({ orcaPage 
     async () => {
       // The target section lights up before release, like a status lane does.
       await expect(header).toHaveClass(/bg-worktree-sidebar-accent/)
+      // A tag-mode drag does not pop open the status board.
+      await expect(orcaPage.locator('[data-workspace-board-selection-surface]')).toHaveCount(0)
       if (process.env.ORCA_CAPTURE_EVIDENCE === '1') {
         await orcaPage
           .locator('[data-worktree-sidebar]')

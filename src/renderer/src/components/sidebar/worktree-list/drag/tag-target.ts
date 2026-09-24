@@ -22,3 +22,10 @@ export function getPointerDropTagSection(args: {
 export function getTagDropTargetProps(sectionKey: string | undefined): Record<string, string> {
   return sectionKey?.startsWith(TAG_GROUP_PREFIX) ? { [TAG_DROP_TARGET_ATTR]: sectionKey } : {}
 }
+
+/** True when some other tag section is rendered, so even a lone row has somewhere to go. */
+export function hasOtherTagDropTarget(container: HTMLElement, sourceGroupKey: string): boolean {
+  return Array.from(container.querySelectorAll(`[${TAG_DROP_TARGET_ATTR}]`)).some(
+    (element) => element.getAttribute(TAG_DROP_TARGET_ATTR) !== sourceGroupKey
+  )
+}
