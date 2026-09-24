@@ -10,6 +10,7 @@ import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 import { formatWorkerStart } from './worker-output'
 import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
+import { readClaudeLaunchAccountFlag } from '../claude-launch-account-flag'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
@@ -28,6 +29,9 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
         )
       }
     }
+    const account = flags.has('terminal')
+      ? getOptionalStringFlag(flags, 'account')
+      : await readClaudeLaunchAccountFlag(flags, client, getOptionalStringFlag(flags, 'agent'))
     const task = getOptionalStringFlag(flags, 'task')
     const spec = getOptionalStringFlag(flags, 'spec')
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
@@ -62,6 +66,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       agent: getOptionalStringFlag(flags, 'agent'),
       model,
       effort,
+      ...(account ? { account } : {}),
       terminal: getOptionalStringFlag(flags, 'terminal'),
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
