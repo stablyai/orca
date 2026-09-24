@@ -313,6 +313,11 @@ describe('Codex default-mode helpers', () => {
         agents: [expect.objectContaining({ id: HELPER, label: LABEL, state: 'working' })]
       })
     ])
+    // The roster row does not stand in for the call's own row.
+    expect(run.toolRow('spawn_agent')).toMatchObject({
+      state: 'completed',
+      input: { description: LABEL }
+    })
   })
 
   it('ends a running helper its caller closed as cancelled, in the strip and the record together', async () => {
