@@ -27,6 +27,7 @@ import {
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
 import { isHermesReadyPromptSnapshot } from './hermes-terminal-readiness'
+import { hasFreshWorkingFirstPartyStatus } from './tui-idle-evidence'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
@@ -52,10 +53,19 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
+    const retryIntervalMs = Math.min(
+      TUI_IDLE_POLL_INTERVAL_MS,
+      Math.max(50, Math.floor(waiterTimeoutMs / 3))
+    )
+    /** A short wait must get another visible read before its own deadline. */
     const probe = (): void => {
       if (!this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
         return
       }
+      // Schedule from the start, not after the read. A slow provider cannot use up
+      // the whole deadline before a short Hermes waiter gets its next screen read.
+      const retry = agent === 'hermes' ? setTimeout(probe, retryIntervalMs) : null
+      retry?.unref?.()
       void withTimeout(
         this.readTerminal(
           waiter.handle,
@@ -95,24 +105,31 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
           if (!blockedReason && !ready) {
             return
           }
+          if (agent === 'hermes' && ready && !blockedReason) {
+            const ptyId =
+              this.getLivePtyForHandle(waiter.handle)?.pty.ptyId ??
+              this.getLiveLeafForHandle(waiter.handle).leaf.ptyId
+            const status = ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null
+            // A fresh turn or approval owns input even if the previous ready frame remains painted.
+            if (hasFreshWorkingFirstPartyStatus(status ?? null)) {
+              return
+            }
+          }
           const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
+          if (retry) {
+            clearTimeout(retry)
+          }
           if (waiter.cancelIdlePoll) {
             waiter.cancelIdlePoll()
           }
           this.terminalWaiters.resolve(waiter, result)
         })
         .catch(() => {})
-        .finally(() => {
-          if (agent !== 'hermes' || !this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
-            return
-          }
-          const retry = setTimeout(probe, TUI_IDLE_POLL_INTERVAL_MS)
-          retry.unref?.()
-        })
     }
     probe()
   }
 
+  /** Build a visible-probe verdict against the current PTY or leaf. */
   protected buildTuiIdleProbeResult(
     handle: string,
     blockedReason: RuntimeTerminalWaitBlockedReason | null

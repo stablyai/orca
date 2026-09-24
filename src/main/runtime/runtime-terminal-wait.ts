@@ -150,10 +150,9 @@ export class RuntimeTerminalWait {
             this.polls.startPty(waiter, live.pty)
             const paneAgent = this.deps.getPaneAgent(live.pty.ptyId)
             if (
-              // AGY can retain a stale working/blocked status after a trust dialog was
-              // dismissed. Its visible composer is authoritative, so probe whenever the
-              // pane is identified as AGY (or its banner is present), regardless of that
-              // stale status.
+              // AGY can retain stale status after a dismissed dialog. Hermes may have
+              // no useful retained tail: probe its screen, but a fresh working or
+              // approval OSC status still vetoes readiness before the probe settles.
               (paneAgent === 'antigravity' ||
                 paneAgent === 'hermes' ||
                 hasAntigravityTerminalHeader(livePtyWaitText) ||
