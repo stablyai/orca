@@ -150,7 +150,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3815,7 +3816,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "cursorUsageMenu": "Cursor Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4005,6 +4007,12 @@
             "usage": {
               "noSubscription": {
                 "label": "No subscription"
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Sign-in expired",
+                "message": "Run cursor-agent login in a terminal on the computer running Orca, then retry usage."
               }
             }
           },
@@ -9085,7 +9093,18 @@
             "b2c4e7f1a8": "endpoint",
             "3a9b6d2c4e": "api key",
             "5d8f1a3b7c": "china",
-            "7e2a4b8c1d": "overseas"
+            "7e2a4b8c1d": "overseas",
+            "cursor": {
+              "title": "Cursor Usage",
+              "description": "Monthly plan usage read from the Cursor sign-in already on this computer (cursor-agent login).",
+              "kw": {
+                "cursor": "cursor",
+                "usage": "usage",
+                "spend": "spend",
+                "rateLimit": "rate limit",
+                "statusBar": "status bar"
+              }
+            }
           }
         },
         "advanced": {
@@ -9341,6 +9360,13 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
+            },
+            "cursor": {
+              "title": "Cursor Usage",
+              "description": "Show monthly Cursor plan usage from the Cursor sign-in on this computer.",
+              "kw": {
+                "cursor": "cursor"
+              }
             }
           }
         },
@@ -12152,6 +12178,30 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "CursorAccountsSection": {
+          "source": {
+            "keychain": "macOS Keychain (cursor-agent)",
+            "cli": "Cursor CLI auth file",
+            "desktop": "Cursor IDE"
+          },
+          "title": "Cursor",
+          "subtitle": "Shows your monthly Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.",
+          "dashboardLink": "Cursor dashboard",
+          "loading": "Loading…",
+          "signedIn": "Signed in",
+          "signedInFrom": "Signed in. Orca reads the session stored in {{source}}.",
+          "signedInGeneric": "Signed in. Orca reads the Cursor session stored on this computer.",
+          "expired": "Sign-in expired — run cursor-agent login on the computer running Orca, then click Refresh usage.",
+          "signedOut": "Not signed in to Cursor",
+          "signedOutHelp": "In a terminal, run cursor-agent login, then click Refresh usage here.",
+          "refreshUsage": "Refresh usage",
+          "usageTitle": "Monthly plan usage",
+          "usageDescription": "Cursor bills two pools that reset with your billing cycle, plus on-demand spend once they run out.",
+          "planTotal": "Plan",
+          "resets": "Resets {{when}}",
+          "usageLabel": "Usage",
+          "noAllowance": "Cursor reported no usage allowance for this account."
         }
       },
       "right": {

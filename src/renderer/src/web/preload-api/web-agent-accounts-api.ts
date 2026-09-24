@@ -14,6 +14,23 @@ export function createMiniMaxCredentialsApi(): NonNullable<
   }
 }
 
+export function createCursorAccountsApi(): NonNullable<Partial<PreloadApi>['cursorAccounts']> {
+  // Why: Cursor's session lives on the machine running Orca, so a web client
+  // reports signed-out rather than guessing at the host's local credential.
+  return {
+    getStatus: () =>
+      Promise.resolve({
+        signedIn: false,
+        email: null,
+        displayName: null,
+        credentialSource: null,
+        planType: null,
+        tokenFresh: false,
+        error: null
+      })
+  }
+}
+
 export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
   const unsigned = {
     signedIn: false,
