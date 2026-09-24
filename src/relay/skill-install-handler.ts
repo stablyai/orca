@@ -43,7 +43,7 @@ import {
   resolveDetectedTuiAgentIds
 } from '../shared/tui-agent-detection-commands'
 import type { RelayDispatcher } from './dispatcher'
-import { isCommandOnPathForRelay } from './preflight-handler'
+import { isCommandOnPathForRelay } from './relay-command-path-lookup'
 import type { SkillInstallDestinationAuthority } from '../main/skills/skill-install-destinations'
 import {
   previewSharedSkillBundleInstall,

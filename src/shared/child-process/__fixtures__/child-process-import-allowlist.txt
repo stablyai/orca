@@ -170,8 +170,8 @@ src/relay/fs-handler-utils.ts
 src/relay/fs-list-files-fallback-chain.ts
 src/relay/git-handler.ts
 src/relay/git-stdout-stream.ts
-src/relay/preflight-handler.ts
 src/relay/pty-shell-utils.ts
+src/relay/relay-command-path-lookup.ts
 src/relay/subprocess-tree-termination.ts
 src/relay/workspace-space-scan.ts
 src/shared/ephemeral-vm-recipe-process.ts
