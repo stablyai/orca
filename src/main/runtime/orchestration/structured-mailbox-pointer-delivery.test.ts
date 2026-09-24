@@ -73,10 +73,12 @@ function attentionJournal(): AgentJournalRenderItem[] {
 
 function harness(options: {
   journal: AgentJournalRenderItem[] | null
-  dispatchState?: 'accepted' | 'rejected' | 'unknown'
+  dispatchState?: 'accepted' | 'pending' | 'rejected' | 'unknown'
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
   outstandingOwnDelivery?: boolean
+  /** Undelivered unread rows on the mailbox, oldest first. */
+  unreadIds?: string[]
   /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
   mailbox?: string
   dispatchId?: string | null
@@ -103,10 +105,18 @@ function harness(options: {
   const stored = new Map<string, unknown>()
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
-    hasOutstandingMailboxDelivery: (handle: string) =>
+    // The reader holds `m1` unacknowledged, on whichever mailbox the option names.
+    getOutstandingMailboxDelivery: (handle: string) =>
       ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
-      ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:')),
-    getUndeliveredUnreadMessages: () => [{ id: 'm1', type: 'status', sequence: 3 }],
+      ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:'))
+        ? { id: 'delivery_held', messageIds: new Set(['m1']) }
+        : undefined,
+    getUndeliveredUnreadMessages: () =>
+      (options.unreadIds ?? ['m1']).map((id, index) => ({
+        id,
+        type: 'status',
+        sequence: index + 3
+      })),
     markAsDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: { mailbox_handle: string }) =>
@@ -266,13 +276,41 @@ describe('structured mailbox pointer delivery', () => {
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
   })
 
-  it('does not re-nudge a mailbox still holding its own unacked batch', async () => {
-    // The other half of the same gate: the consumer already has this batch, so a second nudge
-    // spends a whole provider turn telling it something it was told.
+  it('does not re-point mail the reader already holds unacknowledged', async () => {
+    // It already has this batch, so a second pointer spends a whole provider turn telling it
+    // something it was told.
     const { delivery, send } = harness({ journal: idleJournal(), outstandingOwnDelivery: true })
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it('points newer mail while the reader holds an unacknowledged batch, naming its ack', async () => {
+    // The strand this pins: a chat reads a result, ends its turn without acking, and the gate on
+    // "an unacknowledged batch exists" silenced every later result. `check` replays that batch
+    // until acked, so the pointer must name the ack to reach the new mail.
+    const { delivery, send, markAsDelivered } = harness({
+      journal: idleJournal(),
+      outstandingOwnDelivery: true,
+      unreadIds: ['m1', 'm2']
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
+      text: expect.stringMatching(/You have 1 new orchestration message\. .*--ack delivery_held`/)
+    })
+    expect(markAsDelivered).toHaveBeenCalledWith(['m2'])
+  })
+
+  it('counts a turn the provider admitted but has not echoed as pointed', async () => {
+    const { delivery, markAsDelivered } = harness({
+      journal: idleJournal(),
+      dispatchState: 'pending'
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
   })
 
   it('retries a rejected nudge on the next journal edge', async () => {
@@ -364,7 +402,7 @@ describe('forgetting one settled worker', () => {
     }))
     const db = {
       getDispatchContextById: () => ({ run_id: 'run_1' }),
-      hasOutstandingMailboxDelivery: () => false,
+      getOutstandingMailboxDelivery: () => undefined,
       getUndeliveredUnreadMessages: () => [{ id: 'm1', type: 'status', sequence: 3 }],
       markAsDelivered: vi.fn(),
       getStructuredPointerOperation: () => undefined,

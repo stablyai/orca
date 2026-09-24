@@ -159,26 +159,23 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (!db || this.inFlight.has(mailboxHandle)) {
       return
     }
-    // Don't re-nudge a mailbox whose consumer still holds an unacknowledged batch. The lookup is
-    // keyed on the exact handle being nudged, so a coordinator's own `run:` delivery is invisible
-    // to a worker's `dispatch:` gate and cannot suppress the nudges a coordinator sends its
-    // workers. Worth more here than in the PTY lane: a structured nudge costs a whole provider
-    // turn, not a line of text into a composer.
-    if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
-      return
-    }
+    // Eligibility is "not yet pointed" (`delivered_at`), never "has the consumer acked": a chat that
+    // reads a batch and ends its turn without acking must still be pointed at the NEXT result. The
+    // batch it holds is excluded, and the pointer names the `--ack` that releases it, since `check`
+    // replays an unacknowledged batch instead of returning newer mail.
+    const outstanding = db.getOutstandingMailboxDelivery?.(mailboxHandle)
     const unread = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,
       waiters: this.deps.getMessageWaiters(mailboxHandle),
       reservedTypes
-    })
+    }).filter((message) => !outstanding?.messageIds.has(message.id))
     if (unread.length === 0) {
       return
     }
     this.inFlight.add(mailboxHandle)
     try {
-      await this.attempt(db, mailboxHandle, target, unread, reservedTypes)
+      await this.attempt(db, mailboxHandle, target, unread, reservedTypes, outstanding?.id)
     } finally {
       this.inFlight.delete(mailboxHandle)
     }
@@ -189,11 +186,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     unread: readonly { id: string; type: string; sequence: number }[],
-    reservedTypes: ReadonlySet<string> | undefined
+    reservedTypes: ReadonlySet<string> | undefined,
+    ackDeliveryId: string | undefined
   ): Promise<void> {
     const release = await this.deps.host.wake?.(target.sessionId)
     try {
-      await this.attemptAwake(db, mailboxHandle, target, unread, reservedTypes)
+      await this.attemptAwake(db, mailboxHandle, target, unread, reservedTypes, ackDeliveryId)
     } finally {
       release?.()
     }
@@ -204,7 +202,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     unread: readonly { id: string; type: string; sequence: number }[],
-    reservedTypes: ReadonlySet<string> | undefined
+    reservedTypes: ReadonlySet<string> | undefined,
+    ackDeliveryId: string | undefined
   ): Promise<void> {
     const sessionId = target.sessionId
     const session = this.deps.host.readGateFacts(sessionId)
@@ -227,7 +226,8 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           text: formatMessagePointer(
             unread.length,
             mailboxHandle,
-            this.deps.host.cliInvocation(sessionId)
+            this.deps.host.cliInvocation(sessionId),
+            ackDeliveryId
           ).trim()
         }
       ]
@@ -259,7 +259,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.retain(
         mailboxHandle,
         sessionId,
-        retainReasonForDispatch(outcome.state as Exclude<StructuredDispatchState, 'accepted'>),
+        retainReasonForDispatch(
+          outcome.state as Exclude<StructuredDispatchState, 'accepted' | 'pending'>
+        ),
         reservedTypes
       )
       return
@@ -271,7 +273,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   }
 
   /**
-   * No `markAsUndelivered` is owed: rows are marked delivered only after an accepted dispatch.
+   * No `markAsUndelivered` is owed: rows are marked delivered only once the host took the turn.
    *
    * Every reason parks for the session's next journal edge. `unknown` may mean the nudge already
    * sits in the provider's input queue, so an immediate retry can stack duplicate nudges;

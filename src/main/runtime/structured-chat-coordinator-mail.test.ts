@@ -33,6 +33,7 @@ const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 const PEER_CHAT = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
 const WORKSPACE = 'workspace-1'
 const WORKER_PANE = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const WORKER_2_PANE = 'tab_worker2:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
 type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closed: boolean
@@ -230,7 +231,10 @@ function userTexts(sessionId: string): string[] {
 }
 
 /** A capability-backed terminal worker under the coordinator's Run, and its worker_done. */
-async function finishWorker(taskId: string): Promise<void> {
+async function finishWorker(
+  taskId: string,
+  worker: { handle: string; paneKey: string } = { handle: 'term_worker', paneKey: WORKER_PANE }
+): Promise<void> {
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: Number.MAX_SAFE_INTEGER,
@@ -239,9 +243,9 @@ async function finishWorker(taskId: string): Promise<void> {
   })
   const capability = db.prepareStartingWorkerAuthority({
     dispatchId: started.dispatch.id,
-    handle: 'term_worker',
-    paneKey: WORKER_PANE,
-    processIncarnation: 'runtime_test:term_worker:1',
+    handle: worker.handle,
+    paneKey: worker.paneKey,
+    processIncarnation: `runtime_test:${worker.handle}:1`,
     worktreeId: 'repo::worker',
     effects: [],
     setupState: 'not_applicable'
@@ -250,7 +254,7 @@ async function finishWorker(taskId: string): Promise<void> {
   await call(
     'orchestration.send',
     {
-      from: 'term_worker',
+      from: worker.handle,
       subject: 'Done',
       type: 'worker_done',
       payload: JSON.stringify({ taskId, dispatchId: started.dispatch.id, outcome: 'succeeded' })
@@ -287,7 +291,7 @@ beforeEach(async () => {
   runtime.setOrchestrationDb(db)
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-    handle === 'term_worker' ? WORKER_PANE : null
+    handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
   )
   host = await ensureStructuredAgentSessionHost({
     stateDirectory: root,
@@ -354,6 +358,43 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     )
     expect(chat.turns).toHaveLength(1)
     expect(userTexts(COORDINATOR)).toHaveLength(1)
+  })
+
+  it('points the next result at a coordinator that read the last one without acking', async () => {
+    // The strand this pins: a flagless `check` opens a delivery that `check` replays until acked,
+    // and a lane gated on "an unacknowledged batch exists" never pointed the chat at a later result.
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1))
+    await settleTurn(COORDINATOR, 0)
+    const first = await call('orchestration.check', {}, { sessionId: COORDINATOR })
+    const heldDelivery = String(first.deliveryId)
+    expect(first).toMatchObject({ count: 1, messages: [{ type: 'worker_done' }] })
+
+    const second = await call(
+      'orchestration.taskCreate',
+      { spec: 'more' },
+      { sessionId: COORDINATOR }
+    )
+    await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(2))
+    expect(chat.turns[1]!.text).toContain('1 new orchestration message')
+    expect(chat.turns[1]!.text).toContain(`--ack ${heldDelivery}`)
+    await settleTurn(COORDINATOR, 1)
+
+    // Exactly once per new message: a retry and the idle edge point nothing further.
+    runtime.deliverPendingMessagesForHandle(`run:${runId}`)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(chat.turns).toHaveLength(2)
+
+    const acked = await call(
+      'orchestration.check',
+      { ack: heldDelivery },
+      { sessionId: COORDINATOR }
+    )
+    expect(acked).toMatchObject({ acknowledged: heldDelivery, count: 1 })
+    expect(acked.messages).not.toEqual(first.messages)
   })
 
   it('wakes a coordinator the host evicted, and delivers once it is back', async () => {

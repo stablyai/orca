@@ -112,11 +112,14 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
-  cliCommand: OrchestrationCliCommand | StructuredSessionCliInvocation = 'orca'
+  cliCommand: OrchestrationCliCommand | StructuredSessionCliInvocation = 'orca',
+  /** The unacknowledged batch the reader holds; `check` replays it until acked. */
+  ackDeliveryId?: string
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
-  return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
+  const ackFlag = ackDeliveryId ? ` --ack ${ackDeliveryId}` : ''
+  return `\nYou have ${count} ${ackDeliveryId ? 'new ' : ''}orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}${ackFlag}\`.\n`
 }

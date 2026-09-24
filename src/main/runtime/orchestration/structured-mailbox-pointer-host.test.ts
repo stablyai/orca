@@ -80,9 +80,9 @@ describe('structured mailbox pointer host', () => {
   it.each([
     ['accepted', 'accepted'],
     ['rejected', 'rejected'],
-    // Neither is an acknowledgement, and only `accepted` may consume mail: both have to reach the
-    // caller as `unknown` so the pointer is retained for the next journal edge.
-    ['pending', 'unknown'],
+    // Admitted and awaiting its echo: the turn exists, so the lane counts the rows as pointed.
+    ['pending', 'pending'],
+    // A failed or unanswered call: the lane retains for the next journal edge.
     ['unknown', 'unknown']
   ])('maps a %s submission to %s', async (dispatchState, expected) => {
     const send = vi.fn(
