@@ -11,6 +11,7 @@
 import { parseOrchestrationActor } from '../../../shared/orchestration-actor'
 import { agentSessionPtyWriteGate } from '../agent-session-pty-write-gate'
 import type { OrchestrationDb } from './db'
+import { currentRunCoordinatorActor } from './db/runs/run-coordinator-actor'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   readAgentSessionRecordStore,
@@ -36,16 +37,22 @@ export function findConnectedPtyBoundToSession<T extends { ptyId: string; connec
 
 /**
  * The session a Run's coordinator binding names when that binding has no handle. A structured
- * worker coordinates by its own handle and resolves through it; an actor beside any handle is
- * stale (see `runBoundToCoordinator`), so only a handle-less binding names a session here.
+ * worker coordinates by its own handle and resolves through it, so only a handle-less binding names
+ * a session here, and only by an actor that still counts (see `currentRunCoordinatorActor`).
  */
 export function handleLessCoordinatorSessionId(
-  run: Pick<RunRow, 'coordinator_handle' | 'coordinator_actor'>
+  run: Pick<
+    RunRow,
+    | 'coordinator_handle'
+    | 'coordinator_actor'
+    | 'coordinator_actor_generation'
+    | 'consumer_generation'
+  >
 ): string | null {
   if (run.coordinator_handle !== null) {
     return null
   }
-  return parseOrchestrationActor(run.coordinator_actor)?.id ?? null
+  return parseOrchestrationActor(currentRunCoordinatorActor(run))?.id ?? null
 }
 
 /**

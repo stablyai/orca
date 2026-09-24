@@ -149,6 +149,16 @@ describe('a Run whose coordinator is a chat (a session actor, no handle)', () =>
     expect(probe().target(`run:${runId}`)).toBeNull()
   })
 
+  it('does not deliver to an actor written at an earlier generation of the Run', () => {
+    // An older binary's rebind or unbind bumps the generation and leaves the actor behind.
+    installStore(chatRecord())
+    const runId = chatCoordinatedRun()
+    db.db
+      .prepare('UPDATE runs SET consumer_generation = consumer_generation + 1 WHERE id = ?')
+      .run(runId)
+    expect(probe().target(`run:${runId}`)).toBeNull()
+  })
+
   it('ignores an actor left beside a PTY handle; the handle owns the Run', () => {
     installStore(chatRecord())
     const runId = db.createRun({
