@@ -2,11 +2,12 @@ import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 
-export async function registerPersistedPtySpawn(
+// Successful registration must not yield before the remaining spawn publication.
+export function registerPersistedPtySpawn(
   runtime: OrcaRuntimeService | undefined,
   store: Store | undefined,
   ...args: Parameters<OrcaRuntimeService['registerPty']>
-): Promise<void> {
+): Promise<never> | undefined {
   try {
     runtime?.registerPty(...args)
   } catch (error) {
@@ -18,13 +19,16 @@ export async function registerPersistedPtySpawn(
       runtime?.getPtyLivenessVerdict?.(ptyId)?.status === 'exited' &&
       binding
     ) {
-      await retirePersistedStablePaneOwner(
+      return retirePersistedStablePaneOwner(
         store,
         { ...binding, ptyId, persistedIncarnationId: binding.incarnationId },
         worktreeId,
         connectionId
-      )
+      ).then(() => {
+        throw error
+      })
     }
     throw error
   }
+  return undefined
 }

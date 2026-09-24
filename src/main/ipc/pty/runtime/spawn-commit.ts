@@ -16,13 +16,7 @@ import {
   rendererSerializerReadiness
 } from '../pane/serializer-state'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
-import { track } from '../../../telemetry/client'
-import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
-import {
-  agentKindSchema,
-  launchSourceSchema,
-  requestKindSchema
-} from '../../../../shared/telemetry-events'
+import { recordPtySpawnTelemetry } from '../pane/spawn-telemetry'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
 import { claimSshPaneLease } from '../pane/ssh-pane-lease-claim'
 import {
@@ -69,7 +63,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     if (ctx.result.incarnationId) {
       ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
     }
-    await registerPersistedPtySpawn(
+    const rejectedRegistration = registerPersistedPtySpawn(
       ctx.deps.runtime,
       ctx.hostSessionBinding?.store ?? ctx.deps.store,
       ctx.result.id,
@@ -83,6 +77,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
       }
     )
+    if (rejectedRegistration) {
+      await rejectedRegistration
+    }
     if (!args.connectionId) {
       ctx.deps.options?.onCodexHomePtySpawned?.({
         id: ctx.result.id,
@@ -195,7 +192,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, args.preAllocatedHandle)
   }
   if (args.worktreeId) {
-    await registerPersistedPtySpawn(
+    const rejectedRegistration = registerPersistedPtySpawn(
       ctx.deps.runtime,
       ctx.hostSessionBinding?.store ?? ctx.deps.store,
       ctx.result.id,
@@ -218,6 +215,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ? shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd)
         : undefined
     )
+    if (rejectedRegistration) {
+      await rejectedRegistration
+    }
   } else {
     // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
     ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
@@ -232,17 +232,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     markClaudePtySpawned(ctx.result.id)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
-    const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-    const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-    const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-    if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-      track('agent_started', {
-        agent_kind: agentKindParse.data,
-        launch_source: launchSourceParse.data,
-        request_kind: requestKindParse.data,
-        ...getCohortAtEmit()
-      })
-    }
+    recordPtySpawnTelemetry(args.telemetry)
   }
   // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
   const paneKey = rememberPaneKeyForPty(ctx.result.id, ctx.env?.ORCA_PANE_KEY)
