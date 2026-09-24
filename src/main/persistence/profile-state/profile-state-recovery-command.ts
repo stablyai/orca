@@ -15,6 +15,7 @@ import { restoreProfileStateJsonExport } from './profile-state-recovery'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
 import type { ProfileStateMaintenance } from './profile-state-access'
 import { readProfileStateDomain } from './profile-state-domain-reader'
+import { isRecord } from './profile-state-document-validation'
 import {
   invalidateHttp1CompatibilityMarker,
   writeHttp1CompatibilityMarker
@@ -129,8 +130,4 @@ function syncHttp1CompatibilityMarkerAfterRollback(
     return
   }
   writeHttp1CompatibilityMarker(userDataPath, enabled, profileId)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
