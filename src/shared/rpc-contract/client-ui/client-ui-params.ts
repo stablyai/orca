@@ -14,6 +14,7 @@ import {
 } from '../../agent-status/presentation/agents-view-thread-filters'
 import { isReleaseChannel } from '../../updater/release-channel'
 import type { ReleaseChannel } from '../../updater/release-channel'
+import { WORKSPACE_GROUP_BY_VALUES } from '../../workspace-view/workspace-group-by'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'
@@ -139,7 +140,7 @@ export const UiUpdateFields = z
     activityBarPosition: z.enum(['top', 'side']).optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
     combinedDiffFileTreeWidth: z.number().finite().optional(),
-    groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
+    groupBy: z.enum(WORKSPACE_GROUP_BY_VALUES).optional(),
     showWorkspaceLineage: z.boolean().optional(),
     sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
     projectOrderBy: z.enum(['manual', 'recent']).optional(),

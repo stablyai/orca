@@ -17,13 +17,24 @@ function workspaceOptionChoices<Id extends string>(
   }))
 }
 
+type PhoneGroupByChoice = Exclude<
+  (typeof viewOptions.WORKSPACE_GROUP_BY_CHOICES)[number],
+  { id: 'tag' }
+>
+
+// Why no Tag: mobile has no tag view yet; a desktop in Tag mode shows here as a flat list.
 export const groupByChoices = (t: Translate) =>
-  workspaceOptionChoices(viewOptions.WORKSPACE_GROUP_BY_CHOICES, {
-    none: t('hostScreen.workspaceOptionControls.none', 'None'),
-    'workspace-status': t('hostScreen.workspaceOptionControls.status', 'Status'),
-    'pr-status': t('hostScreen.workspaceOptionControls.pr', 'PR'),
-    repo: t('hostScreen.workspaceOptionControls.project', 'Project')
-  })
+  workspaceOptionChoices(
+    viewOptions.WORKSPACE_GROUP_BY_CHOICES.filter(
+      (choice): choice is PhoneGroupByChoice => choice.id !== 'tag'
+    ),
+    {
+      none: t('hostScreen.workspaceOptionControls.none', 'None'),
+      'workspace-status': t('hostScreen.workspaceOptionControls.status', 'Status'),
+      'pr-status': t('hostScreen.workspaceOptionControls.pr', 'PR'),
+      repo: t('hostScreen.workspaceOptionControls.project', 'Project')
+    }
+  )
 
 export const sortByChoices = (t: Translate) =>
   workspaceOptionChoices(
