@@ -129,10 +129,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'flag-prompt',
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
-    // Why: ConPTY never forwards DECSET 2004 (terminal-agent-paste-bracketing.ts), so on Windows
-    // this signal cannot fire at all and the budget becomes the fixed settle delay before the
-    // blind process-ownership paste. 8s lands mid-startup there; match codex, the other
-    // quiet-window-less signal, which needed the same headroom (#22479).
+    // Why 20s: measured on two Windows hosts (ConPTY dll backend, as pinned by
+    // local-pty-utils), opencode does not enable bracketed paste until ~4.8s and its
+    // composer is not ready until ~10s — so the 8s default expired first and the draft
+    // was pasted blind, mid-startup (#22479). The signal itself fired every time in
+    // those runs, so the budget was the problem, not a dropped escape.
     draftPasteReadyTimeoutMs: 20_000
   },
   // Why: opencode2 installs as a separate binary and uses the same prompt flags.
