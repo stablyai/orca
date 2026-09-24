@@ -10,6 +10,7 @@ import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 
 export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
   async dedupeTerminalCreate(
@@ -143,7 +144,12 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      launchPreferences?: AgentLaunchPreferences
+    }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     // Why: the trust write lands in an agent's config on the machine that runs it, keyed by the
@@ -158,7 +164,7 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
+    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, opts.launchPreferences)
     await this.markWorkspaceTrustedForAgent(opts.agent, resolution.connectionId, worktree.path)
     return await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,

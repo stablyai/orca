@@ -73,6 +73,29 @@ orca automations create \
 
 Use `--project-host-setup <id>` when you already have a setup id. Optional `--source-context '<json>'` pins task/provider data to a host/account (pass `null` on edit to clear).
 
+## Pin the model a run uses
+
+A scheduled run has no open tab to inherit a model from, so without `--model` it
+launches on whatever default the agent currently holds. Pin it on the automation
+instead, and add `--effort` when the model exposes reasoning levels:
+
+```bash
+orca automations create \
+  --name "Nightly triage" \
+  --trigger daily \
+  --prompt "Triage the backlog" \
+  --provider claude \
+  --model opus \
+  --effort high \
+  --disabled
+```
+
+`--model` and `--effort` take the same values as `orca orchestration worker-start`,
+and a provider with no launch-time model selection is refused when you create or
+edit the automation rather than at run time. Use
+`orca automations edit <automationId> --model null` to unpin the model and go back
+to the agent default; the effort is cleared with it.
+
 ## Manage automations across hosts
 
 The desktop **Automations** page loads schedules from this computer and supported connected Orca hosts into one table. The **Host** column shows where each automation is stored and scheduled; use **Filters → Host** to show one or more hosts, or return to **All hosts**.

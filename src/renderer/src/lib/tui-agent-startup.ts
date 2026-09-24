@@ -1,4 +1,5 @@
 export {
+  agentStartupSessionOptionProps,
   buildAgentResumeStartupPlan,
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,

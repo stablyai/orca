@@ -51,6 +51,16 @@ export const AutomationPrecheck = z
   .nullable()
   .optional()
 
+/** Like OptionalNullablePlainString, but a blank value is no value: an empty
+ *  model id would read as "pinned" while behaving like agent default. */
+export const OptionalNullableString = z
+  .unknown()
+  .transform((value) =>
+    value === null ? null : typeof value === 'string' && value.length > 0 ? value : undefined
+  )
+  .pipe(z.union([z.string(), z.null(), z.undefined()]))
+  .optional()
+
 export const OptionalNullablePlainString = z
   .unknown()
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
@@ -189,6 +199,8 @@ export const AutomationCreate = z.object({
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  model: OptionalString,
+  effort: OptionalString,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -210,6 +222,9 @@ export const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  // Why nullable: an edit must be able to unpin the model and fall back to the agent default.
+  model: OptionalNullableString,
+  effort: OptionalNullableString,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

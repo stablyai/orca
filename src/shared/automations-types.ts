@@ -1,3 +1,4 @@
+import type { AutomationLaunchPin } from './automation-launch-pin'
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
@@ -96,6 +97,11 @@ export type Automation = {
   prompt: string
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
+  /** Why: a scheduled run has no human tab to inherit a model from, so the
+   *  choice has to be pinned on the record. Null or absent = agent default. */
+  model?: string | null
+  /** Reasoning effort for the pinned model; only meaningful alongside `model`. */
+  effort?: string | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -155,6 +161,11 @@ export type AutomationRun = {
   outputSnapshot: AutomationRunOutputSnapshot | null
   precheckResult: AutomationPrecheckResult | null
   usage: AutomationRunUsage | null
+  /** Why separate from `usage.model`: that one is harvested from the provider
+   *  log after the fact and is absent whenever no session could be matched.
+   *  This records what the automation requested, so a run stays reproducible
+   *  even when it never reached the provider. Absent on legacy runs. */
+  launchRequest?: AutomationLaunchPin | null
   error: string | null
   startedAt: number | null
   dispatchedAt: number | null
@@ -198,7 +209,9 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
-}
+  // Why an intersection: the launch pin a create carries is exactly the pin the
+  // record stores, and restating it here only invites the two to drift.
+} & Partial<Pick<Automation, 'model' | 'effort'>>
 
 export type AutomationUpdateInput = Partial<
   Pick<
@@ -207,6 +220,8 @@ export type AutomationUpdateInput = Partial<
     | 'prompt'
     | 'precheck'
     | 'agentId'
+    | 'model'
+    | 'effort'
     | 'runContext'
     | 'sourceContext'
     | 'projectId'
@@ -249,9 +264,7 @@ export type ExternalAutomationAction = 'pause' | 'resume' | 'run' | 'delete'
 export type ExternalAutomationRunStatus = 'completed' | 'failed' | 'unknown'
 
 export type ExternalAutomationTarget =
-  | {
-      type: 'local'
-    }
+  | { type: 'local' }
   | {
       type: 'ssh'
       connectionId: string

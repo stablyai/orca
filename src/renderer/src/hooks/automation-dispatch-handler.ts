@@ -6,6 +6,7 @@ import { observeExistingAutomationSession } from '@/lib/automation-session-obser
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
+import { automationLaunchPin } from '../../../shared/automation-launch-pin'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult
@@ -92,6 +93,7 @@ export async function handleAutomationDispatchRequest({
       finalizeTerminalOwnership
     })
     const dispatchStartedAt = Date.now()
+    const launchPin = automationLaunchPin(automation)
     if (automation.reuseSession) {
       const reusableSession = findReusableAutomationSession({
         automationId: automation.id,
@@ -168,6 +170,9 @@ export async function handleAutomationDispatchRequest({
       agent: automation.agentId,
       worktreeId: worktree.id,
       prompt: automation.prompt,
+      // Why only on a fresh launch: the reuse branch above submits into a live
+      // session, whose model was fixed when that session started.
+      ...(launchPin ? { sessionOptions: launchPin } : {}),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,

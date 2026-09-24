@@ -104,6 +104,112 @@ describe('OrcaRuntimeService automation methods', () => {
     expect(automation.id).toBe('auto-1')
   })
 
+  it('pins a validated model and effort on create', async () => {
+    const store = makeStore()
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.createAutomation({
+      name: 'Nightly triage',
+      prompt: 'Triage the backlog',
+      agentId: 'claude',
+      model: 'opus',
+      effort: 'high',
+      repo: 'repo-1',
+      workspaceMode: 'new_per_run',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 1
+    })
+
+    expect(store.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'opus', effort: 'high' }),
+      undefined
+    )
+  })
+
+  it('refuses a model for an agent with no launch-time model selection', async () => {
+    const store = makeStore()
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.createAutomation({
+        name: 'Nightly triage',
+        prompt: 'Triage the backlog',
+        agentId: 'opencode',
+        model: 'anything',
+        repo: 'repo-1',
+        workspaceMode: 'new_per_run',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    ).rejects.toThrow('Agent opencode does not support launch-time model selection.')
+    expect(store.createAutomation).not.toHaveBeenCalled()
+  })
+
+  it('refuses an effort with no model to apply it to', async () => {
+    const store = makeStore()
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.createAutomation({
+        name: 'Nightly triage',
+        prompt: 'Triage the backlog',
+        agentId: 'claude',
+        effort: 'high',
+        repo: 'repo-1',
+        workspaceMode: 'new_per_run',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    ).rejects.toThrow('--effort requires --model.')
+    expect(store.createAutomation).not.toHaveBeenCalled()
+  })
+
+  it('clears the pinned model and its effort on update', async () => {
+    const store = makeStore([{ ...existingAutomation, model: 'opus', effort: 'high' }])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.updateAutomation('auto-1', { model: null })
+
+    expect(store.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      { model: null, effort: null },
+      undefined
+    )
+  })
+
+  it('refuses an effort on an automation that is already unpinned, exactly as create does', async () => {
+    const store = makeStore([{ ...existingAutomation, model: null, effort: null }])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(runtime.updateAutomation('auto-1', { effort: 'high' })).rejects.toThrow(
+      '--effort requires --model.'
+    )
+    expect(store.updateAutomation).not.toHaveBeenCalled()
+  })
+
+  it('keeps an effort edit against the model the automation already has pinned', async () => {
+    const store = makeStore([{ ...existingAutomation, model: 'opus', effort: 'low' }])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.updateAutomation('auto-1', { effort: 'high' })
+
+    expect(store.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      { model: 'opus', effort: 'high' },
+      undefined
+    )
+  })
+
+  it('revalidates a pinned model against a newly chosen provider', async () => {
+    const store = makeStore([{ ...existingAutomation, model: 'opus', effort: 'high' }])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(runtime.updateAutomation('auto-1', { agentId: 'opencode' })).rejects.toThrow(
+      'Agent opencode does not support launch-time model selection.'
+    )
+    expect(store.updateAutomation).not.toHaveBeenCalled()
+  })
+
   it('rejects a run context that names a different repo path', async () => {
     const store = makeStore()
     const runtime = new OrcaRuntimeService(store as never)

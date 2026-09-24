@@ -86,6 +86,8 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
+    model: input.model ?? null,
+    effort: input.model ? (input.effort ?? null) : null,
     // Why own contexts win: a wire context speaks the client's perspective —
     // 'runtime:<id>' is a client-assigned name this store cannot interpret, and
     // persisting it makes the projection orphan a record this authority owns.
@@ -159,6 +161,9 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+  const model = Object.hasOwn(definedUpdates, 'model')
+    ? (definedUpdates.model ?? null)
+    : (current.model ?? null)
   const merged: Automation = {
     ...current,
     ...definedUpdates,
@@ -183,6 +188,13 @@ export function updateAutomation(
           ? (contexts.sourceContext ?? definedUpdates.sourceContext ?? null)
           : (current.sourceContext ?? contexts.sourceContext),
     schedulerOwner,
+    model,
+    // Why: effort only means anything against a pinned model, so unpinning clears it too.
+    effort: model
+      ? Object.hasOwn(definedUpdates, 'effort')
+        ? (definedUpdates.effort ?? null)
+        : (current.effort ?? null)
+      : null,
     workspaceMode,
     workspaceId:
       workspaceMode === 'existing'

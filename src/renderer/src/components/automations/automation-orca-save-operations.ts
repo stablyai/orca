@@ -9,6 +9,7 @@ import type {
   StableAutomationCatalogRef
 } from '../../../../shared/automation-owner-ref'
 import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+import { automationLaunchPin } from '../../../../shared/automation-launch-pin'
 import { translate } from '@/i18n/i18n'
 import {
   deleteAutomationForTarget,
@@ -167,10 +168,13 @@ export async function moveAutomationToDestination(
   const operationKey = `${source.id}:${target.entry.stableKey}`
   const creationKey = context.moveCreationKeysRef.current.get(operationKey) ?? crypto.randomUUID()
   context.moveCreationKeysRef.current.set(operationKey, creationKey)
+  // The editor has no model field, so the draft cannot carry a CLI-set pin; take it
+  // from the record being moved or the destination copy silently loses it.
+  const launchPin = automationLaunchPin(source)
   const created = toDispatchResult(
     await createAutomationAtDestination(
       target.authority,
-      { ...input, creationKey },
+      { ...input, ...launchPin, creationKey },
       target.destination
     )
   )

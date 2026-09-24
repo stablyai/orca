@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { automationLaunchPin } from '../../../shared/automation-launch-pin'
 import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
@@ -101,6 +102,9 @@ export function createAutomationRun(
     outputSnapshot: null,
     precheckResult: null,
     usage: null,
+    // Why recorded here and not left to usage: history has to show what this run
+    // asked for even when the provider log yields nothing to harvest.
+    launchRequest: automationLaunchPin(automation),
     error: null,
     startedAt: null,
     dispatchedAt: null,

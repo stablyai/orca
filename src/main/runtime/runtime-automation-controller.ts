@@ -15,6 +15,10 @@ import type {
   AutomationDestination
 } from '../../shared/automation-owner-precondition'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
+import {
+  applyAutomationLaunchPinPatch,
+  resolveAutomationLaunchPin
+} from './runtime-automation-launch-pin'
 import { paginateAutomationRuns } from '../../shared/automation-run-cursor'
 import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
 import { assertAutomationRunContextMatchesTarget } from './runtime-automation-run-context'
@@ -113,6 +117,7 @@ export class RuntimeAutomationController {
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+    const pin = resolveAutomationLaunchPin(input.agentId, input.model, input.effort)
     return this.store.createAutomation(
       {
         creationKey: input.creationKey,
@@ -120,6 +125,8 @@ export class RuntimeAutomationController {
         prompt: input.prompt,
         precheck: input.precheck,
         agentId: input.agentId,
+        model: pin.model,
+        effort: pin.effort,
         runContext: input.runContext,
         sourceContext: input.sourceContext,
         projectId: target.projectId,
@@ -151,6 +158,7 @@ export class RuntimeAutomationController {
     const current = this.show(id)
     const patch: AutomationUpdateInput = {}
     this.copyPatchValues(updates, patch)
+    applyAutomationLaunchPinPatch(current, updates, patch)
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
@@ -227,6 +235,8 @@ export class RuntimeAutomationController {
       'prompt',
       'precheck',
       'agentId',
+      'model',
+      'effort',
       'runContext',
       'sourceContext',
       'baseBranch',

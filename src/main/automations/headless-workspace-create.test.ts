@@ -90,6 +90,34 @@ describe('headless automation workspace create args', () => {
     })
   })
 
+  it('carries a pinned model into the serve-mode startup agent', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, model: 'gpt-5.6-sol', effort: 'high' },
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args.startupLaunchPreferences).toEqual({ model: 'gpt-5.6-sol', effort: 'high' })
+  })
+
+  it('leaves startup launch preferences off an automation on the agent default', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation,
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args.startupLaunchPreferences).toBeUndefined()
+  })
+
   it('falls back to skip for legacy automations without a saved setup decision', () => {
     const args = buildHeadlessAutomationWorktreeCreateArgs({
       automation: { ...automation, setupDecision: undefined },

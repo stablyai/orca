@@ -12,6 +12,7 @@ const AUTOMATION_TARGET_FLAGS = [
   'base-branch'
 ]
 const AUTOMATION_SCHEDULE_FLAGS = ['trigger', 'schedule', 'time', 'day', 'timezone']
+const AUTOMATION_LAUNCH_FLAGS = ['model', 'effort']
 const AUTOMATION_PRECHECK_FLAGS = ['precheck', 'precheck-timeout']
 const AUTOMATION_STATE_FLAGS = [
   'enabled',
@@ -41,12 +42,13 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Orca automation',
     usage:
-      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
+      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--model <id>] [--effort <level>] [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
       'prompt',
       'provider',
+      ...AUTOMATION_LAUNCH_FLAGS,
       ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
@@ -60,24 +62,29 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
-      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
+      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
+      '--model pins the model every scheduled run launches on; without it a run takes whatever default the agent currently holds. --effort requires a model, and both are refused for a provider with no launch-time model selection.',
+      'On edit, --model null unpins the model and returns the automation to the agent default; it clears --effort with it.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
       'orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo',
-      'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex'
+      'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex',
+      'orca automations create --name "Nightly triage" --trigger daily --prompt "Triage the backlog" --provider claude --model opus --effort high'
     ]
   },
   {
     path: ['automations', 'edit'],
     summary: 'Edit an Orca automation',
-    usage: 'orca automations edit <id> [--name <name>] [--trigger <preset|cron|rrule>] [--json]',
+    usage:
+      'orca automations edit <id> [--name <name>] [--trigger <preset|cron|rrule>] [--model <id|null>] [--effort <level>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'id',
       'name',
       'prompt',
       'provider',
+      ...AUTOMATION_LAUNCH_FLAGS,
       ...AUTOMATION_PRECHECK_FLAGS,
       ...AUTOMATION_TARGET_FLAGS,
       ...AUTOMATION_SCHEDULE_FLAGS,
@@ -86,6 +93,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['id'],
     examples: [
       'orca automations edit 2f9e... --disabled',
+      'orca automations edit 2f9e... --model null',
       'orca automations edit --id 2f9e... --trigger "30 * * * *" --json'
     ]
   },

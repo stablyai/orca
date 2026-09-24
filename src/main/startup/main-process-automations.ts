@@ -1,4 +1,5 @@
 import { AutomationService } from '../automations/service'
+import { automationLaunchPin } from '../../shared/automation-launch-pin'
 import { createHeadlessAutomationOutputSnapshotBuffer } from '../automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from '../automations/headless-workspace-create'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
@@ -48,9 +49,11 @@ export function initializeMainProcessAutomations(): AutomationService {
             if (!automation.workspaceId) {
               throw new Error('The target workspace is no longer available.')
             }
+            const launchPin = automationLaunchPin(automation)
             const terminal = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
               agent: automation.agentId,
               prompt: automation.prompt,
+              ...(launchPin ? { launchPreferences: launchPin } : {}),
               title: run.title
             })
             terminalHandle = terminal.handle

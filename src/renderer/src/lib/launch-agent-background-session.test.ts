@@ -594,6 +594,23 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
+  it('emits pinned session options into the launch command', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      sessionOptions: { model: 'opus', effort: 'high' }
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining("'--model' 'opus' '--effort' 'high'")
+      })
+    )
+  })
+
   it('passes Hermes automation prompts through the native startup query', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 

@@ -86,6 +86,55 @@ describe('Store', () => {
     expect(persisted.automations[0].baseBranch).toBeNull()
   })
 
+  it('persists a pinned model and unpins it with its effort', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      model: 'opus',
+      effort: 'high',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    expect(automation.model).toBe('opus')
+    expect(automation.effort).toBe('high')
+
+    const cleared = store.updateAutomation(automation.id, { model: null })
+
+    expect(cleared.model).toBeNull()
+    // Effort alone names nothing to apply it to, so unpinning the model takes it too.
+    expect(cleared.effort).toBeNull()
+    store.flush()
+    expect(readDataFile()).toMatchObject({ automations: [{ model: null, effort: null }] })
+  })
+
+  it('keeps the pinned model when an unrelated field is edited', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      model: 'opus',
+      effort: 'high',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const renamed = store.updateAutomation(automation.id, { name: 'Nightly checks' })
+
+    expect(renamed).toMatchObject({ model: 'opus', effort: 'high' })
+  })
+
   it('returns the existing automation for a repeated creation key', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -365,6 +414,54 @@ describe('Store', () => {
     expect(automation.runContext).toMatchObject({
       hostId: toRuntimeExecutionHostId('gpu-server')
     })
+  })
+
+  it('snapshots the requested launch onto runs', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      model: 'opus',
+      effort: 'high',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    store.updateAutomation(automation.id, { model: null })
+
+    // The run keeps what it asked for even after the automation is unpinned.
+    expect(run.launchRequest).toEqual({ model: 'opus', effort: 'high' })
+    expect(store.listAutomationRuns(automation.id)[0].launchRequest).toEqual({
+      model: 'opus',
+      effort: 'high'
+    })
+  })
+
+  it('records no launch request for a run on the agent default', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
+    expect(run.launchRequest).toBeNull()
   })
 
   it('snapshots automation contexts onto runs', async () => {

@@ -35,6 +35,19 @@ export type AgentStartupPlan = {
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
+/**
+ * The two startup-plan props that pin a launch's model. They always travel
+ * together: a pin the user's own agent args can override is not a pin.
+ */
+export function agentStartupSessionOptionProps(
+  sessionOptions: Record<string, SessionOptionValue> | undefined
+): Pick<
+  Parameters<typeof buildAgentStartupPlan>[0],
+  'sessionOptions' | 'sessionOptionsOverrideAgentArgs'
+> {
+  return sessionOptions ? { sessionOptions, sessionOptionsOverrideAgentArgs: true } : {}
+}
+
 function appliedSessionOptionProps(values: Record<string, SessionOptionValue>) {
   return Object.keys(values).length > 0 ? { sessionOptions: { ...values } } : {}
 }

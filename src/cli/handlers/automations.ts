@@ -24,6 +24,7 @@ import {
   type AutomationShowPayload
 } from '../format'
 import {
+  getOptionalNullableStringFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
@@ -184,6 +185,8 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       prompt: getRequiredStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
+      model: getOptionalStringFlag(flags, 'model'),
+      effort: getOptionalStringFlag(flags, 'effort'),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -214,6 +217,9 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       prompt: getOptionalStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getOptionalProviderFlag(flags),
+      // `--model null` unpins; an omitted flag leaves the stored choice alone.
+      model: getOptionalNullableStringFlag(flags, 'model'),
+      effort: getOptionalNullableStringFlag(flags, 'effort'),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
