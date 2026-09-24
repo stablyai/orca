@@ -28,6 +28,7 @@ import {
   findPreferredRenderRowIndexForWorktreeIdentity,
   rowKeyMatchesRenderRow
 } from './render-row-lookup'
+import { narrowTagRevealKeys } from '../../../../../../shared/sidebar-list/sections/tag-groups'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 import { useAppStore } from '@/store'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
@@ -90,7 +91,7 @@ export function expandGroupsForWorktreeReveal(
     }
   )
   if (folderGroupKeys.length > 0) {
-    for (const groupKey of folderGroupKeys) {
+    for (const groupKey of narrowTagRevealKeys(folderGroupKeys, args.collapsedGroups)) {
       if (args.collapsedGroups.has(groupKey)) {
         args.toggleGroup(groupKey)
       }

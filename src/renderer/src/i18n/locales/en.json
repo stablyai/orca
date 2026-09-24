@@ -2298,7 +2298,8 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "tags": "Update the remote runtime to tag workspaces"
                 }
               }
             }
@@ -2869,6 +2870,9 @@
             }
           }
         }
+      },
+      "worktreeCreationMeta": {
+        "saveFailed": "{{value0}} was created, but its note or tags could not be saved"
       },
       "aiVaultResumeRefusal": {
         "openInChat": "This {{value0}} conversation is open in a chat. Refresh Session History to open it.",
@@ -3780,7 +3784,11 @@
         "runCommandsNow": "Run commands now",
         "skipForNow": "Skip for now",
         "skipCommands": "Skip commands",
-        "connectProject": "Connect {{name}}"
+        "connectProject": "Connect {{name}}",
+        "tags": "Tags",
+        "removeTag": "Remove tag {{value0}}",
+        "tagsLimit": "A workspace can have up to 32 tags",
+        "tagsPlaceholder": "Add a tag and press Enter"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -7630,7 +7638,9 @@
           "optionsActiveFilters_one": "Workspace options ({{count}} filter active)",
           "optionsActiveFilters_other": "Workspace options ({{count}} filters active)",
           "optionsFilterCount_one": "Workspace options ({{count}} filter)",
-          "optionsFilterCount_other": "Workspace options ({{count}} filters)"
+          "optionsFilterCount_other": "Workspace options ({{count}} filters)",
+          "tag": "Tag",
+          "tags": "Tags"
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
@@ -7795,7 +7805,12 @@
           "lineageSubmenu": "Parent & Children",
           "projectGroupSubmenu": "Project Group",
           "muteNotifications": "Mute Notifications",
-          "unmuteNotifications": "Unmute Notifications"
+          "unmuteNotifications": "Unmute Notifications",
+          "tags": "Tags",
+          "tagsSearch": "Find or create a tag…",
+          "tagsPartial": "some",
+          "tagsCreate": "Create “{{value0}}”",
+          "tagsEmpty": "Type a name to create the first tag"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -8107,7 +8122,8 @@
               "682ed5d551": "Closed",
               "7c2f009786": "In progress",
               "6798dc7c94": "In review",
-              "5076efc3d2": "Done"
+              "5076efc3d2": "Done",
+              "untagged": "Untagged"
             }
           }
         },
@@ -8454,6 +8470,25 @@
           "title": "Sort changed to Manual",
           "description": "Manual keeps workspaces where you drop them.",
           "restore": "Back to {{label}}"
+        },
+        "tagHeader": {
+          "renameTitle": "Rename Tag",
+          "renameDescription": "Renames the tag on every workspace that has it. Using an existing name merges the two tags.",
+          "renameConfirm": "Rename",
+          "nameLabel": "Tag Name",
+          "deleteTitle": "Delete tag “{{value0}}”?",
+          "deleteDescription": "The tag is removed from {{value0}} workspace(s). The workspaces themselves are not changed.",
+          "deleteConfirm": "Delete tag",
+          "actions": "Tag actions for {{value0}}",
+          "rename": "Rename tag",
+          "delete": "Delete tag"
+        },
+        "WorktreeCardTagChips": {
+          "label": "Tags"
+        },
+        "workspaceTags": {
+          "updateFailed": "Could not update tags",
+          "limitReached": "{{value0}} workspace(s) already have the maximum of 32 tags"
         },
         "AddWslHostDialogBody": {
           "added": "{{value0}} added."

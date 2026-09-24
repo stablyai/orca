@@ -2,6 +2,7 @@ import {
   MAX_WORKTREE_TAGS,
   compareWorktreeTags,
   normalizeWorktreeTags,
+  preferTagSpelling,
   worktreeTagKey
 } from '../../../../../shared/worktree/metadata/worktree-tags'
 
@@ -15,7 +16,7 @@ function hasTag(workspace: Taggable, key: string): boolean {
   return normalizeWorktreeTags(workspace.tags).some((tag) => worktreeTagKey(tag) === key)
 }
 
-/** Every tag in use, alphabetically, with the first spelling seen. Unused tags do not exist. */
+/** Every tag in use, alphabetically, with a stable spelling. Unused tags do not exist. */
 export function collectWorkspaceTags(workspaces: readonly Taggable[]): WorkspaceTagSummary[] {
   const byKey = new Map<string, WorkspaceTagSummary>()
   for (const workspace of workspaces) {
@@ -24,6 +25,7 @@ export function collectWorkspaceTags(workspaces: readonly Taggable[]): Workspace
       const summary = byKey.get(key)
       if (summary) {
         summary.count += 1
+        summary.tag = preferTagSpelling(summary.tag, tag)
       } else {
         byKey.set(key, { tag, count: 1 })
       }

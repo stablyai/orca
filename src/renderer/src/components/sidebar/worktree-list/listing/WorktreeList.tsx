@@ -42,6 +42,7 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { useWorkspaceTagCommands } from '../../workspace-tags/use-workspace-tag-commands'
+import { TagRenameDialogHost } from '../../workspace-tags/TagRenameDialogHost'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -303,6 +304,7 @@ const WorktreeList = React.memo(function WorktreeList({
             projectsCollapseTarget
           )
         : null}
+      <TagRenameDialogHost />
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}

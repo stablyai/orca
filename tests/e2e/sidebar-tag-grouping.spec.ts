@@ -93,6 +93,16 @@ test.describe('Sidebar tag grouping', () => {
     )
 
     // Rename from the section header; both workspaces follow.
+    // Keyboard users reach the search box: ArrowRight on "Tags" focuses it.
+    await worktreeRow(orcaPage, firstId).click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Tags' }).focus()
+    await orcaPage.keyboard.press('ArrowRight')
+    await expect(orcaPage.getByRole('textbox', { name: 'Find or create a tag…' })).toBeFocused()
+    await orcaPage.keyboard.press('Escape')
+    await orcaPage.keyboard.press('Escape')
+    // Why wait: the closing menu restores focus to its row, which would close a menu opened too early.
+    await expect(orcaPage.getByRole('menu')).toHaveCount(0)
+
     await openHeaderMenu(orcaPage, 'billing team')
     await orcaPage.getByRole('menuitem', { name: 'Rename tag' }).click()
     const nameField = orcaPage.getByRole('textbox', { name: 'Tag Name' })

@@ -36,5 +36,23 @@ export function compareTagSections(
   if (left.key === UNTAGGED_GROUP_KEY || right.key === UNTAGGED_GROUP_KEY) {
     return Number(left.key === UNTAGGED_GROUP_KEY) - Number(right.key === UNTAGGED_GROUP_KEY)
   }
-  return compareWorktreeTags(left.label, right.label)
+  return compareWorktreeTags(left.label, right.label) || left.key.localeCompare(right.key)
+}
+
+function isTagSectionKey(key: string): boolean {
+  return key.startsWith(TAG_GROUP_PREFIX) || key === UNTAGGED_GROUP_KEY
+}
+
+/** Reveal keys with at most one tag section: none if one is already open, else the first. */
+export function narrowTagRevealKeys(
+  keys: readonly string[],
+  collapsedGroups: ReadonlySet<string>
+): string[] {
+  const tagKeys = keys.filter(isTagSectionKey)
+  const otherKeys = keys.filter((key) => !isTagSectionKey(key))
+  if (tagKeys.length === 0 || tagKeys.some((key) => !collapsedGroups.has(key))) {
+    return otherKeys
+  }
+  const [first] = [...tagKeys].sort((left, right) => compareWorktreeTags(left, right))
+  return [...otherKeys, first]
 }

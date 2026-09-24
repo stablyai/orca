@@ -16,6 +16,7 @@ import {
   getFolderWorkspaceHostIdentity
 } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
+import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import {
@@ -56,6 +57,7 @@ export type FolderWorkspaceRowContext = {
     worktree: Worktree
   ) => readonly Worktree[]
   onImmediateActivate: (worktreeId: string, rowKey: string | undefined) => void
+  getActiveSurfaceVariant: (row: FolderWorkspaceItemRow) => ActiveSurfaceVariant
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onRowPointerDown: (
     event: React.PointerEvent<HTMLDivElement>,
@@ -97,6 +99,8 @@ export function renderFolderWorkspaceOption(args: {
     worktreeId: ctx.activeWorktreeId,
     hostId: ctx.activeWorkspaceExecutionHostId ?? null
   })
+  // Why section-scoped: in tag mode one folder workspace renders once per tag.
+  const rowKey = getFolderWorkspaceRowNavigationKey(row)
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
     folderWorkspaceId: row.folderWorkspace.id
@@ -125,14 +129,14 @@ export function renderFolderWorkspaceOption(args: {
   return (
     <div
       key={vItem?.key ?? row.key}
-      id={getWorktreeOptionId(getFolderWorkspaceRowNavigationKey(row))}
+      id={getWorktreeOptionId(rowKey)}
       role="option"
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
       aria-current={isActiveWorktree ? 'page' : undefined}
       data-worktree-id={folderWorktree.id}
-      {...getTagDropTargetProps(row.sectionKey)}
+      {...getTagDropTargetProps(ctx.groupBy === 'tag' ? row.sectionKey : undefined)}
       data-worktree-host-identity={folderWorktreeIdentity}
-      data-worktree-row-key={folderWorktreeIdentity}
+      data-worktree-row-key={rowKey}
       data-worktree-lineage-drop-row=""
       {...(vItem
         ? {
@@ -147,7 +151,7 @@ export function renderFolderWorkspaceOption(args: {
         : { className: 'relative' })}
       onClick={forwardOptionPressToCardSurface}
       onClickCapture={ctx.onRowClickCapture}
-      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
+      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, rowKey)}
     >
       <div className="relative" style={{ paddingLeft: surfaceInset, paddingRight: frame?.right }}>
         <WorktreeCard
@@ -157,12 +161,13 @@ export function renderFolderWorkspaceOption(args: {
           isMultiSelected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
           // A child-active folder looks active without the active card's side effects.
           isActiveSurface={lineage?.childIsActive === true || isActiveWorktree}
+          activeSurfaceVariant={isActiveWorktree ? ctx.getActiveSurfaceVariant(row) : 'primary'}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
           contentIndent={cardContentIndent}
           flushSurface
           nativeDragEnabled={false}
           onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-          activationRowKey={folderWorktreeIdentity}
+          activationRowKey={rowKey}
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}
