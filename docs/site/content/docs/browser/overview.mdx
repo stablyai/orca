@@ -18,7 +18,7 @@ Every Orca worktree has its own browser. It's a real Chromium window — address
 - `Cmd-F` — find in page.
 - `Cmd-T` — new tab, scoped to this worktree.
 - `Cmd-Shift-T` — reopen last closed tab.
-- Page links that use `target=_blank` and ordinary unnamed popups open in new Orca tabs, using the opener tab's browser profile. Named or OAuth-style popups can still open in a separate window.
+- Page links that use `target=_blank` and ordinary unnamed popups open in new Orca tabs (in the pane already showing a browser, when there is one), using the opener tab's browser profile. Named or OAuth-style popups can still open in a separate window.
 
 ## Worktree scoping
 
@@ -35,6 +35,8 @@ For SSH workspaces, **Browse through SSH workspace hosts** controls whether brow
 ## Link routing
 
 Under [Settings → Browser → Link Routing](/docs/settings), choose whether http(s) links from the terminal, markdown, and editor open in Orca's per-worktree browser or the system browser.
+
+When a browser tab is already showing in the worktree's layout, a link opened in Orca becomes a new tab in that browser's pane instead of covering the pane you clicked in; the previous page stays open as its own tab. If several browser panes are showing, the focused one wins, otherwise the one you used last. A browser hidden behind another tab does not count, and with none showing, links open where they did before.
 
 A nested **Hold Shift…** toggle inverts that default for one click with the platform modifier (`⇧⌘-click` on macOS, `Shift+Ctrl+click` on Windows / Linux):
 
