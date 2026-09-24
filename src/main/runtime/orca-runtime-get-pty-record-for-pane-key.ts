@@ -7,6 +7,7 @@ import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { structuredWorkerIdentities } from './structured-worker-identity'
 import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
+import { releaseRestoredStructuredPointerClaims } from './orchestration/structured-pointer-claim-restore'
 import {
   handleLessCoordinatorSessionId,
   findConnectedPtyBoundToSession,
@@ -308,9 +309,11 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   }
 
   protected scheduleRestoredMessageRepoints(): void {
+    const db = this._orchestrationDb
+    // Before the scan, so a released batch is found as undelivered like any other.
+    releaseRestoredStructuredPointerClaims(db)
     let handles: Set<string>
     try {
-      const db = this._orchestrationDb
       // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
       handles = new Set([
         ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
