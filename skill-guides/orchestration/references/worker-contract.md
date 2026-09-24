@@ -2,12 +2,15 @@
 
 The injected preamble is authoritative. Copy its command rather than
 reconstructing flags. In particular, preserve the exact executable, worker
-handle, Dispatch capability, Task ID, and Dispatch ID.
+address, Dispatch capability, Task ID, and Dispatch ID. A worker running as a
+chat names itself `session:<id>`, never a `structworker_` handle, and follows
+its preamble's chat forms below.
 
 ## Heartbeat
 
 Send heartbeats only at the cadence required by the live preamble. Skip them
 while blocked inside `ask` or `check --wait`; those calls are liveness signals.
+A chat skips them only while its turn has ended waiting for an answer.
 
 ```text
 ORCA orchestration send --from <worker_handle> --dispatch-capability <capability> --type heartbeat --subject "alive" --task-id <task_id> --dispatch-id <dispatch_id> --phase "<investigating|implementing|reviewing|waiting>"
@@ -29,6 +32,10 @@ ORCA orchestration ask --from <worker_handle> --dispatch-capability <capability>
 
 A timeout or disconnect leaves the original question pending. Resume its
 message ID; do not create a duplicate question.
+
+A chat never blocks here: its shell tool would kill the call before the message
+ID prints. It asks with the preamble's short `--timeout-ms`, ends its turn on a
+timeout, and runs the printed resume command on the turn the reply starts.
 
 ## Reading coordinator follow-ups
 

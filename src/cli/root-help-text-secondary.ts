@@ -113,7 +113,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.',
   '  Use selectors for discovery and handles for repeated live terminal operations.',
   '  Inside an Orca agent, `orca status --json` reports its orchestration address as caller.address:',
-  '  session:<id> for a chat session, its terminal handle for a terminal agent.',
+  '  session:<id> for a chat session, kept across /clear; its terminal handle for a terminal agent.',
   '  When ORCA_CLI_COMMAND is set, run that executable: "$ORCA_CLI_COMMAND" in a POSIX shell,',
   '  & $env:ORCA_CLI_COMMAND in PowerShell. Bare `orca` in a login shell can reach another Orca.',
   '',

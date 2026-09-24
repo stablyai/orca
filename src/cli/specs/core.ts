@@ -20,7 +20,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca status [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
-      "caller is this agent's orchestration address as Orca resolved it from its environment: session:<id> for a chat session, the terminal handle for a terminal agent, null outside an Orca agent."
+      "caller is this agent's orchestration address as Orca resolved it from its environment: session:<id> for a chat session, kept across /clear, the terminal handle for a terminal agent, null outside an Orca agent."
     ],
     examples: ['orca status', 'orca status --json']
   },

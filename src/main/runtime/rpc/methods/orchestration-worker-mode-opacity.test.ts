@@ -3,9 +3,10 @@
  *
  * Two properties are pinned here, because both were false at some point in this lane:
  *
- * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once the handle and
- *   dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
- *   worker, which is a two-tier capability model dressed as a preamble tweak;
+ * - a worker is TAUGHT the same contract whichever mode it runs in: the same sections, verbs,
+ *   flags and lifecycle ids. The sub-dispatch section used to be withheld from a structured
+ *   worker, which is a two-tier capability model dressed as a preamble tweak. How it waits is
+ *   not contract: a chat's shell tool kills a blocking call, so that discipline follows the mode;
  * - a structured worker can actually BE a coordinator. `worker-start` used to resolve `--from`
  *   through `showTerminal`, which needs a PTY, so the capability the preamble withheld was in fact
  *   missing rather than merely unadvertised.
@@ -99,16 +100,24 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
   return paneKey
 }
 
-/** Strips the ids that legitimately differ per dispatch, leaving what the agent is taught. */
 /**
- * The two facts that legitimately differ by mode, and nothing else: the worker's own address (its
- * handle, or `session:<id>` with how mail reaches a chat) and how its shell invokes the CLI.
+ * The contract a preamble teaches: its sections, then every command with the worker's own address,
+ * its CLI invocation and its wait budget normalised. Those three follow the mode; nothing else may.
  */
-function normalizeWorkerIdentity(preamble: string, cli: string): string {
-  return preamble
-    .replace(/^Your orchestration address is: [^\n]*\n(?:[^\n]+\n)*/m, '<own address>\n')
-    .split(`${cli} orchestration`)
-    .join('<cli> orchestration')
+function preambleContract(preamble: string, self: string, cli: string): string[] {
+  const sections = preamble.match(/^=== [A-Z -]+ ===$/gm) ?? []
+  const commands = preamble
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(`${cli} orchestration `))
+    .map((line) =>
+      line
+        .slice(cli.length)
+        .split(self)
+        .join('<self>')
+        .replace(/--timeout-ms \d+/g, '--timeout-ms <budget>')
+    )
+  return [...sections, ...commands]
 }
 
 function normalizePreamble(preamble: string, handle: string, dispatchId: string): string {
@@ -202,7 +211,7 @@ describe('a worker cannot tell which mode it is running in', () => {
     return result
   }
 
-  it('teaches byte-identical instructions in both modes', async () => {
+  it('teaches the same contract in both modes', async () => {
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_coord',
       worktreeId: WORKTREE,
@@ -224,17 +233,22 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(terminal.mode.mode).toBe('terminal')
     const structuredPreamble = structuredPreambles[0] as string
     const terminalPreamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] as string
-    expect(
-      normalizeWorkerIdentity(
-        normalizePreamble(structuredPreamble, STRUCTURED_HANDLE, structured.dispatchId),
-        '"$ORCA_CLI_COMMAND"'
-      )
-    ).toBe(
-      normalizeWorkerIdentity(
+    const structuredContract = preambleContract(
+      normalizePreamble(structuredPreamble, STRUCTURED_HANDLE, structured.dispatchId),
+      'session:sess_worker',
+      '"$ORCA_CLI_COMMAND"'
+    )
+    expect(structuredContract).toEqual(
+      preambleContract(
         normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId),
+        '<worker>',
         'orca'
       )
     )
+    // Guards the equality against both sides losing their commands.
+    expect(structuredContract.filter((line) => line.includes(' orchestration '))).toHaveLength(8)
+    // One agent-visible address: the minted handle is the mailbox key, never taught.
+    expect(structuredPreamble).not.toContain(STRUCTURED_HANDLE)
     expect(structuredPreamble).toContain('Your orchestration address is: session:sess_worker\n')
     expect(terminalPreamble).toContain(`Your orchestration address is: ${TERMINAL_HANDLE}\n`)
     // The section the structured lane used to withhold, asserted by name so the equality above
@@ -257,6 +271,10 @@ describe('a worker cannot tell which mode it is running in', () => {
 
     expect(result).toMatchObject({ state: 'ready' })
     expect(showTerminal).not.toHaveBeenCalled()
+    // Its sub-worker is told the coordinator's one address, not the handle it was minted.
+    expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
+      "Your coordinator's address is: session:sess_coord\n"
+    )
     expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
       '=== SUB-DISPATCH ==='
     )

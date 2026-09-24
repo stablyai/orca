@@ -8,7 +8,8 @@ of truth for the loop order and completion boundary.
 
 When `ORCA status --json` reports `caller.kind` `session`, you coordinate from a
 chat. Never block in `check --wait`: your shell tool has its own timeout, and
-Orca wakes you instead. When messages reach your Run, Orca starts a new turn in
+Orca wakes you instead. Orca refuses it with `wait_requires_terminal` while the
+session runs as a chat; only its terminal view may wait. When messages reach your Run, Orca starts a new turn in
 this chat once you are idle, saying `You have <n> orchestration message(s)` and
 naming the `check` to run.
 
@@ -22,8 +23,8 @@ naming the `check` to run.
 
 A turn with no new Delivery is a checkpoint, not a failure. The compact guide's
 empty-wait enumeration applies when a turn arrives and a Dispatch you expected
-has still not settled. `/clear` gives the chat a new session and address; Orca
-moves your Runs and unread mail to it.
+has still not settled. Your address survives `/clear`: your Runs and unread
+mail stay with the chat.
 
 ## Ready waves
 

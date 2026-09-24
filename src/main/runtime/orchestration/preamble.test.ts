@@ -421,8 +421,55 @@ describe('the worker is told its own orchestration address', () => {
     )
 
     expect(preamble).toContain(`Your orchestration address is: session:${sessionId}\n`)
-    expect(preamble).toContain('Your coordinator reaches you there or at dispatch:ctx_def456.')
+    expect(preamble).toContain('Your coordinator reaches you there.')
     expect(preamble).toContain("Your coordinator's address is: term_coord\n")
+  })
+
+  it('names a structured worker by one address in every command, never its minted handle', () => {
+    const preamble = buildDispatchPreamble(
+      baseParams({ workerHandle: 'structworker_1', structuredSession: posixSession })
+    )
+
+    expect(preamble).not.toContain('structworker_1')
+    expect(preamble).not.toContain('dispatch:ctx_def456')
+    expect(cliFence(preamble)).toContain(`--from session:${sessionId} `)
+    expect(cliFence(preamble)).toContain(`check --terminal session:${sessionId} --json`)
+  })
+})
+
+describe('a chat worker is taught the turn loop, not a blocking one', () => {
+  const sessionId = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+  const chat = () =>
+    buildDispatchPreamble(
+      baseParams({
+        workerHandle: 'structworker_1',
+        canDispatchSubWorkers: true,
+        structuredSession: { sessionId, cliInvocation: '"$ORCA_CLI_COMMAND"' }
+      })
+    )
+
+  it('asks with a wait no shell tool kills, so the message ID for --resume is always printed', () => {
+    const ask = cliFence(chat())
+      .split('\n')
+      .find((line) => line.includes('orchestration ask '))
+    const timeoutMs = Number(/--timeout-ms (\d+)/.exec(ask ?? '')?.[1])
+
+    // Below the shortest default any supported agent's shell tool applies to a command.
+    expect(timeoutMs).toBeLessThan(10_000)
+    expect(chat()).toContain("it prints the question's message ID and a resume command")
+    expect(chat()).toContain('the reply starts a new turn in this chat')
+  })
+
+  it('never teaches a blocking wait, a shell to keep open, or a terminal it does not have', () => {
+    const preamble = chat()
+
+    expect(preamble).not.toContain('--timeout-ms 600000')
+    expect(preamble).not.toContain('blocked inside')
+    expect(preamble).not.toContain('block until')
+    expect(preamble).not.toContain('Do not exit the shell')
+    expect(preamble).not.toMatch(/this terminal/)
+    expect(preamble).toContain('never in `check --wait`')
+    expect(afterWorkerDoneSection(preamble)).toContain('starts a new turn here')
   })
 
   it.each([

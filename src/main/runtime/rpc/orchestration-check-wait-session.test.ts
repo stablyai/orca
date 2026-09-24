@@ -53,7 +53,8 @@ describe('check --wait from an agent session', () => {
       ok: false,
       error: { code: 'wait_requires_terminal', data: { effectsApplied: false } }
     })
-    const message = isRecord(response) && isRecord(response.error) ? response.error.message : ''
+    const failure: unknown = response
+    const message = isRecord(failure) && isRecord(failure.error) ? failure.error.message : ''
     expect(message).toContain('Run check without --wait')
     expect(message).toContain('end your turn')
     expect(waitForMessage).not.toHaveBeenCalled()

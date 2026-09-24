@@ -66,7 +66,8 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
   examples below, replace `ORCA` with it; do not create a shell variable or run
   `ORCA` literally. If it fails, report that exact error instead of switching.
 - Your address is `caller.address` in `ORCA status --json`: `session:<id>` in a
-  chat, your handle in a terminal. Never name another agent with `--from`/`--terminal`.
+  chat (a chat worker too; it survives `/clear`), your handle in a terminal.
+  Never name another agent with `--from`/`--terminal`.
 - A successful `orchestration send` proves durable enqueue; its wake or nudge is
   best-effort attention only and does not prove the recipient read or accepted it.
 
@@ -74,15 +75,14 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
 
 The injected preamble is authoritative. A dispatched worker must:
 
-1. Do only the current Task and use the preamble's `ask` command for a blocking
-   coordinator question. Never open a local question TUI the coordinator cannot
-   answer. Resume the same message ID after an ask timeout.
+1. Do only the current Task. Ask the coordinator only with the preamble's `ask`
+   command, never a local question TUI; resume its message ID after a timeout.
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
    liveness, not completion.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`,
    with the preamble's own `check` command.
-4. Send `worker_done` exactly once, from the dispatched terminal, with a
+4. Send `worker_done` exactly once, as the dispatched worker, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.
 5. Append `--files-modified` and `--report-path` only with real values when
@@ -144,7 +144,7 @@ sent no `worker_done`. Then load `references/recovery-and-cleanup.md` and choose
 `worker-stop` or `worker-abandon` explicitly. `unverifiable` is absence,
 including when `worker-show` reports `agentWait` null. Absence never authorizes
 stop, abandon, retry, or release; keep waiting or inspect. A chat coordinator
-ends its turn instead of `check --wait`; see `references/coordinator-loop.md`.
+ends its turn instead; Orca refuses its `check --wait` (`references/coordinator-loop.md`).
 
 `worker-start` is the normal path, composing placement, terminal readiness,
 prompt injection, and supervised resource ownership. `dispatch --inject` leaves
