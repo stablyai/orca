@@ -24,7 +24,8 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 
 const SESSION_PREFIX = 'session:'
 
-export type SessionRecipient = { sessionId: string; address: string }
+/** `actor` is the `session:<id>` spelling; the mailbox mail lands in is the session's identity address. */
+export type SessionRecipient = { sessionId: string; actor: string }
 
 export type SessionRecipientRefusal = {
   code: (typeof CODES)[keyof typeof CODES]
@@ -47,7 +48,7 @@ export function readSessionRecipient(
   if (recipient.startsWith(SESSION_PREFIX)) {
     const actor = parseOrchestrationActor(recipient)
     return actor
-      ? { sessionId: actor.id, address: formatOrchestrationActor(actor) }
+      ? { sessionId: actor.id, actor: formatOrchestrationActor(actor) }
       : {
           code: CODES.unknown,
           message: `${recipient} does not name an Orca agent session id. No message was sent.`
@@ -59,7 +60,7 @@ export function readSessionRecipient(
     return providerIdRefusal(recipient, found.orcaSessionId)
   }
   return actor && found?.kind === 'found'
-    ? { sessionId: actor.id, address: formatOrchestrationActor(actor) }
+    ? { sessionId: actor.id, actor: formatOrchestrationActor(actor) }
     : null
 }
 

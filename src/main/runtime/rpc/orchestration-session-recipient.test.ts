@@ -150,3 +150,70 @@ describe('a send addressed to an agent session', () => {
     })
   })
 })
+
+describe('a live structured worker addressed by its session id', () => {
+  let h: SessionCallerHarness
+  const handle = mintStructuredWorkerHandle()
+  const paneKey = mintStructuredWorkerPaneKey(SESSION_Y)
+
+  beforeEach(() => {
+    h = createSessionCallerHarness(hostRef)
+    structuredWorkerIdentities.register({
+      handle,
+      sessionId: SESSION_Y,
+      agent: 'claude',
+      paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
+      worktreeId: 'wt_1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+  })
+
+  afterEach(() => {
+    h.close()
+    vi.restoreAllMocks()
+  })
+
+  async function sendTo(to: string): Promise<Row> {
+    return resultOf(
+      await h.dispatch(
+        orchestrationRequest('orchestration.send', { from: 'term_worker', to, subject: 'hello' })
+      )
+    )
+  }
+
+  async function flaglessCheck(): Promise<Row> {
+    return resultOf(
+      await h.dispatch(
+        orchestrationRequest('orchestration.check', { peek: true }, { sessionId: SESSION_Y })
+      )
+    )
+  }
+
+  it('lands in its Dispatch mailbox, which its flagless check reads', async () => {
+    // The defect this pins: the mail was stored at `session:<id>`, pointed at the worker, and its
+    // `check` — which reads the worker's handle and Dispatch mailboxes — returned nothing.
+    const run = h.db.createRun({
+      objective: 'pty coordinator',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:12121212-1212-4212-8212-121212121212'
+    })
+    const dispatch = h.db.createDispatchContext({
+      taskId: h.db.createTask({ runId: run.id, spec: 'work' }).id,
+      assigneeHandle: handle,
+      assigneePaneKey: paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    expect(await sendTo(`session:${SESSION_Y}`)).toMatchObject({
+      message: { to_handle: `dispatch:${dispatch.id}` }
+    })
+    expect(await flaglessCheck()).toMatchObject({ messages: [{ subject: 'hello' }] })
+  })
+
+  it('lands in its own handle mailbox between Dispatches, which its flagless check reads', async () => {
+    expect(await sendTo(SESSION_Y)).toMatchObject({ message: { to_handle: handle } })
+    expect(await flaglessCheck()).toMatchObject({ messages: [{ subject: 'hello' }] })
+  })
+})
