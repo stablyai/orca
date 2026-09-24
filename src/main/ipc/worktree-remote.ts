@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeProgressEvent,
@@ -121,6 +122,7 @@ import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directo
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { attributedSparsePresetId } from './sparse-preset-attribution'
 import {
+  applySetupAutoCloseSetting,
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
 } from '../../shared/setup-runner-command'
@@ -320,11 +322,12 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   startup: CreateWorktreeArgs['startup']
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
+  settings: GlobalSettings
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
   /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
   automationCreate: boolean
 }): Promise<StagedStartupResult> {
-  const { runtime, worktree, startup, defaultTabs, createdWithAgent } = args
+  const { runtime, worktree, startup, defaultTabs, settings, createdWithAgent } = args
   const userAct = args.automationCreate ? {} : { wslUserAct: true as const }
   let { setup } = args
   if (!startup || defaultTabs?.tabs.length) {
@@ -393,16 +396,17 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   let didSpawnSetup = false
   if (setup) {
     try {
-      const setupCommand =
+      const setupPlatform = getSetupRunnerCommandPlatformForLaunch(
+        setup,
+        process.platform === 'win32' ? 'windows' : 'posix'
+      )
+      const setupCommand = applySetupAutoCloseSetting(
         wrappedSetupCommandStr ??
-        buildSetupRunnerCommand(
-          setup.runnerScriptPath,
-          getSetupRunnerCommandPlatformForLaunch(
-            setup,
-            process.platform === 'win32' ? 'windows' : 'posix'
-          ),
-          setup.shell
-        )
+          buildSetupRunnerCommand(setup.runnerScriptPath, setupPlatform, setup.shell),
+        setupPlatform,
+        setup.shell,
+        settings
+      )
       await runtime.createTerminal(
         `id:${worktree.id}`,
         {
@@ -1724,6 +1728,7 @@ async function performLocalWorktreeCreate(
       startup: args.startup,
       setup,
       defaultTabs,
+      settings,
       createdWithAgent: args.createdWithAgent,
       automationCreate: Boolean(args.automationProvenance)
     })
