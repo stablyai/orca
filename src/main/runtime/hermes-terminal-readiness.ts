@@ -7,7 +7,7 @@ export function isHermesReadyPromptSnapshot(screen: string): boolean {
   const tail = visible.slice(-8)
   if (
     tail.some((line) =>
-      /^[^\p{L}\p{N}]*(?:approval required|permission required|do you trust|sign in|select a model|choose a theme|press enter to continue)\b/iu.test(
+      /^[^\p{L}\p{N}]*(?:\d+[.)]\s*)?(?:approval required|permission required|do you trust|sign in|select a model|choose a theme|press enter to continue)\b/iu.test(
         line
       )
     )

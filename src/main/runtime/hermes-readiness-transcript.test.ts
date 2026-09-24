@@ -115,6 +115,25 @@ describe('Hermes TUI readiness from a captured PTY', () => {
     expect(isHermesReadyPromptSnapshot(rows.join('\n'))).toBe(true)
   })
 
+  it('rejects numbered dialog choices beside a stale ready composer', async () => {
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Hermes Agent',
+      foregroundProcess: 'hermes',
+      launchAgent: 'hermes',
+      ptySize: { cols: 120, rows: 31 },
+      data: captured
+    })
+    const { tail } = await runtime.readTerminal(handle, { screen: true })
+    const rows = tail.join('\n').split('\n')
+    const statusIndex = rows.findIndex((row) => /─ ready │/.test(row))
+    expect(statusIndex).toBeGreaterThan(0)
+    for (const choice of ['1. Sign in', '2) Select a model', '• Choose a theme']) {
+      const withChoice = [...rows]
+      withChoice.splice(statusIndex, 0, choice)
+      expect(isHermesReadyPromptSnapshot(withChoice.join('\n'))).toBe(false)
+    }
+  })
+
   it('does not settle on a quoted prompt or a screen-owning dialog', async () => {
     const { runtime, handle } = await createTranscriptPane({
       paneTitle: 'Hermes Agent',
