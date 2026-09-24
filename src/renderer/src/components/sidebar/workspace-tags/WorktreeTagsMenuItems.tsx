@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuItem,
@@ -23,6 +23,8 @@ export function WorktreeTagsMenuItems(props: {
   const liveWorktrees = resolveLive(props.contextWorktrees)
   const onToggleTag = (tag: string) => void toggleTag(props.contextWorktrees, tag)
   const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const openedByKeyboardRef = useRef(false)
   const typed = normalizeWorktreeTag(query)
   const typedKey = worktreeTagKey(typed)
   const visibleTags = typedKey
@@ -41,20 +43,46 @@ export function WorktreeTagsMenuItems(props: {
   }
 
   return (
-    <DropdownMenuSub onOpenChange={(open) => !open && setQuery('')}>
-      <DropdownMenuSubTrigger disabled={props.disabled}>
+    <DropdownMenuSub
+      onOpenChange={(open) => {
+        if (!open) {
+          setQuery('')
+          return
+        }
+        // Why: the search box is not a menu item, so keyboard users could never reach it otherwise.
+        // Pointer opens keep Radix's own focus handling, which a moved focus would disturb.
+        if (openedByKeyboardRef.current) {
+          openedByKeyboardRef.current = false
+          requestAnimationFrame(() => inputRef.current?.focus())
+        }
+      }}
+    >
+      <DropdownMenuSubTrigger
+        disabled={props.disabled}
+        onKeyDown={(event) => {
+          openedByKeyboardRef.current = ['ArrowRight', 'Enter', ' '].includes(event.key)
+        }}
+      >
         <Tag className="size-3.5" />
         {translate('auto.components.sidebar.WorktreeContextMenu.tags', 'Tags')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-52">
         <div className="p-1">
           <Input
+            ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
                 submitTyped()
+              }
+              if (event.key === 'ArrowDown') {
+                event.preventDefault()
+                event.currentTarget
+                  .closest('[role="menu"]')
+                  ?.querySelector<HTMLElement>('[role="menuitemcheckbox"], [role="menuitem"]')
+                  ?.focus()
               }
               // Why: Radix typeahead and arrow handling would otherwise steal keystrokes.
               if (event.key !== 'Escape' && event.key !== 'Tab') {

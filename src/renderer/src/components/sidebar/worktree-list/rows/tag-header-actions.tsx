@@ -1,25 +1,21 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { useWorkspaceTagCommands } from '../../workspace-tags/use-workspace-tag-commands'
+import { openTagRenameDialog } from '../../workspace-tags/TagRenameDialogHost'
 import { ProjectGroupHeaderMenu } from './project-group-header-actions'
-import { stopRepoHeaderMenuEvent } from './header-event-guards'
 
 /** Rename or delete a tag everywhere it is used; deleting never touches the workspaces themselves. */
 export function TagHeaderMenu({ tag }: { tag: string }): React.JSX.Element {
-  const { renameTag, deleteTag, countTagged } = useWorkspaceTagCommands()
+  const { deleteTag, countTagged } = useWorkspaceTagCommands()
   const confirm = useConfirmationDialog()
-  const [renaming, setRenaming] = useState(false)
 
   const handleDelete = async (): Promise<void> => {
     const confirmed = await confirm({
       title: translate(
         'auto.components.sidebar.tagHeader.deleteTitle',
         'Delete tag “{{value0}}”?',
-        {
-          value0: tag
-        }
+        { value0: tag }
       ),
       description: translate(
         'auto.components.sidebar.tagHeader.deleteDescription',
@@ -30,52 +26,26 @@ export function TagHeaderMenu({ tag }: { tag: string }): React.JSX.Element {
       confirmVariant: 'destructive'
     })
     if (confirmed) {
+      // Planned when the queued write runs, so workspaces tagged while the dialog was open are included.
       await deleteTag(tag)
     }
   }
 
   return (
-    <>
-      <ProjectGroupHeaderMenu
-        groupId={tag}
-        label={tag}
-        onRename={() => setRenaming(true)}
-        onDelete={() => void handleDelete()}
-        copy={{
-          actionsLabel: translate(
-            'auto.components.sidebar.tagHeader.actions',
-            'Tag actions for {{value0}}',
-            { value0: tag }
-          ),
-          renameLabel: translate('auto.components.sidebar.tagHeader.rename', 'Rename tag'),
-          deleteLabel: translate('auto.components.sidebar.tagHeader.delete', 'Delete tag')
-        }}
-      />
-      {/* Why: React bubbles dialog events through this header, which treats Space/Enter as collapse. */}
-      <div
-        className="contents"
-        onKeyDown={stopRepoHeaderMenuEvent}
-        onPointerDown={stopRepoHeaderMenuEvent}
-        onMouseDown={stopRepoHeaderMenuEvent}
-        onClick={stopRepoHeaderMenuEvent}
-      >
-        <ProjectGroupNameDialog
-          open={renaming}
-          title={translate('auto.components.sidebar.tagHeader.renameTitle', 'Rename Tag')}
-          description={translate(
-            'auto.components.sidebar.tagHeader.renameDescription',
-            'Renames the tag on every workspace that has it. Using an existing name merges the two tags.'
-          )}
-          initialName={tag}
-          confirmLabel={translate('auto.components.sidebar.tagHeader.renameConfirm', 'Rename')}
-          nameLabel={translate('auto.components.sidebar.tagHeader.nameLabel', 'Tag Name')}
-          onOpenChange={setRenaming}
-          onSubmit={async (name) => {
-            await renameTag(tag, name)
-            setRenaming(false)
-          }}
-        />
-      </div>
-    </>
+    <ProjectGroupHeaderMenu
+      groupId={tag}
+      label={tag}
+      onRename={() => openTagRenameDialog(tag)}
+      onDelete={() => void handleDelete()}
+      copy={{
+        actionsLabel: translate(
+          'auto.components.sidebar.tagHeader.actions',
+          'Tag actions for {{value0}}',
+          { value0: tag }
+        ),
+        renameLabel: translate('auto.components.sidebar.tagHeader.rename', 'Rename tag'),
+        deleteLabel: translate('auto.components.sidebar.tagHeader.delete', 'Delete tag')
+      }}
+    />
   )
 }

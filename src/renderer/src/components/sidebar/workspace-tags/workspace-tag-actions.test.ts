@@ -21,7 +21,7 @@ describe('collectWorkspaceTags', () => {
   it('lists each tag once, alphabetically, with how many workspaces use it', () => {
     expect(collectWorkspaceTags([web, api, docs])).toEqual([
       { tag: 'backend', count: 1 },
-      { tag: 'billing', count: 2 }
+      { tag: 'Billing', count: 2 }
     ])
   })
 

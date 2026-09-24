@@ -19,6 +19,11 @@ export function compareWorktreeTags(left: string, right: string): number {
   return TAG_COLLATOR.compare(left, right)
 }
 
+/** Which spelling represents a tag carried under several; stable regardless of list order. */
+export function preferTagSpelling(current: string, candidate: string): string {
+  return candidate < current ? candidate : current
+}
+
 /** Case-insensitive identity, so `Billing` and `billing` are one tag. */
 export function worktreeTagKey(tag: string): string {
   // Why not toLocaleLowerCase: hosts on different locales (e.g. Turkish I) must agree on identity.

@@ -9,7 +9,8 @@ import {
   WorktreeCardMetaDetailsHover
 } from '../details/worktree-card-details-items'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
-import { normalizeWorktreeTags } from '../../../../../../shared/worktree/metadata/worktree-tags'
+
+const NO_TAGS: readonly string[] = []
 
 function getVisibleContextLabel(
   projectLabel: string | undefined,
@@ -156,7 +157,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const titleRowIndicators = showTitleRowIndicators ? (
     <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
   ) : null
-  const visibleTags = cardProps.includes('tags') ? normalizeWorktreeTags(worktree.tags) : []
+  // Why no re-normalizing: tags are normalized on write and on load.
+  const visibleTags = cardProps.includes('tags') ? (worktree.tags ?? NO_TAGS) : NO_TAGS
   const hasSecondaryCardContent =
     hasMetaRow ||
     !!remoteBranchConflict ||

@@ -24,6 +24,11 @@ import type {
   WorktreeGroupBy
 } from '../row-types'
 import { compareTagSections, getTagSections, type TaggedSection } from './tag-groups'
+import { preferTagSpelling } from '../../worktree/metadata/worktree-tags'
+
+function getFolderTagLaneLabel(key: string, pair: RenderableFolderWorkspace): string {
+  return getTagSections(pair.folderWorkspace).find((section) => section.key === key)?.label ?? ''
+}
 
 export function buildOrderedGroups(args: {
   groupBy: WorktreeGroupBy
@@ -103,6 +108,10 @@ export function buildOrderedGroups(args: {
         grouped.set(key, { label, items: [], repo: undefined, repoIds: new Set() })
       }
       const group = grouped.get(key)!
+      if (groupBy === 'tag') {
+        // Why: spellings of one tag differ per workspace; the header must not follow sort order.
+        group.label = preferTagSpelling(group.label, label)
+      }
       group.items.push(w)
       group.repoIds.add(w.repoId)
     }
@@ -112,17 +121,16 @@ export function buildOrderedGroups(args: {
     for (const key of getFolderWorkspaceLaneKeys(pair, groupBy, workspaceStatuses)) {
       if (!grouped.has(key)) {
         grouped.set(key, {
-          label:
-            groupBy === 'tag'
-              ? (getTagSections(pair.folderWorkspace).find((section) => section.key === key)
-                  ?.label ?? '')
-              : '',
+          label: groupBy === 'tag' ? getFolderTagLaneLabel(key, pair) : '',
           items: [],
           repo: undefined,
           repoIds: new Set()
         })
       }
       const group = grouped.get(key)!
+      if (groupBy === 'tag') {
+        group.label = preferTagSpelling(group.label, getFolderTagLaneLabel(key, pair))
+      }
       group.folderWorkspaces ??= []
       group.folderWorkspaces.push(pair)
     }
