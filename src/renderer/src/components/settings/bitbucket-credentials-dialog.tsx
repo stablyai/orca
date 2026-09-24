@@ -19,6 +19,8 @@ import { cn } from '@/lib/utils'
 import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { translate } from '@/i18n/i18n'
+import { AtlassianTokenScopeList } from '../atlassian-token-scope-list'
+import { bitbucketTokenScopeGroups } from './bitbucket-token-scopes'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
 
@@ -354,6 +356,9 @@ export function BitbucketCredentialsDialog({
                       'Create an Atlassian API token for your account, then pair it with the email address that owns it.'
                     )}
               </p>
+              {isTokenMode ? null : (
+                <AtlassianTokenScopeList groups={bitbucketTokenScopeGroups()} />
+              )}
               <button
                 type="button"
                 className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"

@@ -1,7 +1,10 @@
 // 'cloud' = Atlassian Cloud (email + API token, Basic auth, REST v3).
+// 'cloud-scoped' = Atlassian Cloud with a scoped API token. Atlassian only
+// honours those on the api.atlassian.com gateway, so REST calls go to
+// `apiBaseUrl` while `siteUrl` keeps serving browse links.
 // 'server' = self-hosted Jira Server/Data Center (personal access token,
 // Bearer auth, REST v2). Older stored sites omit the field and mean 'cloud'.
-export type JiraAuthType = 'cloud' | 'server'
+export type JiraAuthType = 'cloud' | 'cloud-scoped' | 'server'
 
 export type JiraSite = {
   id: string
@@ -10,6 +13,8 @@ export type JiraSite = {
   displayName: string
   accountId: string
   authType?: JiraAuthType
+  // Set for 'cloud-scoped': https://api.atlassian.com/ex/jira/<cloudId>.
+  apiBaseUrl?: string
 }
 
 export type JiraViewer = {
@@ -137,7 +142,8 @@ export type JiraIssueFilter = 'assigned' | 'reported' | 'all' | 'done'
 export type JiraConnectArgs = {
   siteUrl: string
   // Ignored for 'server' auth: self-hosted PATs authenticate via Bearer
-  // header alone, so the email field may be empty.
+  // header alone, so the email field may be empty. Optional for
+  // 'cloud-scoped': with an email the token is sent as Basic, without as Bearer.
   email: string
   apiToken: string
   authType?: JiraAuthType
