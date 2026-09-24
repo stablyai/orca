@@ -22,7 +22,7 @@ export type LspClientHandlers = {
    * `window/workDoneProgress/create` goes unanswered (spike findings §5).
    * The returned value becomes the response result (null when undefined).
    */
-  onServerRequest: (method: string, params: unknown) => unknown | Promise<unknown>
+  onServerRequest: (method: string, params: unknown) => unknown
   /** Framing/protocol violations — the caller kills the session. */
   onProtocolError: (error: Error) => void
 }
