@@ -17,6 +17,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'automation',
   'cli',
   'comment',
+  'tags',
   'ports',
   // Default cards keep agent activity inline; Compact omits the extra row.
   'inline-agents',
@@ -51,6 +52,7 @@ export const WORKTREE_CARD_PROPERTIES = [
   'automation',
   'cli',
   'comment',
+  'tags',
   'ports',
   'inline-agents',
   'host'

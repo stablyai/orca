@@ -65,6 +65,22 @@ test.describe('Sidebar tag grouping', () => {
     await orcaPage.keyboard.press('Escape')
     await orcaPage.keyboard.press('Escape')
 
+    // Cards show their tags as chips, and the Tags card property hides them.
+    const chips = worktreeRow(orcaPage, firstId).getByLabel('Tags', { exact: true })
+    await expect(chips).toContainText('billing')
+    await orcaPage.evaluate(() => {
+      const state = window.__store!.getState()
+      state.setWorktreeCardProperties(
+        state.worktreeCardProperties.filter((property) => property !== 'tags')
+      )
+    })
+    await expect(chips).toHaveCount(0)
+    await orcaPage.evaluate(() => {
+      const state = window.__store!.getState()
+      state.setWorktreeCardProperties([...state.worktreeCardProperties, 'tags'])
+    })
+    await expect(chips).toContainText('billing')
+
     await orcaPage.evaluate(() => window.__store!.getState().setGroupBy('tag'))
     await expect(sidebarHeader(orcaPage, 'billing')).toBeAttached()
     await expect(worktreeRow(orcaPage, firstId)).toBeVisible()

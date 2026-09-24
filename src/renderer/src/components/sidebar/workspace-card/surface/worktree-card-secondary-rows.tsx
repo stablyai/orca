@@ -7,6 +7,7 @@ import {
   WorktreeCardRemoteBranchConflict
 } from '../metadata/worktree-card-meta-items'
 import { WorktreeLineageToggle } from '../identity/WorktreeLineageToggle'
+import { WorktreeCardTagChips } from './WorktreeCardTagChips'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -32,7 +33,7 @@ export function WorktreeCardSecondaryRows({
     childWorkspaceShortLabel,
     isDeleting
   } = card
-  const { hasMetaRow } = presentation
+  const { hasMetaRow, visibleTags } = presentation
 
   return (
     <>
@@ -56,6 +57,8 @@ export function WorktreeCardSecondaryRows({
           settings={settings}
         />
       ) : null}
+
+      {visibleTags.length > 0 ? <WorktreeCardTagChips tags={visibleTags} /> : null}
 
       {/* Why: counterbalance the card stack gap (-mt-1) so agents right after the title read as one header group. */}
       {showInlineAgentList && (

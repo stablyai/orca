@@ -45,6 +45,8 @@ const recentLabel = (): string =>
   translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent')
 const compactLabel = (): string =>
   translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
+const tagsLabel = (): string =>
+  translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tags', 'Tags')
 
 export const GROUP_BY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_GROUP_BY_CHOICES>>(
   WORKSPACE_GROUP_BY_CHOICES,
@@ -134,6 +136,7 @@ export const PROPERTY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_P
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation', 'Automation'),
     comment: () =>
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.26c71e536c', 'Notes'),
+    tags: tagsLabel,
     ports: () =>
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b64d8bcca0', 'Ports'),
     'inline-agents': () =>
@@ -154,6 +157,7 @@ const CARD_DISPLAY_LABELS: Record<
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssues', 'Jira issues'),
   comment: () =>
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.8d62c68b35', 'Notes'),
+  tags: tagsLabel,
   automation: () =>
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation', 'Automation'),
   cli: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cli', 'Orca CLI'),
