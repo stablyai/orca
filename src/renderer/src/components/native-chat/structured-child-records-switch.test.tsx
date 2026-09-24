@@ -24,19 +24,30 @@ import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
-const mocks = vi.hoisted(() => ({
-  store: null as null | {
-    getState: () => AppState
-    setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
-  },
-  subscribeStatus: vi.fn(),
-  unsubscribe: vi.fn()
-}))
+type TestStore = {
+  getState: () => AppState
+  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+}
+
+const mocks = vi.hoisted(() => {
+  const holder: { store: TestStore | null } = { store: null }
+  return {
+    holder,
+    subscribeStatus:
+      vi.fn<
+        (
+          target: unknown,
+          emit: (event: AgentSessionStatusEvent) => void
+        ) => Promise<{ unsubscribe: () => void }>
+      >(),
+    unsubscribe: vi.fn()
+  }
+})
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
   const useAppStore = createTestStore()
-  mocks.store = useAppStore
+  mocks.holder.store = useAppStore
   return { useAppStore }
 })
 
@@ -120,11 +131,11 @@ function feed(): (event: AgentSessionStatusEvent) => void {
   if (!call) {
     throw new Error('status feed not subscribed')
   }
-  return call[1] as (event: AgentSessionStatusEvent) => void
+  return call[1]
 }
 
 function row(): AgentStatusEntry {
-  const entry = mocks.store?.getState().agentStatusByPaneKey[PANE_KEY]
+  const entry = mocks.holder.store?.getState().agentStatusByPaneKey[PANE_KEY]
   if (!entry) {
     throw new Error('no structured row')
   }
@@ -202,7 +213,7 @@ describe('the switch: both surfaces read the host child records', () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionStatusFeedsForTests()
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
-    mocks.store?.setState({
+    mocks.holder.store?.setState({
       agentStatusByPaneKey: {},
       testRuntimeOwner: null,
       unifiedTabsByWorktree: { 'wt-1': [tab] }

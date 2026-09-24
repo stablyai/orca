@@ -204,13 +204,12 @@ describe('child views at the RPC boundary', () => {
     ).filter((capability) => capability !== AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY)
   }
 
-  async function historyFor(backgroundTasks: AgentSessionBackgroundTaskState, client: unknown) {
+  async function historyFor(
+    backgroundTasks: AgentSessionBackgroundTaskState,
+    client: Parameters<typeof call>[2]
+  ) {
     hostCalls.history.mockReturnValue({ ok: true, page: { items: [], backgroundTasks } })
-    return call(
-      'agentSession.history',
-      { sessionId: SESSION, direction: 'tail' },
-      client as typeof CURRENT_CLIENT
-    )
+    return call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client)
   }
 
   it('hands a reader that predates views no strip for a roster of finished children', async () => {
