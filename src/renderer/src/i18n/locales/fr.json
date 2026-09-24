@@ -6942,7 +6942,6 @@
           "9fca1f7f5d": "Enregistre la commande CLI d'Orca pour que les agents orchestrent le navigateur depuis leur shell.",
           "c6065d205d": "Activer Orca CLI",
           "c79eff0213": "Enregistrer Orca CLI pour que les agents pilotent le navigateur.",
-          "702488a5f7": "Permettez aux agents de code de piloter ce navigateur avec vos connexions. Terminez les trois étapes ci-dessous.",
           "b8a1f2d84d": "Agent Browser Use",
           "96b91c6349": "Permettez aux agents de code de piloter ce navigateur avec vos connexions.",
           "2ea4617e3a": "{{value0}} cookies importés depuis {{value1}}{{value2}}.",
@@ -14495,12 +14494,9 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "Installés",
-                  "21d4f79c93": "cliquez sur Installer CLI & Skills pour ouvrir les réglages d'accès macOS",
                   "5c9293e51a": "vérification de l'accès à l'app",
-                  "aae94eeb52": "Cliquez sur Installer CLI & Skills",
                   "aa8e143a2f": "Impossible de vérifier l'installation",
                   "9b33e7fb13": "Vérification de l'installation",
-                  "4c8e1f92a7": "ouvrez Orca Desktop sur ce Mac",
                   "6d2b0a84e1": "Indisponible dans ce build"
                 }
               }

@@ -5864,7 +5864,6 @@
           "9fca1f7f5d": "Registra el comando Orca CLI para que los agents puedan orquestar el navegador desde su shell.",
           "c6065d205d": "Activar Orca CLI",
           "c79eff0213": "Registra Orca CLI para que los agents puedan controlar el navegador.",
-          "702488a5f7": "Deja que los coding agents controlen este navegador con tus logins. Completa los tres pasos de abajo.",
           "b8a1f2d84d": "Agent Browser Use",
           "96b91c6349": "Deja que los coding agents controlen este navegador con tus logins.",
           "2ea4617e3a": "Se importaron {{value0}} cookies de {{value1}}{{value2}}.",
@@ -12596,12 +12595,9 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "Instalado",
-                  "21d4f79c93": "haz clic en Instalar CLI y skills para abrir la configuración de acceso de macOS",
                   "5c9293e51a": "comprobando acceso a la app",
-                  "aae94eeb52": "Haz clic en Instalar CLI y skills",
                   "aa8e143a2f": "No se pudo comprobar la instalación",
                   "9b33e7fb13": "Comprobando instalación",
-                  "4c8e1f92a7": "abre Orca Desktop en este Mac",
                   "6d2b0a84e1": "No disponible en esta compilación"
                 }
               }

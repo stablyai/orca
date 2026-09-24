@@ -6995,7 +6995,6 @@
           "9fca1f7f5d": "Registers the Orca CLI command so agents can orchestrate the browser from their shell.",
           "c6065d205d": "Enable Orca CLI",
           "c79eff0213": "Register the Orca CLI so agents can drive the browser.",
-          "702488a5f7": "Let coding agents drive this browser with your logins. Finish the three steps below.",
           "b8a1f2d84d": "Agent Browser Use",
           "96b91c6349": "Let coding agents drive this browser with your logins.",
           "2ea4617e3a": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
@@ -7009,7 +7008,7 @@
           "8b3054dac7": "Registering...",
           "8f2675c2f3": "Imported {{value0}} cookies from file.",
           "5301857d88": "From {{value0}}",
-          "finishTwoSteps": "Let coding agents drive this browser with your logins. Finish the two steps below."
+          "finishSteps": "Let coding agents drive this browser with your logins. Finish the steps below."
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -14552,12 +14551,9 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "Installed",
-                  "21d4f79c93": "click Install CLI & Skills to open macOS access settings",
                   "5c9293e51a": "checking app access",
-                  "aae94eeb52": "Click Install CLI & Skills",
                   "aa8e143a2f": "Could not check install",
                   "9b33e7fb13": "Checking install",
-                  "4c8e1f92a7": "open Orca Desktop on this Mac",
                   "6d2b0a84e1": "Unavailable in this build",
                   "notInstalled": "Not installed",
                   "openDesktopOnMac": "Open Orca Desktop on this Mac to use",

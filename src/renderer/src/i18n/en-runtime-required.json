@@ -472,17 +472,6 @@
           "TasksAnimatedVisual": {
             "72f9e516a3": "pressing"
           },
-          "agent": {
-            "capability": {
-              "setup": {
-                "status": {
-                  "21d4f79c93": "click Install CLI & Skills to open macOS access settings",
-                  "4c8e1f92a7": "open Orca Desktop on this Mac",
-                  "aae94eeb52": "Click Install CLI & Skills"
-                }
-              }
-            }
-          },
           "agents": {
             "orchestration": {
               "orchestration": {

@@ -14,15 +14,19 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
+import { isAgentCapabilitiesDone } from './feature-wall-setup-progress'
 
-export type AgentCapabilityInstallStatusTone = 'ready' | 'pending' | 'checking' | 'error'
+export type AgentCapabilityInstallStatusTone =
+  | 'ready'
+  | 'pending'
+  | 'checking'
+  | 'error'
+  | 'unavailable'
 
 export type AgentCapabilityInstallStatus = {
   label: string
   tone: AgentCapabilityInstallStatusTone
   installed?: boolean
-  /** Installed, but this host can't run it; the UI shows only the label. */
-  unavailable?: boolean
 }
 
 export type AgentCapabilityReadiness = {
@@ -121,15 +125,8 @@ export function isAgentCapabilityReadinessChecking(readiness: AgentCapabilityRea
   )
 }
 
-// Mirrors the checklist's 'agent-capabilities' done rule in feature-wall-setup-progress.ts.
 export function isAgentCapabilityReadinessComplete(readiness: AgentCapabilityReadiness): boolean {
-  return (
-    !isAgentCapabilityReadinessChecking(readiness) &&
-    readiness.browserUseSkillInstalled &&
-    readiness.computerUseSkillInstalled &&
-    (readiness.computerUseReady || readiness.computerUseUnavailable) &&
-    readiness.orchestrationSkillInstalled
-  )
+  return !isAgentCapabilityReadinessChecking(readiness) && isAgentCapabilitiesDone(readiness)
 }
 
 export function getAgentCapabilityStatusClassName(tone: AgentCapabilityInstallStatusTone): string {
@@ -140,6 +137,7 @@ export function getAgentCapabilityStatusClassName(tone: AgentCapabilityInstallSt
       return 'text-destructive'
     case 'checking':
     case 'pending':
+    case 'unavailable':
       return 'text-muted-foreground'
   }
 }
@@ -231,9 +229,8 @@ function getComputerUseInstallStatus(
               'auto.components.feature.wall.agent.capability.setup.status.6d2b0a84e1',
               'Unavailable in this build'
             ),
-      tone: 'pending',
-      installed: true,
-      unavailable: true
+      tone: 'unavailable',
+      installed: true
     }
   }
   if (!permissions.ready) {

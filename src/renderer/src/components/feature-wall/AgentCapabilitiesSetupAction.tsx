@@ -5,8 +5,12 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
+import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
-import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
+import {
+  getOnboardingFeatureSetupAgentRuntime,
+  type OnboardingFeatureSetupRuntimeContext
+} from '../onboarding/onboarding-feature-setup-runtime'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   hasSelectedOnboardingFeatureSetup,
@@ -15,7 +19,6 @@ import {
   type OnboardingFeatureSetupSelection
 } from '../onboarding/onboarding-feature-setup'
 import {
-  getAgentCapabilityStatusClassName,
   getDefaultAgentCapabilitySetupSelection,
   isAgentCapabilityReadinessChecking,
   isAgentCapabilityReadinessComplete,
@@ -66,7 +69,7 @@ export function AgentCapabilitiesSetupAction(props: {
     setFeatureSetup(value)
   }, [])
   const handleStartFeatureSetup = useCallback(
-    async (selection: OnboardingFeatureSetupSelection = featureSetup): Promise<void> => {
+    async (selection: OnboardingFeatureSetupSelection): Promise<void> => {
       if (setupBusyLabel !== null || featureSetupCommand !== null) {
         return
       }
@@ -125,13 +128,7 @@ export function AgentCapabilitiesSetupAction(props: {
         setSetupBusyLabel(null)
       }
     },
-    [
-      activeSkillRuntime,
-      featureSetup,
-      featureSetupCommand,
-      recordFeatureInteraction,
-      setupBusyLabel
-    ]
+    [activeSkillRuntime, featureSetupCommand, recordFeatureInteraction, setupBusyLabel]
   )
 
   return (
@@ -143,11 +140,19 @@ export function AgentCapabilitiesSetupAction(props: {
         featureSetupCommandSelection={featureSetupCommandSelection}
         featureSetupRuntime={featureSetupRuntime}
         setupBusyLabel={setupBusyLabel}
-        onStartFeatureSetup={() => void handleStartFeatureSetup()}
-        onUpdateAll={() => void handleStartFeatureSetup(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)}
+        onStartFeatureSetup={() => void handleStartFeatureSetup(featureSetup)}
+        onUpdateAll={() =>
+          void handleStartFeatureSetup({
+            ...DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
+            // Why: running setup for an unusable Computer Use only produces a warning toast.
+            computerUse: !readiness.computerUseUnavailable
+          })
+        }
         allReady={isAgentCapabilityReadinessComplete(readiness)}
         installStatus={capabilitySetupStatus.installStatus}
-        cliRequired={isOrcaCliRegistrationRequired(activeSkillRuntime.agentRuntime)}
+        cliRequired={isOrcaCliRegistrationRequired(
+          getOnboardingFeatureSetupAgentRuntime(activeSkillRuntime)
+        )}
       />
     </div>
   )
@@ -356,48 +361,5 @@ function AgentCapabilitySetupChecklist(props: {
         })}
       </div>
     </section>
-  )
-}
-
-// Why: pills sit top-right so they line up across cards regardless of description length.
-function AgentCapabilityStatusPill(props: {
-  status: AgentCapabilityInstallStatus
-}): React.JSX.Element | null {
-  if (props.status.unavailable) {
-    return (
-      <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold leading-none text-muted-foreground">
-        {props.status.label}
-      </span>
-    )
-  }
-  if (!props.status.installed) {
-    return null
-  }
-  return (
-    <span className="rounded-full border border-status-success-border bg-status-success-background px-2 py-0.5 text-[11px] font-semibold leading-none text-status-success">
-      {translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
-        'Installed'
-      )}
-    </span>
-  )
-}
-
-/** Secondary status text (checking, errors, pending actions); installed/unavailable live in the pill. */
-function AgentCapabilityStatusNote(props: {
-  status: AgentCapabilityInstallStatus
-}): React.JSX.Element | null {
-  if (props.status.unavailable || props.status.tone === 'ready') {
-    return null
-  }
-  return (
-    <span
-      className={cn(
-        'mt-2 text-xs font-medium',
-        getAgentCapabilityStatusClassName(props.status.tone)
-      )}
-    >
-      {props.status.label}
-    </span>
   )
 }

@@ -8,7 +8,6 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath,
   isOrcaCliRegistrationRequired
 } from '@/lib/agent-skill-cli-prerequisite'
@@ -57,6 +56,10 @@ export function BrowserUseSetup({
   const [cliBusy, setCliBusy] = useState(false)
   const mountedRef = useMountedRef()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const agentRuntime = activeSkillRuntime.installDisabledReason
+    ? undefined
+    : activeSkillRuntime.agentRuntime
+  const cliRequired = isOrcaCliRegistrationRequired(agentRuntime)
   const browserUseInstallCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
     : ORCA_CLI_SKILL_INSTALL_COMMAND
@@ -86,19 +89,16 @@ export function BrowserUseSetup({
   }
 
   const refreshCli = useCallback(async (): Promise<void> => {
+    if (!cliRequired) {
+      handleCliStatusChange(null)
+      setCliLoading(false)
+      return
+    }
     setCliLoading(true)
     try {
-      if (activeSkillRuntime.installDisabledReason) {
-        handleCliStatusChange(null)
-        return
-      }
-      const nextStatus =
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? await window.api.cli.getWslInstallStatus(
-              getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-            )
-          : await window.api.cli.getInstallStatus()
-      handleCliStatusChange(nextStatus)
+      handleCliStatusChange(
+        await window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
+      )
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
@@ -115,7 +115,7 @@ export function BrowserUseSetup({
         setCliLoading(false)
       }
     }
-  }, [activeSkillRuntime, handleCliStatusChange, mountedRef])
+  }, [agentRuntime, cliRequired, handleCliStatusChange, mountedRef])
 
   useEffect(() => {
     if (!browserUseEnabled) {
@@ -128,11 +128,9 @@ export function BrowserUseSetup({
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const cookiesImported = !!defaultProfile?.source
 
-  const cliEnabled = isOrcaCliAvailableOnPath(cliStatus)
   const cliPathNeedsAttention =
     cliStatus?.state === 'installed' && cliStatus.pathConfigured === false
   const cliSupported = cliStatus?.supported ?? false
-  const cliRequired = isOrcaCliRegistrationRequired(activeSkillRuntime.agentRuntime)
 
   const {
     installed: skillDetected,
@@ -146,20 +144,10 @@ export function BrowserUseSetup({
   })
 
   const handleEnableCli = async (): Promise<void> => {
-    if (activeSkillRuntime.installDisabledReason) {
-      return
-    }
     setCliBusy(true)
     try {
-      const next =
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? await ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-          : await ensureOrcaCliAvailableForAgentSkillTerminal({
-              onStatusChange: handleCliStatusChange
-            })
-      if (activeSkillRuntime.agentRuntime?.runtime === 'wsl') {
-        handleCliStatusChange(next)
-      }
+      const next = await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
+      handleCliStatusChange(next)
       if (mountedRef.current && isOrcaCliAvailableOnPath(next)) {
         toast.success(
           translate(
@@ -182,15 +170,16 @@ export function BrowserUseSetup({
   const showStep1 = matchesSettingsSearch(searchQuery, [getBrowserUsePaneSearchEntries()[0]])
   const showStep2 = matchesSettingsSearch(searchQuery, [getBrowserUsePaneSearchEntries()[1]])
   const showStep3 = matchesSettingsSearch(searchQuery, [getBrowserUsePaneSearchEntries()[2]])
-  const requiredSteps = cliRequired
-    ? [cliEnabled, skillDetected, cookiesImported]
+  // Why: only WSL needs the CLI registered; host terminals already have it on PATH.
+  const cliReady = !cliRequired || isOrcaCliAvailableOnPath(cliStatus)
+  const steps = cliRequired
+    ? [cliReady, skillDetected, cookiesImported]
     : [skillDetected, cookiesImported]
-  const completedCount = requiredSteps.filter(Boolean).length
-  const cliReady = cliEnabled || !cliRequired
+  const completedCount = steps.filter(Boolean).length
+  const skillStepIndex = cliRequired ? 2 : 1
   const step2Blocked =
     Boolean(activeSkillRuntime.installDisabledReason) || (!cliReady && !skillDetected)
   const step3Blocked = !cookiesImported && (!cliReady || !skillDetected)
-  const stepOffset = cliRequired ? 1 : 0
 
   const sourceLabel = defaultProfile?.source
     ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
@@ -226,26 +215,21 @@ export function BrowserUseSetup({
             {translate('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
           </p>
           <p className="text-xs text-muted-foreground">
-            {cliRequired
-              ? translate(
-                  'auto.components.settings.BrowserUsePane.702488a5f7',
-                  'Let coding agents drive this browser with your logins. Finish the three steps below.'
-                )
-              : translate(
-                  'auto.components.settings.BrowserUsePane.finishTwoSteps',
-                  'Let coding agents drive this browser with your logins. Finish the two steps below.'
-                )}
+            {translate(
+              'auto.components.settings.BrowserUsePane.finishSteps',
+              'Let coding agents drive this browser with your logins. Finish the steps below.'
+            )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              completedCount === requiredSteps.length
+              completedCount === steps.length
                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
                 : 'bg-muted text-muted-foreground'
             }`}
           >
-            {completedCount}/{requiredSteps.length}
+            {completedCount}/{steps.length}
           </span>
           <BrowserUseEnableSwitch
             enabled={browserUseEnabled}
@@ -261,7 +245,7 @@ export function BrowserUseSetup({
       {showStep1 && cliRequired ? (
         <BrowserUseCliStep
           cliStatus={cliStatus}
-          cliEnabled={cliEnabled}
+          cliEnabled={cliReady}
           cliLoading={cliLoading}
           cliBusy={cliBusy}
           cliSupported={cliSupported}
@@ -287,7 +271,7 @@ export function BrowserUseSetup({
           )}
         >
           <BrowserUseSkillStep
-            stepIndex={1 + stepOffset}
+            stepIndex={skillStepIndex}
             command={browserUseInstallCommand}
             installedCommand={browserUseUpdateCommand}
             skillDetected={skillDetected}
@@ -298,17 +282,14 @@ export function BrowserUseSetup({
             terminalRuntime={activeSkillRuntime.agentRuntime}
             preInstallNotice={cliRequired ? AGENT_SKILL_CLI_PREREQUISITE_NOTICE : undefined}
             getPrerequisiteStatus={
-              activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-                ? () =>
-                    window.api.cli.getWslInstallStatus(
-                      getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-                    )
+              cliRequired
+                ? () => window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
                 : undefined
             }
             onBeforeOpenTerminal={async () => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
-              if (activeSkillRuntime.agentRuntime?.runtime === 'wsl') {
-                await ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
+              if (cliRequired) {
+                await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
               }
             }}
             onRecheck={refreshSkill}
@@ -318,7 +299,7 @@ export function BrowserUseSetup({
 
       {showStep3 ? (
         <BrowserUseCookieImportStep
-          stepIndex={2 + stepOffset}
+          stepIndex={skillStepIndex + 1}
           cookiesImported={cookiesImported}
           isImportingDefault={isImportingDefault}
           step3Blocked={step3Blocked}

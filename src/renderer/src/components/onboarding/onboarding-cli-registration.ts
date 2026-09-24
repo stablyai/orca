@@ -1,4 +1,6 @@
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import { isOrcaCliRegistrationRequired } from '@/lib/agent-skill-cli-prerequisite'
+import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 
 export type OnboardingCliRegistrationDeps = {
   getCliStatus: () => Promise<CliInstallStatus>
@@ -11,10 +13,14 @@ export type OnboardingCliRegistrationResult = {
   warning: string | null
 }
 
-/** Registers the CLI when it is missing; callers gate this on isOrcaCliRegistrationRequired. */
-export async function registerOnboardingCli(
+/** Registers the CLI when this runtime's terminals can't reach the bundled one and it is missing. */
+export async function registerOnboardingCliIfRequired(
+  agentRuntime: ProjectAgentSkillRuntime | undefined,
   deps: OnboardingCliRegistrationDeps
 ): Promise<OnboardingCliRegistrationResult> {
+  if (!isOrcaCliRegistrationRequired(agentRuntime)) {
+    return { touched: false, warning: null }
+  }
   try {
     const status = await deps.getCliStatus()
     if (!status.supported) {

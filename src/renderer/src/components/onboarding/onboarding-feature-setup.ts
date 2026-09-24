@@ -12,13 +12,10 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
-import {
-  isOrcaCliRegistrationRequired,
-  showOrcaCliRegistrationPromptToast
-} from '@/lib/agent-skill-cli-prerequisite'
+import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
 import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { OnboardingFeatureSetupRuntimeContext } from './onboarding-feature-setup-runtime'
-import { registerOnboardingCli } from './onboarding-cli-registration'
+import { registerOnboardingCliIfRequired } from './onboarding-cli-registration'
 import {
   buildSkillCommandForRuntime,
   getWslCliDistroRequest
@@ -181,18 +178,12 @@ export function createOnboardingFeatureSetupDeps(
     return e2eDeps
   }
 
-  // Register `orca` on the same PATH used by the skill install (#12103).
-  const wslDistroRequest =
-    agentRuntime?.runtime === 'wsl' ? getWslCliDistroRequest(agentRuntime) : undefined
-  const isWsl = agentRuntime?.runtime === 'wsl'
+  // Only WSL registers the CLI (isOrcaCliRegistrationRequired), on the distro the skill installs into (#12103).
+  const wslDistroRequest = getWslCliDistroRequest(agentRuntime)
   return {
-    getCliStatus: () =>
-      isWsl
-        ? window.api.cli.getWslInstallStatus(wslDistroRequest)
-        : window.api.cli.getInstallStatus(),
+    getCliStatus: () => window.api.cli.getWslInstallStatus(wslDistroRequest),
     showCliRegistrationPrompt: showOrcaCliRegistrationPromptToast,
-    installCli: () =>
-      isWsl ? window.api.cli.installWsl(wslDistroRequest) : window.api.cli.install(),
+    installCli: () => window.api.cli.installWsl(wslDistroRequest),
     writeClipboardText: (text) => window.api.ui.writeClipboardText(text),
     getComputerUsePermissionStatus: () => window.api.computerUsePermissions.getStatus(),
     openComputerUsePermissionSetup: () => window.api.computerUsePermissions.openSetup(),
@@ -246,12 +237,10 @@ export async function runOnboardingFeatureSetup(
     }
   }
 
-  if (isOrcaCliRegistrationRequired(agentRuntime)) {
-    const registration = await registerOnboardingCli(deps)
-    cliTouched = registration.touched
-    if (registration.warning) {
-      warnings.push({ featureId: 'cli', message: registration.warning })
-    }
+  const registration = await registerOnboardingCliIfRequired(agentRuntime, deps)
+  cliTouched = registration.touched
+  if (registration.warning) {
+    warnings.push({ featureId: 'cli', message: registration.warning })
   }
 
   if (selection.computerUse) {

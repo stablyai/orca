@@ -171,6 +171,15 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   return null
 }
 
+// Full-width content below the caption/visual grid.
+function SelectedStepFooter(props: { stepId: FeatureWallSetupStepId }): React.JSX.Element | null {
+  // Why: Full Disk Access matters for projects in protected folders, so it sits with adding projects.
+  if (props.stepId === 'add-two-repos') {
+    return <FullDiskAccessSetupPrompt />
+  }
+  return null
+}
+
 function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JSX.Element | null {
   if (props.stepId === 'two-worktrees') {
     return <SetupWorkspacesVisual />
@@ -375,8 +384,7 @@ export function FeatureWallSetupChecklist(
               </div>
               <SelectedStepVisual stepId={activeStep.id} />
             </div>
-            {/* Why: Full Disk Access matters for projects in protected folders; below the grid so it spans the full width. */}
-            {activeStep.id === 'add-two-repos' ? <FullDiskAccessSetupPrompt /> : null}
+            <SelectedStepFooter stepId={activeStep.id} />
           </div>
         ) : null}
       </section>

@@ -89,8 +89,8 @@ const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
   linearTickets: false
 }
 
-// The grab→agent flow relies on the Orca CLI and browser skill, so offer the same
-// install action the Enable Orca CLI step uses, scoped to just browser use.
+// The grab→agent flow relies on the browser skill, so offer the same install action
+// the agent skills step uses, scoped to just browser use.
 function BrowserSkillInstallButton(): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [command, setCommand] = useState<string | null>(null)
