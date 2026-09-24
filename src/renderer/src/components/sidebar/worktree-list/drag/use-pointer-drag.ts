@@ -20,6 +20,7 @@ import type { WorktreeDragSession } from './use-session'
 import { useWorktreePointerDragAutoscroll } from './use-pointer-autoscroll'
 import { useWorktreePointerDragWindowEvents } from './use-pointer-window-events'
 import { flushWorktreePointerDragFrame } from './pointer-flush'
+import { hasOtherTagDropTarget } from './tag-target'
 import { EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS, type WorktreePointerDrag } from './row-state'
 import {
   draggedWorktreeCopiesOf,
@@ -184,7 +185,8 @@ export function useWorktreePointerDrag(args: {
         (session.worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds
           .length ?? 0) <= 1 &&
         !hasWorkspaceKanbanSidebarDropBoard() &&
-        !canPreviewWorkspaceBoardOnDrag
+        !canPreviewWorkspaceBoardOnDrag &&
+        !hasOtherTagDropTarget(container, sourceGroupKey)
       ) {
         return
       }
