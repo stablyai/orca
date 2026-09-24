@@ -1,4 +1,5 @@
 import * as pty from 'node-pty'
+import { normalizeWindowsNativeShellEnvironment } from '../../pty/windows-native-shell-environment'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
@@ -28,6 +29,7 @@ export function spawnNativeDaemonPty(args: {
 }): SpawnedDaemonPty {
   let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
+    normalizeWindowsNativeShellEnvironment(args.env, shellPath)
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
     if (process.platform === 'win32') {
