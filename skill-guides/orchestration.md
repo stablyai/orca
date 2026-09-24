@@ -86,7 +86,9 @@ the identity in your environment. A `caller` with `live: false` and a `refusal`
 says why you cannot act as that session right now; `null` means this shell has
 no orchestration identity. Send to another session with
 `ORCA orchestration send --to session:<id>`; a user may copy a chat's address
-with its Copy Orchestration Address menu action and give it to you.
+with its Copy Orchestration Address menu action and give it to you. `/clear`
+starts a new session, so a new address: Orca moves your Runs and unread mail to
+it, and a send to the old address is refused with the new one named.
 
 Your commands act as you without a caller flag. Never pass another agent's
 address as `--from` or `--terminal`: in a chat session the CLI refuses it, and in
