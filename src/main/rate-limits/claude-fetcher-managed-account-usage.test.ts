@@ -18,7 +18,9 @@ import {
 } from '../claude-accounts/keychain'
 import {
   _internals as pinnedRegistryInternals,
-  markPinnedClaudePtySpawned
+  markPinnedClaudePtySpawned,
+  releaseClaudePinnedAccountReservation,
+  reserveClaudePinnedAccount
 } from '../claude-accounts/claude-pinned-pty-registry'
 
 const { netFetchMock, readFileMock, resolveProxyMock, setProxyMock, appGetPathMock } = vi.hoisted(
@@ -487,5 +489,40 @@ describe('fetchClaudeRateLimits', () => {
     expect(deleteActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalled()
     expect(writeManagedClaudeKeychainCredentials).not.toHaveBeenCalled()
     expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('holds the account against pinned launches until its preview has finished', async () => {
+    setPlatform('linux')
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
+    appGetPathMock.mockReturnValue(tempDir)
+    const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(ownedAuthPath, { recursive: true })
+    writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(
+      join(ownedAuthPath, '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'token', expiresAt: Date.now() + 60_000 } }),
+      'utf-8'
+    )
+    let reservationDuringPreview: string | null = 'not-called'
+    vi.mocked(fetchViaPty).mockImplementationOnce(async () => {
+      reservationDuringPreview = reserveClaudePinnedAccount('account-1')
+      return {
+        provider: 'claude',
+        session: null,
+        weekly: null,
+        updatedAt: 1,
+        error: null,
+        status: 'ok'
+      }
+    })
+
+    await fetchManagedAccountUsage(
+      { id: 'account-1', managedAuthPath: ownedAuthPath },
+      { allowUsagePanelSupplement: true }
+    )
+
+    expect(reservationDuringPreview).toBe('usage-fetch')
+    expect(reserveClaudePinnedAccount('account-1')).toBeNull()
+    releaseClaudePinnedAccountReservation('account-1')
   })
 })

@@ -348,4 +348,36 @@ describe('ClaudeRuntimeAuthService pinned --account launches', () => {
     expect(readFileSync(fixture.runtimeCredentialsPath, 'utf-8')).toBe(refreshed)
     expect(keychain.scoped.has(fixture.pinnedDir)).toBe(false)
   })
+
+  it('refuses a pinned launch while the account is being switched to or removed', async () => {
+    const fixture = await setUpTwoAccounts()
+    const endMutation = fixture.registry.beginClaudeAccountHostMutation('acct-b')
+
+    await expect(
+      fixture.service.prepareForClaudeLaunch({ runtime: 'host' }, { accountId: 'acct-b' })
+    ).rejects.toThrow(/being switched to or removed/)
+
+    expect(keychain.scoped.has(fixture.pinnedDir)).toBe(false)
+    expect(fixture.registry.countClaudePinnedAccountUsers('acct-b')).toBe(0)
+    endMutation?.()
+  })
+
+  it('waits out an in-flight usage fetch before seeding the pinned Keychain item', async () => {
+    const fixture = await setUpTwoAccounts()
+    const endFetch = fixture.registry.beginClaudeAccountUsageFetch('acct-b')
+    let settled = false
+    const prepared = fixture.service
+      .prepareForClaudeLaunch({ runtime: 'host' }, { accountId: 'acct-b' })
+      .finally(() => {
+        settled = true
+      })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(settled).toBe(false)
+    expect(keychain.scoped.has(fixture.pinnedDir)).toBe(false)
+
+    endFetch?.()
+    await expect(prepared).resolves.toMatchObject({ pinnedAccountId: 'acct-b' })
+    expect(keychain.scoped.get(fixture.pinnedDir)).toBe(fixture.pinnedCredentials)
+  })
 })

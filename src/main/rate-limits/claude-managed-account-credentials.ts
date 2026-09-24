@@ -13,7 +13,7 @@ import {
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from '../claude-accounts/managed-auth-path'
-import { countClaudePinnedAccountUsers } from '../claude-accounts/claude-pinned-pty-registry'
+import { beginClaudeAccountUsageFetch } from '../claude-accounts/claude-pinned-pty-registry'
 import { hasPendingPinnedClaudeSeed } from '../claude-accounts/claude-pinned-credentials'
 
 export type InactiveClaudeAccount = {
@@ -99,9 +99,13 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccount): s
   }
 }
 
-/** True while a `--account` launch owns this account's credentials (live, starting, or unread). */
-export function isClaudeAccountHeldByPinnedLaunch(accountId: string): boolean {
-  return countClaudePinnedAccountUsers(accountId) > 0 || hasPendingPinnedClaudeSeed(accountId)
+/**
+ * Claims the account for one Orca usage fetch (token refresh and the `claude` usage preview), or
+ * returns null while a `--account` launch owns its credentials (live, starting, or unread). While
+ * the claim is held a pinned launch waits, so the two never refresh one account at once.
+ */
+export function beginClaudeManagedUsageFetch(accountId: string): (() => void) | null {
+  return hasPendingPinnedClaudeSeed(accountId) ? null : beginClaudeAccountUsageFetch(accountId)
 }
 
 export async function withClaudeManagedPreviewKeychainCredentials<T>(
@@ -116,10 +120,7 @@ export async function withClaudeManagedPreviewKeychainCredentials<T>(
   try {
     return await operation()
   } finally {
-    // Why: a pinned launch that started mid-preview now runs from this same scoped item.
-    if (!isClaudeAccountHeldByPinnedLaunch(location.accountId)) {
-      await deleteActiveClaudeKeychainCredentialsStrict(location.managedAuthPath).catch(() => {})
-    }
+    await deleteActiveClaudeKeychainCredentialsStrict(location.managedAuthPath).catch(() => {})
   }
 }
 

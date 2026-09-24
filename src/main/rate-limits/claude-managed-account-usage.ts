@@ -4,7 +4,7 @@ import {
   refreshClaudeOauthCredentials
 } from '../claude-accounts/oauth-refresh'
 import {
-  isClaudeAccountHeldByPinnedLaunch,
+  beginClaudeManagedUsageFetch,
   readClaudeManagedCredentialsJson,
   readStagedClaudeManagedPreviewCredentials,
   resolveClaudeManagedCredentialsLocation,
@@ -41,10 +41,23 @@ export async function fetchInactiveClaudeAccountUsage(
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
-  const location = resolveClaudeManagedCredentialsLocation(account)
   // Why: a `--account` Claude may be refreshing this account right now; a second refresh from
-  // here would replay its single-use refresh token and revoke the session.
-  const heldByPinnedLaunch = isClaudeAccountHeldByPinnedLaunch(account.id)
+  // here would replay its single-use refresh token and revoke the session. Held to the end so a
+  // pinned launch cannot start between this fetch's refresh or preview and its write-back.
+  const endUsageFetch = beginClaudeManagedUsageFetch(account.id)
+  try {
+    return await fetchClaimedInactiveClaudeAccountUsage(account, options, endUsageFetch === null)
+  } finally {
+    endUsageFetch?.()
+  }
+}
+
+async function fetchClaimedInactiveClaudeAccountUsage(
+  account: InactiveClaudeAccount,
+  options: ClaudeManagedAccountUsageOptions,
+  heldByPinnedLaunch: boolean
+): Promise<ProviderRateLimits> {
+  const location = resolveClaudeManagedCredentialsLocation(account)
   let credentialsJson = location
     ? heldByPinnedLaunch
       ? await readPinnedLaunchCredentialsJson(location)

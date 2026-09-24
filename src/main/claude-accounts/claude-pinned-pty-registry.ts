@@ -18,6 +18,14 @@ const seededUnconfirmedPtyIds = new Set<string>()
 // switch cannot land between the credential seed and the spawn.
 const reservationsByAccountId = new Map<string, number>()
 const drainListeners = new Set<(accountId: string) => void>()
+// Why: a host switch/removal and an Orca usage fetch (refresh or `claude` preview) each touch an
+// account's credentials outside the pinned store; every claim below is a synchronous
+// check-and-set against the reservations, so the two sides can never both believe they own it.
+const hostMutationsByAccountId = new Map<string, number>()
+const usageFetchesByAccountId = new Map<string, number>()
+const usageFetchSettledListeners = new Map<string, Set<() => void>>()
+
+export type ClaudePinnedReservationConflict = 'host-mutation' | 'usage-fetch'
 
 export type ClaudePinnedPtyPersistence = {
   write(entries: Record<string, string>): void
@@ -54,9 +62,88 @@ export function hasLivePinnedClaudePtys(accountId: string): boolean {
   return false
 }
 
-/** Held from auth preparation until the spawn settles; each reserve needs exactly one release. */
-export function reserveClaudePinnedAccount(accountId: string): void {
+/**
+ * Held from auth preparation until the spawn settles; each successful reserve needs exactly one
+ * release. Refused, rather than counted, while a host mutation or usage fetch holds the account.
+ */
+export function reserveClaudePinnedAccount(
+  accountId: string
+): ClaudePinnedReservationConflict | null {
+  if (hostMutationsByAccountId.has(accountId)) {
+    return 'host-mutation'
+  }
+  if (usageFetchesByAccountId.has(accountId)) {
+    return 'usage-fetch'
+  }
   reservationsByAccountId.set(accountId, (reservationsByAccountId.get(accountId) ?? 0) + 1)
+  return null
+}
+
+/** Claims an account for a host switch or removal; null while pinned launches hold it. */
+export function beginClaudeAccountHostMutation(accountId: string): (() => void) | null {
+  return claimUnlessPinned(hostMutationsByAccountId, accountId)
+}
+
+/** Claims an account for an Orca-side usage fetch; null while pinned launches hold it. */
+export function beginClaudeAccountUsageFetch(accountId: string): (() => void) | null {
+  const release = claimUnlessPinned(usageFetchesByAccountId, accountId)
+  if (!release) {
+    return null
+  }
+  return () => {
+    release()
+    if (!usageFetchesByAccountId.has(accountId)) {
+      for (const listener of usageFetchSettledListeners.get(accountId) ?? []) {
+        listener()
+      }
+    }
+  }
+}
+
+/** Resolves true once no usage fetch holds the account, false at the deadline. */
+export function whenClaudeAccountUsageFetchSettles(
+  accountId: string,
+  timeoutMs: number
+): Promise<boolean> {
+  if (!usageFetchesByAccountId.has(accountId)) {
+    return Promise.resolve(true)
+  }
+  return new Promise<boolean>((resolve) => {
+    const listeners = usageFetchSettledListeners.get(accountId) ?? new Set<() => void>()
+    usageFetchSettledListeners.set(accountId, listeners)
+    const settle = (settled: boolean): void => {
+      listeners.delete(listener)
+      if (listeners.size === 0) {
+        usageFetchSettledListeners.delete(accountId)
+      }
+      clearTimeout(timer)
+      resolve(settled)
+    }
+    const listener = (): void => settle(true)
+    listeners.add(listener)
+    const timer = setTimeout(() => settle(false), timeoutMs)
+    timer.unref?.()
+  })
+}
+
+function claimUnlessPinned(claims: Map<string, number>, accountId: string): (() => void) | null {
+  if (countClaudePinnedAccountUsers(accountId) > 0) {
+    return null
+  }
+  claims.set(accountId, (claims.get(accountId) ?? 0) + 1)
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    const remaining = (claims.get(accountId) ?? 1) - 1
+    if (remaining > 0) {
+      claims.set(accountId, remaining)
+    } else {
+      claims.delete(accountId)
+    }
+  }
 }
 
 export function releaseClaudePinnedAccountReservation(accountId: string): void {
@@ -172,6 +259,9 @@ export const _internals = {
     accountIdByPtyId.clear()
     seededUnconfirmedPtyIds.clear()
     reservationsByAccountId.clear()
+    hostMutationsByAccountId.clear()
+    usageFetchesByAccountId.clear()
+    usageFetchSettledListeners.clear()
     drainListeners.clear()
     persistence = null
   }

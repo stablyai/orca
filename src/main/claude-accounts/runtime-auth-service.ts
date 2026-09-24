@@ -116,7 +116,7 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
       await this.doSyncForCurrentSelection(target)
       return this.getPreparation(target)
     }
-    return this.preparePinnedClaudeLaunch(account, target)
+    return this.preparePinnedClaudeLaunch(account.id, target)
   }
 
   private initializeLastSyncedState(): void {

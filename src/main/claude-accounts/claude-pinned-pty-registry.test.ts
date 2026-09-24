@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   _internals,
   attachClaudePinnedPtyPersistence,
+  beginClaudeAccountHostMutation,
+  beginClaudeAccountUsageFetch,
   confirmSeededPinnedClaudePtys,
   countClaudePinnedAccountUsers,
   createClaudePinnedPtyFilePersistence,
@@ -16,7 +18,8 @@ import {
   readClaudePinnedPtyRegistryFile,
   releaseClaudePinnedAccountReservation,
   reserveClaudePinnedAccount,
-  seedPinnedClaudePtysFromPersistence
+  seedPinnedClaudePtysFromPersistence,
+  whenClaudeAccountUsageFetchSettles
 } from './claude-pinned-pty-registry'
 
 describe('Claude pinned PTY registry', () => {
@@ -27,7 +30,7 @@ describe('Claude pinned PTY registry', () => {
   it('counts reservations and live PTYs per account and drains once both are gone', () => {
     const drained = vi.fn()
     onClaudePinnedAccountDrained(drained)
-    reserveClaudePinnedAccount('acct-b')
+    expect(reserveClaudePinnedAccount('acct-b')).toBeNull()
     markPinnedClaudePtySpawned('pty-1', 'acct-b')
     expect(countClaudePinnedAccountUsers('acct-b')).toBe(2)
     expect(countClaudePinnedAccountUsers('acct-c')).toBe(0)
@@ -100,5 +103,36 @@ describe('Claude pinned PTY registry', () => {
     expect(() => markPinnedClaudePtyExited('pty-1')).not.toThrow()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+
+  it('makes a host mutation and a pinned reservation mutually exclusive', () => {
+    const endMutation = beginClaudeAccountHostMutation('acct-b')
+    expect(endMutation).not.toBeNull()
+    expect(reserveClaudePinnedAccount('acct-b')).toBe('host-mutation')
+    expect(countClaudePinnedAccountUsers('acct-b')).toBe(0)
+    endMutation?.()
+    endMutation?.()
+
+    expect(reserveClaudePinnedAccount('acct-b')).toBeNull()
+    expect(beginClaudeAccountHostMutation('acct-b')).toBeNull()
+    expect(beginClaudeAccountHostMutation('acct-c')).not.toBeNull()
+  })
+
+  it('makes a usage fetch and a pinned reservation mutually exclusive and wakes waiters', async () => {
+    const endFetch = beginClaudeAccountUsageFetch('acct-b')
+    expect(endFetch).not.toBeNull()
+    expect(reserveClaudePinnedAccount('acct-b')).toBe('usage-fetch')
+    const settled = whenClaudeAccountUsageFetchSettles('acct-b', 5_000)
+    endFetch?.()
+    await expect(settled).resolves.toBe(true)
+    await expect(whenClaudeAccountUsageFetchSettles('acct-b', 1)).resolves.toBe(true)
+
+    expect(reserveClaudePinnedAccount('acct-b')).toBeNull()
+    expect(beginClaudeAccountUsageFetch('acct-b')).toBeNull()
+  })
+
+  it('stops waiting for a usage fetch at the deadline', async () => {
+    beginClaudeAccountUsageFetch('acct-b')
+    await expect(whenClaudeAccountUsageFetchSettles('acct-b', 5)).resolves.toBe(false)
   })
 })

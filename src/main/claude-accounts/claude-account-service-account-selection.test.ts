@@ -549,4 +549,70 @@ describe('ClaudeAccountService credential capture', () => {
       registry._internals.reset()
     }
   })
+
+  it('holds the account against pinned launches for the whole switch and removal', async () => {
+    setPlatform('linux')
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
+    rmSync(tempDir, { recursive: true, force: true })
+    const authPath = join(tempDir, 'claude-accounts', 'account-2', 'auth')
+    mkdirSync(authPath, { recursive: true })
+    writeFileSync(join(authPath, '.orca-managed-claude-auth'), 'account-2\n', 'utf-8')
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'account-2',
+          email: 'pinned@example.com',
+          managedAuthPath: authPath,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: null as string | null
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const registry = await import('./claude-pinned-pty-registry')
+    const reservationsDuringSync: (string | null)[] = []
+    const runtimeAuth = {
+      // Why: this is where a queued pinned launch would run; it must find the account claimed.
+      syncForCurrentSelection: vi.fn(async () => {
+        const conflict = registry.reserveClaudePinnedAccount('account-2')
+        reservationsDuringSync.push(conflict)
+        if (conflict === null) {
+          registry.releaseClaudePinnedAccountReservation('account-2')
+        }
+      }),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    try {
+      await service.selectAccount('account-2')
+      await service.selectAccount(null)
+      await service.removeAccount('account-2')
+
+      // A deselect never claims the account it is not switching to; select and remove do.
+      expect(reservationsDuringSync).toEqual(['host-mutation', null, 'host-mutation'])
+      expect(registry.reserveClaudePinnedAccount('account-2')).toBeNull()
+    } finally {
+      registry._internals.reset()
+    }
+  })
 })
