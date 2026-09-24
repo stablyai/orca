@@ -211,9 +211,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       input.taskId
     )
   }
-  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
-    sessionId
-  ) => {
+  /** The tracker's own roster. No host decision reads it: the host's child records are the one
+   *  owner of "what runs", and this stays only so tests can hold the two rule sets side by side. */
+  backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined => {
     const session = this.sessions.get(sessionId)
     return session ? backgroundTaskState(session) : undefined
   }

@@ -35,7 +35,8 @@ function readsChildViews(ctx: BackgroundTaskReader): boolean {
 
 /** A reader that predates child views reads any roster as live work: it animates the monitoring
  *  indicator and refuses conversation commands on one. A roster of settled rows alone is new, so
- *  that reader gets its pre-feature view of it — no strip — and never the views it cannot read. */
+ *  that reader gets its pre-feature view of it — no strip — and never the views it cannot read.
+ *  Deleted with the legacy shapes: see `structured-agent-session-child-work-legacy`. */
 function withoutChildViews(
   state: AgentSessionBackgroundTaskState
 ): AgentSessionBackgroundTaskState | null {

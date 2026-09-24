@@ -107,10 +107,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return stop ? stop(input) : Promise.resolve({ cancelled: false })
   }
 
-  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
-    sessionId
-  ) => this.liveOwnerOrNull(sessionId)?.backgroundTaskState?.(sessionId)
-
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
     sessionId
   ) => this.liveOwnerOrNull(sessionId)?.backgroundTaskStops?.(sessionId)

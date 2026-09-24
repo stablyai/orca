@@ -69,7 +69,7 @@ export async function rewindStructuredAgentSession(
           ) {
             return rewindRefusal('outcome-unknown')
           }
-          if (conversationCommandBlocked(ctx, record)) {
+          if (conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))) {
             return rewindRefusal('busy')
           }
           if (ctx.journal.isReadOnly) {

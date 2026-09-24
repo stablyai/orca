@@ -3,6 +3,7 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
@@ -183,9 +184,10 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
-    sessionId
-  ) => this.sessions.get(sessionId)?.backgroundTasks.state
+  /** The tracker's own roster. No host decision reads it: the host's child records are the one
+   *  owner of "what runs", and this stays only so tests can hold the two rule sets side by side. */
+  backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
+    this.sessions.get(sessionId)?.backgroundTasks.state
 
   // Codex exposes no honest stop for a child thread or a persistent command.
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (

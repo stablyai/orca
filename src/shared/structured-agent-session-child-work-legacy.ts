@@ -1,6 +1,15 @@
 // A structured session's legacy child shapes (`tasks`/`settledTasks`, `subagents`), derived from the
 // host's child views so the old and new wire shapes cannot disagree. Clients that predate views read
 // these, and they key rows by the id each lane published before views existed.
+//
+// Death condition: this is a bridge for clients that do not advertise
+// `agent-session.background-task-child-views.v1`. Once MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION is raised
+// past the RUNTIME_PROTOCOL_VERSION in force when that capability first shipped (3), every admitted
+// client reads `children`, and these go together: `structuredChildWorkLegacyTasks` with
+// `codexAgentBackgroundTaskId`, the status summary's `backgroundTasks` derivation, the channel's
+// `tasks`/`settledTasks`, and the capability gate's `withoutChildViews`. Until then a new child fact
+// must be decided here for those older readers too. `structuredChildWorkLegacySubagents` is not wire:
+// it feeds in-app readers of `AgentStatusEntry.subagents`, and dies when they read `children`.
 
 import type { AgentSessionHandleProvider } from './agent-session-provider-handle'
 import {

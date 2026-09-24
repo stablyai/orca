@@ -24,7 +24,6 @@ import type {
   AgentSessionProcessIdentity
 } from '../../../shared/agent-session-record'
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionOptionsResult,
   AgentSessionSlashCommand,
   AgentSessionThreadGoalChange,
@@ -267,10 +266,6 @@ export type StructuredAgentSessionAdapter = {
     fence: number
     taskId?: string
   }): Promise<{ cancelled: boolean }>
-  /** The provider's own roster of background work it can stop, for provider-side decisions
-   *  (targeted stops, conversation-command admission). No surface reads it: every surface reads
-   *  the host's child records. */
-  backgroundTaskState?(sessionId: string): AgentSessionBackgroundTaskState | null | undefined
   /** The stops this provider honours for a live session's background work; undefined when the
    *  adapter holds no live session for it. */
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
