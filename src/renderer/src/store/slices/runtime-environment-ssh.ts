@@ -93,6 +93,12 @@ function targetGenerationsEqual(current: Map<string, number>, next: Map<string, 
 
 const stateGenerationByEnvironment = new Map<string, number>()
 const targetConnectionGenerationByEnvironment = new Map<string, number>()
+const MAX_SSH_STATE_GENERATIONS = 512
+const MAX_SSH_TARGET_GENERATIONS = 4096
+let targetConnectionGenerationSequence = 0
+let evictedTargetConnectionGeneration = 0
+let stateGenerationSequence = 0
+let evictedStateGeneration = 0
 
 function targetGenerationKey(environmentId: string, targetId: string): string {
   return `${environmentId}\0${targetId}`
@@ -103,7 +109,8 @@ export function getEnvironmentSshTargetConnectionGeneration(
   targetId: string
 ): number {
   return (
-    targetConnectionGenerationByEnvironment.get(targetGenerationKey(environmentId, targetId)) ?? 0
+    targetConnectionGenerationByEnvironment.get(targetGenerationKey(environmentId, targetId)) ??
+    evictedTargetConnectionGeneration
   )
 }
 
@@ -112,21 +119,37 @@ function advanceEnvironmentSshTargetConnectionGeneration(
   targetId: string
 ): void {
   const key = targetGenerationKey(environmentId, targetId)
-  targetConnectionGenerationByEnvironment.set(
-    key,
-    getEnvironmentSshTargetConnectionGeneration(environmentId, targetId) + 1
-  )
+  targetConnectionGenerationByEnvironment.set(key, ++targetConnectionGenerationSequence)
+  while (targetConnectionGenerationByEnvironment.size > MAX_SSH_TARGET_GENERATIONS) {
+    const oldest = targetConnectionGenerationByEnvironment.keys().next()
+    if (oldest.done) {
+      break
+    }
+    evictedTargetConnectionGeneration = Math.max(
+      evictedTargetConnectionGeneration,
+      targetConnectionGenerationByEnvironment.get(oldest.value) ?? 0
+    )
+    targetConnectionGenerationByEnvironment.delete(oldest.value)
+  }
 }
 
 export function getEnvironmentSshStateGeneration(environmentId: string): number {
-  return stateGenerationByEnvironment.get(environmentId) ?? 0
+  return stateGenerationByEnvironment.get(environmentId) ?? evictedStateGeneration
 }
 
 function advanceEnvironmentSshStateGeneration(environmentId: string): void {
-  stateGenerationByEnvironment.set(
-    environmentId,
-    getEnvironmentSshStateGeneration(environmentId) + 1
-  )
+  stateGenerationByEnvironment.set(environmentId, ++stateGenerationSequence)
+  while (stateGenerationByEnvironment.size > MAX_SSH_STATE_GENERATIONS) {
+    const oldest = stateGenerationByEnvironment.keys().next()
+    if (oldest.done) {
+      break
+    }
+    evictedStateGeneration = Math.max(
+      evictedStateGeneration,
+      stateGenerationByEnvironment.get(oldest.value) ?? 0
+    )
+    stateGenerationByEnvironment.delete(oldest.value)
+  }
 }
 
 function generationIsCurrent(environmentId: string, generation: number | undefined): boolean {

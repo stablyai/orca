@@ -24,6 +24,7 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     oscLinks?: TerminalOscLinkRange[]
     alternateScreen?: boolean
     scrollbackAnsi?: string
+    pendingEscapeTailAnsi?: string
     terminalOwner?: 'shell'
   } | null> {
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
@@ -134,15 +135,24 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     this.recordRecentPtyOutputForPathProvenance(ptyId, data)
     state.writeChain = state.writeChain
       .then(async () => {
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
         // Why: seed writes never set forwardQueryReplies — the main-side
         // replay guard. A snapshot containing old queries must answer no one.
         await state.emulator.write(data)
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
         // Why AFTER the seed write: the snapshot payload cannot carry kitty
         // pushes (rehydrateSequences deliberately omits them), but ordering
         // behind it keeps the parse deterministic. Unflagged like the seed —
         // re-applying flags must answer no one.
         if (typeof metadata.kittyKeyboardFlags === 'number') {
           await state.emulator.applyKittyKeyboardFlags(metadata.kittyKeyboardFlags)
+          if (this.headlessTerminals.get(ptyId) !== state) {
+            return
+          }
         }
         if (metadata.cwd !== undefined) {
           state.emulator.setCwd(metadata.cwd)

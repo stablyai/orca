@@ -92,6 +92,12 @@ describe('buildAiVaultServiceEnv', () => {
     expect(env.PATH).toBe('C:\\bin')
   })
 
+  it('passes a relocated AppData through so Devin resolves its Windows data root', () => {
+    const env = buildAiVaultServiceEnv({ AppData: 'D:\\Roaming' }, 'win32')
+
+    expect(env.APPDATA).toBe('D:\\Roaming')
+  })
+
   it('spells SystemRoot the way Windows Node expects', () => {
     expect(buildAiVaultServiceEnv({ SystemRoot: 'C:\\Windows' }, 'win32').SystemRoot).toBe(
       'C:\\Windows'
@@ -133,4 +139,16 @@ describe('buildRelayAiVaultServiceEnv', () => {
   it('stays plain Node rather than an Electron child', () => {
     expect(buildRelayAiVaultServiceEnv({}, 'linux').ELECTRON_RUN_AS_NODE).toBeUndefined()
   })
+})
+
+it('carries OMP root/profile inputs only to the desktop service, retaining empty canonical profile', () => {
+  const roots = {
+    OMP_PROFILE: '',
+    PI_PROFILE: 'work',
+    PI_CONFIG_DIR: '.config/omp',
+    PI_CODING_AGENT_DIR: '/home/dev/custom',
+    XDG_DATA_HOME: '/home/dev/data'
+  }
+  expect(buildAiVaultServiceEnv(roots, 'linux')).toEqual({ ...roots, ELECTRON_RUN_AS_NODE: '1' })
+  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({})
 })

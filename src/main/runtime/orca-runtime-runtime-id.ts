@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -23,7 +24,6 @@ import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
 } from './runtime-graph-reload-lifecycle'
-import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { ClientHostedPageReconciliationWindow } from './client-hosted-page-reconciliation-window'
 import { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from './worktree-terminal-mutation-lock'
@@ -91,9 +91,6 @@ export class OrcaRuntimeWithRuntimeId {
     },
     onTimeout: (_revision, windowId) => this.handleGraphReloadTimeout(windowId)
   })
-
-  // Why: paired graph transactions need foreground timer cadence only until their publication settles.
-  protected readonly rendererPublicationThrottle = new RendererPublicationThrottle()
 
   protected tabs = new Map<string, RuntimeSyncedTab>()
 
@@ -263,6 +260,23 @@ export class OrcaRuntimeWithRuntimeId {
   protected pendingMobileSessionPtyAggregateInventoryRefresh: Promise<PtyControllerInventory | null> | null =
     null
 
+  /** The agent Orca believes owns this pane, for tui-idle evidence ranking. Launch
+   *  authority first; the live foreground agent covers panes Orca did not launch. */
+  protected getPaneAgentForTuiIdle(ptyId: string | null | undefined): TuiAgent | null {
+    if (!ptyId) {
+      return null
+    }
+    const pty = this.ptysById.get(ptyId)
+    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+  }
+
+  /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
+  protected deliveryRecheckTimersByLeafKey = new Map<string, ReturnType<typeof setTimeout>>()
+
+  // Why: counts authoritative graph statements so a PTY's recorded surface can be told apart
+  // from one the graph has simply not published yet (pty-recorded-surface-topology.ts).
+  protected graphSequence = 0
+
   protected leaves = new Map<string, RuntimeLeafRecord>()
 
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
@@ -308,7 +322,8 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
     (ptyId, data) => this.ptyController?.write(ptyId, data) ?? false,
-    (ptyId) => this.getPtyWriteHostPlatform(ptyId)
+    (ptyId) => this.getPtyWriteHostPlatform(ptyId),
+    (ptyId) => this.getPtyAgent(ptyId)
   )
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
@@ -317,6 +332,10 @@ export class OrcaRuntimeWithRuntimeId {
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
+    getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+    getFirstPartyAgentStatus: (ptyId) =>
+      (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+    getLiveLeaf: (leaf) => this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId)) ?? leaf,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })
 
@@ -327,8 +346,12 @@ export class OrcaRuntimeWithRuntimeId {
       getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),
       getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
       getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
-      startVisibleReadProbe: (waiter, waiterTimeoutMs) =>
-        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
+      quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
+      getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+      getFirstPartyAgentStatus: (ptyId) =>
+        (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+      startVisibleReadProbe: (waiter, waiterTimeoutMs, agent) =>
+        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent)
     },
     this.terminalWaiters,
     this.terminalIdlePolls

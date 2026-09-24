@@ -1,0 +1,18 @@
+diff --git a/src/main/plugins/plugin-worker-output-buffer.ts b/src/main/plugins/plugin-worker-output-buffer.ts
+index 836330c879..6a0cb2a078 100644
+--- a/src/main/plugins/plugin-worker-output-buffer.ts
++++ b/src/main/plugins/plugin-worker-output-buffer.ts
+@@ -1,0 +2 @@ import type { Readable } from 'node:stream'
++import { ownRetainedString } from '../../shared/own-retained-string'
+@@ -24,3 +25,5 @@ export function pipePluginWorkerOutput(
+-        truncated
+-          ? `${line.slice(0, PLUGIN_WORKER_OUTPUT_LINE_LIMIT - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`
+-          : line
++        ownRetainedString(
++          truncated
++            ? `${line.slice(0, PLUGIN_WORKER_OUTPUT_LINE_LIMIT - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`
++            : line
++        )
+@@ -52 +55 @@ export function pipePluginWorkerOutput(
+-        buffered += segment
++        buffered += newline === -1 ? ownRetainedString(segment) : segment

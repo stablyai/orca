@@ -41,6 +41,7 @@ export type PtySpawnIpcArgs = {
   sessionId?: string
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution
+  terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: {
     foreground?: unknown
     background?: unknown

@@ -14,6 +14,15 @@ export function structuredHostStub(
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> {
   return {
+    // The restart-resume surface hangs off a host MEMBER rather than the root, but its spies stay
+    // flat here: callers iterate this map asserting every entry is a spy that did not run, and
+    // `installableHost` below is what reassembles the member. Keeping them flat also lets the
+    // manifest name them to prove a call reached the host.
+    restartResumableList: vi.fn(async () => []),
+    restartResumableFailures: vi.fn(async () => []),
+    restartResumableDismiss: vi.fn(async () => 0),
+    restartResumeAll: vi.fn(async () => []),
+    restartContinueAll: vi.fn(async () => ({ resumed: [], continued: [] })),
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     // Attach-shaped entries take a client-supplied location, so the host is asked whether it
     // supports creating there. A real host always answers; leaving it unstubbed made every
@@ -60,18 +69,49 @@ export function structuredHostStub(
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
+    changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
     requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    journalSnapshot: vi.fn(() => ({
+      sessionId,
+      cursor: { epoch: 'epoch-a', sequence: 0 },
+      items: [],
+      submissions: []
+    })),
     subscribe: vi.fn(() => () => undefined),
     subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
       subscriber.emit({ type: 'snapshot', sessions: [] })
       return () => undefined
     }),
+    // No opening emit, unlike the status feed above: a completion is an edge, so this stream
+    // opens empty and a subscriber that was away has missed what passed.
+    subscribeTurnCompletions: vi.fn(() => () => undefined),
     unsubscribe: vi.fn()
   }
+}
+
+/** The stub shaped the way the host actually exposes it: flat spies, plus the `restartResume`
+ *  member the RPC methods reach through. Install this; assert against the flat map.
+ *
+ *  The one assertion lives here so no call site needs its own. */
+export function installableHost(
+  hostCalls: Record<string, ReturnType<typeof vi.fn>>
+): StructuredAgentSessionHost {
+  const host = {
+    ...hostCalls,
+    restartResume: {
+      list: hostCalls.restartResumableList,
+      listFailures: hostCalls.restartResumableFailures,
+      dismiss: hostCalls.restartResumableDismiss,
+      resume: hostCalls.restartResumeAll,
+      continueAfterRestart: hostCalls.restartContinueAll
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a spy map standing in for the host; the dispatcher reaches only the members stubbed above, and a missing one fails the call rather than type-checking.
+  return host as unknown as StructuredAgentSessionHost
 }
 
 const TURN = { turnId: 'turn-1', state: 'completed' as const, startedAt: 1, completedAt: 6 }
@@ -86,7 +126,7 @@ export const turnItemSkew = {
     const host = structuredHostStub(sessionId, workspaceId)
     const items = [{ ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
     host.history.mockReturnValue({ ok: true, page: { items } })
-    setStructuredAgentSessionHost(host as unknown as StructuredAgentSessionHost)
+    setStructuredAgentSessionHost(installableHost(host))
   },
   /** Each skew's advertised list and the item it must be published. */
   clients(

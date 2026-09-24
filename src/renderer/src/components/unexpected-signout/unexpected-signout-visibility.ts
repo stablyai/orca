@@ -11,7 +11,7 @@ export function shouldShowUnexpectedSignoutCard(gate: UnexpectedSignoutGate): bo
   if (!gate.persistedUIReady || gate.appVersion === null) {
     return false
   }
-  if (gate.dismissedVersion === gate.appVersion) {
+  if (gate.dismissedVersion !== null) {
     return false
   }
   return (

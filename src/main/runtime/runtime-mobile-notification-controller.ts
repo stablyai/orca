@@ -1,6 +1,7 @@
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type {
+  MobilePushTestResult,
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../shared/mobile-push-contract'
@@ -43,6 +44,7 @@ export type MobileNotificationEvent =
 
 /** The desktop push service, once it exists; absent on hosts that never started one. */
 export type MobilePushRegistrar = {
+  test(deviceId: string): Promise<MobilePushTestResult>
   register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult>
   unregister(deviceId: string): Promise<{ unregistered: boolean }>
 }
@@ -75,6 +77,10 @@ export class RuntimeMobileNotificationController {
         reason: 'gateway_unreachable'
       }
     )
+  }
+
+  async testPushDevice(deviceId: string): Promise<MobilePushTestResult> {
+    return (await this.pushRegistrar?.test(deviceId)) ?? { accepted: false, reason: 'unavailable' }
   }
 
   async unregisterPushDevice(deviceId: string): Promise<{ unregistered: boolean }> {

@@ -1,0 +1,643 @@
+{
+  "operation": "files.preview-load",
+  "family": "files.preview-artifact-image",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "83cad9595793b30d38115ba7118ae1400ecb2af21327853183e91289f4f33a04",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "011a73e13887": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "0254bd812679": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "0639efe16769": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "message": "Binary preview unavailable",
+        "reconnect": false,
+        "status": "error"
+      }
+    },
+    "06ce305bc756": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "15467bba2d60": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "message": "Unable to load preview",
+        "reconnect": false,
+        "status": "error"
+      }
+    },
+    "491897d7dd5d": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "645c5754be42": {
+      "preview": "unloaded"
+    },
+    "6c3ad19b3a5a": {
+      "preview": {
+        "message": "Binary preview unavailable",
+        "reconnect": false,
+        "status": "error"
+      }
+    },
+    "75ebb08fd335": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7659b8b575da": {
+      "preview": {
+        "dataUri": "data:image/png;base64,aGk=",
+        "kind": "image",
+        "status": "ready"
+      }
+    },
+    "879996a2a9e7": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b5608d3d00c8": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifactPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/shot.png\",\"grantId\":\"grant-1\"}}"
+    },
+    "b96f3d16bdfc": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "bf5d986bfb2b": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ce511c0ab8ac": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "content": "aGk=",
+            "isBinary": true,
+            "isImage": true,
+            "mimeType": "image/png"
+          }
+        }
+      }
+    },
+    "d3fa8c5b05e4": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "dd9af848f659": {
+      "name": "files.readTerminalArtifactPreview#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifactPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/shot.png",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "eed3c09414c4": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (files.readTerminalArtifactPreview)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "eee847a9d90d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "dataUri": "data:image/png;base64,aGk=",
+        "kind": "image",
+        "status": "ready"
+      }
+    },
+    "fba5e3c89244": {
+      "preview": {
+        "message": "Unable to load preview",
+        "reconnect": false,
+        "status": "error"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-files.preview-artifact-image-files.readterminalartifactpreview-1",
+    "checkpoints": [
+      {
+        "id": "files-preview-artifact-image-read.normal:settled",
+        "observation": {
+          "sender": ["ce511c0ab8ac"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "eee847a9d90d"
+          },
+          "state": "7659b8b575da",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.result-absent:settled",
+        "observation": {
+          "sender": ["dd9af848f659"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "eed3c09414c4"
+          },
+          "state": "645c5754be42",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.result-null:settled",
+        "observation": {
+          "sender": ["011a73e13887"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "eed3c09414c4"
+          },
+          "state": "645c5754be42",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["06ce305bc756"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "0639efe16769"
+          },
+          "state": "6c3ad19b3a5a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["bf5d986bfb2b"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "0639efe16769"
+          },
+          "state": "6c3ad19b3a5a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["b96f3d16bdfc"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "0639efe16769"
+          },
+          "state": "6c3ad19b3a5a",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.outer-refused:settled",
+        "observation": {
+          "sender": ["75ebb08fd335"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "15467bba2d60"
+          },
+          "state": "fba5e3c89244",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["d3fa8c5b05e4"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "15467bba2d60"
+          },
+          "state": "fba5e3c89244",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.method-not-found:settled",
+        "observation": {
+          "sender": ["491897d7dd5d"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "15467bba2d60"
+          },
+          "state": "fba5e3c89244",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.transport-rejection:settled",
+        "observation": {
+          "sender": ["0254bd812679"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "a947768bc0ed"
+          },
+          "state": "645c5754be42",
+          "effects": []
+        }
+      },
+      {
+        "id": "files-preview-artifact-image-read.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["879996a2a9e7"],
+          "payloads": ["b5608d3d00c8"],
+          "settlements": {
+            "load": "c7584e82c72f"
+          },
+          "state": "645c5754be42",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

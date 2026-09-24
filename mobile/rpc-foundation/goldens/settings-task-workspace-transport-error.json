@@ -1,0 +1,178 @@
+{
+  "operation": "settings.task-workspace",
+  "family": "settings.task-workspace",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c2eed306311a844cd6f2f84b6513c0a1182f86a5e3cace434385b8287c80d7c5",
+  "scenarioSha256": "a5e812cd508826b3f01ec3798c621ab4303de6536a364113f01a4770dd197bb5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1a4a4adee14f": {
+      "name": "creatingKey",
+      "ordinal": 8,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "41a2214deb19": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "483b4c51c982": {
+      "name": "error",
+      "ordinal": 7,
+      "value": "Selected agent is disabled. Choose an enabled agent before creating."
+    },
+    "5deea0bbb564": {
+      "name": "settings.get#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "settings disconnected",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "626f3cf8fc2d": {
+      "name": "workspaceAgentOverridden",
+      "ordinal": 6,
+      "value": false
+    },
+    "7abdfe20af50": {
+      "creating": "linear:1",
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "975f2ff9a730": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "d1777904aa15": {
+      "name": "workspaceAgent",
+      "ordinal": 5,
+      "value": "codex"
+    },
+    "d5df3f6b123a": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "e0a8ee1f3c00": {
+      "name": "creatingKey",
+      "ordinal": 1,
+      "value": "linear:1"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed3a7d6bc894": {
+      "name": "error",
+      "ordinal": 2,
+      "value": ""
+    }
+  },
+  "recording": {
+    "scenario": "settings-task-workspace-transport-error",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": ["41a2214deb19"],
+          "payloads": ["975f2ff9a730"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "9270aeb7d9c6"
+          },
+          "state": "7abdfe20af50",
+          "effects": ["e0a8ee1f3c00", "ed3a7d6bc894"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["5deea0bbb564"],
+          "payloads": ["975f2ff9a730"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "submit": "eb79a9b3682a"
+          },
+          "state": "d5df3f6b123a",
+          "effects": [
+            "e0a8ee1f3c00",
+            "ed3a7d6bc894",
+            "d1777904aa15",
+            "626f3cf8fc2d",
+            "483b4c51c982",
+            "1a4a4adee14f"
+          ]
+        }
+      }
+    ]
+  }
+}

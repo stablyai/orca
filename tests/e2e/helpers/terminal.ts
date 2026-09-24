@@ -26,6 +26,11 @@ import {
 } from './terminal-pane-operations'
 
 export {
+  expectTerminalAccessibilityText,
+  readTerminalAccessibilityText
+} from './terminal-accessibility-tree'
+
+export {
   getTerminalContent,
   readPaneIdentitySnapshot,
   resolveActiveTabId,

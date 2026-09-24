@@ -4,6 +4,7 @@ import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -160,11 +161,7 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_'),
-        expect.objectContaining({
-          acceptQueued: true,
-          observationTimeoutMs: 0,
-          requestId: expect.any(String)
-        })
+        expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
       )
     })
 
@@ -476,9 +473,15 @@ describe('orchestration RPC methods', () => {
       )
     })
 
-    it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
+    // Why the second column: an older host still publishes the codex-* token, and this receipt
+    // reaches the user verbatim -- so it names the neutral spelling the same way the CLI does.
+    it.each([
+      ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
+      ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
+      ['agent-trust-workspace', 'agent-trust-workspace']
+    ] as const)(
       'returns a truthful readiness failure for %s',
-      async (blockedReason) => {
+      async (blockedReason, expectedReason) => {
         setup()
         mockCurrentWorkerStart()
         vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
@@ -500,7 +503,7 @@ describe('orchestration RPC methods', () => {
         expect(result).toMatchObject({
           state: 'failed',
           failedStage: 'agent_readiness',
-          lastError: `Agent startup blocked: ${blockedReason}`
+          lastError: `Agent startup blocked: ${expectedReason}`
         })
         expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
       }

@@ -20,14 +20,12 @@ import { createRelayApp } from './app.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
-import type { RelayDatabase } from './database.js'
+import { readRelayDatabasePoolPressure, type RelayDatabase } from './database.js'
 import { HostSessionRegistry } from './host-session-registry.js'
 import { observeRelayDatabase } from './observed-relay-database.js'
 import { RelayObservability } from './relay-observability.js'
-import {
-  RelayConnectionLedger,
-  type RelayConnectionUpgrade
-} from './relay-connection-ledger.js'
+import { combineRegionalRehomeSafety } from './regional-rehome-safety.js'
+import { RelayConnectionLedger, type RelayConnectionUpgrade } from './relay-connection-ledger.js'
 import { createRelayReadiness } from './relay-readiness.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
@@ -65,7 +63,7 @@ function guardSocketErrors(socket: WebSocket, kind: string): void {
 
 function admissionSource(request: IncomingMessage): string {
   const forwarded = request.headers['x-forwarded-for']
-  const chain = (Array.isArray(forwarded) ? forwarded.join(',') : forwarded ?? '')
+  const chain = (Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? ''))
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
@@ -112,12 +110,20 @@ export function createRelayServer(
   const store = new RelayCredentialStore(observedDatabase, options.now)
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
+    regionalRehomeCohortPercent: config.regionCorrectionCohortPercent ?? 0,
+    // The director runs in the database's region; only its rehome readers use this.
+    regionalRehomeDirectorRegion:
+      config.role === 'director' ? (config.region ?? RELAY_DEFAULT_REGION) : undefined,
     recordControlRenewal: (durationMs, outcome) =>
       observability.recordControlRenewal?.(durationMs, outcome)
   })
-  const ready = createRelayReadiness(observedDatabase, config.jwksUrl, {
-    observe: (observation) => observability.recordReadiness(observation)
+  const readiness = createRelayReadiness(observedDatabase, config.jwksUrl, {
+    jwksGraceMs: config.readinessJwksGraceMs,
+    sqlGraceMs: config.readinessSqlGraceMs,
+    observe: (observation) => observability.recordReadiness(observation),
+    observeGrace: (event) => observability.recordReadinessGrace(event)
   })
+  const ready = readiness.check
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
@@ -127,18 +133,37 @@ export function createRelayServer(
     queuedBytes,
     observability,
     options.now,
-    options.random
+    options.random,
+    cellIncarnation
   )
   const app = createRelayApp(config, {
     store,
     assignments,
-    drain: (graceMs) => sessions.drain(graceMs),
+    drain: (graceMs, options) => sessions.drain(graceMs, options ?? {}),
     drainHost: (input) => sessions.drainHost(input),
+    idleRehome: (input) => {
+      const now = (options.now ?? Date.now)()
+      if (input.directorSafety.observedAt > now || now - input.directorSafety.observedAt > 60_000) {
+        return Promise.resolve({ outcome: 'deferred', reason: 'director-safety-stale' })
+      }
+      return sessions.idleRehome(input,
+        () => assignments.commitIdleRegionalRehome(input, combineRegionalRehomeSafety(
+          input.directorSafety,
+          { ...observability.regionalRehomeRuntimeSafety(), ...readRelayDatabasePoolPressure(database) }
+        ), input.cohortPercent),
+        () => assignments.reconcileIdleRegionalRehome(input)
+      )
+    },
     regionalRehomeTrustProbeHostExists: (input) => sessions.get(input) !== null,
     cellIncarnation,
     isDraining: () => sessions.isDraining(),
     runtimeCounts: () => runtimeCounts(),
+    regionalRehomeSafetySnapshot: () => ({
+      ...observability.regionalRehomeRuntimeSafety(),
+      ...readRelayDatabasePoolPressure(database)
+    }),
     ready,
+    readinessDegradation: () => readiness.degradedDependencies(),
     recordAssignmentAdmission: (outcome) => observability.recordAssignmentAdmission?.(outcome),
     recordAssignmentRejectionReason: (lane, reason) =>
       observability.recordAssignmentRejectionReason?.(lane, reason),
@@ -339,7 +364,7 @@ export function createRelayServer(
               const identity = invite ? { userId: invite.userId, relayHostId: hostId } : null
               // Released combined-service invites gain their first durable cell assignment here.
               const assignment = identity
-                ? (await assignments.resolve(identity)) ?? (await assignments.assign(identity))
+                ? ((await assignments.resolve(identity)) ?? (await assignments.assign(identity)))
                 : null
               if (!invite || !assignment) {
                 phoneAdmission?.hostData.release()

@@ -57,6 +57,7 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
           const provenKittyFlags = session.kittyKeyboardModes.hasProvenBaseline
             ? session.kittyKeyboardModes.snapshotFlags
             : undefined
+          const pendingEscapeTailAnsi = session.transport.getPendingEscapeTailAnsi?.()
           return {
             data,
             cols: session.pane.terminal.cols,
@@ -64,7 +65,8 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
             ...(orderedSeq !== null ? { seq: orderedSeq } : {}),
             ...(orderedSeq !== null && provenKittyFlags !== undefined
               ? { kittyKeyboardFlags: provenKittyFlags }
-              : {})
+              : {}),
+            ...(pendingEscapeTailAnsi ? { pendingEscapeTailAnsi } : {})
           }
         } catch {
           return null

@@ -22,6 +22,10 @@ export interface PushDatabase {
   // Serializes every transaction that reads then writes the same identity's
   // quota rows. Must be called inside a transaction; it releases at commit.
   lockQuotaScope(key: string): Promise<void>
+  // Non-blocking variant: false means another transaction holds the scope.
+  tryLockScope(key: string): Promise<boolean>
+  // Shared try-lock: holders of one key coexist, and an exclusive holder excludes them all.
+  tryLockSharedScope(key: string): Promise<boolean>
   close(): Promise<void>
 }
 
@@ -54,6 +58,14 @@ class SqliteTransaction implements PushDatabase {
   // BEGIN IMMEDIATE already holds the single writer lock for the whole
   // transaction, so there is nothing narrower left to take.
   async lockQuotaScope(): Promise<void> {}
+
+  async tryLockScope(): Promise<boolean> {
+    return true
+  }
+
+  async tryLockSharedScope(): Promise<boolean> {
+    return true
+  }
 
   async close(): Promise<void> {}
 }
@@ -111,6 +123,21 @@ class PostgresTransaction implements PushDatabase {
   // under-quota total, so the identity is serialized for the whole transaction.
   async lockQuotaScope(key: string): Promise<void> {
     await this.query('SELECT pg_advisory_xact_lock(hashtext(?::text))', [key])
+  }
+
+  async tryLockScope(key: string): Promise<boolean> {
+    const [row] = await this.query('SELECT pg_try_advisory_xact_lock(hashtext(?::text)) AS locked', [
+      key
+    ])
+    return row?.locked === true
+  }
+
+  async tryLockSharedScope(key: string): Promise<boolean> {
+    const [row] = await this.query(
+      'SELECT pg_try_advisory_xact_lock_shared(hashtext(?::text)) AS locked',
+      [key]
+    )
+    return row?.locked === true
   }
 
   async close(): Promise<void> {}
@@ -182,6 +209,14 @@ class PostgresDatabase implements PushDatabase {
     throw new Error('lock_quota_scope_requires_transaction')
   }
 
+  async tryLockScope(): Promise<boolean> {
+    throw new Error('lock_quota_scope_requires_transaction')
+  }
+
+  async tryLockSharedScope(): Promise<boolean> {
+    throw new Error('lock_quota_scope_requires_transaction')
+  }
+
   async close(): Promise<void> {
     await this.pool.end()
   }
@@ -213,7 +248,10 @@ async function applySchemaOnUntimedPool(
   const database = new PostgresDatabase(pool)
   try {
     await applyPostgresSchema(pushSchemaStatements(), (statement) => database.query(statement), {
-      eventPrefix: 'orca_push_postgres_schema'
+      eventPrefix: 'orca_push_postgres_schema',
+      // Push has no catalog pre-check, so a lock timeout here says nothing about whether the
+      // object already exists and the old bounded retry is still the right answer.
+      retryLockTimeout: true
     })
   } finally {
     await database.close().catch(() => undefined)

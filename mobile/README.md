@@ -135,10 +135,23 @@ Run these checks before committing mobile terminal changes:
 ```bash
 cd mobile
 pnpm exec tsc --noEmit
+pnpm run check:tests-typecheck
 pnpm lint
 cd ..
 pnpm typecheck:node
 ```
+
+`tsc --noEmit` reads `tsconfig.json`, which excludes test files so Metro never bundles them.
+`tsconfig.test.json` puts them back, and `pnpm run typecheck:tests` shows their errors in full.
+`check:tests-typecheck` is the gate over it: a ratchet against `tests-typecheck-baseline.txt`, the
+127 test files that do not typecheck yet. It fails when a file that checks today stops checking,
+and when a baseline entry starts checking (prune it with
+`node scripts/check-tests-typecheck-ratchet.mjs --prune`). The list may only shrink.
+
+The same gate censuses the program first: every `*.test.ts(x)` on disk must be in it, or named in
+the script's `TESTS_OUTSIDE_PROGRAM` with a reason. Without that, a test excluded from
+`tsconfig.test.json` — or a `Foo.test.tsx` shadowed by a `Foo.test.ts` beside it, which a wildcard
+`include` drops for the higher-priority extension — would leave the ratchet silently.
 
 ## Protocol Version Compatibility
 
@@ -184,6 +197,7 @@ Connect from the app using endpoint `ws://localhost:6768` and token `mock-device
 ### Environment variables
 
 - `MOCK_NATIVE_CHAT=1` — serve the native-chat scenario (one live agent tab, empty transcript, image upload) instead of the default terminal fixtures.
+- `MOCK_CHAT_AGENT=omp` — with `MOCK_NATIVE_CHAT=1`, present an OMP tab and four decoded transcript messages, including a tool call and result, instead of the default Claude scenario. It deliberately omits `transcriptPath` to exercise legacy-hook readability discovery; current OMP hooks may report a path.
 - `MOCK_SERVER_KEY_FILE` — persist the server keypair across restarts so a paired device keeps its public-key pin. A missing or invalid file is re-keyed with a warning, which forces a re-pair.
 
 ### Scenario control files

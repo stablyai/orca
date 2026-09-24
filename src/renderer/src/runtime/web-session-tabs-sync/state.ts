@@ -63,12 +63,6 @@ export type SessionTabsRuntimeHistory = RetiredValueHistory
  * roll the mirror back after the replacement epoch is accepted.
  */
 export type SessionTabsPublicationEpochHistory = RetiredValueHistory
-export type SessionTabsRecoveryState = { pendingCount: number }
-export type SessionTabsRemovalFence = {
-  receivedFrame: number
-  recoveryState: SessionTabsRecoveryState
-  pendingCount: number
-}
 
 export type WebSessionTabsSnapshotApplyOptions = {
   contentScope?: 'all' | 'agent-session'
@@ -95,6 +89,33 @@ export const latestReceivedSessionTabsSnapshotByWorktree = new Map<
   string,
   ReceivedSessionTabsSnapshot
 >()
+/** Receipt ledgers outlive the worktrees they order, so their keys need a bound of their own. */
+export const MAX_TRACKED_SESSION_TABS_RECEIPTS = 512
+
+/**
+ * Bounds a receipt ledger by frame age, never by entry count. One inventory records a receipt per
+ * worktree under a single reserved frame, and evicting by insertion order would drop that batch's
+ * own earlier entries — which the recovery gate reads as "no evidence for this worktree" and uses
+ * to reject it. Only a receipt no in-flight frame can still be ranked against is droppable.
+ */
+export function setBoundedSessionTabsReceipt<T>(
+  map: Map<string, T>,
+  key: string,
+  value: T,
+  frameOf: (entry: T) => number
+): void {
+  map.set(key, value)
+  if (map.size <= MAX_TRACKED_SESSION_TABS_RECEIPTS) {
+    return
+  }
+  const oldestRankableFrame = receivedSessionTabsFrameSequence - MAX_TRACKED_SESSION_TABS_RECEIPTS
+  for (const [entryKey, entry] of map) {
+    if (frameOf(entry) < oldestRankableFrame) {
+      map.delete(entryKey)
+    }
+  }
+}
+
 export const sessionTabsRuntimeHistoryByEnvironment = new Map<string, SessionTabsRuntimeHistory>()
 export const sessionTabsPublicationEpochHistoryByWorktree = new Map<
   string,
@@ -102,8 +123,17 @@ export const sessionTabsPublicationEpochHistoryByWorktree = new Map<
 >()
 export const latestReceivedSessionTabsFrameByEnvironment = new Map<string, number>()
 export const latestReceivedSessionTabsInventoryFrameByEnvironment = new Map<string, number>()
-export const latestSessionTabsRemovalFenceByWorktree = new Map<string, SessionTabsRemovalFence>()
-export const sessionTabsRecoveryStateByWorktree = new Map<string, SessionTabsRecoveryState>()
+/**
+ * Highest `receivedFrame` at which this worktree was retracted. Raise-only: a frame reserved before
+ * the retraction is stale evidence no matter what arrived since, so the boundary cannot be a slot a
+ * later frame overwrites, nor conditional on a recovery happening to be in flight when it landed.
+ *
+ * Deliberately not size-bounded, unlike the receipt ledger beside it. Evicting a boundary readmits
+ * every pre-close frame it was fencing, which is the defect this map exists to prevent; one number
+ * per worktree ever retracted on an environment is a cheaper price, and the environment teardown
+ * below drains it.
+ */
+export const sessionTabsRemovalWatermarkByWorktree = new Map<string, number>()
 export const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
 export const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
 export const sessionTabsTrackingGenerationByEnvironment = new Map<string, number>()
@@ -202,6 +232,10 @@ export type WebSessionTabsSyncState = Pick<
       | 'activityClearedAtByPaneKey'
       | 'agentLaunchConfigByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
+      // Why: a client draft is the evidence that a mirrored file's dirty flag is the client's
+      // own and must survive a host republish (#21392); absent here, the host flag wins.
+      | 'editorDrafts'
+      | 'localOnlyScrollbackByTabId'
       | 'migrationUnsupportedByPtyId'
       | 'manuallyUnreadTurnsByPaneKey'
       | 'paneForegroundAgentByPaneKey'
@@ -226,6 +260,7 @@ export type WebSessionTabsBatchRecordKey =
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
+  | 'localOnlyScrollbackByTabId'
   | 'pendingStartupByTabId'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
@@ -240,6 +275,7 @@ export type WebSessionOpenFilesIndex = {
   byWorktree: Map<string, OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
+  retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
   agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>
   openFilesIndex: WebSessionOpenFilesIndex | null

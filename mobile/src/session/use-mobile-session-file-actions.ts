@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react'
-import { Linking } from 'react-native'
+import { openExternalLink } from '../platform/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
@@ -92,7 +92,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
       // Why: browser.tabCreate resolves a real worktree, which the floating
       // sentinel doesn't have — open taps in the phone browser instead.
       if (terminalLinkOpenMode === 'phone-browser' || isFloatingWorkspaceRoute) {
-        void Linking.openURL(url).catch(() => {})
+        openExternalLink(url)
         return
       }
       void handleCreateBrowserRef.current?.(url)

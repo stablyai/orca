@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type * as NativeChatProseModule from './native-chat-prose'
+import type * as NativeChatProseModule from '../../../../shared/native-chat-prose'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
@@ -15,7 +15,7 @@ import { installNativeChatMessageListTestViewport } from './native-chat-message-
 // Counting real per-row work rather than a render counter: a future refactor could keep the
 // render count low while still re-deriving every row's markdown.
 const proseCalls = vi.hoisted(() => ({ count: 0 }))
-vi.mock('./native-chat-prose', async (importOriginal) => {
+vi.mock('../../../../shared/native-chat-prose', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatProseModule>()
   return {
     ...actual,

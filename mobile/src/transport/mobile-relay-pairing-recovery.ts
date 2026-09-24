@@ -1,9 +1,8 @@
 import { Platform } from 'react-native'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+import type {
+  DeviceCredentialInstalled,
+  MobileRelayEndpoint,
+  PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { loadHosts, saveHost } from './host-store'
@@ -26,7 +25,10 @@ import {
 } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { HostProfile } from './types'
-import { requireRpcResultOrThrowCodedError } from './rpc-acceptance-policies'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 
 export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred' | 'abandoned'
 
@@ -128,14 +130,11 @@ async function runRecovery(
       }
       if (credential.kind === 'invite' && endpoints.installStatus?.state === 'not-found') {
         journal = await transitionToInviteAuthorization(journal, dependencies)
-        const installed = DeviceCredentialInstalledSchema.parse(
-          requireRpcResultOrThrowCodedError(
-            await client.sendRequest('pairing.provisionRelay', {
-              reqId: journal.metadata.installReqId,
-              newResumeTokenHash: journal.metadata.pendingResumeTokenHash
-            })
-          )
-        )
+        const installReply = await relayCredentialProvision.request(client, {
+          reqId: journal.metadata.installReqId,
+          newResumeTokenHash: journal.metadata.pendingResumeTokenHash
+        })
+        const installed = relayCredentialProvision.interpret(installReply)
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
         observedCommitted = true
@@ -220,14 +219,11 @@ async function getRecoveryStatus(
   journal: MobileRelayPairingJournal,
   kind: 'resume' | 'invite'
 ) {
-  return PairingGetEndpointsResultSchema.parse(
-    requireRpcResultOrThrowCodedError(
-      await client.sendRequest('pairing.getEndpoints', {
-        installReqId: journal.metadata.installReqId,
-        ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
-      })
-    )
-  )
+  const reply = await relayPairingEndpointsRead.request(client, {
+    installReqId: journal.metadata.installReqId,
+    ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
+  })
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 async function transitionToInviteAuthorization(
@@ -249,7 +245,7 @@ async function transitionToInviteAuthorization(
 
 async function publishCommitted(
   journal: MobileRelayPairingJournal,
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   dependencies: RecoveryDependencies
 ): Promise<void> {
   if (endpoints.installStatus?.state !== 'committed' || !endpoints.relay) {
@@ -296,7 +292,7 @@ function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
 }
 
 function assertCommitted(
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   installed: DeviceCredentialInstalled
 ): void {
   if (

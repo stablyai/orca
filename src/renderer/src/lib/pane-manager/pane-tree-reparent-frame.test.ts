@@ -74,6 +74,7 @@ function createPane(id: number, container = createMockElement('pane')): ManagedP
     hasComplexScriptOutput: false,
     webglAddon: {} as never,
     ligaturesAddon: null,
+    imageAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     compositionHandler: null,

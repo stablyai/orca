@@ -1,11 +1,8 @@
 import type { Tab } from '../../../../shared/tab-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
 
 export type UnifiedTerminalTabChatFields = {
   unifiedTabId: string | undefined
-  structuredSessionAgent: AgentType | undefined
   isChatViewMode: boolean
-  structuredSessionId: string | null
   unifiedTabLabel: string | undefined
 }
 
@@ -49,7 +46,7 @@ export function getCachedTerminalGroupIdForWorktree(
 }
 
 /**
- * The five unified-tab fields TerminalPane's chat state reads.
+ * The unified-tab fields TerminalPane's chat state reads.
  *
  * Why bundled: they used to be five `useAppStore` calls, so one publication paid
  * the lookup five times and held five listener slots for every mounted tab.
@@ -66,9 +63,7 @@ export function selectUnifiedTerminalTabChatFields(
   )
   return {
     unifiedTabId: tab?.id,
-    structuredSessionAgent: tab?.agentSessionAgent,
     isChatViewMode: tab?.viewMode === 'chat',
-    structuredSessionId: tab?.structuredSessionId ?? null,
     unifiedTabLabel: tab?.label
   }
 }

@@ -1,3 +1,4 @@
+import { paneIdentity } from './runtime-terminal-pane-identity'
 import { randomUUID } from 'node:crypto'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import { resolveWorktreeCreateDisplayNameRequest } from '../ipc/worktree-logic'
@@ -136,6 +137,8 @@ export async function createRuntimeFolderWorktree(args: {
       }
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
+        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
+        ...paneIdentity(request.startupPaneKey),
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),

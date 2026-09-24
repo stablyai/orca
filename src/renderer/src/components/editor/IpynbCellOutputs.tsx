@@ -1,8 +1,40 @@
-import DOMPurify from 'dompurify'
+import type { ITheme } from '@xterm/xterm'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import {
+  DEFAULT_TERMINAL_THEME_DARK,
+  DEFAULT_TERMINAL_THEME_LIGHT,
+  getBuiltinTheme
+} from '@/lib/terminal-theme'
 import { IpynbMarkdownCell } from './IpynbCellEditor'
-import type { IpynbCell, IpynbOutputItem } from './ipynb-parse'
+import { IpynbHtmlOutput } from './IpynbHtmlOutput'
+import { parseAnsiSegments, type AnsiColor } from './ipynb-ansi'
+import type { IpynbCell, IpynbOutput, IpynbOutputItem } from './ipynb-parse'
+import { useDocumentDarkTheme } from './use-document-dark-theme'
+
+const ANSI_PALETTE_KEYS = [
+  'black',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'white',
+  'brightBlack',
+  'brightRed',
+  'brightGreen',
+  'brightYellow',
+  'brightBlue',
+  'brightMagenta',
+  'brightCyan',
+  'brightWhite'
+] as const satisfies readonly (keyof ITheme)[]
+
+// Why: the default terminal themes already carry ANSI palettes tuned for Orca's dark and light surfaces.
+const ANSI_PALETTES = {
+  dark: ANSI_PALETTE_KEYS.map((key) => getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK)?.[key]),
+  light: ANSI_PALETTE_KEYS.map((key) => getBuiltinTheme(DEFAULT_TERMINAL_THEME_LIGHT)?.[key])
+}
 
 function valueToText(value: unknown): string {
   if (Array.isArray(value)) {
@@ -28,63 +60,83 @@ function dataUriForImage(item: IpynbOutputItem): string | null {
   return `data:${item.mime};base64,${value}`
 }
 
-function PreformattedOutput({
-  text,
-  error = false
-}: {
-  text: string
-  error?: boolean
-}): React.JSX.Element {
+function isRenderableMime(mime: string): boolean {
+  return (
+    mime.startsWith('image/') ||
+    mime.startsWith('text/') ||
+    mime === 'application/json' ||
+    mime.endsWith('+json')
+  )
+}
+
+function AnsiText({ text }: { text: string }): React.JSX.Element {
+  const palette = ANSI_PALETTES[useDocumentDarkTheme() ? 'dark' : 'light']
+  const resolve = (color: AnsiColor | undefined): string | undefined =>
+    typeof color === 'number' ? palette[color] : color
+  return (
+    <>
+      {parseAnsiSegments(text).map((segment, index) => (
+        <span
+          key={index}
+          style={{
+            color: resolve(segment.fg),
+            backgroundColor: resolve(segment.bg),
+            fontWeight: segment.bold ? 600 : undefined,
+            fontStyle: segment.italic ? 'italic' : undefined,
+            textDecoration: segment.underline ? 'underline' : undefined
+          }}
+        >
+          {segment.text}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function TextOutput({ text, error = false }: { text: string; error?: boolean }) {
   return (
     <pre
       className={cn(
-        'max-h-[420px] overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-5 scrollbar-editor',
-        error ? 'text-destructive' : 'text-foreground'
+        'max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md px-3 py-2 font-mono text-xs leading-5 text-foreground scrollbar-editor',
+        error && 'bg-destructive/10'
       )}
     >
-      {text}
+      <AnsiText text={text} />
     </pre>
   )
 }
 
-function OutputItem({ item }: { item: IpynbOutputItem }): React.JSX.Element | null {
+function DisplayItem({ item }: { item: IpynbOutputItem }): React.JSX.Element | null {
   if (item.mime === 'text/html') {
-    const html = DOMPurify.sanitize(valueToText(item.value), {
-      USE_PROFILES: { html: true, svg: true, svgFilters: true }
-    })
-    return (
-      <iframe
-        title={translate('auto.components.editor.IpynbViewer.66a3f7d330', 'Notebook HTML output')}
-        sandbox=""
-        referrerPolicy="no-referrer"
-        loading="lazy"
-        className="block h-80 w-full border-0 bg-background"
-        srcDoc={html}
-      />
-    )
+    return <IpynbHtmlOutput html={valueToText(item.value)} />
   }
-
   if (item.mime.startsWith('image/')) {
     const uri = dataUriForImage(item)
     return uri ? (
-      <div className="flex max-w-full overflow-auto p-3 scrollbar-editor">
-        <img src={uri} alt={item.mime} className="max-h-[520px] max-w-full object-contain" />
-      </div>
+      <img
+        src={uri}
+        alt={item.mime}
+        className="mx-3 max-h-[520px] max-w-full self-start object-contain"
+      />
     ) : null
-  }
-
-  if (item.mime === 'application/json' || item.mime.endsWith('+json')) {
-    const text =
-      typeof item.value === 'string' ? item.value : JSON.stringify(item.value ?? null, null, 2)
-    return <PreformattedOutput text={text} />
   }
   if (item.mime === 'text/markdown') {
     return <IpynbMarkdownCell source={valueToText(item.value)} />
   }
-  if (item.mime.startsWith('text/') || item.mime === 'application/javascript') {
-    return <PreformattedOutput text={valueToText(item.value)} />
+  return <TextOutput text={valueToText(item.value)} />
+}
+
+function Output({ output }: { output: IpynbOutput }): React.JSX.Element | null {
+  if (output.kind === 'stream') {
+    return <TextOutput text={output.text} error={output.name === 'stderr'} />
   }
-  return null
+  if (output.kind === 'error') {
+    // Jupyter tracebacks already end with "ename: evalue".
+    return <TextOutput error text={output.traceback || `${output.name}: ${output.message}`} />
+  }
+  // Items arrive richest-first; like Jupyter, show only the best representation.
+  const item = output.items.find((candidate) => isRenderableMime(candidate.mime))
+  return item ? <DisplayItem item={item} /> : null
 }
 
 export function IpynbCellOutputs({ cell }: { cell: IpynbCell }): React.JSX.Element | null {
@@ -92,30 +144,11 @@ export function IpynbCellOutputs({ cell }: { cell: IpynbCell }): React.JSX.Eleme
     return null
   }
   return (
-    <div className="border-t border-border/50 bg-background">
-      {cell.outputs.map((output, index) => {
-        if (output.kind === 'stream') {
-          return <PreformattedOutput key={index} text={output.text} />
-        }
-        if (output.kind === 'error') {
-          return (
-            <div key={index} className="border-l-2 border-destructive">
-              <PreformattedOutput
-                error
-                text={[output.name, output.message, output.traceback].filter(Boolean).join('\n')}
-              />
-            </div>
-          )
-        }
-        const renderedItems = output.items
-          .map((item, itemIndex) => <OutputItem key={`${item.mime}-${itemIndex}`} item={item} />)
-          .filter(Boolean)
-        return renderedItems.length > 0 ? (
-          <div key={index} className="border-b border-border/40 last:border-b-0">
-            {renderedItems}
-          </div>
-        ) : null
-      })}
+    <div className="flex min-w-0 flex-col gap-1 pt-2">
+      {cell.outputs.map((output, index) => (
+        // Scoping by run means a re-execution remounts outputs instead of reusing stale frames.
+        <Output key={`${cell.executionCount}:${index}`} output={output} />
+      ))}
     </div>
   )
 }

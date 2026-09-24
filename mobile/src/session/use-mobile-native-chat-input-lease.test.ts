@@ -33,7 +33,9 @@ describe('useMobileNativeChatInputLease', () => {
     expect(lease?.ready).toBe(true)
     expect(lease?.lockReason).toBeNull()
 
-    act(() => lease?.clear())
+    act(() => {
+      lease?.clear()
+    })
     expect(lease?.ready).toBe(false)
     act(() => lease?.markReady('terminal'))
     expect(lease?.ready).toBe(true)
@@ -86,18 +88,26 @@ describe('useSettledMobileNativeChatInputLock', () => {
       renderer = create(createElement(Harness, { reason: 'waiting' }))
     })
     expect(settled).toBeNull()
-    act(() => vi.advanceTimersByTime(600))
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
     expect(settled).toBe('waiting')
 
     // A brief unlock that reverts inside the settle window never reaches the composer.
     act(() => renderer?.update(createElement(Harness, { reason: null })))
-    act(() => vi.advanceTimersByTime(300))
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
     act(() => renderer?.update(createElement(Harness, { reason: 'disconnected' })))
-    act(() => vi.advanceTimersByTime(600))
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
     expect(settled).toBe('disconnected')
 
     act(() => renderer?.update(createElement(Harness, { reason: null })))
-    act(() => vi.advanceTimersByTime(600))
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
     expect(settled).toBeNull()
   })
 })

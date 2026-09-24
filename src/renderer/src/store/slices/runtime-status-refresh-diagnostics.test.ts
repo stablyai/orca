@@ -24,7 +24,11 @@ describe('refreshRuntimeEnvironmentStatus diagnostics', () => {
     })
     const publish = vi.fn()
 
-    await expect(refreshRuntimeEnvironmentStatus('env-a', 5_000, publish)).resolves.toBe(false)
+    const applySnapshot = vi.fn()
+
+    await expect(
+      refreshRuntimeEnvironmentStatus('env-a', 5_000, publish, applySnapshot)
+    ).resolves.toBe(false)
 
     expect(getStatus).toHaveBeenCalledWith({ selector: 'env-a', timeoutMs: 5_000 })
     expect(publish).toHaveBeenCalledWith({

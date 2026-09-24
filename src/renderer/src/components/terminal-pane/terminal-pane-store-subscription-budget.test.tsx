@@ -27,8 +27,9 @@ import {
  * above before you do.
  */
 const TERMINAL_PANE_LISTENER_BUDGET = 16
-/** What the same mount cost before the stable-action and unified-tab folds. */
-const PRE_FOLD_LISTENERS_PER_PANE = 49
+/** What the same mount cost before the stable-action and unified-tab folds: one listener per
+ *  bound action (each new stable action raises this by one, never the budget) plus the folded reads. */
+const PRE_FOLD_LISTENERS_PER_PANE = 50
 
 const originalState = useAppStore.getState()
 
@@ -104,7 +105,7 @@ describe('TerminalPane store subscription budget', () => {
 
     expect(perPane).toBe(TERMINAL_PANE_LISTENER_BUDGET)
     expect(perPane).toBeLessThan(PRE_FOLD_LISTENERS_PER_PANE)
-    // 28 stable actions, four duplicate unified-tab reads, one dead dispatch-status read.
+    // 29 stable actions, four duplicate unified-tab reads, one dead dispatch-status read.
     expect(PRE_FOLD_LISTENERS_PER_PANE - perPane).toBe(TERMINAL_PANE_STORE_ACTION_KEYS.length + 5)
 
     unmount()

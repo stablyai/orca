@@ -55,6 +55,7 @@ vi.mock('./use-structured-agent-session', async () => {
         submissions: mocks.submissions as never
       })
       return {
+        journalItems: [],
         messages:
           mocks.mode === 'outbox'
             ? []
@@ -277,11 +278,11 @@ describe('NativeChatStructuredSession delivery', () => {
     expect(request.envelope.clientOperationId).toBe('op-head')
   })
 
-  it('raises no delivery notice for a stuck message behind a healthy head', async () => {
+  it('names the stuck message behind an admitted head, and its Retry sends that one', async () => {
     mocks.mode = 'outbox'
     mocks.submissions = []
-    // Admitted: written and awaiting the provider, so the head is not in doubt
-    // and a Retry could not act on the entry queued behind it anyway.
+    // The head is admitted -- written and awaiting the provider -- so the entry behind it is the
+    // one holding the queue, and Retry acts on it instead of waiting for the head to clear.
     mocks.call.mockResolvedValue({
       ok: true,
       value: { submission: { clientMessageId: 'op-head', dispatchState: 'pending' } }
@@ -303,8 +304,17 @@ describe('NativeChatStructuredSession delivery', () => {
     )
 
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull()
-    expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull()
+    expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
+      envelope: { clientOperationId: 'op-head' }
+    })
+
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(mocks.call.mock.calls[1]?.[2]).toMatchObject({
+      envelope: { clientOperationId: 'op-later' }
+    })
   })
 
   it('resends a transport-unconfirmed head so later messages are not wedged', async () => {
@@ -339,7 +349,7 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull())
   }, 20000)
 
-  it('probes without retryUnknown so the host cannot redispatch', async () => {
+  it('probes the same operation without marking an explicit user retry', async () => {
     mocks.mode = 'outbox'
     mocks.submissions = []
     mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
@@ -398,7 +408,7 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
     const sent = mocks.call.mock.calls[0]?.[2] as { envelope: { clientOperationId: string } }
-    // The host now reports it as an unresolved unknown: redispatch is the user's call.
+    // The host now reports an unresolved unknown: another replay is the user's call.
     mocks.submissions = [
       {
         clientMessageId: sent.envelope.clientOperationId,
@@ -537,14 +547,14 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
 
-    // User force-retries: this request legitimately carries retryUnknown.
+    // User retries with the same envelope and no legacy redelivery signal.
     fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     const forcedRequest = mocks.call.mock.calls[1]?.[2] as Record<string, unknown> | undefined
-    expect(forcedRequest?.retryUnknown).toBe(true)
+    expect(forcedRequest?.retryUnknown).toBeUndefined()
 
-    // That retry also failed at the transport. The probe must NOT pick it up, or it
-    // would re-send retryUnknown automatically and redispatch to the agent.
+    // That retry also failed at the transport. The probe must not repeat an
+    // explicit retry automatically.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 3000))
     })

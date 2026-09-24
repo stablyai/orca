@@ -10,6 +10,7 @@ import {
 } from './runtime-worktree-path-identity'
 import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { recordPtySurface, SURFACE_CLAIM_WITHOUT_STANDING } from './pty-recorded-surface-topology'
 import { evaluateStructuredTuiRecoveryClaim } from './structured-tui-recovery-claim-match'
 import {
   cloneAgentSessionOwnerBinding,
@@ -127,10 +128,13 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
           throw new Error('The owning agent terminal could not be recovered.')
         }
         candidate = recovered.pty
-        candidate.tabId = recovered.owner.surface.tabId
-        candidate.paneKey = makePaneKey(
+        // The owner binding is persisted evidence, so it names the pane without claiming the graph
+        // still holds it; the guard below needs the names, not the standing.
+        recordPtySurface(
+          candidate,
           recovered.owner.surface.tabId,
-          recovered.owner.surface.leafId
+          makePaneKey(recovered.owner.surface.tabId, recovered.owner.surface.leafId),
+          SURFACE_CLAIM_WITHOUT_STANDING
         )
         handle = this.issuePtyHandle(candidate)
         const recoveredIncarnationId = candidate.incarnationId

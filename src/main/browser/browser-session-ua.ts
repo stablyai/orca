@@ -1,56 +1,126 @@
 import type { Session } from 'electron'
+import type { ViewportUserAgentOverride } from './browser-viewport-user-agent'
+export { cleanElectronUserAgent } from './browser-process-user-agent'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 
 import {
   currentUserAgent,
   googleAuthUserAgent,
-  isGoogleAuthUrl,
   setUserAgentHeader,
+  shouldUseGoogleAuthIdentity,
   stripClientHints
 } from './browser-google-auth-ua'
 
-// Why: Electron's default UA includes "Electron/X.X.X" and the app name
-// (e.g. "orca/1.2.3"), an impossible identity for sessions imported from Chrome.
-// This focused revocation fix strips only those tokens; it does not attempt full Chrome
-// impersonation, and Chromium's client-hint identity remains browser-owned.
-export function cleanElectronUserAgent(ua: string): string {
-  return (
-    ua
-      .replace(/\s+Electron\/\S+/, '')
-      // Why: \S+ matches any non-whitespace token (e.g. "orca/1.3.8-rc.0")
-      // including pre-release semver strings that [\d.]+ would miss.
-      .replace(/(\)\s+)\S+\s+(Chrome\/)/, '$1$2')
-  )
+export type BrowserSessionRequestUserAgentResolver = (args: {
+  session: Session
+  url: string
+  referrer?: string
+  resourceType?: string
+  webContentsId?: number
+  currentUserAgent?: string
+  effectiveUserAgent?: string
+}) => ViewportUserAgentOverride | undefined
+
+function quoteClientHint(value: string): string {
+  return `"${value.replace(/["\\]/g, '\\$&')}"`
 }
 
-// Why: Chromium already publishes one internally consistent client-hint identity through both
-// request headers and navigator.userAgentData. This handler only owns the host-scoped Firefox
-// exception; synthesizing Chrome brands here would make those two browser-owned surfaces disagree.
-export function setupGoogleAuthUserAgentOverride(sess: Session): void {
-  const firefoxUa = googleAuthUserAgent()
+function formatClientHintBrands(brands: { brand: string; version: string }[]): string {
+  return brands
+    .map(({ brand, version }) => `${quoteClientHint(brand)};v=${quoteClientHint(version)}`)
+    .join(', ')
+}
 
-  sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
-    const headers = details.requestHeaders
-    if (isGoogleAuthUrl(details.url)) {
-      // Why: present a Firefox identity on Google's sign-in hosts so the user logs
-      // in inside the app and Google issues self-refreshing bound cookies. Strip
-      // sec-ch-ua* because real Firefox sends none.
-      setUserAgentHeader(headers, firefoxUa)
-      stripClientHints(headers)
+function applyUserAgentMetadataHeaders(
+  headers: Record<string, string>,
+  metadata: NonNullable<ViewportUserAgentOverride['userAgentMetadata']>
+): void {
+  const values: Record<string, string> = {
+    'sec-ch-ua': formatClientHintBrands(metadata.brands),
+    'sec-ch-ua-full-version-list': formatClientHintBrands(metadata.fullVersionList),
+    'sec-ch-ua-full-version': quoteClientHint(metadata.fullVersion),
+    'sec-ch-ua-platform': quoteClientHint(metadata.platform),
+    'sec-ch-ua-platform-version': quoteClientHint(metadata.platformVersion),
+    'sec-ch-ua-arch': quoteClientHint(metadata.architecture),
+    'sec-ch-ua-model': quoteClientHint(metadata.model),
+    'sec-ch-ua-mobile': metadata.mobile ? '?1' : '?0'
+  }
+  for (const key of Object.keys(headers)) {
+    const lowerKey = key.toLowerCase()
+    if (!lowerKey.startsWith('sec-ch-ua')) {
+      continue
+    }
+    const value = values[lowerKey]
+    if (value === undefined) {
+      delete headers[key]
+    } else {
+      headers[key] = value
+    }
+  }
+}
+
+// Desktop client hints remain browser-owned. Mobile overrides carry the same metadata CDP used,
+// so worker requests replace only hints Chromium already chose to emit without inventing them.
+export function installBrowserSessionUserAgentPolicy(
+  sess: Session,
+  resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
+): () => void {
+  const firefoxUa = googleAuthUserAgent()
+  sess.webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+    (details, callback) => {
+      const headers = details.requestHeaders
+      const requestUserAgent = currentUserAgent(headers)
+      let effectiveUserAgent: string | undefined
+      try {
+        effectiveUserAgent = details.webContents?.getUserAgent()
+      } catch {
+        // The request can race guest teardown; the header and manager state still provide a fallback.
+      }
+      // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve one
+      // coherent identity per mode instead of pairing a Firefox document with native workers.
+      if (
+        getBrowserProcessUserAgentIdentity().mode === 'clean' &&
+        shouldUseGoogleAuthIdentity(details.url, details.referrer ?? '', details.resourceType ?? '')
+      ) {
+        setUserAgentHeader(headers, firefoxUa)
+        stripClientHints(headers)
+        callback({ requestHeaders: headers })
+        return
+      }
+      const identity = resolveRequestUserAgent?.({
+        session: sess,
+        url: details.url,
+        referrer: details.referrer,
+        resourceType: details.resourceType,
+        webContentsId: details.webContentsId,
+        currentUserAgent: requestUserAgent,
+        effectiveUserAgent
+      })
+      if (!identity) {
+        callback({ requestHeaders: headers })
+        return
+      }
+      if (identity.userAgent) {
+        setUserAgentHeader(headers, identity.userAgent)
+      }
+      if (identity.userAgent === firefoxUa) {
+        stripClientHints(headers)
+        callback({ requestHeaders: headers })
+        return
+      }
+      if (identity.userAgentMetadata) {
+        applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+      }
       callback({ requestHeaders: headers })
+    }
+  )
+  let disposed = false
+  return (): void => {
+    if (disposed) {
       return
     }
-    if (currentUserAgent(headers) === firefoxUa) {
-      // Why: while the auth document is on screen the WebContents UA is Firefox,
-      // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
-      // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
-      // bearing Chromium client hints. Rewriting those to Chrome pairs a Firefox
-      // UA with Chrome hints — a sharper cross-host identity tell than either
-      // alone, which can stall Google's password-submit challenge. Real Firefox
-      // sends no client hints, so strip them to keep one identity for the flow.
-      stripClientHints(headers)
-      callback({ requestHeaders: headers })
-      return
-    }
-    callback({ requestHeaders: headers })
-  })
+    disposed = true
+    sess.webRequest.onBeforeSendHeaders(null)
+  }
 }

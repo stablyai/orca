@@ -15,7 +15,8 @@ import { mergeNativeChatLiveSession } from './native-chat-live-status'
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT,
-  nextNativeChatLimit
+  nextNativeChatLimit,
+  type NativeChatOlderPageResult
 } from './native-chat-pagination'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
@@ -46,8 +47,9 @@ export type NativeChatLiveSession = NativeChatSession & {
   hasMore: boolean
   /** Whether an older-history page is currently loading. */
   loadingEarlier: boolean
-  /** Grow the read window to page in older history (scrolled-to-top trigger). */
-  loadEarlier: () => void
+  /** Page in older history. Resolves once the page has landed (or not); a call while
+   *  one is in flight joins it. */
+  loadEarlier: () => Promise<NativeChatOlderPageResult>
   /** Raw initial-read phase. `status` is not a substitute: a live 'working' hook
    *  outranks (and so hides) 'loading', which would let a consumer deciding from
    *  an empty list treat an in-flight transcript as real history. */
@@ -284,23 +286,30 @@ export function useNativeChatLiveSession(
     // `transport` identity changes on an owner flip, re-running this effect to re-subscribe against the new host.
   }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
 
-  const loadEarlier = useCallback(() => {
-    if (
-      !latestEnabled.current ||
-      !sessionId ||
-      loadingEarlier ||
-      !hasMore ||
-      read.phase !== 'ready'
-    ) {
-      return
+  // The page in flight for the current transcript epoch; concurrent callers join it.
+  const olderPageRef = useRef<{
+    epoch: number
+    promise: Promise<NativeChatOlderPageResult>
+  } | null>(null)
+  const loadEarlier = useCallback((): Promise<NativeChatOlderPageResult> => {
+    const inFlight = olderPageRef.current
+    if (inFlight?.epoch === transcriptEpochRef.current) {
+      return inFlight.promise
+    }
+    if (!hasMore) {
+      return Promise.resolve('exhausted')
+    }
+    if (!latestEnabled.current || !sessionId || read.phase !== 'ready') {
+      return Promise.resolve('unchanged')
     }
     const nextLimit = nextNativeChatLimit(limitRef.current)
     const requestEpoch = transcriptEpochRef.current
     const lifecycleRevision = transcriptLifecycleControl.revision()
+    const loadedCount = read.messages.length
     setLoadingEarlier(true)
-    void transport
+    const promise = transport
       .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
-      .then((result) => {
+      .then((result): NativeChatOlderPageResult => {
         // Ignore a stale resolve from a swapped session or flipped owner — either would paint the wrong host's history.
         if (
           !latestEnabled.current ||
@@ -308,36 +317,33 @@ export function useNativeChatLiveSession(
           latestTransport.current !== transport ||
           transcriptEpochRef.current !== requestEpoch
         ) {
-          return
+          return 'superseded'
         }
         if (!result || 'error' in result) {
-          return
+          return 'failed'
         }
         limitRef.current = nextLimit
         // Read results are an ordered tail: replace the base list so the older page prepends in order; live appends stay separate.
         setRead({ phase: 'ready', messages: result.messages })
         transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
-        setHasMore(hasMoreNativeChatHistory(result.messages.length, nextLimit))
+        const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
+        setHasMore(more)
+        return result.messages.length > loadedCount ? 'applied' : more ? 'unchanged' : 'exhausted'
       })
-      .catch(() => {
-        // Swallow a rejected "load more" read: keep the already-loaded transcript intact rather than surface the rejection.
-      })
+      // Swallow a rejected "load more" read: keep the already-loaded transcript intact rather than surface the rejection.
+      .catch((): NativeChatOlderPageResult => 'failed')
       .finally(() => {
+        if (olderPageRef.current?.promise === promise) {
+          olderPageRef.current = null
+        }
         // Clear the loading flag on the current epoch even when the result is discarded, so a stale resolve can't wedge it true.
         if (latestEnabled.current && transcriptEpochRef.current === requestEpoch) {
           setLoadingEarlier(false)
         }
       })
-  }, [
-    agent,
-    sessionId,
-    transcriptPath,
-    transport,
-    hasMore,
-    loadingEarlier,
-    read.phase,
-    transcriptLifecycleControl
-  ])
+    olderPageRef.current = { epoch: requestEpoch, promise }
+    return promise
+  }, [agent, sessionId, transcriptPath, transport, hasMore, read, transcriptLifecycleControl])
 
   // Computed outside the status memo so hookState churn (status-only) never re-runs the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES

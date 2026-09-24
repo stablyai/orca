@@ -1,12 +1,9 @@
 import { settlePostAcquisitionAttachFailure } from './structured-agent-session-attach-failure'
-import { rewindRefusal } from './structured-rewind-refusal'
 import {
-  AgentSessionRewindRefusal,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   isAgentSessionPreSpawnError,
-  type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 // The host supplies owner authority; this flow reserves, proves, and publishes the session.
@@ -16,11 +13,13 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   admitAttachOrRefuse,
   attachJournal,
   classifyStoreFailure,
+  journalIdentityFor,
   reserveRequestFor,
   type AgentSessionAttachAuthority,
   type AgentSessionAttachParams,
@@ -36,9 +35,13 @@ import {
   importAdoptedTranscript,
   prepareAdoptedTranscript
 } from './structured-agent-session-adopted-import'
+import {
+  withAgentSessionCreatePhase,
+  type AgentSessionCreatePhaseRecorder
+} from '../../observability/agent-session-instrumentation'
+import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 
 export type AttachFlowInput = {
-  rewind?: StructuredAgentSessionAcquireInput['rewind']
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   journalRoot: string
@@ -46,6 +49,7 @@ export type AttachFlowInput = {
   callerKey: string
   params: AgentSessionAttachParams
   now: () => number
+  recordPhase?: AgentSessionCreatePhaseRecorder
   /** Publishes the journal before clients can send against the new owner. `acquiredOwner` is
    *  true only when this attach spawned the provider child, so a re-attach to a live one is not
    *  mistaken for a cold acquire. */
@@ -91,6 +95,7 @@ export async function performAttach(
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
   let replayed = false
+  let providerHistoryWindow: ProviderHistoryWindow | null = null
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
     : await prepareAdoptedTranscript(params)
@@ -98,15 +103,17 @@ export async function performAttach(
     return preparedTranscript
   }
   try {
-    const reserved = await store.reserveOwner(
-      reserveRequestFor({
-        sessionId,
-        params,
-        authority: input.authority,
-        callerKey: input.callerKey,
-        fingerprint: admitted.fingerprint,
-        now: input.now()
-      })
+    const reserved = await withAgentSessionCreatePhase('reserve_owner', input.recordPhase, () =>
+      store.reserveOwner(
+        reserveRequestFor({
+          sessionId,
+          params,
+          authority: input.authority,
+          callerKey: input.callerKey,
+          fingerprint: admitted.fingerprint,
+          now: input.now()
+        })
+      )
     )
     record = reserved.record
     replayed = reserved.disposition === 'replayed'
@@ -139,8 +146,19 @@ export async function performAttach(
         return { ok: false, refusal: replay.refusal }
       }
     }
+    // Sample provider history before a new child is acquired. Once acquireOwner
+    // starts the child, the adapter's liveness signal intentionally becomes
+    // conservative and an absent prompt can no longer prove non-delivery.
+    providerHistoryWindow = await readProviderHistoryWindow({
+      adapter: input.adapter,
+      identity: journalIdentityFor(record, params),
+      accountHome: record.accountHome,
+      ownerAlreadyAdmitted: agentSessionLeaseAdmitsWriter(record.lease)
+    })
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
-      const acquired = await acquireOwner(input, record)
+      const acquired = await withAgentSessionCreatePhase('acquire_owner', input.recordPhase, () =>
+        acquireOwner(input, record)
+      )
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
       acquiredOwner = true
@@ -192,9 +210,6 @@ export async function performAttach(
         )
       }
     }
-    if (error instanceof AgentSessionRewindRefusal) {
-      return rewindRefusal(error.rewindReason)
-    }
     if (error instanceof AgentSessionAcquisitionRefusal) {
       return { ok: false, refusal: { code: error.code, message: error.message } }
     }
@@ -215,7 +230,8 @@ export async function performAttach(
       record,
       params,
       journalRoot: input.journalRoot,
-      adapter: input.adapter
+      adapter: input.adapter,
+      providerHistoryWindow
     })
     await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
     await input.onAttached(attached, acquisitionGeneration, acquiredOwner)
@@ -241,6 +257,27 @@ export async function performAttach(
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds
     }
   }
+}
+
+async function readProviderHistoryWindow(input: {
+  adapter: StructuredAgentSessionAdapter
+  identity: AgentSessionJournalIdentity
+  accountHome: AgentSessionRecord['accountHome']
+  ownerAlreadyAdmitted: boolean
+}): Promise<ProviderHistoryWindow | null> {
+  const read = input.adapter.providerHistoryWindow
+  if (!read) {
+    return null
+  }
+  let history: ProviderHistoryWindow | null
+  try {
+    history = await read({ identity: input.identity, accountHome: input.accountHome })
+  } catch {
+    return null
+  }
+  // A lease that was already live may belong to a provider child this process
+  // has not indexed yet. Preserve the safe unknown outcome in that case.
+  return history && input.ownerAlreadyAdmitted ? { ...history, turnInFlight: true } : history
 }
 
 async function settleUnsupportedReservation(

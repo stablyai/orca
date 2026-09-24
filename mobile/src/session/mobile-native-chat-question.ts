@@ -5,6 +5,8 @@
 
 export type MobileChatQuestion = {
   question: string
+  /** Structured prompt identity, present only for durable host prompts. */
+  prompt?: { itemId: string; expectedRevision: number }
   options: string[]
   multiSelect: boolean
   /** Structured questions hide the free-text row when the provider does not accept it. */

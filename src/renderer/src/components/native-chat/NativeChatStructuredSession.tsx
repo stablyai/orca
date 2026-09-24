@@ -1,10 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
-import { RotateCcw } from 'lucide-react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { Button } from '@/components/ui/button'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
@@ -17,22 +15,15 @@ import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useStructuredAgentSession } from './use-structured-agent-session'
-import { translate } from '@/i18n/i18n'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
-
-type StoppingBackgroundTasks = {
-  sessionId: string
-  taskIds: ReadonlySet<string>
-  all: boolean
-}
-
-const NO_STOPPING_TASKS: ReadonlySet<string> = new Set()
-
-type ExpandedBackgroundTasks = { sessionId: string; expanded: boolean }
+import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
+import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
+import { NativeChatDeliveryRetry } from './NativeChatDeliveryRetry'
+import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -41,7 +32,15 @@ function encodeQuestionAnswer(questionId: string, answer: string): string {
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
-  const controller = useStructuredAgentSession(props)
+  const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
+  const provisionalLaunch = useNativeChatProvisionalLaunch(
+    fileLinkContext?.worktreeId,
+    props.sessionId
+  )
+  const controller = useStructuredAgentSession({
+    ...props,
+    transportEnabled: provisionalLaunch.transportEnabled
+  })
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
     terminalTabId: props.tabId,
     agent: props.agent,
@@ -51,12 +50,6 @@ export function NativeChatStructuredSession(
     transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
   })
   const [composerError, setComposerError] = useState<string | null>(null)
-  const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
-    useState<StoppingBackgroundTasks | null>(null)
-  // Held here, not in the strip: the strip unmounts whenever live work briefly
-  // drops to nothing, and its own state would collapse the list each time.
-  const [expandedBackgroundTasks, setExpandedBackgroundTasks] =
-    useState<ExpandedBackgroundTasks | null>(null)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -93,7 +86,7 @@ export function NativeChatStructuredSession(
       ...(controller.error ? { error: controller.error } : {}),
       hasMore: controller.hasOlder,
       loadingEarlier: controller.loadingOlder,
-      loadEarlier: () => void controller.loadOlder(),
+      loadEarlier: controller.loadOlder,
       readPhase:
         controller.status === 'loading'
           ? 'loading'
@@ -105,16 +98,38 @@ export function NativeChatStructuredSession(
   )
   const viewState = selectNativeChatViewState(session)
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
-  const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
-  const activeStoppingBackgroundTasks =
-    stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
+  const approvalBody = prompt?.body.kind === 'approval' ? prompt.body : null
+  const approval = approvalBody
+    ? {
+        title: approvalBody.title,
+        ...(approvalBody.displayName ? { displayName: approvalBody.displayName } : {}),
+        ...(approvalBody.description ? { description: approvalBody.description } : {}),
+        ...(approvalBody.decisionReason ? { decisionReason: approvalBody.decisionReason } : {}),
+        ...(approvalBody.blockedPath ? { blockedPath: approvalBody.blockedPath } : {}),
+        ...(approvalBody.matchedAskRule ? { matchedAskRule: approvalBody.matchedAskRule } : {}),
+        ...(approvalBody.subject ? { subject: approvalBody.subject } : {}),
+        ...(approvalBody.detail ? { detail: approvalBody.detail } : {}),
+        options: approvalBody.options.map((option) => ({
+          label: option.label,
+          send: option.id
+        }))
+      }
+    : null
+  const cancelPrompt = () => {
+    if (controller.turnId && prompt) {
+      void controller.cancel(controller.turnId, {
+        itemId: prompt.itemId,
+        expectedRevision: prompt.revision
+      })
+    }
+  }
   useNativeChatComposerRevealFocus({
     rootRef,
     composerRef,
@@ -138,19 +153,12 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
-  // Only the head of the outbox is ever dispatched, so it is the only entry a
-  // Retry can act on and the only one whose state can be holding the queue.
-  // Scanning past it named a message the user was not looking at and re-sent
-  // one from earlier in the session while their newest sat behind it.
-  const outboxHead = controller.outbox[0] ?? null
-  const retryableOutboxEntry =
-    outboxHead &&
-    (outboxHead.state === 'unconfirmed' ||
-      outboxHead.clientMessageId === controller.blockedClientMessageId)
-      ? outboxHead
+  const structuredTransport = useMemo(() => {
+    const threadGoal = controller.threadGoal
+    const setThreadGoalObjective = threadGoal
+      ? (objective: string) => threadGoal.change({ kind: 'set', objective })
       : null
-  const structuredTransport = useMemo(
-    () => ({
+    return {
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
         controller.send(
           text,
@@ -169,29 +177,31 @@ export function NativeChatStructuredSession(
           },
           setOption: controller.setStructuredOption,
           conversationCommands: controller.conversationCommands,
-          runConversationCommand: controller.runConversationCommand
+          runConversationCommand: controller.runConversationCommand,
+          ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
         }),
+      ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,
+      contextUsage: controller.contextUsage,
       worktreeId: fileLinkContext?.worktreeId,
       onError: setComposerError,
       runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote',
       sessionId: props.sessionId,
       runtimeEnvironmentId:
         props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
-    }),
-    [
-      controller,
-      fileLinkContext?.worktreeId,
-      optionPickerRequest,
-      props.agent,
-      props.sessionId,
-      props.target
-    ]
-  )
+    }
+  }, [
+    controller,
+    fileLinkContext?.worktreeId,
+    optionPickerRequest,
+    props.agent,
+    props.sessionId,
+    props.target
+  ])
 
   return (
     <div
@@ -221,12 +231,15 @@ export function NativeChatStructuredSession(
           <NativeChatMessageList
             session={session}
             journalItems={controller.journalItems}
+            railOutline={controller.railOutline}
+            isVisible={props.isVisible}
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
             workingStartedAt={controller.workingStartedAt}
             settledTurns={controller.settledTurns}
             showTurnStatus
+            showLiveTurnActivity={prompt === null}
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}
             allowFileUriLinks={onLinkClick !== undefined}
@@ -234,17 +247,15 @@ export function NativeChatStructuredSession(
           />
         )}
       </div>
-      {prompt?.body.kind === 'approval' ? (
+      {prompt && approval ? (
         <NativeChatApprovalCard
-          approval={{
-            title: prompt.body.title,
-            ...(prompt.body.detail ? { detail: prompt.body.detail } : {}),
-            options: prompt.body.options.map((option) => ({
-              label: option.label,
-              send: option.id
-            }))
-          }}
+          key={`${prompt.itemId}:${prompt.revision}`}
+          approval={approval}
           onChoose={(optionId) => void controller.respond(prompt, optionId)}
+          onCancel={cancelPrompt}
+          shouldFocus={props.isVisible && props.isFocusedGroup}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={onLinkClick !== undefined}
         />
       ) : null}
       {prompt && questionBody ? (
@@ -294,93 +305,36 @@ export function NativeChatStructuredSession(
               void controller.respond(prompt, optionId)
             }
           }}
-          onCancel={() => {
-            if (controller.turnId) {
-              void controller.cancel(controller.turnId)
-            }
-          }}
+          onCancel={cancelPrompt}
         />
       ) : null}
-      {retryableOutboxEntry ? (
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-1 text-xs text-muted-foreground">
-          <span>
-            {retryableOutboxEntry.state === 'unconfirmed'
-              ? translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
-                  'Message delivery is unconfirmed.'
-                )
-              : translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
-                  'Message was not sent.'
-                )}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => controller.retry(retryableOutboxEntry.clientMessageId)}
-          >
-            <RotateCcw className="size-3" />
-            {translate(
-              'auto.components.native.chat.NativeChatStructuredSession.a5e7f14068',
-              'Retry'
-            )}
-          </Button>
-        </div>
-      ) : null}
-      {controller.error || composerError ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
-          {controller.error ?? composerError}
-        </p>
-      ) : null}
-      {controller.backgroundTasks.show ? (
-        <NativeChatBackgroundTasksStatus
+      <NativeChatDeliveryRetry
+        outbox={controller.outbox}
+        blockedClientMessageId={controller.blockedClientMessageId}
+        retry={controller.retry}
+      />
+      <NativeChatLaunchRetry
+        lifecycle={provisionalLaunch.lifecycle}
+        onRetry={provisionalLaunch.retry}
+      />
+      <NativeChatStructuredSessionStatus
+        sessionId={props.sessionId}
+        error={controller.error}
+        composerError={composerError}
+        isVisible={props.isVisible}
+        backgroundTasks={controller.backgroundTasks}
+        stopBackgroundTask={controller.stopBackgroundTask}
+      />
+      {!prompt && controller.threadGoal?.goal ? (
+        <NativeChatThreadGoalBanner
+          key={props.sessionId}
+          goal={controller.threadGoal.goal}
+          pending={controller.threadGoal.pending}
           isVisible={props.isVisible}
-          tasks={controller.backgroundTasks.tasks}
-          settledTasks={controller.backgroundTasks.settledTasks}
-          indicatorActive={controller.backgroundTasks.isMonitoring}
-          supportsTaskStop={controller.backgroundTasks.supportsStop}
-          supportsStopAll={controller.backgroundTasks.supportsStopAll}
-          stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
-          stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
-          expanded={
-            expandedBackgroundTasks?.sessionId === props.sessionId &&
-            expandedBackgroundTasks.expanded
+          runningTurn={
+            controller.turnId === null ? null : { startedAt: controller.workingStartedAt ?? null }
           }
-          onExpandedChange={(expanded) =>
-            setExpandedBackgroundTasks({ sessionId: props.sessionId, expanded })
-          }
-          onStop={(taskId) => {
-            const targetSessionId = props.sessionId
-            setStoppingBackgroundTasks((current) => {
-              const taskIds = new Set(
-                current?.sessionId === targetSessionId ? current.taskIds : NO_STOPPING_TASKS
-              )
-              if (taskId) {
-                taskIds.add(taskId)
-              }
-              return {
-                sessionId: targetSessionId,
-                taskIds,
-                all: taskId ? current?.sessionId === targetSessionId && current.all : true
-              }
-            })
-            void controller.stopBackgroundTask(taskId).finally(() => {
-              setStoppingBackgroundTasks((current) => {
-                if (current?.sessionId !== targetSessionId) {
-                  return current
-                }
-                const taskIds = new Set(current.taskIds)
-                if (taskId) {
-                  taskIds.delete(taskId)
-                }
-                const all = taskId ? current.all : false
-                return taskIds.size === 0 && !all
-                  ? null
-                  : { sessionId: targetSessionId, taskIds, all }
-              })
-            })
-          }}
+          onChange={(change) => void controller.threadGoal?.change(change)}
         />
       ) : null}
       {prompt ? null : (

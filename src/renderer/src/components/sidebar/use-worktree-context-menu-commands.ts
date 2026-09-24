@@ -8,6 +8,7 @@ import {
 } from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
   planWorkspaceStatusAssignment,
@@ -40,6 +41,9 @@ export function useWorktreeContextMenuCommands(args: {
 }) {
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(args.worktree.path)
+  }, [args])
+  const handleCopyName = useCallback(() => {
+    window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
   }, [args])
   const handleToggleRead = useCallback(() => {
     args.updateWorktreeMeta(
@@ -166,6 +170,7 @@ export function useWorktreeContextMenuCommands(args: {
   return {
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
+    handleCopyName,
     handleCopyPath,
     handleCreateGroupDialogOpenChange,
     handleCreateGroupFromRepo,

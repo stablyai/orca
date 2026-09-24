@@ -8,7 +8,9 @@
 // journal rather than skipping or compacting past it.
 
 import type { AgentType } from './agent-status-types'
+import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
+import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
@@ -85,10 +87,19 @@ export type AgentJournalBoundedPayload = {
 
 // ─── Render-model items ─────────────────────────────────────────────────────
 
+/** How a user message reached the provider when it was not an ordinary turn
+ *  input. Persisted and open for growth: a reader that cannot place a value
+ *  renders an ordinary message. */
+export const AGENT_JOURNAL_MESSAGE_SEND_MODES = ['goal'] as const
+export type AgentJournalMessageSendMode = (typeof AGENT_JOURNAL_MESSAGE_SEND_MODES)[number]
+
 export type AgentJournalMessageItem = {
   kind: 'message'
   role: NativeChatRole
   blocks: NativeChatBlock[]
+  /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
+   *  goal's objective, and the provider pursues it without a turn of its own. */
+  sentAs?: AgentJournalMessageSendMode
 }
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
@@ -140,9 +151,27 @@ export type AgentJournalQuestion = {
   freeTextQuestionId?: string
 }
 
+export type AgentJournalApprovalMatchedAskRule = {
+  source: string
+  toolName: string
+  ruleContent?: string
+}
+
+export type AgentJournalApprovalSubject = {
+  kind: 'plan'
+  text: string
+  filePath?: string
+}
+
 export type AgentJournalApprovalItem = {
   kind: 'approval'
   title: string
+  displayName?: string
+  description?: string
+  decisionReason?: string
+  blockedPath?: string
+  matchedAskRule?: AgentJournalApprovalMatchedAskRule
+  subject?: AgentJournalApprovalSubject
   detail: string | null
   options: AgentJournalPromptOption[]
   resolution: AgentJournalResolution
@@ -166,17 +195,63 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
 ] as const
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
 
+// The turn verdict vocabulary lives in agent-turn-outcome.ts so the agent-status
+// row can share it without importing the journal; re-exported to keep one import site.
+export { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './agent-turn-outcome'
+
 export type AgentJournalTurnLifecycle = {
   turnId: string
   state: AgentJournalTurnLifecycleState
-  /** Provider key of the user item that opened the turn; clients resolve a
-   *  submission alias through it. Absent on rows from older hosts. */
+  /** The provider's own verdict, when it gave one. ABSENT MEANS UNKNOWN and must
+   *  never be read as success: a row from a host that predates the field, an end
+   *  the host inferred rather than heard, and a verdict vocabulary this build
+   *  cannot place all land here. `completed` alone proves nothing — the provider
+   *  reports an API error as a finished turn. */
+  outcome?: AgentJournalTurnOutcome
+  /** Journal key of the user item that opened the turn. A lifecycle row may key
+   *  itself when provider output opened a turn with no user item; absent means
+   *  an older host. */
   userItemId?: string
   startedAt?: number
+  /** Host clock at the send that opened this turn, when one is known. `startedAt`
+   *  remains the provider turn-open instant and is never rewritten. */
+  requestedAt?: number
   completedAt?: number
   /** The provider's own measured turn duration, preferred over the host interval. */
   durationMs?: number
+  /** What the provider said about its context window during or after this turn.
+   *  Usually written by a later revision, since the provider answers after the end. */
+  contextUsage?: AgentSessionContextUsage
 }
+
+/** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
+ *  status a newer provider reports must not turn a row malformed. */
+export const AGENT_JOURNAL_THREAD_GOAL_STATUSES = [
+  'active',
+  'paused',
+  'blocked',
+  'usageLimited',
+  'budgetLimited',
+  'complete'
+] as const
+export type AgentJournalThreadGoalStatus = (typeof AGENT_JOURNAL_THREAD_GOAL_STATUSES)[number]
+
+/** The provider's goal as last journaled. Timestamps are epoch ms on the
+ *  provider's clock; counters are as of `updatedAt`. */
+export type AgentJournalThreadGoal = {
+  objective: string
+  status: AgentJournalThreadGoalStatus
+  tokenBudget: number | null
+  tokensUsed: number
+  timeUsedSeconds: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** A goal transition in typed form, so readers never parse a bounded frame head. */
+export type AgentJournalThreadGoalState =
+  | { state: 'set'; goal: AgentJournalThreadGoal }
+  | { state: 'cleared' }
 
 export type AgentJournalStatusItem = {
   kind: 'status'
@@ -195,6 +270,8 @@ export type AgentJournalStatusItem = {
     kind: string
     payload: AgentJournalBoundedPayload
   }
+  /** Present on thread-goal transitions; absent on rows from older hosts. */
+  threadGoal?: AgentJournalThreadGoalState
 }
 
 /** The durable record of one root turn. `running` exposes cancellation while
@@ -202,7 +279,8 @@ export type AgentJournalStatusItem = {
  *  never tombstoned, so the endpoints survive. Timestamps are the execution
  *  host's clock at provider-event receipt; `durationMs` is the provider's own
  *  measurement. `unverifiable` carries no end: the host lost the child without
- *  observing its exit. */
+ *  observing its exit. `outcome` is the provider's separate verdict and is
+ *  absent whenever nothing told the host one. */
 export type AgentJournalTurnItem = { kind: 'turn' } & AgentJournalTurnLifecycle
 
 export type AgentJournalItemBody =
@@ -214,10 +292,41 @@ export type AgentJournalItemBody =
   | AgentJournalStatusItem
   | AgentJournalTurnItem
 
+/** Agent work, versus a backgrounded shell or command task. Classified once by
+ *  the producer, which holds the provider vocabulary, so no reader re-derives it. */
+export type AgentJournalProducerKind = 'agent' | 'background'
+
+/**
+ * Which agent produced a row, repeated on every row that agent produced.
+ *
+ * One journal is the durable record of one agent SESSION, and a session that
+ * runs subagents journals their rows into it too. Absence is a positive claim
+ * and never "unknown": no `agentId` means the session's own agent wrote the row.
+ * Repeated per row rather than held once on a start row, so a row answers for
+ * itself: every reader here scans backwards from the tail and stops at the
+ * turn, so one that had to find a start row first would have to scan past that
+ * stop to attribute anything. Repetition is near-free — absent on the session's
+ * own rows, which are most of them — and it is what keeps the field correct
+ * without a second lookup.
+ */
+export type AgentJournalProducerLinkage = {
+  /** The producing subagent's canonical id. Absent ⇒ the session's own agent. */
+  agentId?: string
+  /** The producing agent's own parent. Absent ⇒ its parent is the session root. */
+  parentAgentId?: string
+  /** The provider's own parent reference for this row. Provenance only: it names
+   *  the tool CALL, which is re-minted on every resume, so it is never a join key. */
+  providerParentRef?: string
+  producerKind?: AgentJournalProducerKind
+  /** Which run of the agent, when past the first. Identity answers "which agent";
+   *  this answers "which run of it", and is deliberately not part of the identity. */
+  attempt?: number
+}
+
 /** One reduced timeline entry. `sequence` orders the list; `observedAt` is the
  *  provider's own clock and may sort earlier than a later sequence when the row
  *  was recovered after a crash. */
-export type AgentJournalRenderItem = {
+export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   itemId: string
   revision: number
   body: AgentJournalItemBody

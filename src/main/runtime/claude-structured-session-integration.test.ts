@@ -1,17 +1,15 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import type {
-  ClaudeStreamJsonConnection,
-  ClaudeStreamJsonConnectionHandlers,
-  ClaudeStreamJsonLaunch,
-  openClaudeStreamJsonConnection
-} from '../claude/claude-stream-json-connection'
+import {
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
+import { fakeClaude } from './claude-structured-fake-connection-test-fixture'
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
 import {
   CLAUDE_SPAWN_TOKEN_ENV,
@@ -27,6 +25,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from './rpc/dispatcher'
+import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
@@ -55,108 +54,6 @@ vi.mock('../native-chat/session-file-resolver', () => ({
   readClaudeTranscriptLeafUuid,
   resolveSessionFilePath
 }))
-
-type FakeClaudeConnection = Omit<ClaudeStreamJsonConnection, 'closed' | 'exitVerdict'> & {
-  closed: boolean
-  exitVerdict: ClaudeStreamJsonConnection['exitVerdict']
-  launch: ClaudeStreamJsonLaunch
-  handlers: ClaudeStreamJsonConnectionHandlers
-  calls: { subtype: string; params?: Record<string, unknown> }[]
-  sent: Record<string, unknown>[]
-}
-
-function fakeClaude() {
-  const connections: FakeClaudeConnection[] = []
-  let initializeAccount: unknown
-  /** A child that dies during start, with the close verdict its ladder observed. */
-  let selfExit: { message: string; exitVerdict: ClaudeStreamJsonConnection['exitVerdict'] } | null =
-    null
-  const openConnection = (async (launch, handlers = {}) => {
-    const connection: FakeClaudeConnection = {
-      launch,
-      handlers,
-      calls: [],
-      sent: [],
-      pid: 4321 + connections.length,
-      closed: false,
-      initializationResult: async () => {
-        connection.calls.push({ subtype: 'initialize' })
-        if (selfExit) {
-          handlers.onExit?.(new Error(selfExit.message))
-          return { models: [] }
-        }
-        handlers.onMessage?.({
-          type: 'system',
-          subtype: 'init',
-          session_id: PROVIDER_SESSION,
-          ...(connections.length === 0 ? { uuid: 'init-leaf' } : {}),
-          model: 'claude-sonnet-5',
-          apiKeySource: 'none'
-        })
-        return {
-          models: [{ value: 'sonnet', displayName: 'Sonnet' }],
-          ...(initializeAccount === undefined ? {} : { account: initializeAccount })
-        }
-      },
-      getSettings: async () => {
-        connection.calls.push({ subtype: 'get_settings' })
-        return { env: {} }
-      },
-      supportedModels: async () => {
-        connection.calls.push({ subtype: 'list_models' })
-        return [{ value: 'sonnet', displayName: 'Sonnet' }]
-      },
-      setModel: async (model) => {
-        connection.calls.push({ subtype: 'set_model', params: { model } })
-      },
-      setPermissionMode: async (mode) => {
-        connection.calls.push({ subtype: 'set_permission_mode', params: { mode } })
-      },
-      applyFlagSettings: async (settings) => {
-        connection.calls.push({ subtype: 'apply_flag_settings', params: { settings } })
-      },
-      interrupt: async () => {
-        connection.calls.push({ subtype: 'interrupt', params: {} })
-        return undefined
-      },
-      cancelAsyncMessage: async () => {},
-      stopTask: async (taskId) => {
-        connection.calls.push({ subtype: 'stop_task', params: { taskId } })
-      },
-      send: async (message) => {
-        connection.sent.push(message)
-        if (message.type === 'user') {
-          handlers.onMessage?.({ ...message, uuid: 'user-1' })
-        }
-      },
-      exitVerdict: selfExit?.exitVerdict ?? { root: 'live', tree: 'unverifiable' },
-      close: async () => {
-        connection.closed = true
-        return selfExit === null
-      }
-    }
-    connections.push(connection)
-    return connection
-  }) as typeof openClaudeStreamJsonConnection
-  const live = (): FakeClaudeConnection => {
-    const connection = connections.at(-1)
-    if (!connection) {
-      throw new Error('no Claude connection')
-    }
-    return connection
-  }
-  return {
-    connections,
-    openConnection,
-    live,
-    setInitializeAccount: (account: unknown) => {
-      initializeAccount = account
-    },
-    setSelfExit: (exit: typeof selfExit) => {
-      selfExit = exit
-    }
-  }
-}
 
 let operations = 0
 // Keep IDs unique without making each assertion depend on a wall-clock tick.
@@ -196,7 +93,7 @@ function ensureParams(fence: number) {
     },
     provider: 'claude' as const,
     agent: 'claude',
-    accountHome: { variable: 'CLAUDE_CONFIG_DIR' as const, path: join(root, 'claude-home') },
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR' as const, path: recordAccountHomePath },
     runtimeKind: 'native' as const,
     providerHandle: {
       kind: 'claude' as const,
@@ -249,9 +146,13 @@ let dispatcher: RpcDispatcher
 let cleanups: Map<string, () => void>
 let tuiOwner: StructuredTuiOwner | null
 let transcriptPath: string
+/** The Claude home the durable record pins; the managed dir under `root` unless a test says otherwise. */
+let recordAccountHomePath: string
 /** Managed-account state and configured overlay this host installs, per test. */
 let claudeAuthPolicy: ClaudeStructuredAuthPolicy
 let claudeLaunchEnv: Record<string, string>
+let shellEnv: NodeJS.ProcessEnv
+let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -271,7 +172,9 @@ async function ok<T>(method: string, params: unknown): Promise<T> {
   return result.value as T
 }
 
-async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
+async function subscribe(
+  client: { clientKind: 'runtime'; clientCapabilities: string[] } = CLIENT
+): Promise<AgentSessionSubscribeEvent[]> {
   const frames: AgentSessionSubscribeEvent[] = []
   await dispatcher.dispatchStreaming(
     {
@@ -286,7 +189,7 @@ async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
         frames.push(response.result)
       }
     },
-    CLIENT
+    client
   )
   return frames
 }
@@ -316,11 +219,14 @@ function textOf(item: AgentJournalRenderItem): string {
 beforeEach(async () => {
   operations = 0
   claudeAuthPolicy = { stripAuthEnv: false }
+  shellEnv = { PATH: '/shell/bin:/usr/bin' }
+  shellEnvironmentPolicy = { inheritAll: true, names: [] }
   claudeLaunchEnv = {
     ANTHROPIC_AUTH_TOKEN: 'configured-token',
     ANTHROPIC_BASE_URL: 'https://gateway.example.test'
   }
   root = await mkdtemp(join(tmpdir(), 'orca-claude-structured-integration-'))
+  recordAccountHomePath = join(root, 'claude-home')
   transcriptPath = join(root, 'claude-home', 'projects', 'workspace', `${PROVIDER_SESSION}.jsonl`)
   await mkdir(join(root, 'claude-home', 'projects', 'workspace'), { recursive: true })
   resolveSessionFilePath.mockResolvedValue(transcriptPath)
@@ -331,7 +237,7 @@ beforeEach(async () => {
     async (_path: string, _providerSessionId: string, previousLeafUuid?: string | null) =>
       previousLeafUuid ?? 'init-leaf'
   )
-  claude = fakeClaude()
+  claude = fakeClaude(PROVIDER_SESSION)
   tuiOwner = null
   cleanups = new Map()
   const handoffTransport: StructuredAgentSessionHandoffTransport = {
@@ -409,6 +315,9 @@ beforeEach(async () => {
         resolveClaudeCommand: () => '/usr/local/bin/claude',
         readProcessStartTime: async (pid: number) => pid * 10,
         resolveClaudeLaunchEnv: () => claudeLaunchEnv,
+        // Hermetic: never the developer's real login shell.
+        resolveEnvironment: async () => shellEnv,
+        resolveShellEnvironmentPolicy: () => shellEnvironmentPolicy,
         resolveClaudeAuthPolicy: () => claudeAuthPolicy,
         openClaudeConnection: claude.openConnection,
         handoffTransport
@@ -433,8 +342,12 @@ describe('a structured Claude session over agentSession.*', () => {
   it('strips ambient Anthropic auth from the child once a managed account is pinned', async () => {
     claudeAuthPolicy = { stripAuthEnv: true }
     claudeLaunchEnv = { ANTHROPIC_BASE_URL: 'https://gateway.example.test' }
-    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-SHELL-LEAK')
-    vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'tok-SHELL-LEAK')
+    shellEnv = {
+      ...shellEnv,
+      ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK',
+      ANTHROPIC_AUTH_TOKEN: 'tok-SHELL-LEAK',
+      CLAUDE_CONFIG_DIR: '/shell/claude'
+    }
 
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
 
@@ -445,6 +358,45 @@ describe('a structured Claude session over agentSession.*', () => {
       ANTHROPIC_BASE_URL: 'https://gateway.example.test',
       CLAUDE_CONFIG_DIR: join(root, 'claude-home')
     })
+  })
+
+  it('passes shell exports straight to the child, as a terminal would', async () => {
+    shellEnv = {
+      ...shellEnv,
+      CODEX_LB_API_KEY: 'shell-exported',
+      ANTHROPIC_API_KEY: 'sk-ant-SHELL-ONLY'
+    }
+
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+
+    expect(claude.live().launch.env).toMatchObject({
+      CODEX_LB_API_KEY: 'shell-exported',
+      ANTHROPIC_API_KEY: 'sk-ant-SHELL-ONLY'
+    })
+  })
+
+  it('ignores a shell-exported CLAUDE_CONFIG_DIR: the pinned account chooses the Claude home', async () => {
+    // System auth on the CLI's own default home: an explicit pin to it would move the CLI off its
+    // default Keychain item, so the child must carry no CLAUDE_CONFIG_DIR at all.
+    recordAccountHomePath = join(homedir(), '.claude')
+    shellEnv = { ...shellEnv, CLAUDE_CONFIG_DIR: '/shell/claude', SHELL_ONLY_MARKER: 'from-shell' }
+
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+
+    const env = claude.live().launch.env
+    expect(env).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+    expect(env?.SHELL_ONLY_MARKER).toBe('from-shell')
+  })
+
+  it('leaves unlisted shell exports out when inheritance is off', async () => {
+    shellEnv = { ...shellEnv, CODEX_LB_API_KEY: 'shell-exported', LISTED_ONLY: 'yes' }
+    shellEnvironmentPolicy = { inheritAll: false, names: ['LISTED_ONLY'] }
+
+    await ok<{ fence: number }>('agentSession.create', createIntentParams())
+
+    const env = claude.live().launch.env
+    expect(env?.LISTED_ONLY).toBe('yes')
+    expect(env).not.toHaveProperty('CODEX_LB_API_KEY')
   })
 
   it('refuses a create whose configured env overrides the pinned managed account auth', async () => {
@@ -533,7 +485,7 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   it('creates, sends, streams, approves, interrupts, and resumes from the chain head', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-SHELL-LEAK')
+    shellEnv = { ...shellEnv, ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK' }
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
     expect(claude.live().launch.options).toMatchObject({ sessionId: PROVIDER_SESSION })
     expect(claude.live().launch.options.resume).toBeUndefined()
@@ -600,6 +552,18 @@ describe('a structured Claude session over agentSession.*', () => {
       `claude:${PROVIDER_SESSION}:assistant-leaf`
     )
 
+    // A background task can wake Claude after the preceding dispatch settled.
+    // This assistant frame opens the provider-owned turn without an Orca send
+    // echo; Stop must target that frame's id rather than the settled user row.
+    claude.live().handlers.onMessage?.({
+      type: 'assistant',
+      session_id: PROVIDER_SESSION,
+      uuid: 'provider-opened-assistant',
+      parent_tool_use_id: null,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Background task update.' }] }
+    })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+
     claude.live().handlers.onMessage?.({
       type: 'system',
       subtype: 'background_tasks_changed',
@@ -649,7 +613,10 @@ describe('a structured Claude session over agentSession.*', () => {
     )
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
-    expect(approval?.body).toMatchObject({ title: 'Allow Bash?', detail: '{"command":"ls"}' })
+    expect(approval?.body).toMatchObject({
+      title: 'Allow Bash?',
+      detail: '{\n  "command": "ls"\n}'
+    })
     await ok('agentSession.respondToApproval', {
       envelope: envelope(
         'agentSession.respondTo:approval',
@@ -672,10 +639,14 @@ describe('a structured Claude session over agentSession.*', () => {
 
     await expect(
       ok('agentSession.cancel', {
-        envelope: envelope('agentSession.cancel', { turnId: 'user-1' }, created.fence),
-        turnId: 'user-1'
+        envelope: envelope(
+          'agentSession.cancel',
+          { turnId: 'provider-opened-assistant' },
+          created.fence
+        ),
+        turnId: 'provider-opened-assistant'
       })
-    ).resolves.toMatchObject({ turnId: 'user-1', cancelled: true })
+    ).resolves.toMatchObject({ turnId: 'provider-opened-assistant', cancelled: true })
     expect(claude.live().calls.at(-1)).toMatchObject({ subtype: 'interrupt' })
 
     const host = getStructuredAgentSessionHost() as unknown as {
@@ -687,28 +658,74 @@ describe('a structured Claude session over agentSession.*', () => {
         }
       }
     }
+    // A completed turn advances the durable resume point in place while the owner is live.
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)?.handle).toMatchObject({
       provider: 'claude',
-      leafUuid: null
+      leafUuid: 'assistant-leaf'
     })
+    // Claude's marker names a hook row after a turn; close must never adopt it.
+    readClaudeTranscriptLeafUuid.mockClear().mockResolvedValue('stop-hook-summary-row')
     const old = claude.live()
     const resumed = await ok<{ fence: number }>('agentSession.ensure', ensureParams(created.fence))
     expect(resumed.fence).toBe(created.fence + 1)
     expect(old.closed).toBe(true)
-    expect(resolveSessionFilePath).toHaveBeenCalledWith('claude', PROVIDER_SESSION, {
-      claudeProjectsDir: join(root, 'claude-home', 'projects')
-    })
-    expect(claude.live().launch.options).toMatchObject({
-      resume: PROVIDER_SESSION,
-      resumeSessionAt: 'assistant-leaf'
-    })
-    expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject({
-      handle: {
-        provider: 'claude',
-        sessionId: PROVIDER_SESSION,
-        leafUuid: 'assistant-leaf'
-      },
+    // Claude owns where the conversation continues; the stored leaf is the last completed turn.
+    expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
+    expect(claude.live().launch.options).not.toHaveProperty('resumeSessionAt')
+    const lastCompletedTurn = {
+      handle: { provider: 'claude', sessionId: PROVIDER_SESSION, leafUuid: 'assistant-leaf' },
       origin: 'resumed'
+    }
+    expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
+      lastCompletedTurn
+    )
+    // Open, close, open with no turn in between keeps that leaf and never reads the transcript.
+    const reopened = await ok<{ fence: number }>('agentSession.ensure', ensureParams(resumed.fence))
+    expect(reopened.fence).toBe(resumed.fence + 1)
+    expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)).toMatchObject(
+      lastCompletedTurn
+    )
+    expect(readClaudeTranscriptLeafUuid).not.toHaveBeenCalled()
+  })
+
+  it('delivers the breakdown a settled turn asks for with no later frame to carry it', async () => {
+    const answers: ((value: unknown) => void)[] = []
+    claude.setContextUsage(() => new Promise((resolve) => answers.push(resolve)))
+    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const stream = await subscribe({
+      ...CLIENT,
+      clientCapabilities: [...CLIENT.clientCapabilities, AGENT_SESSION_TURN_ITEM_CAPABILITY]
+    })
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hi' }] }
+    await ok('agentSession.send', {
+      envelope: envelope('agentSession.send', { body }, created.fence),
+      body
+    })
+    claude.live().handlers.onMessage?.({
+      type: 'result',
+      subtype: 'success',
+      session_id: PROVIDER_SESSION,
+      uuid: 'result-frame-uuid'
+    })
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
+    expect(turnRow()?.body).toMatchObject({ state: 'completed' })
+
+    answers.at(-1)?.({
+      model: 'claude-sonnet-5',
+      totalTokens: 18_600,
+      rawMaxTokens: 200_000,
+      categories: [{ name: 'Messages', tokens: 12_000 }]
+    })
+    // The answer is the last event of the turn: only its own publication can reach the client.
+    await vi.waitFor(async () => {
+      await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+      const turn = turnRow()?.body
+      expect(turn?.kind === 'turn' ? turn.contextUsage?.used : undefined).toMatchObject({
+        kind: 'report',
+        usedTokens: 18_600,
+        categories: [{ name: 'Messages', tokens: 12_000 }]
+      })
     })
   })
 

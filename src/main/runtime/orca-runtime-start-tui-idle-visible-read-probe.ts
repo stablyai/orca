@@ -24,6 +24,8 @@ import {
   buildTerminalWaitResult
 } from './terminal-wait-results'
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
+import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
   /** One bounded look at the provider's screen for an adopted PTY whose retained
@@ -31,7 +33,11 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
    *  screen already showing a settled prompt", and the poll above owns every
    *  later transition. A provider screen that is still working when this fires
    *  resolves through the poll, not here. */
-  protected startTuiIdleVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void {
+  protected startTuiIdleVisibleReadProbe(
+    waiter: TerminalWaiter,
+    waiterTimeoutMs: number,
+    agent: TuiAgent | null
+  ): void {
     const settleMarginMs = Math.min(
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))
@@ -48,7 +54,7 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
       return
     }
     void withTimeout(
-      this.readTerminal(waiter.handle, {}, {
+      this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
         timeoutMs: providerTimeoutMs,
         retireOnTimeout: true,
         // Why: the ready banner stays in scrollback for the whole session, so
@@ -66,9 +72,16 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         ) {
           return
         }
-        const snapshotText = projection.tail.join('\n')
+        const snapshotText =
+          agent === 'antigravity'
+            ? [...projection.tail, projection.draft ?? ''].join('\n')
+            : projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        if (!blockedReason && !isKnownReadyPromptPreview(snapshotText)) {
+        const ready =
+          agent === 'antigravity'
+            ? isAntigravityReadyPromptSnapshot(snapshotText)
+            : isKnownReadyPromptPreview(snapshotText)
+        if (!blockedReason && !ready) {
           return
         }
         const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
@@ -96,7 +109,10 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
       : buildTerminalWaitResult(handle, 'tui-idle', leaf)
   }
 
-  async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
+  async waitForSetupTerminalCompletion(
+    handle: string,
+    signal?: AbortSignal
+  ): Promise<{ exitCode: number | null }> {
     const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
@@ -106,9 +122,13 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     return await new Promise<{ exitCode: number | null }>((resolve, reject) => {
       let settled = false
       let unsubscribe: (() => void) | null = null
+      const onAbort = (): void => {
+        fail(signal?.reason ?? new Error('request_aborted'))
+      }
       const cleanup = (): void => {
         unsubscribe?.()
         exitAbort.abort()
+        signal?.removeEventListener('abort', onAbort)
       }
       const finish = (exitCode: number | null): void => {
         if (settled) {
@@ -127,6 +147,11 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         cleanup()
         reject(error)
       }
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
       const scanner = completionToken ? createSetupCompletionScanner(completionToken, finish) : null
 
       if (scanner) {

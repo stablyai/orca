@@ -4,6 +4,7 @@ import {
 } from '../../../shared/relay-host-close-reason'
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { RelayBrokerStatus } from './relay-session-broker'
+import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
 
 export type RelayAuthIdentity = {
@@ -30,7 +31,7 @@ type RelayAuthCoordinatorOptions = {
   openBroker: (input: {
     context: RelayAuthContext
     isCurrent: () => boolean
-    refreshAccessToken: () => Promise<string | null>
+    refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
   }) => Promise<CoordinatedRelayBroker>
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
   lingerMs?: number
@@ -45,6 +46,14 @@ type BrokerOwnership = {
 
 function identityKey(identity: RelayAuthIdentity): string {
   return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
+}
+
+// The single owner of "why the socket died". Why only the null case: readContext
+// throws on transient failures and returns null solely when the cloud session is
+// gone (absent, or cleared by a 401). A present-but-unentitled context is still a
+// signed-in desktop, and "sign in to reconnect" would be wrong advice for it.
+function authLossCloseReason(context: RelayAuthContext | null): RelayHostCloseReason | undefined {
+  return context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT
 }
 
 export class RelayAuthCoordinator {
@@ -165,11 +174,7 @@ export class RelayAuthCoordinator {
       if (!context || !context.relayEntitled) {
         this.cancelLinger()
         this.retryAttempt = 0
-        // Why only the null case: readContext throws on transient failures and
-        // returns null solely when the cloud session is gone (absent, or cleared
-        // by a 401). A present-but-unentitled context is still a signed-in
-        // desktop, and "sign in to reconnect" would be wrong advice for it.
-        this.invalidateOwnership(context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+        this.invalidateOwnership(authLossCloseReason(context))
         this.publish('offline')
         return
       }
@@ -277,21 +282,20 @@ export class RelayAuthCoordinator {
   private async refreshAccessToken(
     ownership: { valid: boolean },
     expectedIdentityKey: string
-  ): Promise<string | null> {
+  ): Promise<RelayAccessTokenRefresh> {
     if (!ownership.valid || this.stopped) {
-      return null
+      return { accessToken: null }
     }
     const epoch = this.authEpoch
     const context = await this.options.readContext()
-    if (
-      !ownership.valid ||
-      !this.isEpochCurrent(epoch) ||
-      !context?.relayEntitled ||
-      identityKey(context.identity) !== expectedIdentityKey
-    ) {
-      return null
+    // A superseded refresh names no reason: whoever superseded it owns the close.
+    if (!ownership.valid || !this.isEpochCurrent(epoch)) {
+      return { accessToken: null }
     }
-    return context.accessToken
+    if (!context?.relayEntitled || identityKey(context.identity) !== expectedIdentityKey) {
+      return { accessToken: null, hostCloseReason: authLossCloseReason(context) }
+    }
+    return { accessToken: context.accessToken }
   }
 
   private invalidateOwnership(hostCloseReason?: RelayHostCloseReason): void {

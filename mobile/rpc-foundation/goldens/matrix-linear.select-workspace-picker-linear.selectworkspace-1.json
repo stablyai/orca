@@ -1,0 +1,604 @@
+{
+  "operation": "linear.select-workspace-picker",
+  "family": "linear.select-workspace-picker",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "b65996c152b632d553a31e07e31ea5c76f998eada42cf0966923d730da21908f",
+  "scenarioSha256": "c7de1f6fc0895d4ddf1b87a83859da46c583f098e058f14c8f85d48120c80c40",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "028532235ade": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "03ad330a1788": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "19b5600e9b31": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "1eb8d10c3003": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2a8d45397a3b": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "36c0bdbc5f9b": {
+      "contextLoads": 0,
+      "error": "",
+      "selectedWorkspaceId": "workspace-b",
+      "teamCount": 0
+    },
+    "37b43ce2490b": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "5100209812a4": {
+      "name": "linear.context-reloaded",
+      "ordinal": 3,
+      "value": {
+        "contextLoads": 1
+      }
+    },
+    "5434c3d0a73f": {
+      "contextLoads": 0,
+      "error": "transport failure",
+      "selectedWorkspaceId": "workspace-b",
+      "teamCount": 0
+    },
+    "68b2ea550f02": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "81c5a734a2f9": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "87cebd70c943": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "87e48df4867a": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.selectWorkspace\",\"params\":{\"workspaceId\":\"workspace-b\"}}"
+    },
+    "bb41255837cc": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c8827af2e8d6": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "d2ade472a8ba": {
+      "contextLoads": 1,
+      "error": "",
+      "selectedWorkspaceId": "workspace-b",
+      "teamCount": 0
+    },
+    "dc6af816d203": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-linear.select-workspace-picker-linear.selectworkspace-1",
+    "checkpoints": [
+      {
+        "id": "linear-select-workspace.prelude:selected",
+        "observation": {
+          "sender": ["dc6af816d203"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "36c0bdbc5f9b",
+          "effects": []
+        }
+      },
+      {
+        "id": "linear-select-workspace.normal:switched",
+        "observation": {
+          "sender": ["2a8d45397a3b"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.result-absent:switched",
+        "observation": {
+          "sender": ["37b43ce2490b"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.result-null:switched",
+        "observation": {
+          "sender": ["81c5a734a2f9"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.inner-ok-missing:switched",
+        "observation": {
+          "sender": ["bb41255837cc"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.inner-false-string-error:switched",
+        "observation": {
+          "sender": ["87cebd70c943"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.inner-false-object-error:switched",
+        "observation": {
+          "sender": ["c8827af2e8d6"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.outer-refused:switched",
+        "observation": {
+          "sender": ["028532235ade"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.outer-refused-no-message:switched",
+        "observation": {
+          "sender": ["1eb8d10c3003"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.method-not-found:switched",
+        "observation": {
+          "sender": ["68b2ea550f02"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      },
+      {
+        "id": "linear-select-workspace.transport-rejection:switched",
+        "observation": {
+          "sender": ["03ad330a1788"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "5434c3d0a73f",
+          "effects": []
+        }
+      },
+      {
+        "id": "linear-select-workspace.transport-rejection-no-message:switched",
+        "observation": {
+          "sender": ["19b5600e9b31"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "36c0bdbc5f9b",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

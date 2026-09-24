@@ -25,7 +25,7 @@ type Props = {
   onReady?: () => void
 }
 
-function formatSize(bytes: number | null): string {
+function formatSize(bytes: number | null | undefined): string {
   if (!bytes) {
     return ''
   }

@@ -3,22 +3,30 @@
 // Two leaks meet here and each has to be tested against the real host, not a double: a chat that
 // closes without stopping its app-server, and a launch that starts one for every record on disk.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
+import type {
+  StructuredAgentSessionHandoffTransport,
+  StructuredTuiOwner
+} from './structured-agent-session-handoff-types'
+import { StructuredHandoffTestRequests } from './structured-agent-session-handoff-test-requests'
+import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
+import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -42,6 +50,7 @@ let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let sink: StructuredAgentSessionEventSink | null
 let hostErrors: unknown[]
+let statusSink: StructuredAgentSessionStatusSink
 function adapter(): StructuredAgentSessionAdapter {
   return {
     acquire,
@@ -67,6 +76,7 @@ function openHost(
     releaseGraceMs: GRACE_MS,
     now: () => NOW,
     onEventSinkError: ({ error }) => hostErrors.push(error),
+    statusSink,
     ...(probeOwner ? { probeOwner: probeOwner as never } : {}),
     ...(handoffTransport ? { handoffTransport } : {})
   })
@@ -118,11 +128,111 @@ function waitOutSeveralGraceWindows(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
 }
 
+const handoffRequests = new StructuredHandoffTestRequests(
+  NOW,
+  SESSION,
+  () => store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+)
+/** Whether the terminal this host handed the session to can be reached again. */
+let tuiRecoverable: boolean
+
+/** One operation-id source with the rest of the suite, so the durable ledger sees no duplicate. */
+function handoffRequest(direction: 'to-tui' | 'to-native') {
+  return handoffRequests.request(direction, 'now', { operationId: hostTestOperationId() })
+}
+
+function tuiOwner(fence: number, spawnToken: string, transcriptPath: string): StructuredTuiOwner {
+  return {
+    terminal: { handle: 'term-tui', tabId: 'tab-tui', paneKey: 'pane-tui', ptyId: 'pty-tui' },
+    process: { hostId: 'local', pid: 5200, processStartTimeMs: NOW, spawnToken },
+    link: {
+      linkId: `tui-link-${fence}`,
+      handle: { provider: 'codex', threadId: THREAD },
+      origin: 'resumed',
+      mintedAtFence: fence,
+      observedAt: NOW
+    },
+    transcriptPath
+  }
+}
+
+/** A codex rollout the return trip can import, so a real to-native handoff has history to read. */
+async function writeTuiTranscript(): Promise<string> {
+  const sessionsDir = join(root, 'codex-home', 'sessions', '2026', '08', '12')
+  await mkdir(sessionsDir, { recursive: true })
+  const transcriptPath = join(sessionsDir, `rollout-2026-08-12T10-00-00-${THREAD}.jsonl`)
+  await writeFile(
+    transcriptPath,
+    `${JSON.stringify({
+      type: 'session_meta',
+      timestamp: '2026-08-12T10:00:00.000Z',
+      payload: { id: THREAD, session_id: THREAD }
+    })}\n`,
+    'utf8'
+  )
+  return transcriptPath
+}
+
+/** Replaces the current host with one that can hand the session to a terminal and take it back. */
+function openHandoffHost(transcriptPath: string): void {
+  openHost(undefined, {
+    hostLabel: 'Test host',
+    launchTui: async ({ fence, spawnToken }) => tuiOwner(fence, spawnToken, transcriptPath),
+    reproveTuiOwner: async ({ owner }) => owner,
+    recoverTuiOwner: async (record) => {
+      if (!tuiRecoverable) {
+        throw new Error('the owning terminal could not be reached')
+      }
+      return tuiOwner(
+        record.lease.runtimeFence,
+        record.lease.reservedSpawnToken ?? 'recovered',
+        transcriptPath
+      )
+    },
+    stopRecoveredOwner: async () => undefined,
+    closeTuiOwner: async (owner) => ({ transcriptPath: owner.transcriptPath }),
+    waitForTuiExit: async (owner) => ({ transcriptPath: owner.transcriptPath }),
+    waitForTuiIdleOrExit: async () => 'idle',
+    tuiStatus: () => 'idle'
+  })
+}
+
+/** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. */
+function failNextDrain(): void {
+  vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained').mockResolvedValueOnce({
+    ok: false,
+    error: new Error('drain barrier lost')
+  })
+}
+
+/** The submissions as they stood when the session was forgotten; its journal is gone after that. */
+function captureSettledSubmissions(): { value: AgentJournalSubmission[] } {
+  const captured: { value: AgentJournalSubmission[] } = { value: [] }
+  const journal = host['sessions'].get(SESSION)!.journal
+  const closeJournal = journal.close.bind(journal)
+  vi.spyOn(journal, 'close').mockImplementation(async () => {
+    captured.value = journal.snapshot().submissions
+    await closeJournal()
+  })
+  return captured
+}
+
+async function sendPending(text: string): Promise<void> {
+  dispatch.mockResolvedValueOnce({ state: 'admitted' })
+  const body = hostTestMessage(text)
+  expect(
+    await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  ).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+}
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-surface-lifetime-'))
+  handoffRequests.reset()
+  tuiRecoverable = true
   resetHostTestOperationIds()
   sink = null
   hostErrors = []
+  statusSink = { publish: vi.fn(), forget: vi.fn() }
   let generation = 0
   acquire = vi.fn(async ({ fence, spawnToken, events }) => {
     sink = events ?? null
@@ -180,6 +290,25 @@ describe('a chat that closes', () => {
     expect(host.hasSession(SESSION)).toBe(true)
   })
 
+  // The pane outlives the close by a few frames — a workspace delete closes the chats inside it
+  // while their panes are still mounted — so whatever a read raises in that window is what the user
+  // sees. This is the code the client narrows on to keep that window off the pane; a host that
+  // starts raising a different one there puts the red error back.
+  it('answers a read from the pane that outlived it with the code the client treats as transitional', async () => {
+    await attach()
+    await host.hold(SESSION, SURFACE)
+
+    await host.close(SESSION)
+
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(() => host.history({ sessionId: SESSION, direction: 'tail' })).toThrow(
+      AGENT_SESSION_UNATTACHED_REFUSAL_CODE
+    )
+    expect(() =>
+      host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: () => undefined })
+    ).toThrow(AGENT_SESSION_UNATTACHED_REFUSAL_CODE)
+  })
+
   it('does not lose the session to a release the client sent twice', async () => {
     await attach()
     await host.hold(SESSION, SURFACE)
@@ -215,6 +344,73 @@ describe('a chat that closes', () => {
 
     await expect(settlement).resolves.toBeUndefined()
   })
+
+  it('retries teardown after journal close loses its result', async () => {
+    await attach()
+    const session = host['sessions'].get(SESSION)
+    expect(session).toBeDefined()
+    const closeJournal = session!.journal.close.bind(session!.journal)
+    vi.spyOn(session!.journal, 'close')
+      .mockImplementationOnce(async () => {
+        await closeJournal()
+        throw new Error('journal close result lost')
+      })
+      .mockImplementation(closeJournal)
+
+    await expect(host.close(SESSION)).rejects.toMatchObject({
+      step: 'forget-session',
+      cause: expect.objectContaining({ message: 'journal close result lost' })
+    })
+    expect(host.hasSession(SESSION)).toBe(true)
+    expect(host['sessions'].get(SESSION)?.hasProviderChild).toBe(false)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null
+    })
+    expect(statusSink.forget).toHaveBeenCalledWith({
+      kind: 'structured-session',
+      sessionId: SESSION,
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree'
+    })
+
+    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(closeSession).toHaveBeenCalledOnce()
+  })
+
+  it('settles and releases on the retry when a step after the child stopped aborts', async () => {
+    await attach()
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const body = hostTestMessage('pending across an aborted eviction')
+    const sent = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    const session = host['sessions'].get(SESSION)
+    expect(session).toBeDefined()
+    vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained').mockResolvedValueOnce({
+      ok: false,
+      error: new Error('drain barrier lost')
+    })
+    const settled = captureSettledSubmissions()
+
+    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
+    // The child is proven gone, but the wind-down it owes is not done: nothing settled, no release.
+    expect(session!.hasProviderChild).toBe(false)
+    expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
+
+    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    expect(closeSession).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null
+    })
+    expect(hasUnansweredStructuredAgentSessionDispatch(settled.value)).toBe(false)
+  })
 })
 
 describe('a session with a turn in flight', () => {
@@ -238,6 +434,35 @@ describe('a session with a turn in flight', () => {
 })
 
 describe('startup', () => {
+  it('settles an idle absent owner without chat pollution and resumes the same provider identity', async () => {
+    await attach()
+    const beforeRestart = store.getRecord(SESSION)
+    host['runtimeState'].stopLeaseRenewal()
+    host['holds'].dispose()
+    await host['sessions'].get(SESSION)?.journal.close()
+    host['sessions'].clear()
+
+    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    openHost(async () => ({ outcome: 'pid-absent' }))
+    await host.restoreReadableSessions()
+
+    const restored = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(restored.ok && restored.page.items.some((item) => item.body.kind === 'status')).toBe(
+      false
+    )
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null,
+      settlementRetryRequired: undefined
+    })
+
+    await host.hold(SESSION, SURFACE)
+    expect(store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toEqual(
+      beforeRestart?.providerHandleChain.at(-1)?.handle
+    )
+    expect(store.getRecord(SESSION)?.providerHandleChain.at(-1)?.origin).toBe('resumed')
+  })
+
   it('restores a session for reading without spawning a provider child', async () => {
     await attach()
     await reboot()
@@ -357,7 +582,7 @@ describe('an unexpected provider exit', () => {
         history.page.items.some(
           (item) => item.body.kind === 'status' && item.body.text.includes('journal sink failure')
         )
-    ).toBe(true)
+    ).toBe(false)
 
     // Replace the failed cached sink so suite cleanup can drain the host.
     ;(
@@ -505,13 +730,13 @@ describe('an unexpected provider exit', () => {
     expect(hostErrors).toContainEqual(expect.objectContaining({ message: 'journal failed' }))
     const history = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.submissions[0]?.dispatchState).toBe('unknown')
-    expect(
-      history.ok &&
-        history.page.items.some(
-          (item) =>
-            item.body.kind === 'status' && item.body.text === 'Provider exited: provider exited'
-        )
-    ).toBe(true)
+    // A send whose delivery outcome is unknown IS work in progress, so the reassuring outcome is
+    // written — carrying the cause, and never the old bare `Provider exited: <reason>` row.
+    const statuses = history.ok
+      ? history.page.items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+      : []
+    expect(statuses).toEqual([unexpectedProviderExitOutcome('provider exited')])
+    expect(statuses.some((text) => text.startsWith('Provider exited'))).toBe(false)
 
     dispatch.mockResolvedValueOnce({
       state: 'accepted',
@@ -527,6 +752,8 @@ describe('an unexpected provider exit', () => {
   it('latches a failed exit settlement and blocks attach until the terminal batch is written', async () => {
     await attach()
     await host.hold(SESSION, SURFACE)
+    emitTurnLifecycle('running', 1)
+    await host.flushStreamedEvents(SESSION)
     const runtimeState = (
       host as unknown as {
         runtimeState: { lifecycleBarrier: () => Promise<{ ok: false; error: Error }> }
@@ -583,5 +810,88 @@ describe('an unexpected provider exit', () => {
       settlementRetryRequired: undefined
     })
     expect(acquire).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('a chat handed to a terminal and taken back', () => {
+  // The wind-down a close owes belongs to the child in front of it, not to whatever the LAST
+  // eviction found. A session a terminal owns is indexed with no child of its own, so a close
+  // there records "nothing owed" — and the trip back re-acquires into that SAME session object.
+  it('settles and releases the child it was given back', async () => {
+    const transcriptPath = await writeTuiTranscript()
+    await host.flushAllStreamedEvents()
+    openHandoffHost(transcriptPath)
+    await attach()
+    expect(await host.requestHandoff(CALLER, handoffRequest('to-tui'))).toMatchObject({ ok: true })
+    // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
+      { timeout: 5000 }
+    )
+
+    // The app restarts and cannot reach the terminal, so this generation restores the session for
+    // reading and holds no handle to the owner it would otherwise stop on a close.
+    await host.flushAllStreamedEvents()
+    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+    tuiRecoverable = false
+    openHandoffHost(transcriptPath)
+    await host.restoreReadableSessions()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      runtimeKind: 'tui',
+      claimStatus: 'live'
+    })
+
+    failNextDrain()
+    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
+    expect(host.hasSession(SESSION)).toBe(true)
+
+    // The terminal answers again, and the status read the reopened pane makes recovers the owner.
+    tuiRecoverable = true
+    expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' })
+    expect(await host.requestHandoff(CALLER, handoffRequest('to-native'))).toMatchObject({
+      ok: true
+    })
+    // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
+    await vi.waitFor(
+      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' }),
+      { timeout: 5000 }
+    )
+    expect(host['sessions'].get(SESSION)?.hasProviderChild).toBe(true)
+    await sendPending('pending when the retaken chat closes')
+    const settled = captureSettledSubmissions()
+
+    await expect(host.close(SESSION)).resolves.toBeUndefined()
+
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null
+    })
+    expect(hasUnansweredStructuredAgentSessionDispatch(settled.value)).toBe(false)
+  })
+})
+
+describe('a quit over an eviction that never got its retry', () => {
+  // Nothing calls `close` a second time when the user quits instead of reopening the chat, so the
+  // quit sweep is the last thing that can hand the lease back — and it only reaches the session if
+  // it still counts a stopped child's unfinished wind-down as owed.
+  it('finishes the wind-down the aborted close left behind', async () => {
+    await attach()
+    await sendPending('pending across an abandoned eviction')
+    const settled = captureSettledSubmissions()
+    failNextDrain()
+
+    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
+    expect(host['sessions'].get(SESSION)?.hasProviderChild).toBe(false)
+    expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
+
+    await host.flushAllStreamedEvents()
+
+    expect(closeSession).toHaveBeenCalledOnce()
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null
+    })
+    expect(hasUnansweredStructuredAgentSessionDispatch(settled.value)).toBe(false)
   })
 })

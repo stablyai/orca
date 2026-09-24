@@ -1,10 +1,8 @@
 import { track } from '../../telemetry/client'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
-import { isAgentHookSource, restoreShedStatusFields } from '../../../shared/agent-hook-relay'
+import { restoreShedStatusFields } from '../../../shared/agent-hook-relay'
 import {
   MAX_PANE_KEY_LEN,
-  normalizeClaudePromptId,
   warnOnHookEnvOrVersionMismatch
 } from '../../../shared/agent-hook-listener/listener-limits'
 import {
@@ -16,7 +14,13 @@ import {
 import { launchTokenHash } from '../../../shared/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import {
+  AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
+  canAdmitLegacyAgentStatus,
+  olderPeerAgentStatusLegacyMode
+} from '../../../shared/agent-status-legacy-adapter'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
+import { normalizeRemoteEnvelopeFields } from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructured } from './server-ingest-structured'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructured {
@@ -34,6 +38,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hookEventName?: string
       source?: unknown
       providerPromptId?: unknown
+      grokPromptBoundary?: unknown
       compactTrigger?: unknown
       toolUseId?: string
       toolAgentId?: string
@@ -45,10 +50,23 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       /** Payload fields the relay dropped to fit an oversized frame; validated below. */
       shedFields?: unknown
       claudeRunningNonAgentTask?: unknown
+      /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
+      advertisedAgentStatusCapabilities?: readonly string[]
       payload: unknown
     },
     connectionId: string | null
   ): void {
+    if (
+      !canAdmitLegacyAgentStatus(
+        'main-status-update',
+        olderPeerAgentStatusLegacyMode(
+          envelope?.advertisedAgentStatusCapabilities ??
+            AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES
+        )
+      )
+    ) {
+      return
+    }
     // Why: wire crosses a trust boundary — re-check/trim so an empty connectionId can't poison caches.
     if (connectionId !== null && typeof connectionId !== 'string') {
       return
@@ -62,13 +80,19 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     }
     // Why: trim paneKey to match the HTTP path, else remote-vs-local events for one pane diverge.
     const physicalPaneKey = envelope.paneKey.trim()
-    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
+    let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
+      return
+    }
+    if (
+      (envelope.isReplay !== undefined && typeof envelope.isReplay !== 'boolean') ||
+      (envelope.launchToken !== undefined && typeof envelope.launchToken !== 'string')
+    ) {
       return
     }
     // Why: fence relay spool replay at main so stale generations cannot overwrite hydrated state.
@@ -97,21 +121,51 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     ) {
       return
     }
-    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
-    const hookEventName =
-      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
-        ? envelope.hookEventName.trim()
-        : undefined
-    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
-    const providerPromptId =
-      source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
-    const compactTrigger =
-      source === 'claude' &&
-      (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
-        ? envelope.compactTrigger
-        : undefined
-    const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+    let tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
+    const {
+      hookEventName,
       source,
+      providerPromptId,
+      grokPromptBoundary,
+      compactTrigger,
+      worktreeId,
+      promptInteractionKey,
+      toolUseId,
+      toolAgentId,
+      teammateName,
+      toolAgentType,
+      providerSession
+    } = normalizeRemoteEnvelopeFields(envelope)
+    // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
+    const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
+    if (!validatedPayload) {
+      return
+    }
+    if (
+      envelope.source !== undefined &&
+      (source === 'omp' || validatedPayload.agentType === 'omp') &&
+      envelope.source !== validatedPayload.agentType
+    ) {
+      return
+    }
+    // Why: restore a shed roster only when its digest and turn identity still match the cache.
+    let normalizedPayload = restoreShedStatusFields(
+      validatedPayload,
+      envelope.shedFields,
+      this.state.lastStatusByPaneKey.get(paneKey)?.payload
+    )
+    if (
+      envelope.providerSessionOnly === true &&
+      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
+    ) {
+      return
+    }
+    // Older relays omit source; canonical OMP identity preserves boundary provenance.
+    const effectiveSource =
+      source ??
+      (envelope.source === undefined && validatedPayload.agentType === 'omp' ? 'omp' : undefined)
+    const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+      source: effectiveSource,
       rawSource: envelope.source,
       hookEventName,
       isReplay: envelope.isReplay === true,
@@ -121,49 +175,20 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     if (statusDisposition === 'suppress') {
       return
     }
+    const restartedAuthority =
+      statusDisposition === 'restart' && effectiveSource === 'omp'
+        ? this.restoreRetiredStatusRestart(paneKey)
+        : undefined
+    if (restartedAuthority && restartedAuthority.paneKey !== paneKey) {
+      paneKey = restartedAuthority.paneKey
+      tabId = parsePaneKey(paneKey)?.tabId
+    }
     if (statusDisposition === 'restart') {
       // Why: same rebind as the HTTP path — a retired pane taking a new turn is a new session.
       // Why paneKey, not envelope.paneKey: alias resolution already mapped it to the
       // stable pane, so the rebind cannot land on a legacy key.
       this.observations.rebind(paneKey)
     }
-    const worktreeId =
-      envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
-        ? envelope.worktreeId.trim()
-        : undefined
-    const promptInteractionKey =
-      typeof envelope.promptInteractionKey === 'string' &&
-      envelope.promptInteractionKey.trim().length > 0
-        ? envelope.promptInteractionKey.trim()
-        : undefined
-    const toolUseId =
-      typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
-        ? envelope.toolUseId.trim()
-        : undefined
-    const toolAgentId =
-      typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
-        ? envelope.toolAgentId.trim()
-        : undefined
-    const teammateName =
-      typeof envelope.teammateName === 'string' && envelope.teammateName.trim().length > 0
-        ? envelope.teammateName.trim()
-        : undefined
-    const toolAgentType =
-      typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
-        ? envelope.toolAgentType.trim()
-        : undefined
-    const providerSession = normalizeAgentProviderSession(envelope.providerSession) ?? undefined
-    // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
-    const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
-    if (!validatedPayload) {
-      return
-    }
-    // Why: restore a shed roster only when its digest and turn identity still match the cache.
-    let normalizedPayload = restoreShedStatusFields(
-      validatedPayload,
-      envelope.shedFields,
-      this.state.lastStatusByPaneKey.get(paneKey)?.payload
-    )
     const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
     let acceptedCompactCompletion = false
     if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
@@ -204,17 +229,13 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
         paneKey,
         providerPromptId
       )
-      // Why: an older relay built this payload before the boundary flag existed, so it arrives as a
-      // plain `done` — which every completion-reactive consumer reads as a finished turn. Stamp the
-      // boundary here so a compact stays silent regardless of which relay normalized it.
+      // Older relays omit the boundary flag; stamp it so compact completion stays silent.
       if (normalizedPayload.sessionBoundary !== true) {
         normalizedPayload = { ...normalizedPayload, sessionBoundary: true }
       }
       acceptedCompactCompletion = true
     }
-    // Why: keyed on "did we accept a completion", not on the trigger surviving the wire — the
-    // trigger-stripped replay is exactly the shape that arrives without one, and it is still the
-    // compact's own promptless event, so it still needs the summarized turn's label.
+    // Accepted compact completions retain the summarized turn label, including trigger-stripped replays.
     if (
       source === 'claude' &&
       (compactTrigger !== undefined || acceptedCompactCompletion) &&
@@ -223,16 +244,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     ) {
       normalizedPayload = { ...normalizedPayload, prompt: previousStatus.payload.prompt }
     }
-    if (
-      envelope.providerSessionOnly === true &&
-      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
-    ) {
-      return
-    }
     const applyClaudeBackgroundWork =
       normalizedPayload.agentType === 'claude' &&
       typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
-      // Why: reconnect replay may seed a restarted listener, but cannot override any observation made by this runtime.
       (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(paneKey))
     // Why: run the HTTP path's warn-once version/env-mismatch diagnostics with this.env as expected.
     warnOnHookEnvOrVersionMismatch(this.state, {
@@ -240,9 +254,12 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       env: envelope.env,
       expectedEnv: this.env
     })
-    const event = {
+    const event: AgentHookEventPayload & { authorityRestartId?: string } = {
       paneKey,
-      source,
+      source: effectiveSource,
+      ...(restartedAuthority?.authorityRestartId
+        ? { authorityRestartId: restartedAuthority.authorityRestartId }
+        : {}),
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
       tabId,
       worktreeId,
@@ -251,6 +268,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       promptInteractionKey,
       hookEventName,
       providerPromptId,
+      grokPromptBoundary,
       compactTrigger,
       toolUseId,
       toolAgentId,
@@ -264,7 +282,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
           ? envelope.claudeRunningNonAgentTask
           : undefined,
       payload: normalizedPayload
-    } as AgentHookEventPayload
+    }
     this.recordCurrentAuthorityObservation(event)
     this.applyNormalizedStatus(
       event,

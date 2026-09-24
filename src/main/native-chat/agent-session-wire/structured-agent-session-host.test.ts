@@ -234,12 +234,117 @@ describe('cancel', () => {
     })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    ['a missing prompt item', { itemId: 'missing-item', expectedRevision: 1 }],
+    ['a stale prompt revision', { itemId: 'seeded', expectedRevision: 2 }]
+  ])('refuses %s before interrupting the provider', async (_case, requestedPrompt) => {
+    await attach()
+    const prompt = await seedApproval()
+    const strictPrompt = {
+      ...requestedPrompt,
+      ...(requestedPrompt.itemId === 'seeded' ? { itemId: prompt.itemId } : {})
+    }
+    const fields = { turnId: 'turn-1', prompt: strictPrompt }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: false })
+    expect(cancelTurn).not.toHaveBeenCalled()
+  })
+
+  it('refuses cancellation after an answer has already resolved the prompt', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    const answer = {
+      itemId: prompt.itemId,
+      expectedRevision: prompt.revision,
+      optionId: 'allow'
+    }
+    await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:approval', answer),
+      kind: 'approval',
+      ...answer
+    })
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_item_revision_stale' }
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+  })
+
+  it('records an unknown outcome when lifecycle draining fails and never interrupts on replay', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    vi.spyOn(host, 'flushStreamedEvents').mockRejectedValueOnce(new Error('journal drain failed'))
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+    const params = {
+      envelope: envelope('agentSession.cancel', fields),
+      ...fields
+    }
+
+    await expect(host.cancel(CALLER, params)).rejects.toThrow('journal drain failed')
+    expect(await host.cancel(CALLER, params)).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown' }
+    })
+    expect(cancelTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('records an unknown outcome when strict prompt interruption throws and never retries it', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+    const params = {
+      envelope: envelope('agentSession.cancel', fields),
+      ...fields
+    }
+
+    await expect(host.cancel(CALLER, params)).rejects.toThrow('interrupt receipt lost')
+    expect(await host.cancel(CALLER, params)).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown' }
+    })
+    expect(cancelTurn).toHaveBeenCalledTimes(1)
+    expect(host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
+      ok: true,
+      page: {
+        items: [
+          expect.objectContaining({
+            body: expect.objectContaining({
+              resolution: expect.objectContaining({ state: 'pending' })
+            })
+          })
+        ]
+      }
+    })
+  })
 })
 
 describe('respondToPrompt', () => {
   it('commits the answer before the provider callback', async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
     const result = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
@@ -254,8 +359,8 @@ describe('respondToPrompt', () => {
   })
 
   it('refuses a second answer to one prompt and says which answer won', async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
     await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
@@ -281,8 +386,8 @@ describe('respondToPrompt', () => {
   })
 
   it('refuses an option the prompt does not offer', async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'deny' }
     expect(
       await host.respondToPrompt(CALLER, {
@@ -295,8 +400,8 @@ describe('respondToPrompt', () => {
   })
 
   it("does not turn a recorded refusal into another client's successful answer", async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const rejectedFields = {
       itemId: prompt.itemId,
       expectedRevision: prompt.revision,
@@ -326,9 +431,12 @@ describe('respondToPrompt', () => {
   })
 
   it('keeps the answer and reports it undelivered when the provider callback throws', async () => {
-    const prompt = await seedApproval()
     await attach()
-    answerPrompt.mockRejectedValueOnce(new Error('pipe closed'))
+    const prompt = await seedApproval()
+    answerPrompt.mockImplementationOnce(async ({ commit }) => {
+      await commit()
+      throw new Error('pipe closed')
+    })
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
     const result = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),

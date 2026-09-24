@@ -1,0 +1,1338 @@
+{
+  "operation": "session.pr-mutations",
+  "family": "github.pr-mutation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "ac7e91b4d35021eca63af8ce01f9a2c7959109e4cb824009881437cb94dbfe82",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "053eb7126f9a": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      }
+    },
+    "0e14bd119328": {
+      "merge": {
+        "ok": true
+      }
+    },
+    "127e52cfe2c9": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "1a595f6dfe90": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1b2778bf67a2": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "1f490ebc92b5": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true
+        }
+      }
+    },
+    "217757a427ce": {
+      "auto-merge": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      }
+    },
+    "258eb619fcbb": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      }
+    },
+    "2b56dde57d4f": {
+      "name": "github.mergePR#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.mergePR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "method": "squash",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "39e80d3f3344": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      },
+      "rerun-checks": {
+        "error": "inner refused",
+        "ok": false
+      }
+    },
+    "3e98a51bf209": {
+      "name": "github.setPRAutoMerge#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.setPRAutoMerge"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enabled": true,
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "420d821938ad": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-6",
+          "ok": false
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "451ed1b5138d": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-6",
+          "ok": false
+        }
+      }
+    },
+    "5145e99589f6": {
+      "name": "github.requestPRReviewers#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.requestPRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
+    },
+    "56fc7450f80f": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      },
+      "rerun-checks": {
+        "error": "Request failed: github.rerunPRChecks",
+        "ok": false
+      }
+    },
+    "5a3a15468816": {
+      "name": "github.removePRReviewers#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.removePRReviewers\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"reviewers\":[\"octocat\"]}}"
+    },
+    "6e912bd10baa": {
+      "name": "github.updatePRState#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.updatePRState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "updates": {
+              "state": "closed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "714977c3cfc6": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      },
+      "rerun-checks": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "89a20acf05d3": {
+      "name": "github.updatePRState#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.updatePRState\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"updates\":{\"state\":\"closed\"}}}"
+    },
+    "8be705a6533e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Request failed: github.rerunPRChecks",
+        "ok": false
+      }
+    },
+    "8beb92b45a8f": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-6",
+          "ok": false
+        }
+      }
+    },
+    "91638fa7c927": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "948fde384959": {
+      "name": "github.requestPRReviewers#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.requestPRReviewers"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "reviewers": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "95bed935c770": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      },
+      "rerun-checks": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
+    "98972432d7c1": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "98a9268b04e2": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      }
+    },
+    "9f00dd54ba64": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "inner refused",
+        "ok": false
+      }
+    },
+    "a14250b0a5a9": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      },
+      "rerun-checks": {
+        "error": "outer refused",
+        "ok": false
+      }
+    },
+    "a197c20578aa": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "transport failure",
+        "ok": false
+      }
+    },
+    "aa7c42d78de1": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "c125b9b847ae": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c6cd1f9aeefc": {
+      "name": "github.mergePR#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.mergePR\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"method\":\"squash\"}}"
+    },
+    "d026cfa35ea0": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      },
+      "rerun-checks": {
+        "ok": true
+      }
+    },
+    "d750130be52f": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.rerunPRChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "failedOnly": true,
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "e5820e16ca2c": {
+      "name": "github.rerunPRChecks#1",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.rerunPRChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"failedOnly\":true,\"headSha\":\"head-sha-1\"}}"
+    },
+    "e6f15a3c2f54": {
+      "auto-merge": {
+        "ok": true
+      },
+      "close": {
+        "ok": true
+      },
+      "merge": {
+        "ok": true
+      },
+      "remove-reviewers": {
+        "ok": true
+      },
+      "request-reviewers": {
+        "ok": true
+      },
+      "rerun-checks": {
+        "error": "",
+        "ok": false
+      }
+    },
+    "e70f88fb717a": {
+      "name": "github.setPRAutoMerge#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.setPRAutoMerge\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"enabled\":true}}"
+    },
+    "fa93ca01f266": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Unknown method",
+        "ok": false
+      }
+    },
+    "fb4429083480": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "",
+        "ok": false
+      }
+    },
+    "fbc958e4d46e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true
+      }
+    },
+    "ff463b2bc96b": {
+      "name": "github.removePRReviewers#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.removePRReviewers"
+        },
+        {
+          "name": "params",
+          "value": {
+            "prNumber": 12,
+            "repo": "id:repo-9",
+            "reviewers": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-github.pr-mutation-github.rerunprchecks-1",
+    "checkpoints": [
+      {
+        "id": "pr-mutation-status.prelude:pending",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {},
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.prelude:merge",
+        "observation": {
+          "sender": ["2b56dde57d4f"],
+          "payloads": ["c6cd1f9aeefc"],
+          "settlements": {
+            "merge": "fbc958e4d46e"
+          },
+          "state": "0e14bd119328",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.prelude:auto-merge",
+        "observation": {
+          "sender": ["2b56dde57d4f", "3e98a51bf209"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a"],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e"
+          },
+          "state": "217757a427ce",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.prelude:close",
+        "observation": {
+          "sender": ["2b56dde57d4f", "3e98a51bf209", "6e912bd10baa"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3"],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e"
+          },
+          "state": "053eb7126f9a",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.prelude:request-reviewers",
+        "observation": {
+          "sender": ["2b56dde57d4f", "3e98a51bf209", "6e912bd10baa", "948fde384959"],
+          "payloads": ["c6cd1f9aeefc", "e70f88fb717a", "89a20acf05d3", "5145e99589f6"],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e"
+          },
+          "state": "258eb619fcbb",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.prelude:remove-reviewers",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e"
+          },
+          "state": "98a9268b04e2",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.normal:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "91638fa7c927"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "fbc958e4d46e"
+          },
+          "state": "d026cfa35ea0",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.result-absent:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "1f490ebc92b5"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "fbc958e4d46e"
+          },
+          "state": "d026cfa35ea0",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.result-null:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "d750130be52f"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "fbc958e4d46e"
+          },
+          "state": "d026cfa35ea0",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.inner-ok-missing:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "98972432d7c1"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "fbc958e4d46e"
+          },
+          "state": "d026cfa35ea0",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.inner-false-string-error:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "aa7c42d78de1"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "9f00dd54ba64"
+          },
+          "state": "39e80d3f3344",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.inner-false-object-error:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "1a595f6dfe90"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "9f00dd54ba64"
+          },
+          "state": "39e80d3f3344",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.outer-refused:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "420d821938ad"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "1b2778bf67a2"
+          },
+          "state": "a14250b0a5a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.outer-refused-no-message:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "8beb92b45a8f"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "8be705a6533e"
+          },
+          "state": "56fc7450f80f",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.method-not-found:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "451ed1b5138d"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "fa93ca01f266"
+          },
+          "state": "714977c3cfc6",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.transport-rejection:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "127e52cfe2c9"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "a197c20578aa"
+          },
+          "state": "95bed935c770",
+          "effects": []
+        }
+      },
+      {
+        "id": "pr-mutation-status.transport-rejection-no-message:rerun-checks",
+        "observation": {
+          "sender": [
+            "2b56dde57d4f",
+            "3e98a51bf209",
+            "6e912bd10baa",
+            "948fde384959",
+            "ff463b2bc96b",
+            "c125b9b847ae"
+          ],
+          "payloads": [
+            "c6cd1f9aeefc",
+            "e70f88fb717a",
+            "89a20acf05d3",
+            "5145e99589f6",
+            "5a3a15468816",
+            "e5820e16ca2c"
+          ],
+          "settlements": {
+            "merge": "fbc958e4d46e",
+            "auto-merge": "fbc958e4d46e",
+            "close": "fbc958e4d46e",
+            "request-reviewers": "fbc958e4d46e",
+            "remove-reviewers": "fbc958e4d46e",
+            "rerun-checks": "fb4429083480"
+          },
+          "state": "e6f15a3c2f54",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

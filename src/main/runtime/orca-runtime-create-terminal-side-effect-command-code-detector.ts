@@ -11,7 +11,6 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import type { ProcessedAgentStatusChunk } from '../../shared/agent-status-osc'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'
-import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 
 export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends OrcaRuntimeWithApplyTrackedPtyTitle {
   protected createTerminalSideEffectCommandCodeDetector(
@@ -86,17 +85,9 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
   }
 
-  /** Returns true when any retained agent-row snapshot changed in a
-   *  client-visible way, so the caller can republish session snapshots. */
-  protected emitTerminalAgentStatusEvents(
-    ptyId: string,
-    chunk: ProcessedAgentStatusChunk
-  ): boolean {
-    // Why: snapshot retention (for mobile worktree.ps) must run even when no
-    // renderer listener is attached, so we don't early-return on a missing
-    // onTerminalAgentStatus — only the per-target emit below is gated on it.
+  protected emitTerminalAgentStatusEvents(ptyId: string, chunk: ProcessedAgentStatusChunk): void {
     if (chunk.payloads.length === 0) {
-      return false
+      return
     }
     const targets = new Map<
       string,
@@ -106,6 +97,7 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         tabId?: string
         worktreeId?: string
         connectionId?: string | null
+        terminalHandle?: string
       }
     >()
     const pty = this.ptysById.get(ptyId)
@@ -129,22 +121,24 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         connectionId
       })
     }
-    let retainedChanged = false
+    // Why once per chunk and not per payload: the same lookup the renderer-facing IPC boundary
+    // runs, and it is the pane's only durable join back to its terminal once the pane key moves.
+    if (this.onTerminalAgentStatus) {
+      for (const target of targets.values()) {
+        const terminalHandle = this.getAgentStatusTerminalHandleForPaneKey(target.paneKey)
+        if (terminalHandle) {
+          target.terminalHandle = terminalHandle
+        }
+      }
+    }
     for (const payload of chunk.payloads) {
+      // Why not gated on a listener: the prompt lifecycle is main's own state, read by
+      // terminal waits that run with no status consumer attached.
       this.recordAgentPromptLifecycleState(
         ptyId,
         mapExplicitAgentStateToRuntimeTerminalStatus(payload.state)
       )
       for (const target of targets.values()) {
-        retainedChanged =
-          this.retainAgentRowSnapshot(
-            ptyId,
-            target.paneKey,
-            target.worktreeId,
-            target.tabId,
-            target.connectionId ?? null,
-            payload
-          ) || retainedChanged
         if (!this.onTerminalAgentStatus) {
           continue
         }
@@ -165,28 +159,5 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         }
       }
     }
-    return retainedChanged
-  }
-
-  protected retainAgentRowSnapshot(
-    ptyId: string,
-    paneKey: string,
-    worktreeId: string | undefined,
-    tabId: string | undefined,
-    connectionId: string | null,
-    payload: ParsedAgentStatusPayload
-  ): boolean {
-    return this.agentRows.retain({
-      ptyId,
-      paneKey,
-      worktreeId,
-      tabId,
-      connectionId,
-      payload
-    })
-  }
-
-  protected clearAgentRowSnapshotsForPty(ptyId: string): void {
-    this.agentRows.clearPty(ptyId)
   }
 }

@@ -22,6 +22,7 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree
 } from '../../../worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
 import {
   cleanupUnusedWorktreePushTargetRemote,
   notifyWorktreesChanged
@@ -31,6 +32,7 @@ import {
   removeWorktreeLinkedPaths
 } from '../../worktree-symlinks'
 import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
@@ -68,7 +70,8 @@ export async function removeRegisteredLocalWorktree(
   const refreshedRegisteredWorktree = findRegisteredDeletableWorktree(
     repo.path,
     canonicalWorktreePath,
-    refreshedWorktrees
+    refreshedWorktrees,
+    CLIENT_REMOVAL_HOME
   )
   if (!refreshedRegisteredWorktree) {
     throw new Error(
@@ -164,6 +167,7 @@ export async function removeRegisteredLocalWorktree(
           await canSafelyRemoveOrphanedWorktreeDirectory(
             toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
             toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+            CLIENT_REMOVAL_HOME,
             access.statPath,
             access.readPath
           )
@@ -212,6 +216,8 @@ export async function removeRegisteredLocalWorktree(
         )
       }
     }
+    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    runWorktreeChangeInvalidators(repoId)
     removalCompleted = true
   } finally {
     await removalGate.finish(removalCompleted)

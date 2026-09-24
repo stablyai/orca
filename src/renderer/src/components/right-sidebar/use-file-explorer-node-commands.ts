@@ -42,7 +42,6 @@ type UseFileExplorerNodeCommandsParams = {
   requestDeleteAll: (nodes: TreeNode[]) => void
   refreshDir: (dirPath: string) => Promise<void>
   handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
-  cancelPendingDirToggle: () => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
 }
@@ -76,7 +75,6 @@ export function useFileExplorerNodeCommands({
   requestDeleteAll,
   refreshDir,
   handleClick,
-  cancelPendingDirToggle,
   toggleDir,
   scrollToIndex
 }: UseFileExplorerNodeCommandsParams): UseFileExplorerNodeCommandsResult {
@@ -98,16 +96,6 @@ export function useFileExplorerNodeCommands({
     },
     [handleClick]
   )
-  // Why: a rename can start while a name click is still holding back its
-  // directory toggle; drop it so the tree doesn't shift under the input.
-  const handleStartRename = useCallback(
-    (node: TreeNode) => {
-      cancelPendingDirToggle()
-      startRename(node)
-    },
-    [cancelPendingDirToggle, startRename]
-  )
-
   useFileExplorerKeys({
     containerRef,
     rowProjection,
@@ -119,7 +107,7 @@ export function useFileExplorerNodeCommands({
     activateNode,
     moveSelection,
     toggleDir,
-    startRename: handleStartRename,
+    startRename,
     requestDelete,
     requestDeleteAll,
     scrollToIndex,
@@ -195,7 +183,7 @@ export function useFileExplorerNodeCommands({
   )
 
   return {
-    handleStartRename,
+    handleStartRename: startRename,
     handleContextMenuDelete,
     handleDuplicate,
     handleRowClick,

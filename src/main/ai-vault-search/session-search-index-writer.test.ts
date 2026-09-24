@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionSearchIndexConsumer } from './session-search-index-consumer'
 import {
   openSessionSearchIndexFile,
@@ -25,6 +25,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   store.close()
   await index.close()
 })
@@ -55,6 +56,51 @@ function indexRead(previousByteOffset: number, byteOffset: number, text: string)
     incomplete: false
   })
 }
+
+it('buffers capped tool rows without retaining their large parent strings', () => {
+  if (!('gc' in globalThis) || typeof globalThis.gc !== 'function') {
+    throw new Error('The test runner must enable --expose-gc')
+  }
+  const gc = globalThis.gc
+  const heapAfterGc = (): number => {
+    gc()
+    gc()
+    return process.memoryUsage().heapUsed
+  }
+  const write = store.beginWrite({ ...syntheticCandidate(), agent: 'codex' }, 'replace', 0)
+  if (!write) {
+    throw new Error('expected a write')
+  }
+  const prefix = (i: number): string => `retentionneedle ${i} 漢字 😀 `
+  const rows = 70
+  const before = heapAfterGc()
+  for (let i = 0; i < rows; i++) {
+    write.add({
+      role: 'tool',
+      text: prefix(i) + 'x'.repeat(2 * 1024 * 1024),
+      timestamp: null
+    })
+  }
+  // 210 Ki characters must not keep hundreds of MiB of discarded tool output alive.
+  expect(heapAfterGc() - before).toBeLessThan(16 * 1024 * 1024)
+  expect(count('messages')).toBe(0)
+  expect(
+    write.commit({
+      session: syntheticSession({ agent: 'codex' }),
+      byteOffset: 140 * 1024 * 1024,
+      incomplete: false
+    })
+  ).toBe(true)
+  expect(count('messages')).toBe(rows)
+  expect(
+    index.db
+      .prepare(
+        "SELECT tool_text FROM messages_fts WHERE messages_fts MATCH 'tool_text:retentionneedle' ORDER BY rowid"
+      )
+      .all()
+  ).toEqual(Array.from({ length: rows }, (_, i) => ({ tool_text: prefix(i).padEnd(3072, 'x') })))
+  expect(errors).toEqual([])
+})
 
 it('refuses an append whose predecessor offset is not the committed cursor', () => {
   expect(indexRead(0, 100, 'first')).toBe(true)
@@ -111,15 +157,13 @@ it('refuses to commit a write whose file was removed mid-read', () => {
 
 it('declines a behind cursor in beginRead before it ever reaches the store', () => {
   const attempted: number[] = []
-  const stub = {
-    indexedFile: () => ({ byteOffset: 100, mtimeMs: 1, sizeBytes: 1 }),
-    beginWrite: (_candidate: unknown, _mode: unknown, previousByteOffset: number) => {
-      attempted.push(previousByteOffset)
-      return { add: () => undefined, commit: () => true }
-    },
-    setFileState: () => undefined
-  } as unknown as SessionSearchStore
-  const consumer = new SessionSearchIndexConsumer(stub)
+  vi.spyOn(store, 'indexedFile').mockReturnValue({ byteOffset: 100, mtimeMs: 1, sizeBytes: 1 })
+  vi.spyOn(store, 'beginWrite').mockImplementation((_candidate, _mode, previousByteOffset) => {
+    attempted.push(previousByteOffset)
+    return { add: () => undefined, commit: () => true, discard: () => undefined }
+  })
+  vi.spyOn(store, 'setFileState').mockImplementation(() => undefined)
+  const consumer = new SessionSearchIndexConsumer(store)
 
   expect(
     consumer.beginRead({
@@ -142,22 +186,17 @@ it('declines a behind cursor in beginRead before it ever reaches the store', () 
 
 it("hands the read's identity accessor to the store", () => {
   const captured: unknown[] = []
-  const stub = {
-    indexedFile: () => null,
-    beginWrite: (
-      _candidate: unknown,
-      _mode: unknown,
-      _previousByteOffset: unknown,
-      identity: unknown
-    ) => {
+  vi.spyOn(store, 'indexedFile').mockReturnValue(null)
+  vi.spyOn(store, 'beginWrite').mockImplementation(
+    (_candidate, _mode, _previousByteOffset, identity) => {
       captured.push(identity)
-      return { add: () => undefined, commit: () => true }
-    },
-    setFileState: () => undefined
-  } as unknown as SessionSearchStore
+      return { add: () => undefined, commit: () => true, discard: () => undefined }
+    }
+  )
+  vi.spyOn(store, 'setFileState').mockImplementation(() => undefined)
   const identity = (): null => null
 
-  new SessionSearchIndexConsumer(stub).beginRead({
+  new SessionSearchIndexConsumer(store).beginRead({
     candidate: syntheticCandidate(),
     mode: 'replace',
     previousByteOffset: 0,

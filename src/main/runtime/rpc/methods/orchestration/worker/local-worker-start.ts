@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
@@ -186,7 +187,7 @@ export async function startLocalWorker(args: {
         }
         throw new Error(
           wait.blockedReason
-            ? `Agent startup blocked: ${wait.blockedReason}`
+            ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
             : structuredSession
               ? `Setup did not finish before the structured worker started (${wait.status}).`
               : `Agent did not become ready (${wait.status}).`

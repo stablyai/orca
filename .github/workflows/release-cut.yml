@@ -107,6 +107,10 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
+          # Why: version math recovers unpublished tags; checkout's default
+          # fetch-tags:false hides them, so a patch cut recreates vX.Y.Z and
+          # `git push` overwrites the existing tag.
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -805,6 +809,16 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+      - name: Restore draft-release scripts from the workflow ref
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- \
+            config/scripts/create-draft-release.mjs \
+            config/scripts/assert-github-release-is-draft.mjs
+
       - name: Create draft release with bounded generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -846,7 +860,8 @@ jobs:
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- \
             tests/e2e/golden-source-control-open-diff.spec.ts \
-            tests/e2e/golden-terminal-file-link.spec.ts
+            tests/e2e/golden-terminal-file-link.spec.ts \
+            tests/e2e/golden-worktree-create-switch.spec.ts
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -871,8 +886,17 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
+      # Why: this install runs lifecycle scripts, so node-gyp rebuilds
+      # native/windows-registry and fetches that Node version's headers from
+      # nodejs.org. One `read ECONNRESET` there failed this blocking gate and the
+      # whole cut. Retry like the release build's install below.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
 
       - name: Build Electron app for platform golden
         run: npx electron-vite build --mode e2e
@@ -1088,8 +1112,14 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
+      # Same node-gyp header fetch as the blocking golden gate above.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
 
       - name: Build Electron app for terminal rendering evidence
         run: npx electron-vite build --mode e2e
@@ -1161,14 +1191,14 @@ jobs:
               ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
             platform: linux-x64
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-unpacked
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
           - os: ubuntu-24.04-arm
             platform: linux-arm64
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-arm64-unpacked
             eb_cache_path: |
               ~/.cache/electron
@@ -1204,22 +1234,45 @@ jobs:
       # ref, so cutting from an older/off-main ref whose tree predates a composite
       # action would fail the step with "Can't find 'action.yml'". Restore the
       # actions directory from the commit this workflow file itself came from.
-      - name: Restore composite actions from the workflow ref
-        if: matrix.platform == 'win' && github.run_attempt == 1
+      # Not Windows-only: every platform now consumes install-mobile-dependencies, so
+      # any of them can be the one whose cut ref predates the action.
+      - name: Restore draft-publish scripts from the workflow ref
+        # Why: this job checks out the release tag, so a cut from an older SHA
+        # still has electron-builder releaseType:release and no re-draft helper.
+        # The workflow YAML is from main; restore the scripts it invokes.
         shell: bash
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
-          action_path=".github/actions/install-signpath-module/action.yml"
-          if [ -f "$action_path" ]; then
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
+
+      - name: Restore composite actions from the workflow ref
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          required=(.github/actions/install-mobile-dependencies/action.yml)
+          if [ "$PLATFORM" = win ] && [ "$GITHUB_RUN_ATTEMPT" = 1 ]; then
+            required+=(.github/actions/install-signpath-module/action.yml)
+          fi
+          missing=()
+          for action_path in "${required[@]}"; do
+            [ -f "$action_path" ] || missing+=("$action_path")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
             echo "Composite actions already present at the cut ref."
             exit 0
           fi
-          echo "Cut ref predates $action_path; restoring it from $WORKFLOW_SHA."
+          echo "Cut ref predates ${missing[*]}; restoring from $WORKFLOW_SHA."
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- .github/actions
-          test -f "$action_path"
+          for action_path in "${required[@]}"; do
+            test -f "$action_path"
+          done
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
@@ -1232,6 +1285,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       # Why: release builds hit the same native-module postinstall path as
       # PR CI, so keep the pinned node-gyp override here too instead of
@@ -1262,6 +1318,8 @@ jobs:
       # Electron binary from GitHub release assets. GitHub's download CDN
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
+      # Why host-only: this job packages only for its own runner OS and
+      # architecture, so the default host-scoped install is deliberate.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
@@ -1269,6 +1327,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       # Why: `pnpm build:release` verifies the Linux computer-use provider by
       # importing AT-SPI bindings, which are runtime package deps but are not
@@ -1309,6 +1371,20 @@ jobs:
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
 
+      # Why here and not in build:relay: only a Windows runner can compile it, and
+      # arm64 cross-compiles from this same x64 agent. Mirrors dev-channel-win-build.yml,
+      # which had it while release-cut did not — so every stable installer through
+      # v1.4.203 shipped Windows relays with no windows-process-tree.node, silently
+      # falling back to the PowerShell scan on every Windows SSH host.
+      # Why no run_attempt guard, unlike the artifact steps below: Build app is ungated,
+      # so a rerun would reach the required-addon check with nothing staged and fail.
+      - name: Build Windows process-table addon for the relay
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+
       # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
       # produces a published binary, so this is the only place the secret
       # needs to be in scope. The key is a PostHog *project* API key, not
@@ -1331,6 +1407,9 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+          # Fail the release rather than ship a relay that silently falls back to
+          # the PowerShell scan on every Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: ${{ matrix.platform == 'win' && 'x64,arm64' || '' }}
 
       - name: Gate runtime file-watcher process isolation
         if: runner.os == 'Linux'
@@ -2141,36 +2220,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify release remains draft after artifact upload
-        # Why: the build matrix must never be the actor that exposes a partial
-        # release. If an uploader or GitHub transition flips draft early, fail
-        # this platform leg and leave the diagnostic monitor artifact behind.
+        # Why: electron-builder `--publish always` can create a public release
+        # as soon as this platform uploads. Re-draft immediately, then fail, so
+        # /releases/latest never keeps serving a missing Windows exe.
+        # Why bash: the Windows matrix defaults to pwsh, which does not expand
+        # "$TAG" into argv.
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: |
-          set -euo pipefail
-          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
-          # Why: release upload must validate the draft before it is publicly visible.
-          draft="$(jq -e -r --arg tag "$TAG" '
-            map(select(.tag_name == $tag))
-            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
-          ' <<<"$releases_json")" || {
-            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
-            exit 1
-          }
-          if [[ "$draft" != "true" ]]; then
-            echo "::error::Release $TAG was published during the ${{ matrix.platform }} artifact upload."
-            exit 1
-          fi
+        run: node config/scripts/assert-github-release-is-draft.mjs "${{ needs.cut.outputs.tag }}"
 
-      # Why post-publish for Linux: electron-builder packs and uploads in a
-      # single `--publish always` invocation, so there is no cheap insertion
-      # point between pack and upload without splitting those steps. Running
-      # verify last still blocks the bad release: the binary is uploaded to the
-      # draft, but a failed matrix job blocks `publish-release` from flipping
-      # the release from draft → published, so users never see it. A human then
-      # deletes the draft and re-cuts.
+      # Why post-pack for Linux: electron-builder packs and uploads in one
+      # `--publish always` invocation. The previous step re-drafts if that
+      # upload flipped the GitHub release public; this telemetry check still
+      # blocks `publish-release` from undrafting a bad binary.
       #
       # Why this guards against: a misconfigured CI run where
       # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify

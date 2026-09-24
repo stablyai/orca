@@ -1,3 +1,5 @@
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
@@ -384,76 +386,116 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     }
   })
 
-  it('creates background sessions on the active runtime environment', async () => {
+  it.each([true, false])(
+    'creates background sessions with negotiated keyboard support: %s',
+    async (keyboardSupported) => {
+      useRemoteAgentBackgroundRuntime(state)
+      mockRuntimeEnvironmentTransportCall.mockImplementation((request: { method: string }) => {
+        const status = createCompatibleRuntimeStatusResponseIfNeeded(request)
+        if (status?.ok) {
+          return Promise.resolve({
+            ...status,
+            result: {
+              ...status.result,
+              capabilities: status.result.capabilities?.filter(
+                (capability) =>
+                  keyboardSupported || capability !== AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY
+              )
+            }
+          })
+        }
+        return mockRuntimeEnvironmentCall(request)
+      })
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      const result = await launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation'
+      })
+
+      expect(mockSpawn).not.toHaveBeenCalled()
+      const params = mockRuntimeEnvironmentCall.mock.calls[0]?.[0]?.params
+      if (keyboardSupported) {
+        expect(params).toHaveProperty('terminalKittyKeyboardProtocol', true)
+      } else {
+        expect(params).not.toHaveProperty('terminalKittyKeyboardProtocol')
+      }
+      const leafId = params?.placement?.leafId
+      const tabId = params?.placement?.tabId
+      expect(leafId).toMatch(UUID_RE)
+      expect(tabId).toMatch(UUID_RE)
+      // Why: background launches have no explicit recipe override, so remote host settings win.
+      expect(params).not.toHaveProperty('agentArgs')
+      expect(mockRegisterAgentLaunchConfig).toHaveBeenCalledWith(
+        `${tabId}:${leafId}`,
+        {
+          agentCommand: "claude '--dangerously-skip-permissions'",
+          agentArgs: '--dangerously-skip-permissions',
+          agentEnv: {}
+        },
+        {
+          agentType: 'claude',
+          launchToken: expect.stringMatching(UUID_RE),
+          tabId,
+          leafId
+        }
+      )
+      expect(mockSetTabLayout).toHaveBeenCalledWith(
+        tabId,
+        expect.objectContaining({
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          ptyIdsByLeafId: { [leafId]: 'remote:env-1@@terminal-1' }
+        })
+      )
+      expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
+          worktree: 'id:wt-1',
+          agent: 'claude',
+          prompt: 'run the automation',
+          promptDelivery: 'auto-submit',
+          placement: { tabId, leafId },
+          presentation: 'background'
+        }),
+        timeoutMs: 15_000
+      })
+      expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'remote:env-1@@terminal-1')
+      expect(mockRegisterEagerPtyBuffer).not.toHaveBeenCalled()
+      expect(mockRuntimeEnvironmentSubscribe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'env-1',
+          method: 'terminal.multiplex',
+          params: {}
+        }),
+        expect.any(Object)
+      )
+      expect(result).toMatchObject({
+        tabId,
+        paneKey: `${tabId}:${leafId}`,
+        ptyId: 'remote:env-1@@terminal-1',
+        terminalOwnership: null
+      })
+    }
+  )
+
+  it('advertises keyboard support for a background OMP launch', async () => {
     useRemoteAgentBackgroundRuntime(state)
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-
-    const result = await launchAgentBackgroundSession({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
-
-    expect(mockSpawn).not.toHaveBeenCalled()
-    const params = mockRuntimeEnvironmentCall.mock.calls[0]?.[0]?.params
-    const leafId = params?.placement?.leafId
-    const tabId = params?.placement?.tabId
-    expect(leafId).toMatch(UUID_RE)
-    expect(tabId).toMatch(UUID_RE)
-    // Why: background launches have no explicit recipe override, so remote host settings win.
-    expect(params).not.toHaveProperty('agentArgs')
-    expect(mockRegisterAgentLaunchConfig).toHaveBeenCalledWith(
-      `${tabId}:${leafId}`,
-      {
-        agentCommand: "claude '--dangerously-skip-permissions'",
-        agentArgs: '--dangerously-skip-permissions',
-        agentEnv: {}
-      },
-      {
-        agentType: 'claude',
-        launchToken: expect.stringMatching(UUID_RE),
-        tabId,
-        leafId
-      }
-    )
-    expect(mockSetTabLayout).toHaveBeenCalledWith(
-      tabId,
+    await launchAgentBackgroundSession({ agent: 'omp', worktreeId: 'wt-1', prompt: 'review' })
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({
-        root: { type: 'leaf', leafId },
-        activeLeafId: leafId,
-        ptyIdsByLeafId: { [leafId]: 'remote:env-1@@terminal-1' }
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          agent: 'omp',
+          terminalKittyKeyboardProtocol: true,
+          presentation: 'background'
+        })
       })
     )
-    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'terminal.createAgentSession',
-      params: expect.objectContaining({
-        clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
-        worktree: 'id:wt-1',
-        agent: 'claude',
-        prompt: 'run the automation',
-        promptDelivery: 'auto-submit',
-        placement: { tabId, leafId },
-        presentation: 'background'
-      }),
-      timeoutMs: 15_000
-    })
-    expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'remote:env-1@@terminal-1')
-    expect(mockRegisterEagerPtyBuffer).not.toHaveBeenCalled()
-    expect(mockRuntimeEnvironmentSubscribe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'env-1',
-        method: 'terminal.multiplex',
-        params: {}
-      }),
-      expect.any(Object)
-    )
-    expect(result).toMatchObject({
-      tabId,
-      paneKey: `${tabId}:${leafId}`,
-      ptyId: 'remote:env-1@@terminal-1',
-      terminalOwnership: null
-    })
   })
 
   it('preserves the legacy background spawn on an old remote host', async () => {
@@ -494,6 +536,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         params: expect.objectContaining({
           worktree: 'id:wt-1',
           command: "claude '--dangerously-skip-permissions' 'run remotely'",
+          terminalKittyKeyboardProtocol: true,
           launchAgent: 'claude',
           presentation: 'background'
         })

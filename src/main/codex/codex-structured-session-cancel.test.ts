@@ -257,9 +257,8 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toMatchObject({
-      state: 'accepted',
-      providerIdentity: { turnId: 'turn-2' }
+    ).resolves.toEqual({
+      state: 'admitted'
     })
   })
 

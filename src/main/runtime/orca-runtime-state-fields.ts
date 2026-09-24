@@ -3,6 +3,7 @@ import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { StatsCollector } from '../stats/collector'
 import type { IPtyProvider } from '../providers/types'
+import type { PrepareClaudeAuth } from '../ipc/pty/host-env/types'
 import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
@@ -28,6 +29,10 @@ import {
 } from './runtime-skill-command-surface'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
+import {
+  RuntimeSessionSearchSettingsController,
+  type SessionSearchSettingsApply
+} from './runtime-session-search-settings'
 import { RuntimeAutomationController } from './runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from './runtime-orchestration-federation'
 import { configureAiVaultSessionSources } from '../ai-vault/cached-session-list'
@@ -35,14 +40,22 @@ import { configureHostReadableTranscriptPathSources } from '../native-chat/host-
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from './terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+  protected readonly prepareClaudeAuth?: PrepareClaudeAuth
+
+  protected readonly machineName = new RuntimeMachineName(
+    () => this.store?.getSettings?.().machineName
+  )
+
   constructor(
     store: RuntimeStore | null = null,
     stats?: StatsCollector,
     deps?: {
       getLocalProvider?: () => IPtyProvider
       getSshProvider?: (connectionId: string) => IPtyProvider | undefined
+      prepareClaudeAuth?: PrepareClaudeAuth
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
@@ -90,11 +103,17 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
       skillTransactionRecovery?: Promise<unknown>
+      // Why a host hook and not a direct call: the process that owns this runtime's index
+      // differs per host (scanner child on the desktop, in-process on orcad), and on orcad
+      // it is installed after construction, so the closure has to resolve it at call time.
+      applySessionSearchSettings?: SessionSearchSettingsApply
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
     super()
     this.store = store
+    this.machineName.start()
+    this.prepareClaudeAuth = deps?.prepareClaudeAuth
     store?.onSettingsChanged?.((updates) => {
       if ('experimentalStructuredNativeChat' in updates) {
         this.notifyMobileSessionTabsChanged()
@@ -128,6 +147,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     })
     installRuntimeServiceCommandSurface(runtime, {
       aiVault: this.aiVault,
+      sessionSearchSettings: new RuntimeSessionSearchSettingsController(
+        store,
+        deps?.applySessionSearchSettings ?? null
+      ),
       clientEvents: this.clientEvents,
       nativeChatDraftResolutions: this.nativeChatDraftResolutions,
       subscriptions: this.subscriptions,

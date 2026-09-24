@@ -5,29 +5,13 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
-  type ComponentType,
   type ForwardedRef
 } from 'react'
-import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import {
-  Bold,
-  Code2,
-  FileCode2,
-  Heading1,
-  Heading2,
-  Heading3,
-  ImageIcon,
-  Italic,
-  Link,
-  List,
-  ListOrdered,
-  ListTodo,
-  Pilcrow,
-  Quote,
-  Strikethrough
-} from 'lucide-react-native'
+import { Keyboard, StyleSheet, View } from 'react-native'
+import { openExternalLink } from '../platform/external-link'
 import WebView, { type WebViewMessageEvent } from 'react-native-webview'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
+import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
 import type {
   MobileRichMarkdownCommand,
   MobileRichMarkdownEditorMessage,
@@ -42,7 +26,11 @@ import {
 const EDITOR_DOCUMENT_ORIGIN = 'https://orca-mobile-editor.invalid'
 const EDITOR_DOCUMENT_URL = `${EDITOR_DOCUMENT_ORIGIN}/rich-markdown-editor`
 
-type Props = Omit<MobileRichMarkdownEditorProps, 'onOpenLink'> & {
+/** Exported so the web sibling answers the same shape and a change to it fails there too. */
+export type MobileRichMarkdownEditorComponentProps = Omit<
+  MobileRichMarkdownEditorProps,
+  'onOpenLink'
+> & {
   onOpenLink?: (url: string) => void
 }
 
@@ -50,32 +38,14 @@ export type MobileRichMarkdownEditorHandle = {
   dismissKeyboard: () => void
 }
 
-type ToolbarItem = {
-  command: MobileRichMarkdownCommand
-  label: string
-  icon: ComponentType<{ size?: number; color?: string }>
-}
-
-const TOOLBAR_ITEMS: ToolbarItem[] = [
-  { command: 'paragraph', label: 'Body', icon: Pilcrow },
-  { command: 'heading1', label: 'H1', icon: Heading1 },
-  { command: 'heading2', label: 'H2', icon: Heading2 },
-  { command: 'heading3', label: 'H3', icon: Heading3 },
-  { command: 'bold', label: 'Bold', icon: Bold },
-  { command: 'italic', label: 'Italic', icon: Italic },
-  { command: 'strike', label: 'Strike', icon: Strikethrough },
-  { command: 'bulletList', label: 'Bullet list', icon: List },
-  { command: 'orderedList', label: 'Numbered list', icon: ListOrdered },
-  { command: 'taskList', label: 'Checklist', icon: ListTodo },
-  { command: 'quote', label: 'Quote', icon: Quote },
-  { command: 'link', label: 'Link', icon: Link },
-  { command: 'image', label: 'Image', icon: ImageIcon },
-  { command: 'inlineCode', label: 'Inline code', icon: Code2 },
-  { command: 'codeBlock', label: 'Code block', icon: FileCode2 }
-]
-
 function MobileRichMarkdownEditorInner(
-  { content, editable, onChange, onKeyboardInsetChange, onOpenLink }: Props,
+  {
+    content,
+    editable,
+    onChange,
+    onKeyboardInsetChange,
+    onOpenLink
+  }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
   const webViewRef = useRef<WebView>(null)
@@ -109,7 +79,7 @@ function MobileRichMarkdownEditorInner(
         onOpenLink(url)
         return
       }
-      void Linking.openURL(url).catch(() => {})
+      openExternalLink(url)
     },
     [onOpenLink]
   )
@@ -160,34 +130,7 @@ function MobileRichMarkdownEditorInner(
 
   return (
     <View style={styles.container}>
-      <View style={styles.toolbar}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.toolbarContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {TOOLBAR_ITEMS.map((item) => {
-            const Icon = item.icon
-            return (
-              <Pressable
-                key={item.command}
-                disabled={!editable}
-                accessibilityRole="button"
-                accessibilityLabel={item.label}
-                onPress={() => runCommand(item.command)}
-                style={({ pressed }) => [
-                  styles.toolbarButton,
-                  pressed && editable ? styles.toolbarButtonPressed : null,
-                  !editable ? styles.toolbarButtonDisabled : null
-                ]}
-              >
-                <Icon size={15} color={editable ? colors.textPrimary : colors.textMuted} />
-              </Pressable>
-            )
-          })}
-        </ScrollView>
-      </View>
+      <MobileRichMarkdownToolbar editable={editable} onCommand={runCommand} />
       <WebView
         ref={webViewRef}
         source={{ html, baseUrl: EDITOR_DOCUMENT_URL }}
@@ -216,32 +159,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     backgroundColor: colors.bgBase
-  },
-  toolbar: {
-    minHeight: 42,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  toolbarContent: {
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6
-  },
-  toolbarButton: {
-    minWidth: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.xs
-  },
-  toolbarButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  toolbarButtonDisabled: {
-    opacity: 0.55
   },
   webView: {
     flex: 1,

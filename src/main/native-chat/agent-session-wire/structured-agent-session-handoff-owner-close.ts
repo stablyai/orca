@@ -30,6 +30,7 @@ export async function closeRetainedTuiOwner(input: {
       journalSettlement: 'not-required'
     })
   )
+  input.deps.stopTuiHistoryCatchup?.(input.sessionId)
   input.releaseOwner(input.sessionId)
   return true
 }

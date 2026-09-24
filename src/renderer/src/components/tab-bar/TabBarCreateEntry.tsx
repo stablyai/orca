@@ -36,7 +36,6 @@ import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empt
 import { useStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { translate } from '@/i18n/i18n'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 
@@ -390,15 +389,6 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                labelOverride={
-                  option.kind === 'agent' && isStructuredLaunchPending(option.option.agent)
-                    ? translate(
-                        'components.native-chat.structuredSessionLaunchPending',
-                        'Starting {{value0}} chat…',
-                        { value0: option.option.label }
-                      )
-                    : undefined
-                }
                 disabled={
                   disabled ||
                   pending ||

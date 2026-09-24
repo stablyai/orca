@@ -253,7 +253,9 @@ describe('SkillInstallDialog', () => {
     })
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
     await inspectSkill()
-    await screen.findByRole('button', { name: 'Installing for: Codex' })
+    // Canonical-root agents (for example Muse) are shown alongside the
+    // detected provider, so keep this assertion focused on the detected one.
+    await screen.findByRole('button', { name: /Installing for: Codex/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Install skill' }))
     await waitFor(() => expect(skills.installShare).toHaveBeenCalled())

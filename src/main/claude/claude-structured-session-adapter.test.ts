@@ -96,6 +96,95 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     })
   })
 
+  it('restores an encoded Fast preference through the absolute flag setting', async () => {
+    const claude = fakeClaude({
+      settings: { effective: { fastMode: false, fastModePerSessionOptIn: false } },
+      routes: {
+        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
+      }
+    })
+    const adapter = adapterFor(claude)
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'opus', fastMode: 'true' }
+    })
+
+    expect(claude.connections[0].calls).toContainEqual({
+      subtype: 'apply_flag_settings',
+      params: { settings: { fastMode: true } }
+    })
+  })
+
+  it('does not carry a saved opt-in into a new per-session-opt-in child', async () => {
+    const claude = fakeClaude({
+      settings: { effective: { fastMode: false, fastModePerSessionOptIn: true } },
+      routes: {
+        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
+      }
+    })
+    const adapter = adapterFor(claude)
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'opus', fastMode: 'true' }
+    })
+
+    expect(
+      claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
+    ).toEqual([])
+  })
+
+  it('restores Fast when reacquiring the same per-session-opt-in conversation', async () => {
+    const claude = fakeClaude({
+      settings: { effective: { fastMode: false, fastModePerSessionOptIn: true } },
+      routes: {
+        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
+      }
+    })
+    const adapter = adapterFor(claude, { resumed: true })
+
+    await adapter.acquire({
+      identity: identityFor(),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'opus', fastMode: 'true' }
+    })
+
+    expect(claude.connections[0].calls).toContainEqual({
+      subtype: 'apply_flag_settings',
+      params: { settings: { fastMode: true } }
+    })
+  })
+
+  it('self-heals a Fast preference the running model no longer supports', async () => {
+    const claude = fakeClaude({
+      settings: { effective: { fastMode: false } },
+      routes: {
+        list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: false }]
+      }
+    })
+    const adapter = adapterFor(claude)
+
+    await expect(
+      adapter.acquire({
+        identity: identityFor(),
+        fence: 7,
+        spawnToken: 'spawn-9',
+        options: { model: 'opus', fastMode: 'true' }
+      })
+    ).resolves.toBeDefined()
+
+    expect(adapter.readOptionRestoreFailures('session-1')).toContain('fastMode')
+    expect(
+      claude.connections[0].calls.filter((call) => call.subtype === 'apply_flag_settings')
+    ).toEqual([])
+  })
+
   it.each([
     ['model', 'set_model', { model: 'retired-model' }],
     ['effort', 'apply_flag_settings', { effort: 'retired-effort' }],
@@ -183,6 +272,45 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'late-turn-1', fence: 7 })
     ).resolves.toEqual({ cancelled: true })
+  })
+
+  it('opens each queued exact replay with its own request origin', async () => {
+    const claude = fakeClaude({ replayUuid: null })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = await acquired(claude, {}, events)
+    const connection = claude.connections[0]!
+    const dispatch = async (clientMessageId: string, requestedAt: number): Promise<void> => {
+      await expect(
+        adapter.dispatch({
+          sessionId: 'session-1',
+          clientMessageId,
+          body: USER_MESSAGE,
+          fence: 7,
+          requestedAt
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+    }
+    const echo = (index: number): void => {
+      const sent = connection.sent[index]!
+      connection.handlers.onMessage?.({
+        ...sent,
+        uuid: `turn-${index + 1}`,
+        user_message_uuid: sent.uuid
+      })
+    }
+
+    await dispatch('client-a', 100)
+    echo(0)
+    await dispatch('client-b', 200)
+    await dispatch('client-c', 300)
+    echo(1)
+    echo(2)
+
+    expect(
+      events
+        .filter((event) => event.type === 'message' && event.startsTurn === true)
+        .map((event) => (event.type === 'message' ? event.requestedAt : undefined))
+    ).toEqual([100, 200, 300])
   })
 
   it('quarantines SDK frames without the acquired session identity', async () => {
@@ -587,7 +715,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       itemId: 'journal-approval',
       kind: 'approval',
       optionId: 'allowForSession',
-      fence: 7
+      fence: 7,
+      commit: async () => undefined
     })
     // The answer resolves the SDK's own callback promise; the SDK writes the wire response.
     await expect(answered.promise).resolves.toEqual({
@@ -623,7 +752,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       itemId: 'journal-q1',
       kind: 'question',
       optionId: encodeClaudeQuestionOptionId('Library?', 'Luxon'),
-      fence: 7
+      fence: 7,
+      commit: async () => undefined
     })
     await tick()
     expect(answered.settled()).toBe(false)
@@ -632,7 +762,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       itemId: 'journal-q2',
       kind: 'question',
       optionId: encodeClaudeQuestionOptionId('Ship now?', 'Yes'),
-      fence: 7
+      fence: 7,
+      commit: async () => undefined
     })
     await expect(answered.promise).resolves.toMatchObject({
       behavior: 'allow',
@@ -663,7 +794,8 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
         itemId: 'journal-9',
         kind: 'approval',
         optionId: 'allow',
-        fence: 7
+        fence: 7,
+        commit: async () => undefined
       })
     ).rejects.toThrow(/no longer waiting/)
   })

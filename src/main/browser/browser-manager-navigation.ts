@@ -1,8 +1,11 @@
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
-import { cleanElectronUserAgent } from './browser-session-ua'
-import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
+import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
+import type { BrowserSessionRequestUserAgentResolver } from './browser-session-ua'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
-import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
+import {
+  buildViewportUserAgentOverride,
+  type ViewportUserAgentOverride
+} from './browser-viewport-user-agent'
 import {
   safeOrigin,
   type AuthUserAgentOverrideOperation,
@@ -11,27 +14,80 @@ import {
 import { BrowserManagerVisibility } from './browser-manager-visibility'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
+  resolveBrowserGuestRequestUserAgent(
+    request: Parameters<BrowserSessionRequestUserAgentResolver>[0]
+  ): ViewportUserAgentOverride {
+    const identity = getBrowserProcessUserAgentIdentity()
+    const firefoxUa = googleAuthUserAgent()
+    const pendingNavigation =
+      request.webContentsId === undefined
+        ? undefined
+        : this.pendingNavigationByGuestId.get(request.webContentsId)
+    // Firefox is delivered per-target and cannot reach workers; keep it clean-only to preserve one
+    // coherent identity per mode instead of pairing a Firefox document with native workers.
+    const googleAuthEnabled = identity.mode === 'clean'
+    if (
+      googleAuthEnabled &&
+      request.currentUserAgent === firefoxUa &&
+      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
+    ) {
+      return { userAgent: firefoxUa }
+    }
+    const overrideState =
+      request.webContentsId === undefined
+        ? undefined
+        : this.authUserAgentOverrideStateByGuestId.get(request.webContentsId)
+    const latestPendingOverride = overrideState?.pending.at(-1)
+    const currentOverride =
+      latestPendingOverride &&
+      latestPendingOverride.sequence > (overrideState?.confirmed?.sequence ?? -1)
+        ? latestPendingOverride
+        : overrideState?.confirmed
+    if (
+      googleAuthEnabled &&
+      !currentOverride &&
+      request.effectiveUserAgent === firefoxUa &&
+      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
+    ) {
+      return { userAgent: firefoxUa }
+    }
+    if (googleAuthEnabled && currentOverride?.userAgent === firefoxUa) {
+      return { userAgent: firefoxUa }
+    }
+    const browserPageId =
+      request.webContentsId === undefined
+        ? undefined
+        : this.tabIdByWebContentsId.get(request.webContentsId)
+    // Shared and service worker requests carry no webContentsId, and resolving a session-wide mobile
+    // intent for one put the mobile UA on the wire for a context whose own navigator.userAgent is
+    // desktop-clean — and for every tab sharing the session. One context, one identity: those workers
+    // stay on the session identity, while emulation reaches documents and the emulated tab's dedicated
+    // workers, which carry the owning webContentsId and so resolve through browserPageId.
+    const mobile = browserPageId
+      ? (this.viewportUaOverrideMobileByTabId.get(browserPageId) ?? false)
+      : false
+    return buildViewportUserAgentOverride({
+      url: request.url,
+      mobile,
+      baseUserAgent: identity.userAgent,
+      googleAuthEnabled
+    })
+  }
+
   // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
-  // not the request header, so the header-level Firefox switch in setupGoogleAuthUserAgentOverride
+  // not the request header, so the Firefox switch in the session request hook
   // must be matched here per navigation or the two layers disagree — itself a bot tell.
-  // Restores the session's base identity off the auth hosts. Native-UA profiles opt out
-  // of the whole clean-UA path, so they keep their untouched identity everywhere.
   protected applyGoogleAuthUserAgent(
     guest: Electron.WebContents,
     url: string,
     options: { duringRedirect?: boolean } = {}
   ): void {
     const browserPageId = this.tabIdByWebContentsId.get(guest.id)
-    // Why: popup child windows get these policies but are never in tabIdByWebContentsId, so a direct
-    // lookup misses the native-UA opt-out and would hand a native profile's popup the Firefox UA.
-    // That is worse than doing nothing: native sessions skip setupGoogleAuthUserAgentOverride, so
-    // the popup would send the raw Electron UA on the wire while navigator.userAgent claims Firefox.
-    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
-    // Session state is authoritative before renderer registration and after a native profile imports a source UA.
-    const mode =
-      getBrowserSessionUserAgentMode(guest.session) ??
-      (ownerTabId ? this.userAgentModeByPageId.get(ownerTabId) : undefined)
-    if (mode === 'native') {
+    const identity = getBrowserProcessUserAgentIdentity()
+    if (identity.mode === 'native') {
+      if (browserPageId) {
+        this.reapplyViewportUserAgentOverride(guest, browserPageId, url)
+      }
       return
     }
     const firefoxUa = googleAuthUserAgent()
@@ -48,7 +104,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       : // Only restore when the auth-host override is actually in place, so normal
         // navigation never touches the session UA.
         currentUa === firefoxUa
-        ? guest.session.getUserAgent()
+        ? identity.userAgent
         : null
     let authOverrideIssuedOverCdp = false
     if (nextUa !== null && nextUa !== currentUa) {
@@ -57,7 +113,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       // cannot survive — the sign-in lands on a blank tab. CDP retargets navigator.userAgent without
       // touching the navigation, and it outranks the WebContents UA from then on, so a guest that
       // switches to it stays on it. The wire UA never depended on this write:
-      // setupGoogleAuthUserAgentOverride rewrites User-Agent per request for auth-host URLs on its own.
+      // The session request hook rewrites User-Agent for auth-host URLs on its own.
       if (options.duringRedirect === true || overrideState !== undefined) {
         if (this.canOverrideUserAgentOverCdp(guest)) {
           authOverrideIssuedOverCdp = true
@@ -222,7 +278,8 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         // Why: the session UA is the profile's stable base identity. guest.getUserAgent() is not:
         // applyGoogleAuthUserAgent leaves it pinned to the Firefox auth UA once a guest switches to
         // the CDP override, so reading it back here would republish that identity on ordinary hosts.
-        baseUserAgent: cleanElectronUserAgent(baseUserAgent ?? guest.session.getUserAgent())
+        baseUserAgent: baseUserAgent ?? getBrowserProcessUserAgentIdentity().userAgent,
+        googleAuthEnabled: getBrowserProcessUserAgentIdentity().mode === 'clean'
       })
     )
   }

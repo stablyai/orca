@@ -1,5 +1,5 @@
 import { restoreRewindJournalBody } from './structured-rewind-journal-body'
-import { isRetainedTurnRow, mergeRetainedTurnRows } from './structured-rewind-retained-turns'
+import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
 import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
@@ -10,6 +10,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
+import { rewindRefusal } from './structured-rewind-refusal'
 
 export function persistRewindRecord(
   store: AgentSessionRecordStore,
@@ -23,6 +24,38 @@ export function persistRewindRecord(
     }
     return { ...record, rewind }
   })
+}
+
+/**
+ * Claude rewind is unsupported, so a pending one (an older build's, or an interrupted one) is
+ * settled refused rather than proven. Bookkeeping only: the chat is already attached either way.
+ */
+async function settleUnsupportedClaudeRewind(
+  store: AgentSessionRecordStore,
+  sessionId: string,
+  fence: number,
+  rewind: AgentSessionRewindRecord
+): Promise<void> {
+  const refusal = rewindRefusal('unsupported').refusal
+  try {
+    await persistRewindRecord(store, sessionId, fence, {
+      ...rewind,
+      phase: 'refused',
+      reason: 'unsupported',
+      retained: []
+    })
+    await store.recordOperationOutcome({
+      callerKey: rewind.callerKey,
+      operationId: rewind.operationId,
+      outcome: { status: 'failed', code: refusal.code, rewindReason: 'unsupported' }
+    })
+  } catch (error) {
+    console.warn('[structured-rewind] pending Claude rewind was not settled:', {
+      sessionId,
+      operationId: rewind.operationId,
+      error
+    })
+  }
 }
 
 /** Recovery observes provider state; it never repeats an ambiguous native mutation. */
@@ -39,6 +72,10 @@ export async function recoverStructuredRewind(
     return
   }
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
+  if (target?.provider === 'claude') {
+    await settleUnsupportedClaudeRewind(store, sessionId, fence, rewind)
+    return
+  }
   if (target?.provider === 'codex' && !rewind.hydrationVerified) {
     const recovered = await adapter?.recoverRewind?.({
       sessionId,
@@ -61,9 +98,13 @@ export async function recoverStructuredRewind(
       }
       throw new Error(`agent_session_rewind:${recovered?.reason ?? 'outcome-unknown'}`)
     }
-    // Turn rows are the host's, never the provider's; the proof covers provider items only.
     const expectedItems = new Set(
-      rewind.retained.filter((item) => !isRetainedTurnRow(item)).map((item) => item.itemId)
+      rewind.retained
+        .filter((item) => {
+          const identity = parseAgentJournalItemKey(item.itemId)
+          return identity?.provider === 'codex' && identity.threadId === target.threadId
+        })
+        .map((item) => item.itemId)
     )
     const observedItems = new Set<string>()
     for (const { identity } of recovered.items) {
@@ -80,7 +121,7 @@ export async function recoverStructuredRewind(
     if (observedItems.size !== expectedItems.size) {
       throw new Error('agent_session_rewind:proof-mismatch')
     }
-    const retained = mergeRetainedTurnRows(
+    const retained = mergeRetainedHostLifecycleRows(
       rewind.retained,
       recovered.items.map(({ identity, body }) => ({
         itemId: agentJournalItemKey(identity),

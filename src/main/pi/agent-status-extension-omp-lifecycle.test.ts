@@ -15,6 +15,53 @@ const OMP_RUNTIME_CASES = [
 ] as const
 
 describe('OMP agent_end contract', () => {
+  it('keeps a Pi pane working until async subagents finish', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+
+    await harness.callHook('agent_start')
+    harness.emitPiEvent('task:subagent:lifecycle', { id: 'child-1', status: 'started' })
+    await harness.callHook('agent_settled', undefined, { isIdle: () => true })
+
+    expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start'])
+
+    harness.emitPiEvent('task:subagent:lifecycle', { id: 'child-1', status: 'completed' })
+    await vi.waitFor(() =>
+      expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
+    )
+  })
+
+  it('ignores malformed or unknown Pi subagent lifecycle events', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    harness.emitPiEvent('task:subagent:lifecycle', {})
+    harness.emitPiEvent('task:subagent:lifecycle', { id: 'child-1', status: 'paused' })
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_settled')
+    await vi.waitFor(() =>
+      expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
+    )
+  })
+
+  it('keeps one lifecycle subscription across extension reloads', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    harness.reload()
+    expect(harness.piEventListenerCount('task:subagent:lifecycle')).toBe(1)
+    expect(harness.piEventListenerCount('subagent:async-started')).toBe(1)
+    expect(harness.piEventListenerCount('subagent:async-complete')).toBe(1)
+    harness.emitPiEvent('task:subagent:lifecycle', { id: 'child-1', status: 'started' })
+    await vi.waitFor(() => expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start']))
+  })
+
+  it('accepts the pi-subagents async lifecycle aliases', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    harness.emitPiEvent('subagent:async-started', { id: 'child-1' })
+    await harness.callHook('agent_settled')
+    expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start'])
+    harness.emitPiEvent('subagent:async-complete', { id: 'child-1' })
+    await vi.waitFor(() =>
+      expect(postedHookNames(harness.fetchMock)).toEqual(['agent_start', 'agent_end'])
+    )
+  })
+
   it.each(OMP_RUNTIME_CASES)(
     'keeps %s working when agent_end will continue',
     async (_name, args) => {

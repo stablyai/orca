@@ -4,7 +4,7 @@ import {
   loadAgentSessionStore,
   type LoadedAgentSessionStore
 } from './agent-session-record-store-file'
-import { withAgentSessionStoreTransactionLock } from './agent-session-store-transaction-lock'
+import { withFileTransactionLock } from '../file-transaction-lock'
 
 const OWNER_DIRECTORY_MODE = 0o700
 const OWNER_FILE_MODE = 0o600
@@ -33,7 +33,7 @@ export async function loadProtectedAgentSessionStore(
   filePath: string,
   hostId: string
 ): Promise<LoadedAgentSessionStore> {
-  return withAgentSessionStoreTransactionLock(filePath, async () => {
+  return withFileTransactionLock(filePath, async () => {
     await hardenAgentSessionStorePermissions(filePath)
     return loadAgentSessionStore(filePath, hostId)
   })

@@ -8,6 +8,7 @@ import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -150,6 +151,10 @@ describe('capability gating', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
+    // Separate from the structured capability on purpose: a host can serve the rest of the
+    // surface and not this stream, and a decoder drops an unknown stream opcode in silence — a
+    // client that subscribed without probing would wait forever and report nothing wrong.
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY)
     // Additive methods do not break an old client; bumping would strand every
     // paired device that has not updated.
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
@@ -162,7 +167,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(22)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(29)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -606,6 +611,19 @@ describe('method routing', () => {
     expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
   })
 
+  it('routes strict prompt identity through cancellation', async () => {
+    const params = {
+      envelope: envelope(),
+      turnId: 'turn-1',
+      prompt: { itemId: 'prompt-1', expectedRevision: 2 }
+    }
+
+    const response = await call('agentSession.cancel', params, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
+  })
+
   it('routes the structured handoff mutation through the host', async () => {
     const response = await call('agentSession.requestHandoff', {
       envelope: envelope(),
@@ -647,6 +665,17 @@ describe('parameter validation', () => {
       envelope: envelope(),
       turnId: 'turn-1',
       taskId: 'task-2'
+    })
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      prompt: { itemId: 'prompt-1', expectedRevision: 1 }
+    })
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'turn-1',
+      prompt: { itemId: 'prompt-1', expectedRevision: 0 }
     })
     expect(hostCalls.cancel).not.toHaveBeenCalled()
   })

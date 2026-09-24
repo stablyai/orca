@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 /* Adopting daemon sessions that already exist: reattach, attach-only, inventory, tombstones, startup reconcile. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'

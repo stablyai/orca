@@ -320,7 +320,7 @@ jobs:
             echo '### Regional rehome control'
             jq -r '"- mode: `\(.mode)`\n- generation: `\(.control.generation)`\n- enabled: `\(.control.enabled)`"' \
               "${RUNNER_TEMP}/relay-rehome-control.json"
-            jq -r '"- active: `\(.active)`\n- awaiting receipt: `\(.awaitingReceipt)`\n- target registered: `\(.targetRegistered)`\n- completed (24h): `\(.completedLast24Hours)`\n- aborted (24h): `\(.abortedLast24Hours)`"' \
+            jq -r '"- active: `\(.active)`\n- awaiting receipt: `\(.awaitingReceipt)`\n- target registered: `\(.targetRegistered)`\n- completed (24h): `\(.completedLast24Hours)`\n- aborted (24h): `\(.abortedLast24Hours)`\n- host not arrived (24h): `\(.hostNotArrivedLast24Hours // "not reported")`\n- oldest active age (ms): `\(.oldestActiveAgeMs // "none")`"' \
               "${RUNNER_TEMP}/relay-rehome-inventory.json"
           } >> "${GITHUB_STEP_SUMMARY}"
 

@@ -23,17 +23,64 @@
 # runs `git apply` on one must force `-c core.autocrlf=input` rather than trust
 # the host's setting. See config/scripts/windows-process-tree-gyp-rebuild.mjs.
 /config/patches/*.patch -text
+# Same reason, and pnpm parses these too: a CRLF checkout makes the mobile
+# patches unparseable, so Windows packaging dies on ERR_PNPM_INVALID_PATCH.
+/mobile/patches/*.patch -text
 # The xterm bundle hunks also make a diff nobody can read; review the hand-written
 # source patch under xterm-src/ instead. The sibling patches stay diffable.
 /config/patches/@xterm__xterm@*.patch -diff
 /config/patches/xterm-src/*.patch text eol=lf
+# pnpm parses these unified diffs during Windows installs; keep checkout bytes stable.
+/mobile/patches/*.patch -text
 # Generated wrapper fixtures: collapse them in the PR diff so they stop drowning
 # the reviewable change, and pin LF because they are compared byte-for-byte.
 # Not -diff: the shell diff is the review surface when a wrapper does change.
 /src/main/__fixtures__/shell-wrapper-snapshots/*.txt linguist-generated=true text eol=lf
+# Captured agent PTY transcripts. -text, not `text eol=lf` like the wrapper snapshots above:
+# these carry real CR and CRLF bytes as the terminal emitted them, and line-ending
+# normalisation on a Windows checkout would rewrite the evidence the fixture exists to be.
+/src/main/runtime/__fixtures__/*.txt -text
 # Generated runtime English subset: compared byte-for-byte by
 # verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf
 # Generated method->params catalog: compared byte-for-byte by
 # verify:rpc-params-catalog, so a CRLF checkout would fail the gate.
 /src/shared/rpc-contract/rpc-params-catalog.generated.ts linguist-generated=true text eol=lf
+# Mobile web page source. Every text byte here is hashed into an asset digest and from
+# there into buildId, so a CRLF Windows checkout would ship a different bundle id for
+# identical source (91af2897 vs 9d78435e, measured on the bundle this replaced).
+/mobile/src/** text eol=lf
+/mobile/app/** text eol=lf
+/mobile/web-entry/** text eol=lf
+# The blanket pin above would mark a future binary as text; exempt the asset types an
+# RN page actually carries.
+/mobile/src/**/*.png -text
+/mobile/src/**/*.jpg -text
+/mobile/src/**/*.jpeg -text
+/mobile/src/**/*.gif -text
+/mobile/src/**/*.ico -text
+/mobile/src/**/*.webp -text
+/mobile/src/**/*.ttf -text
+/mobile/src/**/*.otf -text
+/mobile/src/**/*.woff -text
+/mobile/src/**/*.woff2 -text
+/mobile/app/**/*.png -text
+/mobile/app/**/*.jpg -text
+/mobile/app/**/*.jpeg -text
+/mobile/app/**/*.gif -text
+/mobile/app/**/*.ico -text
+/mobile/app/**/*.webp -text
+/mobile/app/**/*.ttf -text
+/mobile/app/**/*.otf -text
+/mobile/app/**/*.woff -text
+/mobile/app/**/*.woff2 -text
+/mobile/web-entry/**/*.png -text
+/mobile/web-entry/**/*.jpg -text
+/mobile/web-entry/**/*.jpeg -text
+/mobile/web-entry/**/*.gif -text
+/mobile/web-entry/**/*.ico -text
+/mobile/web-entry/**/*.webp -text
+/mobile/web-entry/**/*.ttf -text
+/mobile/web-entry/**/*.otf -text
+/mobile/web-entry/**/*.woff -text
+/mobile/web-entry/**/*.woff2 -text

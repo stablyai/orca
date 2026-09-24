@@ -133,3 +133,30 @@ export function sessionSearchEmptiedRoots(
 ): Set<string> {
   return new Set([...previous].filter((root) => !current.has(root)))
 }
+
+/**
+ * Whether two root sets name the same trees.
+ *
+ * Structural, not by reference: the caller re-resolves roots on every policy
+ * push, so a live index that already walks these trees must not be rebuilt just
+ * because the object is new. Key-sorted rather than a plain JSON compare because
+ * nothing fixes the key order two producers write, and list-sorted because the
+ * indexer walks every root, so a re-enumeration that reorders is not a change.
+ */
+export function sameSessionSearchRoots(
+  a: SessionSearchScanRoots,
+  b: SessionSearchScanRoots
+): boolean {
+  const left = comparableRootFields(a)
+  const right = comparableRootFields(b)
+  return left.length === right.length && left.every((field, index) => field === right[index])
+}
+
+function comparableRootFields(roots: SessionSearchScanRoots): string[] {
+  return Object.entries(roots)
+    .filter(([, value]) => value !== undefined)
+    .map(
+      ([key, value]) => `${key}=${JSON.stringify(Array.isArray(value) ? [...value].sort() : value)}`
+    )
+    .sort()
+}

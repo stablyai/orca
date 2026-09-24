@@ -38,8 +38,12 @@ vi.mock('node:os', async () => {
   }
 })
 
-const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
-  await import('./agent-trust-presets')
+const {
+  markAntigravityWorkspaceTrusted,
+  markCodexProjectTrusted,
+  markCopilotFolderTrusted,
+  markCursorWorkspaceTrusted
+} = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
 
@@ -134,6 +138,75 @@ describe('markCopilotFolderTrusted', () => {
       expect(parsed.trustedFolders).toHaveLength(1)
     } finally {
       rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('markAntigravityWorkspaceTrusted', () => {
+  it('appends the workspace to trustedWorkspaces in ~/.gemini/antigravity-cli/settings.json', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-agy-ws-'))
+    try {
+      markAntigravityWorkspaceTrusted(workspace)
+      const configPath = join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json')
+      expect(existsSync(configPath)).toBe(true)
+      const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+      expect(Array.isArray(parsed.trustedWorkspaces)).toBe(true)
+      expect(parsed.trustedWorkspaces).toHaveLength(1)
+      expect(parsed.trustedWorkspaces[0]).toBe(realpathSync(workspace))
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  // Why: the same settings.json also carries model, permissions and toolPermission. A
+  // clobbering write here would silently reset the user's agy configuration.
+  it('preserves sibling settings keys and dedups an already-trusted workspace', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-agy-ws-'))
+    const realpath = realpathSync(workspace)
+    try {
+      mkdirSync(join(testState.fakeHomeDir, '.gemini', 'antigravity-cli'), { recursive: true })
+      writeFileSync(
+        join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json'),
+        JSON.stringify({
+          agentMode: 'accept-edits',
+          model: 'gemini-3.8-flash',
+          trustedWorkspaces: [realpath]
+        })
+      )
+      markAntigravityWorkspaceTrusted(workspace)
+      const parsed = JSON.parse(
+        readFileSync(
+          join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json'),
+          'utf-8'
+        )
+      )
+      expect(parsed.agentMode).toBe('accept-edits')
+      expect(parsed.model).toBe('gemini-3.8-flash')
+      expect(parsed.trustedWorkspaces).toHaveLength(1)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  // Why: agy's trust is exact-path, not inherited — a parent entry does not cover a child,
+  // which is what makes the per-worktree preflight necessary at all.
+  it('adds a child worktree even when its parent is already trusted', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'orca-agy-parent-'))
+    const child = join(parent, 'child-worktree')
+    try {
+      mkdirSync(child, { recursive: true })
+      markAntigravityWorkspaceTrusted(parent)
+      markAntigravityWorkspaceTrusted(child)
+      const parsed = JSON.parse(
+        readFileSync(
+          join(testState.fakeHomeDir, '.gemini', 'antigravity-cli', 'settings.json'),
+          'utf-8'
+        )
+      )
+      expect(parsed.trustedWorkspaces).toHaveLength(2)
+      expect(parsed.trustedWorkspaces).toContain(realpathSync(child))
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
     }
   })
 })

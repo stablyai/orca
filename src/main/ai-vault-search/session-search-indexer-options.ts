@@ -36,6 +36,8 @@ export const DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES = 15
 export type SessionSearchIndexerOptions = {
   databasePath: string
   roots: SessionSearchScanRoots
+  /** Full sweeps refresh host roots; recent cycles reuse the last snapshot. */
+  resolveRoots?: (signal: AbortSignal) => Promise<SessionSearchScanRoots>
   /** null = all history; otherwise only transcripts modified within this many days. */
   historyDays: number | null
   clock?: SessionSearchClock

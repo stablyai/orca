@@ -1,6 +1,6 @@
 import type { CodexUsageRange, CodexUsageScope } from '../../shared/codex-usage-types'
 import type { CodexUsagePersistedState } from './types'
-import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import { filterUsageDaily, filterUsageSessions } from '../usage/usage-scope-filters'
 
 export type ScopedCodexUsageModelRow = {
   modelKey: string
@@ -19,16 +19,7 @@ export function getFilteredDaily(
   scope: CodexUsageScope,
   range: CodexUsageRange
 ) {
-  const cutoff = getUsageRangeCutoff(range)
-  return state.dailyAggregates.filter((entry) => {
-    if (cutoff && entry.day < cutoff) {
-      return false
-    }
-    if (scope === 'orca' && entry.worktreeId === null) {
-      return false
-    }
-    return true
-  })
+  return filterUsageDaily(state.dailyAggregates, scope, range)
 }
 
 export function getFilteredSessions(
@@ -36,20 +27,7 @@ export function getFilteredSessions(
   scope: CodexUsageScope,
   range: CodexUsageRange
 ) {
-  const cutoff = getUsageRangeCutoff(range)
-  return state.sessions.filter((session) => {
-    const day = getLocalUsageDay(session.lastTimestamp)
-    if (!day) {
-      return false
-    }
-    if (cutoff && day < cutoff) {
-      return false
-    }
-    if (scope === 'orca') {
-      return session.locationBreakdown.some((entry) => entry.worktreeId !== null)
-    }
-    return true
-  })
+  return filterUsageSessions(state.sessions, scope, range)
 }
 
 export function getScopedSessionModels(

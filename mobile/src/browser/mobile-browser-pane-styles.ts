@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const mobileBrowserPaneStyles = StyleSheet.create({
@@ -102,6 +103,15 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     lineHeight: 20,
     marginTop: spacing.sm
   },
+  dialogButtonDisabled: {
+    opacity: 0.5
+  },
+  dialogError: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    lineHeight: 18,
+    marginTop: spacing.sm
+  },
   dialogActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -150,7 +160,10 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    fontSize: 14,
+    // The seam, not the 14 it was: on the web an input under 16px zooms the page on focus and the
+    // keyboard seam reads that zoom as "no keyboard". Natively the seam is the theme's body size,
+    // which is what this already rendered at.
+    fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
   },

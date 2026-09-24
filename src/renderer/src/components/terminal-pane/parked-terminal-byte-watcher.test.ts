@@ -215,7 +215,7 @@ describe('startParkedTerminalByteWatcher', () => {
     flushSideEffects()
 
     expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
+    expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
     expect(mockStoreState.markTerminalPaneUnread).not.toHaveBeenCalled()
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
@@ -239,7 +239,7 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('\x07')
     flushSideEffects()
 
-    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY)
+    expect(mockStoreState.markTerminalPaneUnread).toHaveBeenCalledWith(PANE_KEY, 'terminal-bell')
     dispose()
   })
 
@@ -773,7 +773,7 @@ describe('startParkedTerminalByteWatcher', () => {
       await dispatchFacts([{ kind: 'bell' }])
 
       expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith(WORKTREE_ID)
-      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID)
+      expect(mockStoreState.markTerminalTabUnread).toHaveBeenCalledWith(TAB_ID, 'terminal-bell')
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)

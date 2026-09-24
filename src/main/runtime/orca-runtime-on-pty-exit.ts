@@ -30,6 +30,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
     }
+    this.invalidatePtyControllerInventoryForLifecycle(ptyId, pty?.connectionId)
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.
     const observedCause = options.cause ?? resolveUnreportedExitCause(exitCode)
@@ -47,7 +48,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       options.hostExitConfirmed !== true
     // Why: collect before retirePtyAgentLaunchAuthority, which deletes the restored-authority
     // receipt a receipt-only pane's key comes from.
-    const exitPaneKeys = this.collectPaneKeysForPty(ptyId)
+    const exitPaneKeys = this.collectAgentStatusPaneKeysForPty(ptyId)
     if (preservesAbnormalSshSurface) {
       const prior = this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict
       this.rememberPtyLivenessVerdict(ptyId, {
@@ -153,7 +154,6 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.terminalCwdByPtyId.delete(ptyId)
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
     // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
     // process died, renderer reload) must release its team + nested panes map.
     // Previously only explicit closeTerminal evicted it, so natural exits leaked
@@ -199,6 +199,10 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.terminalDrivers.clear(ptyId)
     this.remoteDesktopFloor.clearPty(ptyId)
     this.disposeHeadlessTerminal(ptyId)
+    if (processDeathCertified) {
+      // The bounded verdict register also fences late graphs after the PTY record was pruned.
+      this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
+    }
     if (pty) {
       pty.connected = false
       pty.runtimeSessionOwned = false
@@ -206,12 +210,6 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
       pty.lastExitCause = exitCause
-      if (exitCode >= 0 || options.hostExitConfirmed === true) {
-        // Record the certificate rather than merely dropping the doubt: a reader that has to
-        // authorize a respawn cannot distinguish "the host reported this process gone" from "this
-        // runtime has never asked" if both are absence.
-        this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
-      }
       // Why: the exited process's live frames say nothing about a replacement.
       // A same-id respawn makes the leaf writable again before any new title,
       // so leaving this true would let push delivery type into the new process

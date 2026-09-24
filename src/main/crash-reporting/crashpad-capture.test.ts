@@ -1,3 +1,4 @@
+import type { MinidumpSource } from './minidump-stream-reader'
 import { mkdtemp, mkdir, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -200,8 +201,8 @@ describe('captureMinidumpSignature', () => {
       Buffer.from('renderer')
     )
     await writeDump(path.join('reports', 'gpu.dmp'), CRASHED_AT + 200, Buffer.from('gpu-process'))
-    parseMinidumpCrashSignatureMock.mockImplementation((dump: Buffer) => ({
-      processType: dump.toString('utf8'),
+    parseMinidumpCrashSignatureMock.mockImplementation(async (dump: MinidumpSource) => ({
+      processType: (await dump.read(0, dump.byteLength)).toString('utf8'),
       annotations: {}
     }))
 

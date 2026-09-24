@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS } from '@/components/right-sidebar/source-control/listing/virtual-file-list'
+import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { CombinedDiffFileTreeRow as CombinedDiffFileTreeRowComponent } from './combined-diff-file-tree-row'
 
@@ -119,15 +119,15 @@ function renderTree(entries: readonly GitBranchChangeEntry[]): void {
 
 describe('combined diff file tree row windowing', () => {
   it('mounts every row below the virtualize threshold', () => {
-    const fileCount = SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS - 10
+    const fileCount = VIRTUALIZED_LIST_MIN_ROWS - 10
     const directoryCount = 4
     renderTree(buildEntries(fileCount, directoryCount))
 
     // `src` plus one directory row per leaf directory, plus one row per file.
     const totalRows = 1 + directoryCount + fileCount
-    expect(totalRows).toBeLessThan(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
+    expect(totalRows).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
     expect(mountedRows.count).toBe(totalRows)
-    expect(host.querySelector('[data-testid="source-control-virtual-list"]')).toBeNull()
+    expect(host.querySelector('[data-testid="virtualized-list"]')).toBeNull()
     // Natural flow: no absolutely positioned wrappers, exactly the pre-virtualization markup.
     expect(host.querySelectorAll('[data-index]').length).toBe(0)
   })
@@ -138,7 +138,7 @@ describe('combined diff file tree row windowing', () => {
     renderTree(buildEntries(fileCount, directoryCount))
 
     const totalRows = 1 + directoryCount + fileCount
-    expect(host.querySelector('[data-testid="source-control-virtual-list"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="virtualized-list"]')).not.toBeNull()
     expect(mountedRows.count).toBeGreaterThan(0)
     // A 600px viewport plus overscan: bounded by the window, not by the review size.
     expect(mountedRows.count).toBeLessThan(totalRows / 10)

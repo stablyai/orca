@@ -8,9 +8,18 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalSnapshot,
   AgentJournalSubmission,
+  AgentJournalThreadGoal,
+  AgentJournalTurnLifecycle,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { currentAgentSessionThreadGoalBySequence } from '../../../shared/agent-session-thread-goal'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
+import {
+  activeStructuredAgentSessionTurnIdBySequence,
+  newestStructuredAgentSessionTurnBySequence
+} from '../../../shared/structured-agent-session-live-turn'
 import { agentSessionJournalCloseRetries } from './journal-close-retry'
 import { openJournalDatabase, type OpenJournalDatabase } from './journal-database'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
@@ -161,6 +170,36 @@ export class AgentSessionJournal {
   })
 
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
+
+  /** Visits reduced items without allocating and sorting a full snapshot. */
+  visitItems = (
+    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
+  ): void => {
+    for (const item of this.state.items.values()) {
+      visit(item.itemId, item.sequence, item.body)
+    }
+  }
+
+  /** One reduced item's body by its journal key, for a writer revising a row it can name. */
+  itemBody = (itemId: string): AgentJournalItemBody | null =>
+    this.state.items.get(itemId)?.body ?? null
+
+  /** The turn this journal has published as running — the same read a client's snapshot gives,
+   *  without materialising one. */
+  activeTurnId = (): string | null =>
+    activeStructuredAgentSessionTurnIdBySequence(this.state.items.values())
+
+  /** The newest turn record whatever state it settled in, for readers that need the outcome. */
+  newestTurn = (): AgentJournalTurnLifecycle | null =>
+    newestStructuredAgentSessionTurnBySequence(this.state.items.values())
+
+  /** The latest goal the whole journal records, not only a client's loaded page. */
+  threadGoal = (): AgentJournalThreadGoal | null =>
+    currentAgentSessionThreadGoalBySequence(this.state.items.values()) ?? null
+
+  /** The newest context facts the whole journal records, not only a client's loaded page. */
+  contextUsage = (): AgentSessionContextUsage =>
+    latestStructuredAgentContextFacts(this.state.items.values())
 
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt

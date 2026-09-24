@@ -44,7 +44,7 @@ export function createTerminalOutputBatcher(
             ...(typeof lastSeq === 'number' ? { seq: lastSeq, rawLength: pendingRawLength } : {}),
             ...(pendingCwd !== undefined ? { cwd: pendingCwd } : {}),
             ...(pendingSourceRanges.length > 0
-              ? { sourceRanges: Object.freeze(pendingSourceRanges.slice()) }
+              ? { sourceRanges: Object.freeze(pendingSourceRanges) }
               : {})
           }
         : undefined

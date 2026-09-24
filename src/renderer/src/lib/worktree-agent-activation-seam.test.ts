@@ -6,6 +6,7 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
+import * as sleepingResume from './resume-sleeping-agent-session'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent-test-state'
@@ -158,6 +159,7 @@ function stubInventory(args?: {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   useAppStore.setState(initialState, true)
 })
@@ -302,9 +304,7 @@ describe('worktree agent activation seam', () => {
     })
   })
 
-  // A peer owns its own PTYs, so this client can never scope an inventory at it. Scoping must not
-  // turn that into a refusal: 'blocked' would also skip the sleeping-agent resume below.
-  it('still reaches a verdict for a paired-runtime-owned workspace', async () => {
+  it('does not authorize client-side recovery for a paired-runtime-owned workspace', async () => {
     const worktree = makeWorktree()
     useAppStore.setState({
       ...baseState(),
@@ -313,14 +313,11 @@ describe('worktree agent activation seam', () => {
     const { listSessions } = stubInventory()
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
-    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
-    expect(listSessions).toHaveBeenCalledExactlyOnceWith()
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('blocked')
+    expect(listSessions).not.toHaveBeenCalled()
   })
 
-  // Loss of contact with the relay is not evidence about the host, and once the sync has stopped
-  // without an answer the bounded floor in workspace-terminal-host-authority.ts hands seeding back
-  // to this client — a detached provider must not turn that into a permanently empty workspace.
-  it('still seeds a pane when the selected SSH relay is detached', async () => {
+  it('blocks seeding while detached and allows activation after the owning relay answers', async () => {
     const worktree = makeWorktree()
     useAppStore.setState({
       ...baseState(),
@@ -336,11 +333,58 @@ describe('worktree agent activation seam', () => {
     })
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('blocked')
+    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }]])
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+
+    listSessions.mockResolvedValue([])
+    activateAndRevealWorktree(worktree.id)
     await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
-    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }], []])
+    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }], [{ connectionId: 'box' }]])
     await vi.waitFor(() =>
       expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(1)
     )
     expect(useAppStore.getState().tabsByWorktree[worktree.id]?.[0]?.ptyId).toBeNull()
+  })
+
+  it('preserves a sleeping OMP session until its execution host can answer', async () => {
+    const worktree = makeWorktree()
+    const record = {
+      paneKey: 'saved-tab:11111111-1111-4111-8111-111111111111',
+      tabId: 'saved-tab',
+      worktreeId: worktree.id,
+      agent: 'omp' as const,
+      providerSession: { key: 'session_id' as const, id: 'saved-omp-session' },
+      prompt: 'resume',
+      state: 'working' as const,
+      capturedAt: 1,
+      updatedAt: 1
+    }
+    useAppStore.setState({
+      ...baseState(),
+      worktreesByRepo: { [worktree.repoId]: [{ ...worktree, hostId: 'ssh:box' }] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    })
+    const { listSessions } = stubInventory()
+    const resume = vi
+      .spyOn(sleepingResume, 'resumeSleepingAgentSessionsForWorktree')
+      .mockReturnValue(1)
+    listSessions.mockImplementation(async (scope?: unknown) => {
+      if (scope) {
+        throw new Error('No PTY provider for connection "box": the SSH relay is not attached')
+      }
+      return []
+    })
+
+    activateAndRevealWorktree(worktree.id)
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('blocked')
+    expect(resume).not.toHaveBeenCalled()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toEqual(record)
+
+    listSessions.mockResolvedValue([])
+    activateAndRevealWorktree(worktree.id)
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('resumed')
+    expect(resume).toHaveBeenCalledExactlyOnceWith(worktree.id, { skipClaimKeys: new Set() })
+    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }], [{ connectionId: 'box' }]])
   })
 })

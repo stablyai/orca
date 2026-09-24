@@ -179,7 +179,15 @@ export function registerClipboardHandlers(store: Store): void {
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
-    return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
+    const safeText = await assertClipboardTextWriteWithinLimitWithYield(text)
+    try {
+      clipboard.writeText(safeText)
+    } catch (error) {
+      // Native failures can name paths or platform state, so they stay here; the renderer
+      // only renders a vetted reason (describeClipboardWriteFailure).
+      console.error('[clipboard] writeText failed', error)
+      throw error
+    }
   })
   ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)

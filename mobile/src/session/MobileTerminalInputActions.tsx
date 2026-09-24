@@ -12,7 +12,7 @@ type MobileTerminalInputActionsProps = {
   readonly canSend: boolean
   readonly isAttaching: boolean
   readonly dictation: DictationState
-  readonly dictationMode: 'toggle' | 'hold'
+  readonly dictationMode: string | undefined
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly activeButtonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>

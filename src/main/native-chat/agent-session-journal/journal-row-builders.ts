@@ -3,9 +3,11 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
+  AgentJournalProducerLinkage,
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import type {
@@ -20,6 +22,7 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
+import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
 type RowBuilder<T> = (seq: number, ts: number) => T
@@ -28,7 +31,7 @@ export function journalItemRowBuilder(
   state: () => JournalReducerState,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  options: { fence: number; observedAt?: number; recovered?: true }
+  options: AgentJournalProducerLinkage & { fence: number; observedAt?: number; recovered?: true }
 ): RowBuilder<JournalItemRow> {
   return (seq, ts) =>
     buildJournalItemRow({
@@ -38,7 +41,8 @@ export function journalItemRowBuilder(
       seq,
       fence: options.fence,
       ts: options.observedAt ?? ts,
-      recovered: options.recovered
+      recovered: options.recovered,
+      linkage: options
     })
 }
 
@@ -76,13 +80,23 @@ export function journalDispatchRowBuilder(
       clientMessageId: input.clientMessageId,
       dispatchState: input.state,
       providerItemId,
-      reason:
-        input.state === 'accepted' || input.state === 'pending' ? null : (input.reason ?? null),
+      reason: boundedDispatchReason(input),
       seq,
       fence: input.fence,
       ts,
       recovered: input.recovered
     })
+}
+
+/** `reason` is the only unbounded field written by Orca's own code: a provider error is
+ *  arbitrary text, and a multi-megabyte one reached the row verbatim. Bounded head-first,
+ *  because `dispatchRejectionWasTransportWriteFailure` prefix-matches the value. Rows
+ *  written before this keep their full text, so readers still meet unbounded ones. */
+function boundedDispatchReason(input: ResolveDispatchInput): string | null {
+  if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
+    return null
+  }
+  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
 }
 
 export type JournalLifecycleMutationInput =
@@ -93,6 +107,11 @@ export function journalLifecycleBatchRowBuilder(
   state: () => JournalReducerState,
   settlementId: string,
   mutations: readonly JournalLifecycleMutationInput[],
+  /** No producer linkage: one batch row covers N mutations, so a row-level
+   *  producer would stamp whoever opened the batch onto every one of them. The
+   *  reducer still READS linkage off a batch row, because a row may come from a
+   *  host that writes one; a mixed-producer batch would have to stamp per
+   *  mutation, which nothing needs yet. */
   options: { fence: number; recovered?: true }
 ): RowBuilder<JournalLifecycleBatchRow> {
   return (seq, ts) => {
@@ -153,6 +172,7 @@ export function buildJournalItemRow(input: {
   fence: number
   ts: number
   recovered?: true
+  linkage?: AgentJournalProducerLinkage
 }): JournalItemRow {
   const itemId = agentJournalItemKey(input.identity)
   const resolved = input.state.aliases.get(itemId) ?? itemId
@@ -169,7 +189,8 @@ export function buildJournalItemRow(input: {
     revision,
     body: input.body,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [input.body]),
-    ...(input.recovered ? { recovered: input.recovered } : {})
+    ...(input.recovered ? { recovered: input.recovered } : {}),
+    ...agentJournalLinkageFields(input.linkage)
   }
 }
 

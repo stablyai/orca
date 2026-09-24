@@ -114,7 +114,7 @@ export function getStatusPluginLifecycleSource(): string[] {
     '    // Why: flush the coalesced final reply snapshot before the idle',
     '    // transition so the done-state preview shows the completed message.',
     '    await flushPendingAssistantPart(true);',
-    '    clearAttentionForSession(sessionID, factoryID);',
+    '    clearAttentionForTurnEnd(sessionID, factoryID);',
     '    if (busyRootOwnerBySessionID.get(sessionID) === factoryID) {',
     '      busyRootOwnerBySessionID.delete(sessionID);',
     '    }',

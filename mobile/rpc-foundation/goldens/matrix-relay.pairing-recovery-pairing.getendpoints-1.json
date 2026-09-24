@@ -1,0 +1,818 @@
+{
+  "operation": "relay.pairing-recovery",
+  "family": "relay.pairing-recovery",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
+  "scenarioSha256": "5aaa104a652d4f10cd48ab742112cf59fca22f52bbf85ee3716505a9642fbe37",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1020838fc104": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\",\"resumeConfirmReqId\":\"confirm-fixture-1\"}}"
+    },
+    "23d8185ee5a0": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3e7ece78969e": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "3fd37613d182": {
+      "name": "pairing.getEndpoints#2",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "4b87f8374959": {
+      "name": "bundle-written",
+      "ordinal": 4,
+      "value": {
+        "version": 4
+      }
+    },
+    "5194e28c1a62": {
+      "name": "candidate-closed",
+      "ordinal": 3,
+      "value": "relay"
+    },
+    "51db29224055": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "54c5309cac70": {
+      "outcome": "unrecovered",
+      "winner": {
+        "$rpc": "null"
+      }
+    },
+    "5c8a55122fd9": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "6fd2524785ca": {
+      "name": "candidate-closed",
+      "ordinal": 7,
+      "value": "relay"
+    },
+    "792cb678f228": {
+      "name": "host-saved",
+      "ordinal": 5,
+      "value": "host-1"
+    },
+    "7a3e4e5413b5": {
+      "outcome": "recovered",
+      "winner": {
+        "$rpc": "null"
+      }
+    },
+    "7e1d80db076a": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "87db1a2d2066": {
+      "name": "journal-cleared",
+      "ordinal": 6,
+      "value": "recovery"
+    },
+    "8e378786864c": {
+      "name": "candidate-closed",
+      "ordinal": 6,
+      "value": "relay"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9a184e27d5dd": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "9b3ec7c3761c": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "a0ee987f0809": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-fixture-1",
+              "result": {
+                "authorizationMode": "relay-basis",
+                "currentVersion": 4,
+                "reqId": "install-fixture-1",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "bf06ca434842": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "bfa48ca31e25": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c65c327025c8": {
+      "name": "pairing.getEndpoints#2",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c7269155f70c": {
+      "name": "journal-updated",
+      "ordinal": 3,
+      "value": "relay-basis"
+    },
+    "c8a7c6e1a485": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "deferred"
+    },
+    "ca192b794d53": {
+      "name": "pairing.getEndpoints#2",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-fixture-1\"}}"
+    },
+    "d39b9bb93741": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-fixture-1",
+            "resumeConfirmReqId": "confirm-fixture-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f0723ea3ab16": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "recovered"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-relay.pairing-recovery-pairing.getendpoints-1",
+    "checkpoints": [
+      {
+        "id": "relay-pairing-recovery-resume-committed.normal:recovered-on-resume",
+        "observation": {
+          "sender": ["a0ee987f0809"],
+          "payloads": ["1020838fc104"],
+          "settlements": {
+            "recover": "f0723ea3ab16"
+          },
+          "state": "7a3e4e5413b5",
+          "effects": [
+            "c7269155f70c",
+            "4b87f8374959",
+            "792cb678f228",
+            "87db1a2d2066",
+            "6fd2524785ca"
+          ]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.result-absent:recovered-on-resume",
+        "observation": {
+          "sender": ["9b3ec7c3761c", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.result-absent:cleanup",
+        "observation": {
+          "sender": ["9b3ec7c3761c", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.result-null:recovered-on-resume",
+        "observation": {
+          "sender": ["3e7ece78969e", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.result-null:cleanup",
+        "observation": {
+          "sender": ["3e7ece78969e", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.inner-ok-missing:recovered-on-resume",
+        "observation": {
+          "sender": ["9a184e27d5dd", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.inner-ok-missing:cleanup",
+        "observation": {
+          "sender": ["9a184e27d5dd", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.inner-false-string-error:recovered-on-resume",
+        "observation": {
+          "sender": ["51db29224055", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.inner-false-string-error:cleanup",
+        "observation": {
+          "sender": ["51db29224055", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.inner-false-object-error:recovered-on-resume",
+        "observation": {
+          "sender": ["5c8a55122fd9", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.inner-false-object-error:cleanup",
+        "observation": {
+          "sender": ["5c8a55122fd9", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.outer-refused:recovered-on-resume",
+        "observation": {
+          "sender": ["d39b9bb93741", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.outer-refused:cleanup",
+        "observation": {
+          "sender": ["d39b9bb93741", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.outer-refused-no-message:recovered-on-resume",
+        "observation": {
+          "sender": ["23d8185ee5a0", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.outer-refused-no-message:cleanup",
+        "observation": {
+          "sender": ["23d8185ee5a0", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.method-not-found:recovered-on-resume",
+        "observation": {
+          "sender": ["7e1d80db076a", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.method-not-found:cleanup",
+        "observation": {
+          "sender": ["7e1d80db076a", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.transport-rejection:recovered-on-resume",
+        "observation": {
+          "sender": ["bfa48ca31e25", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.transport-rejection:cleanup",
+        "observation": {
+          "sender": ["bfa48ca31e25", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.transport-rejection-no-message:recovered-on-resume",
+        "observation": {
+          "sender": ["bf06ca434842", "c65c327025c8"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "9270aeb7d9c6"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62"]
+        }
+      },
+      {
+        "id": "relay-pairing-recovery-resume-committed.transport-rejection-no-message:cleanup",
+        "observation": {
+          "sender": ["bf06ca434842", "3fd37613d182"],
+          "payloads": ["1020838fc104", "ca192b794d53"],
+          "settlements": {
+            "recover": "c8a7c6e1a485"
+          },
+          "state": "54c5309cac70",
+          "effects": ["5194e28c1a62", "8e378786864c"]
+        }
+      }
+    ]
+  }
+}

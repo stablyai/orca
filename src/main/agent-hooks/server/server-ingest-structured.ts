@@ -1,30 +1,74 @@
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import {
+  parseAgentStatusSubject,
+  serializeAgentStatusSubject,
+  type AgentStatusStructuredSessionSubject
+} from '../../../shared/agent-status-subject'
 import {
   structuredAgentSessionPaneKey,
-  structuredAgentSessionStatusState,
   structuredAgentSessionTabId
 } from '../../../shared/structured-agent-session-projection'
+import {
+  continueMainAgentStatus,
+  isAgentStatusHeldOpenByChildWork
+} from '../../../shared/agent-lead-status-fold'
+import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
-/**
- * Structured (native chat) sessions have no PTY and no hook script, so nothing else reaches this
- * store for them. The host projects each session's journal into a summary; this is where that
- * summary becomes the same row every other agent has, keyed by the pane key the renderer derives.
- */
 export abstract class AgentHookServerIngestStructured extends AgentHookServerIngestTerminal {
-  ingestStructuredStatus(summary: AgentSessionStatusSummary): void {
-    const paneKey = structuredStatusPaneKey(summary.sessionId)
-    // No persisted turn yet: the chat shows nothing, so neither does any status reader.
+  ingestStructuredStatus(
+    summary: AgentSessionStatusSummary,
+    subject: AgentStatusStructuredSessionSubject
+  ): void {
+    const parsed = parseAgentStatusSubject(subject)
+    if (
+      !parsed ||
+      parsed.kind !== 'structured-session' ||
+      parsed.sessionId !== summary.sessionId ||
+      parsed.workspaceId !== summary.workspaceId ||
+      !Number.isFinite(summary.updatedAt) ||
+      summary.updatedAt < 0
+    ) {
+      throw new Error('Structured status does not match its trusted owner subject')
+    }
     if (!summary.status) {
-      this.dropStructuredStatus(summary.sessionId)
+      this.dropStructuredStatus(parsed)
       return
     }
-    if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
-      return
+    const previous = this.canonicalStatusStore.getParent(parsed)
+    const priorStatus = previous?.status
+    const agentStatus = structuredAgentSessionAgentStatus({
+      status: summary.status,
+      backgroundTasks: summary.backgroundTasks,
+      turnOutcome: summary.turnOutcome
+    })
+    const { state, workingMode } = agentStatus
+    // The main agent's own clock keeps continuity the same way the combined row's does below, dated
+    // by the journal: a restart's republish is not a new main agent state either.
+    const mainAgent = continueMainAgentStatus(
+      priorStatus?.mainAgent,
+      agentStatus.mainAgent,
+      summary.updatedAt
+    )
+    const tabId = structuredAgentSessionTabId(parsed.sessionId)
+    const paneKey = structuredAgentSessionPaneKey(tabId, parsed.sessionId)
+    if (this.state.lastStatusByPaneKey.has(paneKey)) {
+      throw new Error('Structured status address conflicts with legacy evidence')
     }
-    const payload: ParsedAgentStatusPayload = {
-      state: structuredAgentSessionStatusState(summary.status),
+    const snapshot = this.canonicalStatusStore.getSnapshot()
+    const observedAt = Math.max(Date.now(), priorStatus?.receivedAt ?? 0)
+    const status: AgentStatusIpcPayload = {
+      paneKey,
+      tabId,
+      worktreeId: parsed.workspaceId,
+      connectionId: null,
+      structuredHost: summary.hostExecutionOwned ? 'owned' : 'held',
+      ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
+      state,
+      ...(workingMode ? { workingMode } : {}),
+      mainAgent,
       prompt: summary.latestPrompt,
       agentType: summary.agent,
       ...(summary.model ? { model: summary.model } : {}),
@@ -32,35 +76,82 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       ...(summary.toolInput ? { toolInput: summary.toolInput } : {}),
       ...(summary.lastAssistantMessage
         ? { lastAssistantMessage: summary.lastAssistantMessage }
-        : {})
+        : {}),
+      receivedAt: observedAt,
+      // The journal clock dates a lead's turn, so a restart's republish is not new evidence. It
+      // cannot date child work: it stopped when the lead did, and reading it as the evidence age
+      // retires a genuinely live roster at the 30-minute staleness window. Only then does the
+      // host's own observation clock stand in, matching what the hook lane stamps for its rows.
+      evidenceObservedAt: isAgentStatusHeldOpenByChildWork({ state, mainAgent })
+        ? observedAt
+        : summary.updatedAt,
+      // Continuity is the whole published work identity: `state` alone no longer means "a turn is
+      // running", so monitoring that becomes a real turn must restart the clock, not inherit it.
+      stateStartedAt:
+        priorStatus?.state === state && priorStatus.workingMode === workingMode
+          ? priorStatus.stateStartedAt
+          : summary.updatedAt,
+      observation: {
+        origin: 'structured',
+        kind: 'transition',
+        authorityId: snapshot.epoch,
+        incarnation: 0,
+        revision: snapshot.revision + 1,
+        observedAt: summary.updatedAt
+      }
     }
-    // The journal clock stamps the evidence so a restart's republish does not read as fresh work.
-    this.applyNormalizedStatus(
-      {
-        paneKey,
-        tabId: structuredAgentSessionTabId(summary.sessionId),
-        worktreeId: summary.workspaceId,
-        connectionId: null,
-        structuredHost: summary.hostExecutionOwned ? 'owned' : 'held',
-        ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
-        payload
-      },
-      undefined,
-      'structured',
-      summary.updatedAt
-    )
+    const publication = this.canonicalStatusStore.applyMutation({
+      parent: { subject: parsed, status, firstObservedAt: previous?.firstObservedAt ?? Date.now() }
+    })
+    if (!publication) {
+      return
+    }
+    const key = serializeAgentStatusSubject(parsed)
+    const subjects =
+      this.canonicalSubjectsByPane.get(paneKey) ??
+      new Map<string, AgentStatusStructuredSessionSubject>()
+    subjects.set(key, parsed)
+    this.canonicalSubjectsByPane.set(paneKey, subjects)
+    if (!this.canonicalListingOrder.has(key)) {
+      this.canonicalListingOrder.set(key, this.nextStatusListingOrder())
+    }
+    const committed = this.canonicalStatusStore.getParent(parsed)?.status
+    if (!committed) {
+      throw new Error('Committed structured status is missing')
+    }
+    const after = structuredStatusLegacyEvent(committed)
+    this.commitStatusRowMutation(priorStatus && structuredStatusLegacyEvent(priorStatus), after)
+    this.notifyStatusChangeListeners()
+    this.emitEnrichedStatus(after)
   }
 
-  /** The host no longer holds the session; its last projection is history the journal keeps.
-   *  `dropStatusEntry`, not `clearPaneState`: the renderer's own bridge still owns this pane key,
-   *  so a pane-status-clear would make main a second writer for it. */
-  dropStructuredStatus(sessionId: string): void {
-    this.dropStatusEntry(structuredStatusPaneKey(sessionId), { preserveResumeIdentity: false })
+  /** Pane cleanup never resolves a canonical subject; only its owning feed can forget this row. */
+  dropStructuredStatus(subject: AgentStatusStructuredSessionSubject): void {
+    const parsed = parseAgentStatusSubject(subject)
+    if (!parsed || parsed.kind !== 'structured-session') {
+      throw new Error('Structured status removal requires its exact owner subject')
+    }
+    const previous = this.canonicalStatusStore.getParent(parsed)
+    if (!previous) {
+      return
+    }
+    const publication = this.canonicalStatusStore.applyMutation({
+      removeParent: parsed
+    })
+    if (!publication) {
+      return
+    }
+    const key = serializeAgentStatusSubject(parsed)
+    this.canonicalListingOrder.delete(key)
+    if (previous.status) {
+      const subjects = this.canonicalSubjectsByPane.get(previous.status.paneKey)
+      subjects?.delete(key)
+      if (subjects?.size === 0) {
+        this.canonicalSubjectsByPane.delete(previous.status.paneKey)
+      }
+      this.commitStatusRowMutation(structuredStatusLegacyEvent(previous.status), undefined)
+      this.notifyStatusChangeListeners()
+      this.emitStatusDropped(previous.status.paneKey)
+    }
   }
-}
-
-// The DERIVED pane key the renderer publishes, never the orchestration bearer handle or the minted
-// worker pane key: both of those are credentials.
-function structuredStatusPaneKey(sessionId: string): string {
-  return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }

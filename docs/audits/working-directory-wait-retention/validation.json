@@ -1,0 +1,57 @@
+{
+  "tests": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/providers/working-directory-validation-retention.test.ts src/main/providers/working-directory-validation.test.ts src/main/daemon/pty-subprocess-cwd-cancel-identity.test.ts",
+    "passed": 31,
+    "files": 3,
+    "exitCode": 0,
+    "newRegressionCases": 12
+  },
+  "baselineOverlay": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config docs/audits/working-directory-wait-retention/before.config.mjs src/main/providers/working-directory-validation-retention.test.ts src/main/providers/working-directory-validation.test.ts src/main/daemon/pty-subprocess-cwd-cancel-identity.test.ts",
+    "passed": 30,
+    "expectedFailed": 1,
+    "failure": "releases the first caller and subsequent canceled callers while their native stat stays owned",
+    "exitCode": 1
+  },
+  "typecheck": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:node",
+    "exitCode": 0
+  },
+  "lint": {
+    "files": [
+      "src/main/providers/working-directory-validation.ts",
+      "src/main/providers/working-directory-validation-retention.test.ts",
+      "docs/audits/working-directory-wait-retention/sources.cjs",
+      "docs/audits/working-directory-wait-retention/scenario.cjs",
+      "docs/audits/working-directory-wait-retention/reproduce.cjs",
+      "docs/audits/working-directory-wait-retention/before.config.mjs"
+    ],
+    "ordinary": "pnpm exec oxlint --no-ignore <files>",
+    "typeAware": "pnpm exec oxlint --no-ignore --type-aware --config config/oxlint-code-quality-type-aware.json <files> --deny-warnings",
+    "exitCodes": [0, 0]
+  },
+  "changedQuality": {
+    "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_CODE_QUALITY_BASE=96970f9b6efe915f9578b765c93f3d06880ccc2d pnpm run check:code-quality:changed",
+    "exitCode": 0,
+    "changedFiles": 2,
+    "newFindings": 0
+  },
+  "proofs": {
+    "node": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc --max-old-space-size=192 docs/audits/working-directory-wait-retention/reproduce.cjs",
+    "electron": "Installed Electron executable with ELECTRON_RUN_AS_NODE=1 and ORCA_BACKGROUND_LAUNCH=1; same flags and proof path.",
+    "exitCodes": [0, 0],
+    "nativeSettlementOrderingCasesPerRuntime": 48,
+    "externalRawObserverCasesPerRuntime": 6,
+    "unhandledRejectionsPerRuntime": 0,
+    "crlfLoaderControlPerRuntime": true
+  },
+  "format": "All product TS and artifact CJS/MJS/MD/JSON checked with oxfmt --stdin-filepath; patch excluded.",
+  "gitDiffCheckExitCode": 0,
+  "historicalCompatibility": "All three named baseline refs accept fix.patch and produce identical fixed SHA-256; all nine recorded provenance sources match main291b. No shared-waiter dependency.",
+  "artifactNormalization": {
+    "change": "Regenerated fix.patch with zero context so stored context blank lines do not appear as trailing whitespace when checked as a new artifact. Product/tests unchanged.",
+    "proofs": "Both Node/Electron 54-case ordering/lifecycle runs pass with the regenerated patch; formatted result files are byte-identical to the prior capture.",
+    "quality": "All six published code files explicitly scanned through five quality configurations with --no-ignore. Ordinary/type-aware/React/design scans pass; whole-file casting scan reports one unchanged assertion at product line84 present in the baseline. Root changed-lines gate since96970f9b passes all five scans across11 changed files with zero new findings.",
+    "whitespace": "All 12 publication files checked as complete additions; no whitespace diagnostics."
+  }
+}

@@ -86,9 +86,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             expectedRuntimeFence: input.expectedRuntimeFence,
             payloadFingerprint: input.payloadFingerprint
           },
-          body: input.body,
-          // The recorded unknown is the only thing that unlocks a redispatch of the same id.
-          retryUnknown: true
+          body: input.body
         }
       )
       if (!result.ok) {

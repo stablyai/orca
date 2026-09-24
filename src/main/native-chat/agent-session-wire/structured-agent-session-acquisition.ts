@@ -1,5 +1,4 @@
 import { isDeepStrictEqual } from 'node:util'
-import { claudeRewindAcquisitionProofs } from './structured-rewind-claude-proof'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   AgentSessionPreSpawnError,
@@ -9,6 +8,7 @@ import {
 import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
+import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 
 /** A reservation with no process behind it is only a promise to spawn; the
  * adapter makes it real and the store then grants the writer. */
@@ -16,7 +16,6 @@ export async function acquireOwner(
   input: AttachFlowInput,
   record: AgentSessionRecord
 ): Promise<{ record: AgentSessionRecord; acquisitionGeneration: string | null }> {
-  const { store, rewind, now } = input
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
   if (!spawnToken) {
@@ -38,19 +37,21 @@ export async function acquireOwner(
     }
     const acquired = await input.adapter.acquire({
       identity: journalIdentityFor(record, input.params),
-      ...claudeRewindAcquisitionProofs({ store, record, rewind, now }),
       fence,
       // Retries must recover the original reservation, not mint a second child.
       spawnToken,
       ...(record.options ? { options: record.options } : {}),
-      ...(input.eventSink ? { events: input.eventSink } : {})
+      ...(input.eventSink ? { events: input.eventSink } : {}),
+      ...(input.recordPhase ? { recordPhase: input.recordPhase } : {})
     })
-    const options = await readNativeSessionOptions({
-      adapter: input.adapter,
-      sessionId: record.sessionId,
-      fence,
-      ...(record.options ? { priorOptions: record.options } : {})
-    })
+    const options = await withAgentSessionCreatePhase('restore_options', input.recordPhase, () =>
+      readNativeSessionOptions({
+        adapter: input.adapter,
+        sessionId: record.sessionId,
+        fence,
+        ...(record.options ? { priorOptions: record.options } : {})
+      })
+    )
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
         sessionId: record.sessionId,

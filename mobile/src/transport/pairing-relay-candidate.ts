@@ -1,4 +1,5 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import { hostStatusProbe } from './host-status-probe-operations'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'
 import { RelayDirectorMoveNotNewerError } from './mobile-relay-invite-director'
@@ -28,7 +29,7 @@ export function createRecoveringPairingRelayCandidate(args: {
         return await client.sendRequest(method, params)
       } catch (error) {
         if (
-          method !== 'status.get' ||
+          method !== hostStatusProbe.operation.method ||
           closed ||
           relay.inviteExpiresAt <= args.now() ||
           !isDirectorRecoverable(error)

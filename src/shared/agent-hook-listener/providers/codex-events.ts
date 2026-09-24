@@ -5,22 +5,30 @@ import {
 } from '../../agent-status-types'
 import { normalizeOptionalField } from '../../agent-status-field-normalization'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import type { AgentLeadStatusResolution } from '../../agent-lead-status-fold'
 import {
-  codexRosterEffectiveState,
   codexRosterToSnapshots,
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
 import { reconcileCodexSubagentTranscript } from '../../codex-subagent-transcript'
+import {
+  codexTurnApprovalsAreAutoReviewed,
+  reconcileCodexSubagentReviewer
+} from '../../codex-subagent-reviewer'
 import { readFirstString } from '../interactive-tool'
 import type { HookListenerState } from '../listener-state'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
 import {
+  codexMainAgentStatusForPayload,
+  codexOutcomeRestatedByStop,
   getOrCreateCodexSubagentRoster,
   getOrCreateCodexSubagentTranscriptState,
-  hasCodexTranscriptSubagents
+  hasCodexTranscriptSubagents,
+  resolveCodexPaneStatus,
+  setCodexMainAgentTurnState
 } from './codex-state'
 
 export function buildCodexStatusPayload(
@@ -29,7 +37,7 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: { stateName: 'working' | 'waiting' | 'done'; updateLead: boolean }
+  options: AgentLeadStatusResolution & { updateLead: boolean }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
     ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
@@ -40,6 +48,7 @@ export function buildCodexStatusPayload(
 
   return normalizeAgentStatusPayload({
     state: options.stateName,
+    workingMode: options.workingMode,
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateLead && isNewTurnEvent('codex', eventName)
     }),
@@ -50,7 +59,8 @@ export function buildCodexStatusPayload(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
+    subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
+    mainAgent: codexMainAgentStatusForPayload(lead)
   })
 }
 
@@ -60,13 +70,10 @@ export function buildCodexChildDrivenStatusPayload(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const leadState = state.codexLeadStateByPaneKey.get(paneKey)?.state ?? 'working'
-  const stateName = codexRosterEffectiveState(
-    state.codexSubagentRosterByPaneKey.get(paneKey),
-    leadState
-  )
+  // Why: a child event before any root event means the root is mid-turn; nothing else spawns.
+  const lead = state.codexLeadStateByPaneKey.get(paneKey) ?? { state: 'working' as const }
   return buildCodexStatusPayload(state, eventName, '', paneKey, hookPayload, {
-    stateName,
+    ...resolveCodexPaneStatus(state, paneKey, lead),
     updateLead: false
   })
 }
@@ -97,6 +104,35 @@ export function normalizeCodexSubagentLifecycleEvent(
     finishCodexSubagent(roster, agentId)
   }
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+}
+
+/**
+ * Drops a `PermissionRequest` wait that Codex's own review agent owns.
+ *
+ * Codex runs this hook as decider #1, ahead of both its review agent and the user, so the event
+ * alone is "a decision is being made", not "a human is blocked". Under `approvals_reviewer =
+ * auto_review` ("Approve for me") the review agent resolves it seconds later and the pane flapped
+ * between Needs You and Working for every gated tool call (STA-7698).
+ *
+ * `request_user_input` is untouched: it arrives as `PreToolUse`, and no reviewer can answer a
+ * question addressed to the user (#9861).
+ */
+function resolveCodexApprovalOwnedState(
+  state: HookListenerState,
+  eventName: unknown,
+  paneKey: string,
+  transcriptPath: string | undefined,
+  stateName: 'working' | 'waiting' | 'done'
+): 'working' | 'waiting' | 'done' {
+  if (stateName !== 'waiting' || eventName !== 'PermissionRequest') {
+    return stateName
+  }
+  return codexTurnApprovalsAreAutoReviewed(
+    state.codexSubagentTranscriptByPaneKey.get(paneKey),
+    transcriptPath
+  )
+    ? 'working'
+    : stateName
 }
 
 export function normalizeCodexEvent(
@@ -130,50 +166,76 @@ export function normalizeCodexEvent(
   }
 
   const agentId = readString(hookPayload, 'agent_id')
-  if (agentId) {
-    upsertCodexSubagent(
-      getOrCreateCodexSubagentRoster(state, paneKey),
-      agentId,
-      {
-        agentType: readString(hookPayload, 'agent_type'),
-        model: readString(hookPayload, 'model'),
-        state: stateName === 'waiting' ? 'waiting' : 'working'
-      },
-      Date.now()
-    )
-    return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
-  }
-
-  if (eventName === 'SessionStart') {
+  const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
+  if (eventName === 'SessionStart' && !agentId) {
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
     state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   }
-  const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
-  if (transcriptPath) {
+  if (agentId && transcriptPath && eventName === 'PermissionRequest') {
+    const transcriptState = getOrCreateCodexSubagentTranscriptState(state, paneKey)
+    if (transcriptState.parent.filePath === transcriptPath) {
+      reconcileCodexSubagentTranscript(
+        transcriptState,
+        getOrCreateCodexSubagentRoster(state, paneKey),
+        transcriptPath
+      )
+    } else {
+      reconcileCodexSubagentReviewer(transcriptState, transcriptPath)
+    }
+  }
+  if (transcriptPath && !agentId) {
     reconcileCodexSubagentTranscript(
       getOrCreateCodexSubagentTranscriptState(state, paneKey),
       getOrCreateCodexSubagentRoster(state, paneKey),
       transcriptPath
     )
   }
+  if (agentId) {
+    // Why: reconcile the child rollout reviewer before classifying its approval, including after relay restart.
+    const childState = resolveCodexApprovalOwnedState(
+      state,
+      eventName,
+      paneKey,
+      transcriptPath,
+      stateName
+    )
+    upsertCodexSubagent(
+      getOrCreateCodexSubagentRoster(state, paneKey),
+      agentId,
+      {
+        agentType: readString(hookPayload, 'agent_type'),
+        model: readString(hookPayload, 'model'),
+        state: childState === 'waiting' ? 'waiting' : 'working'
+      },
+      Date.now()
+    )
+    return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+  }
+
   if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
     // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
   }
+  // Why: resolved after the transcript reconcile above, so this turn's reviewer is read from the
+  // rollout during the very PermissionRequest being classified, not from a prior event.
+  const ownedState = resolveCodexApprovalOwnedState(
+    state,
+    eventName,
+    paneKey,
+    transcriptPath,
+    stateName
+  )
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
-  state.codexLeadStateByPaneKey.set(paneKey, {
-    state: stateName,
+  const record = setCodexMainAgentTurnState(state, paneKey, {
+    state: ownedState,
+    ...codexOutcomeRestatedByStop(previousLead, ownedState),
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model)
   })
-  const effectiveState = codexRosterEffectiveState(
-    state.codexSubagentRosterByPaneKey.get(paneKey),
-    stateName
-  )
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-    stateName: effectiveState,
+    ...resolveCodexPaneStatus(state, paneKey, record),
     updateLead: true
   })
 }

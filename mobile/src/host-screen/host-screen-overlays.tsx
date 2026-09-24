@@ -1,4 +1,5 @@
-import { Linking, Pressable, Text, View } from 'react-native'
+import { openExternalLink } from '../platform/external-link'
+import { Pressable, Text, View } from 'react-native'
 import { Check, Moon } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { ActionSheetContent } from '../components/ActionSheetModal'
@@ -215,14 +216,16 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
-        openExternalUrl={(url) => Linking.openURL(url)}
+        // The seam, not react-native's `Linking`: this screen is in the tasks page closure, and
+        // inside the shell's WebView `openURL` resolves without opening anything.
+        openExternalUrl={openExternalLink}
         onVisibleChange={(visible) => {
           state.newWorktreeModalVisibleRef.current = visible
         }}
-        onCreated={(worktreeId, worktreeName) => {
+        onCreated={(worktreeId, worktreeName, warning) => {
           void catalog.fetchWorktrees({ allowDuringModal: true })
           actions.navigateFromHostList(
-            hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName)
+            hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName, warning)
           )
         }}
         onRouteVisibleChange={actions.setShowNewWorktreeVisible}

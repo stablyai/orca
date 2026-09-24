@@ -149,7 +149,7 @@ export function createUpdateWorktreeMeta(
         shouldApplyUpdate &&
         !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId, executionHostId))
       ) {
-        return {}
+        return s
       }
       didApply = true
       const nextWorktrees = applyWorktreeUpdates(
@@ -204,7 +204,7 @@ export function createUpdateWorktreeMeta(
         !cacheKey &&
         !prCacheKey
       ) {
-        return {}
+        return s
       }
 
       const nextHostedReviewCache =

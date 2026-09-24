@@ -251,7 +251,7 @@ describe('submission and dispatch state machine', () => {
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -272,13 +272,46 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
-    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('rejected')
     expect(state.submissions.get('cm_2')).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: 'claude:session-1:user-1'
     })
     expect(state.receipts.has('cm_1')).toBe(false)
     expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
+  })
+
+  it('does not give a newer identical echo to a legacy unknown write failure', () => {
+    const body = userText('same message')
+    const state = fold([
+      { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      { kind: 'item', itemId: 'claude:session-1:user-1', revision: 1, body, ...base(4) }
+    ])
+
+    // A journal written before a refused write became `rejected` still holds it as
+    // `unknown`. Replay must not let that row claim the echo of a later send that
+    // genuinely landed, which would attach the delivery to the wrong message.
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
   })
 
   it('does not accept a submission from a stale provider item behind its tombstone', () => {
@@ -484,13 +517,13 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
-  it('returns a proven retry to pending without moving its original submission', () => {
+  it('keeps a refused write rejected and leaves its bubble where it was', () => {
     const state = fold([
       submission,
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -505,11 +538,12 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
+    // `rejected` is terminal, so nothing can put this id back on the wire; the
+    // user's Retry sends a new message under a new id instead.
     expect(state.submissions.get('cm_1')).toMatchObject({
-      dispatchState: 'pending',
+      dispatchState: 'rejected',
       submittedAt: submission.ts,
-      reason: null,
-      resolvedAt: null
+      reason: 'provider_write_failed: closed before enqueue'
     })
     expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
   })
@@ -622,5 +656,144 @@ describe('re-adding a tombstoned row', () => {
 
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 4, fence: 1, ts: 1_004 }))
     expect(renderJournalState(state).items).toEqual([])
+  })
+})
+
+describe('producer linkage round-trips through the reducer', () => {
+  const identity: AgentJournalItemIdentity = {
+    provider: 'claude',
+    sessionId: 'claude-session',
+    uuid: 'child-1'
+  }
+  const linkage = {
+    agentId: 'task-1',
+    parentAgentId: 'task-parent',
+    providerParentRef: 'toolu_1',
+    producerKind: 'agent' as const,
+    attempt: 2
+  }
+
+  it('copies the whole bundle onto the render item on the plain item path', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('looking'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        linkage
+      })
+    )
+    expect(renderJournalState(state).items[0]).toMatchObject(linkage)
+  })
+
+  it('copies it on the lifecycle-batch path too, which is a separate upsert', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(state, {
+      kind: 'lifecycle-batch',
+      settlementId: 'settle-1',
+      mutations: [{ kind: 'item', itemId: 'i-child', revision: 1, body: text('looking') }],
+      ...base(1),
+      ...linkage
+    })
+    expect(renderJournalState(state).items[0]).toMatchObject(linkage)
+  })
+
+  it('lets a correction win over the provisional row, without moving the bubble', () => {
+    // Write-through then correct: the row is written under the spawn call's own
+    // id, then re-appended under the canonical one. Revision is assigned inside
+    // the journal's serialized write step, so the later append always outranks
+    // — and `sequence`/`observedAt` stay pinned, so re-attributing a row does
+    // not relocate it in the timeline.
+    const state = createJournalReducerState('session-1', EPOCH)
+    const provisional = { agentId: 'toolu_1', providerParentRef: 'toolu_1' }
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('looking'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        linkage: provisional
+      })
+    )
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('looking'),
+        seq: 9,
+        fence: 1,
+        ts: 9_999,
+        linkage
+      })
+    )
+
+    const items = renderJournalState(state).items
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ revision: 2, ...linkage })
+    expect(items[0]).toMatchObject({ sequence: 1, observedAt: 1_001 })
+  })
+
+  it('does not let a stale checkpoint undo a correction that already landed', () => {
+    // A text checkpoint carrying the OLD stamp, submitted after the correction,
+    // would re-root the row. It cannot: revision is read at write time, so the
+    // last write wins and the lane resolves linkage fresh on every checkpoint.
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('a'), seq: 1, fence: 1, ts: 1, linkage })
+    )
+    applyJournalRow(
+      state,
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('a and more'),
+        seq: 2,
+        fence: 1,
+        ts: 2,
+        linkage
+      })
+    )
+    const items = renderJournalState(state).items
+    expect(items[0]).toMatchObject({ revision: 2, ...linkage })
+  })
+
+  it('keeps linkage when a later revision rewrites the row', () => {
+    // The resolved-append path lost the marker once before by rebuilding the
+    // row without it, so the SECOND write is the one that matters here.
+    const state = createJournalReducerState('session-1', EPOCH)
+    for (const [seq, body] of [
+      [1, text('look')],
+      [2, text('looking at the lane')]
+    ] as const) {
+      applyJournalRow(
+        state,
+        buildJournalItemRow({ state, identity, body, seq, fence: 1, ts: 1_000 + seq, linkage })
+      )
+    }
+    const items = renderJournalState(state).items
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ revision: 2, ...linkage })
+  })
+
+  it("renders a row that predates linkage as the session's own", () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(state, {
+      kind: 'item',
+      itemId: 'i-legacy',
+      revision: 1,
+      body: text('written before linkage existed'),
+      ...base(1)
+    })
+    const item = renderJournalState(state).items[0]
+    expect(item && 'agentId' in item).toBe(false)
   })
 })

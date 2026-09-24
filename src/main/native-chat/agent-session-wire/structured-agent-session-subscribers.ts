@@ -22,6 +22,7 @@ import {
   createAgentSessionCatchUpReader,
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
+import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type AgentSessionSubscribeInput = {
@@ -42,10 +43,8 @@ type Subscriber = {
 
 export type AgentSessionSubscribersHooks = {
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
-  /** Fires after any publication that can change journal content, whether or not anyone
-   *  is subscribed to the transcript: session lists project status from this same edge. */
+  /** Fires after publications that can change journal content. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
-  /** Host wall clock, stamped once per published frame as `hostNow`. */
   now?: () => number
 }
 
@@ -55,8 +54,10 @@ export class AgentSessionSubscribers {
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
-  /** Opens the stream with a bounded tail page or, when the client's cursor
-   *  still resolves, with the rows it missed. Returns the disposer. */
+  get retainedActivityCountForTests(): number {
+    return this.activityBySession.size
+  }
+
   open(input: {
     id: string
     sessionId: string
@@ -113,7 +114,6 @@ export class AgentSessionSubscribers {
     }
   }
 
-  /** Fan out whatever each subscriber has not yet seen. */
   publish(
     sessionId: string,
     journal: AgentSessionJournal,
@@ -121,7 +121,7 @@ export class AgentSessionSubscribers {
   ): void {
     if (activity !== undefined) {
       if (activity) {
-        this.activityBySession.set(sessionId, activity)
+        rememberSessionActivity(this.activityBySession, sessionId, activity)
       } else {
         this.activityBySession.delete(sessionId)
       }

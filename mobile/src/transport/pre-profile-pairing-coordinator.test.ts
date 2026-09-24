@@ -316,6 +316,43 @@ describe('pre-profile pairing coordinator', () => {
     ])
   })
 
+  // Why 'forbidden' and not only 'method_not_found': the desktop's mobile allowlist gate runs
+  // before its RPC dispatcher, so a method a desktop predates is missing from both and the phone
+  // is refused by scope, never by absence. A desktop that old also omits the offer's `relay` block,
+  // so this flow would not probe it at all — what this pins is the skew that stays reachable, a
+  // desktop that offers relay but does not allowlist the probe. Refusing it must still commit.
+  it('tolerates an old desktop scope refusal and commits a direct-only host', async () => {
+    const events: string[] = []
+    const entries: ConnectionLogEntry[] = []
+    const client = fakeClient([success({ version: '1.0.0' }), failure('forbidden')])
+    const deps = dependencies(client, events)
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      connectOptions: { onLog: (entry) => entries.push(entry) },
+      dependencies: deps
+    })
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.not.objectContaining({ endpoints: expect.anything() })
+    )
+    expect(events).toEqual([
+      'save-journal',
+      'connect',
+      'update-journal',
+      'save-host',
+      'clear-journal'
+    ])
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        message: 'Relay: desktop will not serve relay pairing',
+        detail: 'forbidden'
+      })
+    )
+  })
+
   it('uses relay-basis provisioning when only the relay reaches post-E2EE status', async () => {
     const direct = fakeClient([])
     ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))

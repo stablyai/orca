@@ -18,8 +18,14 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // paused notice that read it (207 hooks, still 8 useMemo).
 // Then host-authoritative layout removal added two `useRef`s in reconciliation
 // (last host layout leaf set, retired leaf set) (209 hooks, still 8 useMemo).
+// Then search match count + Cmd+F focus parity (#9035) added a `useRef` and a `useCallback` in
+// foundation (search input ref, focus-search-input) (211 hooks, still 8 useMemo).
+// Then the pending split-close admission added one `useRef` in close-actions
+// (the confirmed-close continuation) (212 hooks, still 8 useMemo).
+// Then the dead adopted-structured-session portal went with its local target `useMemo`
+// in projection (211 hooks, 7 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  'f6de13ab7d6d130444c50fec2cfe097851ee1b7ecf0f3a2cbdc082c2e8e8838b'
+  '8293793dd40900d869b110ddbe8b4412080f8f505da0baeb4337102147886053'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
@@ -84,8 +90,8 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(209)
-    expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(8)
+    expect(hooks).toHaveLength(211)
+    expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(7)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256
     )

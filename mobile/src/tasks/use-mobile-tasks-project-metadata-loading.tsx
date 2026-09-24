@@ -1,11 +1,11 @@
 import type { ProjectDetailLoadingModel } from './use-mobile-tasks-project-detail-loading'
 import { useEffect } from './mobile-tasks-dependencies'
+import { type GitHubIssueType, splitRepositorySlug } from './mobile-tasks-legacy-foundation'
 import {
-  type GitHubAssignableUser,
-  type GitHubIssueType,
-  isSuccess,
-  splitRepositorySlug
-} from './mobile-tasks-legacy-foundation'
+  githubProjectAssignableUserListRead,
+  githubProjectIssueTypeListRead,
+  githubProjectLabelListRead
+} from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoadingModel) {
   const {
@@ -38,9 +38,9 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectAvailableLabels([])
     setProjectLabelsError('')
     setProjectLabelsLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listLabelsBySlug',
+    void githubProjectLabelListRead
+      .request(
+        client,
         { owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost },
         { timeoutMs: 30_000 }
       )
@@ -48,12 +48,7 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; labels?: string[] }
-          | { ok: false; error?: { message?: string } }
+        const result = githubProjectLabelListRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load labels')
         }
@@ -88,9 +83,9 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectAssignableUsers([])
     setProjectAssignableUsersError('')
     setProjectAssignableUsersLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listAssignableUsersBySlug',
+    void githubProjectAssignableUserListRead
+      .request(
+        client,
         {
           owner: slug.owner,
           repo: slug.repo,
@@ -103,12 +98,7 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; users?: GitHubAssignableUser[] }
-          | { ok: false; error?: { message?: string } }
+        const result = githubProjectAssignableUserListRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load assignees')
         }
@@ -151,9 +141,9 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectIssueTypes([])
     setProjectIssueTypesError('')
     setProjectIssueTypesLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listIssueTypesBySlug',
+    void githubProjectIssueTypeListRead
+      .request(
+        client,
         { owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost },
         { timeoutMs: 30_000 }
       )
@@ -161,16 +151,12 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; types?: GitHubIssueType[] }
-          | { ok: false; error?: { message?: string } }
+        const result = githubProjectIssueTypeListRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load issue types')
         }
-        setProjectIssueTypes(result.types ?? [])
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the `id` the issue-type write sends and types `name`; `color` and `description` are declared non-nullable by GitHubIssueType but absent from the recorded reply, so requiring them would drop a row main renders.
+        setProjectIssueTypes((result.types ?? []) as GitHubIssueType[])
       })
       .catch((err) => {
         if (!stale) {

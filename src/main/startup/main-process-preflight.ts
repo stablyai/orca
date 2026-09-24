@@ -71,6 +71,7 @@ import { initStatsPath } from '../stats/collector'
 import { initClaudeUsagePath } from '../claude-usage/store'
 import { initCodexUsagePath } from '../codex-usage/store'
 import { initOpenCodeUsagePath } from '../opencode-usage/store'
+import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-protocol'
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
 import { CrashReportStore } from '../crash-reporting/crash-report-store'
@@ -86,6 +87,8 @@ import {
 import { maybeApplyGpuFallbackForThisLaunch, registerGpuLifecycleHandlers } from './gpu-lifecycle'
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
+import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
+import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-mode-store'
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: () => void
@@ -178,6 +181,15 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
+  // Why: Electron resolves the macOS safeStorage Keychain service name from the app name before
+  // ready. Dev pins userData above, so applying its name here cannot shift the captured path.
+  if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
+    app.setName(state.devInstanceIdentity.appName)
+  }
+  // Why: renderer and worker defaults are process-global and must be fixed before any session exists.
+  initializeBrowserProcessUserAgent(
+    initializeBrowserIdentityModeStore(getCanonicalUserDataPath()).appliedMode
+  )
   state.startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
   if (state.startupDiagnosticsEnabled) {
     logStartupDiagnostic('before-single-instance-lock', {
@@ -275,15 +287,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
-  // Why: Electron resolves the macOS safeStorage Keychain service name
-  // ("<app name> Safe Storage") before `ready`, so the setName in whenReady is
-  // too late to move it — dev otherwise lands on the package.json name. Dev-only
-  // so a packaged build keeps deriving the key from its own CFBundleName.
-  // Safe here: dev always pins userData via app.setPath (configure-process.ts),
-  // so setName cannot shift the paths captured just above.
-  if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
-    app.setName(state.devInstanceIdentity.appName)
-  }
+  initMuseUsagePath()
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
   registerDocPreviewSchemePrivileges()

@@ -153,7 +153,8 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
         itemId: 'codex-item-1',
         kind: 'approval',
         optionId: 'accept',
-        fence: 1
+        fence: 1,
+        commit: async () => undefined
       })
     ).rejects.toThrow('no longer waiting on')
 

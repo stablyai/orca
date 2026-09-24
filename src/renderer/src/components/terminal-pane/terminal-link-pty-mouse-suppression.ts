@@ -1,7 +1,8 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import {
   isTerminalLinkActionActivation,
-  isTerminalLinkDirectActivation
+  isTerminalLinkDirectActivation,
+  isTerminalMiddleClickActivation
 } from './terminal-link-activation'
 import { isXtermMouseReport } from './terminal-pointer-input-sequences'
 
@@ -80,7 +81,10 @@ export function installTerminalLinkPtyMouseSuppression(
       captureCurrentMouseEvent()
       return
     }
-    if (!isTerminalLinkDirectActivation(event) || !shouldSuppressMouseEvent(event)) {
+    if (
+      (!isTerminalLinkDirectActivation(event) && !isTerminalMiddleClickActivation(event)) ||
+      !shouldSuppressMouseEvent(event)
+    ) {
       return
     }
     restore()

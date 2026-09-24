@@ -47,3 +47,14 @@ describe('agent status worktree attribution', () => {
     expect(parseAgentStatusPaneIdentity('tab-1:7')).toEqual({ tabId: 'tab-1', paneId: '7' })
   })
 })
+
+it.each([
+  { connectionId: 'host-a' },
+  { paneKey: 'web-terminal-shared:11111111-1111-4111-8111-111111111111' }
+])('keeps the remote owner when another workspace has the same tab ID: %o', (remote) => {
+  const row = entry({ worktreeId: 'host-a-workspace', ...remote })
+  const tabId = row.paneKey.split(':')[0]
+  expect(resolveAgentStatusWorktreeId(row, new Map([[tabId, 'host-b-workspace']]))).toBe(
+    'host-a-workspace'
+  )
+})

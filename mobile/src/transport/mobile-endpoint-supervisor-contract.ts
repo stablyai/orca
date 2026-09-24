@@ -4,6 +4,7 @@ import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bund
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import type { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import type { RpcClient } from './rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 import type { ConnectionLogSink, HostProfile } from './types'
 
 export type MobileEndpointSupervisorDependencies = {
@@ -20,7 +21,7 @@ export type MobileEndpointSupervisorDependencies = {
   saveHost: (host: HostProfile) => Promise<void>
   now: () => number
   randomBytes: (length: number) => Uint8Array
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
   onLog?: ConnectionLogSink
 }

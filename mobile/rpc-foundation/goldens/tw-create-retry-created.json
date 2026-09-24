@@ -1,0 +1,93 @@
+{
+  "operation": "tasks.worktree-create-retry",
+  "family": "worktree.create-retry",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "0278216fee698c00118bb0e73a7fe755dc59c3b8e2b0459153edae64f155774c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "06b14e4985de": {
+      "name": "worktree.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
+    },
+    "60da9621493e": {
+      "name": "worktree.create#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-1",
+            "name": "kestrel",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "displayName": "kestrel",
+              "id": "repo-1::/w"
+            }
+          }
+        }
+      }
+    },
+    "b32227fdb10b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "name": "kestrel",
+        "worktreeId": "repo-1::/w"
+      }
+    },
+    "df162b95f465": {
+      "outcome": {
+        "name": "kestrel",
+        "worktreeId": "repo-1::/w"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-create-retry-created",
+    "checkpoints": [
+      {
+        "id": "created",
+        "observation": {
+          "sender": ["60da9621493e"],
+          "payloads": ["06b14e4985de"],
+          "settlements": {
+            "create": "b32227fdb10b"
+          },
+          "state": "df162b95f465",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

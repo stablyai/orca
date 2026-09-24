@@ -1,0 +1,677 @@
+{
+  "operation": "terminal.viewport-refit",
+  "family": "terminal.viewport-refit",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "7588d30f33a8bb846c48f160aa9a4a8138176662bb2fb6be7bbdf352f553d05f",
+  "scenarioSha256": "bde05ca916393d7f5ccd48686cf13a52fb2dfa599ea874b084c58bd59adb7e7f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "00f9f7ee6897": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "023dd4dc980e": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "0c8f096f45e7": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "3528bb02a8da": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "488f89ec001e": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 150,
+        "settledAt": 150,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "558c422ccf47": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "685125182eef": {
+      "name": "reflow",
+      "ordinal": 4,
+      "value": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "71d36d2b307f": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 150,
+        "settledAt": 150,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "737f04849b85": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7e0619ad636f": {
+      "measured": true,
+      "viewport": {
+        "cols": 100,
+        "rows": 30
+      }
+    },
+    "890d1937dd65": {
+      "name": "unsubscribe-terminal",
+      "ordinal": 4,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "8ee930d6bf0e": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.updateViewport\",\"params\":{\"terminal\":\"terminal-1\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"viewport\":{\"cols\":100,\"rows\":30}}}"
+    },
+    "a47f5afd190d": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "applied": true,
+            "updated": true
+          }
+        }
+      }
+    },
+    "b0d098357ff3": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c0f39ed4140d": {
+      "name": "terminal.updateViewport#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.updateViewport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 150,
+        "settledAt": 150,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "c13357779299": {
+      "name": "subscribe-terminal",
+      "ordinal": 5,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f199e923e51c": {
+      "name": "measure-fit",
+      "ordinal": 1,
+      "value": {
+        "frameHeight": 600
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-terminal.viewport-refit-terminal.updateviewport-1",
+    "checkpoints": [
+      {
+        "id": "terminal-viewport-refit-applied.normal:reflowed",
+        "observation": {
+          "sender": ["a47f5afd190d"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "685125182eef"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.result-absent:reflowed",
+        "observation": {
+          "sender": ["c0f39ed4140d"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.result-null:reflowed",
+        "observation": {
+          "sender": ["0c8f096f45e7"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.inner-ok-missing:reflowed",
+        "observation": {
+          "sender": ["00f9f7ee6897"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.inner-false-string-error:reflowed",
+        "observation": {
+          "sender": ["023dd4dc980e"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.inner-false-object-error:reflowed",
+        "observation": {
+          "sender": ["558c422ccf47"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.outer-refused:reflowed",
+        "observation": {
+          "sender": ["b0d098357ff3"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.outer-refused-no-message:reflowed",
+        "observation": {
+          "sender": ["3528bb02a8da"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.method-not-found:reflowed",
+        "observation": {
+          "sender": ["737f04849b85"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.transport-rejection:reflowed",
+        "observation": {
+          "sender": ["71d36d2b307f"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      },
+      {
+        "id": "terminal-viewport-refit-applied.transport-rejection-no-message:reflowed",
+        "observation": {
+          "sender": ["488f89ec001e"],
+          "payloads": ["8ee930d6bf0e"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "height": "eb79a9b3682a"
+          },
+          "state": "7e0619ad636f",
+          "effects": ["f199e923e51c", "890d1937dd65", "c13357779299"]
+        }
+      }
+    ]
+  }
+}

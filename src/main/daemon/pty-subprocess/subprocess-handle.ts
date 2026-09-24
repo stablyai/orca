@@ -23,6 +23,7 @@ export function createDaemonPtySubprocessHandle(args: {
   sessionId: string
   startupAgentRecognition: RecognizedAgentProcess | null
 }): SubprocessHandle {
+  const reportsChildExitStatus = args.reportsChildExitStatus
   const proc = args.process
   // node-pty exposes destroy at runtime but omits it from IPty.
   const nativeProc = proc as DisposableNativePty
@@ -56,7 +57,7 @@ export function createDaemonPtySubprocessHandle(args: {
     events.acceptExit({
       exitCode,
       signal,
-      hostReportsChildExitStatus: args.reportsChildExitStatus
+      hostReportsChildExitStatus: reportsChildExitStatus
     })
   })
 

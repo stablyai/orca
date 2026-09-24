@@ -2,6 +2,10 @@ import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
+import {
+  acquireBrowserAutomationVisibility,
+  releaseBrowserAutomationVisibility
+} from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 
 /**
@@ -68,6 +72,29 @@ export function registerBrowserStateIpcBridge(
       }
     })
   )
+  // Why: main owns capture holds and sends each page's first hold and last release; no reply is awaited.
+  const capturePaintHoldTokens = new Map<string, string>()
+  const unsubscribeCapturePaintHold = window.api.browser.onCapturePaintHold?.(
+    ({ browserPageId, held }) => {
+      const token = capturePaintHoldTokens.get(browserPageId)
+      if (held && !token) {
+        capturePaintHoldTokens.set(browserPageId, acquireBrowserAutomationVisibility(browserPageId))
+      } else if (!held && token) {
+        capturePaintHoldTokens.delete(browserPageId)
+        releaseBrowserAutomationVisibility(token)
+      }
+    }
+  )
+  if (unsubscribeCapturePaintHold) {
+    unsubs.push(() => {
+      unsubscribeCapturePaintHold()
+      // Why: the release for a live hold can no longer arrive, so it must not leave the page drawn.
+      for (const token of capturePaintHoldTokens.values()) {
+        releaseBrowserAutomationVisibility(token)
+      }
+      capturePaintHoldTokens.clear()
+    })
+  }
   unsubs.push(
     window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
       if (isRuntimeEnvironmentActive()) {

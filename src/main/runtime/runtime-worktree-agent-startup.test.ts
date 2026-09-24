@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
+  markAntigravityWorkspaceTrusted: vi.fn(),
   markCodexProjectTrusted: vi.fn(),
   markCopilotFolderTrusted: vi.fn(),
   markCursorWorkspaceTrusted: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../agent-trust-presets', () => ({
+  markAntigravityWorkspaceTrusted: mocks.markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted: mocks.markCodexProjectTrusted,
   markCopilotFolderTrusted: mocks.markCopilotFolderTrusted,
   markCursorWorkspaceTrusted: mocks.markCursorWorkspaceTrusted
@@ -80,6 +82,25 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
   it('keeps the rename for a runtime host with no nested SSH target', () => {
     expect(launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca-ide')
   })
+
+  it('uses per-launch arguments and preserves launch telemetry', () => {
+    const result = buildWorktreeStartupForAgent({
+      repo: makeRepo({}),
+      settings,
+      agent: 'claude',
+      agentArgs: '--model opus',
+      launchSource: 'source_control_recovery',
+      getLaunchPlatform: () => 'linux',
+      toSessionOptions: () => undefined
+    })
+
+    expect(result.startup.command).toContain("'--model'")
+    expect(result.startup.telemetry).toEqual({
+      agent_kind: 'claude-code',
+      launch_source: 'source_control_recovery',
+      request_kind: 'new'
+    })
+  })
 })
 
 describe('buildWorktreeStartupForDraft agent detection', () => {
@@ -139,5 +160,30 @@ describe('markLocalWorktreeTrusted', () => {
     mocks.markCodexProjectTrusted.mockRejectedValueOnce(new Error('write failed'))
 
     await expect(markLocalWorktreeTrusted('codex', '/workspace/app')).resolves.toBeUndefined()
+  })
+
+  /**
+   * Why this test exists: Orca has two trust dispatch chains — the renderer's
+   * preflightAgentTrust (via the agentTrust:markTrusted IPC) and this main-process
+   * one, which is the only path `orchestration worker-start` takes. Adding
+   * `preflightTrust: 'antigravity'` to TUI_AGENT_CONFIG clears the `!preset` guard
+   * here but matched none of the cursor/copilot/codex branches, so every supervised
+   * agy worker still failed at agent_readiness with 'agent-trust-workspace' while
+   * the renderer-side unit tests passed. Verified live: with the branch added, the
+   * worktree is appended to ~/.gemini/antigravity-cli/settings.json and the dispatch
+   * reaches worker_done.
+   */
+  it('writes the agy workspace trust artifact on the orchestration path', async () => {
+    await markLocalWorktreeTrusted('antigravity', '/workspace/app')
+
+    expect(mocks.markAntigravityWorkspaceTrusted).toHaveBeenCalledWith('/workspace/app')
+  })
+
+  it('contains a throwing agy trust write', async () => {
+    mocks.markAntigravityWorkspaceTrusted.mockImplementationOnce(() => {
+      throw new Error('write failed')
+    })
+
+    await expect(markLocalWorktreeTrusted('antigravity', '/workspace/app')).resolves.toBeUndefined()
   })
 })

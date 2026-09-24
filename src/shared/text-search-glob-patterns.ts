@@ -37,3 +37,13 @@ export function toGitGlobPathspec(glob: string, exclude?: boolean): string {
   const pattern = needsRecursive ? `**/${glob}` : glob
   return exclude ? `:(exclude,glob)${pattern}` : `:(glob)${pattern}`
 }
+
+export function toGitGlobPathspecs(glob: string, exclude?: boolean): string[] {
+  const directoryOnly = /\/+$/u.test(glob)
+  const trimmed = glob.replace(/\/+$/, '')
+  if (!trimmed) {
+    return []
+  }
+  const pathspec = toGitGlobPathspec(trimmed, exclude)
+  return directoryOnly ? [`${pathspec}/**`] : [pathspec, `${pathspec}/**`]
+}

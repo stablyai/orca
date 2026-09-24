@@ -11,148 +11,37 @@ import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 describe('regional rehome worker', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('sends an incarnation- and source-epoch-bound drain without exposing identity', async () => {
-    let now = 0
-    const attempt = {
-      attemptId: '11111111-1111-4111-8111-111111111111',
-      userId: 'private-user',
-      relayHostId: 'abcdefghijklmnop',
-      preferredRegion: 'asia-east2',
-      sourceCellId: 'production-gce-c7',
-      sourceCellUrl: 'https://c7.relay.example.test',
-      sourceCellIncarnation: '22222222-2222-4222-8222-222222222222',
-      targetCellId: 'production-gce-c27',
-      targetCellIncarnation: '33333333-3333-4333-8333-333333333333',
-      previousEpoch: 7,
-      assignmentEpoch: 8,
-      drainGraceMs: 60_000,
-      sendAttempts: 1
+  it('bounds empty polling to the six-second cadence and stops its timer', async () => {
+    vi.useFakeTimers()
+    const selectIdleRegionalRehomeCandidates = vi.fn().mockResolvedValue([])
+    const worker = startRegionalRehomeWorker(config(), {
+      selectIdleRegionalRehomeCandidates
+    } as unknown as RelayAssignmentStore, {
+      safetySnapshot: () => safety(Date.now()),
+      random: () => 0
+    })!
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(5_999)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(2)
+      worker.stop()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(2)
+    } finally {
+      worker.stop()
+      vi.useRealTimers()
     }
-    const claimRegionalRehome = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(attempt)
-    const recordRegionalRehomeDrainReceipt = vi.fn().mockResolvedValue(true)
-    const assignments = {
-      claimRegionalRehome,
-      recordRegionalRehomeDrainReceipt
-    } as unknown as RelayAssignmentStore
-    const requests: Array<{ url: string; init?: RequestInit }> = []
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const worker = startRegionalRehomeWorker(config(), assignments, {
-      now: () => now,
-      safetySnapshot: () => safety(now),
-      intervalMs: 60_000,
-      identityToken: async (audience) => {
-        expect(audience).toBe('https://relay.example.test/v1/admin/host-drain')
-        return 'secret-token'
-      },
-      fetch: (async (url, init) => {
-        requests.push({ url: String(url), init })
-        return Response.json({ v: 1, outcome: 'accepted' })
-      }) as typeof fetch
-    })!
-    await settleWorker()
-    now = 1_000
-    await worker.run()
-    worker.stop()
-
-    expect(requests).toHaveLength(1)
-    expect(requests[0]!.url).toBe('https://c7.relay.example.test/v1/admin/host-drain')
-    expect(requests[0]!.url).not.toContain('secret-token')
-    expect(requests[0]!.init?.headers).toMatchObject({
-      authorization: 'Bearer secret-token'
-    })
-    expect(JSON.parse(String(requests[0]!.init?.body))).toEqual({
-      v: 1,
-      attemptId: '11111111-1111-4111-8111-111111111111',
-      userId: 'private-user',
-      relayHostId: 'abcdefghijklmnop',
-      sourceCellId: 'production-gce-c7',
-      sourceCellIncarnation: '22222222-2222-4222-8222-222222222222',
-      sourceAssignmentEpoch: 7,
-      graceMs: 60_000
-    })
-    expect(recordRegionalRehomeDrainReceipt).toHaveBeenCalledWith(
-      '11111111-1111-4111-8111-111111111111',
-      'accepted'
-    )
-    const logs = warn.mock.calls.map((call) => String(call[0])).join('\n')
-    expect(logs).not.toContain('private-user')
-    expect(logs).not.toContain('abcdefghijklmnop')
-  })
-
-  it('fails closed before the observation gate and records bounded dispatch failures', async () => {
-    let now = 0
-    const attempt = {
-      attemptId: '11111111-1111-4111-8111-111111111111',
-      userId: 'private-user',
-      relayHostId: 'abcdefghijklmnop',
-      sourceCellId: 'source',
-      sourceCellUrl: 'https://source.example.test',
-      sourceCellIncarnation: '22222222-2222-4222-8222-222222222222',
-      targetCellId: 'target',
-      previousEpoch: 1,
-      assignmentEpoch: 2,
-      drainGraceMs: 60_000,
-      sendAttempts: 1
-    }
-    const claimRegionalRehome = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(attempt)
-    const assignments = {
-      claimRegionalRehome,
-      recordRegionalRehomeDispatchFailure: vi.fn().mockResolvedValue(undefined)
-    } as unknown as RelayAssignmentStore
-    const worker = startRegionalRehomeWorker(config(), assignments, {
-      now: () => now,
-      safetySnapshot: () => safety(now),
-      intervalMs: 60_000,
-      identityToken: async () => {
-        throw new Error('token unavailable')
-      }
-    })!
-    await settleWorker()
-    claimRegionalRehome.mockClear()
-    now = 100
-    await worker.run()
-    worker.stop()
-    expect(assignments.recordRegionalRehomeDispatchFailure).toHaveBeenCalledWith(
-      '11111111-1111-4111-8111-111111111111'
-    )
-  })
-
-  it('keeps a failed poll out of the durable dispatch-failure budget', async () => {
-    let now = 0
-    const claimRegionalRehome = vi
-      .fn()
-      .mockResolvedValueOnce(null)
-      .mockRejectedValue(new Error('Connection terminated due to connection timeout'))
-    const recordRegionalRehomeDispatchFailure = vi.fn().mockResolvedValue(undefined)
-    const assignments = {
-      claimRegionalRehome,
-      recordRegionalRehomeDispatchFailure
-    } as unknown as RelayAssignmentStore
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const worker = startRegionalRehomeWorker(config(), assignments, {
-      now: () => now,
-      safetySnapshot: () => safety(now),
-      intervalMs: 60_000
-    })!
-    await settleWorker()
-    now = 1_000
-    await expect(worker.run()).resolves.toBeUndefined()
-    worker.stop()
-
-    // The poll never claimed an attempt, so nothing was drained and nothing may
-    // be charged to the budget that latches the durable control off.
-    expect(recordRegionalRehomeDispatchFailure).not.toHaveBeenCalled()
-    expect(warn.mock.calls.map((call) => JSON.parse(String(call[0])).event)).toEqual([
-      'orca_relay_regional_rehome_poll_failed'
-    ])
   })
 
   it('passes unsafe process telemetry to the durable claim gate', async () => {
     let now = 0
     let sqlFailures = 0
-    const claimRegionalRehome = vi.fn().mockResolvedValue(null)
+    const selectIdleRegionalRehomeCandidates = vi.fn().mockResolvedValue([])
     const assignments = {
-      claimRegionalRehome
+      selectIdleRegionalRehomeCandidates
     } as unknown as RelayAssignmentStore
     const worker = startRegionalRehomeWorker(config(), assignments, {
       now: () => now,
@@ -160,47 +49,111 @@ describe('regional rehome worker', () => {
       intervalMs: 60_000
     })!
     await settleWorker()
-    claimRegionalRehome.mockClear()
+    selectIdleRegionalRehomeCandidates.mockClear()
     now = 100
     sqlFailures = 1
     await worker.run()
     worker.stop()
 
-    expect(claimRegionalRehome).toHaveBeenCalledWith(
+    expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledWith(
       expect.objectContaining({ observedAt: 100, sqlFailures: 1 })
     )
   })
 
   it('starts inert on directors so durable control can enable without a restart', async () => {
     let now = 0
-    const claimRegionalRehome = vi.fn().mockResolvedValue(null)
+    const selectIdleRegionalRehomeCandidates = vi.fn().mockResolvedValue([])
     const assignments = {
-      claimRegionalRehome
+      selectIdleRegionalRehomeCandidates
     } as unknown as RelayAssignmentStore
-    const worker = startRegionalRehomeWorker(
-      config(),
-      assignments,
-      {
-        now: () => now,
-        safetySnapshot: () => safety(now),
-        intervalMs: 60_000
-      }
-    )
+    const worker = startRegionalRehomeWorker(config(), assignments, {
+      now: () => now,
+      safetySnapshot: () => safety(now),
+      intervalMs: 60_000
+    })
     expect(worker).not.toBeNull()
     await settleWorker()
-    claimRegionalRehome.mockClear()
+    selectIdleRegionalRehomeCandidates.mockClear()
     now = 100
     await worker!.run()
     worker!.stop()
-    expect(claimRegionalRehome).toHaveBeenCalledOnce()
+    expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledOnce()
 
     expect(
-      startRegionalRehomeWorker(
-        config({ role: 'cell' }),
-        {} as RelayAssignmentStore,
-        { safetySnapshot: () => safety(1) }
-      )
+      startRegionalRehomeWorker(config({ role: 'cell' }), {} as RelayAssignmentStore, {
+        safetySnapshot: () => safety(1)
+      })
     ).toBeNull()
+  })
+
+  it('stops walking the page when the source names a deferral no candidate can pass', async () => {
+    const fetchImpl = respondWith([{ outcome: 'deferred', reason: 'concurrency-limit' }])
+    const summaries = collectSummaries()
+    try {
+      await runOnePoll(fetchImpl, 3, summaries)
+    } finally {
+      summaries.restore()
+    }
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(summaries.entries).toEqual([
+      {
+        event: 'orca_relay_idle_rehome_dispatch_summary',
+        candidates: 3,
+        dispatched: 1,
+        stoppedBy: 'concurrency-limit',
+        outcomes: { 'deferred:concurrency-limit': 1 }
+      }
+    ])
+  })
+
+  it('keeps its whole-page walk when the source sends no reason at all', async () => {
+    const fetchImpl = respondWith([{ outcome: 'deferred' }])
+    const summaries = collectSummaries()
+    try {
+      await runOnePoll(fetchImpl, 3, summaries)
+    } finally {
+      summaries.restore()
+    }
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(summaries.entries[0]).toMatchObject({
+      stoppedBy: null,
+      outcomes: { deferred: 3 }
+    })
+  })
+
+  it('walks past a deferral that only concerns the one candidate', async () => {
+    const fetchImpl = respondWith([
+      { outcome: 'deferred', reason: 'host-unsupported' },
+      { outcome: 'busy' },
+      { outcome: 'committed' }
+    ])
+    const summaries = collectSummaries()
+    try {
+      await runOnePoll(fetchImpl, 4, summaries)
+    } finally {
+      summaries.restore()
+    }
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(summaries.entries[0]).toMatchObject({
+      dispatched: 3,
+      stoppedBy: 'committed',
+      outcomes: { 'deferred:host-unsupported': 1, busy: 1, committed: 1 }
+    })
+  })
+
+  it('counts a source that answers with an error in the same summary', async () => {
+    const fetchImpl = vi.fn(async () => new Response('nope', { status: 503 }))
+    const summaries = collectSummaries()
+    try {
+      await runOnePoll(fetchImpl, 2, summaries)
+    } finally {
+      summaries.restore()
+    }
+
+    expect(summaries.entries[0]).toMatchObject({ dispatched: 2, outcomes: { failed: 2 } })
   })
 
   it('treats the reconnect threshold as per-cell and excludes the director', () => {
@@ -208,18 +161,92 @@ describe('regional rehome worker', () => {
     const limit = cells * REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT
     const processSafety = { ...safety(100), reconnects: limit * 10 }
     const fleetSafety = { ...safety(100), reconnects: limit }
-    expect(regionalRehomeSafetyFailure(
-      combineRegionalRehomeSafety(processSafety, fleetSafety),
-      100,
-      cells
-    )).toBeNull()
-    expect(regionalRehomeSafetyFailure(
-      combineRegionalRehomeSafety(processSafety, { ...fleetSafety, reconnects: limit + 1 }),
-      100,
-      cells
-    )).toBe('elevated_reconnects')
+    expect(
+      regionalRehomeSafetyFailure(
+        combineRegionalRehomeSafety(processSafety, fleetSafety),
+        100,
+        cells
+      )
+    ).toBeNull()
+    expect(
+      regionalRehomeSafetyFailure(
+        combineRegionalRehomeSafety(processSafety, { ...fleetSafety, reconnects: limit + 1 }),
+        100,
+        cells
+      )
+    ).toBe('elevated_reconnects')
   })
 })
+
+// Answers each POST with the next scripted body, repeating the last one.
+function respondWith(bodies: { outcome: string; reason?: string }[]) {
+  let index = 0
+  return vi.fn(async () => {
+    const body = bodies[Math.min(index++, bodies.length - 1)]!
+    return new Response(JSON.stringify({ v: 1, ...body }), {
+      headers: { 'content-type': 'application/json' }
+    })
+  })
+}
+
+function collectSummaries() {
+  const entries: Record<string, unknown>[] = []
+  let arrived: (() => void) | undefined
+  // The worker polls once the moment it is constructed, so the poll under test
+  // is that one; `first` is how a test waits for it rather than for a tick.
+  const first = new Promise<void>((resolve) => {
+    arrived = resolve
+  })
+  const original = console.warn
+  console.warn = (line: unknown, ...rest: unknown[]) => {
+    try {
+      const parsed = JSON.parse(line as string) as Record<string, unknown>
+      if (parsed.event === 'orca_relay_idle_rehome_dispatch_summary') {
+        entries.push(parsed)
+        arrived?.()
+        return
+      }
+    } catch {
+      // Not a JSON log line; fall through to the original writer.
+    }
+    original(line as string, ...rest)
+  }
+  return { entries, first, restore: () => (console.warn = original) }
+}
+
+async function runOnePoll(
+  fetchImpl: typeof fetch,
+  candidates: number,
+  summaries: { first: Promise<void> }
+): Promise<void> {
+  const assignments = {
+    selectIdleRegionalRehomeCandidates: vi.fn(async () =>
+      Array.from({ length: candidates }, (_, index) => ({
+        v: 1 as const,
+        attemptId: `00000000-0000-4000-8000-00000000000${index}`,
+        userId: `user-${index}`,
+        relayHostId: 'abcdefghijklmnop',
+        sourceCellId: 'us-c1',
+        sourceCellUrl: 'https://us-c1.relay.example.test',
+        sourceCellIncarnation: '11111111-1111-4111-8111-111111111111',
+        sourceAssignmentEpoch: 1,
+        sourceGeneration: 1,
+        targetCellId: 'asia-c1'
+      }))
+    )
+  } as unknown as RelayAssignmentStore
+  const worker = startRegionalRehomeWorker(config(), assignments, {
+    fetch: fetchImpl,
+    identityToken: async () => 'token',
+    safetySnapshot: () => safety(Date.now()),
+    intervalMs: 60_000
+  })!
+  try {
+    await summaries.first
+  } finally {
+    worker.stop()
+  }
+}
 
 function config(overrides: Partial<RelayConfig> = {}): RelayConfig {
   return {

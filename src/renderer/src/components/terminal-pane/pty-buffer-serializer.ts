@@ -19,6 +19,8 @@ export type SerializedBuffer = {
    *  the tracker's snapshotFlags, so an old host's unknown state is never
    *  republished as a known `0`. */
   kittyKeyboardFlags?: number
+  /** Trailing incomplete escape to replay after snapshot reset bytes. */
+  pendingEscapeTailAnsi?: string
 }
 
 export type SerializeFn = (
@@ -159,6 +161,9 @@ function ensureSerializerListener(): void {
         // snapshot has none for a consumer to reconcile live bytes against.
         if (result.seq !== undefined && result.kittyKeyboardFlags !== undefined) {
           payload.kittyKeyboardFlags = result.kittyKeyboardFlags
+        }
+        if (result.pendingEscapeTailAnsi !== undefined) {
+          payload.pendingEscapeTailAnsi = result.pendingEscapeTailAnsi
         }
         if (lastTitle !== undefined) {
           payload.lastTitle = lastTitle

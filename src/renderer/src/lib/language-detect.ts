@@ -57,6 +57,10 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cxx': 'cpp',
   '.hpp': 'cpp',
   '.cs': 'csharp',
+  // Why: Monaco's apex grammar claims only '.cls'; triggers and anonymous-Apex scripts share it.
+  '.cls': 'apex',
+  '.trigger': 'apex',
+  '.apex': 'apex',
   '.rb': 'ruby',
   '.php': 'php',
   '.swift': 'swift',

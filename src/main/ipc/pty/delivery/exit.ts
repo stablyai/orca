@@ -9,17 +9,21 @@ import { getRendererInFlightCharsForPty } from './accounting'
 import { clearFlushTimerIfIdle } from './flush'
 import type { PtyIpcSession } from '../session'
 
-export function rememberSyntheticKillExit(session: PtyIpcSession, id: string): void {
+export function rememberSyntheticKillExit(
+  session: PtyIpcSession,
+  id: string,
+  incarnationId?: string
+): void {
   const existing = session.syntheticKillExitPtyIds.get(id)
   if (existing) {
-    clearTimeout(existing)
+    clearTimeout(existing.cleanupTimer)
   }
-  // Why a timed window: providers may report the real exit after kill completes; skip only that late duplicate, not a future reused id forever.
+  // Only the same incarnation's late exit duplicates the synthetic renderer notification.
   const cleanupTimer = setTimeout(() => {
     session.syntheticKillExitPtyIds.delete(id)
   }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
   cleanupTimer.unref?.()
-  session.syntheticKillExitPtyIds.set(id, cleanupTimer)
+  session.syntheticKillExitPtyIds.set(id, { cleanupTimer, incarnationId })
 }
 
 export function rememberRetiredRejectedPty(session: PtyIpcSession, id: string): void {
@@ -34,12 +38,16 @@ export function rememberRetiredRejectedPty(session: PtyIpcSession, id: string): 
   session.retiredRejectedPtyIds.set(id, cleanupTimer)
 }
 
-export function consumeSyntheticKillExit(session: PtyIpcSession, id: string): boolean {
-  const cleanupTimer = session.syntheticKillExitPtyIds.get(id)
-  if (!cleanupTimer) {
+export function consumeSyntheticKillExit(
+  session: PtyIpcSession,
+  id: string,
+  incarnationId?: string
+): boolean {
+  const pending = session.syntheticKillExitPtyIds.get(id)
+  if (!pending || pending.incarnationId !== incarnationId) {
     return false
   }
-  clearTimeout(cleanupTimer)
+  clearTimeout(pending.cleanupTimer)
   session.syntheticKillExitPtyIds.delete(id)
   return true
 }

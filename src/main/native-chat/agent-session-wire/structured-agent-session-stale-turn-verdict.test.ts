@@ -4,8 +4,9 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session-journ
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   runningTurnLifecycleRevisions,
-  settleStaleRunningTurnsOnAcquire,
-  turnVerdictFromDeathEvidence
+  settleStaleSessionStateOnAcquire,
+  turnVerdictFromDeathEvidence,
+  UNVERIFIABLE_TURN_VERDICT
 } from './structured-agent-session-stale-turn-verdict'
 
 const THREAD = 'thread-1'
@@ -39,6 +40,32 @@ function legacyLifecycleItem(turnId: string, startedAt: number): AgentJournalRen
       kind: 'status',
       text: 'Working',
       turnLifecycle: { turnId, state: 'running', startedAt }
+    }
+  }
+}
+
+function promptItem(state: 'pending' | 'resolved', sequence: number): AgentJournalRenderItem {
+  return {
+    itemId: agentJournalItemKey({
+      provider: 'legacy',
+      agent: 'codex',
+      sessionId: 'session-1',
+      recordId: `approval-${state}`
+    }),
+    revision: 1,
+    sequence,
+    observedAt: sequence,
+    body: {
+      kind: 'approval',
+      title: 'Approve?',
+      detail: null,
+      options: [],
+      resolution: {
+        state,
+        selectedOptionId: state === 'resolved' ? 'allow' : null,
+        resolvedBy: state === 'resolved' ? 'client-1' : null,
+        resolvedAt: state === 'resolved' ? 10 : null
+      }
     }
   }
 }
@@ -87,6 +114,50 @@ describe('running turn lifecycle revisions', () => {
     ])
   })
 
+  it('keeps every field it does not own when the host settles a running row', () => {
+    const contextUsage = {
+      used: {
+        kind: 'estimate' as const,
+        usage: {
+          inputTokens: 1,
+          cacheCreationInputTokens: 0,
+          cacheReadInputTokens: 90_000,
+          outputTokens: 5
+        },
+        capturedAt: 35
+      }
+    }
+    const running = lifecycleItem('turn-2', 'running', 2, { startedAt: 30 })
+    const body = {
+      ...running.body,
+      requestedAt: 29,
+      userItemId: 'user-2',
+      contextUsage,
+      // A field a newer build wrote: the verdict does not own it, so it survives.
+      laterField: { kept: true },
+      outcome: 'success' as const,
+      durationMs: 7
+    }
+    const items: AgentJournalRenderItem[] = [{ ...running, body }]
+    const kept = {
+      kind: 'turn',
+      turnId: 'turn-2',
+      startedAt: 30,
+      requestedAt: 29,
+      userItemId: 'user-2',
+      contextUsage,
+      laterField: { kept: true }
+    }
+    expect(
+      runningTurnLifecycleRevisions(items, { state: 'interrupted', completedAt: 40 })[0]
+    ).toMatchObject({ body: { ...kept, state: 'interrupted', completedAt: 40 } })
+    const unverifiable = runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT)[0]
+    expect(unverifiable?.kind === 'item' ? unverifiable.body : null).toEqual({
+      ...kept,
+      state: 'unverifiable'
+    })
+  })
+
   it('revises a legacy status-form running row from an older host into a typed turn', () => {
     expect(
       runningTurnLifecycleRevisions([legacyLifecycleItem('turn-2', 30)], { state: 'unverifiable' })
@@ -105,7 +176,7 @@ describe('running turn lifecycle revisions', () => {
   })
 })
 
-describe('stale running turns on a cold acquire', () => {
+describe('stale session state on a cold acquire', () => {
   function journalWith(items: AgentJournalRenderItem[]) {
     const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 9 }))
     const journal = {
@@ -123,7 +194,7 @@ describe('stale running turns on a cold acquire', () => {
     ])
 
     await expect(
-      settleStaleRunningTurnsOnAcquire({
+      settleStaleSessionStateOnAcquire({
         journal,
         sessionId: 'session-1',
         fence: 14,
@@ -132,7 +203,7 @@ describe('stale running turns on a cold acquire', () => {
     ).resolves.toBe(1)
 
     expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
-      settlementId: 'stale-turn:session-1:14:generation-2',
+      settlementId: 'stale-session:session-1:14:generation-2',
       fence: 14,
       recovered: true,
       mutations: [
@@ -145,12 +216,53 @@ describe('stale running turns on a cold acquire', () => {
     })
   })
 
+  it('cancels only prompts whose callbacks were lost with the prior owner', async () => {
+    const pending = promptItem('pending', 1)
+    const resolved = promptItem('resolved', 2)
+    const { journal, appendLifecycleBatch } = journalWith([pending, resolved])
+
+    await expect(
+      settleStaleSessionStateOnAcquire({
+        journal,
+        sessionId: 'session-1',
+        fence: 14,
+        acquisitionGeneration: 'generation-2'
+      })
+    ).resolves.toBe(1)
+
+    expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
+      settlementId: 'stale-session:session-1:14:generation-2',
+      fence: 14,
+      recovered: true,
+      mutations: [
+        {
+          kind: 'item',
+          identity: {
+            provider: 'legacy',
+            agent: 'codex',
+            sessionId: 'session-1',
+            recordId: 'approval-pending'
+          },
+          body: {
+            ...pending.body,
+            resolution: {
+              state: 'cancelled',
+              selectedOptionId: null,
+              resolvedBy: null,
+              resolvedAt: null
+            }
+          }
+        }
+      ]
+    })
+  })
+
   it('writes nothing when no turn is running and keys on the journal position without a generation', async () => {
     const idle = journalWith([
       lifecycleItem('turn-1', 'completed', 1, { startedAt: 10, completedAt: 20 })
     ])
     await expect(
-      settleStaleRunningTurnsOnAcquire({
+      settleStaleSessionStateOnAcquire({
         journal: idle.journal,
         sessionId: 'session-1',
         fence: 14,
@@ -160,14 +272,14 @@ describe('stale running turns on a cold acquire', () => {
     expect(idle.appendLifecycleBatch).not.toHaveBeenCalled()
 
     const running = journalWith([lifecycleItem('turn-2', 'running', 2)])
-    await settleStaleRunningTurnsOnAcquire({
+    await settleStaleSessionStateOnAcquire({
       journal: running.journal,
       sessionId: 'session-1',
       fence: 14,
       acquisitionGeneration: null
     })
     expect(running.appendLifecycleBatch).toHaveBeenCalledWith(
-      expect.objectContaining({ settlementId: 'stale-turn:session-1:14:seq-8' })
+      expect.objectContaining({ settlementId: 'stale-session:session-1:14:seq-8' })
     )
   })
 })

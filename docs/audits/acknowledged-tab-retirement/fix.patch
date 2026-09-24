@@ -1,0 +1,184 @@
+--- a/src/main/runtime/orca-runtime-close-mobile-session-tab.ts
++++ b/src/main/runtime/orca-runtime-close-mobile-session-tab.ts
+@@ -20,6 +20,7 @@
+ import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
+ import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+ import { SESSION_TAB_NOT_FOUND_ERROR } from '../../shared/session-tab-close'
++import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
+ 
+ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
+   async closeMobileSessionTab(
+@@ -177,8 +178,18 @@
+         return finishCommittedClose()
+       }
+       if (closingWholeParent && this.notifier?.closeTerminalTab) {
+-        // Why: whole-tab close is a lifecycle transaction. The renderer reply
+-        // arrives only after canonical retirement and a forced session flush.
++        // The renderer flush can rebase its omission; the host commits the acknowledged identity.
++        const acknowledgeRetirement = captureAcknowledgedTerminalTabRetirement(
++          worktreeId,
++          tab.parentTabId,
++          () => ({
++            hostId: this.getWorkspaceSessionHostIdForWorktree(worktreeId),
++            session: this.getWorkspaceSessionForWorktree(worktreeId),
++            snapshot: this.mobileSessionTabsByWorktree.get(worktreeId),
++            incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId
++          })
++        )
++        // Wait for the renderer's pin guard, retirement and forced session flush.
+         const win = this.getAvailableAuthoritativeWindow()
+         if (win?.webContents.isDestroyed?.()) {
+           throw new Error('runtime_unavailable')
+@@ -200,6 +211,11 @@
+           releasePublicationThrottle()
+         }
+         const remainingSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
++        const retirement = acknowledgeRetirement()
++        if (!retirement.matches) {
++          this.republishMobileSessionTabsSnapshot(worktreeId)
++          return refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
++        }
+         const remainingTab = remainingSnapshot?.tabs.find(
+           (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+             candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
+@@ -220,6 +236,10 @@
+             ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
+           })
+           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
++        } else if (retirement.hasPersistedTab) {
++          this.commitHeadlessTerminalTabRetirement(worktreeId, tab.parentTabId, {
++            force: options.force
++          })
+         }
+         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
+         return finishCommittedClose()
+--- /dev/null
++++ b/src/main/runtime/workspace-session-terminal-tab-retirement-identity.ts
+@@ -0,0 +1,127 @@
++import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
++import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
++import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
++
++type PersistedTerminalTabIdentity = {
++  createdAt: number
++  generation: number
++  ptyId: string | null
++  remoteSessionId: string | null
++  leaves: Map<string, { ptyId: string | null; incarnationId: string | null }>
++}
++function capturePersistedTerminalTabRetirementIdentity(
++  session: WorkspaceSessionState | null,
++  worktreeId: string,
++  tabId: string
++): PersistedTerminalTabIdentity | null {
++  const row = session?.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
++  if (!row || !session) {
++    return null
++  }
++  const layout = session.terminalLayoutsByTabId[tabId]
++  return {
++    createdAt: row.createdAt,
++    generation: row.generation ?? 0,
++    ptyId: row.ptyId,
++    remoteSessionId: session.remoteSessionIdsByTabId?.[tabId] ?? null,
++    leaves: new Map(
++      collectPersistedTerminalLeafIds(layout).map((leafId) => [
++        leafId,
++        {
++          ptyId: layout?.ptyIdsByLeafId?.[leafId] ?? null,
++          incarnationId: session.terminalPtyIncarnationsByPaneKey?.[`${tabId}:${leafId}`] ?? null
++        }
++      ])
++    )
++  }
++}
++function isRetainedTerminalTabRetirementIdentity(
++  captured: PersistedTerminalTabIdentity | null,
++  current: PersistedTerminalTabIdentity | null
++): boolean {
++  if (!current) {
++    return true
++  }
++  if (
++    !captured ||
++    captured.createdAt !== current.createdAt ||
++    captured.generation !== current.generation ||
++    (current.ptyId !== null &&
++      current.ptyId !== captured.ptyId &&
++      ![...captured.leaves.values()].some((leaf) => leaf.ptyId === current.ptyId)) ||
++    (current.remoteSessionId !== null &&
++      current.remoteSessionId !== captured.remoteSessionId &&
++      ![...captured.leaves.values()].some((leaf) => leaf.ptyId === current.remoteSessionId))
++  ) {
++    return false
++  }
++  // Physical exits may retire original leaves while the renderer close is awaiting its flush.
++  return [...current.leaves].every(([leafId, binding]) => {
++    const previous = captured.leaves.get(leafId)
++    return (
++      previous !== undefined &&
++      (binding.ptyId === null || binding.ptyId === previous.ptyId) &&
++      (binding.incarnationId === null || binding.incarnationId === previous.incarnationId)
++    )
++  })
++}
++
++type TerminalTabRetirementState = {
++  hostId: string
++  session: WorkspaceSessionState | null
++  snapshot: RuntimeMobileSessionTabsSnapshot | undefined
++  incarnationOf: (ptyId: string) => string | null | undefined
++}
++
++export function captureAcknowledgedTerminalTabRetirement(
++  worktreeId: string,
++  tabId: string,
++  readState: () => TerminalTabRetirementState
++): () => { matches: boolean; hasPersistedTab: boolean } {
++  const { hostId, session, snapshot, incarnationOf } = readState()
++  const identity = capturePersistedTerminalTabRetirementIdentity(session, worktreeId, tabId)
++  const surfaces = new Map(
++    snapshot?.tabs.flatMap((tab) =>
++      tab.type === 'terminal' && tab.parentTabId === tabId
++        ? [[tab.leafId, tab.ptyId ?? null] as const]
++        : []
++    )
++  )
++  const ptyIds = new Set([
++    identity?.ptyId,
++    identity?.remoteSessionId,
++    ...[...(identity?.leaves.values() ?? [])].map((leaf) => leaf.ptyId),
++    ...surfaces.values(),
++    ...(snapshot?.tabs.flatMap((tab) =>
++      tab.type === 'terminal' && tab.parentTabId === tabId
++        ? Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})
++        : []
++    ) ?? [])
++  ])
++  const incarnations = new Map(
++    [...ptyIds].flatMap((ptyId) => (ptyId ? [[ptyId, incarnationOf(ptyId) ?? null] as const] : []))
++  )
++  return () => {
++    const current = readState()
++    const remaining = capturePersistedTerminalTabRetirementIdentity(
++      current.session,
++      worktreeId,
++      tabId
++    )
++    const matches =
++      current.hostId === hostId &&
++      isRetainedTerminalTabRetirementIdentity(identity, remaining) &&
++      [...incarnations].every(([ptyId, incarnationId]) => {
++        const next = current.incarnationOf(ptyId)
++        return next === undefined || next === incarnationId
++      }) &&
++      !current.snapshot?.tabs.some(
++        (tab) =>
++          tab.type === 'terminal' &&
++          tab.parentTabId === tabId &&
++          (!surfaces.has(tab.leafId) ||
++            (tab.ptyId != null && surfaces.get(tab.leafId) !== tab.ptyId))
++      )
++    return { matches, hasPersistedTab: remaining !== null }
++  }
++}

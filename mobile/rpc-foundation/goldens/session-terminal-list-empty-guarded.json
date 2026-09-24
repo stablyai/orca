@@ -1,0 +1,84 @@
+{
+  "operation": "session.terminal-inventory",
+  "family": "session.terminal-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "5c2b3237a14f9df9357ab458b2e21f2df8e68ad6bf6dc5670c0ace7eeb567e80",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "34f7b35ae07c": {
+      "name": "terminal.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false}}"
+    },
+    "6aa9d70c1c82": {
+      "known": [],
+      "terminals": []
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "b499750a17bb": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includeVisualLayouts": false,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminals": []
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-terminal-list-empty-guarded",
+    "checkpoints": [
+      {
+        "id": "kept",
+        "observation": {
+          "sender": ["b499750a17bb"],
+          "payloads": ["34f7b35ae07c"],
+          "settlements": {
+            "no-empty": "84e5ca07cb7a"
+          },
+          "state": "6aa9d70c1c82",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

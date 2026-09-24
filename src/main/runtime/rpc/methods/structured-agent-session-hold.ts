@@ -36,7 +36,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredHost(ctx)
       const holderKey = holderKeyFor(ctx, params.holderId)
-      ctx.runtime.registerSubscriptionCleanup(
+      const registration = ctx.runtime.registerOwnedSubscriptionCleanup(
         holdCleanupIdFor(params.sessionId, holderKey),
         () => host.release(params.sessionId, holderKey),
         ctx.connectionId
@@ -44,7 +44,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
       try {
         await host.hold(params.sessionId, holderKey)
       } catch (error) {
-        ctx.runtime.cleanupSubscription(holdCleanupIdFor(params.sessionId, holderKey))
+        registration.releaseIfCurrent()
         throw error
       }
       return { held: true as const }

@@ -26,6 +26,7 @@ export {
   searchRuntimeFiles
 } from './runtime-file-search-client'
 export {
+  isMissingRuntimePathError,
   listRuntimeMarkdownDocuments,
   runtimePathExists,
   statRuntimePath

@@ -168,9 +168,7 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     result = processResult('zsh', false)
-    vi.advanceTimersByTime(750)
-    await flushAsyncTicks()
-    vi.advanceTimersByTime(750)
+    await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
@@ -179,9 +177,7 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
     result = processResult('zsh', false)
-    vi.advanceTimersByTime(750)
-    await flushAsyncTicks()
-    vi.advanceTimersByTime(750)
+    await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)

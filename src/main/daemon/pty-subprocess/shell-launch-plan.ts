@@ -209,7 +209,10 @@ export function createPtyShellLaunchPlan(
       })
     )
     Object.assign(env, shellLaunch.env)
-    shellArgs = shellLaunch.args ?? ['-l']
+    shellArgs =
+      !opts.command && !opts.launchAgent && opts.terminalShellArgs !== undefined
+        ? opts.terminalShellArgs
+        : (shellLaunch.args ?? ['-l'])
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })

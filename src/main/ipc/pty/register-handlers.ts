@@ -232,7 +232,10 @@ export function registerPtyHandlers(
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
     retiredRejectedPtyIds: session.retiredRejectedPtyIds,
     reversibleStopOwnersByPtyId: session.reversibleStopOwnersByPtyId,
-    mainWindow
+    mainWindow,
+    transitionSpawnHiddenRendererPtyDeliveryState:
+      session.transitionSpawnHiddenRendererPtyDeliveryState,
+    syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery
   })
 
   installPtySnapshotIpcHandlers({ runtime, pendingData: session.pendingData })

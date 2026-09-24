@@ -93,3 +93,7 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
     expiresAt: registration.expiresAt
   }
 }
+
+export type MobilePushTestResult =
+  | { accepted: true }
+  | { accepted: false; reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected' }

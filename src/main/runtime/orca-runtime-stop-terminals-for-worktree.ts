@@ -19,6 +19,7 @@ import {
 } from '../../shared/execution-host'
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { summarizeWorktreePtyStopVerdict } from './worktree-pty-stop-verdict'
+import { describeMobileSessionTabCloseRefusal } from './mobile-session-tab-close-refusal-message'
 
 export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithResolveTerminalSplitSourceAuthority {
   private collectWorktreePtyIds(
@@ -83,7 +84,7 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
           localPtyTeardownOwnedExternally: true
         })
         if (result.refused) {
-          throw new Error(result.refusalReason ?? 'terminal_close_refused')
+          throw new Error(describeMobileSessionTabCloseRefusal(result.refusalReason))
         }
         closed += 1
       }

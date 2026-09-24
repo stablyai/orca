@@ -171,7 +171,10 @@ export const WorktreeRemove = WorktreeSelector.extend({
   // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
   // waiver travels on its own field.
   allowUnverifiedPtyStop: OptionalBoolean,
-  runHooks: OptionalBoolean
+  runHooks: OptionalBoolean,
+  // Why (#19334): a failed archive hook blocks removal. This waives that refusal and is recorded
+  // in the result; it is NOT `force`, and it does not decide whether the hook runs.
+  allowFailedArchiveHook: OptionalBoolean
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({

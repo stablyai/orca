@@ -56,7 +56,7 @@ describe('push gateway send route', () => {
     await harness.flushDeliveries()
     expect(harness.fcmRequests).toHaveLength(1)
     expect(JSON.parse(harness.fcmRequests[0]!.body)).toMatchObject({
-      message: { token: FCM_TOKEN, notification: { title: 'Agent needs input' } }
+      message: { token: FCM_TOKEN, data: { title: 'Agent needs input' } }
     })
 
     const afterDeath = await harness.post(
@@ -179,7 +179,7 @@ describe('push gateway send route', () => {
     const message = JSON.parse(harness.fcmRequests[0]!.body) as {
       message: { android: { notification: { tag: string } }; data: Record<string, string> }
     }
-    expect(message.message.android.notification.tag).toMatch(/^[a-f0-9]{64}$/)
+    expect(message.message.data.tag).toMatch(/^[a-f0-9]{64}$/)
     expect(message.message.data.coalescedCount).toBeUndefined()
   })
 

@@ -8,6 +8,7 @@ import { claudeRosterToSnapshots } from '../../claude-subagent-roster'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import type { HookListenerState } from '../listener-state'
+import { claudeMainAgentStatusForPayload } from './claude-roster-state'
 
 export function buildClaudeStatusPayload(
   state: HookListenerState,
@@ -31,6 +32,7 @@ export function buildClaudeStatusPayload(
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
+  const mainAgentRecord = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: validate directly — the JSON stringify/parse round trip other normalizers use is pure overhead on this hot per-hook path.
   // The normalizer clamps `interrupted` to done payloads, so a gated 'working' emit drops it; claudeLeadStateByPaneKey preserves it for the eventual done.
   return normalizeAgentStatusPayload({
@@ -49,6 +51,8 @@ export function buildClaudeStatusPayload(
     interrupted: options.interrupted,
     sessionBoundary: options.sessionBoundary,
     turnCompletedAt: options.turnCompletedAt,
-    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
+    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
+    // Why: every path writes the main agent record before building, so the row's `mainAgent` is that record.
+    mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
   })
 }

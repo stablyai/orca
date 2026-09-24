@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { RuntimeStore } from './runtime-store-contract'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 vi.mock('electron', () => ({
@@ -47,5 +48,32 @@ describe('runtime extraction regressions', () => {
     } finally {
       vi.unstubAllEnvs()
     }
+  })
+
+  it('publishes the answering runtime machine name in status', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test exercises status with only the store surface the runtime reads during construction.
+    const runtime = new OrcaRuntimeService({
+      getSettings: () => ({ machineName: 'Build server' })
+    } as RuntimeStore)
+    expect(runtime.getStatus().machineName).toBe('Build server')
+    expect(runtime.getStatus().hostPlatform).toBe(process.platform)
+  })
+
+  it('labels a handed-off terminal with the same name status publishes', () => {
+    const settings = { machineName: 'Build server' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test exercises status with only the store surface the runtime reads during construction.
+    const runtime = new OrcaRuntimeService({ getSettings: () => settings } as RuntimeStore)
+    type TransportFactory = {
+      createStructuredAgentSessionHandoffTransport(): { hostLabel: string }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport factory is protected; the test reaches it to compare the label it hands the handoff status.
+    const factory: TransportFactory = runtime as unknown as TransportFactory
+    const transport = factory.createStructuredAgentSessionHandoffTransport()
+    expect(transport.hostLabel).toBe('Build server')
+    settings.machineName = 'Renamed desk'
+    expect(transport.hostLabel).toBe(runtime.getStatus().machineName)
+    expect(transport.hostLabel).toBe('Renamed desk')
+    // The remote-workspace client identity reads this same accessor at send time.
+    expect(runtime.readMachineName()).toBe('Renamed desk')
   })
 })

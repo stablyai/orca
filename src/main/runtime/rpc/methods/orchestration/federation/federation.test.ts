@@ -12,6 +12,7 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
 import { syncFederationBarrier } from './federation-sync-barrier.test-support'
+import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
 
 describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
@@ -151,11 +152,7 @@ describe('orchestration federation', () => {
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`),
-      expect.objectContaining({
-        acceptQueued: true,
-        observationTimeoutMs: 0,
-        requestId: expect.any(String)
-      })
+      expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
     )
   })
 

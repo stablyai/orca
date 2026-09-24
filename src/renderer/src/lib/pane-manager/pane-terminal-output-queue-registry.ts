@@ -83,6 +83,8 @@ export type QueueEntry = {
   foregroundReleaseDeadlineAt: number | null
   // Why: an open frame's own hold chunks may still push the deadline out, but once coalesce has taken the entry over the deadline stops moving so the two mechanisms can't re-arm each other.
   foregroundReleaseDeadlineFixed: boolean
+  // Why: continuous tool output may re-arm hold chunks indefinitely; allow one split-frame extension, then force the safety flush.
+  foregroundHoldSafetyExtended: boolean
 }
 
 export const BACKGROUND_FLUSH_DELAY_MS = 50

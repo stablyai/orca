@@ -170,7 +170,7 @@ describe('AgentHookServer listener replay', () => {
           baselineStateStartedAt: baseline.stateStartedAt,
           baselinePrompt: 'run in background',
           baselineAgentType: 'claude',
-          intent: 'plain-escape'
+          intent: 'ctrl-c'
         })
       ).toBe(false)
       expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
@@ -196,7 +196,7 @@ describe('AgentHookServer listener replay', () => {
           baselineStateStartedAt: baseline.stateStartedAt,
           baselinePrompt: 'run in background',
           baselineAgentType: 'claude',
-          intent: 'plain-escape'
+          intent: 'ctrl-c'
         })
       ).toBe(true)
     } finally {
@@ -525,7 +525,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it.each(['opencode', 'copilot'] as const)(
+  it.each(['opencode', 'opencode2', 'copilot'] as const)(
     'rejects single plain Escape inference for %s',
     (agentType) => {
       vi.useFakeTimers()
@@ -567,7 +567,7 @@ describe('AgentHookServer listener replay', () => {
     }
   )
 
-  it.each(['opencode', 'copilot'] as const)(
+  it.each(['opencode', 'opencode2', 'copilot'] as const)(
     'accepts double plain Escape inference for %s',
     (agentType) => {
       vi.useFakeTimers()

@@ -158,7 +158,7 @@ describe('host-settled turns override local observation', () => {
       {
         activeTurnKey: 'u1',
         isWorking: false,
-        hasCurrentTurnResponse: true,
+        thinking: false,
         settledByTurn: settled
       }
     )
@@ -249,7 +249,7 @@ describe('explicit user-item attribution', () => {
 })
 
 describe('provider-measured duration', () => {
-  it('outranks the host interval and floors to seconds', () => {
+  it('outranks an unattributed host interval and floors to seconds', () => {
     expect(
       completedStructuredAgentTurnSeconds({
         state: 'completed',

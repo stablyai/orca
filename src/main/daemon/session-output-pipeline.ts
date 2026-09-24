@@ -14,6 +14,7 @@ export function createSessionOutputPipeline(opts: {
   subprocess: SubprocessHandle
   isAlive: () => boolean
 }): { output: SessionOutputPlane; recoveryBarrier: TerminalShellRecoveryBarrier } {
+  const { subprocess, isAlive } = opts
   let barrier: TerminalShellRecoveryBarrier | null = null
   const output = new SessionOutputPlane({
     cols: opts.cols,
@@ -24,9 +25,9 @@ export function createSessionOutputPipeline(opts: {
     getTerminalOwner: () => barrier?.getOwner()
   })
   const recoveryBarrier = new TerminalShellRecoveryBarrier({
-    confirmShellForeground: async () => (await opts.subprocess.confirmShellForeground?.()) ?? false,
+    confirmShellForeground: async () => (await subprocess.confirmShellForeground?.()) ?? false,
     release: (emission) => output.emit(emission),
-    isAlive: opts.isAlive
+    isAlive
   })
   barrier = recoveryBarrier
   return { output, recoveryBarrier }

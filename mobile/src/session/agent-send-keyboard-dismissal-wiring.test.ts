@@ -66,13 +66,28 @@ describe('terminal send keyboard dismissal wiring', () => {
 
   it('dismisses after the live input submits, which is the only Enter path', () => {
     // terminal-live-input.ts deliberately keeps Enter off the key map, so
-    // onSubmitEditing is the single send seam for the live field.
-    const slice = sourceSlice(commandDockSource, 'ref={liveInputRef}', 'importantForAutofill="no"')
-    expect(slice).toContain('generation: getSendCompletionGeneration()')
+    // submitLiveInput is the single send seam for the live field.
+    const slice = sourceSlice(
+      sendActionsSource,
+      'const submitLiveInput = useCallback(() => {',
+      'useTerminalTextFieldSubmitBinding(liveInputRef, submitLiveInput)'
+    )
     expect(slice).toContain('const submit = handleLiveInputSubmit()')
+    expect(slice).toContain('generation: getSendCompletionGeneration()')
     expect(slice).toContain('interaction: getLiveInteractionGeneration()')
     expect(slice).toContain('sendOrigin.interaction === getLiveInteractionGeneration()')
     expect(slice).toContain('dismissKeyboardAfterAgentSend(')
+  })
+
+  it('gives the live field both Enter paths and neither blur', () => {
+    // The page reaches submitLiveInput through the ref binding, because react-native-web withholds
+    // onSubmitEditing under an open composition; native reaches it through the editor action.
+    const slice = sourceSlice(
+      commandDockSource,
+      'ref={bindLiveInputField}',
+      'importantForAutofill="no"'
+    )
+    expect(slice).toContain('onSubmitEditing={submitLiveInput}')
     // Explicit dismissal replaces RN's blur, which stays off so a shell send
     // does not drop focus.
     expect(slice).toContain('blurOnSubmit={false}')
@@ -84,10 +99,12 @@ describe('terminal send keyboard dismissal wiring', () => {
       'async function handleSend() {',
       'async function handleAccessoryKey('
     )
-    const acceptedAt = slice.indexOf('const accepted = isTerminalSendRpcAccepted(response)')
+    const acceptedAt = slice.indexOf(
+      'const accepted = terminalInputSend.interpret(response) === true'
+    )
     const restoreAt = slice.indexOf('restoreRejectedDraft()', acceptedAt)
     const dismissAt = slice.indexOf('dismissKeyboardAfterAgentSend(')
-    const responseAt = slice.indexOf('const response = await client.sendRequest(')
+    const responseAt = slice.indexOf('const response = await terminalInputSend.request(')
     const catchAt = slice.indexOf('} catch {')
     expect(dismissAt).toBeGreaterThan(0)
     expect(responseAt).toBeGreaterThan(0)
@@ -108,7 +125,7 @@ describe('terminal send keyboard dismissal wiring', () => {
   it('keeps buffered Return focused until accepted-agent dismissal runs', () => {
     const slice = sourceSlice(
       commandDockSource,
-      'ref={commandInputRef}',
+      'ref={bindCommandField}',
       'onSubmitEditing={() => void handleSend()}'
     )
     expect(slice).toContain('blurOnSubmit={false}')
@@ -121,7 +138,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'async function handleAccessoryKey('
     )
     const originAt = sendSlice.indexOf('handle: activeHandle')
-    const requestAt = sendSlice.indexOf('await client.sendRequest(')
+    const requestAt = sendSlice.indexOf('await terminalInputSend.request(')
     const restoreSlice = sourceSlice(
       sendActionsSource,
       'const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(',

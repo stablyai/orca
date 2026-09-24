@@ -70,6 +70,11 @@ export class StructuredAgentSessionHostRuntimeState {
     this.eventSinks.delete(sessionId)
   }
 
+  hasPendingStreamedEvents(sessionId: string): boolean {
+    const state = this.eventSinks.get(sessionId)?.state()
+    return state !== undefined && (state.failed || state.queuedOperations > 0)
+  }
+
   flushEventSink(sessionId: string): Promise<void> {
     return this.requireSuccessfulBarrier(
       this.eventSinks.get(sessionId)?.drained() ?? Promise.resolve({ ok: true } as const)

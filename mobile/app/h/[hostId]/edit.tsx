@@ -137,7 +137,7 @@ export default function EditHostScreen() {
       // Why: reconnect is a follow-on side effect of a save that already
       // committed — its failure or a hang must not be reported as a save
       // failure or block navigating back.
-      void forceReconnectHost(host.id).catch(() => {})
+      void forceReconnectHost?.(host.id).catch(() => {})
     }
   }
 

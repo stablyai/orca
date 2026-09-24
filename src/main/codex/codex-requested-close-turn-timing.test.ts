@@ -1,8 +1,10 @@
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import { closeCodexPublishedSession } from './codex-structured-session-close'
 import type { CodexSession } from './codex-structured-session-state'
 
@@ -48,17 +50,30 @@ describe('requested-close durable turn timing', () => {
           observedAt: 1_000
         })
       ).toEqual({ accepted: true })
-      const session = {
-        connection: { close: vi.fn(async () => true) },
+      const session: CodexSession = {
+        connection: {
+          pid: 4321,
+          closed: false,
+          request: async () => ({}),
+          notify: () => {},
+          respond: () => {},
+          respondWithError: () => {},
+          close: async () => true
+        },
         backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
         ended: false,
         requestedClose: false,
         fence: 7,
         acquisitionGeneration: 'generation-1',
         threadId: 'thread-1',
-        prompts: { clear: vi.fn() },
+        historyPath: null,
+        prompts: new CodexPromptRegistry(),
+        options: new Map(),
+        reportedOptions: {},
+        fastModeTierByModel: new Map(),
+        dispatchEchoes: createCodexDispatchEchoes(),
         translator
-      } as unknown as CodexSession
+      }
       const sessions = new Map([['session-1', session]])
       const onEvent = vi.fn()
 

@@ -66,13 +66,24 @@ type TransitionFrame = {
   targetSelected: boolean
 }
 
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    // Per-provider capture buffers written by startTransitionCapture below.
+    __githubUrlTransitionFrames?: TransitionFrame[]
+    __gitlabUrlTransitionFrames?: TransitionFrame[]
+  }
+}
+
+type TransitionFrameKey = '__githubUrlTransitionFrames' | '__gitlabUrlTransitionFrames'
+
 function pasteChord(): string {
   return process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
 }
 
 async function startTransitionCapture(
   page: Page,
-  frameKey: string,
+  frameKey: TransitionFrameKey,
   wrongTitle: string,
   targetTitle: string
 ): Promise<void> {
@@ -95,20 +106,29 @@ async function startTransitionCapture(
           requestAnimationFrame(capture)
         }
       }
-      Reflect.set(window, frameKey, frames)
+      window[frameKey] = frames
       capture()
     },
     { frameKey, frameLimit: TRANSITION_FRAME_LIMIT, wrongTitle, targetTitle }
   )
 }
 
-async function readTransitionFrames(page: Page, frameKey: string): Promise<TransitionFrame[]> {
-  return page.evaluate((key) => Reflect.get(window, key) as TransitionFrame[], frameKey)
+async function readTransitionFrames(
+  page: Page,
+  frameKey: TransitionFrameKey
+): Promise<TransitionFrame[]> {
+  return page.evaluate((key) => {
+    const frames = window[key]
+    if (!frames) {
+      throw new Error(`Transition capture ${key} was never installed`)
+    }
+    return frames
+  }, frameKey)
 }
 
 async function expectLookupHeldWithoutStaleRow(
   page: Page,
-  frameKey: string,
+  frameKey: TransitionFrameKey,
   targetUrl: string,
   wrongOption: Locator,
   targetOption: Locator
@@ -125,7 +145,7 @@ async function expectLookupHeldWithoutStaleRow(
 
 async function expectExactTargetAfterLookup(
   page: Page,
-  frameKey: string,
+  frameKey: TransitionFrameKey,
   targetUrl: string,
   targetOption: Locator
 ): Promise<void> {
@@ -268,7 +288,7 @@ test('a pasted GitHub URL never selects a stale cached issue', async ({
   })
   await expect(wrongOption).toBeVisible()
 
-  const frameKey = '__githubUrlTransitionFrames'
+  const frameKey: TransitionFrameKey = '__githubUrlTransitionFrames'
   await startTransitionCapture(orcaPage, frameKey, WRONG_TITLE, TARGET_TITLE)
 
   await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), TARGET_URL)
@@ -317,7 +337,7 @@ test('a pasted GitLab URL never selects a stale cached merge request', async ({
   })
   await expect(wrongOption).toBeVisible()
 
-  const frameKey = '__gitlabUrlTransitionFrames'
+  const frameKey: TransitionFrameKey = '__gitlabUrlTransitionFrames'
   await startTransitionCapture(orcaPage, frameKey, GITLAB_WRONG_TITLE, GITLAB_TARGET_TITLE)
 
   await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), GITLAB_TARGET_URL)

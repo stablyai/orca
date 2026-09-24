@@ -54,6 +54,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -72,6 +73,59 @@ describe('performCancel', () => {
       },
       { kind: 'status', text: 'Cancellation requested.' }
     ])
+  })
+
+  it('hands the adapter a live-turn read of the published journal', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-live-turn-'))
+    const journal = await journals.open({ identity: IDENTITY, journalDir: root })
+    const lifecycleIdentity = {
+      provider: 'legacy' as const,
+      agent: 'codex' as const,
+      sessionId: 'session-1',
+      recordId: 'turn-lifecycle:turn-1'
+    }
+    await journal.appendItem(
+      lifecycleIdentity,
+      {
+        kind: 'status',
+        text: 'Agent is working…',
+        turnLifecycle: { turnId: 'turn-1', state: 'running' }
+      },
+      { fence: 1 }
+    )
+    let resolveLiveTurnId: (() => string | null) | undefined
+    const cancelTurn = vi.fn(
+      async (input: Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]) => {
+        resolveLiveTurnId = input.resolveLiveTurnId
+        return { cancelled: true }
+      }
+    )
+    const ctx: AgentSessionTurnContext = {
+      sessionId: 'session-1',
+      journal,
+      fence: 1,
+      adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
+      persistOptions: async () => undefined,
+      resolvedBy: 'client-1',
+      publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
+      now: () => 1
+    }
+
+    await performCancel(ctx, { clientOperationId: 'cancel-live-1', turnId: 'turn-1' })
+
+    expect(resolveLiveTurnId?.()).toBe('turn-1')
+    // Re-read, not captured: the turn ending is what the guard has to see.
+    await journal.appendItem(
+      lifecycleIdentity,
+      {
+        kind: 'status',
+        text: 'Done.',
+        turnLifecycle: { turnId: 'turn-1', state: 'completed' }
+      },
+      { fence: 1 }
+    )
+    expect(resolveLiveTurnId?.()).toBeNull()
   })
 
   it('keeps the running lifecycle when cancellation cannot be confirmed', async () => {
@@ -101,6 +155,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -133,6 +188,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 
@@ -164,6 +220,7 @@ describe('performCancel', () => {
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
+      flushStreamedEvents: async () => undefined,
       now: () => 1
     }
 

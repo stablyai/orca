@@ -96,3 +96,16 @@ export async function persistReprovedTuiOwner(
     })
   }
 }
+
+export async function startRecoveredTuiCatchup(
+  input: StructuredAgentSessionRestartAccess,
+  record: AgentSessionRecord
+): Promise<void> {
+  const prepared = await input.deps.recoverTuiHistoryCatchup?.(
+    record.sessionId,
+    record.lease.runtimeFence
+  )
+  prepared?.throwIfAborted()
+  await input.deps.activateTuiHistoryCatchup?.(record.sessionId)
+  prepared?.throwIfAborted()
+}

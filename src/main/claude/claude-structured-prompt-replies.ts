@@ -1,48 +1,25 @@
+import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import { decodeAgentSessionQuestionAnswers } from '../../shared/agent-session-question-answer'
+import {
+  claudePromptQuestions,
+  isClaudePromptRecord,
+  readClaudePromptString,
+  type ClaudePendingPrompt
+} from './claude-prompt-registry'
+export {
+  ClaudePromptRegistry,
+  type ClaudePendingPrompt,
+  type ClaudePromptClaim,
+  type ClaudePromptPresentation,
+  type ClaudePromptRegistration,
+  type ClaudePromptSettle
+} from './claude-prompt-registry'
 
 export const CLAUDE_APPROVAL_DECISIONS = ['allow', 'allowForSession', 'deny', 'cancel'] as const
 export type ClaudeApprovalDecision = (typeof CLAUDE_APPROVAL_DECISIONS)[number]
 
-/** Settles the SDK's `canUseTool` promise; `null` is the SDK's "no response written" sentinel. */
-export type ClaudePromptSettle = (response: Record<string, unknown> | null) => void
-
-export type ClaudePendingPrompt = {
-  requestId: string
-  promptKey: string
-  toolUseId: string
-  toolName: string
-  kind: 'approval' | 'question'
-  input: Record<string, unknown>
-  suggestions: unknown[]
-  questionIds: readonly string[]
-  answers: Map<string, string | readonly string[]>
-  settle: ClaudePromptSettle
-}
-
-export type ClaudePromptRegistration = {
-  requestId: string
-  toolName: string
-  toolUseId: string
-  input: Record<string, unknown>
-  suggestions: unknown[]
-  settle: ClaudePromptSettle
-}
-
-type PromptBinding = {
-  address: string
-  questionId?: string
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null
-}
-
-function questionsFrom(input: Record<string, unknown>): Record<string, unknown>[] {
-  return Array.isArray(input.questions) ? input.questions.filter(isRecord) : []
+function isClaudeApprovalDecision(optionId: string): optionId is ClaudeApprovalDecision {
+  return CLAUDE_APPROVAL_DECISIONS.some((decision) => decision === optionId)
 }
 
 function questionIdFromAddress(prompt: ClaudePendingPrompt, address: string): string | null {
@@ -62,10 +39,10 @@ function questionAnswer(prompt: ClaudePendingPrompt, questionId: string, optionI
   }
   const choice = /^choice-([1-9]\d*)$/.exec(decoded.answer)
   const optionIndex = choice ? Number(choice[1]) - 1 : -1
-  const question = questionsFrom(prompt.input)[questionIndex]
+  const question = claudePromptQuestions(prompt.input)[questionIndex]
   const options = Array.isArray(question?.options) ? question.options : []
   const option = options[optionIndex]
-  const label = isRecord(option) ? readString(option.label) : null
+  const label = isClaudePromptRecord(option) ? readClaudePromptString(option.label) : null
   if (decoded.questionId === `q${questionIndex + 1}` && label) {
     return label
   }
@@ -73,15 +50,12 @@ function questionAnswer(prompt: ClaudePendingPrompt, questionId: string, optionI
     return decoded.answer
   }
   const legacyChoice = options.some(
-    (candidate) => isRecord(candidate) && readString(candidate.label) === decoded.answer
+    (candidate) =>
+      isClaudePromptRecord(candidate) && readClaudePromptString(candidate.label) === decoded.answer
   )
   return decoded.questionId === questionId && (legacyChoice || decoded.answer.trim().length > 0)
     ? decoded.answer
     : optionId
-}
-
-function questionId(question: Record<string, unknown>, index: number): string {
-  return readString(question.question) ?? readString(question.header) ?? `question-${index + 1}`
 }
 
 export function encodeClaudeQuestionOptionId(questionId: string, answer: string): string {
@@ -105,93 +79,18 @@ export function decodeClaudeQuestionOptionId(
   }
 }
 
-export class ClaudePromptRegistry {
-  private readonly prompts = new Map<string, ClaudePendingPrompt>()
-  private readonly journalBindings = new Map<string, PromptBinding>()
-
-  register(registration: ClaudePromptRegistration): ClaudePendingPrompt | null {
-    const toolUseId = readString(registration.toolUseId)
-    const toolName = readString(registration.toolName)
-    const input = isRecord(registration.input) ? registration.input : null
-    if (!toolUseId || !toolName || !input) {
-      return null
-    }
-    const questions = toolName === 'AskUserQuestion' ? questionsFrom(input) : []
-    const prompt: ClaudePendingPrompt = {
-      requestId: registration.requestId,
-      promptKey: registration.requestId,
-      toolUseId,
-      toolName,
-      kind: questions.length > 0 ? 'question' : 'approval',
-      input,
-      suggestions: Array.isArray(registration.suggestions) ? registration.suggestions : [],
-      questionIds: questions.map(questionId),
-      answers: new Map(),
-      settle: registration.settle
-    }
-    this.prompts.set(prompt.promptKey, prompt)
-    return prompt
-  }
-
-  /** True only if the prompt was still pending; lets an abort and an answer race settle once. */
-  forgetIfPending(prompt: ClaudePendingPrompt): boolean {
-    if (!this.prompts.has(prompt.promptKey)) {
-      return false
-    }
-    this.forget(prompt)
-    return true
-  }
-
-  bindJournalItemId(journalItemId: string, promptKey: string, questionIdForItem?: string): void {
-    this.journalBindings.set(journalItemId, {
-      address: promptKey,
-      ...(questionIdForItem ? { questionId: questionIdForItem } : {})
-    })
-  }
-
-  find(itemId: string): { prompt: ClaudePendingPrompt; questionId?: string } | null {
-    const binding = this.journalBindings.get(itemId)
-    const prompt = this.prompts.get(binding?.address ?? itemId)
-    return prompt
-      ? { prompt, ...(binding?.questionId ? { questionId: binding.questionId } : {}) }
-      : null
-  }
-
-  cancel(requestId: string): ClaudePendingPrompt | null {
-    const prompt = this.prompts.get(requestId) ?? null
-    if (prompt) {
-      this.forget(prompt)
-    }
-    return prompt
-  }
-
-  forget(prompt: ClaudePendingPrompt): void {
-    this.prompts.delete(prompt.promptKey)
-    for (const [itemId, binding] of this.journalBindings) {
-      if (binding.address === prompt.promptKey) {
-        this.journalBindings.delete(itemId)
-      }
-    }
-  }
-
-  clear(): ClaudePendingPrompt[] {
-    const pending = [...this.prompts.values()]
-    this.prompts.clear()
-    this.journalBindings.clear()
-    return pending
-  }
-}
-
-function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Record<string, unknown> {
-  if (!(CLAUDE_APPROVAL_DECISIONS as readonly string[]).includes(optionId)) {
+function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): PermissionResult {
+  if (!isClaudeApprovalDecision(optionId)) {
     throw new Error(`${optionId} is not a Claude approval decision`)
   }
-  const decision = optionId as ClaudeApprovalDecision
+  const decision = optionId
   if (decision === 'allow' || decision === 'allowForSession') {
     return {
       behavior: 'allow',
       updatedInput: prompt.input,
-      ...(decision === 'allowForSession' && prompt.suggestions.length > 0
+      ...(decision === 'allowForSession' &&
+      prompt.subject?.kind !== 'plan' &&
+      prompt.suggestions.length > 0
         ? { updatedPermissions: prompt.suggestions }
         : {}),
       toolUseID: prompt.toolUseId
@@ -199,7 +98,12 @@ function approvalResponse(prompt: ClaudePendingPrompt, optionId: string): Record
   }
   return {
     behavior: 'deny',
-    message: decision === 'cancel' ? 'User stopped this turn.' : 'User denied this action.',
+    message:
+      decision === 'cancel'
+        ? 'User stopped this turn.'
+        : prompt.subject?.kind === 'plan'
+          ? 'The user asked you to keep planning. Revise the plan and call ExitPlanMode again.'
+          : 'User denied this action.',
     ...(decision === 'cancel' ? { interrupt: true } : {}),
     toolUseID: prompt.toolUseId
   }
@@ -209,7 +113,7 @@ function questionResponse(
   prompt: ClaudePendingPrompt,
   optionId: string,
   boundQuestionId?: string
-): Record<string, unknown> | null {
+): PermissionResult | null {
   const decoded = decodeClaudeQuestionOptionId(optionId)
   const decodedQuestionId = decoded
     ? (questionIdFromAddress(prompt, decoded.questionId) ??
@@ -229,7 +133,11 @@ function questionResponse(
   }
   const answers: Record<string, string | readonly string[]> = {}
   for (const id of prompt.questionIds) {
-    answers[id] = prompt.answers.get(id) as string
+    const answer = prompt.answers.get(id)
+    if (answer === undefined) {
+      return null
+    }
+    answers[id] = answer
   }
   return {
     behavior: 'allow',
@@ -241,21 +149,21 @@ function questionResponse(
 function groupedQuestionResponse(
   prompt: ClaudePendingPrompt,
   optionId: string
-): Record<string, unknown> | null {
+): PermissionResult | null {
   const grouped = decodeAgentSessionQuestionAnswers(optionId)
   if (!grouped) {
     return null
   }
-  const questions = questionsFrom(prompt.input)
+  const questions = claudePromptQuestions(prompt.input)
   if (grouped.length !== prompt.questionIds.length) {
     throw new Error(`Grouped answer does not match Claude prompt ${prompt.promptKey}`)
   }
   const answers: Record<string, string | readonly string[]> = {}
   for (let index = 0; index < questions.length; index += 1) {
-    const question = questions[index]!
+    const question = questions[index]
     const providerQuestionId = prompt.questionIds[index]
     const answer = grouped.find((entry) => entry.questionId === `q${index + 1}`)
-    if (!providerQuestionId || !answer) {
+    if (!question || !providerQuestionId || !answer) {
       throw new Error(`Grouped answer does not name question ${index + 1}`)
     }
     const selected = answer.optionIds.map((selectedId) =>
@@ -286,7 +194,7 @@ function groupedQuestionResponse(
 export function applyClaudePromptAnswer(
   found: { prompt: ClaudePendingPrompt; questionId?: string },
   optionId: string
-): Record<string, unknown> | null {
+): PermissionResult | null {
   if (found.prompt.kind === 'approval') {
     return approvalResponse(found.prompt, optionId)
   }

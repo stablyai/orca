@@ -62,6 +62,21 @@ describe('resolution receipts', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('uses the SDK display name in the compact resolved receipt', () => {
+    render(
+      <NativeChatResolutionReceipt
+        body={{
+          ...approval,
+          title: 'Claude wants to present its implementation plan',
+          displayName: 'Present plan'
+        }}
+      />
+    )
+
+    expect(screen.getByText('Present plan')).toBeInTheDocument()
+    expect(screen.queryByText('Claude wants to present its implementation plan')).toBeNull()
+  })
+
   it('renders cancellation quietly without inventing a choice or resolver', () => {
     render(
       <NativeChatResolutionReceipt
@@ -140,6 +155,59 @@ describe('resolution receipts', () => {
       { question: 'Features?', answer: null },
       { question: 'Name?', answer: null }
     ])
+  })
+
+  it('keeps a single grouped question heading distinct from its answer line', () => {
+    const body: AgentJournalQuestionItem = {
+      kind: 'question',
+      question: '1 grouped question from Claude',
+      options: [],
+      questions: [{ id: 'q1', question: 'Libraries?', multiSelect: true, options: [] }],
+      resolution: {
+        ...approval.resolution,
+        selectedOptionId: encodeAgentSessionQuestionAnswers([
+          { questionId: 'q1', optionIds: [], other: 'TypeScript' }
+        ])
+      }
+    }
+
+    render(<NativeChatResolutionReceipt body={body} />)
+    expect(screen.getByText('1 grouped question from Claude')).toBeInTheDocument()
+    expect(screen.getAllByText('Libraries?')).toHaveLength(1)
+    expect(screen.getByText('TypeScript')).toBeInTheDocument()
+  })
+
+  it('does not repeat a single question above its answer', () => {
+    const body: AgentJournalQuestionItem = {
+      kind: 'question',
+      question: 'Libraries?',
+      options: [],
+      questions: [{ id: 'q1', question: 'Libraries?', multiSelect: false, options: [] }],
+      resolution: {
+        ...approval.resolution,
+        selectedOptionId: encodeAgentSessionQuestionAnswers([
+          { questionId: 'q1', optionIds: [], other: 'TypeScript' }
+        ])
+      }
+    }
+
+    render(<NativeChatResolutionReceipt body={body} />)
+    expect(screen.getAllByText('Libraries?')).toHaveLength(1)
+    expect(screen.getByText('TypeScript')).toBeInTheDocument()
+  })
+
+  it('names the actual question while a single grouped prompt is pending', () => {
+    const body: AgentJournalQuestionItem = {
+      kind: 'question',
+      question: '1 grouped question from Claude',
+      options: [],
+      questions: [{ id: 'q1', question: 'Libraries?', multiSelect: true, options: [] }],
+      resolution: { ...approval.resolution, state: 'pending', selectedOptionId: null }
+    }
+
+    render(<NativeChatResolutionReceipt body={body} />)
+    expect(screen.getByText('Libraries?')).toBeInTheDocument()
+    expect(screen.queryByText('1 grouped question from Claude')).toBeNull()
   })
 
   it('decodes single free-text answers only for the declared question', () => {

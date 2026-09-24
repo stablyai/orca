@@ -1,0 +1,279 @@
+{
+  "operation": "pairing.pre-profile",
+  "family": "pairing.pre-profile",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
+  "scenarioSha256": "e4fb7aa3b071c1207f206adcc0f31e92b6bb98a80f86a0772e48b5cebcab24ff",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "061b247f2805": {
+      "name": "host-saved",
+      "ordinal": 13,
+      "value": "relay-host-0001x"
+    },
+    "077b94702eb7": {
+      "name": "candidate-closed",
+      "ordinal": 15,
+      "value": "direct"
+    },
+    "1f647ffe77b0": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.getEndpoints\",\"params\":{\"installReqId\":\"install-l99UBPM71AZiC1ghz2glnA\"}}"
+    },
+    "28a5fc6036c5": {
+      "name": "pairing.provisionRelay#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.provisionRelay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "newResumeTokenHash": "yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU",
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "authorizationMode": "authenticated-direct",
+            "currentVersion": 4,
+            "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+            "resumeExpiresAt": 1767830400000,
+            "v": 1
+          }
+        }
+      }
+    },
+    "33c6a36cc4b6": {
+      "name": "journal-cleared",
+      "ordinal": 14,
+      "value": "pair-fixture-1"
+    },
+    "406c8ab0b9b6": {
+      "name": "journal-saved",
+      "ordinal": 1,
+      "value": "pair-fixture-1"
+    },
+    "6995d6b0bd4c": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "6d04596c636d": {
+      "name": "status.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "8bf25ca8d4ae": {
+      "name": "bundle-written",
+      "ordinal": 12,
+      "value": {
+        "version": 4
+      }
+    },
+    "8e378786864c": {
+      "name": "candidate-closed",
+      "ordinal": 6,
+      "value": "relay"
+    },
+    "9b50435fa2f8": {
+      "outcome": "host-1",
+      "savedHost": "relay-host-0001x",
+      "timedOut": false
+    },
+    "c86730581187": {
+      "name": "status.get#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": []
+          }
+        }
+      }
+    },
+    "d1b2eddf66f4": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "hostId": "host-1"
+      }
+    },
+    "e29d4c104dd3": {
+      "name": "journal-updated",
+      "ordinal": 7,
+      "value": "pair-fixture-1"
+    },
+    "ea163bb1f5e0": {
+      "name": "pairing.getEndpoints#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "pairing.getEndpoints"
+        },
+        {
+          "name": "params",
+          "value": {
+            "installReqId": "install-l99UBPM71AZiC1ghz2glnA"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "installStatus": {
+              "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+              "result": {
+                "authorizationMode": "authenticated-direct",
+                "currentVersion": 4,
+                "reqId": "install-l99UBPM71AZiC1ghz2glnA",
+                "resumeExpiresAt": 1767830400000,
+                "v": 1
+              },
+              "state": "committed",
+              "v": 1
+            },
+            "relay": {
+              "assignmentEpoch": 1,
+              "cellUrl": "https://cell.example",
+              "directorUrl": "https://director.example",
+              "e2eeFraming": 2,
+              "relayHostId": "relay-host-0001x",
+              "v": 1
+            },
+            "v": 1
+          }
+        }
+      }
+    },
+    "edde120654bf": {
+      "name": "status.get#2",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "f49423f836f9": {
+      "name": "pairing.provisionRelay#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
+    },
+    "f6b99510eefb": {
+      "name": "candidate-closed",
+      "ordinal": 16,
+      "value": "relay"
+    }
+  },
+  "recording": {
+    "scenario": "pairing-pre-profile-direct-wins-and-provisions",
+    "checkpoints": [
+      {
+        "id": "paired-over-direct",
+        "observation": {
+          "sender": ["6995d6b0bd4c", "c86730581187", "28a5fc6036c5", "ea163bb1f5e0"],
+          "payloads": ["6d04596c636d", "edde120654bf", "f49423f836f9", "1f647ffe77b0"],
+          "settlements": {
+            "pair": "d1b2eddf66f4"
+          },
+          "state": "9b50435fa2f8",
+          "effects": [
+            "406c8ab0b9b6",
+            "8e378786864c",
+            "e29d4c104dd3",
+            "8bf25ca8d4ae",
+            "061b247f2805",
+            "33c6a36cc4b6",
+            "077b94702eb7",
+            "f6b99510eefb"
+          ]
+        }
+      }
+    ]
+  }
+}

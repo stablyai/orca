@@ -67,6 +67,10 @@ export class StatsCollector {
 
   record(event: StatsEvent): void {
     this.events.push(event)
+    // A stalled async write must not defer the in-memory retention limit.
+    if (this.events.length > MAX_EVENTS) {
+      this.events.splice(0, this.events.length - MAX_EVENTS)
+    }
     this.updateAggregates(event)
     this.scheduleSave()
   }

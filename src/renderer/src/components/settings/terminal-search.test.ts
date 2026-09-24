@@ -86,6 +86,16 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'Scrollback Size')).toBe(false)
   })
 
+  it('indexes the Unix terminal shell profile without exposing it on Windows', () => {
+    const unixEntries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    const windowsEntries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const shellEntry = unixEntries.find((entry) => entry.title === 'Terminal shell')
+
+    expect(shellEntry).toBeDefined()
+    expect(matchesSettingsSearch('rcfile', [shellEntry!])).toBe(true)
+    expect(windowsEntries.some((entry) => entry.title === 'Terminal shell')).toBe(false)
+  })
+
   it('includes the OSC 52 clipboard setting on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })

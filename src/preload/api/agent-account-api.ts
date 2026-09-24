@@ -11,6 +11,10 @@ export type CodexAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
+  cancelPendingLogin: () => Promise<boolean>
+  /** Sign-in link of the login waiting on a browser, or null when none is. */
+  getPendingLoginUrl: () => Promise<string | null>
+  onPendingLoginUrlChanged: (callback: (url: string | null) => void) => () => void
   reauthenticate: (args: {
     accountId: string
     /** Local-only: activate the re-authed account when its runtime lane had no selection. */

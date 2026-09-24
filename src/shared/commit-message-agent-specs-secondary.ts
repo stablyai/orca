@@ -110,6 +110,33 @@ export function buildSecondaryCommitMessageAgentSpecs({
       ],
       defaultModelId: 'default'
     },
+    muse: {
+      id: 'muse',
+      label: 'Muse',
+      binary: 'muse',
+      // Muse's `exec` subcommand accepts a positional prompt. Keep Source
+      // Control AI one-shot and workspace-read-only, matching the other text
+      // generators rather than launching the interactive TUI.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model, thinkingLevel }) => [
+        'exec',
+        '--no-session-log',
+        '--approval-mode',
+        'never',
+        '--disable-sandbox',
+        '--disable-shell',
+        '--disable-write',
+        '--disable-web-tools',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        ...(thinkingLevel ? ['--reasoning-effort', thinkingLevel] : []),
+        '--',
+        prompt
+      ],
+      singletonOptions: [['--model'], ['--reasoning-effort']],
+      modelSource: 'static',
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
+    },
     copilot: {
       id: 'copilot',
       label: 'GitHub Copilot',
@@ -212,16 +239,21 @@ export function buildSecondaryCommitMessageAgentSpecs({
       id: 'antigravity',
       label: 'Antigravity',
       binary: 'agy',
-      promptDelivery: 'stdin',
-      buildArgs: ({ model }) => ['--print', '--sandbox', '--model', model],
+      // agy's --print takes the prompt as its value (#19539, #14059). Deliver on argv
+      // using `--print=<value>` so a leading-dash prompt binds to the flag instead of
+      // being parsed as its own option, and --sandbox/--model stay separate options.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model, thinkingLevel }) => [
+        `--print=${prompt}`,
+        '--sandbox',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+      ],
+      singletonOptions: [['--model'], ['--effort']],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
-      models: [
-        { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
-        { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
-        { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' }
-      ],
-      defaultModelId: 'Gemini 3.5 Flash (Medium)'
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
     }
   }
 }

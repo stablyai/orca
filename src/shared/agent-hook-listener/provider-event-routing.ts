@@ -20,19 +20,6 @@ import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
 
-export function isGrokIdleNotification(message: string | undefined): boolean {
-  if (!message) {
-    return false
-  }
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('type your message') ||
-    lower.includes('enter send') ||
-    lower.includes('shift-tab normal') ||
-    lower.includes('ask a side question')
-  )
-}
-
 /** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
  *  observation stamp reuses it instead of minting a second list of event-name literals. */
 export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
@@ -45,6 +32,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'kimi':
       // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
+    case 'muse':
+      // Muse uses Claude-compatible lifecycle events.
+      return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
@@ -54,6 +44,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'amp':
       return eventName === 'agent.start'
     case 'opencode':
+    case 'opencode2':
       return eventName === 'SessionStart'
     case 'mimo-code':
       return false
@@ -105,7 +96,10 @@ export function hasExplicitUserPrompt(
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
-    return (source === 'opencode' || source === 'mimo-code') && eventName === 'MessagePart'
+    return (
+      (source === 'opencode' || source === 'opencode2' || source === 'mimo-code') &&
+      eventName === 'MessagePart'
+    )
   }
   if (extractedPrompt.text.length === 0) {
     return false
@@ -140,6 +134,9 @@ export function extractToolFields(
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
     // falls through
     case 'kimi':
+    // Muse uses Claude-compatible tool fields.
+    // falls through
+    case 'muse':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
@@ -150,6 +147,7 @@ export function extractToolFields(
     case 'amp':
       return extractAmpToolFields(eventName, hookPayload)
     case 'opencode':
+    case 'opencode2':
     case 'mimo-code':
       return extractOpenCodeToolFields(eventName, hookPayload)
     case 'cursor':

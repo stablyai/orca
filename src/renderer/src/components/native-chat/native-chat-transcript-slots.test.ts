@@ -40,14 +40,64 @@ function build(
     turnStatuses: NO_STATUSES,
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
     showTurnStatus: true,
-    showTypingIndicator: false,
+    expandedTurnKeys: new Set<string>(),
     isWorking: false,
     lifecycleWorking: false,
     ...overrides
   })
 }
 
+function toolRun(id: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'completed' }],
+    timestamp: 1,
+    source: 'transcript'
+  }
+}
+
 describe('transcript slots', () => {
+  // The trailing run is the one still live while the turn works. Prose or a
+  // further run after it settles it; a reasoning aside leaves it live.
+  it('marks the last row that speaks or acts as the trailing run', () => {
+    const trailing = (messages: NativeChatMessage[]) =>
+      build(messages)
+        .filter((slot) => slot.trailingRun)
+        .map((slot) => slot.message.id)
+
+    expect(trailing([text('u', 'go', 'user'), toolRun('a'), text('b', 'Done.')])).toEqual(['b'])
+    expect(trailing([text('u', 'go', 'user'), toolRun('a'), toolRun('b')])).toEqual(['b'])
+    expect(
+      trailing([text('u', 'go', 'user'), toolRun('a'), text('r', 'hmm', 'reasoning')])
+    ).toEqual(['a'])
+    expect(trailing([toolRun('a'), text('u', 'again', 'user')])).toEqual(['a'])
+  })
+
+  // Approving a call lets that call run, and it sits in the run above the
+  // receipt. A question's receipt blocks the agent on the reader, so it does not.
+  it('keeps the run above an approval receipt trailing, but not above a question', () => {
+    const resolution = {
+      state: 'resolved' as const,
+      selectedOptionId: 'yes',
+      resolvedBy: 'desktop',
+      resolvedAt: 1
+    }
+    const receipts = new Map<string, NativeChatResolvedPrompt>([
+      ['approval', { kind: 'approval', title: 'Run?', detail: 'ls', options: [], resolution }],
+      ['question', { kind: 'question', question: 'Which?', options: [], resolution }]
+    ])
+    const trailing = (receiptId: string) =>
+      build([text('u', 'go', 'user'), toolRun('a'), text(receiptId, 'Run?', 'system')], {
+        receipts
+      })
+        .filter((slot) => slot.trailingRun)
+        .map((slot) => slot.message.id)
+
+    expect(trailing('approval')).toEqual(['a'])
+    expect(trailing('question')).toEqual(['question'])
+  })
+
   // A counted row that draws nothing is a gap in the transcript: it reserves
   // estimated height for a bubble that never appears.
   it('gives no slot to a message with nothing to draw', () => {
@@ -85,13 +135,12 @@ describe('transcript slots', () => {
     expect(slots[0]?.receipt).toBe(receipt)
   })
 
-  it('hides the running turn status until the turn has something to say', () => {
+  it('leaves the running turn status to the single transcript-tail indicator', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: null }
     const slots = build([text('u', 'ask', 'user')], {
       latestUserIndex: 0,
       turnStatuses: { active: status, completedByTurn: {} },
-      isWorking: true,
-      showTypingIndicator: false
+      isWorking: true
     })
     expect(slots[0]?.status).toBeUndefined()
   })

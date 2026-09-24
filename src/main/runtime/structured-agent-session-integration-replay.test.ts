@@ -17,7 +17,10 @@ import type {
 } from '../codex/codex-app-server-connection'
 import type { CodexStructuredSessionAdapter } from '../codex/codex-structured-session-adapter'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
@@ -37,10 +40,16 @@ const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
 const TURN = 'turn-1'
 const WORKSPACE = 'workspace-1'
+// The capability set the desktop renderer advertises. Without the pending-send
+// one the host holds the reply until the send settles, which is a shim for
+// clients too old to render a pending bubble — not what this suite models.
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ]
 }
 
 // ─── the fake `codex app-server` ────────────────────────────────────────────

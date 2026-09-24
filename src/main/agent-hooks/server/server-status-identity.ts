@@ -69,6 +69,7 @@ export function toAgentStatusIpcPayload(
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...(entry.observation ? { observation: entry.observation } : {}),
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
+    ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...entry.payload
   }
 }

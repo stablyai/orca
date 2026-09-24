@@ -55,7 +55,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     expect(settled).not.toHaveBeenCalled()
   })
 
-  it('puts delivery in doubt only when the write itself fails', async () => {
+  it('rejects a send whose frame the transport never took', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const adapter = await acquired(claude)
     claude.connections[0]!.send = async () => {
@@ -68,7 +68,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
   })
 
   it('requires an acknowledged interrupt and supports controlled options', async () => {
@@ -80,9 +80,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'sonnet', fence: 7 })
     ).resolves.toEqual({ model: 'sonnet' })
-    expect(claude.connections[0].calls.slice(-2)).toEqual([
+    // The model write pre-flights the catalog first; this CLI lists nothing, which
+    // identifies no model and so refuses none. Then it asks for the new model's window.
+    expect(claude.connections[0].calls.slice(-4)).toEqual([
       { subtype: 'interrupt', params: {} },
-      { subtype: 'set_model', params: { model: 'sonnet' } }
+      { subtype: 'list_models' },
+      { subtype: 'set_model', params: { model: 'sonnet' } },
+      { subtype: 'get_context_usage' }
     ])
 
     claude.routes.interrupt = () => {

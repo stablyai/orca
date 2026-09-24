@@ -1,5 +1,4 @@
 import { providerRetryAfter } from './provider-retry-delay.js'
-import { createHash } from 'node:crypto'
 import { PUSH_DEFAULTS } from '@orca-cloud/push-contract'
 import { orcaDataStrings, type PushDelivery } from './push-delivery-message.js'
 import type { PushProviderOutcome } from './push-provider-outcome.js'
@@ -22,12 +21,6 @@ type FcmErrorBody = {
   error?: { status?: unknown; message?: unknown; details?: { errorCode?: unknown }[] }
 }
 
-// FCM collapse_key is a short opaque string, so the collapse id is hashed
-// rather than truncated: truncation would merge unrelated notifications.
-export function fcmCollapseKey(collapseId: string): string {
-  return createHash('sha256').update(collapseId).digest('hex').slice(0, 32)
-}
-
 export function fcmMessageBody(input: {
   delivery: PushDelivery
   token: string
@@ -39,24 +32,23 @@ export function fcmMessageBody(input: {
   return JSON.stringify({
     message: {
       token: input.token,
-      ...(delivery.orca.kind === 'dismiss'
-        ? {}
-        : { notification: { title: delivery.title, body: delivery.body } }),
       android: {
         priority: 'HIGH',
-        ttl: `${Math.max(0, Math.ceil((delivery.expiresAt - now) / 1000))}s`,
-        collapse_key: fcmCollapseKey(delivery.collapseId),
+        ttl: `${Math.max(0, Math.ceil((delivery.expiresAt - now) / 1000))}s`
+      },
+      // Notification payloads collapse offline; Expo renders these data messages natively.
+      data: {
+        ...orcaDataStrings(delivery.orca),
         ...(delivery.orca.kind === 'dismiss'
           ? {}
           : {
-              notification: {
-                channel_id:
-                  delivery.sound === false ? `${input.channelId}-silent` : input.channelId,
-                tag: delivery.collapseId
-              }
+              title: delivery.title,
+              message: delivery.body,
+              tag: delivery.collapseId,
+              channelId: delivery.sound === false ? `${input.channelId}-silent` : input.channelId,
+              ...(delivery.sound === false ? { sound: '' } : {})
             })
-      },
-      data: orcaDataStrings(delivery.orca)
+      }
     }
   })
 }
