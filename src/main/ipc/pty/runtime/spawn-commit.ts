@@ -36,6 +36,7 @@ import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { registerPersistedPtySpawn } from '../pane/spawn-registration'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
@@ -68,7 +69,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     if (ctx.result.incarnationId) {
       ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
     }
-    ctx.deps.runtime?.registerPty(
+    await registerPersistedPtySpawn(
+      ctx.deps.runtime,
+      ctx.hostSessionBinding?.store ?? ctx.deps.store,
       ctx.result.id,
       owner.surface.worktreeId,
       args.connectionId ?? null,
@@ -150,25 +153,21 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   })
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
+      const { store, worktreeId, tabId, leafId, expectedSourceBinding } = ctx.hostSessionBinding
       const binding = {
-        worktreeId: ctx.hostSessionBinding.worktreeId,
-        tabId: ctx.hostSessionBinding.tabId,
-        leafId: ctx.hostSessionBinding.leafId,
+        worktreeId,
+        tabId,
+        leafId,
         ptyId: ctx.result.id,
         hostAdmittedMembership: true,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
-        ...(ctx.hostSessionBinding.expectedSourceBinding
-          ? { expectedSourceBinding: ctx.hostSessionBinding.expectedSourceBinding }
-          : {}),
-        origin: spawnCommitBindingOrigin(ctx.result, ctx.hostSessionBinding.expectedSourceBinding)
+        ...(expectedSourceBinding ? { expectedSourceBinding } : {}),
+        origin: spawnCommitBindingOrigin(ctx.result, expectedSourceBinding)
       }
       const persisted = args.connectionId
-        ? await ctx.hostSessionBinding.store.persistPtyBinding(
-            binding,
-            toSshExecutionHostId(args.connectionId)
-          )
-        : await ctx.hostSessionBinding.store.persistPtyBinding(binding)
+        ? await store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+        : await store.persistPtyBinding(binding)
       if (persisted === false) {
         throw new Error('terminal_split_source_not_found')
       }
@@ -196,7 +195,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, args.preAllocatedHandle)
   }
   if (args.worktreeId) {
-    ctx.deps.runtime?.registerPty(
+    await registerPersistedPtySpawn(
+      ctx.deps.runtime,
+      ctx.hostSessionBinding?.store ?? ctx.deps.store,
       ctx.result.id,
       args.worktreeId,
       args.connectionId ?? null,
