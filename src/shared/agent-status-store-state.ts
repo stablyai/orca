@@ -69,6 +69,19 @@ export function agentStatusTombstoneMapKey(
   return `${entity}\0${key}`
 }
 
+// A teardown marker is a bounded consistency record, not an authority: it fences only
+// writes at or below its own revision, so an absent marker and an older one answer the
+// same and compaction can never change a verdict.
+export function agentStatusTombstoneFences(
+  state: AgentStatusStoreState,
+  entity: AgentStatusTombstoneEntity,
+  key: string,
+  revision: number
+): boolean {
+  const tombstone = state.tombstones.get(agentStatusTombstoneMapKey(entity, key))
+  return tombstone !== undefined && tombstone.revision >= revision
+}
+
 export function createEmptyAgentStatusStoreState(epoch: string): AgentStatusStoreState {
   return {
     epoch,
@@ -131,8 +144,7 @@ export function validateAgentStatusStoreState(state: AgentStatusStoreState): boo
     if (
       key !== serializeAgentStatusSubject(parent.subject) ||
       parent.revision > state.revision ||
-      (state.tombstones.get(agentStatusTombstoneMapKey('parent', key))?.revision ?? -1) >=
-        parent.revision
+      agentStatusTombstoneFences(state, 'parent', key, parent.revision)
     ) {
       return false
     }
@@ -142,14 +154,13 @@ export function validateAgentStatusStoreState(state: AgentStatusStoreState): boo
       childWorkId !== child.childWorkId ||
       child.revision > state.revision ||
       !state.parents.has(serializeAgentStatusSubject(child.parent)) ||
-      state.tombstones.has(agentStatusTombstoneMapKey('child', childWorkId))
+      agentStatusTombstoneFences(state, 'child', childWorkId, child.revision)
     ) {
       return false
     }
   }
   for (const [key, alias] of state.aliases) {
     const child = state.children.get(alias.childWorkId)
-    const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('alias', key))
     if (
       key !== serializeAgentChildWorkBindingKey(alias) ||
       alias.revision > state.revision ||
@@ -158,18 +169,17 @@ export function validateAgentStatusStoreState(state: AgentStatusStoreState): boo
       child.provider !== alias.provider ||
       child.kind !== alias.kind ||
       !hasMatchingFence(child, alias) ||
-      (tombstone !== undefined && tombstone.revision >= alias.revision)
+      agentStatusTombstoneFences(state, 'alias', key, alias.revision)
     ) {
       return false
     }
   }
   for (const [key, fact] of state.facts) {
-    const tombstone = state.tombstones.get(agentStatusTombstoneMapKey('fact', key))
     if (
       key !== agentStatusFactMapKey(fact) ||
       fact.revision > state.revision ||
       !state.parents.has(serializeAgentStatusSubject(fact.subject)) ||
-      (tombstone !== undefined && tombstone.revision >= fact.revision)
+      agentStatusTombstoneFences(state, 'fact', key, fact.revision)
     ) {
       return false
     }

@@ -335,6 +335,42 @@ also retain a numeric key only when the runtime supplies the matching tab, PTY,
 and terminal handle. HTTP and relay ingress still require a stable key or a
 registered alias, and numeric rows are never persisted.
 
+## Teardown markers are bounded records, not authorities
+
+The store writes a teardown marker when a parent, child, alias or fact is removed,
+and compacts markers away under `AGENT_STATUS_STORE_LIMITS.tombstones` and
+`AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS`. Permanence was never enforceable,
+so one rule covers all four entities:
+
+**A teardown marker fences only writes at or below its own revision.** An absent
+marker and a marker older than the incoming write give the same answer, which is what
+makes compaction unable to change a verdict. `agentStatusTombstoneFences` is the only
+spelling of that rule; admission (`agent-status-store-mutation.ts`) and state validity
+(`agent-status-store-state.ts`) both call it, for every entity.
+
+Two consequences worth stating, because both have been got wrong:
+
+- **A marker is not what fences a delayed observation.** Two things that survive
+  compaction do that job: the lock-step revision envelope, which refuses any
+  out-of-order mutation, and the live-row lookup at admission, which answers
+  `unknown-child` for a removed id. A check written as "the marker exists" silently
+  stops working the moment the marker is evicted.
+- **A marker may never latch a name.** A child work id is minted; a provider alias
+  (`task_id`, `tool_use_id`) is a reusable name that later, unrelated work will use
+  again. Under the revision rule a marker cannot outlive its own revision, so the next
+  legitimate occupant of a name is admitted and gets a freshly minted identity. Work
+  announced under a reused alias can therefore never be confused with, or corrupt, the
+  torn-down work that held that name before.
+
+Readers project live rows and never consult markers: the `AgentStatusStore` interface
+deliberately exposes no accessor for them, and a reader-side precedence rule built on
+marker presence would reintroduce both failures above.
+
+This rule assumes one writer per epoch — `applyMutation` requires `authority` mode and
+`applyTransportEnvelope` requires `replica` mode with strictly consecutive revisions.
+Two authorities minting revisions for one epoch would make ordering insufficient and
+this rule would need revisiting.
+
 ## PR 2: the renderer subscribes
 
 With structured rows arriving over `agentStatus:set`, the renderer's
