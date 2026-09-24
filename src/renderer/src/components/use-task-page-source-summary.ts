@@ -1,5 +1,6 @@
 import type { TaskPageSourceAvailabilityPreludeModel } from './use-task-page-source-availability'
 import { useMemo } from 'react'
+import { useAppStore } from '@/store'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type {
   TaskSourceAvailabilityNotice,
@@ -34,6 +35,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     accountBackedTaskSourceHostId,
     accountBackedTaskSourceHostAvailability
   } = model
+  const planeStatus = useAppStore((s) => s.planeStatus)
   const taskSourceAvailabilityNoticeByProvider = useMemo<
     Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
   >(() => {
@@ -100,6 +102,13 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      plane:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('plane'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -121,7 +130,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
       providerLabel,
       repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'plane'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -129,9 +138,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null,
+      planeWorkspaceName: planeStatus.activeWorkspaceSlug
     })
   }, [
+    planeStatus.activeWorkspaceSlug,
     selectedJiraSite,
     selectedLinearWorkspace,
     selectedRepos.length,
@@ -149,11 +160,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'plane'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'plane'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById

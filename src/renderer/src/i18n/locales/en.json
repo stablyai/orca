@@ -1006,6 +1006,27 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked issue",
+            "readTicketSummary": "Pull the linked Plane issue's full context before starting work.",
+            "readTicketPrompt": "Use {{value0}} to read the linked Plane issue for this worktree, then summarize the goal and acceptance criteria before you start.",
+            "postUpdate": "Post a progress update",
+            "postUpdateSummary": "Comment progress or a completion summary back to the Plane issue.",
+            "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Plane issue with what changed and how it was verified.",
+            "moveState": "Move the issue forward",
+            "moveStateSummary": "Advance the Plane workflow state as the work progresses.",
+            "moveStatePrompt": "Use {{value0}} to move the linked Plane issue to In Progress or In Review now that the change is underway.",
+            "triagePriority": "Triage and set priority",
+            "triagePrioritySummary": "Update priority or state on the Plane issue as scope is clarified.",
+            "triagePriorityPrompt": "Use {{value0}} to triage the linked Plane issue — update its priority to urgent/high/medium/low and adjust state.",
+            "createFollowup": "Create a follow-up issue",
+            "createFollowupSummary": "File a new Plane issue for deferred work or related bugs found during development.",
+            "createFollowupPrompt": "Use {{value0}} to create a new Plane issue for the deferred follow-up work."
+          }
+        }
       }
     },
     "hooks": {
@@ -8408,7 +8429,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "planeTitle": "Plane",
+          "planeDescription": "How Plane works in Orca, setup checklist, agent skill, and example prompts."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -11405,6 +11428,17 @@
           "manageConnectionHint": "Review connected Linear workspaces and API keys in",
           "manageConnectionLink": "Integrations"
         },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "How Plane works in Orca: browse issues, start linked workspaces, and let agents update tickets with /orca-plane.",
+          "skillTitle": "Plane skill",
+          "howToUse": "Example prompts",
+          "howToUseDescription": "Click a card to copy a prompt. Use these in a Plane-linked worktree after the skill is installed.",
+          "terminalTitle": "Plane skill setup",
+          "terminalAriaLabel": "Plane skill install terminal",
+          "manageConnectionHint": "Review connected Plane workspaces and API tokens in",
+          "manageConnectionLink": "Integrations"
+        },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
         },
@@ -11779,6 +11813,47 @@
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal",
           "showDescription": "Include Linear in the Tasks page source picker and sidebar shortcuts."
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. Connect Plane",
+          "setupConnectBody": "Personal API token so Orca can list issues and open linked workspaces.",
+          "manageKeys": "Manage access",
+          "addAccess": "Add access",
+          "setupSkillTitle": "2. Install the agent skill",
+          "setupSkillBody": "Gives coding agents /orca-plane for reading, updates, comments, priority, and workflow states.",
+          "setupVisibleTitle": "3. Show Plane in Tasks",
+          "setupVisibleBody": "Keeps Plane in the Tasks source picker and sidebar shortcuts.",
+          "openTaskSources": "Task Sources",
+          "setupTitle": "Setup checklist",
+          "setupBody": "All three are required for the full Tasks + agent loop. First-time path is also under Task Sources.",
+          "setupReady": "All set",
+          "setupProgress": "{{done}} of {{total}} ready",
+          "notesTitle": "Good to know",
+          "notesIntro": "Quick reminders once Plane is connected and the skill is installed.",
+          "noteLinkedTitle": "Start from a Plane issue",
+          "noteLinkedBody": "Issue actions work best in a worktree created from Tasks so the issue stays linked as context.",
+          "noteSlashTitle": "Mention /orca-plane",
+          "noteSlashBody": "In chat, use /orca-plane (or ask in plain language) so the agent loads the skill for that turn.",
+          "noteInstanceTitle": "Cloud and Self-Hosted",
+          "noteInstanceBody": "Supports both Plane Cloud (app.plane.so) and custom self-hosted Plane instances.",
+          "noteVisibilityTitle": "Hiding ≠ disconnect",
+          "noteVisibilityBody": "Hiding Plane in Task Sources only removes it from the picker. It does not remove your token or skill.",
+          "setupChecking": "Checking…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "Connect Plane",
+          "connectDescription": "Add an API token so Orca can browse issues and open workspaces with ticket context.",
+          "manageAccess": "Manage access",
+          "addAccess": "Add Plane access",
+          "connectedHint": "Workspaces and tokens are stored for the active runtime.",
+          "recheck": "Re-check connection",
+          "skillTitle": "Install Plane agent skill",
+          "skillDescription": "Gives agents /orca-plane to read tickets, post updates, move states, and comment on issues.",
+          "skillBlocked": "Connect Plane first, then install the skill for agents.",
+          "skillPanelTitle": "Plane skill",
+          "terminalTitle": "Plane skill setup",
+          "terminalAriaLabel": "Plane skill install terminal",
+          "showDescription": "Include Plane in the Tasks page source picker and sidebar shortcuts."
         },
         "TaskSourceProviderCard": {
           "statusChecking": "Checking…",

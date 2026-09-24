@@ -9,6 +9,9 @@ export const EPHEMERAL_VMS_SKILL_NAME = 'orca-per-workspace-env'
 export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
 export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
+export const ORCA_PLANE_SKILL_NAME = 'orca-plane'
+export const PLANE_TICKETS_SKILL_NAME = 'plane-tickets'
+export const PLANE_AGENT_SKILL_NAMES = [ORCA_PLANE_SKILL_NAME, PLANE_TICKETS_SKILL_NAME] as const
 
 // Why: `yes` and `agents` default off so every Settings/onboarding string a human
 // pastes keeps its interactive prompts and the CLI's own agent detection. Only an
@@ -132,3 +135,13 @@ export const ORCA_LINEAR_SKILL_UPDATE_COMMAND =
 
 export const LINEAR_TICKETS_SKILL_UPDATE_COMMAND =
   buildAgentFeatureSkillUpdateCommand(LINEAR_TICKETS_SKILL_NAME)
+
+export const ORCA_PLANE_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+  ORCA_PLANE_SKILL_NAME
+])
+
+export const ORCA_PLANE_SKILL_UPDATE_COMMAND =
+  buildAgentFeatureSkillUpdateCommand(ORCA_PLANE_SKILL_NAME)
+
+export const PLANE_TICKETS_SKILL_UPDATE_COMMAND =
+  buildAgentFeatureSkillUpdateCommand(PLANE_TICKETS_SKILL_NAME)
