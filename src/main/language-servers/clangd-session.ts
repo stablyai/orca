@@ -16,14 +16,20 @@ import {
   mapClangdHoverResult,
   mapClangdLocationResult
 } from './clangd-protocol'
+import {
+  decodeSemanticTokensFullResult,
+  type SemanticTokenLegend
+} from './semantic-token-legend-decoder'
 import { lspUriToNativePath, nativePathToLspUri, normalizeNativeFilePath } from './uri-mapping'
+import { lspLanguageForFile } from './clangd-session-language-id'
 import type { ClangdSession, ClangdSessionOptions } from './clangd-session-types'
 export type { ClangdSession, ClangdSessionOptions } from './clangd-session-types'
 import type {
   LanguageServerDefinitionLocation,
   LanguageServerDocumentChange,
   LanguageServerHoverContent,
-  LanguageServerPosition
+  LanguageServerPosition,
+  LanguageServerSemanticTokens
 } from '../../shared/language-server-navigation-types'
 
 export class ClangdPositionEncodingError extends Error {
@@ -50,29 +56,6 @@ type OpenDocument = {
   version: number
 }
 
-const LSP_LANGUAGE_BY_EXTENSION: Record<string, string> = {
-  '.c': 'c',
-  '.cpp': 'cpp',
-  '.cc': 'cpp',
-  '.cxx': 'cpp',
-  '.c++': 'cpp',
-  '.hpp': 'cpp',
-  '.hh': 'cpp',
-  '.h': 'cpp',
-  '.hxx': 'cpp',
-  '.inl': 'cpp',
-  '.m': 'objective-c',
-  '.mm': 'objective-cpp'
-}
-
-function lspLanguageForFile(filePath: string): string {
-  const dot = filePath.lastIndexOf('.')
-  if (dot === -1) {
-    return 'cpp'
-  }
-  return LSP_LANGUAGE_BY_EXTENSION[filePath.slice(dot).toLowerCase()] ?? 'cpp'
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -90,6 +73,9 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
   let stopping = false
   let died: Error | null = null
   let serverVersion: string | null = null
+  // The server's semantic-token legend, captured at initialize (spike findings §1:
+  // clangd returns its OWN names, not LSP standard — decode is BY NAME).
+  let semanticLegend: SemanticTokenLegend | null = null
 
   const documents = new Map<string, OpenDocument>()
 
@@ -165,12 +151,13 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
       'initialize',
       buildClangdInitializeParams(options.rootPath, process.pid),
       { timeoutMs: INITIALIZE_TIMEOUT_MS }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the initialize result is the wire-deserialized LSP InitializeResult; `positionEncoding` is verified against utf-16 (throws otherwise), `referencesProvider`/`declarationProvider` are checked for presence (warned if absent), and `serverInfo.version` is read through optional chaining.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the initialize result is the wire-deserialized LSP InitializeResult; `positionEncoding` is verified against utf-16 (throws otherwise), `referencesProvider`/`declarationProvider`/`semanticTokensProvider.legend` are read through typeof/optional-chaining guards before use, and `serverInfo.version` is read through optional chaining.
     )) as {
       capabilities?: {
         positionEncoding?: string
         referencesProvider?: unknown
         declarationProvider?: unknown
+        semanticTokensProvider?: { legend?: SemanticTokenLegend } | boolean
       }
       serverInfo?: { version?: string }
     } | null
@@ -178,6 +165,13 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
     const encoding = result?.capabilities?.positionEncoding
     if (encoding !== 'utf-16') {
       throw new ClangdPositionEncodingError(encoding)
+    }
+    // Capture the server's semantic-token legend for by-name decoding (S5 / spike
+    // findings §1). The provider may be a boolean (no legend) — clangd always
+    // returns the legend object.
+    const semProvider = result?.capabilities?.semanticTokensProvider
+    if (semProvider && typeof semProvider === 'object' && semProvider.legend) {
+      semanticLegend = semProvider.legend
     }
     // Verify the server echoes the S4 capabilities (S4 criterion). clangd
     // always advertises both; absence means a non-conformant build — warn so
@@ -301,6 +295,16 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
     ): Promise<LanguageServerHoverContent | null> {
       const result = await client!.request('textDocument/hover', positionParams(filePath, position))
       return mapClangdHoverResult(result)
+    },
+    async semanticTokensFull(filePath: string): Promise<LanguageServerSemanticTokens> {
+      if (!semanticLegend) {
+        return { tokenTypes: [], tokenModifiers: [], tokens: [] }
+      }
+      const doc = documentFor(filePath)
+      const result = await client!.request('textDocument/semanticTokens/full', {
+        textDocument: { uri: doc.uri }
+      })
+      return decodeSemanticTokensFullResult(result, semanticLegend)
     },
     async stop(): Promise<void> {
       if (died !== null || stopping) {

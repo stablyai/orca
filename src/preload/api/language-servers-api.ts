@@ -7,6 +7,7 @@ import type {
   LanguageServerHoverResult,
   LanguageServerPosition,
   LanguageServerReferencesResult,
+  LanguageServerSemanticTokensResult,
   LanguageServerStatusEvent
 } from '../../shared/language-server-navigation-types'
 
@@ -38,6 +39,7 @@ export type LanguageServersApi = {
     filePath: string
     position: LanguageServerPosition
   }) => Promise<LanguageServerHoverResult>
+  semanticTokens: (args: { filePath: string }) => Promise<LanguageServerSemanticTokensResult>
   /** `$/progress` projection; null clears. Returns an unsubscribe function. */
   onStatus: (callback: (event: LanguageServerStatusEvent) => void) => () => void
 }
@@ -51,5 +53,6 @@ export type {
   LanguageServerHoverResult,
   LanguageServerPosition,
   LanguageServerReferencesResult,
+  LanguageServerSemanticTokensResult,
   LanguageServerStatusEvent
 }

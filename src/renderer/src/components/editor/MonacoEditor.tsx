@@ -237,7 +237,7 @@ export default function MonacoEditor({
         language={language}
         // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
         defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={isDark ? 'orca-lsp-dark' : 'vs'}
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{
@@ -246,6 +246,13 @@ export default function MonacoEditor({
           // Defense-in-depth only — it does NOT guard the Monarch embed recursion,
           // which overflowed at ~17_000 chars, under this cap. See the budget module.
           maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
+          // S5 / spike findings §1 GATE 1: the standalone theme's
+          // `semanticHighlighting` is hardcoded false and the editor option
+          // defaults to 'configuredByTheme' -> semantic coloring stays off.
+          // The switch is the FLAT key (nested `semanticHighlighting:{enabled}`
+          // does NOT work); it survives rawOptions, folds into config, and
+          // `isEditorConfigurationKey` accepts it.
+          'semanticHighlighting.enabled': true,
           // Why: only the file editor honors this; Monaco 0.55 DiffEditor hard-overrides minimap.enabled=false on sub-editors (see diffEditorEditors._adjustOptionsForSubEditor).
           minimap: { enabled: settings?.editorMinimapEnabled ?? false },
           scrollBeyondLastLine: false,

@@ -17,6 +17,7 @@ import {
   type LanguageServerHoverResult,
   type LanguageServerPosition,
   type LanguageServerReferencesResult,
+  type LanguageServerSemanticTokensResult,
   type LanguageServerStatusEvent
 } from '../../shared/language-server-navigation-types'
 
@@ -47,7 +48,8 @@ export function registerLanguageServersHandlers(
     'languageServers:definition',
     'languageServers:hover',
     'languageServers:references',
-    'languageServers:declaration'
+    'languageServers:declaration',
+    'languageServers:semanticTokens'
   ] as const) {
     ipcMain.removeHandler(channel)
   }
@@ -150,6 +152,21 @@ export function registerLanguageServersHandlers(
           ok: false,
           error: error instanceof Error ? error.message : String(error),
           locations: []
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'languageServers:semanticTokens',
+    async (_event, args: { filePath: string }): Promise<LanguageServerSemanticTokensResult> => {
+      try {
+        return { ok: true, tokens: await host.semanticTokens(args) }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          tokens: null
         }
       }
     }

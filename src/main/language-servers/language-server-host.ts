@@ -284,6 +284,13 @@ export function createLanguageServerHost(
       }
       return session.hover(normalizeNativeFilePath(filePath), position)
     },
+    async semanticTokens({ filePath }) {
+      const session = sessionForDocument(filePath)
+      if (!session) {
+        throw new Error(`no language-server session owns ${filePath}`)
+      }
+      return session.semanticTokensFull(normalizeNativeFilePath(filePath))
+    },
     async shutdownAll() {
       const entries = [...sessionsByKey.values()]
       sessionsByKey.clear()

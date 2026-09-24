@@ -7,6 +7,10 @@ import type {
   LanguageServerHoverContent
 } from '../../shared/language-server-navigation-types'
 import { nativePathToLspUri } from './uri-mapping'
+import {
+  SEMANTIC_TOKEN_CLIENT_MODIFIERS,
+  SEMANTIC_TOKEN_CLIENT_TYPES
+} from './semantic-token-legend-decoder'
 
 /** The initialize params verified against clangd 23 in the spike (findings §5). */
 export function buildClangdInitializeParams(rootPath: string, processId: number): unknown {
@@ -33,7 +37,20 @@ export function buildClangdInitializeParams(rootPath: string, processId: number)
         hover: { dynamicRegistration: false, contentFormat: ['markdown', 'plaintext'] },
         definition: { dynamicRegistration: false, linkSupport: false },
         declaration: { dynamicRegistration: false, linkSupport: false },
-        references: { dynamicRegistration: false }
+        references: { dynamicRegistration: false },
+        // Semantic coloring (S5 / spike findings §1): the client declares the
+        // normalized FULL token set; the server returns its OWN legend which
+        // is decoded BY NAME (not hardcoded standard-enum indices — clangd's
+        // legend differs: method not function.member, 24 types incl.
+        // unknown/bracket/label, 19 modifiers incl. self-invented scopes).
+        // full:true / range:false — only whole-document tokens are used.
+        semanticTokens: {
+          dynamicRegistration: false,
+          requests: { range: false, full: true },
+          tokenTypes: [...SEMANTIC_TOKEN_CLIENT_TYPES],
+          tokenModifiers: [...SEMANTIC_TOKEN_CLIENT_MODIFIERS],
+          formats: ['relative']
+        }
       }
     }
   }

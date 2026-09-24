@@ -436,4 +436,52 @@ test.describe('Editor LSP navigation — native host (DiligentEngine + clangd)',
       })
       .toBeGreaterThan(0)
   })
+
+  test('semantic tokens color ≥2 identifier classes via DOM/getComputedStyle (no getLegend pageerror)', async ({
+    orcaPage
+  }) => {
+    // S5 / spike findings §1: hidden-window CDP screenshots freeze a stale
+    // frame (rAF paused) so late semantic-color repaints false-negative on
+    // pixel sampling. getComputedStyle/DOM histograms are authoritative.
+    // Also listens for `getLegend is not a function` — the provider-shape trap
+    // whose error is swallowed by pageerror (fetch happens but no color).
+    const pageErrors: string[] = []
+    orcaPage.on('pageerror', (error) => pageErrors.push(error.message))
+
+    await openCppFile(orcaPage, TIMER_CPP)
+
+    // Wait until the server has produced semantic tokens for the open doc
+    // (clangd holds the first request until the preamble/AST is ready —
+    // spike findings §1 measured Timer.cpp 51 tokens, 1ms return once ready).
+    await expect
+      .poll(
+        async () =>
+          orcaPage.evaluate(async (filePath: string) => {
+            const res = await window.api.languageServers.semanticTokens({ filePath })
+            return res.ok && (res.tokens?.tokens?.length ?? 0) > 0
+          }, TIMER_CPP),
+        { timeout: 60_000, message: 'semanticTokens IPC never returned tokens' }
+      )
+      .toBe(true)
+
+    // give monaco's semantic-tokens contrib a moment to apply the styling
+    await orcaPage.waitForTimeout(1500)
+
+    const histogram = await orcaPage.evaluate(() => window.__monacoEditorE2E?.colorHistogram())
+    // spike findings §1: distinct computed colors > 1 means identifier-class
+    // semantic tokens colored (Monarch alone yields effectively one foreground
+    // for identifiers). ≥2 distinct colors is the ≥2-color-classes acceptance.
+    expect(
+      histogram?.distinctColors ?? 0,
+      `color histogram: ${JSON.stringify(histogram)}`
+    ).toBeGreaterThan(1)
+
+    // The getLegend-is-a-function shape trap: a swallowed pageerror here means
+    // the provider shape is wrong (silent no-color). Assert none fired.
+    const getLegendErrors = pageErrors.filter((m) => /getLegend/i.test(m))
+    expect(
+      getLegendErrors,
+      `getLegend pageerror(s) fired (silent no-color shape trap): ${getLegendErrors.join(', ')}`
+    ).toEqual([])
+  })
 })

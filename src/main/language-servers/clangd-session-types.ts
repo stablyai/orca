@@ -5,7 +5,8 @@ import type {
   LanguageServerDefinitionLocation,
   LanguageServerDocumentChange,
   LanguageServerHoverContent,
-  LanguageServerPosition
+  LanguageServerPosition,
+  LanguageServerSemanticTokens
 } from '../../shared/language-server-navigation-types'
 
 export type ClangdSessionOptions = {
@@ -50,6 +51,8 @@ export type ClangdSession = {
     filePath: string,
     position: LanguageServerPosition
   ): Promise<LanguageServerHoverContent | null>
+  /** textDocument/semanticTokens/full, decoded BY NAME against the server legend. */
+  semanticTokensFull(filePath: string): Promise<LanguageServerSemanticTokens>
   /** shutdown -> exit -> 5s grace -> tree kill (spec D8). */
   stop(): Promise<void>
 }

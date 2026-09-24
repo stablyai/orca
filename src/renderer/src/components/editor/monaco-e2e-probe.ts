@@ -35,6 +35,8 @@ export type MonacoE2EProbe = {
   undo: () => void
   /** Apply several edits as ONE model change event (multi-change single gesture). */
   applyEdits: (edits: readonly { range: IRange; text: string }[]) => void
+  /** DOM color histogram of rendered line spans (semantic-token coloring signal). */
+  colorHistogram: () => { distinctColors: number; byColor: Record<string, number> }
   snapshot: () => MonacoE2ESnapshot
 }
 
@@ -125,6 +127,20 @@ export function installMonacoE2EProbe(
         'e2e',
         edits.map((edit) => ({ ...edit, forceMoveMarkers: true }))
       )
+    },
+    colorHistogram: (): { distinctColors: number; byColor: Record<string, number> } => {
+      // spike findings §1: getComputedStyle/DOM histograms are the authoritative
+      // semantic-color signal (CDP screenshots freeze a stale frame in a hidden
+      // window — pixel sampling false-negatives). Counts the distinct computed
+      // `color` values across rendered line spans.
+      const container = editorInstance.getContainerDomNode()
+      const spans = container.querySelectorAll<HTMLElement>('.view-lines .view-line span')
+      const byColor: Record<string, number> = {}
+      for (const s of spans) {
+        const color = getComputedStyle(s).color
+        byColor[color] = (byColor[color] ?? 0) + 1
+      }
+      return { distinctColors: Object.keys(byColor).length, byColor }
     },
     snapshot: (): MonacoE2ESnapshot => {
       const container = editorInstance.getContainerDomNode()

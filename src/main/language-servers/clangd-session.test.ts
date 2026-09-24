@@ -20,6 +20,10 @@ type FakeClangdOptions = {
   positionEncoding?: string
   /** When false, the initialize result omits references/declaration caps (S4 verification path). */
   advertiseReferencesDeclaration?: boolean
+  /** The server's semanticTokensProvider legend advertised at initialize (S5). */
+  semanticTokensLegend?: { tokenTypes: string[]; tokenModifiers: string[] }
+  /** The relative 5-tuple data returned for textDocument/semanticTokens/full (S5). */
+  semanticTokensData?: readonly number[]
   onClientMessage?: (message: Record<string, unknown>) => void
   /** Methods the fake never answers, for in-flight-at-death assertions. */
   hangOn?: readonly string[]
@@ -69,7 +73,16 @@ function fakeClangd(options: FakeClangdOptions = {}): FakeClangd {
               textDocumentSync: { change: 2, openClose: true, save: true },
               hoverProvider: true,
               definitionProvider: true,
-              ...(advertise ? { referencesProvider: true, declarationProvider: true } : {})
+              ...(advertise ? { referencesProvider: true, declarationProvider: true } : {}),
+              ...(options.semanticTokensLegend
+                ? {
+                    semanticTokensProvider: {
+                      full: { delta: true },
+                      legend: options.semanticTokensLegend,
+                      range: false
+                    }
+                  }
+                : {})
             },
             serverInfo: { name: 'clangd', version: '23.1.0' }
           }
@@ -141,6 +154,14 @@ function fakeClangd(options: FakeClangdOptions = {}): FakeClangd {
             contents: { kind: 'markdown', value: '### method `X`' },
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }
           }
+        })
+        return
+      }
+      if (method === 'textDocument/semanticTokens/full') {
+        pushToClient({
+          jsonrpc: '2.0',
+          id,
+          result: { data: options.semanticTokensData ?? [] }
         })
         return
       }
@@ -436,6 +457,57 @@ describe('openClangdSession — navigation', () => {
     session.didOpen('D:\\a.cpp', 'x')
     const hover = await session.hover('D:\\a.cpp', { line: 0, character: 0 })
     expect(hover).toEqual({ kind: 'markdown', value: '### method `X`' })
+    await session.stop()
+  })
+
+  it('semanticTokensFull decodes the server legend BY NAME (S5)', async () => {
+    // clangd's legend differs from LSP standard names (spike findings §1) —
+    // decode must map the server's indices to ITS OWN type/modifier names.
+    const fake = fakeClangd({
+      semanticTokensLegend: {
+        tokenTypes: ['variable', 'function', 'macro', 'unknown-type'],
+        tokenModifiers: ['declaration', 'globalScope']
+      },
+      // (deltaLine, deltaChar, length, typeIdx, modBitmask) relative 5-tuples.
+      semanticTokensData: [
+        0,
+        0,
+        3,
+        1,
+        0b001, // 'function' + declaration
+        0,
+        4,
+        5,
+        0,
+        0b010, // 'variable' + globalScope
+        1,
+        0,
+        7,
+        3,
+        0 // 'unknown-type' (self-invented) -> skip sentinel
+      ]
+    })
+    const session = await openSessionWith(fake)
+    session.didOpen('D:\\zwf\\Project A\\src\\main.cpp', 'x')
+    const tokens = await session.semanticTokensFull('D:\\zwf\\Project A\\src\\main.cpp')
+    expect(tokens.tokenTypes).toEqual(['variable', 'function', 'macro', 'unknown-type'])
+    expect(tokens.tokenModifiers).toEqual(['declaration', 'globalScope'])
+    expect(tokens.tokens).toEqual([
+      { line: 0, char: 0, length: 3, type: 'function', modifiers: ['declaration'] },
+      { line: 0, char: 4, length: 5, type: 'variable', modifiers: ['globalScope'] },
+      // 'unknown-type' is decoded faithfully by the SERVER legend; the renderer
+      // re-encodes against the CLIENT legend and skips it there (spike §1).
+      { line: 1, char: 0, length: 7, type: 'unknown-type', modifiers: [] }
+    ])
+    await session.stop()
+  })
+
+  it('semanticTokensFull returns an empty set when the server advertised no legend', async () => {
+    const fake = fakeClangd()
+    const session = await openSessionWith(fake)
+    session.didOpen('D:\\a.cpp', 'x')
+    const tokens = await session.semanticTokensFull('D:\\a.cpp')
+    expect(tokens).toEqual({ tokenTypes: [], tokenModifiers: [], tokens: [] })
     await session.stop()
   })
 })

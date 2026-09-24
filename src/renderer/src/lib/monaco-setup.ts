@@ -20,6 +20,7 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 import { installLanguageServerDocumentSync } from '@/components/editor/lsp-navigation/language-server-document-sync'
 import { installLanguageServerNavigationProviders } from '@/components/editor/lsp-navigation/language-server-navigation-providers'
+import { installLanguageServerSemanticTokensProvider } from '@/components/editor/lsp-navigation/semantic-tokens-provider'
 import { installLanguageServerStatusSubscriber } from '@/components/editor/lsp-navigation/language-server-status-subscriber'
 
 globalThis.MonacoEnvironment = {
@@ -97,6 +98,10 @@ installMonacoContextMenuPaste(monaco)
 // opener that F12 needs to leave the current model.
 const uninstallLanguageServerDocumentSync = installLanguageServerDocumentSync(monaco)
 const uninstallLanguageServerNavigation = installLanguageServerNavigationProviders(monaco)
+// S5: semantic-tokens provider (defineTheme + registerDocumentSemanticTokensProvider)
+// + the three gates the spike located (the flat option + onMount re-setModel
+// live at the editor creation/mount sites; getLegend-is-a-method lives here).
+const uninstallLanguageServerSemanticTokens = installLanguageServerSemanticTokensProvider(monaco)
 // S2: $/progress -> status surface + LRU-eviction toast (spec §6).
 const uninstallLanguageServerStatusSubscriber = installLanguageServerStatusSubscriber()
 
@@ -109,6 +114,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     uninstallLanguageServerDocumentSync()
     uninstallLanguageServerNavigation()
+    uninstallLanguageServerSemanticTokens()
     uninstallLanguageServerStatusSubscriber()
   })
 }

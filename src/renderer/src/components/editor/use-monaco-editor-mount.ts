@@ -11,6 +11,7 @@ import { createMarkdownDocLinkDecorationController } from './monaco-markdown-doc
 import { ensureMarkdownDocCompletionProvider } from './monaco-markdown-doc-completions'
 import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
+import { reattachActiveModelForSemanticTokens } from './lsp-navigation/semantic-tokens-attach-fix'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
 import { installMonacoEditorInputBindings } from './monaco-editor-input-bindings'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
@@ -67,6 +68,11 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       editorRef.current = editorInstance
       setMountedEditor(editorInstance)
       const uninstallE2EProbe = installMonacoE2EProbe(editorInstance, filePath)
+      // S5 / spike findings §1 GATE 2 (attach): re-setModel on the active path so
+      // monaco's semantic-tokens contrib fetches for a model attached to a live
+      // editor instance (@monaco-editor/react creates the editor async; a
+      // setModel before the instance was ready leaves the model unattached).
+      reattachActiveModelForSemanticTokens(editorInstance, monaco, filePath)
       let autoHeightSub: { dispose: () => void } | null = null
       let autoHeightFrame: number | null = null
       const updateAutoHeight = (): void => {

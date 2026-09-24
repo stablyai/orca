@@ -71,3 +71,35 @@ export type LanguageServerStatusEvent =
   | { kind: 'toast'; message: string }
 
 export const LANGUAGE_SERVERS_STATUS_CHANNEL = 'languageServers:status'
+
+/**
+ * One decoded semantic token. clangd's legend does NOT match LSP standard names
+ * (spike findings §1), so the main process decodes the server-returned relative
+ * 5-tuple BY NAME into this shape for IPC; the renderer re-encodes by name.
+ * `line`/`char`/`length` are the LSP relative 5-tuple fields (delta line, delta
+ * start char, length — same basis Monaco expects, NO 0/1-based conversion).
+ * `type` is the decoded token-type NAME (e.g. 'function', 'variable', or a
+ * clangd self-invented name like 'unknown'/'bracket'). `modifiers` are the
+ * decoded modifier NAMES. `skip` is true when the type name is unknown to the
+ * renderer's legend — the lexical (Monarch) layer then colors the identifier.
+ */
+export type LanguageServerSemanticToken = {
+  line: number
+  char: number
+  length: number
+  type: string
+  modifiers: string[]
+  /** True when the type name is unknown to the renderer's legend — the lexical (Monarch) layer then colors the identifier. Absent = false. */
+  skip?: boolean
+}
+
+export type LanguageServerSemanticTokens = {
+  /** Decoded legend BY NAME so the renderer never hardcodes clangd indices. */
+  tokenTypes: string[]
+  tokenModifiers: string[]
+  tokens: LanguageServerSemanticToken[]
+}
+
+export type LanguageServerSemanticTokensResult =
+  | { ok: true; tokens: LanguageServerSemanticTokens }
+  | { ok: false; error: string; tokens: null }

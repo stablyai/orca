@@ -9,7 +9,8 @@ import type {
   LanguageServerDefinitionLocation,
   LanguageServerDocumentChange,
   LanguageServerHoverContent,
-  LanguageServerPosition
+  LanguageServerPosition,
+  LanguageServerSemanticTokens
 } from '../../shared/language-server-navigation-types'
 
 /** 10min idle -> graceful shutdown (spec §6). */
@@ -72,6 +73,7 @@ export type LanguageServerHost = {
     filePath: string
     position: LanguageServerPosition
   }): Promise<LanguageServerHoverContent | null>
+  semanticTokens(args: { filePath: string }): Promise<LanguageServerSemanticTokens>
   /** shutdown -> exit for every live session (app quit path). */
   shutdownAll(): Promise<void>
   /** Test seam: live session count. */
