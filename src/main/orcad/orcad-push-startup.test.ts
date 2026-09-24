@@ -35,16 +35,21 @@ vi.mock('../ipc/pty', () => ({
   getLocalPtyProvider: () => null,
   getSshPtyProvider: () => null
 }))
-vi.mock('../persistence/loading-store/store', () => ({
-  Store: class {
-    getSettings() {
-      return {}
+vi.mock('./orcad-profile-state-startup', () => ({
+  createOrcadProfileStateStartup: async () => ({
+    store: {
+      getSettings: () => ({}),
+      flushFinalOrThrowAsync: async () => {},
+      freezeWritesAsync: async () => {}
+    },
+    authority: {
+      backend: 'sqlite',
+      classification: 'neither',
+      authority_mode: 'sqlite-candidate',
+      runtime: 'orcad',
+      migrated: false
     }
-
-    async flushPendingOrThrowAsync() {}
-
-    freezeWrites() {}
-  }
+  })
 }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
   initOrcaProfilePaths() {},

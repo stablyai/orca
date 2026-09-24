@@ -1,6 +1,9 @@
 // Schema 3 requires explicit automation storage metadata even when history is empty.
 
-import { createProfileStateAutomationRunsTablesSql } from './profile-state-automation-runs'
+import {
+  PROFILE_STATE_AUTOMATION_RUNS_META_TABLE,
+  PROFILE_STATE_AUTOMATION_RUNS_TABLE
+} from './profile-state-automation-runs-model'
 
 export const PROFILE_STATE_DATABASE_SCHEMA_VERSION = 3
 export const PROFILE_STATE_DOCUMENT_VERSION = 1
@@ -19,5 +22,20 @@ export function createProfileStateTablesSql(): string {
     domain_version INTEGER NOT NULL, revision INTEGER NOT NULL,
     updated_at INTEGER NOT NULL, content_hash TEXT NOT NULL
   );
-  ${createProfileStateAutomationRunsTablesSql()}`
+  CREATE TABLE IF NOT EXISTS ${PROFILE_STATE_AUTOMATION_RUNS_META_TABLE} (
+    domain TEXT PRIMARY KEY NOT NULL,
+    presence TEXT NOT NULL,
+    domain_version INTEGER NOT NULL,
+    revision INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    content_hash TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS ${PROFILE_STATE_AUTOMATION_RUNS_TABLE} (
+    run_id TEXT PRIMARY KEY NOT NULL,
+    ordinal INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );`
 }

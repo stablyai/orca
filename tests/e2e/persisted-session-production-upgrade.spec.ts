@@ -478,6 +478,7 @@ test('fails closed when a packaged old build mutates live SQLite compatibility J
   try {
     const candidateLaunch = await session.launch()
     candidateApp = candidateLaunch.app
+    const candidateExecutable = await candidateApp.evaluate(() => process.execPath)
     await waitForSessionReady(candidateLaunch.page)
     await candidateLaunch.page.evaluate(async () => {
       const updateSettings = window.__store?.getState().updateSettingsOrThrow
@@ -526,19 +527,11 @@ test('fails closed when a packaged old build mutates live SQLite compatibility J
     expect(mutatedJson).toMatchObject({ settings: { terminalFontSize: 23 } })
     expect(existsSync(databasePath)).toBe(true)
 
-    let stderr = ''
-    let launchError: unknown
-    try {
-      await session.launch({
-        onStderr: (chunk) => {
-          stderr += chunk
-        }
-      })
-    } catch (error) {
-      launchError = error
-    }
-    expect(launchError).toBeDefined()
-    expect(stderr).toContain('both JSON and SQLite storage without a matching acceptance marker')
+    const refused = await session.launchUntilExit(candidateExecutable)
+    expect(refused, refused.stderr).toMatchObject({ code: 1, signal: null, timedOut: false })
+    expect(refused.stderr).toContain(
+      'both JSON and SQLite storage without a matching acceptance marker'
+    )
     expect(existsSync(databasePath)).toBe(true)
     const opened = openProfileStateDatabaseReadOnly(databasePath, DEFAULT_LOCAL_ORCA_PROFILE_ID)
     try {
@@ -567,6 +560,7 @@ test('fails closed on a corrupt established SQLite profile and retains recovery 
   try {
     const initialLaunch = await session.launch()
     app = initialLaunch.app
+    const candidateExecutable = await app.evaluate(() => process.execPath)
     await waitForSessionReady(initialLaunch.page)
     await session.close(app)
     app = null
@@ -585,20 +579,9 @@ test('fails closed on a corrupt established SQLite profile and retains recovery 
     const jsonBeforeCorruption = readFileSync(dataFile)
 
     writeFileSync(databaseFile, 'corrupt profile-state database')
-    let stderr = ''
-    let launchError: unknown
-    try {
-      await session.launch({
-        onStderr: (chunk) => {
-          stderr += chunk
-        }
-      })
-    } catch (error) {
-      launchError = error
-    }
-
-    expect(launchError).toBeDefined()
-    expect(stderr).toContain('cannot safely open the active profile')
+    const refused = await session.launchUntilExit(candidateExecutable)
+    expect(refused, refused.stderr).toMatchObject({ code: 1, signal: null, timedOut: false })
+    expect(refused.stderr).toContain('cannot safely open the active profile')
     expect(readFileSync(dataFile)).toEqual(jsonBeforeCorruption)
     expect(
       readdirSync(profileDirectory).filter((name) =>

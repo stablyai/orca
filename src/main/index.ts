@@ -1,6 +1,7 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
+import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
@@ -130,7 +131,7 @@ if (preflightReady) {
         })
       }
       console.error(`[profile-state] ${message}`)
-      if (!state.isServeMode && process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
+      if (!state.isServeMode && !isBackgroundLaunch()) {
         try {
           await presentProfileStateStartupRecoveryDialog({
             message,

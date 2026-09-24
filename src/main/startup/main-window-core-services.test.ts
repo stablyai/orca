@@ -9,8 +9,8 @@ const {
   store
 } = vi.hoisted(() => {
   const store = {
-    writeLatestProfileStateJsonCompatibilityExport: vi.fn(),
-    writeLatestProfileStateJsonExport: vi.fn(),
+    writeLatestProfileStateJsonCompatibilityExportAsync: vi.fn(async () => {}),
+    writeLatestProfileStateJsonExportAsync: vi.fn(async () => {}),
     getSettings: vi.fn(() => ({}))
   }
   return {
@@ -107,11 +107,11 @@ describe('main window profile-state update preparation', () => {
       claudeRuntimeAuth: state.claudeRuntimeAuth,
       store
     })
-    expect(store.writeLatestProfileStateJsonExport).toHaveBeenCalledOnce()
-    expect(store.writeLatestProfileStateJsonCompatibilityExport).toHaveBeenCalledOnce()
+    expect(store.writeLatestProfileStateJsonExportAsync).toHaveBeenCalledOnce()
+    expect(store.writeLatestProfileStateJsonCompatibilityExportAsync).toHaveBeenCalledOnce()
     expect(options).toHaveProperty('onBeforeUpdateQuitFailure', 'abort')
-    expect(store.writeLatestProfileStateJsonExport.mock.invocationCallOrder[0]).toBeLessThan(
-      store.writeLatestProfileStateJsonCompatibilityExport.mock.invocationCallOrder[0]
+    expect(store.writeLatestProfileStateJsonExportAsync.mock.invocationCallOrder[0]).toBeLessThan(
+      store.writeLatestProfileStateJsonCompatibilityExportAsync.mock.invocationCallOrder[0]
     )
   })
 })

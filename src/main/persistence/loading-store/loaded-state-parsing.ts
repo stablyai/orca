@@ -9,10 +9,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../shared/project-groups'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
-import {
-  isStartupDiagnosticsEnabled,
-  logStartupDiagnostic
-} from '../../startup/startup-diagnostics'
+import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
@@ -42,21 +39,6 @@ import { hasStateBackup } from './backup-recovery-rotation'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
-
-type PersistenceStartupDetails = Record<string, unknown> | (() => Record<string, unknown>)
-
-function logPersistenceStartupMilestone(
-  event: string,
-  details: PersistenceStartupDetails = {}
-): void {
-  if (!isStartupDiagnosticsEnabled()) {
-    return
-  }
-  // Why: snapshot `t` before resolving lazy details — otherwise an expensive details closure is billed to the milestone it measures.
-  const t = Math.round(performance.now())
-  const resolvedDetails = typeof details === 'function' ? details() : details
-  logStartupDiagnostic(event, { t, ...resolvedDetails })
-}
 
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
@@ -114,7 +96,7 @@ export class LoadedStateParsingOperations {
     const fileExistedOnLoad = authoritySource
       ? serialized !== undefined || parsedInput !== undefined
       : serialized !== undefined || existsSync(dataFile)
-    logPersistenceStartupMilestone('persistence-load-start', {
+    logStartupMilestone('persistence-load-start', {
       fileExists: fileExistedOnLoad
     })
 
@@ -126,13 +108,13 @@ export class LoadedStateParsingOperations {
         const raw =
           parsedInput === undefined ? (serialized ?? readFileSync(dataFile, 'utf-8')) : undefined
         if (raw !== undefined) {
-          logPersistenceStartupMilestone('persistence-read-done', {
+          logStartupMilestone('persistence-read-done', {
             bytes: Buffer.byteLength(raw),
             durationMs: Math.round(performance.now() - readStartedAt)
           })
-          logPersistenceStartupMilestone('persistence-json-parse-start')
+          logStartupMilestone('persistence-json-parse-start')
           parsed = JSON.parse(raw)
-          logPersistenceStartupMilestone('persistence-json-parse-done')
+          logStartupMilestone('persistence-json-parse-done')
         } else {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Legacy partial records enter the existing domain normalizers through this loader type.
           parsed = parsedInput as PersistedState
@@ -336,7 +318,7 @@ export class LoadedStateParsingOperations {
       migrated.githubCache = readGithubCacheSnapshot(this.runtime.dataFile) ?? migrated.githubCache
     }
 
-    logPersistenceStartupMilestone('persistence-load-done', () => ({
+    logStartupMilestone('persistence-load-done', () => ({
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
     }))

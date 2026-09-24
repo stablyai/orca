@@ -116,4 +116,24 @@ describe('profile-state recovery launch', () => {
     await expect(launchProfileStateRecovery(request)).rejects.toThrow('Executable unavailable')
     expect(mocks.run).toHaveBeenCalledOnce()
   })
+
+  it('retains bounded child diagnostics when recovery exits without a result', async () => {
+    mocks.run.mockResolvedValue({
+      code: null,
+      signal: 'SIGTRAP',
+      timedOut: false,
+      stdout: '',
+      stderr: `${'x'.repeat(5000)}\nsandbox unavailable\n`
+    })
+    await expect(launchProfileStateRecovery(request)).rejects.toMatchObject({
+      data: {
+        exitCode: null,
+        signal: 'SIGTRAP',
+        timedOut: false,
+        outputTruncated: false,
+        stderr: `${'x'.repeat(5000)}\nsandbox unavailable`.slice(-4096)
+      }
+    })
+    expect(mocks.run).toHaveBeenCalledOnce()
+  })
 })

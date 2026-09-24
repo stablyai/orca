@@ -64,9 +64,10 @@ describe.each([false, true])('complete domain writes (established: %s)', (establ
     const before = authority.readSerializedState()
     const revision = readRevision()
 
-    expect(() =>
-      Reflect.apply(authority.writeCompleteSerializedDomains, authority, [value])
-    ).toThrow()
+    expect(() => {
+      // @ts-expect-error Intentionally malformed input must fail runtime validation.
+      authority.writeCompleteSerializedDomains(value)
+    }).toThrow()
 
     expect(authority.readSerializedState()).toBe(before)
     expect(readRevision()).toBe(revision)
