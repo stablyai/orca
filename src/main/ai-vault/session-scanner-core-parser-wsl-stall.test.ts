@@ -90,7 +90,11 @@ function stalls<T>(): Promise<T> {
 }
 
 function stallingHandle() {
-  return { read: vi.fn(stalls<ReadResult>), close: vi.fn(async () => {}) }
+  return {
+    read: vi.fn(stalls<ReadResult>),
+    readFile: vi.fn(stalls<string>),
+    close: vi.fn(async () => {})
+  }
 }
 
 function servingHandle(body: string) {
@@ -101,7 +105,10 @@ function servingHandle(body: string) {
       slice.copy(buffer, offset)
       return { bytesRead: slice.length, buffer }
     }),
-    close: vi.fn(async () => {})
+    close: vi.fn(async () => {}),
+    readFile: vi.fn(async (options?: { encoding?: BufferEncoding }) =>
+      options?.encoding ? bytes.toString(options.encoding) : bytes
+    )
   }
 }
 
@@ -162,6 +169,13 @@ beforeEach(() => {
   mocks.readFile.mockReset()
   mocks.readdir.mockReset()
   mocks.stat.mockReset()
+
+  mocks.open.mockImplementation(async (path: string) => ({
+    close: vi.fn(async () => {}),
+    read: vi.fn(async () => ({ bytesRead: 0, buffer: Buffer.alloc(0) })),
+    readFile: async (options?: { encoding?: BufferEncoding }) =>
+      mocks.readFile(path, options?.encoding)
+  }))
   releaseStall = undefined
   mocks.stat.mockRejectedValue(missing())
   // performance.now drives the route quarantine clock, so it must be faked too.
@@ -199,8 +213,12 @@ describe('Kimi session parse against a stalled WSL transcript', () => {
   // rethrow: widening it to every error turns this into a hard scan issue.
   it('still returns a metadata-only session when the wire file is simply missing', async () => {
     const state = uncPath('KimiMissing', ...KIMI_HOME, 'state.json')
-    mocks.readFile.mockResolvedValue(KIMI_STATE)
-    mocks.open.mockRejectedValue(missing())
+    mocks.open.mockImplementation(async (path: string) => {
+      if (String(path).endsWith('state.json')) {
+        return servingHandle(KIMI_STATE)
+      }
+      throw missing()
+    })
 
     const session = await parseAgentSessionFileCached(candidate('kimi', state), 'linux')
 
@@ -227,8 +245,12 @@ describe('Grok session parse against a stalled WSL transcript', () => {
 
   it('still returns the summary-only session when chat_history is missing', async () => {
     const file = uncPath('GrokMissing', ...GROK_DIR, 'session.json')
-    mocks.readFile.mockResolvedValue(GROK_SESSION)
-    mocks.open.mockRejectedValue(missing())
+    mocks.open.mockImplementation(async (path: string) => {
+      if (String(path).endsWith('session.json')) {
+        return servingHandle(GROK_SESSION)
+      }
+      throw missing()
+    })
 
     const session = await parseAgentSessionFileCached(candidate('grok', file), 'linux')
 

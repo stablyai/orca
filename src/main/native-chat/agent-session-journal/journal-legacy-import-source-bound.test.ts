@@ -1,19 +1,13 @@
-import { createReadStream } from 'node:fs'
-import { appendFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, open, rm, stat, writeFile } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
 
-vi.mock(import('node:fs'), async (importOriginal) => {
-  const original = await importOriginal()
-  return { ...original, createReadStream: vi.fn(original.createReadStream) }
-})
-
 vi.mock(import('node:fs/promises'), async (importOriginal) => {
   const original = await importOriginal()
-  return { ...original, stat: vi.fn() }
+  return { ...original, stat: vi.fn(), open: vi.fn(original.open) }
 })
 
 const SOURCE_LIMIT_BYTES = 16 * 1024 * 1024
@@ -54,7 +48,9 @@ describe('legacy import source byte bound', () => {
       ok: false,
       error: expect.stringContaining(`${SOURCE_LIMIT_BYTES} byte limit`)
     })
-    expect(createReadStream).toHaveBeenCalledOnce()
-    expect(vi.mocked(createReadStream).mock.results[0]?.value.destroyed).toBe(true)
+    // The refusal must release the descriptor it opened, not just stop decoding.
+    expect(open).toHaveBeenCalledOnce()
+    const handle = await vi.mocked(open).mock.results[0]?.value
+    await expect(handle.read()).rejects.toMatchObject({ code: 'EBADF' })
   })
 })

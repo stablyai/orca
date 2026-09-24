@@ -7,6 +7,7 @@ import {
 } from '../../native-chat/transcript-tail-reader'
 import { transcriptFallbackId } from '../../native-chat/transcript-fallback-id'
 import { MAX_REMOTE_TRANSCRIPT_SCAN_BYTES } from './worker-transcript-remote-read'
+import { TRANSCRIPT_READ_OPEN_FLAGS } from '../../transcript-read-open-flags'
 import {
   localTranscriptOffsetStartsInsideRecord,
   readLocalTranscriptHandleBoundaryCheckpoint,
@@ -88,7 +89,7 @@ export async function readForwardLocalWorkerTranscriptPage(
     return sourceChanged()
   }
   const scanEnd = Math.min(fileSize, startOffset + MAX_REMOTE_TRANSCRIPT_SCAN_BYTES)
-  const handle = await open(filePath, 'r')
+  const handle = await open(filePath, TRANSCRIPT_READ_OPEN_FLAGS)
   const opened = localWorkerTranscriptSourceIdentity(await handle.stat({ bigint: true }))
   if (!opened || opened.fingerprint !== sourceIdentity.fingerprint || opened.size < scanEnd) {
     await handle.close()

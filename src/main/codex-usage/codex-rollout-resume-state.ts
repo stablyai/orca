@@ -3,11 +3,11 @@
  * stopped. A wrong answer here silently corrupts usage totals, so every check
  * fails closed: anything unproven falls back to a full reparse.
  */
-import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { open, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import type { CodexUsageParseContext } from './codex-usage-record-parser'
 import type { CodexUsageParseResumeState, CodexUsagePersistedFile } from './types'
+import { TRANSCRIPT_READ_OPEN_FLAGS } from '../transcript-read-open-flags'
 
 /** Bytes hashed immediately before the resume offset. Large enough to span a
  *  whole token_count record, small enough that verifying it is free next to
@@ -49,11 +49,22 @@ async function readWindowDigest(
   const expectedBytes = endExclusive - start
   const hash = createHash('sha256')
   let readBytes = 0
-  const stream = createReadStream(filePath, { start, end: endExclusive - 1 })
-  for await (const chunk of stream) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    hash.update(buffer)
-    readBytes += buffer.length
+  // The handle carries the hardened open flags; `createReadStream`'s string
+  // `flags` cannot express them.
+  const handle = await open(filePath, TRANSCRIPT_READ_OPEN_FLAGS)
+  try {
+    const stream = handle.createReadStream({
+      start,
+      end: endExclusive - 1,
+      autoClose: false
+    })
+    for await (const chunk of stream) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      hash.update(buffer)
+      readBytes += buffer.length
+    }
+  } finally {
+    await handle.close()
   }
   // A short read means the file no longer reaches the offset we recorded.
   return readBytes === expectedBytes ? `${expectedBytes}:${hash.digest('hex')}` : null

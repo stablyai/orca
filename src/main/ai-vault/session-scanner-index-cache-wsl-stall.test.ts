@@ -53,7 +53,10 @@ function servingHandle(body: string) {
       slice.copy(buffer, offset)
       return { bytesRead: slice.length, buffer }
     }),
-    close: vi.fn(async () => {})
+    close: vi.fn(async () => {}),
+    readFile: vi.fn(async (options?: { encoding?: BufferEncoding }) =>
+      options?.encoding ? bytes.toString(options.encoding) : bytes
+    )
   }
 }
 
@@ -74,6 +77,13 @@ beforeEach(() => {
   mocks.stat.mockReset()
   mocks.open.mockReset()
   mocks.readFile.mockReset()
+
+  mocks.open.mockImplementation(async (path: string) => ({
+    close: vi.fn(async () => {}),
+    read: vi.fn(async () => ({ bytesRead: 0, buffer: Buffer.alloc(0) })),
+    readFile: async (options?: { encoding?: BufferEncoding }) =>
+      mocks.readFile(path, options?.encoding)
+  }))
   mocks.stat.mockResolvedValue(INDEX_STATS)
   releaseStall = undefined
   // performance.now drives the route quarantine clock, so it must be faked too.
@@ -87,7 +97,11 @@ afterEach(async () => {
 
 describe('memoized WSL session indexes under a stalled mount', () => {
   it('evicts the Codex title index instead of pinning "no titles"', async () => {
-    mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
+    mocks.open.mockResolvedValue({
+      read: vi.fn(stalls),
+      readFile: vi.fn(stalls),
+      close: vi.fn(async () => {})
+    })
     const refused = readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
 
@@ -106,7 +120,11 @@ describe('memoized WSL session indexes under a stalled mount', () => {
   })
 
   it('evicts the Kimi work-dir index instead of pinning "no cwd"', async () => {
-    mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
+    mocks.open.mockResolvedValue({
+      read: vi.fn(stalls),
+      readFile: vi.fn(stalls),
+      close: vi.fn(async () => {})
+    })
     const refused = readKimiWorkDirBySessionId(KIMI_INDEX)
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
 

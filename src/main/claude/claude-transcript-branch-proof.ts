@@ -5,6 +5,7 @@
 
 import { open } from 'node:fs/promises'
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
+import { TRANSCRIPT_READ_OPEN_FLAGS } from '../transcript-read-open-flags'
 import {
   ClaudeTranscriptMarkerMissingError,
   ClaudeTranscriptPreviousCursorMissingError,
@@ -94,7 +95,7 @@ async function runPinnedTranscriptPasses<T>(
   maxRecordBytes: number | undefined,
   attempt: (readLines: PinnedTranscriptLines) => Promise<T>
 ): Promise<T> {
-  const handle = await open(transcriptPath, 'r')
+  const handle = await open(transcriptPath, TRANSCRIPT_READ_OPEN_FLAGS)
   try {
     let size = (await handle.stat()).size
     let refreshed = false

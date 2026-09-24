@@ -10,8 +10,7 @@
 // never be spliced into a sequence space that a structured session is also
 // writing; a later structured resume rolls the epoch again and rebuilds.
 
-import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { open, stat } from 'node:fs/promises'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentJournalCursor,
@@ -39,6 +38,7 @@ import {
   type JournalPayloadLimits
 } from './journal-payload-bounds'
 import type { AgentSessionJournal } from './journal-store'
+import { TRANSCRIPT_READ_OPEN_FLAGS } from '../../transcript-read-open-flags'
 
 export type LegacyImportOptions = ResolveSessionFileOptions & {
   /** Resolve directly to this file, skipping path discovery. */
@@ -195,33 +195,39 @@ async function decodeWithIdentities(input: {
   let lineIndex = 0
 
   // Count raw bytes while reading: the source can grow after the stat check.
-  const stream = createReadStream(input.filePath)
-  const { messages } = await decodeTranscriptStream(
-    stream,
-    input.filePath,
-    0,
-    (line, fallbackId) => {
-      const trackedIdentity = tracker.identify(line, lineIndex)
-      lineIndex += 1
-      const message = decode(line, fallbackId)
-      if (message) {
-        identities.push(
-          input.decodedMessageIdentities
-            ? {
-                provider: 'legacy',
-                agent: input.agent,
-                sessionId: input.sessionId,
-                recordId: message.id
-              }
-            : trackedIdentity
-        )
-      }
-      return message
-    },
-    true,
-    MAX_LEGACY_IMPORT_SOURCE_BYTES
-  )
-  return { messages, identities }
+  // The handle carries the hardened open flags; `createReadStream`'s string
+  // `flags` cannot express them.
+  const handle = await open(input.filePath, TRANSCRIPT_READ_OPEN_FLAGS)
+  try {
+    const { messages } = await decodeTranscriptStream(
+      handle.createReadStream({ autoClose: false }),
+      input.filePath,
+      0,
+      (line, fallbackId) => {
+        const trackedIdentity = tracker.identify(line, lineIndex)
+        lineIndex += 1
+        const message = decode(line, fallbackId)
+        if (message) {
+          identities.push(
+            input.decodedMessageIdentities
+              ? {
+                  provider: 'legacy',
+                  agent: input.agent,
+                  sessionId: input.sessionId,
+                  recordId: message.id
+                }
+              : trackedIdentity
+          )
+        }
+        return message
+      },
+      true,
+      MAX_LEGACY_IMPORT_SOURCE_BYTES
+    )
+    return { messages, identities }
+  } finally {
+    await handle.close()
+  }
 }
 
 /**

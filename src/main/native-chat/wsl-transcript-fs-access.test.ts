@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsModule from 'node:fs'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import type * as GateModule from './wsl-transcript-fs-gate'
 
 const UNC_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\a.jsonl'
@@ -50,6 +51,7 @@ import {
   wslGatedStat,
   WSL_TRANSCRIPT_READ_CHUNK_BYTES
 } from './wsl-transcript-fs-access'
+import { TRANSCRIPT_READ_OPEN_FLAGS } from '../transcript-read-open-flags'
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS,
@@ -57,7 +59,12 @@ import {
 } from './wsl-transcript-fs-gate'
 
 function fakeHandle() {
-  return { read: vi.fn(), close: vi.fn(async () => {}) }
+  return {
+    read: vi.fn(),
+    close: vi.fn(async () => {}),
+    readFile: vi.fn(async () => 'body'),
+    createReadStream: vi.fn(() => Readable.from(['body']))
+  }
 }
 
 beforeEach(() => {
@@ -87,7 +94,6 @@ describe('transcript filesystem accessor off WSL UNC', () => {
     const handle = fakeHandle()
     handle.read.mockResolvedValue({ bytesRead: 0, buffer: Buffer.alloc(0) })
     mocks.open.mockResolvedValue(handle)
-    mocks.createReadStream.mockReturnValue('raw-stream')
 
     await wslGatedStat(path, 'exact')
     await wslGatedLstat(path, 'scan')
@@ -95,29 +101,35 @@ describe('transcript filesystem accessor off WSL UNC', () => {
     await wslGatedReadFile(path, 'utf-8', 'scan')
     const opened = await wslGatedOpen(path, 'exact')
     await wslGatedRead(opened, path, Buffer.alloc(1), 0, 1, 0, 'exact')
-    const stream = openTranscriptReadStream(path, { encoding: 'utf-8' }, 'scan')
+    const streamed = await openTranscriptReadStream(path, { encoding: 'utf-8' }, 'scan').toArray()
 
     expect(mocks.runTask).not.toHaveBeenCalled()
     expect(mocks.stat).toHaveBeenCalledWith(path)
     expect(mocks.readdir).toHaveBeenCalledWith(path, { withFileTypes: true })
-    expect(mocks.readFile).toHaveBeenCalledWith(path, 'utf-8')
-    expect(mocks.open).toHaveBeenCalledWith(path, 'r')
-    // Off UNC the raw stream is handed back verbatim, encoding included.
-    expect(stream).toBe('raw-stream')
-    expect(mocks.createReadStream).toHaveBeenCalledWith(path, {
+    expect(handle.readFile).toHaveBeenCalledWith({ encoding: 'utf-8' })
+    // Off UNC the reader opens the descriptor itself, so the hardened flags
+    // apply to the gated open, the gated readFile and the stream alike.
+    expect(mocks.open).toHaveBeenCalledWith(path, TRANSCRIPT_READ_OPEN_FLAGS)
+    expect(streamed).toEqual(['body'])
+    expect(handle.createReadStream).toHaveBeenCalledWith({
       encoding: 'utf-8',
+      autoClose: false,
       signal: undefined
     })
+    // The stream owns the descriptor it opened and releases it at the end.
+    expect(handle.close).toHaveBeenCalled()
   })
 
-  it('forwards the caller signal so the local stream honours cancellation', () => {
-    mocks.createReadStream.mockReturnValue('raw-stream')
+  it('forwards the caller signal so the local stream honours cancellation', async () => {
+    const handle = fakeHandle()
+    mocks.open.mockResolvedValue(handle)
     const controller = new AbortController()
 
-    openTranscriptReadStream(POSIX_PATH, { start: 4 }, 'exact', controller.signal)
+    await openTranscriptReadStream(POSIX_PATH, { start: 4 }, 'exact', controller.signal).toArray()
 
-    expect(mocks.createReadStream).toHaveBeenCalledWith(POSIX_PATH, {
+    expect(handle.createReadStream).toHaveBeenCalledWith({
       start: 4,
+      autoClose: false,
       signal: controller.signal
     })
   })
@@ -132,6 +144,8 @@ describe('transcript filesystem accessor on WSL UNC', () => {
     mocks.lstat.mockResolvedValue({ size: 7 })
     mocks.readdir.mockResolvedValue([])
     mocks.readFile.mockResolvedValue('body')
+    const handle = fakeHandle()
+    mocks.open.mockResolvedValue(handle)
 
     await wslGatedStat(path, 'exact')
     await wslGatedLstat(path, 'scan')

@@ -1,8 +1,8 @@
 import { basename } from 'node:path'
-import { stat } from 'node:fs/promises'
-import { createReadStream } from 'node:fs'
+import { open, stat } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import type { ClaudeUsageParsedTurn, ClaudeUsageProcessedFile } from './types'
+import { TRANSCRIPT_READ_OPEN_FLAGS } from '../transcript-read-open-flags'
 
 type ClaudeUsageSourceRecord = {
   type?: string
@@ -180,16 +180,23 @@ export function parseClaudeUsageRecord(line: string): ClaudeUsageParsedTurn | nu
 export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsageParsedTurn[]> {
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
-  const lines = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+  // The handle carries the hardened open flags; `createReadStream`'s string
+  // `flags` cannot express them.
+  const handle = await open(filePath, TRANSCRIPT_READ_OPEN_FLAGS)
+  try {
+    const lines = createInterface({
+      input: handle.createReadStream({ encoding: 'utf-8', autoClose: false }),
+      crlfDelay: Infinity
+    })
 
-  for await (const line of lines) {
-    const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
-    if (parsed) {
-      turns.push(parsed)
+    for await (const line of lines) {
+      const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
+      if (parsed) {
+        turns.push(parsed)
+      }
     }
+  } finally {
+    await handle.close()
   }
 
   return dedupeClaudeUsageTurns(turns).map(stripClaudeSourceMetadata)
@@ -203,17 +210,22 @@ export async function readClaudeUsageScanFile(filePath: string): Promise<{
   let lineCount = 0
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
-  const lines = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+  const handle = await open(filePath, TRANSCRIPT_READ_OPEN_FLAGS)
+  try {
+    const lines = createInterface({
+      input: handle.createReadStream({ encoding: 'utf-8', autoClose: false }),
+      crlfDelay: Infinity
+    })
 
-  for await (const line of lines) {
-    lineCount++
-    const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
-    if (parsed) {
-      turns.push(parsed)
+    for await (const line of lines) {
+      lineCount++
+      const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
+      if (parsed) {
+        turns.push(parsed)
+      }
     }
+  } finally {
+    await handle.close()
   }
 
   return {
