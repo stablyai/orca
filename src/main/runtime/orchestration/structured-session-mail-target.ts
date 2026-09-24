@@ -104,13 +104,14 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
   return mailboxes
 }
 
-/** The mailboxes a session's idle edge re-derives, opening the database if nothing has yet: after a
- *  restart this edge is what redrives mail stored before it. */
+/** The mailboxes a session's idle edge re-derives, opening an existing database if nothing has
+ *  yet: after a restart this edge is what redrives mail stored before it. No database file means
+ *  no mail, so `openDb` answers null and nothing is created. */
 export function structuredSessionIdleEdgeMailboxes(
   sessionId: string,
-  openDb: () => OrchestrationDb
+  openDb: () => OrchestrationDb | null
 ): string[] {
-  let db: OrchestrationDb
+  let db: OrchestrationDb | null
   try {
     db = openDb()
   } catch (error) {
@@ -120,5 +121,5 @@ export function structuredSessionIdleEdgeMailboxes(
     })
     return []
   }
-  return structuredSessionOwnedMailboxes(sessionId, db)
+  return db ? structuredSessionOwnedMailboxes(sessionId, db) : []
 }

@@ -209,7 +209,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       return
     }
     this.notifyStructuredSessionJournalActivity(summary.sessionId)
-    const openDb = () => this.getOrchestrationDb()
+    const openDb = () => this.getExistingOrchestrationDb()
     const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
     structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
   }

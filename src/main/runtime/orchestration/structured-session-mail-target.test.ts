@@ -1,4 +1,13 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  getAppEnvironment,
+  hasAppEnvironment,
+  setAppEnvironment,
+  type AppEnvironment
+} from '../../../shared/app-environment'
 import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
@@ -220,19 +229,73 @@ describe('the idle edge of a structured session', () => {
 })
 
 describe('the idle edge after a restart, before any orchestration call', () => {
-  it('opens the orchestration database itself, so mail stored before the restart is redriven', () => {
+  let userData: string
+  let previousEnvironment: AppEnvironment | null
+
+  beforeEach(() => {
+    userData = mkdtempSync(join(tmpdir(), 'orca-idle-edge-db-'))
+    previousEnvironment = hasAppEnvironment() ? getAppEnvironment() : null
+    setAppEnvironment({
+      getPath: () => userData,
+      getAppPath: () => userData,
+      getVersion: () => '0.0.0-test',
+      isPackaged: () => false,
+      onWillQuit: () => {},
+      exit: () => {},
+      getAppMetrics: () => []
+    })
+  })
+
+  afterEach(() => {
+    if (previousEnvironment) {
+      setAppEnvironment(previousEnvironment)
+    }
+    rmSync(userData, { recursive: true, force: true })
+  })
+
+  /** A runtime whose database has not been opened in this process yet. */
+  function restarted(delivered: string[]): MailTargetProbe {
+    return probe({
+      _orchestrationDb: null,
+      ensureOrchestrationFederationRelay: vi.fn(),
+      scheduleRestoredMessageRepoints: vi.fn(),
+      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
+      notifyStructuredSessionJournalActivity: vi.fn()
+    })
+  }
+
+  it('opens an existing orchestration database itself, so mail stored before the restart is redriven', () => {
     // The strand this pins: the edge read the raw database field, null until the first
     // orchestration RPC opened it, so a restarted chat's idle edges silently redrove nothing.
     installStore(chatRecord())
-    const runId = chatCoordinatedRun()
+    const stored = new OrchestrationDb(join(userData, 'orchestration.db'))
+    const runId = stored.createRun({
+      objective: 'o',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorActor: CHAT_ACTOR
+    }).id
+    stored.close()
     const delivered: string[] = []
-    probe({
-      _orchestrationDb: null,
-      getOrchestrationDb: () => db,
-      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn()
-    }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
+    const runtime = restarted(delivered)
+
+    runtime.onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
+
     expect(delivered).toEqual([`run:${runId}`])
+    runtime.getOrchestrationDb().close()
+  })
+
+  it('creates no database for a profile that never orchestrated, and says nothing', () => {
+    installStore(chatRecord())
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const delivered: string[] = []
+
+    restarted(delivered).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
+
+    expect(delivered).toEqual([])
+    expect(existsSync(join(userData, 'orchestration.db'))).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('says so when the database cannot be opened, instead of skipping silently', () => {
@@ -241,7 +304,7 @@ describe('the idle edge after a restart, before any orchestration call', () => {
     const deliver = vi.fn()
     probe({
       _orchestrationDb: null,
-      getOrchestrationDb: () => {
+      getExistingOrchestrationDb: () => {
         throw new Error('userData unavailable')
       },
       deliverPendingMessagesForHandle: deliver,
