@@ -71,8 +71,13 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       const holderId = `orchestration:mail:${++wakeHolds}`
       try {
         await host.hold(sessionId, holderId)
-      } catch {
-        // A lease another owner holds, or a resume the provider refused; delivery retains.
+      } catch (error) {
+        // A lease another owner holds, or a resume the provider refused; delivery retains. Logged:
+        // a coordinator that never wakes is otherwise indistinguishable from one with no mail.
+        console.warn('[orchestration] could not wake a structured session for its mail', {
+          sessionId,
+          error: error instanceof Error ? error.message : String(error)
+        })
         return null
       }
       return () => host.release(sessionId, holderId)
