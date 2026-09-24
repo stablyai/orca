@@ -8,7 +8,10 @@
 
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-delivery'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredPointerSettlement
+} from './structured-mailbox-pointer-delivery'
 import { structuredSessionCliInvocation } from './cli-command'
 import {
   structuredSessionGateFacts,
@@ -127,13 +130,26 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           ? { kind: 'unattached' }
           : { kind: 'sent', state: 'rejected' }
       }
-      // `pending` is admitted and awaiting its echo: the turn exists, so the rows count as pointed.
+      // `pending` is admitted and awaiting its echo; its settlement says whether a turn ran.
       const state = result.value.submission.dispatchState
-      return {
-        kind: 'sent',
-        state:
-          state === 'accepted' || state === 'pending' || state === 'rejected' ? state : 'unknown'
+      if (state === 'pending') {
+        return {
+          kind: 'sent',
+          state,
+          settlement: host
+            .waitForSendSettlement(input.sessionId, result.value.clientMessageId)
+            .then(
+              (settled) => pointerSettlement(settled?.value.submission.dispatchState),
+              () => 'unknown' as const
+            )
+        }
       }
+      return { kind: 'sent', state: pointerSettlement(state) }
     }
   }
+}
+
+/** No verdict — the wait gave up, or the generation closed with the turn unechoed — is unknown. */
+function pointerSettlement(state: string | undefined): StructuredPointerSettlement {
+  return state === 'accepted' || state === 'rejected' ? state : 'unknown'
 }

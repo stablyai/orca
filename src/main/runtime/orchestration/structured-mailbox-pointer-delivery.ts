@@ -45,8 +45,12 @@ type ParkedPointerDelivery = {
   reservedTypes: ReadonlySet<string> | undefined
 }
 
+/** How an admitted pointer finally settled; `unknown` when no turn is known to have run. */
+export type StructuredPointerSettlement = Exclude<StructuredDispatchState, 'pending'>
+
 export type StructuredPointerSendOutcome =
-  | { kind: 'sent'; state: StructuredDispatchState }
+  | { kind: 'sent'; state: StructuredPointerSettlement }
+  | { kind: 'sent'; state: 'pending'; settlement: Promise<StructuredPointerSettlement> }
   | { kind: 'unattached' }
 
 export type StructuredMailboxPointerHost = {
@@ -260,13 +264,52 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       return
     }
     db.markAsDelivered(staged)
+    if (outcome.state === 'pending') {
+      // Admitted is a claim, not a turn: it is consumed with the echo or given back, never kept.
+      const operationId = operation.operationId
+      void outcome.settlement
+        .then((settled) =>
+          this.settlePendingPointer(mailboxHandle, sessionId, staged, operationId, settled)
+        )
+        .catch((error: unknown) => {
+          console.warn('[orchestration] could not settle a pending pointer', {
+            mailboxHandle,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        })
+      return
+    }
     // The nudge landed as its own turn, so the next settle edge is the natural retry point for
     // anything that arrives while it runs.
     db.deleteStructuredPointerOperation(mailboxHandle)
   }
 
+  private settlePendingPointer(
+    mailboxHandle: string,
+    sessionId: string,
+    staged: readonly string[],
+    operationId: string,
+    settled: StructuredPointerSettlement
+  ): void {
+    const db = this.deps.getDb()
+    if (!db) {
+      return
+    }
+    // Only this send's row: a newer batch may have minted its own since.
+    if (db.getStructuredPointerOperation(mailboxHandle)?.operation_id === operationId) {
+      db.deleteStructuredPointerOperation(mailboxHandle)
+    }
+    if (settled === 'accepted') {
+      return
+    }
+    // The row is dropped above because a recorded send replays its verdict and never reaches the
+    // provider twice: re-pointing under this id would replay `unknown` instead of landing a turn.
+    db.markAsUndelivered([...staged])
+    this.retain(mailboxHandle, sessionId, retainReasonForDispatch(settled), undefined)
+  }
+
   /**
-   * No `markAsUndelivered` is owed: rows are marked delivered only once the host took the turn.
+   * Nothing is owed back here: rows are stamped only once the host admitted the turn.
    *
    * Every reason parks for the session's next journal edge. `unknown` may mean the nudge already
    * sits in the provider's input queue, so an immediate retry can stack duplicate nudges;

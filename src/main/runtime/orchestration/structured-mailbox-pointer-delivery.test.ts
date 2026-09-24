@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import {
   OrchestrationStructuredMailboxPointerDelivery,
-  type StructuredMailboxPointerHost
+  type StructuredMailboxPointerHost,
+  type StructuredPointerSettlement
 } from './structured-mailbox-pointer-delivery'
 import { structuredSessionGateFacts } from './structured-session-pointer-delivery'
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
@@ -74,6 +75,8 @@ function attentionJournal(): AgentJournalRenderItem[] {
 function harness(options: {
   journal: AgentJournalRenderItem[] | null
   dispatchState?: 'accepted' | 'pending' | 'rejected' | 'unknown'
+  /** For a `pending` dispatch: how the admitted turn settles; never, when omitted. */
+  settlement?: Promise<StructuredPointerSettlement>
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
   outstandingOwnDelivery?: boolean
@@ -89,11 +92,18 @@ function harness(options: {
   const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
   let journal = options.journal
   const markAsDelivered = vi.fn()
-  const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => ({
-    kind: 'sent' as const,
-    state: options.dispatchState ?? ('accepted' as const)
-  }))
+  const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => {
+    const state = options.dispatchState ?? 'accepted'
+    return state === 'pending'
+      ? {
+          kind: 'sent' as const,
+          state,
+          settlement: options.settlement ?? new Promise<StructuredPointerSettlement>(() => {})
+        }
+      : { kind: 'sent' as const, state }
+  })
   const sendMock = vi.mocked(send)
+  const markAsUndelivered = vi.fn()
   const released = vi.fn()
   const wake = vi.fn(async () => {
     if (!options.wakeTo) {
@@ -118,6 +128,7 @@ function harness(options: {
         sequence: index + 3
       })),
     markAsDelivered,
+    markAsUndelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: { mailbox_handle: string }) =>
       stored.set(row.mailbox_handle, row),
@@ -139,6 +150,7 @@ function harness(options: {
   return {
     delivery,
     markAsDelivered,
+    markAsUndelivered,
     released,
     wake,
     send: sendMock,
@@ -304,13 +316,68 @@ describe('structured mailbox pointer delivery', () => {
   })
 
   it('counts a turn the provider admitted but has not echoed as pointed', async () => {
-    const { delivery, markAsDelivered } = harness({
+    const { delivery, markAsDelivered, markAsUndelivered, stored } = harness({
       journal: idleJournal(),
       dispatchState: 'pending'
     })
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    // Unsettled, the claim is still open: its operation id is what a replay would reuse.
+    expect(markAsUndelivered).not.toHaveBeenCalled()
+    expect(stored.has('dispatch:d1')).toBe(true)
+  })
+
+  it('consumes an admitted pointer once its turn is echoed', async () => {
+    const { delivery, markAsUndelivered, stored } = harness({
+      journal: idleJournal(),
+      dispatchState: 'pending',
+      settlement: Promise.resolve('accepted')
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(markAsUndelivered).not.toHaveBeenCalled()
+    expect(stored.has('dispatch:d1')).toBe(false)
+  })
+
+  it.each(['unknown', 'rejected'] as const)(
+    'gives back an admitted pointer that settles %s, and re-points it as a new send',
+    async (settled) => {
+      const { delivery, send, markAsDelivered, markAsUndelivered } = harness({
+        journal: idleJournal(),
+        dispatchState: 'pending',
+        settlement: Promise.resolve(settled)
+      })
+      delivery.deliverForHandle('dispatch:d1')
+      await flush()
+      expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+      expect(markAsUndelivered).toHaveBeenCalledWith(['m1'])
+      const first = send.mock.calls[0]![0].operationId
+      // A recorded send replays its verdict and never reaches the provider twice, so the
+      // re-point must mint: under the old id it would replay `unknown` and land nothing.
+      delivery.onJournalActivity('session-1')
+      await flush()
+      expect(send).toHaveBeenCalledTimes(2)
+      expect(send.mock.calls[1]![0].operationId).not.toBe(first)
+    }
+  )
+
+  it('leaves a newer batch`s operation row alone when an older pointer settles', async () => {
+    let settle: (value: StructuredPointerSettlement) => void = () => {}
+    const { delivery, stored } = harness({
+      journal: idleJournal(),
+      dispatchState: 'pending',
+      settlement: new Promise((resolve) => {
+        settle = resolve
+      })
+    })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    const newer = { mailbox_handle: 'dispatch:d1', operation_id: 'newer' }
+    stored.set('dispatch:d1', newer)
+    settle('unknown')
+    await flush()
+    expect(stored.get('dispatch:d1')).toBe(newer)
   })
 
   it('retries a rejected nudge on the next journal edge', async () => {

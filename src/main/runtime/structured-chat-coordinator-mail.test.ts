@@ -401,6 +401,32 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(acked.messages).not.toEqual(first.messages)
   })
 
+  it('gives back a pointer whose provider died before the echo, and points it again', async () => {
+    // Admitted is not a turn: a provider that dies before echoing never ran the pointer, and a row
+    // left stamped "pointed" would never be pointed again — the last result would strand silently.
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
+    await vi.waitFor(
+      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
+      WAIT
+    )
+
+    chat.handlers.onExit?.(new Error('provider died before the echo'))
+    await vi.waitFor(
+      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1),
+      WAIT
+    )
+
+    const before = codex.connections.length
+    runtime.onStructuredSessionStatusForMail({ sessionId: COORDINATOR, status: 'idle' })
+    await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
+    const revived = connectionFor(COORDINATOR)
+    await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
+    expect(revived.turns[0]!.text).toMatch(POINTER)
+  })
+
   it('wakes a coordinator the host evicted, and delivers once it is back', async () => {
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
