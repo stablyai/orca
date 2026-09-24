@@ -13,7 +13,6 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import extractZip from 'extract-zip'
 import { basename, join, resolve } from 'node:path'
 import { orcadBunRuntimeFilename } from '../../src/shared/orcad-artifacts.ts'
 import {
@@ -22,6 +21,7 @@ import {
   orcadBunReleaseUrl
 } from '../../src/shared/orcad-bun-runtime.ts'
 import { runProcessSync } from './script-child-process.mjs'
+import { getZipExtractorCommand } from './zip-extractor-command.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const cacheRoot = join(root, 'out', '.orcad-bun-runtime', `v${ORCAD_BUN_VERSION}`)
@@ -101,7 +101,18 @@ async function materializeRuntime(target, outputPath) {
       }
       const extracted = join(temporary, 'extracted')
       mkdirSync(extracted)
-      await extractZip(zipPath, { dir: extracted })
+      // Node 24.16 can leave extract-zip's stream promise unsettled with no active handles.
+      const command = getZipExtractorCommand(zipPath, extracted)
+      const result = runProcessSync({
+        program: command.file,
+        args: command.args,
+        timeoutMs: 120_000
+      })
+      if (result.code !== 0) {
+        throw new Error(
+          `Bun archive extraction failed with exit ${result.code}: ${result.stderr || result.stdout}`
+        )
+      }
       mkdirSync(join(cacheRoot, target), { recursive: true })
       copyFileSync(findBunExecutable(extracted, target), cached)
       if (!target.startsWith('win32-')) {
