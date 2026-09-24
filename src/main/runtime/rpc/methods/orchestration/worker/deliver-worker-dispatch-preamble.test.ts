@@ -1,0 +1,107 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preamble'
+
+const sent = vi.hoisted((): { preambles: string[] } => ({ preambles: [] }))
+vi.mock('../../orchestration-structured-worker-session', () => ({
+  sendStructuredWorkerPreamble: async (args: { preamble: string }) => {
+    sent.preambles.push(args.preamble)
+  }
+}))
+
+const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+
+function runtime(prompts: string[]): OrcaRuntimeService {
+  const fake: Pick<
+    OrcaRuntimeService,
+    'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
+  > = {
+    getNestedWorkerMaxDepth: () => 0,
+    getTerminalOrchestrationCliCommand: () => 'orca',
+    sendTerminalAgentPrompt: async (handle, text) => {
+      prompts.push(text)
+      return { handle, accepted: true, bytesWritten: text.length }
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliverWorkerDispatchPreamble reads only the three members the fake implements.
+  return fake as OrcaRuntimeService
+}
+
+type StructuredSession = Parameters<typeof deliverWorkerDispatchPreamble>[0]['structuredSession']
+
+function structuredSession(agent: 'claude' | 'codex' = 'claude'): StructuredSession {
+  const session = { host: {}, identity: { sessionId: SESSION, agent } }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delivery reads only identity.sessionId/agent, and the mocked send ignores host.
+  return session as unknown as StructuredSession
+}
+
+const args = {
+  dispatchId: 'ctx_1',
+  dispatchDepth: 1,
+  taskId: 'task_1',
+  taskSpec: 'do it',
+  coordinatorHandle: 'session:7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64',
+  dispatchCapability: 'cap',
+  devMode: false,
+  requestId: 'req_1'
+}
+
+describe('deliverWorkerDispatchPreamble tells each worker its own address', () => {
+  beforeEach(() => {
+    sent.preambles = []
+  })
+
+  it('names a structured worker by the session it was started as', async () => {
+    const prompts: string[] = []
+    await deliverWorkerDispatchPreamble({
+      ...args,
+      runtime: runtime(prompts),
+      terminalHandle: 'structworker_1',
+      structuredSession: structuredSession()
+    })
+
+    expect(prompts).toEqual([])
+    expect(sent.preambles).toHaveLength(1)
+    expect(sent.preambles[0]).toContain(`Your orchestration address is: session:${SESSION}\n`)
+    expect(sent.preambles[0]).toContain(
+      '"$ORCA_CLI_COMMAND" orchestration send --from structworker_1'
+    )
+  })
+
+  it("renders the CLI in the worker's own shell: PowerShell for Codex on Windows", async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      for (const agent of ['codex', 'claude'] as const) {
+        await deliverWorkerDispatchPreamble({
+          ...args,
+          runtime: runtime([]),
+          terminalHandle: 'structworker_1',
+          structuredSession: structuredSession(agent)
+        })
+      }
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(sent.preambles[0]).toContain('& $env:ORCA_CLI_COMMAND orchestration send')
+    expect(sent.preambles[1]).toContain('"$ORCA_CLI_COMMAND" orchestration send')
+  })
+
+  it('names a terminal worker by its handle and keeps its bare CLI', async () => {
+    const prompts: string[] = []
+    await deliverWorkerDispatchPreamble({
+      ...args,
+      runtime: runtime(prompts),
+      terminalHandle: 'term_worker',
+      structuredSession: null
+    })
+
+    expect(sent.preambles).toEqual([])
+    expect(prompts[0]).toContain('Your orchestration address is: term_worker\n')
+    expect(prompts[0]).toContain('orca orchestration send --from term_worker')
+    expect(prompts[0]).not.toContain('ORCA_CLI_COMMAND')
+  })
+})

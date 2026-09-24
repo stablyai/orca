@@ -403,3 +403,54 @@ describe('sub-dispatch section', () => {
     expect(preamble.indexOf('=== SUB-DISPATCH ===')).toBeLessThan(preamble.indexOf('=== TASK ==='))
   })
 })
+
+describe('the worker is told its own orchestration address', () => {
+  const sessionId = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+  const posixSession = { sessionId, cliInvocation: '"$ORCA_CLI_COMMAND"' } as const
+
+  it('names a terminal worker by its handle', () => {
+    const preamble = buildDispatchPreamble(baseParams())
+
+    expect(preamble).toContain('Your orchestration address is: term_worker\n')
+    expect(preamble).not.toContain('session:')
+  })
+
+  it('names a structured worker session:<id> and says how its coordinator reaches it', () => {
+    const preamble = buildDispatchPreamble(
+      baseParams({ workerHandle: 'structworker_1', structuredSession: posixSession })
+    )
+
+    expect(preamble).toContain(`Your orchestration address is: session:${sessionId}\n`)
+    expect(preamble).toContain('Your coordinator reaches you there or at dispatch:ctx_def456.')
+    expect(preamble).toContain("Your coordinator's address is: term_coord\n")
+  })
+
+  it.each([
+    ['a POSIX shell', '"$ORCA_CLI_COMMAND"'],
+    ['PowerShell', '& $env:ORCA_CLI_COMMAND']
+  ] as const)(
+    "runs a structured worker's commands through ORCA_CLI_COMMAND in %s, even in dev",
+    (_shell, cliInvocation) => {
+      const preamble = buildDispatchPreamble(
+        baseParams({
+          workerHandle: 'structworker_1',
+          structuredSession: { sessionId, cliInvocation },
+          devMode: true,
+          cliCommand: 'orca'
+        })
+      )
+      const commands = cliFence(preamble)
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#'))
+
+      expect(commands.length).toBeGreaterThan(0)
+      for (const command of commands) {
+        expect(command.startsWith(`${cliInvocation} orchestration `)).toBe(true)
+      }
+      expect(preamble).not.toContain('orca-dev')
+      expect(preamble).toContain(`\`${cliInvocation}\` runs this Orca's CLI`)
+      expect(afterWorkerDoneSection(preamble)).toContain(`${cliInvocation} orchestration check`)
+    }
+  )
+})

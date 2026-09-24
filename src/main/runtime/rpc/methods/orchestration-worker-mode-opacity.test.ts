@@ -39,7 +39,10 @@ vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createStructuredWorkerSessionForWorktree: async (args: { effects: unknown[] }) => {
     args.effects.push({ kind: 'terminal', role: 'agent', action: 'created' })
-    return { identity: { handle: STRUCTURED_HANDLE, sessionId: 'sess_worker' }, host: {} }
+    return {
+      identity: { handle: STRUCTURED_HANDLE, sessionId: 'sess_worker', agent: 'claude' },
+      host: {}
+    }
   },
   createExistingWorktreeWorkerTerminal: async () => ({ handle: TERMINAL_HANDLE })
 }))
@@ -97,6 +100,17 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
 }
 
 /** Strips the ids that legitimately differ per dispatch, leaving what the agent is taught. */
+/**
+ * The two facts that legitimately differ by mode, and nothing else: the worker's own address (its
+ * handle, or `session:<id>` with how mail reaches a chat) and how its shell invokes the CLI.
+ */
+function normalizeWorkerIdentity(preamble: string, cli: string): string {
+  return preamble
+    .replace(/^Your orchestration address is: [^\n]*\n(?:[^\n]+\n)*/m, '<own address>\n')
+    .split(`${cli} orchestration`)
+    .join('<cli> orchestration')
+}
+
 function normalizePreamble(preamble: string, handle: string, dispatchId: string): string {
   return preamble
     .split(handle)
@@ -210,9 +224,19 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(terminal.mode.mode).toBe('terminal')
     const structuredPreamble = structuredPreambles[0] as string
     const terminalPreamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] as string
-    expect(normalizePreamble(structuredPreamble, STRUCTURED_HANDLE, structured.dispatchId)).toBe(
-      normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId)
+    expect(
+      normalizeWorkerIdentity(
+        normalizePreamble(structuredPreamble, STRUCTURED_HANDLE, structured.dispatchId),
+        '"$ORCA_CLI_COMMAND"'
+      )
+    ).toBe(
+      normalizeWorkerIdentity(
+        normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId),
+        'orca'
+      )
     )
+    expect(structuredPreamble).toContain('Your orchestration address is: session:sess_worker\n')
+    expect(terminalPreamble).toContain(`Your orchestration address is: ${TERMINAL_HANDLE}\n`)
     // The section the structured lane used to withhold, asserted by name so the equality above
     // cannot pass by both preambles losing it.
     expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')
