@@ -525,11 +525,6 @@ export type OrcaWorkspaceLayout = {
   nestWorkspaces: boolean
 }
 
-export type GhosttyImportPreview = {
-  found: boolean
-  configPath?: string
-  configPaths?: string[]
-  diff: Partial<GlobalSettings>
-  unsupportedKeys: string[]
-  error?: string
-}
+// Re-exported so existing importers keep one entry point; the shape lives in its
+// own file because this one is at the max-lines ceiling.
+export type { GhosttyImportPreview } from './ghostty-import-preview'
