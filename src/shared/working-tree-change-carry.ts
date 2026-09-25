@@ -121,3 +121,37 @@ export async function carryWorkingTreeChanges(
   }
   return { ok: true, trackedChanges: stashCommit.length > 0, untrackedCopied: untracked.length }
 }
+
+const CARRY_FAILURE_REASONS: ReadonlySet<string> = new Set<WorkingTreeCarryFailureReason>([
+  'base_mismatch',
+  'target_dirty',
+  'too_large',
+  'apply_failed',
+  'partially_applied'
+])
+
+function isCarryFailureReason(value: unknown): value is WorkingTreeCarryFailureReason {
+  return typeof value === 'string' && CARRY_FAILURE_REASONS.has(value)
+}
+
+// Why: an SSH relay reply is untyped wire data; anything unrecognised surfaces as a failed carry.
+export function normalizeWorkingTreeCarryResult(raw: unknown): WorkingTreeCarryResult {
+  if (typeof raw === 'object' && raw !== null) {
+    const record: Record<string, unknown> = { ...raw }
+    if (record.ok === true) {
+      return {
+        ok: true,
+        trackedChanges: record.trackedChanges === true,
+        untrackedCopied: typeof record.untrackedCopied === 'number' ? record.untrackedCopied : 0
+      }
+    }
+    if (record.ok === false && isCarryFailureReason(record.reason)) {
+      return {
+        ok: false,
+        reason: record.reason,
+        ...(typeof record.detail === 'string' ? { detail: record.detail } : {})
+      }
+    }
+  }
+  return { ok: false, reason: 'apply_failed', detail: 'Unexpected response from host' }
+}

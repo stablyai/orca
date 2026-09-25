@@ -4,6 +4,10 @@ import type {
 } from '../../shared/git-diff-compare-types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { GitConflictOperation } from '../../shared/git-status-types'
+import {
+  normalizeWorkingTreeCarryResult,
+  type WorkingTreeCarryResult
+} from '../../shared/working-tree-change-carry'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { SshGitNoninteractiveProvider } from './ssh-git-noninteractive-provider'
 
@@ -72,6 +76,20 @@ export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
     await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
     })
+  }
+
+  async carryWorkingTreeChanges(
+    sourceWorktreePath: string,
+    targetWorktreePath: string
+  ): Promise<WorkingTreeCarryResult> {
+    return this.runWithGitReadInvalidation(async () =>
+      normalizeWorkingTreeCarryResult(
+        await this.mux.request('git.carryWorkingTreeChanges', {
+          sourceWorktreePath,
+          targetWorktreePath
+        })
+      )
+    )
   }
 
   async detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {

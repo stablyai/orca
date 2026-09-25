@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   CARRY_MAX_UNTRACKED_FILES,
   carryWorkingTreeChanges,
+  normalizeWorkingTreeCarryResult,
   type WorkingTreeCarryIo
 } from './working-tree-change-carry'
 import {
@@ -319,5 +320,40 @@ describe('carryWorkingTreeChanges', () => {
 
     expect(result).toEqual({ ok: false, reason: 'target_dirty' })
     expect(readFileSync(join(target, '.env'), 'utf8')).toBe('target-secret\n')
+  })
+})
+
+describe('normalizeWorkingTreeCarryResult', () => {
+  it('keeps valid results and rejects garbage', () => {
+    expect(
+      normalizeWorkingTreeCarryResult({ ok: true, trackedChanges: true, untrackedCopied: 2 })
+    ).toEqual({ ok: true, trackedChanges: true, untrackedCopied: 2 })
+    expect(normalizeWorkingTreeCarryResult({ ok: false, reason: 'too_large' })).toEqual({
+      ok: false,
+      reason: 'too_large'
+    })
+    expect(
+      normalizeWorkingTreeCarryResult({ ok: false, reason: 'partially_applied', detail: 'x' })
+    ).toEqual({ ok: false, reason: 'partially_applied', detail: 'x' })
+    expect(normalizeWorkingTreeCarryResult({ ok: false, reason: 'nope' })).toMatchObject({
+      ok: false,
+      reason: 'apply_failed'
+    })
+    expect(normalizeWorkingTreeCarryResult(null)).toMatchObject({
+      ok: false,
+      reason: 'apply_failed'
+    })
+  })
+
+  it('accepts every failure reason the core can return', () => {
+    for (const reason of [
+      'base_mismatch',
+      'target_dirty',
+      'too_large',
+      'apply_failed',
+      'partially_applied'
+    ] as const) {
+      expect(normalizeWorkingTreeCarryResult({ ok: false, reason })).toEqual({ ok: false, reason })
+    }
   })
 })
