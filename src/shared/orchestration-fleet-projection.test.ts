@@ -626,3 +626,79 @@ describe('fleet liveness and attention after a host verdict', () => {
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 })
+
+describe('fleet worker whose main-agent turn failed', () => {
+  const now = 10_000
+  const failedMainAgent = {
+    state: 'done' as const,
+    outcome: 'failure' as const,
+    stateStartedAt: now - 5
+  }
+  const project = (overrides: Partial<AgentStatusIpcPayload>) =>
+    projectOrchestrationFleet({
+      workers: [worker('1')],
+      statuses: [status('1', now - 1, overrides)],
+      now
+    }).workers[0]!
+
+  it('carries the main agent record on the stage and raises one failure', () => {
+    const projected = project({ state: 'working', mainAgent: failedMainAgent })
+
+    expect(projected.stage).toMatchObject({ activity: 'working', mainAgent: failedMainAgent })
+    expect(projected.attention).toEqual({ categories: ['failure'], requiresAction: true })
+  })
+
+  it('still raises one failure when the dispatch failed too', () => {
+    const projected = projectOrchestrationFleet({
+      workers: [worker('1', { outcome: 'failed' })],
+      statuses: [status('1', now - 1, { state: 'done', mainAgent: failedMainAgent })],
+      now
+    }).workers[0]!
+
+    expect(projected.attention.categories.filter((c) => c === 'failure')).toHaveLength(1)
+  })
+
+  it('withholds the record and the failure from a restored, unconfirmed row', () => {
+    const projected = project({
+      state: 'done',
+      mainAgent: failedMainAgent,
+      restoredUnconfirmed: true
+    })
+
+    expect(projected.stage).not.toHaveProperty('mainAgent')
+    expect(projected.attention.categories).not.toContain('failure')
+  })
+
+  it('clears the failure once the next turn starts', () => {
+    const projected = project({
+      state: 'working',
+      mainAgent: { state: 'working', stateStartedAt: now - 1 }
+    })
+
+    expect(projected.attention).toEqual({ categories: [], requiresAction: false })
+  })
+
+  it('projects a row without a main agent record exactly as before', () => {
+    const projected = project({ state: 'done' })
+
+    expect(projected.stage).toEqual({
+      worker: 'ready',
+      dispatch: 'dispatched',
+      detail: 'prompt_delivered',
+      activity: 'done'
+    })
+    expect(projected.attention).toEqual({ categories: [], requiresAction: false })
+  })
+
+  it('re-derives the failure from the stage record after a host verdict', () => {
+    const projected = project({ state: 'working', mainAgent: failedMainAgent })
+    projected.liveness = { verdict: 'live', observedAt: now, source: 'execution_host' }
+    refreshOrchestrationFleetLivenessAttention(projected)
+    expect(projected.attention).toEqual({ categories: ['failure'], requiresAction: true })
+
+    // The next turn lands on the stage: the refresh must not carry the old category forward.
+    projected.stage.mainAgent = { state: 'working', stateStartedAt: now }
+    refreshOrchestrationFleetLivenessAttention(projected)
+    expect(projected.attention).toEqual({ categories: [], requiresAction: false })
+  })
+})

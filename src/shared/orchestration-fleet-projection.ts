@@ -1,6 +1,8 @@
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
+import type { AgentMainAgentStatus } from './main-agent-status'
 import { createFleetStatusIndex, statusForFleetWorker } from './orchestration-fleet-status-index'
 import {
+  isFleetMainTurnFailed,
   projectOrchestrationFleetAttention,
   type OrchestrationFleetAttention,
   type OrchestrationFleetAttentionCategory
@@ -103,6 +105,8 @@ export type OrchestrationFleetWorker = {
     dispatch: string
     detail: string | null
     activity: 'working' | 'blocked' | 'waiting' | 'done' | 'unknown'
+    /** The main agent's own state and verdict. Optional on the wire: older hosts never send it. */
+    mainAgent?: AgentMainAgentStatus
   }
   outcome: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
   liveness: FleetLiveness
@@ -138,6 +142,8 @@ export function refreshOrchestrationFleetLivenessAttention(worker: Orchestration
     pendingGuidance: had('guidance'),
     pendingApproval: had('approval'),
     interrupted: had('interruption'),
+    // Why: re-derived from the record, never from a prior `failure`, which may be the dispatch's.
+    mainTurnFailed: isFleetMainTurnFailed(worker.stage.mainAgent),
     liveness: worker.liveness
   })
 }

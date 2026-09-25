@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { projectOrchestrationFleetAttention } from './orchestration-fleet-attention'
+import {
+  isFleetMainTurnFailed,
+  projectOrchestrationFleetAttention
+} from './orchestration-fleet-attention'
 
 describe('orchestration fleet attention', () => {
   it('keeps durable input, approval, failure, and interruption categories separate', () => {
@@ -73,5 +76,39 @@ describe('orchestration fleet attention', () => {
 
     expect(counts).toEqual({ root_completion: 1, input: 1, failure: 1, interruption: 1 })
     expect(wave.filter((entry) => entry.requiresAction)).toHaveLength(3)
+  })
+
+  it('raises one failure when the main turn failed while the dispatch is still open', () => {
+    expect(
+      projectOrchestrationFleetAttention({
+        isRoot: false,
+        outcome: 'in_progress',
+        mainTurnFailed: true,
+        liveness: { verdict: 'live' }
+      })
+    ).toEqual({ categories: ['failure'], requiresAction: true })
+  })
+
+  it('does not double the failure when the dispatch failed too', () => {
+    expect(
+      projectOrchestrationFleetAttention({
+        isRoot: false,
+        outcome: 'failed',
+        mainTurnFailed: true,
+        liveness: { verdict: 'live' }
+      }).categories
+    ).toEqual(['failure'])
+  })
+
+  it('derives the failed main turn from the main agent record alone', () => {
+    expect(isFleetMainTurnFailed({ state: 'done', outcome: 'failure', stateStartedAt: 1 })).toBe(
+      true
+    )
+    expect(
+      isFleetMainTurnFailed({ state: 'done', outcome: 'cancellation', stateStartedAt: 1 })
+    ).toBe(false)
+    // The next turn clears the verdict: a live main agent has no ending.
+    expect(isFleetMainTurnFailed({ state: 'working', stateStartedAt: 2 })).toBe(false)
+    expect(isFleetMainTurnFailed(undefined)).toBe(false)
   })
 })
