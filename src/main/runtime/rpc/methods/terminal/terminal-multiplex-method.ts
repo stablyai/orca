@@ -17,7 +17,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      { runtime, connectionId, requestId, sendBinary, registerBinaryStreamHandler, signal },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -31,6 +31,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       const state: TerminalMultiplexConnectionBase = {
         runtime,
         connectionId,
+        requestId,
         sendBinary,
         registerBinaryStreamHandler,
         signal,
