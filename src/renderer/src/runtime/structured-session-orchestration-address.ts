@@ -1,7 +1,4 @@
-import {
-  formatOrchestrationActor,
-  sessionOrchestrationActor
-} from '../../../shared/orchestration-actor'
+import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../shared/orca-session-address'
 import type { OrchestrationSessionAddressResult } from '../../../shared/orchestration-caller-status'
 import { callRuntimeRpc, RuntimeRpcCallError, type RuntimeClientTarget } from './runtime-rpc-client'
 
@@ -13,8 +10,7 @@ export async function resolveStructuredSessionOrchestrationAddress(
   target: RuntimeClientTarget,
   sessionId: string
 ): Promise<string | null> {
-  const actor = sessionOrchestrationActor(sessionId)
-  if (!actor) {
+  if (!isOrcaSessionId(sessionId)) {
     return null
   }
   try {
@@ -27,7 +23,7 @@ export async function resolveStructuredSessionOrchestrationAddress(
   } catch (error) {
     // Why: a host that predates the method has no /clear lineage, so there the live id is the address.
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return formatOrchestrationActor(actor)
+      return formatOrcaSessionAddress(sessionId)
     }
     throw error
   }

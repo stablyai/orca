@@ -1,4 +1,5 @@
 import type { CliStatusCaller } from '../shared/orchestration-caller-status'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../shared/orca-session-address-prefix'
 import type { CliStatusResult } from '../shared/runtime-types'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
@@ -147,7 +148,7 @@ function formatStatusCaller(caller: CliStatusCaller): string {
     return 'none'
   }
   if ('refusal' in caller) {
-    return `session:${caller.sessionId} (refused: ${caller.refusal.code})`
+    return `${ORCA_SESSION_ADDRESS_PREFIX}${caller.sessionId} (refused: ${caller.refusal.code})`
   }
   return `${caller.address}${caller.live ? '' : ' (not live)'}`
 }

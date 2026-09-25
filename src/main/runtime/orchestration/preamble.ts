@@ -1,6 +1,7 @@
 import type { OrchestrationCliCommand, StructuredSessionCliInvocation } from './cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 
 export type PreambleParams = {
   taskId: string
@@ -67,7 +68,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // Why one spelling: a structured worker's minted handle is only its mailbox key; the host binds
   // `session:<id>` to that same caller, so every command names it the way its address line does.
   const self = params.structuredSession
-    ? `session:${params.structuredSession.sessionId}`
+    ? `${ORCA_SESSION_ADDRESS_PREFIX}${params.structuredSession.sessionId}`
     : params.workerHandle
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
@@ -172,7 +173,7 @@ function buildWorkerAddressSection(params: PreambleParams): string {
     return `Your orchestration address is: ${params.workerHandle}
 `
   }
-  return `Your orchestration address is: session:${session.sessionId}
+  return `Your orchestration address is: ${ORCA_SESSION_ADDRESS_PREFIX}${session.sessionId}
 Your coordinator reaches you there. Mail that arrives while you are idle starts a new turn in
 this chat; mid-task, read it with the check command below.
 Run every command below exactly as written: \`${session.cliInvocation}\` runs this Orca's CLI

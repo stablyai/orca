@@ -7,7 +7,7 @@ import {
   structuredWorkerProcessIncarnation
 } from '../structured-worker-identity'
 import {
-  ACTOR_X,
+  ADDRESS_X,
   createSessionCallerHarness,
   orchestrationRequest,
   PROVIDER_ID_X,
@@ -48,7 +48,7 @@ describe('orchestration.callerShow: the caller learns its own address from the h
     )
 
     expect(resultOf(response)).toEqual({
-      caller: { kind: 'session', address: ACTOR_X, sessionId: SESSION_X, live: true }
+      caller: { kind: 'session', address: ADDRESS_X, sessionId: SESSION_X, live: true }
     })
   })
 
@@ -168,7 +168,7 @@ describe('orchestration.callerShow: the caller learns its own address from the h
       )
       const acting = resultOf(await h.dispatch(callerShow({ sessionId })))
       // One derivation: the conversation's root, which the successor copies and acts as too.
-      expect(shown.address).toBe(ACTOR_X)
+      expect(shown.address).toBe(ADDRESS_X)
       expect(acting.caller).toMatchObject({ kind: 'session', address: shown.address })
     }
   })
