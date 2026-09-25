@@ -150,7 +150,7 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
-    agentHookServer.stop()
+    const agentHookShutdown = agentHookServer.stop()
     // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
     // bare script path that cannot express the guard and would otherwise keep spawning after quit.
     // Why bounded here: every other teardown member carries its own ceiling, and this one reaches
@@ -245,6 +245,7 @@ function installWillQuitHandler(): void {
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
+      { name: 'agent-hooks', promise: agentHookShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },
       { name: 'ref-maintenance', promise: refMaintenanceShutdown },

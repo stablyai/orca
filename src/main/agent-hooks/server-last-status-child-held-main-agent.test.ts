@@ -52,8 +52,8 @@ describe('Claude rows held open by child agents', () => {
   }
 
   async function restart(server: AgentHookServer): Promise<AgentHookServer> {
-    server.flushStatusPersistSync()
-    server.stop()
+    await server.flushStatusPersist()
+    await server.stop()
     return startServer()
   }
 
@@ -94,7 +94,7 @@ describe('Claude rows held open by child agents', () => {
         mainAgent: { state: 'done' }
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -110,7 +110,7 @@ describe('Claude rows held open by child agents', () => {
         subagents: [expect.objectContaining({ id: 'achild-a', state: 'working' })]
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -133,7 +133,7 @@ describe('Claude rows held open by child agents', () => {
       expect(row(server)).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
       expect(row(server)?.restoredUnconfirmed).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -149,7 +149,7 @@ describe('Claude rows held open by child agents', () => {
 
       expect(row(server)).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -164,7 +164,7 @@ describe('Claude rows held open by child agents', () => {
 
       expect(row(server)).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -186,7 +186,7 @@ describe('Claude rows held open by child agents', () => {
       await post(server, { hook_event_name: 'PreToolUse', tool_name: 'Grep' })
       expect(pushed).toHaveLength(1)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -207,7 +207,7 @@ describe('Claude rows held open by child agents', () => {
 
       expect(row(server)).toMatchObject({ state: 'working', restoredUnconfirmed: true })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -225,7 +225,7 @@ describe('Claude rows held open by child agents', () => {
 
       expect(row(server)).toMatchObject({ state: 'working', restoredUnconfirmed: true })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -252,7 +252,7 @@ describe('Claude rows held open by child agents', () => {
 
       expect(row(server)?.state).toBe('working')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -277,7 +277,7 @@ describe('Claude rows held open by child agents', () => {
 
       expect(row(server)?.state).toBe('working')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -306,7 +306,7 @@ describe('Claude rows held open by child agents', () => {
 
       expect(row(server)).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 

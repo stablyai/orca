@@ -104,7 +104,7 @@ describe('Last-status persistence', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -129,8 +129,8 @@ describe('Last-status persistence', () => {
       },
       'conn-1'
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -162,7 +162,7 @@ describe('Last-status persistence', () => {
       })
       expect(confirmed?.restoredUnconfirmed).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -173,8 +173,8 @@ describe('Last-status persistence', () => {
       firstServer,
       buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'may finish offline' })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -190,7 +190,7 @@ describe('Last-status persistence', () => {
       expect(server.getStatusSnapshot()[0]).toEqual(restored)
       expect(server._getStateForTests().claudeSubagentRosterByPaneKey.size).toBe(0)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -205,8 +205,8 @@ describe('Last-status persistence', () => {
         agent_type: 'reviewer'
       })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -243,7 +243,7 @@ describe('Last-status persistence', () => {
       expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
       expect(statusListener).toHaveBeenCalledTimes(2)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -258,8 +258,8 @@ describe('Last-status persistence', () => {
         agent_type: 'reviewer'
       })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const secondServer = new AgentHookServer()
     await secondServer.start({ env: 'production', userDataPath })
@@ -272,8 +272,8 @@ describe('Last-status persistence', () => {
       restoredUnconfirmed: true,
       subagents: undefined
     })
-    secondServer.flushStatusPersistSync()
-    secondServer.stop()
+    await secondServer.flushStatusPersist()
+    await secondServer.stop()
 
     const thirdServer = new AgentHookServer()
     await thirdServer.start({ env: 'production', userDataPath })
@@ -285,7 +285,7 @@ describe('Last-status persistence', () => {
       expect(thirdServer.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
       expect(thirdServer.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
     } finally {
-      thirdServer.stop()
+      await thirdServer.stop()
     }
   })
 
@@ -300,8 +300,8 @@ describe('Last-status persistence', () => {
         agent_type: 'reviewer'
       })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -315,7 +315,7 @@ describe('Last-status persistence', () => {
       })
       expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -330,8 +330,8 @@ describe('Last-status persistence', () => {
         agent_type: 'reviewer'
       })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -346,7 +346,7 @@ describe('Last-status persistence', () => {
 
       expect(server.getStatusSnapshot()[0]).toEqual(restored)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -361,8 +361,8 @@ describe('Last-status persistence', () => {
         agent_type: 'reviewer'
       })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -405,7 +405,7 @@ describe('Last-status persistence', () => {
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
       expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -420,8 +420,8 @@ describe('Last-status persistence', () => {
         agent_type: 'reviewer'
       })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -459,7 +459,7 @@ describe('Last-status persistence', () => {
       })
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

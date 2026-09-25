@@ -79,7 +79,7 @@ describe('Last-status persistence', () => {
       expect(listener).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalled()
     } finally {
-      server.stop()
+      await server.stop()
       warnSpy.mockRestore()
     }
   })
@@ -116,7 +116,7 @@ describe('Last-status persistence', () => {
         expect.stringContaining('last-status hydrate dropped 1 entries')
       )
     } finally {
-      server.stop()
+      await server.stop()
       warnSpy.mockRestore()
     }
   })
@@ -150,7 +150,7 @@ describe('Last-status persistence', () => {
       expect(listener).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('version mismatch'))
     } finally {
-      server.stop()
+      await server.stop()
       warnSpy.mockRestore()
     }
   })
@@ -204,7 +204,7 @@ describe('Last-status persistence', () => {
         })
       )
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -245,7 +245,7 @@ describe('Last-status persistence', () => {
       const snapshot = server.getStatusSnapshot()
       expect(snapshot.map((e) => e.paneKey)).toEqual([FRESH_PANE])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -287,7 +287,7 @@ describe('Last-status persistence', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -327,7 +327,7 @@ describe('Last-status persistence', () => {
       expect(server.getStatusSnapshot()).toEqual([])
       expect(statusListener).toHaveBeenCalledWith([])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -382,7 +382,7 @@ describe('Last-status persistence', () => {
     try {
       expect(server.getStatusSnapshot()).toEqual([])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -397,16 +397,16 @@ describe('Last-status persistence', () => {
         server,
         buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'about to drop' })
       )
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
       let parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(parsed.entries[PANE]).toBeTruthy()
 
       server.clearPaneState(PANE)
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
       parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(parsed.entries[PANE]).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -421,21 +421,20 @@ describe('Last-status persistence', () => {
         server,
         buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
       )
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
       const firstMtime = statSync(lastStatusPath()).mtimeMs
 
       // Why: clearPaneState on a paneKey not in the cache must not trigger a redundant write (clear bails when nothing was evicted).
       server.clearPaneState(makePaneKey('non-existent', LEAF_5))
-      server.flushStatusPersistSync()
-      // Assert no rewrite happened: mtime unchanged after a forced sync flush.
+      await server.flushStatusPersist()
       const secondMtime = statSync(lastStatusPath()).mtimeMs
       expect(secondMtime).toBe(firstMtime)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
-  it('stop() flushes pending debounced writes synchronously', async () => {
+  it('stop() settles after pending debounced writes', async () => {
     const server = new AgentHookServer()
     await server.start({
       env: 'production',
@@ -446,11 +445,9 @@ describe('Last-status persistence', () => {
         server,
         buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'flush me' })
       )
-      // Note: do NOT call flushStatusPersistSync explicitly — let stop() do it.
     } finally {
-      server.stop()
+      await server.stop()
     }
-    // Why: stop() must synchronously drain the pending trailing-debounced timer even though we never explicitly flushed.
     expect(existsSync(lastStatusPath())).toBe(true)
     const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
     expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')

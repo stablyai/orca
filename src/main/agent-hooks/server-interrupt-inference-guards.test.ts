@@ -452,7 +452,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 

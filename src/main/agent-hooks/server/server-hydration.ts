@@ -161,7 +161,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
     }
     if (dropped > 0 || prunedLegacyClaudeSubagents > 0 || scrubbedLegacyLaunchTokens > 0) {
       // Why: persist load-time pruning and bearer scrubbing once.
-      this.runStatusPersist()
+      void this.runStatusPersist()
     } else if (hydrated > 0) {
       // Why: prime dedup from raw bytes (not re-serialized) only when hydration was lossless.
       this.lastWrittenJson = raw

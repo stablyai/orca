@@ -225,7 +225,7 @@ describe('AgentHookServer listener replay', () => {
 
       expect(server.getStatusSnapshot()).toEqual([])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -263,7 +263,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ).toBeNull()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -301,7 +301,7 @@ describe('AgentHookServer listener replay', () => {
           expect.objectContaining({ paneKey: PANE, state: 'done' })
         ])
       } finally {
-        server.stop()
+        await server.stop()
       }
     })
   }
@@ -338,7 +338,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({ paneKey: PANE, state: 'working', prompt: 'much later turn' })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -368,7 +368,7 @@ describe('AgentHookServer listener replay', () => {
       // The pane fence must still be standing too, not silently lifted underneath.
       expect(server.restorePaneAuthority(PANE)).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -405,7 +405,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({ paneKey: detachedPane, state: 'done' })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -441,7 +441,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({ paneKey: PANE, state: 'done' })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -472,7 +472,7 @@ describe('AgentHookServer listener replay', () => {
       await postHook({ hook_event_name: 'agent_end' })
       expect(server.getStatusSnapshot()).toEqual([])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -508,7 +508,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({ paneKey: PANE, state: 'done' })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -564,7 +564,7 @@ describe('AgentHookServer listener replay', () => {
       )
       expect(server.getStatusSnapshot()).toHaveLength(1)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -602,7 +602,7 @@ describe('AgentHookServer listener replay', () => {
       await postHook({ hook_event_name: 'before_agent_start', prompt: 'after tab-1 close' })
       expect(server.getStatusSnapshot()).toEqual([])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -636,7 +636,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({ paneKey: reboundPane, state: 'working' })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -666,7 +666,7 @@ describe('AgentHookServer listener replay', () => {
         expect.objectContaining({ paneKey: PANE, state: 'done', sessionBoundary: true })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 

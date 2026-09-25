@@ -50,7 +50,7 @@ describe('AgentHookServer startup failure lifecycle', () => {
       },
       'ssh-lifecycle'
     )
-    persisted.stop()
+    await persisted.stop()
     const server = new AgentHookServer()
     const rendererListener = vi.fn()
     const statusChanges = vi.fn()
@@ -152,15 +152,15 @@ describe('AgentHookServer startup failure lifecycle', () => {
       expect(rowMutations).toHaveBeenCalledTimes(2)
       expect(statusChanges).toHaveBeenCalledTimes(2)
 
-      server.stop()
-      server.stop()
+      await server.stop()
+      await server.stop()
       expect(server.buildPtyEnv()).toEqual({})
       expect(server.getStatusSnapshot()).toEqual([])
       expect(statusChanges).toHaveBeenCalledTimes(3)
       expect(statusChanges).toHaveBeenLastCalledWith([])
     } finally {
-      server.stop()
-      persisted.stop()
+      await server.stop()
+      await persisted.stop()
       rmSync(userDataPath, { recursive: true, force: true })
     }
   })

@@ -209,11 +209,11 @@ describe('structured canonical production slice', () => {
     expect(server.getStatusSnapshotForPane(PANE_KEY)).toHaveLength(1)
   })
 
-  it('clears canonical state and renews the owner epoch when the server stops', () => {
+  it('clears canonical state and renews the owner epoch when the server stops', async () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary(), SUBJECT)
     const epoch = server.getCanonicalStatusSnapshot().epoch
-    server.stop()
+    await server.stop()
     expect(server.getCanonicalStatusSnapshot().parents).toEqual([])
     expect(server.getCanonicalStatusSnapshot().epoch).not.toBe(epoch)
     expect(server.getStatusSnapshot()).toEqual([])

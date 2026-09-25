@@ -79,7 +79,7 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
           agentType: 'omp'
         })
       ])
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
       expect(existsSync(lastStatusPath())).toBe(true)
       const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8')) as {
         entries: Record<string, { payload: { state: string } }>
@@ -87,7 +87,7 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
       expect(file.entries[PANE]?.payload.state).toBe('done')
       expect(file.entries[REMINTED]).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -110,7 +110,7 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -145,7 +145,7 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -176,7 +176,7 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -220,7 +220,7 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

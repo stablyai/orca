@@ -67,7 +67,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -107,7 +107,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -148,7 +148,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -195,7 +195,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -241,7 +241,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -287,7 +287,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -334,7 +334,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -384,7 +384,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -427,7 +427,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -472,7 +472,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -517,7 +517,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -562,7 +562,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -602,7 +602,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -642,7 +642,7 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -671,7 +671,7 @@ describe('AgentHookServer listener replay', () => {
 
       expect(listener).not.toHaveBeenCalled()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

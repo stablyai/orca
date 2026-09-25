@@ -157,8 +157,8 @@ describe('agent hook spool', () => {
       'spool-test'
     )
     expect(first.getStatusSnapshot()).toHaveLength(1)
-    first.flushStatusPersistSync()
-    first.stop()
+    await first.flushStatusPersist()
+    await first.stop()
     const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
     mkdirSync(spoolDir, { recursive: true })
     writeFileSync(
@@ -171,10 +171,10 @@ describe('agent hook spool', () => {
       const snapshot = restarted.getStatusSnapshot()
       expect(snapshot).toHaveLength(1)
       expect(snapshot[0]!.subagents).toBeUndefined()
-      restarted.flushStatusPersistSync()
+      await restarted.flushStatusPersist()
       expect(readFileSync(restarted.lastStatusPath!, 'utf8')).not.toContain('isReplay')
     } finally {
-      restarted.stop()
+      await restarted.stop()
     }
   })
 
@@ -194,8 +194,8 @@ describe('agent hook spool', () => {
         },
         'ssh-1'
       )
-      first.flushStatusPersistSync()
-      first.stop()
+      await first.flushStatusPersist()
+      await first.stop()
 
       await second.start({ env: 'production', userDataPath })
       second.ingestRemote(
@@ -214,8 +214,8 @@ describe('agent hook spool', () => {
         prompt: 'old'
       })
     } finally {
-      first.stop()
-      second.stop()
+      await first.stop()
+      await second.stop()
     }
   })
 
@@ -270,8 +270,8 @@ describe('agent hook spool', () => {
       },
       null
     )
-    first.flushStatusPersistSync()
-    first.stop()
+    await first.flushStatusPersist()
+    await first.stop()
     const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
     mkdirSync(spoolDir, { recursive: true })
     writeFileSync(
@@ -283,7 +283,7 @@ describe('agent hook spool', () => {
     try {
       expect(restarted.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
-      restarted.stop()
+      await restarted.stop()
     }
   })
 })

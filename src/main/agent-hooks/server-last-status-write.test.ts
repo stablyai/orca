@@ -66,8 +66,7 @@ describe('Last-status persistence', () => {
           { launchToken: 'launch-bearer-must-not-persist' }
         )
       )
-      // Synchronous flush via stop() captures the trailing-debounced write.
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
       expect(existsSync(lastStatusPath())).toBe(true)
       const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(file.version).toBe(2)
@@ -96,7 +95,7 @@ describe('Last-status persistence', () => {
       })
       expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -141,7 +140,7 @@ describe('Last-status persistence', () => {
       expect(persisted).not.toContain(launchToken)
       expect(JSON.parse(persisted).entries[PANE]).toMatchObject({ launchTokenHash })
     } finally {
-      server.stop()
+      await server.stop()
     }
 
     const restartedServer = new AgentHookServer()
@@ -155,7 +154,7 @@ describe('Last-status persistence', () => {
       ])
       expect(restartedServer.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
     } finally {
-      restartedServer.stop()
+      await restartedServer.stop()
     }
   })
 
@@ -191,8 +190,8 @@ describe('Last-status persistence', () => {
     const first = new AgentHookServer()
     await first.start({ env: 'production', userDataPath })
     first.clearStatusEntriesForConnection('ssh-target')
-    first.flushStatusPersistSync()
-    first.stop()
+    await first.flushStatusPersist()
+    await first.stop()
 
     const afterClear = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
     expect(afterClear.entries).toEqual({})
@@ -213,8 +212,8 @@ describe('Last-status persistence', () => {
       })
     ).toEqual({ paneKey: PANE, source: 'hydrated_commitment' })
     restored.retirePaneAuthority(PANE)
-    restored.flushStatusPersistSync()
-    restored.stop()
+    await restored.flushStatusPersist()
+    await restored.stop()
 
     const retired = new AgentHookServer()
     await retired.start({ env: 'production', userDataPath })
@@ -228,7 +227,7 @@ describe('Last-status persistence', () => {
         })
       ).toBeNull()
     } finally {
-      retired.stop()
+      await retired.stop()
     }
   })
 
@@ -264,7 +263,7 @@ describe('Last-status persistence', () => {
       expect(statusChangeListener).toHaveBeenCalledWith([])
       expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
 
-      firstServer.flushStatusPersistSync()
+      await firstServer.flushStatusPersist()
       const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(file.entries[PANE]).toMatchObject({
         providerSessionOnly: true,
@@ -275,7 +274,7 @@ describe('Last-status persistence', () => {
         }
       })
     } finally {
-      firstServer.stop()
+      await firstServer.stop()
     }
 
     const hydratedServer = new AgentHookServer()
@@ -293,7 +292,7 @@ describe('Last-status persistence', () => {
       )
       expect(hydratedServer.getStatusChangeSnapshot()).toEqual([])
     } finally {
-      hydratedServer.stop()
+      await hydratedServer.stop()
     }
   })
 
@@ -314,12 +313,12 @@ describe('Last-status persistence', () => {
         }),
         '/hook/opencode'
       )
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
       const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(file.entries[PANE].payload.prompt).toBe('persist status only')
       expect(file.entries[PANE].promptInteractionKey).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

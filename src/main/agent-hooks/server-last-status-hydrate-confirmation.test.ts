@@ -59,8 +59,8 @@ describe('Last-status persistence', () => {
       connectionId: null,
       payload
     })
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -82,7 +82,7 @@ describe('Last-status persistence', () => {
       expect(confirmed?.restoredUnconfirmed).toBeUndefined()
       expect(confirmed?.receivedAt).toBe(restored.receivedAt + 1)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -105,8 +105,8 @@ describe('Last-status persistence', () => {
       },
       'conn-1'
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -133,7 +133,7 @@ describe('Last-status persistence', () => {
       })
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -158,8 +158,8 @@ describe('Last-status persistence', () => {
       },
       'conn-1'
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -201,7 +201,7 @@ describe('Last-status persistence', () => {
       )
       expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -217,13 +217,13 @@ describe('Last-status persistence', () => {
       },
       'conn-1'
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const secondServer = new AgentHookServer()
     await secondServer.start({ env: 'production', userDataPath })
-    secondServer.flushStatusPersistSync()
-    secondServer.stop()
+    await secondServer.flushStatusPersist()
+    await secondServer.stop()
     expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('restoredUnconfirmed')
 
     const thirdServer = new AgentHookServer()
@@ -233,7 +233,7 @@ describe('Last-status persistence', () => {
         expect.objectContaining({ paneKey: PANE, state: 'working', restoredUnconfirmed: true })
       ])
     } finally {
-      thirdServer.stop()
+      await thirdServer.stop()
     }
   })
 
@@ -249,8 +249,8 @@ describe('Last-status persistence', () => {
       },
       'conn-1'
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -270,7 +270,7 @@ describe('Last-status persistence', () => {
       expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
       expect(server.getStatusSnapshot()[0]?.interrupted).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -332,7 +332,7 @@ describe('Last-status persistence', () => {
         })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -387,7 +387,7 @@ describe('Last-status persistence', () => {
       const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(persisted.entries[PANE].payload.subagents).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -471,7 +471,7 @@ describe('Last-status persistence', () => {
         expect.objectContaining({ state: 'done', model: 'gpt-5.4', subagents: undefined })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

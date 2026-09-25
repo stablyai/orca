@@ -52,9 +52,9 @@ describe.skipIf(process.platform === 'win32')(
       }
     }, 120_000)
 
-    afterEach(() => {
+    afterEach(async () => {
       manager?.disposeAll()
-      orcaServer?.stop()
+      await orcaServer?.stop()
       child?.kill()
       rmSync(fakeHome, { recursive: true, force: true })
     })

@@ -504,8 +504,8 @@ describe('AgentSessionTransitionRecorder fed by the status store', () => {
     const first = new AgentHookServer()
     await first.start({ env: 'production', userDataPath: hookDataDir })
     first.ingestTerminalStatus(osc)
-    first.flushStatusPersistSync()
-    first.stop()
+    await first.flushStatusPersist()
+    await first.stop()
 
     now.mockReturnValue(T + 3_600_000)
     const server = new AgentHookServer()
@@ -517,7 +517,7 @@ describe('AgentSessionTransitionRecorder fed by the status store', () => {
       server.ingestTerminalStatus({ ...osc, payload: { ...osc.payload, toolName: 'Bash' } })
       expect(starts.onAgentStart).toHaveBeenCalledWith(STORE_PANE, T + 3_600_000, undefined, 'wt-1')
     } finally {
-      server.stop()
+      await server.stop()
       now.mockRestore()
       rmSync(hookDataDir, { recursive: true, force: true })
     }

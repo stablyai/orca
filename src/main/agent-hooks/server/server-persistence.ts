@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 
@@ -14,6 +14,9 @@ import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
+  protected pendingStatusPersist: Promise<void> | null = null
+  private pendingStatusSnapshot: { json: string; directory: string; path: string } | null = null
+
   protected serializeStatusFile(): string {
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
@@ -84,57 +87,64 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     }
     this.statusPersistTimer = setTimeout(() => {
       this.statusPersistTimer = null
-      this.runStatusPersist()
+      void this.runStatusPersist()
     }, STATUS_PERSIST_DEBOUNCE_MS)
-    // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
     }
   }
 
-  flushStatusPersistSync(): void {
+  flushStatusPersist(): Promise<void> {
     if (this.statusPersistTimer) {
       clearTimeout(this.statusPersistTimer)
       this.statusPersistTimer = null
     }
-    if (!this.lastStatusFilePath) {
-      return
-    }
-    this.runStatusPersist()
+    return this.runStatusPersist()
   }
 
-  protected runStatusPersist(): void {
+  protected runStatusPersist(): Promise<void> {
     if (!this.lastStatusFilePath || !this.endpointDir) {
-      return
+      return this.pendingStatusPersist ?? Promise.resolve()
     }
-    const json = this.serializeStatusFile()
-    if (json === this.lastWrittenJson) {
-      return
+    this.pendingStatusSnapshot = {
+      json: this.serializeStatusFile(),
+      directory: this.endpointDir,
+      path: this.lastStatusFilePath
     }
-    const tmpPath = join(this.endpointDir, `.last-status-${process.pid}-${randomUUID()}.tmp`)
-    let tmpWritten = false
+    if (!this.pendingStatusPersist) {
+      this.pendingStatusPersist = this.drainStatusSnapshots()
+    }
+    return this.pendingStatusPersist
+  }
+
+  private async drainStatusSnapshots(): Promise<void> {
+    await Promise.resolve()
     try {
-      mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
-      if (process.platform !== 'win32') {
+      while (this.pendingStatusSnapshot) {
+        const { json, directory, path } = this.pendingStatusSnapshot
+        this.pendingStatusSnapshot = null
+        if (json === this.lastWrittenJson) {
+          continue
+        }
+        const tmpPath = join(directory, `.last-status-${process.pid}-${randomUUID()}.tmp`)
         try {
-          chmodSync(this.endpointDir, 0o700)
-        } catch {
-          // best-effort
+          await mkdir(directory, { recursive: true, mode: 0o700 })
+          if (process.platform !== 'win32') {
+            await chmod(directory, 0o700).catch(() => {})
+          }
+          await writeFile(tmpPath, json, { mode: 0o600 })
+          await rename(tmpPath, path)
+          this.lastWrittenJson = json
+        } catch (err) {
+          console.warn('[agent-hooks] failed to write last-status file:', err)
+          await rm(tmpPath, { force: true }).catch(() => {})
+          if (this.lastStatusFilePath === path) {
+            this.scheduleStatusPersist()
+          }
         }
       }
-      writeFileSync(tmpPath, json, { mode: 0o600 })
-      tmpWritten = true
-      renameSync(tmpPath, this.lastStatusFilePath)
-      this.lastWrittenJson = json
-    } catch (err) {
-      console.warn('[agent-hooks] failed to write last-status file:', err)
-      if (tmpWritten) {
-        try {
-          unlinkSync(tmpPath)
-        } catch {
-          // tmp already gone
-        }
-      }
+    } finally {
+      this.pendingStatusPersist = null
     }
   }
 

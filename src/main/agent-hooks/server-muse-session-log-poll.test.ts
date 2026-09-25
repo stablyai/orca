@@ -118,7 +118,7 @@ describe('AgentHookServer Muse session log polling', () => {
       expect(published.at(-1)?.hasExplicitPrompt).toBeUndefined()
       expect(server.getStatusSnapshot()[0]?.interactivePrompt).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

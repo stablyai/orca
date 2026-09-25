@@ -25,7 +25,7 @@ function compactEvent(hookEventName: string, state: 'working' | 'done') {
 }
 
 describe('manual compact status cleanup', () => {
-  it('retires authority with pane, tab, and server cleanup', () => {
+  it('retires authority with pane, tab, and server cleanup', async () => {
     const server = new AgentHookServer()
     const begin = (): void => {
       server.ingestRemote(compactEvent('UserPromptSubmit', 'working'), 'conn-a')
@@ -42,7 +42,7 @@ describe('manual compact status cleanup', () => {
     server.ingestRemote(compactEvent('PostCompact', 'done'), 'conn-a')
     expect(server.getStatusSnapshot()).toEqual([])
 
-    server.stop()
+    await server.stop()
     expect(server._getStateForTests().lastStatusByPaneKey.size).toBe(0)
   })
 })

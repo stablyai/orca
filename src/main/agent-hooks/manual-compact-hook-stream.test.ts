@@ -96,9 +96,9 @@ describe('manual Claude compact hook stream', () => {
   const servers: { stop: () => void }[] = []
   const temporaryPaths: string[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const server of servers.splice(0)) {
-      server.stop()
+      await server.stop()
     }
     for (const path of temporaryPaths.splice(0)) {
       rmSync(path, { recursive: true, force: true })

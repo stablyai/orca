@@ -331,9 +331,9 @@ describe('structured rows and last-status.json', () => {
         payload: { state: 'working', prompt: 'watch the build', agentType: 'claude' }
       })
       server.ingestStructuredStatus(summary(), SUBJECT)
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
     } finally {
-      server.stop()
+      await server.stop()
     }
 
     const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8')) as {
@@ -346,7 +346,7 @@ describe('structured rows and last-status.json', () => {
     try {
       expect(restored.getStatusSnapshot().map((row) => row.paneKey)).toEqual([PANE])
     } finally {
-      restored.stop()
+      await restored.stop()
     }
   })
 
@@ -374,7 +374,7 @@ describe('structured rows and last-status.json', () => {
     try {
       expect(server.getStatusSnapshot()).toEqual([])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

@@ -139,7 +139,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
         mainAgent: { state: 'done', outcome: 'cancellation' }
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -180,7 +180,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       expect(row(server).interrupted).toBeUndefined()
       expect(row(server).mainAgent).not.toHaveProperty('outcome')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -227,7 +227,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       expect(row(server)).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
       expect(row(server).workingMode).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -264,7 +264,7 @@ describe('a Claude cancel with a background shell (captured)', () => {
       })
       expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })
@@ -324,7 +324,7 @@ describe('a Claude cancel with a live subagent (captured)', () => {
       })
       expect(row(server).mainAgent).not.toHaveProperty('outcome')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -353,7 +353,7 @@ describe('a Claude cancel with a live subagent (captured)', () => {
       })
       expect(row(server).turnCompletedAt).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

@@ -70,9 +70,9 @@ describe('AgentHookServer transport interference', () => {
   const servers: AgentHookServer[] = []
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const server of servers) {
-      server.stop()
+      await server.stop()
     }
     servers.length = 0
     warn.mockClear()

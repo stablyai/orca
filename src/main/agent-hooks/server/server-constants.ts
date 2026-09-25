@@ -10,7 +10,6 @@ export const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
 export const LAST_STATUS_FILE_VERSION = 2
 
-// Why: trailing-edge debounce so a burst of hook events yields one disk write, not N; quit-time flushStatusPersistSync() guarantees the final flush.
 export const STATUS_PERSIST_DEBOUNCE_MS = 250
 export const TOOL_PROGRESS_HOOK_EVENTS = new Set([
   'PreToolUse',

@@ -16,13 +16,23 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
+type AgentHookServerStartOptions = {
+  env?: string
+  userDataPath?: string
+  endpointNamespace?: string
+}
+
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
-  /** Start the loopback listener after hydration and spool replay have settled. */
-  async start(options?: {
-    env?: string
-    userDataPath?: string
-    endpointNamespace?: string
-  }): Promise<void> {
+  private lifecycleOperation: Promise<void> = Promise.resolve()
+
+  start(options?: AgentHookServerStartOptions): Promise<void> {
+    const started = this.lifecycleOperation.then(() => this.startListener(options))
+    this.lifecycleOperation = started.catch(() => {})
+    return started
+  }
+
+  private async startListener(options?: AgentHookServerStartOptions): Promise<void> {
+    await this.pendingStatusPersist
     if (this.server) {
       return
     }
@@ -54,6 +64,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       }
       this.ownerStateInitialized = true
     }
+    await this.pendingStatusPersist
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -189,9 +200,14 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.endpointFileWritten = false
   }
 
-  stop(): void {
-    // Why: flush the pending debounced write before clearing the map, else a hook <250ms before quit is lost on relaunch.
-    this.flushStatusPersistSync()
+  stop(): Promise<void> {
+    const stopped = this.lifecycleOperation.then(() => this.stopListener())
+    this.lifecycleOperation = stopped.catch(() => {})
+    return stopped
+  }
+
+  private stopListener(): Promise<void> {
+    const persistence = this.flushStatusPersist()
     this.stopOpenCodeBinderLoop()
     this.rollbackTransportStart()
     this.env = 'production'
@@ -239,5 +255,6 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.providerSessionChangeListeners.clear()
     this.enrichedStatusListeners.clear()
     this.statusRowMutationListeners.clear()
+    return persistence
   }
 }
