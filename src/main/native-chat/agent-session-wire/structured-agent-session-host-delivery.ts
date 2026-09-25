@@ -35,6 +35,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+  trackStart: <T>(start: Promise<T>) => Promise<T>
   ensureProviderChild: (sessionId: string) => Promise<StructuredAgentSessionResumeOutcome>
   reset: (sessionId: string, journal: AgentSessionJournal, reset: AgentJournalResetReason) => void
   publishRestored: (sessionId: string) => void
@@ -44,6 +45,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessions,
     adapter: deps.adapter,
     serialize: input.serialize,
+    trackStart: input.trackStart,
     ensureProviderChild: input.ensureProviderChild,
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),

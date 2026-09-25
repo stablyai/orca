@@ -16,7 +16,7 @@ import {
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
   AgentSessionPreSpawnError,
@@ -488,15 +488,13 @@ describe('a child that exits before its message is handed over', () => {
 })
 
 describe('Stop withdraws what is queued', () => {
-  it('withdraws a crash leftover the open could not settle, ahead of any delivery step (W17a)', async () => {
+  it('withdraws a crash leftover ahead of any delivery step (W17a)', async () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('leftover', 'l', true), fence })
     })
-    const settle = vi.spyOn(AgentSessionJournal.prototype, 'rejectQueuedSubmissions')
-    settle.mockRejectedValueOnce(new Error('journal busy'))
 
+    // Stop's own open wakes the delivery loop, whose first step queues behind this Stop.
     expect(await stop()).toMatchObject({ ok: true })
-    settle.mockRestore()
 
     expect(submission('leftover')).toMatchObject({
       dispatchState: 'rejected',

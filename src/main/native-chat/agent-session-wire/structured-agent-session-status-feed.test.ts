@@ -86,8 +86,7 @@ function feedFor(
       }
     } as unknown as ReadonlyMap<string, ReturnType<typeof indexed>>,
     // A partial record still has a lease: the feed reads the conversation's fence off it.
-    getRecord: () =>
-      record && ({ lease: agentSessionRecordFixture().lease, ...record } as AgentSessionRecord),
+    getRecord: () => (record ? { ...agentSessionRecordFixture(), ...record } : null),
     now: () => (now += 1)
   })
   const events: AgentSessionStatusEvent[] = []

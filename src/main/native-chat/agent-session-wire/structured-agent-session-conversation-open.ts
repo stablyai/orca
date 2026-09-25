@@ -1,16 +1,14 @@
 // The one way a conversation's journal becomes open on this host: for a send, for a reader, and
 // for an attach that finds none open.
 //
-// It opens with recovery, so an unusable journal is rebuilt rather than refused, and it settles
-// what an earlier host process left unanswered — the crash boundary. That needs no lease: a row
-// queued there was accepted by a process that ended before handing it over, so it is provably
-// unwritten; a handed-over row is only doubt, and provider history decides it later, under a won
-// lease, in the attach. Nothing here starts a provider child.
+// It opens with recovery, so an unusable journal is rebuilt rather than refused, and it marks what
+// an earlier host process handed over and left unanswered as in doubt — the crash boundary. That
+// needs no lease: provider history decides such a row later, under a won lease, in the attach. A
+// row an earlier process accepted and never handed over is the delivery loop's, which the open
+// wakes. Nothing here starts a provider child.
 
 import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
-import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -90,26 +88,16 @@ export async function openStructuredAgentSessionConversationJournal(
     historyFilePath: (await deps.adapter.historyFilePath?.({ identity })) ?? null
   })
   try {
-    await settleEarlierProcessSubmissions(opened.journal, fence)
+    // A queued row found here is a leftover the delivery loop's first step rejects; a handed-over
+    // one is only doubt, which provider history decides under a won lease.
+    await opened.journal.markPendingSubmissionsUnknown(fence)
   } catch (error) {
-    // Best effort: the delivery loop rejects a leftover queued row itself.
     deps.onEventSinkError?.({ sessionId, error })
   }
   return {
     session: { journal: opened.journal, params, child: null },
     reset: opened.recovery?.reset ?? null
   }
-}
-
-async function settleEarlierProcessSubmissions(
-  journal: AgentSessionJournal,
-  fence: number
-): Promise<void> {
-  // A handle closes only with nothing queued, so a queued row found here is a leftover.
-  await journal.rejectQueuedSubmissions(fence, DISPATCH_REJECTED_HOST_RESTARTED, (submission) =>
-    journal.wroteBeforeOpen(submission.acceptedSequence)
-  )
-  await journal.markPendingSubmissionsUnknown(fence)
 }
 
 export function attachParamsForRecord(

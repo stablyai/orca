@@ -12,7 +12,11 @@ import type {
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import {
+  DISPATCH_REJECTED_CANCELLED,
+  DISPATCH_REJECTED_PROVIDER_CLOSED
+} from '../../../shared/structured-agent-session-dispatch-rejection'
+import { providerStartupFailureOutcome } from './structured-agent-session-dead-generation-settlement'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -155,14 +159,47 @@ function submission(id: string): AgentJournalSubmission | undefined {
   return host.journalSnapshot(SESSION).submissions.find((entry) => entry.clientMessageId === id)
 }
 
-function statusRows(): { text: string; tone?: string }[] {
-  return host
-    .journalSnapshot(SESSION)
-    .items.flatMap((item) =>
-      item.body.kind === 'status'
-        ? [{ text: item.body.text, ...(item.body.tone ? { tone: item.body.tone } : {}) }]
-        : []
-    )
+function statusRows(): { itemId: string; text: string; tone?: string }[] {
+  return host.journalSnapshot(SESSION).items.flatMap((item) =>
+    item.body.kind === 'status'
+      ? [
+          {
+            itemId: item.itemId,
+            text: item.body.text,
+            ...(item.body.tone ? { tone: item.body.tone } : {})
+          }
+        ]
+      : []
+  )
+}
+
+/** The child the conversation has now, as its lifecycle events name it. */
+function currentChild() {
+  const child = conversation()?.child
+  if (!child?.generation) {
+    throw new Error('no child indexed')
+  }
+  return { sessionId: SESSION, fence: child.fence, acquisitionGeneration: child.generation }
+}
+
+function exit(child: ReturnType<typeof currentChild>, reason: string, startupUnproven?: true) {
+  return host.handleAdapterEvent({
+    type: 'ended',
+    ...child,
+    reason,
+    cause: 'unexpected-exit',
+    ...(startupUnproven ? { startupUnproven } : {})
+  })
+}
+
+function rejectedIn(events: AgentSessionSubscribeEvent[], id: string): boolean {
+  return events.some(
+    (event) =>
+      event.type === 'batch' &&
+      event.batch.submissions.some(
+        (entry) => entry.clientMessageId === id && entry.dispatchState === 'rejected'
+      )
+  )
 }
 
 function conversation() {
@@ -274,5 +311,165 @@ describe('a settlement retry for an earlier child inside the attach for the next
     expect(newFence).toBeGreaterThan(retryFence)
     expect(submission(id)?.fence).toBe(newFence)
     expect(conversation()?.child).toMatchObject({ generation: generation(), fence: newFence })
+  })
+})
+
+describe('a published child that dies while it proves its start', () => {
+  const EXIT = 'claude stream-json exited (code 1)'
+  const TEXT = providerStartupFailureOutcome(EXIT)
+
+  it.each([['the loop sees the start fail first'], ['the exit is processed first']])(
+    'leaves one error row keyed by the start, and every queued message rejected with it: %s (R2)',
+    async (order) => {
+      const settled = deferred<string>()
+      adapterExtras = { awaitStarted: vi.fn(() => settled.promise) }
+      await restartHost()
+      acquire.mockImplementation(spawnStartingChild)
+      const first = await accept('first')
+      const events = subscribe()
+      const second = await accept('second')
+      await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalled())
+      const child = currentChild()
+
+      if (order === 'the exit is processed first') {
+        await exit(child, EXIT, true)
+        settled.resolve(TEXT)
+      } else {
+        settled.resolve(TEXT)
+        await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
+        await exit(child, EXIT, true)
+      }
+
+      await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
+      expect(statusRows()).toEqual([
+        {
+          itemId: `orca:${encodeURIComponent(`start-failure:${child.acquisitionGeneration}`)}`,
+          text: TEXT,
+          tone: 'error'
+        }
+      ])
+      expect(submission(first)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
+      expect(submission(second)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
+      expect(rejectedIn(events, second)).toBe(true)
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(acquire).toHaveBeenCalledTimes(2)
+    }
+  )
+})
+
+describe('a child that ends before its message is handed over', () => {
+  it('starts one child for the message, then rejects it and stops (R2)', async () => {
+    // The child the loop starts exits between its start step and its handover step.
+    adapterExtras = {
+      awaitStarted: vi.fn(async () => {
+        await exit(currentChild(), 'codex app-server crashed')
+      })
+    }
+    await restartHost()
+    const id = await accept('hello')
+    const events = subscribe()
+
+    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
+    expect(submission(id)?.reason).toContain('codex app-server crashed')
+    expect(statusRows()).toEqual([
+      { itemId: expect.any(String), text: submission(id)?.reason, tone: 'error' }
+    ])
+    expect(rejectedIn(events, id)).toBe(true)
+    await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
+    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+})
+
+describe('another child indexed while the loop waits on the one it started', () => {
+  it('hands nothing over until the child now there has proven its start (R2)', async () => {
+    const starts = new Map<string, ReturnType<typeof deferred<void>>>()
+    const startOf = (generation: string) => {
+      const start = starts.get(generation) ?? deferred<void>()
+      starts.set(generation, start)
+      return start
+    }
+    adapterExtras = {
+      awaitStarted: vi.fn(() => startOf(currentChild().acquisitionGeneration).promise),
+      // The stop ends the child without settling the start the loop is waiting on.
+      closeSession: vi.fn(async () => true)
+    }
+    await restartHost()
+    acquire.mockImplementation(spawnStartingChild)
+    const first = await accept('first')
+    await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalledTimes(1))
+    const stopped = currentChild()
+    expect(await stop()).toMatchObject({ ok: true })
+    const second = await accept('second')
+    // A view's hold starts its own child before the loop's handover step runs.
+    await host.hold(SESSION, 'surface-1')
+    const replacement = currentChild()
+    expect(replacement.acquisitionGeneration).not.toBe(stopped.acquisitionGeneration)
+
+    startOf(stopped.acquisitionGeneration).resolve()
+    await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalledTimes(2))
+    expect(dispatch).not.toHaveBeenCalled()
+
+    await host.handleAdapterEvent({
+      type: 'started',
+      ...replacement,
+      reportedOptions: { model: 'sonnet' },
+      restoreSkippedOptions: []
+    })
+    startOf(replacement.acquisitionGeneration).resolve()
+
+    await eventually(() => expect(submission(second)?.dispatchState).toBe('accepted'))
+    expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([second])
+    expect(submission(first)).toMatchObject({ reason: DISPATCH_REJECTED_CANCELLED })
+  })
+})
+
+describe('a quit with a message still queued', () => {
+  /** Read by the next launch, through the same open any reader takes. */
+  async function afterRelaunch(id: string): Promise<AgentJournalSubmission | undefined> {
+    startHost()
+    await host.revealSession(SESSION)
+    return submission(id)
+  }
+
+  it('settles a message no child ever had the way a chat close does (R2)', async () => {
+    // Quit has begun — its first step stops the delivery loops — when this message is accepted.
+    host['conversationDelivery'].loop.dispose()
+    const id = await accept('hello')
+    expect(conversation()?.child).toBeNull()
+    await host.flushAllStreamedEvents()
+
+    expect(await afterRelaunch(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: DISPATCH_REJECTED_PROVIDER_CLOSED
+    })
+  })
+
+  it('waits for the start already in flight and stops the child it produced (R2)', async () => {
+    const starting = deferred<void>()
+    const closeSession = vi.fn(async () => true)
+    adapterExtras = { closeSession }
+    await restartHost()
+    // The loop's start step is under way, but has not reached its attach yet.
+    const resolveRecovery = host['runtimeState'].resolveRecovery.bind(host['runtimeState'])
+    const recovering = vi.spyOn(host['runtimeState'], 'resolveRecovery')
+    recovering.mockImplementationOnce(async (sessionId) => {
+      await starting.promise
+      return resolveRecovery(sessionId)
+    })
+    const id = await accept('hello')
+    await eventually(() => expect(recovering).toHaveBeenCalled())
+
+    const quit = host.flushAllStreamedEvents()
+    starting.resolve()
+    await quit
+
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(await afterRelaunch(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: DISPATCH_REJECTED_PROVIDER_CLOSED
+    })
   })
 })

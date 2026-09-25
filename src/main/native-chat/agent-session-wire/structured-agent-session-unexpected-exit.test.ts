@@ -32,7 +32,7 @@ function recoveryContext(input: {
   handoffStage?: AgentSessionRecord['lease']['handoffStage']
   resumeCapable?: boolean
 }) {
-  const session = {
+  const session: Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'> = {
     child: null,
     lastEndedChild: {
       generation: input.generation ?? GENERATION,
@@ -41,7 +41,7 @@ function recoveryContext(input: {
       reason: null,
       duringStartup: false
     }
-  } as StructuredAgentSessionHostSession
+  }
   const record = {
     lease: {
       runtimeFence: 8,
@@ -132,6 +132,7 @@ describe('provider-exit recovery tickets', () => {
       .fn()
       .mockRejectedValueOnce(new Error('journal unavailable'))
       .mockResolvedValue({ epoch: 'epoch-1', sequence: 2 })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exit reads only the child record and these journal methods; the rest of the session is unreachable from it.
     const session = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
@@ -139,8 +140,7 @@ describe('provider-exit recovery tickets', () => {
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
         appendLifecycleBatch,
-        markPendingSubmissionsUnknown: vi.fn(async () => []),
-        rejectQueuedSubmissions: vi.fn(async () => [])
+        markPendingSubmissionsUnknown: vi.fn(async () => [])
       }
     } as unknown as StructuredAgentSessionHostSession
 
@@ -201,13 +201,13 @@ describe('provider-exit recovery tickets', () => {
       lifecycleItem('turn-1', 1, { state: 'completed', startedAt: 10, completedAt: 20 }),
       lifecycleItem('turn-2', 2, { state: 'running', startedAt: 30 })
     ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exit reads only the child record and these journal methods; the rest of the session is unreachable from it.
     const session = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         snapshot: () => ({ items }),
         appendLifecycleBatch,
-        markPendingSubmissionsUnknown: vi.fn(async () => []),
-        rejectQueuedSubmissions: vi.fn(async () => [])
+        markPendingSubmissionsUnknown: vi.fn(async () => [])
       }
     } as unknown as StructuredAgentSessionHostSession
     const store = {
@@ -313,8 +313,7 @@ describe('provider-exit recovery tickets', () => {
           snapshot: () => ({ items }),
           appendLifecycleBatch,
           markPendingSubmissionsUnknown: vi.fn(async () => []),
-          rejectPendingSubmissions: vi.fn(async () => []),
-          rejectQueuedSubmissions: vi.fn(async () => [])
+          rejectPendingSubmissions: vi.fn(async () => [])
         }
       }
 
@@ -370,7 +369,6 @@ describe('provider-exit recovery tickets', () => {
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
         markPendingSubmissionsUnknown,
         rejectPendingSubmissions: vi.fn(async () => []),
-        rejectQueuedSubmissions: vi.fn(async () => []),
         submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending' }]
       }
     }
@@ -415,7 +413,6 @@ describe('provider-exit recovery tickets', () => {
       journal: {
         markPendingSubmissionsUnknown: vi.fn(async () => []),
         rejectPendingSubmissions: vi.fn(async () => []),
-        rejectQueuedSubmissions: vi.fn(async () => []),
         snapshot: () => ({
           items: [lifecycleItem('turn-failing', 1, { state: 'running', startedAt: 1 })]
         }),

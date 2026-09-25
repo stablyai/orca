@@ -47,25 +47,38 @@ export type StructuredAgentSessionLifetimeContext = {
   }
 }
 
+type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'onEventSinkError'> & {
+  store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'>
+}
+
+/** A conversation's handle closes with nothing queued: what is still queued when the chat closes,
+ *  or the app quits, will not be handed over. Best effort: the next open's delivery loop rejects a
+ *  leftover itself. */
+export async function abandonQueuedStructuredAgentSessionMessages(
+  deps: ConversationCloseDeps,
+  sessionId: string,
+  journal: StructuredAgentSessionHostSession['journal']
+): Promise<void> {
+  await journal
+    .rejectQueuedSubmissions(
+      structuredAgentSessionConversationFence(deps.store, sessionId),
+      DISPATCH_REJECTED_PROVIDER_CLOSED
+    )
+    .catch((error: unknown) => deps.onEventSinkError?.({ sessionId, error }))
+}
+
 /** Dropping a session and dropping its status row are ONE operation: the store keeps the row until
- *  told, so a caller that only deletes strands a live-looking row no reader can ever decay. A
- *  handle closes with nothing queued: what is still queued now will not be handed over. */
+ *  told, so a caller that only deletes strands a live-looking row no reader can ever decay. */
 export async function forgetStructuredAgentSession(
   context: Pick<StructuredAgentSessionLifetimeContext, 'sessions' | 'forgetStatus'> & {
-    deps: Pick<StructuredAgentSessionHostDeps, 'onEventSinkError'> & {
-      store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'>
-    }
+    deps: ConversationCloseDeps
   },
   sessionId: string
 ): Promise<void> {
   const session = context.sessions.get(sessionId)
-  await session?.journal
-    .rejectQueuedSubmissions(
-      structuredAgentSessionConversationFence(context.deps.store, sessionId),
-      DISPATCH_REJECTED_PROVIDER_CLOSED
-    )
-    // Best effort: the next open rejects a leftover itself.
-    .catch((error: unknown) => context.deps.onEventSinkError?.({ sessionId, error }))
+  if (session) {
+    await abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
+  }
   await session?.journal.close()
   context.sessions.delete(sessionId)
   context.forgetStatus(sessionId)
@@ -147,7 +160,6 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         pendingSubmissionReason: 'provider_closed_before_acknowledgement',
         verdict: { state: 'interrupted', completedAt: context.now() },
         showUnexpectedExitOutcome: false,
-        queuedRejection: DISPATCH_REJECTED_PROVIDER_CLOSED,
         onError: (id, error) => {
           settlementError = error
           context.deps.onEventSinkError?.({ sessionId: id, error })

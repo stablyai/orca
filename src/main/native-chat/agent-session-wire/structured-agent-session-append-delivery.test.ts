@@ -150,11 +150,15 @@ describe('an open chat receives every row its journal commits', () => {
 
     await exitBeforeProof()
 
-    expect(pane.received().statuses).toEqual([
-      expect.stringMatching(/stopped before it finished starting: .*not signed in/)
-    ])
-    expect(pane.received().submissions).toContainEqual(
-      expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
+    // The exit ends the child; the delivery loop, which reads why, rejects what it had queued.
+    await vi.waitFor(() =>
+      expect(pane.received().submissions).toContainEqual(
+        expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
+      )
+    )
+    // One row, however many of its writers reported the start.
+    expect(new Set(pane.received().statuses)).toEqual(
+      new Set([expect.stringMatching(/stopped before it finished starting: .*not signed in/)])
     )
   })
 

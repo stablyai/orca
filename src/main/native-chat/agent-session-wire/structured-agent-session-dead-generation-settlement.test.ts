@@ -277,7 +277,7 @@ describe('dead structured-session generation settlement', () => {
       pendingSubmissionReason: 'provider_closed_before_acknowledgement',
       verdict: { state: 'interrupted', completedAt: 1_000 },
       unexpectedExitReason: 'claude stream-json exited (code 1): not signed in',
-      exitedDuringStartup: true
+      exitedDuringStartup: { generation: 'generation-1' }
     })
 
     const reason =

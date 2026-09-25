@@ -4,7 +4,6 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import {
@@ -12,6 +11,7 @@ import {
   cancelledJournalPromptBody
 } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
 import {
   runningTurnLifecycleRevisions,
   type StructuredAgentSessionTurnVerdict
@@ -88,7 +88,6 @@ export type DeadGenerationJournal = {
   appendLifecycleBatch: AgentSessionJournal['appendLifecycleBatch']
   markPendingSubmissionsUnknown: AgentSessionJournal['markPendingSubmissionsUnknown']
   rejectPendingSubmissions: AgentSessionJournal['rejectPendingSubmissions']
-  rejectQueuedSubmissions: AgentSessionJournal['rejectQueuedSubmissions']
   snapshot: () => Pick<ReturnType<AgentSessionJournal['snapshot']>, 'items'>
   pendingSubmissions?: AgentSessionJournal['pendingSubmissions']
   submissions?: () => DeadGenerationSubmission[]
@@ -152,31 +151,21 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   showUnexpectedExitOutcome?: boolean
   /** Why the provider stopped, when the host has it. Rendered with the outcome copy. */
   unexpectedExitReason?: string
-  /** The provider never finished starting; the outcome says so instead of naming a response. */
-  exitedDuringStartup?: boolean
-  /** Why messages queued for delivery are rejected: given only when the child they were queued
-   *  for is the one that ended. A retry for an earlier generation leaves them to the next child. */
-  queuedRejection?: string
+  /** The provider never finished starting: the start that failed, keyed by the child's
+   *  generation. Its row is the one the delivery loop writes for the same start. */
+  exitedDuringStartup?: { generation: string | null }
   onError?: (sessionId: string, error: unknown) => void
 }): Promise<boolean> {
   try {
     const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal)
     const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
-    // Settled even with nothing else in flight: left queued, delivery would start another child
-    // for them, and one that dies the same way would start another.
-    const rejectsQueued =
-      input.queuedRejection !== undefined &&
-      input.journal.submissions?.().some(isQueuedAgentJournalSubmission) === true
-    if (!showUnexpectedExitOutcome && !hasUnfinishedWork && !rejectsQueued) {
+    if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
       return true
     }
-    // A queued message was never handed to this child, so it is provably unwritten. A child
-    // that never proved its start accepted nothing either — input is written only after it
-    // initializes — so every send it left unanswered is rejected with the child's own diagnostic.
-    // A proven child's handed-over sends stay in doubt.
-    if (input.queuedRejection !== undefined) {
-      await input.journal.rejectQueuedSubmissions(input.fence, input.queuedRejection)
-    }
+    // A queued message is the delivery loop's to settle: it was never handed to this child. A
+    // child that never proved its start accepted nothing either — input is written only after it
+    // initializes — so every send it was handed is rejected with the child's own diagnostic. A
+    // proven child's handed-over sends stay in doubt.
     await (input.exitedDuringStartup
       ? input.journal.rejectPendingSubmissions(
           input.fence,
@@ -185,17 +174,21 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
       : input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason))
     const items = input.journal.snapshot().items
     const mutations: JournalLifecycleMutationInput[] = []
-    if (showUnexpectedExitOutcome) {
+    if (showUnexpectedExitOutcome && input.exitedDuringStartup) {
+      // Until views stop starting children, a start can die with nothing queued for the loop.
+      mutations.push(
+        structuredAgentSessionStartFailureRow(
+          input.exitedDuringStartup.generation ?? input.settlementId,
+          providerStartupFailureOutcome(input.unexpectedExitReason)
+        )
+      )
+    } else if (showUnexpectedExitOutcome) {
       mutations.push({
         kind: 'item',
         identity: { provider: 'orca', clientMessageId: input.settlementId },
         body: {
           kind: 'status',
-          text: boundJournalStatusText(
-            input.exitedDuringStartup
-              ? providerStartupFailureOutcome(input.unexpectedExitReason)
-              : unexpectedProviderExitOutcome(input.unexpectedExitReason)
-          )
+          text: boundJournalStatusText(unexpectedProviderExitOutcome(input.unexpectedExitReason))
         }
       })
     }

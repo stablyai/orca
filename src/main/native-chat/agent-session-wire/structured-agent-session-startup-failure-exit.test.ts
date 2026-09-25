@@ -25,8 +25,7 @@ function startedSession(): StructuredAgentSessionUnexpectedExitSession & {
       snapshot: () => ({ items: [] }),
       appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
       markPendingSubmissionsUnknown: vi.fn(async () => []),
-      rejectPendingSubmissions: vi.fn(async () => []),
-      rejectQueuedSubmissions: vi.fn(async () => [])
+      rejectPendingSubmissions: vi.fn(async () => [])
     }
   }
 }
@@ -85,7 +84,9 @@ describe('a provider that ends before it finished starting', () => {
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            body: { kind: 'status', text: providerStartupFailureOutcome(REASON) }
+            // The same row the delivery loop writes for a failed start: an error, keyed by it.
+            identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
+            body: { kind: 'status', text: providerStartupFailureOutcome(REASON), tone: 'error' }
           })
         ]
       })
@@ -115,7 +116,9 @@ describe('a provider that ends before it finished starting', () => {
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            body: { kind: 'status', text: providerStartupFailureOutcome(REASON) }
+            // The same row the delivery loop writes for a failed start: an error, keyed by it.
+            identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
+            body: { kind: 'status', text: providerStartupFailureOutcome(REASON), tone: 'error' }
           })
         ]
       })

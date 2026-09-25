@@ -108,6 +108,8 @@ export class StructuredAgentSessionHost {
       deps,
       sessions: this.sessions,
       serialize: (sessionId, task) => this.serialize(sessionId, task),
+      // Quit drains a delivery start before it evicts, so the child it produces is stopped.
+      trackStart: (start) => this.tasks.trackAttach(start),
       ensureProviderChild: (sessionId) => this.holds.ensureProviderChild(sessionId),
       reset: (...args) => this.subscribers.reset(...args),
       publishRestored: this.clientDelivery.publishRestored
