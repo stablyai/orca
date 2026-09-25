@@ -113,5 +113,8 @@ export const worktreesApi = {
       callback(data)
     ipcRenderer.on('worktree:remoteBranchConflict', listener)
     return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
-  }
+  },
+
+  openInNewWindow: (worktreeId, workspaceKey) =>
+    ipcRenderer.invoke('worktree:open-in-new-window', { worktreeId, workspaceKey })
 } satisfies PreloadApi['worktrees']
