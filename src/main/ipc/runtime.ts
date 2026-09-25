@@ -102,33 +102,28 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
-      const stop = (): void => {
-        if (senderSubscriptions.get(args.subscriptionId) === controller) {
-          senderSubscriptions.delete(args.subscriptionId)
-        }
-      }
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
-        .dispatchStreaming(
-          {
-            id: args.subscriptionId,
-            authToken: 'desktop-ipc',
-            method: args.method,
-            params: args.params
-          },
-          (response) => {
-            if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-              event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
-            }
-          },
-          {
-            signal: controller.signal,
-            clientId: 'desktop-renderer',
-            clientKind: 'runtime',
-            connectionId,
-            clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+      // The controller outlives the handler: most streaming handlers bind and return at once, so
+      // it lives until `runtime:unsubscribe`, a same-id resubscribe, or the sender going away.
+      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
+        {
+          id: args.subscriptionId,
+          authToken: 'desktop-ipc',
+          method: args.method,
+          params: args.params
+        },
+        (response) => {
+          if (!controller.signal.aborted && !event.sender.isDestroyed()) {
+            event.sender.send(channel, JSON.parse(response) as RuntimeRpcResponse<unknown>)
           }
-        )
-        .finally(stop)
+        },
+        {
+          signal: controller.signal,
+          clientId: 'desktop-renderer',
+          clientKind: 'runtime',
+          connectionId,
+          clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
+        }
+      )
       return { subscribed: true }
     }
   )

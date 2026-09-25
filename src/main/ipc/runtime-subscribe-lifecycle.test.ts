@@ -49,12 +49,11 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
         subscriptionId: request.id
       }
       streams.push(record)
-      return new Promise<void>((resolve) => {
-        options.signal.addEventListener('abort', () => {
-          record.settled = true
-          resolve()
-        })
+      // The production shape: a streaming handler binds its abort listener and returns at once.
+      options.signal.addEventListener('abort', () => {
+        record.settled = true
       })
+      return Promise.resolve()
     }
   }
 }))
@@ -265,6 +264,25 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     unsubscribe({ sender: harness.sender }, { subscriptionId: 'sub-explicit' })
 
     expect(stream.signal.aborted).toBe(true)
+  })
+
+  it('aborts a stream whose handler already returned when the renderer unsubscribes (U-01)', async () => {
+    const harness = createSender(12)
+    subscribe(harness.sender, 'sub-returned')
+    const stream = streamFor('sub-returned')
+    // The dispatch settled: the handler bound its stream and returned.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const unsubscribe = listeners.get('runtime:unsubscribe')
+    if (!unsubscribe) {
+      throw new Error('runtime:unsubscribe listener not registered')
+    }
+    unsubscribe({ sender: harness.sender }, { subscriptionId: 'sub-returned' })
+
+    expect(stream.signal.aborted).toBe(true)
+    stream.emit(FRAME)
+    expect(harness.sender.send).not.toHaveBeenCalled()
   })
 
   it('scopes colliding subscription ids and unsubscribe to their sender', () => {
