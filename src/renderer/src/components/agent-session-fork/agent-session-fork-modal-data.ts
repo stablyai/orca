@@ -25,11 +25,10 @@ function parseLaunchSource(value: unknown): AgentForkLaunchSource | null {
 }
 
 function parseTranscript(value: unknown): AgentSessionForkModalData['transcript'] {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== 'object' || value === null || !('agent' in value) || !('prompt' in value)) {
     return null
   }
-  const agent: unknown = Reflect.get(value, 'agent')
-  const prompt: unknown = Reflect.get(value, 'prompt')
+  const { agent, prompt } = value
   return isTuiAgent(agent) && typeof prompt === 'string' ? { agent, prompt } : null
 }
 
