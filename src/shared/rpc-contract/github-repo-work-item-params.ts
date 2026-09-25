@@ -37,3 +37,5 @@ export const WorkItemsCount = RepoSelector.extend({
 export const RateLimit = z.object({
   force: z.boolean().optional()
 })
+
+export const RepositoriesList = z.object({})

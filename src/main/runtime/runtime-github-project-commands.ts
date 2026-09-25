@@ -16,6 +16,7 @@ import {
   updateProjectItemFieldValue,
   updatePullRequestBySlug
 } from '../github/project-view'
+import { listAuthenticatedGitHubRepositories } from '../github/repository-catalog'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -36,6 +37,9 @@ import type {
 } from '../../shared/github/project-request-types'
 
 export class RuntimeGitHubProjectCommands {
+  listGitHubRepositories() {
+    return listAuthenticatedGitHubRepositories()
+  }
   listGitHubProjects(args?: ListAccessibleProjectsArgs) {
     return listAccessibleProjects(args)
   }

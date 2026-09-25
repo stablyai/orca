@@ -23,10 +23,12 @@ import type {
   PRInfo
 } from '../../shared/github/pull-request-types'
 import type { GetRateLimitResult } from '../../shared/github/rate-limit-types'
+import type { GitHubRepositoryCatalogItem } from '../../shared/github-repository-catalog'
 import type { GitHubRepoSelectorArgs } from './github-work-item-api'
 
 export type GithubPullRequestApi = {
   viewer: () => Promise<GitHubViewer | null>
+  listRepositories: () => Promise<GitHubRepositoryCatalogItem[]>
   repoSlug: (args: {
     repoPath: string
     repoId?: string

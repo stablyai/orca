@@ -13,6 +13,7 @@ import type { PreloadApi } from '../api-types'
 
 export const ghPullRequestsAndWorkItemsApi = {
   viewer: () => ipcRenderer.invoke('gh:viewer'),
+  listRepositories: () => ipcRenderer.invoke('gh:listRepositories'),
   repoSlug: (args: { repoPath: string; repoId?: string }) =>
     ipcRenderer.invoke('gh:repoSlug', args),
   repoUpstream: (args: { repoPath: string; repoId?: string }) =>

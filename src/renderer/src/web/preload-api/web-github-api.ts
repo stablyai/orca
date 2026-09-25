@@ -19,6 +19,8 @@ export function createGitHubApi(): WebGitHubApi {
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
   const githubApi = {
     viewer: () => Promise.resolve(null),
+    listRepositories: () =>
+      route<WebGitHubResult<'listRepositories'>>(GITHUB_WEB_RPC_METHODS.listRepositories),
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
     repoUpstream: (args) =>
       route<WebGitHubResult<'repoUpstream'>>(GITHUB_WEB_RPC_METHODS.repoUpstream, args),

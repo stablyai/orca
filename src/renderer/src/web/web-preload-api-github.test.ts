@@ -44,6 +44,7 @@ describe('web GitHub preload API', () => {
         'listLabels',
         'listLabelsBySlug',
         'listProjectViews',
+        'listRepositories',
         'listWorkItems',
         'markPRReadyForReview',
         'mergePR',
@@ -353,6 +354,11 @@ describe('web GitHub preload API', () => {
           line: 12,
           body: 'Fix'
         })
+      },
+      {
+        key: 'listRepositories',
+        expectedMethod: 'github.listRepositories',
+        expectedParams: undefined
       },
       {
         key: 'listLabels',

@@ -104,6 +104,7 @@ export function installRuntimeReviewCommandSurface(
     addRepoIssueComment: comments.addRepoIssueComment.bind(comments),
     addRepoPRReviewComment: comments.addRepoPRReviewComment.bind(comments),
     addRepoPRReviewCommentReply: comments.addRepoPRReviewCommentReply.bind(comments),
+    listGitHubRepositories: projects.listGitHubRepositories.bind(projects),
     listGitHubProjects: projects.listGitHubProjects.bind(projects),
     listGitHubLabelsBySlug: projects.listGitHubLabelsBySlug.bind(projects),
     listGitHubAssignableUsersBySlug: projects.listGitHubAssignableUsersBySlug.bind(projects),

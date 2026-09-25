@@ -142,67 +142,6 @@ export function HostSetupExistingFolderStep({
   )
 }
 
-export function HostSetupCloneStep({
-  cloneUrl,
-  cloneDestination,
-  disabled,
-  isCloning,
-  onBack,
-  onCloneUrlChange,
-  onCloneDestinationChange,
-  onSubmit
-}: {
-  cloneUrl: string
-  cloneDestination: string
-  disabled: boolean
-  isCloning: boolean
-  onBack: () => void
-  onCloneUrlChange: (value: string) => void
-  onCloneDestinationChange: (value: string) => void
-  onSubmit: () => void
-}): React.JSX.Element {
-  return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
-      <StepBackButton
-        onBack={onBack}
-        label={translate('auto.components.settings.RepositoryPane.cloneFromUrl', 'Clone from URL')}
-      />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          value={cloneUrl}
-          onChange={(event) => onCloneUrlChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.RepositoryPane.cloneUrlPlaceholder',
-            'Repository URL'
-          )}
-          className="h-9 min-w-0"
-        />
-        <Input
-          value={cloneDestination}
-          onChange={(event) => onCloneDestinationChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.RepositoryPane.cloneDestinationPlaceholder',
-            '/destination/on/host'
-          )}
-          className="h-9 min-w-0"
-        />
-      </div>
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          size="sm"
-          disabled={disabled || !cloneUrl.trim() || !cloneDestination.trim() || isCloning}
-          onClick={onSubmit}
-        >
-          {isCloning
-            ? translate('auto.components.settings.RepositoryPane.cloningHost', 'Cloning...')
-            : translate('auto.components.settings.RepositoryPane.cloneHost', 'Clone')}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 export function HostSetupPlannedStep({
   disabled,
   isCreatingPendingSetup,
