@@ -169,5 +169,16 @@ export async function producer(host?: AgentHookServer) {
     host ? host.getStructuredChildWork(parent) : store.getChildren(parent)
   const byDescription = (description: string) =>
     records().find((record) => record.description === description)
-  return { adapter, store, send, replay, records, byDescription, evidenceLog, stamps, ingested }
+  return {
+    adapter,
+    claude,
+    store,
+    send,
+    replay,
+    records,
+    byDescription,
+    evidenceLog,
+    stamps,
+    ingested
+  }
 }
