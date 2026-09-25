@@ -231,9 +231,9 @@ async function runAttach(
         )
         await recoverInterruptedCompaction(context.deps.store, sessionId, attached.journal, fence)
         if (attached.recovery) {
-          context.subscribers.reset(sessionId, attached.journal, attached.recovery.reset)
+          context.subscribers.reset(sessionId, attached.journal, attached.recovery.reset, fence)
         } else if (previousFence !== undefined && previousFence !== fence) {
-          context.subscribers.snapshot(sessionId, attached.journal)
+          context.subscribers.snapshot(sessionId, attached.journal, fence)
         } else {
           context.subscribers.publish(sessionId, attached.journal)
         }

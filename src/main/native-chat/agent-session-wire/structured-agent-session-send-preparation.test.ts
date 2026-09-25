@@ -685,8 +685,6 @@ describe('a send with no live owner', () => {
 describe('a write fenced to an owner the pane has not seen replaced', () => {
   it('delivers a send fenced to the owner an idle release retired', async () => {
     const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    const frames: AgentSessionSubscribeEvent[] = []
-    host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => frames.push(event) })
     await loseOwner()
     const params = sendParams('after the release')
     params.envelope.expectedRuntimeFence = seenFence
@@ -699,10 +697,30 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(dispatch).toHaveBeenCalledOnce()
-    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    expect(fence).toBeGreaterThan(seenFence + 1)
-    // The pane learns the fence the host is at, not the one it subscribed under.
-    expect(frames.at(-1)).toMatchObject({ fence })
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
+  })
+
+  // Clients resend a refused message when the fence they hold moves, and a refused restart leaves
+  // no ledger row, so a frame carrying each failed attempt's fence would resend it forever.
+  it("keeps the pane's fence on the row a failed restart publishes", async () => {
+    const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    const frames: AgentSessionSubscribeEvent[] = []
+    host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => frames.push(event) })
+    await loseOwner()
+    acquire.mockRejectedValueOnce(new Error('Not signed in'))
+    const subscribed = frames.length
+
+    expect(await host.send(CALLER, sendParams('while signed out'))).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_owner_restart_failed' }
+    })
+
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
+    const published = frames.slice(subscribed)
+    expect(published.length).toBeGreaterThan(0)
+    for (const frame of published) {
+      expect(frame).toMatchObject({ fence: seenFence })
+    }
   })
 
   it('admits a Stop and a send queued behind the cold start that replaced their owner', async () => {

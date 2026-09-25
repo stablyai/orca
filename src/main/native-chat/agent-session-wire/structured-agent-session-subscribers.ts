@@ -3,9 +3,6 @@
 // Each subscriber advances independently: a client that connected two epochs
 // ago gets a reset while a caught-up one gets a batch from the same publish.
 // Nothing raw reaches a subscriber — every event carries reducer output.
-//
-// Every frame carries the fence read when it is sent. A per-subscriber copy went
-// stale whenever the lease moved without a replay, such as an idle release.
 
 import type {
   AgentJournalCursor,
@@ -39,12 +36,11 @@ type Subscriber = {
   sessionId: string
   emit: AgentSessionSubscriberEmit
   cursor: AgentJournalCursor
+  fence: number
   commands?: AgentSessionSlashCommand[] | null
 }
 
 export type AgentSessionSubscribersHooks = {
-  /** The session's current runtime fence, stamped on every frame for clients that still read it. */
-  readFence: (sessionId: string) => number
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   /** Fires after publications that can change journal content. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
@@ -55,7 +51,7 @@ export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
 
-  constructor(private readonly hooks: AgentSessionSubscribersHooks) {}
+  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
   get retainedActivityCountForTests(): number {
     return this.activityBySession.size
@@ -65,6 +61,7 @@ export class AgentSessionSubscribers {
     id: string
     sessionId: string
     journal: AgentSessionJournal
+    fence: number
     emit: AgentSessionSubscriberEmit
     cursor?: AgentJournalCursor
     backgroundTasks?: AgentSessionBackgroundTaskState | null
@@ -74,7 +71,8 @@ export class AgentSessionSubscribers {
       id: input.id,
       sessionId: input.sessionId,
       emit: input.emit,
-      cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 }
+      cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
+      fence: input.fence
     }
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
     session.set(input.id, subscriber)
@@ -84,13 +82,12 @@ export class AgentSessionSubscribers {
     if (input.cursor) {
       this.deliver(subscriber, input.journal, hostNow, true, input.backgroundTasks)
     } else {
-      const fence = this.hooks.readFence(input.sessionId)
-      const page = readAgentSessionHydrationPage(input.journal, fence)
+      const page = readAgentSessionHydrationPage(input.journal, input.fence)
       this.emit(subscriber, {
         type: 'snapshot',
         sessionId: input.sessionId,
         page,
-        fence,
+        fence: input.fence,
         hostNow,
         ...(input.backgroundTasks !== undefined ? { backgroundTasks: input.backgroundTasks } : {}),
         ...this.activityField(input.sessionId)
@@ -141,26 +138,28 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     reason: AgentJournalResetReason,
+    fence: number,
     backgroundTasks?: AgentSessionBackgroundTaskState | null
   ): void {
-    this.replay(sessionId, journal, backgroundTasks, { type: 'reset', reset: reason })
+    this.replay(sessionId, journal, fence, backgroundTasks, { type: 'reset', reset: reason })
   }
 
   snapshot(
     sessionId: string,
     journal: AgentSessionJournal,
+    fence: number,
     backgroundTasks?: AgentSessionBackgroundTaskState | null
   ): void {
-    this.replay(sessionId, journal, backgroundTasks, { type: 'snapshot' })
+    this.replay(sessionId, journal, fence, backgroundTasks, { type: 'snapshot' })
   }
 
   private replay(
     sessionId: string,
     journal: AgentSessionJournal,
+    fence: number,
     backgroundTasks: AgentSessionBackgroundTaskState | null | undefined,
     frame: { type: 'snapshot' } | { type: 'reset'; reset: AgentJournalResetReason }
   ): void {
-    const fence = this.hooks.readFence(sessionId)
     const page = readAgentSessionHydrationPage(journal, fence)
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
@@ -174,13 +173,17 @@ export class AgentSessionSubscribers {
         ...this.activityField(sessionId)
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
+      subscriber.fence = fence
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
-  backgroundTasks(sessionId: string, state: AgentSessionBackgroundTaskState | null): void {
+  backgroundTasks(
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null,
+    fence: number
+  ): void {
     const hostNow = this.now()
-    const fence = this.hooks.readFence(sessionId)
     for (const subscriber of this.subscribers(sessionId)) {
       this.emit(subscriber, {
         type: 'batch',
@@ -190,6 +193,7 @@ export class AgentSessionSubscribers {
         backgroundTasks: state,
         hostNow
       })
+      subscriber.fence = fence
     }
   }
 
@@ -209,7 +213,6 @@ export class AgentSessionSubscribers {
       ? this.activityField(subscriber.sessionId).activity
       : undefined
     const publishedActivity = activity !== undefined ? activity : checkpointActivity
-    const fence = this.hooks.readFence(subscriber.sessionId)
     const readPage = createAgentSessionCatchUpReader(journal)
     while (true) {
       const result = readPage({
@@ -219,13 +222,13 @@ export class AgentSessionSubscribers {
         limit: AGENT_SESSION_HISTORY_MAX_LIMIT
       })
       if (!result.ok) {
-        const page = { ...result.page, fence }
+        const page = { ...result.page, fence: subscriber.fence }
         this.emit(subscriber, {
           type: 'reset',
           sessionId: subscriber.sessionId,
           reset: result.reset,
           page,
-          fence,
+          fence: subscriber.fence,
           hostNow,
           ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
           ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
@@ -244,7 +247,7 @@ export class AgentSessionSubscribers {
             type: 'batch',
             sessionId: subscriber.sessionId,
             batch: emptyAgentSessionBatch(page.window.nextCursor),
-            fence,
+            fence: subscriber.fence,
             hostNow,
             ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
             ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
@@ -261,7 +264,7 @@ export class AgentSessionSubscribers {
           removedItemIds: page.removedItemIds,
           submissions: page.submissions
         },
-        fence,
+        fence: subscriber.fence,
         hostNow,
         ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
         ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
