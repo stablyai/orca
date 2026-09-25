@@ -137,7 +137,8 @@ export function structuredWorkerRecordIsCurrent(
 ): boolean {
   return Boolean(
     record &&
-    record.lease.runtimeKind === 'native' &&
+    // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
+    record.lease.claimStatus !== 'conflicted' &&
     record.lease.claimStatus !== 'released' &&
     structuredWorkerHostScope(record.location)
   )

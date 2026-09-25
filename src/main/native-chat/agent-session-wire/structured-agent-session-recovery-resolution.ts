@@ -39,7 +39,7 @@ export function structuredSessionRecoveryIsResolvable(record: AgentSessionRecord
     // Settlement latches are cleared only by a successful journal retry, never by owner probing.
     return false
   }
-  const { claimStatus, handoffStage, ownerProcess, runtimeKind } = record.lease
+  const { claimStatus, handoffStage, ownerProcess } = record.lease
   if (handoffStage !== 'recovering' && handoffStage !== 'manual-recovery') {
     return false
   }
@@ -48,16 +48,13 @@ export function structuredSessionRecoveryIsResolvable(record: AgentSessionRecord
     // recorded there is nothing present-time evidence could settle, and the user decides.
     return ownerProcess !== null
   }
-  // A TUI owner has its own recovery transport — but that transport needs a process to talk to
-  // (`structuredManualRecoveryIsAdmissible` requires one). A TUI reservation that crashed before
-  // its identity was committed names nobody, so nothing else in the system can exit it.
-  return runtimeKind === 'native' || ownerProcess === null
+  return true
 }
 
 /** Stopping a matched owner is only Orca's call when Orca owned its transport. A conflicted claim
- *  means ownership was never settled, and a TUI child is the user's foreground agent. */
+ *  means ownership was never settled — including a terminal an older build recorded as owner. */
 function recoveryMayStopOwner(record: AgentSessionRecord): boolean {
-  return record.lease.runtimeKind === 'native' && record.lease.claimStatus !== 'conflicted'
+  return record.lease.claimStatus !== 'conflicted'
 }
 
 export async function resolveStructuredSessionRecovery(

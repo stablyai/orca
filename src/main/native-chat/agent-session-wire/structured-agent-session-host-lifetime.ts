@@ -56,8 +56,8 @@ function hasProviderChild(
 }
 
 /** The wind-down this host owes for the session's child. A live child always owes one, whatever a
- *  previous childless eviction recorded — the same session object is re-acquired in place on a
- *  handoff back to native, so a remembered `false` must never outrank the child in front of it. */
+ *  previous childless eviction recorded: a remembered `false` must never outrank the child in front
+ *  of it. */
 function owesProviderChildWindDown(session: StructuredAgentSessionHostSession): boolean {
   return session.hasProviderChild || session.owesProviderChildWindDown === true
 }

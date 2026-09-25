@@ -19,9 +19,6 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     private readonly subscribers: AgentSessionSubscribers,
     private readonly requireSession: (sessionId: string) => StructuredAgentSessionHostSession,
-    private readonly handoffStatus: (
-      sessionId: string
-    ) => Parameters<AgentSessionSubscribers['open']>[0]['handoff'],
     /** Task edges change the status summary too; the feed's equality check
      *  keeps a no-op re-projection from reaching subscribers. */
     private readonly onPublished: (sessionId: string) => void
@@ -52,7 +49,6 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       ...input,
       journal: session.journal,
       fence: this.deps.store.getRecord(input.sessionId)?.lease.runtimeFence ?? 0,
-      handoff: this.handoffStatus(input.sessionId),
       ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
     })
   }

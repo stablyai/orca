@@ -22,16 +22,15 @@ export function useSidebarFeedbackImages(params: {
   handleRemoveImage: (id: string) => void
   clearImages: () => void
   hasPendingImageReads: () => boolean
-  /** Live committed+pending count for paste capacity checks. */
-  getReservedImageSlots: () => number
+  /** Live committed+pending count and bytes, for the paste and attach gates. */
+  getReservedImageCapacity: () => { count: number; bytes: number }
 } {
   const [images, setImages] = useState<FeedbackImageDraft[]>([])
   const [pendingImageReadCount, setPendingImageReadCount] = useState(0)
   const liveImageDraftsRef = useRef<FeedbackImageDraft[]>([])
   // Why: committed state lags in-flight reads, so batches still being read count
   // against capacity — otherwise two quick pastes both see room for four.
-  const pendingImageReadsRef = useRef(0)
-  const imageCount = images.length
+  const pendingImageReadsRef = useRef({ count: 0, bytes: 0 })
 
   const clearImages = useCallback(() => {
     liveImageDraftsRef.current.forEach(releaseFeedbackImageDraft)
@@ -48,6 +47,17 @@ export function useSidebarFeedbackImages(params: {
     []
   )
 
+  // Why: a read's callback moves its batch from pending to the live ref in one
+  // step, but rendered state lags a render, so only the ref covers that gap.
+  const getReservedImageCapacity = useCallback((): { count: number; bytes: number } => {
+    const liveDrafts = liveImageDraftsRef.current
+    const pendingReads = pendingImageReadsRef.current
+    return {
+      count: liveDrafts.length + pendingReads.count,
+      bytes: liveDrafts.reduce((total, image) => total + image.bytes, 0) + pendingReads.bytes
+    }
+  }, [])
+
   const handleAddFiles = useCallback(
     (files: readonly File[]) => {
       if (files.length === 0) {
@@ -62,14 +72,16 @@ export function useSidebarFeedbackImages(params: {
         )
         return
       }
-      // Why: read the committed count from the closure rather than a ref. A ref
-      // synced in an effect can still be stale-low right after an add.
-      const existingCount = imageCount + pendingImageReadsRef.current
-      pendingImageReadsRef.current += files.length
+      const { count: existingCount, bytes: existingBytes } = getReservedImageCapacity()
+      const pendingReads = pendingImageReadsRef.current
+      const batchBytes = files.reduce((total, file) => total + file.size, 0)
+      pendingReads.count += files.length
+      pendingReads.bytes += batchBytes
       setPendingImageReadCount((current) => current + files.length)
-      void readFeedbackImageFiles(files, existingCount).then(
+      void readFeedbackImageFiles(files, existingCount, existingBytes).then(
         ({ images: added, errors }) => {
-          pendingImageReadsRef.current -= files.length
+          pendingReads.count -= files.length
+          pendingReads.bytes -= batchBytes
           if (!params.mountedRef.current) {
             added.forEach(releaseFeedbackImageDraft)
             return
@@ -83,7 +95,8 @@ export function useSidebarFeedbackImages(params: {
           errors.forEach((error) => toast.warning(error))
         },
         (error: unknown) => {
-          pendingImageReadsRef.current -= files.length
+          pendingReads.count -= files.length
+          pendingReads.bytes -= batchBytes
           console.error('Failed to read feedback image attachments:', error)
           if (params.mountedRef.current) {
             setPendingImageReadCount((current) => Math.max(0, current - files.length))
@@ -97,7 +110,7 @@ export function useSidebarFeedbackImages(params: {
         }
       )
     },
-    [imageCount, params.isSubmitting, params.mountedRef]
+    [getReservedImageCapacity, params.isSubmitting, params.mountedRef]
   )
 
   const handleRemoveImage = useCallback((id: string) => {
@@ -123,7 +136,7 @@ export function useSidebarFeedbackImages(params: {
     handleAddFiles,
     handleRemoveImage,
     clearImages,
-    hasPendingImageReads: () => pendingImageReadsRef.current > 0,
-    getReservedImageSlots: () => liveImageDraftsRef.current.length + pendingImageReadsRef.current
+    hasPendingImageReads: () => pendingImageReadsRef.current.count > 0,
+    getReservedImageCapacity
   }
 }

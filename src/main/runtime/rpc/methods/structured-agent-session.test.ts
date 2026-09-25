@@ -167,7 +167,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(30)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(29)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -695,21 +695,6 @@ describe('method routing', () => {
 
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
-  })
-
-  it('routes the structured handoff mutation through the host', async () => {
-    const response = await call('agentSession.requestHandoff', {
-      envelope: envelope(),
-      direction: 'to-tui',
-      mode: 'now',
-      action: 'start'
-    })
-
-    expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ direction: 'to-tui', mode: 'now', action: 'start' })
-    )
   })
 })
 

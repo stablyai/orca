@@ -13,7 +13,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
-import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
+import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 
 export type CodexStructuredLaunchResolverDeps = {

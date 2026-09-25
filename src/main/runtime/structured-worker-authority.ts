@@ -3,8 +3,8 @@
  *
  * The registry holds the handle→session mapping for this process; the durable worker-terminal
  * resource row is what survives a restart, so a miss falls back to rehydrating from it. The
- * durable agent-session record is the liveness half: a session handed to a TUI owner, released, or
- * pinned to another execution host is no longer this runtime's structured worker.
+ * durable agent-session record is the liveness half: a session whose claim is conflicted or
+ * released, or pinned to another execution host, is no longer this runtime's structured worker.
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -116,12 +116,6 @@ export function observeStructuredWorker(
   }
   if (record.lease.claimStatus === 'released' && record.lease.deathEvidence) {
     return { status: 'exited' }
-  }
-  if (record.lease.runtimeKind !== 'native') {
-    return {
-      status: 'unverifiable',
-      reason: 'The session lease is held by a terminal owner, not this structured host.'
-    }
   }
   if (host.hasSession(identity.sessionId) && record.lease.claimStatus === 'live') {
     return { status: 'live' }

@@ -53,7 +53,6 @@ import {
   CreateParams,
   CreateSupportParams,
   HistoryParams,
-  HandoffParams,
   HandoffStatusParams,
   OptionsParams,
   RespondParams,
@@ -231,11 +230,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.setOption',
     params: SetOptionParams,
     handler: async (params, ctx) => requireHost(ctx).setOption(callerFor(ctx), params)
-  }),
-  defineMethod({
-    name: 'agentSession.requestHandoff',
-    params: HandoffParams,
-    handler: async (params, ctx) => requireHost(ctx).requestHandoff(callerFor(ctx), params)
   }),
   defineMethod({
     name: 'agentSession.handoffStatus',

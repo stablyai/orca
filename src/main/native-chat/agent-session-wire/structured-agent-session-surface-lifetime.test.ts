@@ -3,11 +3,12 @@
 // Two leaks meet here and each has to be tested against the real host, not a double: a chat that
 // closes without stopping its app-server, and a launch that starts one for every record on disk.
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
@@ -23,11 +24,6 @@ import {
 } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import type {
-  StructuredAgentSessionHandoffTransport,
-  StructuredTuiOwner
-} from './structured-agent-session-handoff-types'
-import { StructuredHandoffTestRequests } from './structured-agent-session-handoff-test-requests'
 import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import {
@@ -67,8 +63,7 @@ function adapter(): StructuredAgentSessionAdapter {
 }
 
 function openHost(
-  probeOwner?: (record: never) => Promise<AgentSessionOwnerProbe>,
-  handoffTransport?: StructuredAgentSessionHandoffTransport
+  probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
 ): void {
   host = new StructuredAgentSessionHost({
     store,
@@ -80,8 +75,7 @@ function openHost(
     now: () => NOW,
     onEventSinkError: ({ error }) => hostErrors.push(error),
     statusSink,
-    ...(probeOwner ? { probeOwner: probeOwner as never } : {}),
-    ...(handoffTransport ? { handoffTransport } : {})
+    ...(probeOwner ? { probeOwner } : {})
   })
 }
 
@@ -129,75 +123,6 @@ function waitForEviction(): Promise<void> {
 /** Long enough for several grace windows to elapse, so "not evicted" means the clock declined. */
 function waitOutSeveralGraceWindows(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
-}
-
-const handoffRequests = new StructuredHandoffTestRequests(
-  NOW,
-  SESSION,
-  () => store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-)
-/** Whether the terminal this host handed the session to can be reached again. */
-let tuiRecoverable: boolean
-
-/** One operation-id source with the rest of the suite, so the durable ledger sees no duplicate. */
-function handoffRequest(direction: 'to-tui' | 'to-native') {
-  return handoffRequests.request(direction, 'now', { operationId: hostTestOperationId() })
-}
-
-function tuiOwner(fence: number, spawnToken: string, transcriptPath: string): StructuredTuiOwner {
-  return {
-    terminal: { handle: 'term-tui', tabId: 'tab-tui', paneKey: 'pane-tui', ptyId: 'pty-tui' },
-    process: { hostId: 'local', pid: 5200, processStartTimeMs: NOW, spawnToken },
-    link: {
-      linkId: `tui-link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
-      origin: 'resumed',
-      mintedAtFence: fence,
-      observedAt: NOW
-    },
-    transcriptPath
-  }
-}
-
-/** A codex rollout the return trip can import, so a real to-native handoff has history to read. */
-async function writeTuiTranscript(): Promise<string> {
-  const sessionsDir = join(root, 'codex-home', 'sessions', '2026', '08', '12')
-  await mkdir(sessionsDir, { recursive: true })
-  const transcriptPath = join(sessionsDir, `rollout-2026-08-12T10-00-00-${THREAD}.jsonl`)
-  await writeFile(
-    transcriptPath,
-    `${JSON.stringify({
-      type: 'session_meta',
-      timestamp: '2026-08-12T10:00:00.000Z',
-      payload: { id: THREAD, session_id: THREAD }
-    })}\n`,
-    'utf8'
-  )
-  return transcriptPath
-}
-
-/** Replaces the current host with one that can hand the session to a terminal and take it back. */
-function openHandoffHost(transcriptPath: string): void {
-  openHost(undefined, {
-    hostLabel: 'Test host',
-    launchTui: async ({ fence, spawnToken }) => tuiOwner(fence, spawnToken, transcriptPath),
-    reproveTuiOwner: async ({ owner }) => owner,
-    recoverTuiOwner: async (record) => {
-      if (!tuiRecoverable) {
-        throw new Error('the owning terminal could not be reached')
-      }
-      return tuiOwner(
-        record.lease.runtimeFence,
-        record.lease.reservedSpawnToken ?? 'recovered',
-        transcriptPath
-      )
-    },
-    stopRecoveredOwner: async () => undefined,
-    closeTuiOwner: async (owner) => ({ transcriptPath: owner.transcriptPath }),
-    waitForTuiExit: async (owner) => ({ transcriptPath: owner.transcriptPath }),
-    waitForTuiIdleOrExit: async () => 'idle',
-    tuiStatus: () => 'idle'
-  })
 }
 
 /** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. */
@@ -260,8 +185,6 @@ async function sendPending(text: string): Promise<void> {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-surface-lifetime-'))
-  handoffRequests.reset()
-  tuiRecoverable = true
   resetHostTestOperationIds()
   sink = null
   hostErrors = []
@@ -843,63 +766,6 @@ describe('an unexpected provider exit', () => {
       settlementRetryRequired: undefined
     })
     expect(acquire).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe('a chat handed to a terminal and taken back', () => {
-  // The wind-down a close owes belongs to the child in front of it, not to whatever the LAST
-  // eviction found. A session a terminal owns is indexed with no child of its own, so a close
-  // there records "nothing owed" — and the trip back re-acquires into that SAME session object.
-  it('settles and releases the child it was given back', async () => {
-    const transcriptPath = await writeTuiTranscript()
-    await host.flushAllStreamedEvents()
-    openHandoffHost(transcriptPath)
-    await attach()
-    expect(await host.requestHandoff(CALLER, handoffRequest('to-tui'))).toMatchObject({ ok: true })
-    // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
-    await vi.waitFor(
-      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' }),
-      { timeout: 5000 }
-    )
-
-    // The app restarts and cannot reach the terminal, so this generation restores the session for
-    // reading and holds no handle to the owner it would otherwise stop on a close.
-    await host.flushAllStreamedEvents()
-    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
-    tuiRecoverable = false
-    openHandoffHost(transcriptPath)
-    await host.restoreReadableSessions()
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      runtimeKind: 'tui',
-      claimStatus: 'live'
-    })
-
-    failNextDrain()
-    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
-    expect(host.hasSession(SESSION)).toBe(true)
-
-    // The terminal answers again, and the status read the reopened pane makes recovers the owner.
-    tuiRecoverable = true
-    expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' })
-    expect(await host.requestHandoff(CALLER, handoffRequest('to-native'))).toMatchObject({
-      ok: true
-    })
-    // Real-timer poll: the suite's default 1000ms budget is tight under a loaded CI shard.
-    await vi.waitFor(
-      async () => expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' }),
-      { timeout: 5000 }
-    )
-    expect(host['sessions'].get(SESSION)?.hasProviderChild).toBe(true)
-    await sendPending('pending when the retaken chat closes')
-    const settled = captureSettledSubmissions()
-
-    await expect(host.close(SESSION)).resolves.toBeUndefined()
-
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'released',
-      ownerProcess: null
-    })
-    expect(hasUnansweredStructuredAgentSessionDispatch(settled.value)).toBe(false)
   })
 })
 

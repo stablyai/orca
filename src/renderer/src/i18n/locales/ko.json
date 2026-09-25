@@ -494,7 +494,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3087,6 +3088,14 @@
             "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 공간 분석기를 선택하여 왼쪽 하단 도구 상자 메뉴에서 열 수도 있습니다.",
             "e2fcf07c0d": "로컬 저장소가 가득 찼거나 쓸 수 없기 때문에 Orca가 이 terminal 세션을 저장할 수 없습니다. 디스크 공간 분석기를 열어 정리할 수 있는 워크스페이스 저장소를 찾으세요.",
             "678c780a2c": "디스크 공간을 사용할 수 없습니다."
+          },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
           },
           "osc52": {
             "clipboard": {
@@ -6154,7 +6163,6 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "Attach up to {count} screenshots",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },
@@ -17536,38 +17544,6 @@
         "questionCount": "{{value0}} 질문"
       },
       "structuredSessionLaunchFailed": "{{value0}} 채팅을 열 수 없습니다.",
-      "handoff": {
-        "stage": {
-          "finishingChat": "채팅 세션을 종료하는 중…",
-          "finishingTerminal": "마감제 터미널…",
-          "openingTerminal": "에이전트 터미널을 여는 중…",
-          "resumingChat": "채팅 세션을 재개하는 중…",
-          "verifyingTerminal": "에이전트 터미널 확인 중…",
-          "verifyingChat": "채팅 세션 확인 중…",
-          "recovering": "에이전트 세션을 복구하는 중…",
-          "manualRecovery": "에이전트 세션을 복구해야 합니다."
-        },
-        "switchingOwner": "세션 소유자 전환 중…",
-        "mode": {
-          "switching": "스위칭",
-          "terminal": "터미널",
-          "chat": "채팅"
-        },
-        "switchingAfterTurn": "이번 턴 이후에 전환",
-        "returningAfterTurn": "이번 턴 이후에 돌아옴",
-        "cancel": "취소",
-        "switchAfterTurn": "이번 턴 이후에 전환",
-        "stopTurnAndSwitch": "회전을 멈추고 스위치를 켜세요",
-        "openAgentTui": "에이전트 TUI 공개",
-        "returnAfterTurn": "이번 턴 이후에 돌아오세요",
-        "returnToChat": "채팅으로 돌아가기",
-        "agentOpenOnHost": "에이전트가 {{value0}}의 터미널에 열려 있습니다.",
-        "agentOpen": "에이전트가 터미널에 열려 있습니다.",
-        "exitTerminal": "채팅을 계속하려면 에이전트 터미널을 종료하세요.",
-        "retryProof": "재시도 증명",
-        "retry": "다시 시도",
-        "details": "세부"
-      },
       "structuredSessionLaunchFailedDescription": "Orca는 구조화된 {{value0}} 채팅을 열 수 없습니다. 자세한 내용은 로그를 참조하세요.",
       "subagents": {
         "state": {
