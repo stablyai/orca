@@ -79,6 +79,27 @@ describe('RpcClientStreamRegistry', () => {
     ])
   })
 
+  it('unsubscribes a session tabs stream by its own request id', () => {
+    const { registry, sent } = createRegistry()
+    const disposeOlder = registry.subscribe(
+      'session.tabs.subscribe',
+      { worktree: 'wt-1' },
+      () => {}
+    )
+    registry.subscribe('session.tabs.subscribe', { worktree: 'wt-1' }, () => {})
+    const [older, newer] = sent
+
+    disposeOlder()
+
+    // Without the request id the host sweeps every stream for the worktree, including the newer one.
+    expect(sent[2]).toMatchObject({
+      method: 'session.tabs.unsubscribe',
+      params: { worktree: 'wt-1', subscriptionId: older!.id }
+    })
+    expect(newer!.id).not.toBe(older!.id)
+    expect(sent).toHaveLength(3)
+  })
+
   it('keeps a disposed browser tombstone until ready can be unsubscribed', () => {
     const { registry, sent } = createRegistry()
     const dispose = registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})
