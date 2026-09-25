@@ -71,7 +71,7 @@ export function createTerminalTabCloseActions(
         }
         // Why mirrored here and never persisted: main records the close through the intent below,
         // and the direct-SSH pull merge reads this synchronously, so a pull landing before main
-        // answered would otherwise re-add the tab.
+        // answered would otherwise re-add the tab. Goes away when that merge moves to main.
         const nextClosedTombstones =
           intentReason && closedWorktreeId && opts?.remoteCloseOwnedByHost !== true
             ? {

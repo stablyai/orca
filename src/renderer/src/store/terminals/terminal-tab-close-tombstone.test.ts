@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeTab, makeWorktree, seedStore } from '../slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import { mergeDirectSshRemoteWorkspaceSession } from '@/hooks/remote-workspace-session-merge'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -92,5 +95,40 @@ describe('closeTab close-record mirror', () => {
 
     expect(store.getState().closedTerminalTabTombstonesByTabId).toEqual({})
     expect(closeTerminalSurface).not.toHaveBeenCalled()
+  })
+
+  // The race the mirror exists for: a host pull lands after closeTab and before main has answered
+  // the close intent (which never resolves here). The host still lists the tab.
+  it('keeps a closed SSH tab closed through a pull that lands before main answers', () => {
+    closeTerminalSurface.mockReturnValue(new Promise(() => {}))
+    const store = storeWithBothWorktrees()
+    const hostStillListing = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [REMOTE_WORKTREE]: [makeTab({ id: 'remote-tab', worktreeId: REMOTE_WORKTREE })]
+      }
+    }
+    const applyPull = (): void => {
+      const state = store.getState()
+      const merged = mergeDirectSshRemoteWorkspaceSession(
+        buildWorkspaceSessionPayload(state),
+        hostStillListing,
+        new Set([REMOTE_WORKTREE]),
+        state.tabsByWorktree,
+        new Set(),
+        undefined,
+        state.closedTerminalTabTombstonesByTabId
+      )
+      const replaceWorkspaceKeys = [REMOTE_WORKTREE]
+      store.getState().hydrateWorkspaceSession(merged, { replaceWorkspaceKeys })
+      store.getState().hydrateTabsSession(merged, { replaceWorkspaceKeys })
+    }
+
+    store.getState().closeTab('remote-tab')
+    applyPull()
+    // A second pull: once re-added, a live local tab would override its record for good.
+    applyPull()
+
+    expect(store.getState().tabsByWorktree[REMOTE_WORKTREE]?.map((tab) => tab.id) ?? []).toEqual([])
   })
 })

@@ -92,6 +92,19 @@ describe('close records', () => {
     }
   )
 
+  // The store keeps main's map only when a write omits it; main's own writes carry it and win.
+  it("keeps main's own record writes across later store writes", () => {
+    const { store, runtime } = createPersistedRuntime()
+
+    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: TAB_ID })
+    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: LATE_TAB_ID })
+    store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
+
+    expect(
+      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {}).sort()
+    ).toEqual([LATE_TAB_ID, TAB_ID].sort())
+  })
+
   it('records nothing for a split pane close, which leaves its tab open', () => {
     const { store, runtime } = createPersistedRuntime()
 
