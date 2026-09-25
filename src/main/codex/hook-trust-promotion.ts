@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { isExternalAgentConfigIsolated } from '../agent-config-isolation'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
@@ -146,6 +147,10 @@ export function snapshotCodexRuntimeHookTrustProvenance(
 export function promoteCodexRuntimeHookApprovalsToSystem(
   runtimeHomePath: string = getOrcaManagedCodexHomePath()
 ): void {
+  // Why: promotion writes approvals into the user's ~/.codex/config.toml.
+  if (isExternalAgentConfigIsolated()) {
+    return
+  }
   try {
     promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath)
   } catch (error) {

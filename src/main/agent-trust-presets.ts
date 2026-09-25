@@ -5,6 +5,7 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
+import { isExternalAgentConfigIsolated } from './agent-config-isolation'
 
 export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity'
 
@@ -38,6 +39,10 @@ export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'antigravity'
  * derived via the same util that resolves `~/.cursor/projects/<slug>`).
  */
 export function markCursorWorkspaceTrusted(workspacePath: string): void {
+  // Why: isolated users answer the CLI's own trust prompt; the trust file is user-owned.
+  if (isExternalAgentConfigIsolated()) {
+    return
+  }
   const absPath = canonicalize(workspacePath)
   const slug = cursorWorkspaceSlug(absPath)
   if (!slug) {
@@ -68,6 +73,10 @@ export function markCursorWorkspaceTrusted(workspacePath: string): void {
  * copilotTokens, etc.) survive untouched.
  */
 export function markCopilotFolderTrusted(workspacePath: string): void {
+  // Why: isolated users answer the CLI's own trust prompt; the trust file is user-owned.
+  if (isExternalAgentConfigIsolated()) {
+    return
+  }
   const absPath = canonicalize(workspacePath)
   const configDir = join(homedir(), '.copilot')
   const configPath = join(configDir, 'config.json')
@@ -122,6 +131,10 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
  * toolPermission, agentMode, …) survive untouched.
  */
 export function markAntigravityWorkspaceTrusted(workspacePath: string): void {
+  // Why: isolated users answer the CLI's own trust prompt; the trust file is user-owned.
+  if (isExternalAgentConfigIsolated()) {
+    return
+  }
   const absPath = canonicalize(workspacePath)
   const configDir = join(homedir(), '.gemini', 'antigravity-cli')
   const configPath = join(configDir, 'settings.json')
@@ -173,7 +186,10 @@ export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
   // reverted. Same runtime-before-system lock order the installer takes.
   return runExclusivelyForCodexTrustConfig(runtimeTomlPath, () =>
     runExclusivelyForCodexTrustConfig(systemTomlPath, async () => {
-      upsertProjectTrustLevel(systemTomlPath, absPath, 'trusted')
+      // Why: the runtime config lives under userData; only ~/.codex is user-owned.
+      if (!isExternalAgentConfigIsolated()) {
+        upsertProjectTrustLevel(systemTomlPath, absPath, 'trusted')
+      }
       upsertProjectTrustLevel(runtimeTomlPath, absPath, 'trusted')
     })
   )

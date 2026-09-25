@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { didIsolationTurnOff, releaseIfIsolationTurningOn } from '../agent-config-isolation'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
@@ -196,6 +197,9 @@ export function registerSettingsHandlers(
     // actually changes. The settings UI sometimes re-saves the same value
     // (e.g. blur after a no-op edit), and a `settings_changed` event for a
     // no-op flip would inflate the experimental-feature-adoption signal.
+    if (sanitizedArgs.isolateExternalAgentConfig === true) {
+      await releaseIfIsolationTurningOn(store.getSettings(), sanitizedArgs)
+    }
     const before = store.getSettings()
     const result = store.updateSettings(sanitizedArgs, {
       notifyListeners: true,
@@ -235,7 +239,8 @@ export function registerSettingsHandlers(
       ('agentStatusHooksEnabled' in sanitizedArgs &&
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
       ('disabledTuiAgents' in sanitizedArgs &&
-        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
+        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents)) ||
+      didIsolationTurnOff(before, result)
     if (hookSettingChanged) {
       try {
         await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {

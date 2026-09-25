@@ -12,7 +12,9 @@ import {
 import {
   getAgentStatusHooksDescription,
   getAgentStatusHooksSearchKeywords,
-  getAgentStatusHooksTitle
+  getAgentStatusHooksTitle,
+  getIsolateExternalAgentConfigDescription,
+  getIsolateExternalAgentConfigTitle
 } from './agent-status-hooks-copy'
 import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
 import { translate } from '@/i18n/i18n'
@@ -106,6 +108,11 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: getAgentStatusHooksTitle(),
     description: getAgentStatusHooksDescription(),
+    keywords: getAgentStatusHooksSearchKeywords()
+  },
+  {
+    title: getIsolateExternalAgentConfigTitle(),
+    description: getIsolateExternalAgentConfigDescription(),
     keywords: getAgentStatusHooksSearchKeywords()
   },
   {

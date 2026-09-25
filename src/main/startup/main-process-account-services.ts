@@ -4,6 +4,7 @@ import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../codex-accounts/service'
 import { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import { ClaudeAccountService } from '../claude-accounts/service'
+import { onBeforeAgentConfigIsolation } from '../agent-config-isolation'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
@@ -73,6 +74,13 @@ export function initializeMainProcessAccountServices(): void {
   state.codexSessionMigration.scheduleInitialRun()
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   state.claudeAccounts = new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
+  // Why: a managed Claude login materialized into ~/.claude would otherwise outlive isolation and
+  // silently bill that account for every `claude` run outside Orca.
+  onBeforeAgentConfigIsolation(async () => {
+    if (store.getSettings().activeClaudeManagedAccountId) {
+      await state.claudeAccounts?.selectAccount(null)
+    }
+  })
   state.rateLimits.setCodexHomePathResolver((target) =>
     state.codexRuntimeHome!.prepareForRateLimitFetch(target)
   )

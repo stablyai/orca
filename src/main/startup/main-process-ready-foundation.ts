@@ -1,4 +1,5 @@
 import { app, session } from 'electron'
+import { configureAgentConfigIsolation } from '../agent-config-isolation'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
@@ -139,6 +140,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
   })
   state.store = store
+  // Why this early: account services sync credentials during construction, before any window.
+  configureAgentConfigIsolation(() => store.getSettings())
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
   // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —

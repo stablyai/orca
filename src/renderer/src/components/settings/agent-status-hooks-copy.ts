@@ -39,3 +39,19 @@ export function getAgentStatusHooksSearchKeywords(): string[] {
     }
   ])
 }
+
+const ISOLATE_AGENT_CONFIG_TITLE_KEY =
+  'auto.components.settings.agent-status-hooks-copy.isolateExternalAgentConfigTitle'
+const ISOLATE_AGENT_CONFIG_DESCRIPTION_KEY =
+  'auto.components.settings.agent-status-hooks-copy.isolateExternalAgentConfigDescription'
+
+export function getIsolateExternalAgentConfigTitle(): string {
+  return translate(ISOLATE_AGENT_CONFIG_TITLE_KEY, 'Isolate external agent config')
+}
+
+export function getIsolateExternalAgentConfigDescription(): string {
+  return translate(
+    ISOLATE_AGENT_CONFIG_DESCRIPTION_KEY,
+    "Never write agent CLI config, trust files, or credentials outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off."
+  )
+}

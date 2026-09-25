@@ -5,6 +5,7 @@ import type {
 } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
+import { isExternalAgentConfigIsolated } from '../agent-config-isolation'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
@@ -77,6 +78,10 @@ export class ClaudeAccountSelection {
     accountId: string | null,
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
+    // Why reject: isolated sync never materializes managed creds, so the selection would be a silent no-op.
+    if (accountId !== null && isExternalAgentConfigIsolated()) {
+      throw new Error('Turn off "Isolate external agent config" to switch Claude accounts.')
+    }
     let effectiveTarget = target
     if (accountId !== null) {
       const account = this.requireAccount(accountId)

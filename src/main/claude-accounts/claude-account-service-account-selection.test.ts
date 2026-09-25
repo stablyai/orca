@@ -486,3 +486,42 @@ describe('ClaudeAccountService credential capture', () => {
     })
   })
 })
+
+describe('ClaudeAccountService under external agent config isolation', () => {
+  afterEach(async () => {
+    const { resetAgentConfigIsolationForTests } = await import('../agent-config-isolation')
+    resetAgentConfigIsolationForTests()
+  })
+
+  it('rejects managed account selection without persisting or syncing it', async () => {
+    const { configureAgentConfigIsolation } = await import('../agent-config-isolation')
+    configureAgentConfigIsolation(() => ({ isolateExternalAgentConfig: true }))
+    const store = {
+      getSettings: vi.fn(() => ({ claudeManagedAccounts: [], activeClaudeManagedAccountId: null })),
+      updateSettings: vi.fn()
+    }
+    const runtimeAuth = {
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select() only reads/writes these store fields before the gate.
+      store as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only refreshForClaudeAccountChange is reachable from select().
+      rateLimits as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: select() only calls these two runtime-auth methods.
+      runtimeAuth as never
+    )
+
+    await expect(service.selectAccount('account-1')).rejects.toThrow(
+      'Isolate external agent config'
+    )
+
+    expect(store.updateSettings).not.toHaveBeenCalled()
+    expect(runtimeAuth.syncForCurrentSelection).not.toHaveBeenCalled()
+  })
+})
