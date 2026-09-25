@@ -335,7 +335,12 @@ export function RepositoryPane({
           id={getRepositoryIconSectionId(repo.id)}
           forceVisible={forceFullPaneForRepoMatch}
         >
-          <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
+          <RepositoryIconPicker
+            repo={repo}
+            updateRepo={updateSelectedRepo}
+            defaultProjectIcon={settings?.defaultProjectIcon ?? null}
+            defaultProjectIconColor={settings?.defaultProjectIconColor}
+          />
         </SearchableSetting>
 
         {!isFolder ? (

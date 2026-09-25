@@ -4,6 +4,8 @@ import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-c
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
+import { sanitizeRepoIcon } from '../../../shared/repo-icon'
+import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
@@ -53,6 +55,11 @@ export function normalizeLoadedGlobalSettings(
     normalizedNotifications,
     normalizedSourceControlGroupOrder
   } = profile
+
+  // Why: orca-data.json can be hand-edited or written by an older build; re-validate before the
+  // renderer draws this icon, exactly as repo hydration re-validates each project's own icon.
+  const defaultProjectIcon = sanitizeRepoIcon(parsed.settings?.defaultProjectIcon) ?? null
+  const defaultProjectIconColor = normalizeRepoBadgeColor(parsed.settings?.defaultProjectIconColor)
 
   return {
     ...defaults.settings,
@@ -145,6 +152,10 @@ export function normalizeLoadedGlobalSettings(
     voice: {
       ...getDefaultVoiceSettings(),
       ...parsed.settings?.voice
-    }
+    },
+    defaultProjectIcon,
+    // Why not a conditional spread: the raw parsed value is already in this object, so an
+    // unusable stored color has to be overwritten rather than merely not re-added.
+    defaultProjectIconColor: defaultProjectIconColor ?? undefined
   }
 }

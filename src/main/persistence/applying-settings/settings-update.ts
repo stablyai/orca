@@ -15,6 +15,8 @@ import { normalizeOpenInApplications } from '../../../shared/open-in-application
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
+import { sanitizeRepoIcon } from '../../../shared/repo-icon'
+import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
@@ -87,6 +89,19 @@ export function updateSettings(
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+  }
+  // Why: this icon is rendered as an <img src> on every project surface, so an unsupported
+  // payload must land as "no default" rather than persist and be drawn later.
+  if ('defaultProjectIcon' in updates) {
+    sanitizedUpdates.defaultProjectIcon = sanitizeRepoIcon(updates.defaultProjectIcon) ?? null
+  }
+  if ('defaultProjectIconColor' in updates) {
+    const defaultProjectIconColor = normalizeRepoBadgeColor(updates.defaultProjectIconColor)
+    if (defaultProjectIconColor) {
+      sanitizedUpdates.defaultProjectIconColor = defaultProjectIconColor
+    } else {
+      delete sanitizedUpdates.defaultProjectIconColor
+    }
   }
   if ('worktreeVisibilityDefaults' in updates) {
     sanitizedUpdates.worktreeVisibilityDefaults = {

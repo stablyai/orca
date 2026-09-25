@@ -75,6 +75,45 @@ export const getWorkspaceCardLayoutEntry = createLocalizedCatalog((): SettingsSe
   ]
 }))
 
+export const getDefaultProjectIconEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.defaultProjectIcon.title',
+    'Default Project Icon'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.defaultProjectIcon.description',
+    'Pick the icon, emoji or color projects fall back to instead of the GitHub owner avatar.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectIcon.project',
+      'project icon'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectIcon.repo',
+      'repo icon'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectIcon.avatar',
+      'avatar'
+    ),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.2ee4810f38', 'github'),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectIcon.folder',
+      'folder'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectIcon.emoji',
+      'emoji'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.defaultProjectIcon.color',
+      'color'
+    ),
+    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar')
+  ]
+}))
+
 export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
@@ -189,5 +228,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getDefaultProjectIconEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

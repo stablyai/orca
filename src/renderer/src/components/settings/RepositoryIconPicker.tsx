@@ -3,6 +3,10 @@ import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import {
+  resolveProjectIconDisplay,
+  usesDefaultProjectIcon
+} from '../../../../shared/default-project-icon'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { Button } from '../ui/button'
@@ -22,10 +26,16 @@ import { translate } from '@/i18n/i18n'
 
 export function RepositoryIconPicker({
   repo,
-  updateRepo
+  updateRepo,
+  defaultProjectIcon = null,
+  defaultProjectIconColor
 }: {
   repo: Repo
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
+  /** Global fallback icon; when set it stands in for this project's absent or auto-detected avatar. */
+  defaultProjectIcon?: RepoIcon | null
+  /** Tint for that fallback, so this preview matches what the sidebar draws. */
+  defaultProjectIconColor?: string
 }): React.JSX.Element {
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -45,7 +55,19 @@ export function RepositoryIconPicker({
     [activeRuntimeEnvironmentId]
   )
 
+  const showsGlobalDefault = defaultProjectIcon !== null && usesDefaultProjectIcon(repo.repoIcon)
+  const iconDisplay = resolveProjectIconDisplay(repo.repoIcon, selectedBadgeColor, {
+    defaultProjectIcon,
+    defaultProjectIconColor
+  })
+
   const currentIconLabel = useMemo(() => {
+    if (showsGlobalDefault) {
+      return translate(
+        'auto.components.settings.RepositoryIconPicker.globalDefault',
+        'Global default project icon'
+      )
+    }
     if (repo.repoIcon?.type === 'image') {
       if (repo.repoIcon.source === 'github') {
         return 'GitHub avatar'
@@ -62,7 +84,7 @@ export function RepositoryIconPicker({
       return `${label} icon with repo color`
     }
     return 'Default'
-  }, [repo.repoIcon, selectedLucideName])
+  }, [repo.repoIcon, selectedLucideName, showsGlobalDefault])
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
   const setBadgeColor = (badgeColor: string) => updateRepo(repo.id, { badgeColor })
@@ -116,6 +138,12 @@ export function RepositoryIconPicker({
   }
 
   const handleResetToDefault = async () => {
+    // Why: with a global default set, "default" is that icon, so clearing this project's own icon is
+    // the whole reset — and it avoids a live GitHub probe for an avatar nothing would draw.
+    if (defaultProjectIcon) {
+      updateRepo(repo.id, { repoIcon: null })
+      return
+    }
     setResetting(true)
     try {
       const resolution = await resolveGitHubAvatar({ forceLive: true }).catch(() => null)
@@ -137,7 +165,10 @@ export function RepositoryIconPicker({
 
   const githubIdentityRefreshedRef = useRef<string | null>(null)
   useEffect(() => {
-    const hasGitHubAvatar = repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
+    // Why: while a global default stands in for it, the avatar is drawn nowhere, so its metadata is
+    // not worth a GitHub round trip on every settings open.
+    const hasGitHubAvatar =
+      repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github' && !defaultProjectIcon
     const shouldRefresh = hasGitHubAvatar || repo.upstream === undefined
     if (!shouldRefresh || githubIdentityRefreshedRef.current === repo.id) {
       return
@@ -167,14 +198,14 @@ export function RepositoryIconPicker({
     return () => {
       cancelled = true
     }
-  }, [repo, resolveGitHubAvatar, resolveUpstreamLive, updateRepo, mountedRef])
+  }, [repo, resolveGitHubAvatar, resolveUpstreamLive, updateRepo, mountedRef, defaultProjectIcon])
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <RepoIconGlyph
-          repoIcon={repo.repoIcon}
-          color={selectedBadgeColor}
+          repoIcon={iconDisplay.repoIcon}
+          color={iconDisplay.color ?? undefined}
           className="size-10 shrink-0 rounded-md border border-border/70 bg-muted/30"
           iconClassName="size-5"
         />

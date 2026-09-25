@@ -8058,7 +8058,8 @@
           "868c5c9b56": "Failed to import repo icon",
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
           "currentEmojiSelection": "Current: {{value0}}",
-          "searchEmojiPlaceholder": "Search emoji"
+          "searchEmojiPlaceholder": "Search emoji",
+          "globalDefault": "Global default project icon"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
@@ -9341,6 +9342,16 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
+            },
+            "defaultProjectIcon": {
+              "title": "Default Project Icon",
+              "description": "Pick the icon, emoji or color projects fall back to instead of the GitHub owner avatar.",
+              "project": "project icon",
+              "repo": "repo icon",
+              "avatar": "avatar",
+              "folder": "folder",
+              "emoji": "emoji",
+              "color": "color"
             }
           }
         },
@@ -12152,6 +12163,14 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "DefaultProjectIconSetting": {
+          "title": "Default Project Icon",
+          "description": "Shown for projects with no icon of their own. Icons you pick per project still win.",
+          "githubAvatar": "GitHub owner avatar",
+          "customImage": "Custom image",
+          "iconSelection": "{{value0}} icon",
+          "emojiSelection": "{{value0}} emoji"
         }
       },
       "right": {

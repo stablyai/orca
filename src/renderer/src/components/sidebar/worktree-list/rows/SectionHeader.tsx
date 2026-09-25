@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectIconGlyph } from '@/components/repo/project-icon-glyph'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
@@ -316,7 +316,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               )}
             >
               {row.repo ? (
-                <RepoIconGlyph
+                <ProjectIconGlyph
                   repoIcon={row.repo.repoIcon}
                   color={repoHeaderColor}
                   className="size-4"

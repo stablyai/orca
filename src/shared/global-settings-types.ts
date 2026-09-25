@@ -22,6 +22,7 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
+import type { RepoIcon } from './repo-icon'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
@@ -80,6 +81,12 @@ export type GlobalSettings = {
   theme: 'system' | 'dark' | 'light'
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
+  /** Icon drawn for projects with no icon of their own, in place of the GitHub owner avatar.
+   *  Absent or null keeps the avatar. Applied at display time, so the project's stored icon,
+   *  including the label project identity keys on, is left untouched. */
+  defaultProjectIcon?: RepoIcon | null
+  /** Tint for a lucide `defaultProjectIcon`; absent follows each project's own badge color. */
+  defaultProjectIconColor?: string
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
   uiLanguage: UiLanguage

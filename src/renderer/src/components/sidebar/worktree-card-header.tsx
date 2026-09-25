@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertCircle, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectIconGlyph } from '@/components/repo/project-icon-glyph'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -94,7 +94,7 @@ export function WorktreeCardHeader({
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {showPinnedRepoIcon && (
           <RepoIdentityChip repo={repo!}>
-            <RepoIconGlyph
+            <ProjectIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
               className="size-full"
@@ -157,7 +157,7 @@ export function WorktreeCardHeader({
 
         {showInlineRepoBadge && (
           <RepoIdentityChip repo={repo!}>
-            <RepoIconGlyph
+            <ProjectIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
               className="size-full"
