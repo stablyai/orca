@@ -1,6 +1,29 @@
 import type { TerminalExitRecord } from '../../../../shared/terminal-surface-exit'
 import type { TerminalSlice, TerminalStoreSet } from './terminal-state'
 
+// Why: a record is written once per exit, so the process it names and the time identify it.
+function isSameExitRecord(left: TerminalExitRecord, right: TerminalExitRecord): boolean {
+  return (
+    left.worktreeId === right.worktreeId &&
+    left.ptyId === right.ptyId &&
+    left.incarnationId === right.incarnationId &&
+    left.exitedAt === right.exitedAt
+  )
+}
+
+function hasSameExitRecords(
+  current: Record<string, TerminalExitRecord>,
+  records: readonly TerminalExitRecord[]
+): boolean {
+  if (Object.keys(current).length !== records.length) {
+    return false
+  }
+  return records.every((record) => {
+    const held = current[record.leafId]
+    return held !== undefined && isSameExitRecord(held, record)
+  })
+}
+
 export function createTerminalExitRecordActions(
   set: TerminalStoreSet
 ): Pick<
@@ -10,21 +33,35 @@ export function createTerminalExitRecordActions(
   return {
     replaceTerminalExitRecords: (records: TerminalExitRecord[]) => {
       set((s) => {
-        const terminalExitRecordsByLeafId = Object.fromEntries(
-          records.map((record) => [record.leafId, record] as const)
+        // Why: every mounted pane subscribes to the pending map, so an unchanged push must keep
+        // both references or an exit anywhere re-renders every pane.
+        const terminalExitRecordsByLeafId = hasSameExitRecords(
+          s.terminalExitRecordsByLeafId,
+          records
         )
+          ? s.terminalExitRecordsByLeafId
+          : Object.fromEntries(records.map((record) => [record.leafId, record] as const))
+        const pendingLeafIds = Object.keys(s.pendingExitedTerminalRestartLeafIds)
         // Why: a restart asked for a leaf that no longer has a record has already happened.
-        const pendingExitedTerminalRestartLeafIds = Object.fromEntries(
-          Object.keys(s.pendingExitedTerminalRestartLeafIds)
-            .filter((leafId) => terminalExitRecordsByLeafId[leafId])
-            .map((leafId) => [leafId, true] as const)
+        const keptPendingLeafIds = pendingLeafIds.filter(
+          (leafId) => terminalExitRecordsByLeafId[leafId]
         )
+        const pendingExitedTerminalRestartLeafIds =
+          keptPendingLeafIds.length === pendingLeafIds.length
+            ? s.pendingExitedTerminalRestartLeafIds
+            : Object.fromEntries(keptPendingLeafIds.map((leafId) => [leafId, true] as const))
+        if (
+          terminalExitRecordsByLeafId === s.terminalExitRecordsByLeafId &&
+          pendingExitedTerminalRestartLeafIds === s.pendingExitedTerminalRestartLeafIds
+        ) {
+          return s
+        }
         return { terminalExitRecordsByLeafId, pendingExitedTerminalRestartLeafIds }
       })
     },
     requestExitedTerminalRestart: (leafId) => {
       set((s) =>
-        s.terminalExitRecordsByLeafId[leafId]
+        s.terminalExitRecordsByLeafId[leafId] && !s.pendingExitedTerminalRestartLeafIds[leafId]
           ? {
               pendingExitedTerminalRestartLeafIds: {
                 ...s.pendingExitedTerminalRestartLeafIds,
