@@ -31,7 +31,9 @@ async function performDiscardPreparedWorktree(
 ): Promise<void> {
   const cleanupGitOptions = {
     ...gitCleanupOptions(repoPath, options),
-    timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
+    timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
+    // Why: this remove deletes the whole checkout inline; that must not hold the repo's admin lane.
+    worktreeAdminLock: false as const
   }
   try {
     // Preserve the ownership lock if removal cannot start; Git 2.25 supports locked removal.

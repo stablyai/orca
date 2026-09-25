@@ -22,7 +22,7 @@
 // need to branch on whether tracing is on.
 
 import type { PreparedCheckoutOutcome } from '../../shared/worktree/create-types'
-import { startSpan, withSpan, type ActiveSpan } from './tracer'
+import { getActiveSpanContext, startSpan, withSpan, type ActiveSpan } from './tracer'
 
 const GIT_FAST_SUCCESS_THRESHOLD_MS = 250
 const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
@@ -156,6 +156,13 @@ function addGitAttributes(span: ActiveSpan, meta: GitSpanArgs): void {
   if (meta.cwd) {
     span.setAttribute('cwd', meta.cwd)
   }
+  // Why: parentSpanId names only the nearest span; this names the create or preparation that issued
+  // the command, so its time is attributable even under nested spans or detached background work.
+  const operation = getActiveSpanContext()?.operation
+  if (operation) {
+    span.setAttribute('git.operation', operation.name)
+    span.setAttribute('git.operation_span_id', operation.spanId)
+  }
 }
 
 export function _resetGitSpanSamplingForTests(): void {
@@ -218,8 +225,44 @@ export async function withWorktreeSpan<T>(
       }
       return await fn(span)
     },
-    { attributes: { kind: 'worktree' } }
+    { attributes: { kind: 'worktree' }, operation: true }
   )
+}
+
+export type WorktreePrepareReason = 'prefetch' | 'rearm' | 'discard'
+
+/** Wrap prepared-checkout pool work in its own trace. It outlives whichever create or IPC call
+ *  started it, so inheriting that caller's span would file its git time under the wrong create. */
+export async function withWorktreePrepareSpan<T>(
+  reason: WorktreePrepareReason,
+  fn: (span: ActiveSpan) => Promise<T>
+): Promise<T> {
+  const triggeredBy = getActiveSpanContext()?.operation
+  return withSpan(
+    'worktree.prepare',
+    async (span) => {
+      span.setAttribute('worktree.prepare.reason', reason)
+      if (triggeredBy) {
+        span.setAttribute('worktree.prepare.triggered_by_span_id', triggeredBy.spanId)
+      }
+      return await fn(span)
+    },
+    { attributes: { kind: 'worktree' }, root: true, operation: true }
+  )
+}
+
+/** A create's wait for a claimed preparation to finish its checkout. That git runs in the
+ *  preparation's own trace, so this names it; the wait alone would read as unexplained time. */
+export async function withPreparedCheckoutWaitSpan<T>(
+  prepareSpanId: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  return withSpan('worktree.create.await_preparation', fn, {
+    attributes: {
+      kind: 'worktree',
+      ...(prepareSpanId ? { 'worktree.prepare.span_id': prepareSpanId } : {})
+    }
+  })
 }
 
 type WorktreeCreatePhaseTiming = {

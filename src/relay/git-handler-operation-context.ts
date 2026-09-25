@@ -14,6 +14,8 @@ export type GitHandlerCommandOptions = {
   stdin?: string
   timeout?: number
   terminationBarrier?: boolean
+  /** False for an admin command that also deletes a whole work tree; see the main runner's option. */
+  worktreeAdminLock?: false
 }
 
 export type GitHandlerCommandResult = { stdout: string; stderr: string }

@@ -136,7 +136,8 @@ export async function removeWorktreeOp(
   }
   args.push(worktreePath)
   try {
-    await git(args, repoPath)
+    // Why: this remove deletes the whole tree inline; that must not hold the repo's admin lane.
+    await git(args, repoPath, { worktreeAdminLock: false })
   } catch (error) {
     if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
       throw error
@@ -150,7 +151,9 @@ export async function removeWorktreeOp(
       ;(dirtyError as Error & { stdout?: string }).stdout = stdout
       throw dirtyError
     }
-    await git(['worktree', 'remove', '--force', worktreePath], repoPath)
+    await git(['worktree', 'remove', '--force', worktreePath], repoPath, {
+      worktreeAdminLock: false
+    })
   }
 
   if (!branchName) {

@@ -9,6 +9,7 @@ import {
   _resetGitAdmissionForTests
 } from '../git/command-runner/git-subprocess-admission'
 import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
+import { getActiveSpanContext, setActiveSink } from '../observability/tracer'
 
 const mocks = vi.hoisted(() => ({
   rearm: vi.fn(),
@@ -213,6 +214,33 @@ describe('runtime create Git priority', () => {
       expect(mocks.resolveInclude).toHaveBeenCalledWith('/repo', options)
     }
   )
+
+  it('files runtime create git under a worktree.create operation, like the IPC create', async () => {
+    const recorded: { name: string; spanId: string }[] = []
+    setActiveSink({
+      push: (record) => {
+        if (typeof record === 'object' && record && 'name' in record && 'spanId' in record) {
+          recorded.push({ name: String(record.name), spanId: String(record.spanId) })
+        }
+      },
+      flush: () => {},
+      close: () => {}
+    })
+    let operationDuringAdd: { name: string; spanId: string } | undefined
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'none_armed' })
+    mocks.add.mockImplementation(async () => {
+      operationDuringAdd = getActiveSpanContext()?.operation
+      return {}
+    })
+    try {
+      await createWorktree()
+    } finally {
+      setActiveSink(null)
+    }
+    const createSpan = recorded.find((span) => span.name === 'worktree.create')
+    expect(createSpan).toBeDefined()
+    expect(operationDuringAdd).toEqual({ name: 'worktree.create', spanId: createSpan?.spanId })
+  })
 
   it('creates through interactive headroom when regular Git capacity is occupied', async () => {
     mocks.consume.mockResolvedValue({ status: 'miss', reason: 'none_armed' })

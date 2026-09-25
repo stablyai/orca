@@ -4,6 +4,11 @@ import type {
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import {
+  addWorktreeWithCheckoutOutsideAdminLock,
+  type SplitWorktreeAddGit
+} from '../../shared/worktree/split-worktree-add'
+import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
@@ -187,11 +192,9 @@ async function performAddWorktree(
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   // Why: enable long paths for this Windows checkout without changing user Git config.
-  const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
+  const globalArgs = windowsLongPathGitArgs(repoPath)
+  const args: string[] = []
   let effectiveBase: string | undefined
-  if (noCheckout) {
-    args.push('--no-checkout')
-  }
   if (options.checkoutExistingBranch) {
     // Why: -b would create a new branch instead of checking out the selected one.
     args.push(worktreePath, branch)
@@ -211,16 +214,38 @@ async function performAddWorktree(
       args.push(effectiveBase)
     }
   }
-  try {
-    await gitExecFileAsync(args, {
-      ...gitExecOptions(repoPath, options),
-      // Why: resolve per call — hoisting this to a module const would freeze the override at import.
-      timeout: resolveWorktreeAddTimeoutMs()
+  // Why: resolve per call — hoisting this to a module const would freeze the override at import.
+  const timeout = resolveWorktreeAddTimeoutMs()
+  const git: SplitWorktreeAddGit = (gitArgs, cwd, { detached, ...extra } = {}) =>
+    gitExecFileAsync(gitArgs, {
+      ...gitExecOptions(cwd, detached ? { ...options, signal: undefined } : options),
+      timeout,
+      ...extra
     })
-  } finally {
-    // Git may have written the target's `.git` marker even when it reports a late
-    // failure, so drop any pre-create route before the follow-up commands route.
-    invalidateWslLinkedWorktreeGitRouting(worktreePath)
+  // Git may have written the target's `.git` marker even when it reports a late
+  // failure, so drop any pre-create route before the follow-up commands route.
+  const afterAdminWrite = () => invalidateWslLinkedWorktreeGitRouting(worktreePath)
+  if (noCheckout) {
+    try {
+      await git([...globalArgs, 'worktree', 'add', '--no-checkout', ...args], repoPath)
+    } finally {
+      afterAdminWrite()
+    }
+  } else {
+    await withLocalGitCapabilityCacheForExecution(
+      { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
+      (capabilities) =>
+        addWorktreeWithCheckoutOutsideAdminLock({
+          repoPath,
+          worktreePath,
+          globalArgs,
+          addArgs: args,
+          git,
+          capabilities,
+          timeoutMs: timeout,
+          afterAdminWrite
+        })
+    )
   }
 
   if (options.checkoutExistingBranch) {

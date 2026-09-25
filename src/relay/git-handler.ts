@@ -23,6 +23,10 @@ import type {
 import { createGitHandlerOperationSet } from './git-handler-operation-set'
 import { registerGitHandlers } from './git-handler-registration'
 import { resolveGitFetchHeadCommand, runWithGitFetchHeadLock } from '../shared/git-fetch-head-lock'
+import {
+  resolveGitWorktreeAdminCommand,
+  runWithGitWorktreeAdminLock
+} from '../shared/git-worktree-admin-lock'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { MAX_GIT_BUFFER, runGitToTermination } from './git-handler-command-termination'
 
@@ -159,7 +163,7 @@ export class GitHandler {
     opts?: GitHandlerCommandOptions
   ): Promise<GitHandlerCommandResult> {
     const expandedCwd = expandTilde(cwd)
-    const run = async (): Promise<{ stdout: string; stderr: string }> => {
+    const run = async (toTermination = false): Promise<{ stdout: string; stderr: string }> => {
       const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
       if (opts?.disableOptionalLocks) {
         env.GIT_OPTIONAL_LOCKS = '0'
@@ -172,8 +176,8 @@ export class GitHandler {
         timeout: opts?.timeout,
         signal: opts?.signal
       } satisfies ExecFileOptions
-      if (opts?.terminationBarrier) {
-        return runGitToTermination(args, execOptions, opts.stdin)
+      if (opts?.terminationBarrier || toTermination) {
+        return runGitToTermination(args, execOptions, opts?.stdin)
       }
       if (opts?.stdin !== undefined) {
         return execFileWithStdin('git', args, execOptions, opts.stdin)
@@ -182,8 +186,14 @@ export class GitHandler {
       return { stdout: String(stdout), stderr: String(stderr) }
     }
     const command = resolveGitFetchHeadCommand(args, expandedCwd)
-    return command.needsLock
-      ? runWithGitFetchHeadLock(command.cwd, opts?.signal, run, command.gitDir)
+    if (command.needsLock) {
+      return runWithGitFetchHeadLock(command.cwd, opts?.signal, () => run(), command.gitDir)
+    }
+    const adminCommand =
+      opts?.worktreeAdminLock === false ? null : resolveGitWorktreeAdminCommand(args, expandedCwd)
+    // Why to termination: execFile settles on abort while git still runs, and the lane must outlive it.
+    return adminCommand
+      ? runWithGitWorktreeAdminLock(adminCommand, opts?.signal, () => run(true))
       : run()
   }
 

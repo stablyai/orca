@@ -20,6 +20,7 @@ import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-work
 import { createRuntimeLocalGitWorktree } from './runtime-local-git-worktree-create'
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
+import { withWorktreeSpan } from '../observability/instrumentation'
 
 type RuntimeLocalWorktreeCreateArgs<T> = {
   request: RuntimeManagedWorktreeCreateArgs
@@ -48,7 +49,10 @@ type RuntimeLocalWorktreeCreateArgs<T> = {
 }
 
 export function createRuntimeLocalManagedWorktree<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
-  return worktreeCreateGit.run(() => performRuntimeLocalWorktreeCreate(args))
+  // Why a span: runtime and CLI creates otherwise leave their git as parentless root traces.
+  return withWorktreeSpan({ stage: 'create' }, () =>
+    worktreeCreateGit.run(() => performRuntimeLocalWorktreeCreate(args))
+  )
 }
 
 async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {

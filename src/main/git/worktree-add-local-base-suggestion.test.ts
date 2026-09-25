@@ -29,7 +29,7 @@ vi.mock('../worktree-trash', () => ({
 import { addWorktree } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 
-registerWorktreeSuiteHooks()
+registerWorktreeSuiteHooks({ plainWorktreeAdd: true })
 
 describe('addWorktree', () => {
   afterEach(() => vi.restoreAllMocks())

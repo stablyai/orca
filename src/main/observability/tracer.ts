@@ -29,9 +29,16 @@ export type TracerSink = {
   close(): void
 }
 
+/** The user- or system-level operation a span belongs to, inherited by every descendant. */
+export type SpanOperation = {
+  readonly name: string
+  readonly spanId: string
+}
+
 export type SpanContext = {
   readonly traceId: string
   readonly spanId: string
+  readonly operation?: SpanOperation
 }
 
 export type ActiveSpan = SpanContext & {
@@ -141,19 +148,28 @@ export function getActiveSpanContext(): SpanContext | undefined {
  */
 type SpanRecordDecision = (record: RedactableSpan) => boolean
 
+export type SpanOptions = {
+  kind?: string
+  attributes?: Record<string, unknown>
+  shouldRecord?: SpanRecordDecision
+  /** Start a new trace even inside another span; for work that outlives the code that started it. */
+  root?: boolean
+  /** This span names the operation its descendants belong to (see `SpanOperation`). */
+  operation?: boolean
+}
+
 export async function withSpan<T>(
   name: string,
   fn: (span: ActiveSpan) => Promise<T> | T,
-  options?: {
-    kind?: string
-    attributes?: Record<string, unknown>
-    shouldRecord?: SpanRecordDecision
-  }
+  options?: SpanOptions
 ): Promise<T> {
+  const inherited = options?.root ? undefined : contextStorage.getStore()?.operation
   const span = startSpan(name, options)
+  const operation = options?.operation ? { name, spanId: span.spanId } : inherited
   try {
-    const result = await contextStorage.run({ traceId: span.traceId, spanId: span.spanId }, () =>
-      fn(span)
+    const result = await contextStorage.run(
+      { traceId: span.traceId, spanId: span.spanId, ...(operation ? { operation } : {}) },
+      () => fn(span)
     )
     span.end()
     return result
@@ -172,18 +188,11 @@ export async function withSpan<T>(
  *
  * Hot path is `withSpan`; this is the escape hatch.
  */
-export function startSpan(
-  name: string,
-  options?: {
-    kind?: string
-    attributes?: Record<string, unknown>
-    shouldRecord?: SpanRecordDecision
-  }
-): ActiveSpan {
+export function startSpan(name: string, options?: SpanOptions): ActiveSpan {
   if (!activeSink) {
     return noopSpan
   }
-  const parent = contextStorage.getStore()
+  const parent = options?.root ? undefined : contextStorage.getStore()
   const traceId = parent?.traceId ?? genTraceId()
   const spanId = genSpanId()
   const startTimeUnixNano = nowUnixNano()

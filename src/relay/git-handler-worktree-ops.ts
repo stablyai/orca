@@ -1,6 +1,8 @@
 import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
 import { windowsLongPathGitArgs } from '../shared/windows-long-path-git-args'
+import type { GitCapabilityCache } from '../shared/git-capability-cache'
+import { addWorktreeWithCheckoutOutsideAdminLock } from '../shared/worktree/split-worktree-add'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
 export { readRelayWorktreeList } from './git-handler-worktree-list'
@@ -32,6 +34,7 @@ async function persistRelayWorktreeCreationBase(
 export async function addWorktreeOp(
   git: GitExec,
   params: Record<string, unknown>,
+  capabilities: GitCapabilityCache,
   // Why: only the execution host's OS matters here — the client may be macOS while the SSH host is Windows.
   platform: NodeJS.Platform = process.platform
 ): Promise<void> {
@@ -70,18 +73,23 @@ export async function addWorktreeOp(
 
   // Why: a Windows SSH host hits the same MAX_PATH ceiling as a local Windows checkout.
   const longPathArgs = windowsLongPathGitArgs(targetDir, platform)
-  const args = checkoutExistingBranch
-    ? [...longPathArgs, 'worktree', 'add', targetDir, branchName]
-    : [...longPathArgs, 'worktree', 'add', '--no-track', '-b', branchName, targetDir]
-  if (!checkoutExistingBranch && noCheckout) {
-    // Why: offset by the global-option prefix so --no-checkout still lands before -b.
-    args.splice(longPathArgs.length + 3, 0, '--no-checkout')
-  }
+  const addArgs = checkoutExistingBranch
+    ? [targetDir, branchName]
+    : ['--no-track', '-b', branchName, targetDir]
   if (effectiveBase) {
-    args.push(effectiveBase)
+    addArgs.push(effectiveBase)
   }
 
-  await git(args, repoPath)
+  await (!checkoutExistingBranch && noCheckout
+    ? git([...longPathArgs, 'worktree', 'add', '--no-checkout', ...addArgs], repoPath)
+    : addWorktreeWithCheckoutOutsideAdminLock({
+        repoPath,
+        worktreePath: targetDir,
+        globalArgs: longPathArgs,
+        addArgs,
+        git,
+        capabilities
+      }))
 
   if (checkoutExistingBranch) {
     return

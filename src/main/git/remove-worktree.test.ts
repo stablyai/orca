@@ -363,6 +363,11 @@ branch refs/heads/main
     await removeWorktree('/repo', '/repo-feature')
 
     expect(getGitCalls()).toContain('git worktree remove /repo-feature')
+    // The inline tree delete runs outside the repo's admin lane.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['worktree', 'remove', '/repo-feature'],
+      expect.objectContaining({ cwd: '/repo', worktreeAdminLock: false })
+    )
     expect(scheduleWorktreeTrashDeletionMock).not.toHaveBeenCalled()
   })
 
@@ -492,6 +497,10 @@ branch refs/heads/main
       calls,
       'git worktree remove /repo-feature',
       'git worktree remove --force /repo-feature'
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      expect.objectContaining({ worktreeAdminLock: false })
     )
     // The re-proof of cleanliness between the refusal and the forced retry.
     expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeGreaterThan(

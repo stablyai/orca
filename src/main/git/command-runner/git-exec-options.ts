@@ -23,4 +23,6 @@ export type GitExecOptions = {
   captureWslLoginShellOutput?: boolean
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier
+  /** False for an admin command that also deletes a whole work tree; the delete must not hold the repo's admin lane. */
+  worktreeAdminLock?: false
 }

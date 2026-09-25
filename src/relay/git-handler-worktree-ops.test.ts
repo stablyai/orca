@@ -11,6 +11,13 @@ function removeWorktreeWithCapabilityCache(
   return removeWorktreeOp(git, params, new GitCapabilityCache())
 }
 
+// The plain `worktree add` path; the split path has its own tests.
+function plainAddCapabilities(): GitCapabilityCache {
+  const capabilities = new GitCapabilityCache()
+  capabilities.rememberUnsupported('hook-run')
+  return capabilities
+}
+
 function worktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
     .map((entry, index) =>
@@ -39,6 +46,7 @@ describe('addWorktreeOp', () => {
         targetDir: '/repo-feature',
         base: 'origin/main'
       },
+      plainAddCapabilities(),
       'linux'
     )
 
@@ -88,6 +96,7 @@ describe('addWorktreeOp', () => {
         base: 'origin/main',
         checkoutExistingBranch: true
       },
+      plainAddCapabilities(),
       'linux'
     )
 
@@ -106,6 +115,7 @@ describe('addWorktreeOp', () => {
         branchName: 'feature/no-base',
         targetDir: '/repo-feature'
       },
+      plainAddCapabilities(),
       'linux'
     )
 
@@ -128,11 +138,54 @@ describe('addWorktreeOp', () => {
         targetDir: 'C:\\repo-feature',
         checkoutExistingBranch: true
       },
+      plainAddCapabilities(),
       'win32'
     )
 
     expect(git.mock.calls.map((call) => call[0])).toEqual([
       ['-c', 'core.longpaths=true', 'worktree', 'add', 'C:\\repo-feature', 'feature/test']
+    ])
+  })
+
+  it('checks out and runs post-checkout outside the admin write on a hook-capable host', async () => {
+    const git = vi.fn<GitExec>(async (args) => ({
+      stdout: args.includes('rev-parse') ? 'abc123\n' : '',
+      stderr: ''
+    }))
+
+    await addWorktreeOp(
+      git,
+      { repoPath: '/repo', branchName: 'feature/test', targetDir: '/repo-feature' },
+      new GitCapabilityCache(),
+      'linux'
+    )
+
+    expect(git.mock.calls.map(([args, cwd]) => [cwd, ...args])).toEqual([
+      ['/repo', 'hook', 'run', '--ignore-missing', 'orca-capability-probe'],
+      [
+        '/repo',
+        'worktree',
+        'add',
+        '--no-checkout',
+        '--no-track',
+        '-b',
+        'feature/test',
+        '/repo-feature'
+      ],
+      ['/repo-feature', 'reset', '--hard', '--no-recurse-submodules'],
+      ['/repo-feature', 'rev-parse', 'HEAD'],
+      [
+        '/repo-feature',
+        'hook',
+        'run',
+        '--ignore-missing',
+        'post-checkout',
+        '--',
+        '000000',
+        'abc123',
+        '1'
+      ],
+      ['/repo-feature', 'config', '--get', 'push.autoSetupRemote']
     ])
   })
 
@@ -147,6 +200,7 @@ describe('addWorktreeOp', () => {
         targetDir: 'C:\\repo-feature',
         noCheckout: true
       },
+      plainAddCapabilities(),
       'win32'
     )
 
@@ -155,8 +209,8 @@ describe('addWorktreeOp', () => {
       'core.longpaths=true',
       'worktree',
       'add',
-      '--no-track',
       '--no-checkout',
+      '--no-track',
       '-b',
       'feature/test',
       'C:\\repo-feature'
@@ -174,6 +228,7 @@ describe('addWorktreeOp', () => {
         targetDir: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo-feature',
         checkoutExistingBranch: true
       },
+      plainAddCapabilities(),
       'win32'
     )
 
@@ -203,6 +258,7 @@ describe('addWorktreeOp', () => {
           targetDir: '/repo-feature',
           base: 'origin/main'
         },
+        plainAddCapabilities(),
         'linux'
       )
     ).resolves.toBeUndefined()
@@ -457,9 +513,11 @@ describe('removeWorktreeOp', () => {
       forceBranchDelete: true
     })
 
+    // The inline tree delete runs outside the repo's admin lane.
     expect(git).toHaveBeenCalledWith(
       ['worktree', 'remove', '--force', '/repo-feature'],
-      expect.any(String)
+      expect.any(String),
+      { worktreeAdminLock: false }
     )
     expect(git).toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
     expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))

@@ -125,7 +125,8 @@ describe('prepared worktree creation with real Git', () => {
         workspaceRoot: root,
         baseBranch: 'main',
         canonicalBase: 'refs/heads/main',
-        options: {}
+        options: {},
+        reason: 'prefetch'
       })
       await removalStarted
       expect(hasPendingStalePreparationCleanup()).toBe(true)

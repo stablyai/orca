@@ -57,7 +57,8 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
       workspaceRoot: root,
       baseBranch: 'main',
       canonicalBase: 'refs/heads/main',
-      options: {}
+      options: {},
+      reason: 'prefetch'
     })
   )
   expect(events.length).toBeGreaterThan(0)

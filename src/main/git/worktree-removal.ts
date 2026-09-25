@@ -77,18 +77,20 @@ async function performRemoveWorktree(
       args.push('--force')
     }
     args.push(worktreePath)
+    // Why: this fallback deletes the whole tree inline; that must not hold the repo's admin lane.
+    const removeOptions = {
+      ...gitExecOptions(repoPath, options),
+      worktreeAdminLock: false as const
+    }
     try {
-      await gitExecFileAsync(args, gitExecOptions(repoPath, options))
+      await gitExecFileAsync(args, removeOptions)
     } catch (error) {
       if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
         throw error
       }
       // Why: Git refuses non-force removal of a worktree with an initialised submodule even when clean; re-prove cleanliness, then --force.
       await assertWorktreeCleanForRemoval(worktreePath, false, options)
-      await gitExecFileAsync(
-        ['worktree', 'remove', '--force', worktreePath],
-        gitExecOptions(repoPath, options)
-      )
+      await gitExecFileAsync(['worktree', 'remove', '--force', worktreePath], removeOptions)
     }
   }
 

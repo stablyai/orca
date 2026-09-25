@@ -10,6 +10,7 @@ import {
 import type { AddWorktreeOptions } from './git/worktree'
 import { prepareWorktreeCreateCheckout } from './git/worktree-create-preparation'
 import { toHostFilesystemPath } from './host-tree-removal'
+import { withWorktreePrepareSpan } from './observability/instrumentation'
 import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
 import {
   startStalePreparationCleanup,
@@ -41,6 +42,8 @@ export type PreparationEntry = {
   expiration: NodeJS.Timeout
   controller: AbortController
   checkoutStarted: boolean
+  /** The `worktree.prepare` span doing the checkout; empty when tracing is off. */
+  traceSpanId: string
 }
 
 export type StartPreparationArgs = {
@@ -49,6 +52,8 @@ export type StartPreparationArgs = {
   baseBranch: string
   canonicalBase: string
   options: AddWorktreeOptions
+  /** Prefetch while the composer is open, or rearm after a create consumed a checkout. */
+  reason: 'prefetch' | 'rearm'
 }
 
 const preparations = new Map<string, PreparationEntry>()
@@ -84,7 +89,9 @@ async function discardEntry(entry: PreparationEntry): Promise<void> {
 
 function discardEntryInBackground(entry: PreparationEntry): void {
   // Tracked, not bare `void`: the test reset must be able to settle it before dropping the registry.
-  trackPreparationDiscard(worktreePreparationGit.run(() => discardEntry(entry)))
+  trackPreparationDiscard(
+    worktreePreparationGit.run(() => withWorktreePrepareSpan('discard', () => discardEntry(entry)))
+  )
 }
 
 function expireEntry(entry: PreparationEntry): void {
@@ -161,7 +168,8 @@ function startBackgroundPreparation({
   workspaceRoot,
   baseBranch,
   canonicalBase,
-  options
+  options,
+  reason
 }: StartPreparationArgs): Promise<void> {
   const repoPathKey = preparationPathKey(repoPath)
   const workspaceRootKey = preparationPathKey(workspaceRoot)
@@ -182,6 +190,25 @@ function startBackgroundPreparation({
   const entry = {} as PreparationEntry
   const expiration = setTimeout(() => expireEntry(entry), WORKTREE_CREATE_PREPARATION_TTL_MS)
   expiration.unref()
+  let traceSpanId = ''
+  // The span callback starts synchronously, so the id is set before the entry below is built.
+  const ready = withWorktreePrepareSpan(reason, async (span) => {
+    traceSpanId = span.spanId
+    await startStalePreparationCleanup(
+      preparationHostKey(repoPathKey, wslDistro),
+      repoPath,
+      options
+    )
+    signal.throwIfAborted()
+    await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
+    signal.throwIfAborted()
+    // Already canonical, so the add re-resolves nothing.
+    entry.checkoutStarted = true
+    await prepareWorktreeCreateCheckout(repoPath, preparedPath, canonicalBase, lockReason, {
+      ...options,
+      signal
+    })
+  })
   Object.assign(entry, {
     key,
     repoPath,
@@ -197,22 +224,8 @@ function startBackgroundPreparation({
     expiration,
     controller,
     checkoutStarted: false,
-    ready: (async () => {
-      await startStalePreparationCleanup(
-        preparationHostKey(repoPathKey, wslDistro),
-        repoPath,
-        options
-      )
-      signal.throwIfAborted()
-      await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
-      signal.throwIfAborted()
-      // Already canonical, so the add re-resolves nothing.
-      entry.checkoutStarted = true
-      await prepareWorktreeCreateCheckout(repoPath, preparedPath, canonicalBase, lockReason, {
-        ...options,
-        signal
-      })
-    })()
+    traceSpanId,
+    ready
   } satisfies PreparationEntry)
   preparations.set(key, entry)
   void entry.ready.catch(() => {

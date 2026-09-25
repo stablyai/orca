@@ -22,6 +22,8 @@ export type GitExec = (
     signal?: AbortSignal
     stdin?: string
     timeout?: number
+    /** False for an admin command that also deletes a whole work tree; see the main runner's option. */
+    worktreeAdminLock?: false
   }
 ) => Promise<{ stdout: string; stderr: string }>
 

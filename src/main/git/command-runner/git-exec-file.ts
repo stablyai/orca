@@ -1,10 +1,7 @@
 import { execFileSync, type SpawnOptions } from 'node:child_process'
 import { withGitSpan } from '../../observability/instrumentation'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import {
-  resolveGitFetchHeadCommand,
-  runWithGitFetchHeadLock
-} from '../../../shared/git-fetch-head-lock'
+import { runWithGitExecLocks, type GitExecLockGrant } from './git-exec-lock-policy'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting
@@ -33,12 +30,20 @@ import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeo
  */
 async function gitExecFileAsyncUnlocked(
   args: string[],
-  options: GitExecOptions
+  options: GitExecOptions,
+  lock?: GitExecLockGrant
 ): Promise<{ stdout: string; stderr: string }> {
   // Why: span the user-visible `git <subcommand>` form, not the resolved binary, so dashboards group by intent.
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async (span) => {
+      if (lock?.worktreeAdminLockWaitMs !== undefined) {
+        span?.setAttribute(
+          'git.worktree_admin_lock_wait_ms',
+          Math.round(lock.worktreeAdminLockWaitMs)
+        )
+        span?.setAttribute('git.worktree_admin_lock_held', lock.lease.held)
+      }
       if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
         await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro, {
           signal: options.signal
@@ -153,6 +158,8 @@ async function gitExecFileAsyncUnlocked(
       } finally {
         const termination = terminationState.current
         if (termination) {
+          // Why: an aborted or timed-out git settles before its child exits; it may still be writing.
+          lock?.lease.holdUntil(termination)
           void termination.then(grant.release)
         } else {
           grant.release()
@@ -166,15 +173,7 @@ export function gitExecFileAsync(
   args: string[],
   options: GitExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
-  const command = resolveGitFetchHeadCommand(args, options.cwd)
-  return command.needsLock
-    ? runWithGitFetchHeadLock(
-        command.cwd,
-        options.signal,
-        () => gitExecFileAsyncUnlocked(args, options),
-        command.gitDir
-      )
-    : gitExecFileAsyncUnlocked(args, options)
+  return runWithGitExecLocks(args, options, (lock) => gitExecFileAsyncUnlocked(args, options, lock))
 }
 
 /**

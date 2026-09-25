@@ -33,6 +33,7 @@ import {
   resetPreparationConsumeHistoryForTests
 } from './worktree-create-preparation-burst'
 import { toHostFilesystemPath } from './host-tree-removal'
+import { withPreparedCheckoutWaitSpan } from './observability/instrumentation'
 
 export {
   WORKTREE_CREATE_PREPARATION_LIMIT,
@@ -122,7 +123,8 @@ async function prepareWorktreeCreateInBackground(
     workspaceRoot,
     baseBranch,
     canonicalBase,
-    options
+    options,
+    reason: 'prefetch'
   })
 }
 
@@ -189,7 +191,7 @@ async function claimPreparedWorktree(
   const entry = selection.candidate
   takePreparation(entry)
   try {
-    await entry.ready
+    await withPreparedCheckoutWaitSpan(entry.traceSpanId, () => entry.ready)
     return {
       status: 'claimed',
       entry,
@@ -236,7 +238,8 @@ function deferRearmPreparation(
       workspaceRoot: entry.workspaceRoot,
       baseBranch,
       canonicalBase,
-      options: entry.options
+      options: entry.options,
+      reason: 'rearm'
     }).catch(() => {
       // Why: a warm-up failure is recovered by the normal add on the next create.
     })

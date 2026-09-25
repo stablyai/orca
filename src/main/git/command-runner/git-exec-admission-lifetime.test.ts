@@ -48,6 +48,8 @@ vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
 
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
 import { execFileCapture } from './exec-file-capture'
+import { _gitOperationLockHeldForTests } from '../../../shared/git-operation-lock'
+import { _resolveGitWorktreeAdminLockKeyForTests } from '../../../shared/git-worktree-admin-lock'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,
@@ -123,6 +125,26 @@ describe('git exec admission lifetime', () => {
     child.emit('close', null, 'SIGKILL')
     await Promise.resolve()
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
+  })
+
+  it('holds the worktree admin lane after an aborted admin command until its child exits', async () => {
+    vi.useRealTimers()
+    const key = await _resolveGitWorktreeAdminLockKeyForTests('/repo')
+    const child = mockChild()
+    execFileMock.mockReturnValue(child)
+    const controller = new AbortController()
+    const pending = gitExecFileAsync(['worktree', 'prune'], {
+      cwd: '/repo',
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledOnce())
+
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(_gitOperationLockHeldForTests(key)).toBe(true)
+
+    child.emit('close', null, 'SIGTERM')
+    await vi.waitFor(() => expect(_gitOperationLockHeldForTests(key)).toBe(false))
   })
 
   it('retains the buffer-exec permit after maxBuffer settlement until close', async () => {

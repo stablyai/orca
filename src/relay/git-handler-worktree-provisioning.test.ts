@@ -10,6 +10,7 @@ import { writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
+import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import {
   createMockDispatcher,
   gitInit,
@@ -407,6 +408,11 @@ describe('GitHandler', () => {
           ) => Promise<{ stdout: string; stderr: string }>
         >()
       ;(handler as unknown as { git: typeof gitMock }).git = gitMock
+      // Why: these tests queue git replies in order; the split add has its own suite.
+      const capabilities =
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: GitHandler owns a private GitCapabilityCache field named gitCapabilities.
+        (handler as unknown as { gitCapabilities: GitCapabilityCache }).gitCapabilities
+      capabilities.rememberUnsupported('hook-run')
       return { localDispatcher, gitMock }
     }
 
@@ -555,8 +561,8 @@ describe('GitHandler', () => {
       expect(gitMock.mock.calls[1]?.[0]).toEqual([
         'worktree',
         'add',
-        '--no-track',
         '--no-checkout',
+        '--no-track',
         '-b',
         'feature/sparse',
         '/relay/wt',
