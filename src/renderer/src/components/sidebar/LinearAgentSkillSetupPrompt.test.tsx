@@ -10,6 +10,7 @@ import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
 } from './LinearAgentSkillSetupPrompt'
+import type { LinearAgentSkillPromptSettings } from './linear-agent-skill-runtime'
 
 const HOST_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.host'
 const FEDORA_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.wsl.Fedora'
@@ -47,9 +48,9 @@ const mocks = vi.hoisted(() => ({
   },
   useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
-  getWslCliStatus: vi.fn(),
+  getWslCliStatus: vi.fn<(request?: { distro: string }) => Promise<CliInstallStatus>>(),
   ensureCli: vi.fn(async () => null as CliInstallStatus | null),
-  ensureWslCli: vi.fn(async () => null as CliInstallStatus | null),
+  ensureWslCli: vi.fn(async (_runtime?: unknown): Promise<CliInstallStatus | null> => null),
   panelProps: [] as Record<string, unknown>[]
 }))
 
@@ -59,6 +60,8 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
+  isOrcaCliRegistrationRequired: (runtime?: { runtime: string } | null) =>
+    runtime?.runtime === 'wsl',
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE: 'CLI registration notice',
   ensureOrcaCliAvailableForAgentSkillTerminal: mocks.ensureCli,
   isOrcaCliAvailableOnPath: (status: CliInstallStatus | null | undefined) =>
@@ -66,6 +69,19 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
+  getAgentSkillCliPrerequisite: (runtime?: { runtime: string; wslDistro?: string | null }) =>
+    runtime?.runtime === 'wsl'
+      ? {
+          preInstallNotice: 'CLI registration notice',
+          getPrerequisiteStatus: () =>
+            mocks.getWslCliStatus(
+              runtime.wslDistro?.trim() ? { distro: runtime.wslDistro.trim() } : undefined
+            ),
+          ensureCli: async () => {
+            await mocks.ensureWslCli(runtime)
+          }
+        }
+      : { ensureCli: async () => {} },
   buildSkillCommandForRuntime: (
     command: string,
     _runtime: { runtime: string; wslDistro?: string | null }
@@ -100,6 +116,33 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
     )
   }
 }))
+
+function wslSettings(distro: string): LinearAgentSkillPromptSettings {
+  return {
+    localAgentRuntime: 'wsl',
+    localAgentWslDistro: distro,
+    terminalWindowsShell: 'wsl.exe',
+    activeRuntimeEnvironmentId: null
+  }
+}
+
+function wslPromptProps(
+  distro: string,
+  surface: 'inline' | 'modal' = 'inline'
+): ComponentProps<typeof LinearAgentSkillSetupPrompt> {
+  return {
+    linked: true,
+    remote: false,
+    surface,
+    currentPlatform: 'win32',
+    settings: wslSettings(distro)
+  }
+}
+
+function expectNoCliStatusQuery(): void {
+  expect(mocks.getCliStatus).not.toHaveBeenCalled()
+  expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
+}
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -186,7 +229,6 @@ async function settleRender(): Promise<void> {
 async function showSuccessfulModalRecheck(): Promise<void> {
   await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
-  mocks.getCliStatus.mockResolvedValue(cliStatus({}))
   mocks.skillState.refresh.mockImplementationOnce(async () => {
     mocks.skillState.installed = true
   })
@@ -235,12 +277,14 @@ describe('LinearAgentSkillSetupPrompt', () => {
     Reflect.deleteProperty(window, 'api')
   })
 
-  it('shows a compact setup prompt when a linked Linear worktree is missing CLI or skill setup', async () => {
+  it('shows a compact host setup prompt about only the skill when it is missing', async () => {
     const rendered = await renderPrompt({ linked: true, remote: false })
 
     expect(rendered.textContent).toContain('Set up Linear agent skill')
-    expect(rendered.textContent).toContain('Orca CLI and Linear agent skill are missing')
+    expect(rendered.textContent).toContain('Linear agent skill is missing.')
+    expect(rendered.textContent).not.toContain('Orca CLI')
     expect(rendered.textContent).toContain('Install it for host agent handoffs')
+    expectNoCliStatusQuery()
     expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
       LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({ enabled: true, sourceKinds: ['home'] })
@@ -258,6 +302,21 @@ describe('LinearAgentSkillSetupPrompt', () => {
 
     const ready = await renderPrompt({ linked: true, remote: false })
     expect(ready.textContent).not.toContain('Set up Linear agent skill')
+  })
+
+  it('treats host setup as ready when the skill is installed and no CLI is registered', async () => {
+    mocks.skillState.installed = true
+
+    const inline = await renderPrompt({ linked: true, remote: false, currentPlatform: 'darwin' })
+    expect(inline.textContent).not.toContain('Set up Linear agent skill')
+
+    await unmountPrompt()
+
+    await renderPrompt({ linked: true, remote: false, surface: 'modal', currentPlatform: 'win32' })
+    expect(document.body.textContent).not.toContain(
+      'Enable agents to read and edit the attached Linear ticket.'
+    )
+    expectNoCliStatusQuery()
   })
 
   it('persists host dismissal forever for the host setup target', async () => {
@@ -287,8 +346,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
 
     expect(rendered.textContent).toContain('remote agent environments may need separate setup')
-    expect(mocks.getCliStatus).toHaveBeenCalled()
-    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
+    expectNoCliStatusQuery()
     expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
       LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({
@@ -313,12 +371,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
       linked: true,
       remote: false,
       currentPlatform: 'win32',
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Fedora',
-        terminalWindowsShell: 'wsl.exe',
-        activeRuntimeEnvironmentId: null
-      }
+      settings: wslSettings('Fedora')
     })
 
     expect(mocks.getCliStatus).not.toHaveBeenCalled()
@@ -331,6 +384,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
         sourceKinds: ['home']
       })
     )
+    expect(rendered.textContent).toContain('Orca CLI and Linear agent skill are missing.')
     expect(rendered.textContent).toContain('Install it for WSL agent handoffs')
 
     const setupButton = Array.from(rendered.querySelectorAll('button')).find(
@@ -347,6 +401,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
         installedCommand: 'npx skills update orca-linear --global',
         terminalShellOverride: 'powershell.exe',
         terminalRuntime: expect.objectContaining({ runtime: 'wsl', wslDistro: 'Fedora' }),
+        preInstallNotice: 'CLI registration notice',
         getPrerequisiteStatus: expect.any(Function)
       })
     )
@@ -373,12 +428,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
       linked: true,
       remote: false,
       currentPlatform: 'win32',
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Fedora',
-        terminalWindowsShell: 'wsl.exe',
-        activeRuntimeEnvironmentId: null
-      }
+      settings: wslSettings('Fedora')
     })
 
     await act(async () => {
@@ -418,8 +468,8 @@ describe('LinearAgentSkillSetupPrompt', () => {
       }
     })
 
-    expect(mocks.getCliStatus).toHaveBeenCalled()
-    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
+    expect(container?.textContent).toContain('Install it for host agent handoffs')
+    expectNoCliStatusQuery()
   })
 
   it('keeps the prompt usable and loads the lazy setup dialog only when requested', async () => {
@@ -445,9 +495,11 @@ describe('LinearAgentSkillSetupPrompt', () => {
       installButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(mocks.ensureCli).toHaveBeenCalledWith(
-      expect.objectContaining({ onStatusChange: expect.any(Function) })
-    )
+    expect(mocks.panelProps.at(-1)?.preInstallNotice).toBeUndefined()
+    expect(mocks.panelProps.at(-1)?.getPrerequisiteStatus).toBeUndefined()
+    expect(mocks.ensureCli).not.toHaveBeenCalled()
+    expect(mocks.ensureWslCli).not.toHaveBeenCalled()
+    expectNoCliStatusQuery()
   })
 
   it('auto-opens as a modal-only prompt and treats the × close as a casual snooze', async () => {
@@ -457,16 +509,12 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(document.body.textContent).toContain(
       'Enable agents to read and edit the attached Linear ticket.'
     )
-    expect(document.body.textContent).toContain('Orca CLI and Linear agent skill are missing.')
+    expect(document.body.textContent).toContain('Linear agent skill is missing.')
     expect(document.body.textContent).toContain('Mock install')
     // Why: the permanent opt-out is an EyeOff icon (no visible text); the casual
     // dismiss is the dialog ×. Neither "Not now" nor any dismiss label shows as text.
     expect(document.body.textContent).not.toContain('Not now')
-    expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({
-        preInstallNotice: 'CLI registration notice'
-      })
-    )
+    expect(mocks.panelProps.at(-1)?.preInstallNotice).toBeUndefined()
 
     // Why: the × must snooze for the session, not persist a permanent dismissal.
     const closeButton = Array.from(document.body.querySelectorAll('button')).find(
@@ -512,9 +560,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
     container?.remove()
     container = null
 
-    mocks.getCliStatus.mockResolvedValue(
-      cliStatus({ state: 'not_installed', pathConfigured: false })
-    )
     mocks.skillState.installed = false
 
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
@@ -540,9 +585,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
     container?.remove()
     container = null
 
-    mocks.getCliStatus.mockResolvedValue(
-      cliStatus({ state: 'not_installed', pathConfigured: false })
-    )
     mocks.skillState.installed = false
 
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
@@ -581,7 +623,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
   it('still removes the inline prompt after an inline Re-check succeeds', async () => {
     const rendered = await renderPrompt({ linked: true, remote: false })
 
-    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
     mocks.skillState.refresh.mockImplementationOnce(async () => {
       mocks.skillState.installed = true
     })
@@ -592,15 +633,18 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       recheckButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    await settleRender()
+    // Why: the real skill hook re-renders on refresh; this mock only mutates a shared object.
+    await updatePrompt({ linked: true, remote: false })
 
+    expect(mocks.skillState.refresh).toHaveBeenCalled()
     expect(rendered.textContent).not.toContain('Set up Linear agent skill')
+    expectNoCliStatusQuery()
   })
 
   it('keeps the missing setup modal visible after a partial Re-check', async () => {
-    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+    await renderPrompt(wslPromptProps('Fedora', 'modal'))
 
-    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
+    mocks.getWslCliStatus.mockResolvedValue(cliStatus({}))
 
     await act(async () => {
       findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -615,11 +659,11 @@ describe('LinearAgentSkillSetupPrompt', () => {
   })
 
   it('keeps the modal mounted and the Re-check action loading during a slow modal check', async () => {
-    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+    await renderPrompt(wslPromptProps('Fedora', 'modal'))
 
     let resolveCliStatus: (status: CliInstallStatus) => void = () => {}
     let resolveSkillRefresh: () => void = () => {}
-    mocks.getCliStatus.mockReturnValue(
+    mocks.getWslCliStatus.mockReturnValue(
       new Promise<CliInstallStatus>((resolve) => {
         resolveCliStatus = resolve
       })
@@ -646,18 +690,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
   })
 
   it('ignores stale CLI success after the runtime context changes during Re-check', async () => {
-    await renderPrompt({
-      linked: true,
-      remote: false,
-      surface: 'modal',
-      currentPlatform: 'win32',
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Fedora',
-        terminalWindowsShell: 'wsl.exe',
-        activeRuntimeEnvironmentId: null
-      }
-    })
+    await renderPrompt(wslPromptProps('Fedora', 'modal'))
 
     let resolveWslStatus: (status: CliInstallStatus) => void = () => {}
     mocks.getWslCliStatus.mockReturnValueOnce(
@@ -671,21 +704,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
       findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    mocks.getCliStatus.mockResolvedValue(
-      cliStatus({ state: 'not_installed', pathConfigured: false })
-    )
     mocks.skillState.installed = true
-    await updatePrompt({
-      linked: true,
-      remote: false,
-      surface: 'modal',
-      currentPlatform: 'win32',
-      settings: {
-        localAgentRuntime: 'host',
-        terminalWindowsShell: 'powershell.exe',
-        activeRuntimeEnvironmentId: null
-      }
-    })
+    await updatePrompt(wslPromptProps('Ubuntu', 'modal'))
+    expect(mocks.getWslCliStatus).toHaveBeenLastCalledWith({ distro: 'Ubuntu' })
 
     resolveWslStatus(cliStatus({}))
     await settleRender()
@@ -697,39 +718,28 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(document.body.textContent).not.toContain('Linear ticket access is ready')
   })
 
-  it('ignores stale prerequisite CLI status callbacks after the runtime context changes', async () => {
-    let reportHostCliStatus: ((status: CliInstallStatus) => void) | null = null
-    mocks.ensureCli.mockImplementationOnce(
-      async (options?: { onStatusChange?: (status: CliInstallStatus) => void }) => {
-        reportHostCliStatus = options?.onStatusChange ?? null
-        return null
-      }
+  it('ignores stale prerequisite CLI status results after the runtime context changes', async () => {
+    let resolveEnsureWslCli: (status: CliInstallStatus) => void = () => {}
+    mocks.ensureWslCli.mockImplementationOnce(
+      () =>
+        new Promise<CliInstallStatus>((resolve) => {
+          resolveEnsureWslCli = resolve
+        })
     )
-    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+    await renderPrompt(wslPromptProps('Fedora', 'modal'))
 
     await act(async () => {
       findBodyButton('Mock install')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-
-    mocks.getWslCliStatus.mockResolvedValue(
-      cliStatus({ state: 'not_installed', pathConfigured: false })
+    expect(mocks.ensureWslCli).toHaveBeenCalledWith(
+      expect.objectContaining({ runtime: 'wsl', wslDistro: 'Fedora' })
     )
+
     mocks.skillState.installed = true
-    await updatePrompt({
-      linked: true,
-      remote: false,
-      surface: 'modal',
-      currentPlatform: 'win32',
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Fedora',
-        terminalWindowsShell: 'wsl.exe',
-        activeRuntimeEnvironmentId: null
-      }
-    })
+    await updatePrompt(wslPromptProps('Ubuntu', 'modal'))
 
     await act(async () => {
-      reportHostCliStatus?.(cliStatus({}))
+      resolveEnsureWslCli(cliStatus({}))
     })
     await settleRender()
 
@@ -740,35 +750,28 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(document.body.textContent).not.toContain('Linear ticket access is ready')
   })
 
-  it('accepts same-context prerequisite CLI status callbacks after a newer Re-check', async () => {
-    let reportHostCliStatus: ((status: CliInstallStatus) => void) | null = null
-    let resolveEnsureCli: () => void = () => {}
-    mocks.ensureCli.mockImplementationOnce(
-      async (options?: { onStatusChange?: (status: CliInstallStatus) => void }) => {
-        reportHostCliStatus = options?.onStatusChange ?? null
-        await new Promise<void>((resolve) => {
-          resolveEnsureCli = resolve
+  it('accepts same-context prerequisite CLI status results after a newer Re-check', async () => {
+    let resolveEnsureWslCli: (status: CliInstallStatus) => void = () => {}
+    mocks.ensureWslCli.mockImplementationOnce(
+      () =>
+        new Promise<CliInstallStatus>((resolve) => {
+          resolveEnsureWslCli = resolve
         })
-        return null
-      }
     )
-    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+    await renderPrompt(wslPromptProps('Fedora', 'modal'))
 
     await act(async () => {
       findBodyButton('Mock install')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    mocks.getCliStatus.mockResolvedValue(
-      cliStatus({ state: 'not_installed', pathConfigured: false })
-    )
     await act(async () => {
       findBodyButton('Re-check')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await settleRender()
+    expect(document.body.textContent).toContain('Orca CLI and Linear agent skill are missing.')
 
     await act(async () => {
-      reportHostCliStatus?.(cliStatus({}))
-      resolveEnsureCli()
+      resolveEnsureWslCli(cliStatus({}))
     })
     await settleRender()
 
@@ -780,17 +783,17 @@ describe('LinearAgentSkillSetupPrompt', () => {
   })
 
   it('ignores older same-context CLI refreshes that finish after a newer Re-check', async () => {
-    const rendered = await renderPrompt({ linked: true, remote: false })
+    const rendered = await renderPrompt(wslPromptProps('Fedora'))
     const recheckButton = Array.from(rendered.querySelectorAll('button')).find(
       (button) => button.textContent === 'Re-check'
     )
     let resolveOlderCliStatus: (status: CliInstallStatus) => void = () => {}
-    mocks.getCliStatus.mockReturnValueOnce(
+    mocks.getWslCliStatus.mockReturnValueOnce(
       new Promise<CliInstallStatus>((resolve) => {
         resolveOlderCliStatus = resolve
       })
     )
-    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
+    mocks.getWslCliStatus.mockResolvedValue(cliStatus({}))
     mocks.skillState.refresh.mockImplementation(async () => {
       mocks.skillState.installed = true
     })
@@ -815,12 +818,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
       remote: false,
       surface: 'modal',
       currentPlatform: 'win32',
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Fedora',
-        terminalWindowsShell: 'wsl.exe',
-        activeRuntimeEnvironmentId: null
-      }
+      settings: wslSettings('Fedora')
     })
 
     mocks.getWslCliStatus.mockResolvedValue(cliStatus({}))
@@ -844,12 +842,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
       remote: false,
       currentPlatform: 'win32',
       projectRuntime: projectHostRuntime,
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Fedora',
-        terminalWindowsShell: 'wsl.exe',
-        activeRuntimeEnvironmentId: null
-      }
+      settings: wslSettings('Fedora')
     })
 
     expect(mocks.useInstalledAgentSkillNames).toHaveBeenLastCalledWith(
@@ -858,8 +851,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
         discoveryTarget: { projectRuntime: projectHostRuntime }
       })
     )
-    expect(mocks.getCliStatus).toHaveBeenCalled()
-    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
+    expectNoCliStatusQuery()
   })
 
   it('uses selected project WSL runtime for skill discovery and CLI status', async () => {
@@ -898,7 +890,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
   it('uses remote-safe success copy for remote workspaces', async () => {
     await renderPrompt({ linked: true, remote: true, surface: 'modal' })
 
-    mocks.getCliStatus.mockResolvedValue(cliStatus({}))
     mocks.skillState.refresh.mockImplementationOnce(async () => {
       mocks.skillState.installed = true
     })

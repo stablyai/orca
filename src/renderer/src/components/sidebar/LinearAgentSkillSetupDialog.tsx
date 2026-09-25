@@ -12,10 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  isOrcaCliAvailableOnPath
-} from '@/lib/agent-skill-cli-prerequisite'
+import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { translate } from '@/i18n/i18n'
 
 type AgentSkillSetupPanelProps = ComponentProps<typeof AgentSkillSetupPanel>
@@ -32,6 +29,7 @@ type LinearAgentSkillSetupDialogProps = {
   installed: boolean
   loading: boolean
   error: string | null
+  preInstallNotice?: AgentSkillSetupPanelProps['preInstallNotice']
   getPrerequisiteStatus?: AgentSkillSetupPanelProps['getPrerequisiteStatus']
   onBeforeOpenTerminal: AgentSkillSetupPanelProps['onBeforeOpenTerminal']
   onRecheck: AgentSkillSetupPanelProps['onRecheck']
@@ -52,6 +50,7 @@ export function LinearAgentSkillSetupDialog({
   installed,
   loading,
   error,
+  preInstallNotice,
   getPrerequisiteStatus,
   onBeforeOpenTerminal,
   onRecheck,
@@ -144,13 +143,13 @@ export function LinearAgentSkillSetupDialog({
               loading={loading}
               error={error}
               installLabel={translate(
-                'auto.components.sidebar.LinearAgentSkillSetupPrompt.install',
-                'Install CLI & Skill'
+                'auto.components.skills.SkillInstallDialog.39acb9e8f4',
+                'Install skill'
               )}
               // Why: Install is this modal's sole CTA, so make it the filled primary —
               // matching the other setup surfaces (filled primary + muted dismiss).
               installVariant="default"
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+              preInstallNotice={preInstallNotice}
               getPrerequisiteStatus={getPrerequisiteStatus}
               isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
               onBeforeOpenTerminal={onBeforeOpenTerminal}

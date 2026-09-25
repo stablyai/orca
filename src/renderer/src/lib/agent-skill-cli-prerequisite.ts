@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../shared/cli-install-types'
 import { translate } from '@/i18n/i18n'
-import type { ProjectAgentSkillRuntime } from './project-skill-runtime'
 
 type EnsureOrcaCliAvailableOptions = {
   onStatusChange?: (status: CliInstallStatus) => void
@@ -18,7 +17,7 @@ export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
 // Why: Orca PTYs on macOS/Windows/Linux already put the bundled CLI on PATH
 // (prependOrcaCliDirToChildPath); a WSL guest reaches `orca-ide` only once it is registered.
 export function isOrcaCliRegistrationRequired(
-  agentRuntime: ProjectAgentSkillRuntime | null | undefined
+  agentRuntime: { runtime: 'host' | 'wsl' } | null | undefined
 ): boolean {
   return agentRuntime?.runtime === 'wsl'
 }

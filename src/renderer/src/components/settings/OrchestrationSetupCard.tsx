@@ -1,9 +1,5 @@
 import type { JSX } from 'react'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
-import {
   ORCHESTRATION_SKILL_INSTALL_COMMAND,
   ORCHESTRATION_SKILL_UPDATE_COMMAND
 } from '@/lib/orchestration-install-command'
@@ -11,11 +7,7 @@ import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
-} from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime, getAgentSkillCliPrerequisite } from './CliSkillRuntimeSetup'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
@@ -26,6 +18,7 @@ export function OrchestrationSetupCard(props: {
 }): JSX.Element {
   const { compact, terminalHeightPx, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const cliPrerequisite = getAgentSkillCliPrerequisite(activeSkillRuntime.agentRuntime)
   const installCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(
         ORCHESTRATION_SKILL_INSTALL_COMMAND,
@@ -62,19 +55,11 @@ export function OrchestrationSetupCard(props: {
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       terminalHeightPx={terminalHeightPx}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-      getPrerequisiteStatus={() =>
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? window.api.cli.getWslInstallStatus(
-              getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-            )
-          : window.api.cli.getInstallStatus()
-      }
+      preInstallNotice={cliPrerequisite.preInstallNotice}
+      getPrerequisiteStatus={cliPrerequisite.getPrerequisiteStatus}
       onBeforeOpenTerminal={async () => {
         useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
-        await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-          : ensureOrcaCliAvailableForAgentSkillTerminal())
+        await cliPrerequisite.ensureCli()
       }}
       onRecheck={skill.refresh}
       freshnessSkillName={

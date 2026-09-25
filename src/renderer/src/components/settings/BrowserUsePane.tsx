@@ -7,7 +7,6 @@ import {
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   isOrcaCliAvailableOnPath,
   isOrcaCliRegistrationRequired
 } from '@/lib/agent-skill-cli-prerequisite'
@@ -33,6 +32,7 @@ import { BrowserUseCookieImportStep } from './BrowserUseCookieImportStep'
 import {
   buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
+  getAgentSkillCliPrerequisite,
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
 import { translate } from '@/i18n/i18n'
@@ -60,6 +60,7 @@ export function BrowserUseSetup({
     ? undefined
     : activeSkillRuntime.agentRuntime
   const cliRequired = isOrcaCliRegistrationRequired(agentRuntime)
+  const cliPrerequisite = getAgentSkillCliPrerequisite(agentRuntime)
   const browserUseInstallCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
     : ORCA_CLI_SKILL_INSTALL_COMMAND
@@ -280,17 +281,11 @@ export function BrowserUseSetup({
             disabled={step2Blocked}
             terminalShellOverride={activeSkillRuntime.terminalShellOverride}
             terminalRuntime={activeSkillRuntime.agentRuntime}
-            preInstallNotice={cliRequired ? AGENT_SKILL_CLI_PREREQUISITE_NOTICE : undefined}
-            getPrerequisiteStatus={
-              cliRequired
-                ? () => window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
-                : undefined
-            }
+            preInstallNotice={cliPrerequisite.preInstallNotice}
+            getPrerequisiteStatus={cliPrerequisite.getPrerequisiteStatus}
             onBeforeOpenTerminal={async () => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
-              if (cliRequired) {
-                await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-              }
+              await cliPrerequisite.ensureCli()
             }}
             onRecheck={refreshSkill}
           />

@@ -186,10 +186,7 @@ function BrowserSkillInstallButton(): React.JSX.Element {
             'auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b',
             'Installing…'
           )
-        : translate(
-            'auto.components.feature.wall.FeatureWallBrowserAction.c2df599513',
-            'Install CLI & Skill'
-          )}
+        : translate('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
     </Button>
   )
 }

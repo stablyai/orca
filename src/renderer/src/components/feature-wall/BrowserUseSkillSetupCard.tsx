@@ -4,18 +4,13 @@ import {
   ORCA_CLI_SKILL_NAME,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 import {
   buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
+  getAgentSkillCliPrerequisite
 } from '@/components/settings/CliSkillRuntimeSetup'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -27,6 +22,7 @@ export function BrowserUseSkillSetupCard(props: {
 }): JSX.Element {
   const { compact, terminalHeightPx, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const cliPrerequisite = getAgentSkillCliPrerequisite(activeSkillRuntime.agentRuntime)
   const installCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
     : ORCA_CLI_SKILL_INSTALL_COMMAND
@@ -36,9 +32,7 @@ export function BrowserUseSkillSetupCard(props: {
 
   const handleBeforeOpenTerminal = async (): Promise<void> => {
     useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
-    await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-      ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-      : ensureOrcaCliAvailableForAgentSkillTerminal())
+    await cliPrerequisite.ensureCli()
     localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, '1')
   }
 
@@ -65,14 +59,8 @@ export function BrowserUseSkillSetupCard(props: {
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
       installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
       terminalHeightPx={terminalHeightPx}
-      preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-      getPrerequisiteStatus={() =>
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-          ? window.api.cli.getWslInstallStatus(
-              getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-            )
-          : window.api.cli.getInstallStatus()
-      }
+      preInstallNotice={cliPrerequisite.preInstallNotice}
+      getPrerequisiteStatus={cliPrerequisite.getPrerequisiteStatus}
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}

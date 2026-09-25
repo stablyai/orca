@@ -18,6 +18,19 @@ import { getExistingLinearAgentSkillSetupReminderState } from './linear-agent-sk
 
 const HOST_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.host'
 
+const wslFedoraProps = {
+  linked: true,
+  remote: false,
+  surface: 'modal',
+  currentPlatform: 'win32',
+  settings: {
+    localAgentRuntime: 'wsl',
+    localAgentWslDistro: 'Fedora',
+    terminalWindowsShell: 'wsl.exe',
+    activeRuntimeEnvironmentId: null
+  }
+} satisfies ComponentProps<typeof LinearAgentSkillSetupPrompt>
+
 const mocks = vi.hoisted(() => ({
   skillState: {
     installed: false,
@@ -28,9 +41,9 @@ const mocks = vi.hoisted(() => ({
   },
   useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
-  getWslCliStatus: vi.fn(),
+  getWslCliStatus: vi.fn<(request?: { distro: string }) => Promise<CliInstallStatus>>(),
   ensureCli: vi.fn(async () => null as CliInstallStatus | null),
-  ensureWslCli: vi.fn(async () => null as CliInstallStatus | null),
+  ensureWslCli: vi.fn(async (_runtime?: unknown): Promise<CliInstallStatus | null> => null),
   toastDismiss: vi.fn(),
   toastWarning: vi.fn(() => 'linear-setup-toast-id'),
   panelProps: [] as Record<string, unknown>[]
@@ -49,6 +62,8 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
+  isOrcaCliRegistrationRequired: (runtime?: { runtime: string } | null) =>
+    runtime?.runtime === 'wsl',
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE: 'CLI registration notice',
   ensureOrcaCliAvailableForAgentSkillTerminal: mocks.ensureCli,
   isOrcaCliAvailableOnPath: (status: CliInstallStatus | null | undefined) =>
@@ -56,6 +71,19 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
+  getAgentSkillCliPrerequisite: (runtime?: { runtime: string; wslDistro?: string | null }) =>
+    runtime?.runtime === 'wsl'
+      ? {
+          preInstallNotice: 'CLI registration notice',
+          getPrerequisiteStatus: () =>
+            mocks.getWslCliStatus(
+              runtime.wslDistro?.trim() ? { distro: runtime.wslDistro.trim() } : undefined
+            ),
+          ensureCli: async () => {
+            await mocks.ensureWslCli(runtime)
+          }
+        }
+      : { ensureCli: async () => {} },
   buildSkillCommandForRuntime: (
     command: string,
     runtime: { runtime: string; wslDistro?: string | null }
@@ -217,12 +245,15 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     expect(document.body.textContent).not.toContain(
       'Enable agents to read and edit the attached Linear ticket.'
     )
+    // Why: host terminals already have the bundled CLI, so host reminders name only the skill.
+    expect(mocks.getCliStatus).not.toHaveBeenCalled()
+    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
     expect(toast.warning).toHaveBeenCalledWith(
-      'Orca CLI and Linear skill are missing',
+      'Linear skill is missing',
       expect.objectContaining({
         id: 'linear-agent-skill-setup-orca.linearTicketsSkill.setupDismissed.host',
         description:
-          'Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks.',
+          'Install the Linear skill to enable your agents to read and edit Linear tasks through the Orca CLI.',
         action: {
           label: 'Set up',
           onClick: expect.any(Function)
@@ -233,13 +264,14 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
 
   it('does not repeat the Orca CLI in CLI-only reminder toast copy', async () => {
     mocks.skillState.installed = true
-    await snoozeInitialModal({ linked: true, remote: false, surface: 'modal' })
-    await renderPrompt({ linked: true, remote: false, surface: 'modal' })
+    await snoozeInitialModal(wslFedoraProps)
+    await renderPrompt(wslFedoraProps)
 
     expect(toast.warning).toHaveBeenCalledWith(
       'Orca CLI is missing',
       expect.objectContaining({
-        description: 'Install the Orca CLI to enable your agents to read and edit Linear tasks.'
+        description:
+          'Install the Orca CLI to enable your agents to read and edit Linear tasks. This setup runs in the selected WSL agent runtime.'
       })
     )
   })
@@ -249,29 +281,17 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await renderPrompt({ linked: true, remote: true, surface: 'modal' })
 
     expect(toast.warning).toHaveBeenCalledWith(
-      'Orca CLI and Linear skill are missing',
+      'Linear skill is missing',
       expect.objectContaining({
         description:
-          'Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks. Remote agent environments may need their own setup.'
+          'Install the Linear skill to enable your agents to read and edit Linear tasks through the Orca CLI. Remote agent environments may need their own setup.'
       })
     )
   })
 
   it('keeps WSL target nuance in reminder toast copy', async () => {
-    const wslProps = {
-      linked: true,
-      remote: false,
-      surface: 'modal',
-      currentPlatform: 'win32',
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Fedora',
-        terminalWindowsShell: 'wsl.exe',
-        activeRuntimeEnvironmentId: null
-      }
-    } satisfies ComponentProps<typeof LinearAgentSkillSetupPrompt>
-    await snoozeInitialModal(wslProps)
-    await renderPrompt(wslProps)
+    await snoozeInitialModal(wslFedoraProps)
+    await renderPrompt(wslFedoraProps)
 
     expect(toast.warning).toHaveBeenCalledWith(
       'Orca CLI and Linear skill are missing',

@@ -9,10 +9,6 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
 import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
-import {
   EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
   EPHEMERAL_VMS_SKILL_NAME,
   EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
@@ -22,11 +18,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import {
-  buildSkillCommandForRuntime,
-  ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
-} from './CliSkillRuntimeSetup'
+import { buildSkillCommandForRuntime, getAgentSkillCliPrerequisite } from './CliSkillRuntimeSetup'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
@@ -40,6 +32,7 @@ const AGENT_PROMPT =
 export function EphemeralVmsPane(): React.JSX.Element {
   const openModal = useAppStore((state) => state.openModal)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const cliPrerequisite = getAgentSkillCliPrerequisite(activeSkillRuntime.agentRuntime)
   const [catalog, setCatalog] = useState<RecipeCatalogEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [promptCopied, setPromptCopied] = useState(false)
@@ -187,18 +180,10 @@ export function EphemeralVmsPane(): React.JSX.Element {
         error={activeSkillRuntime.installDisabledReason ?? skillError}
         installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
         icon={<Server className="size-5" />}
-        preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-        getPrerequisiteStatus={() =>
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-            ? window.api.cli.getWslInstallStatus(
-                getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
-              )
-            : window.api.cli.getInstallStatus()
-        }
+        preInstallNotice={cliPrerequisite.preInstallNotice}
+        getPrerequisiteStatus={cliPrerequisite.getPrerequisiteStatus}
         onBeforeOpenTerminal={async () => {
-          await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
-            ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-            : ensureOrcaCliAvailableForAgentSkillTerminal())
+          await cliPrerequisite.ensureCli()
         }}
         onRecheck={refreshSkill}
         freshnessSkillName={

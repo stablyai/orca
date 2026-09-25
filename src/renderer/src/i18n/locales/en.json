@@ -14557,7 +14557,8 @@
                   "6d2b0a84e1": "Unavailable in this build",
                   "notInstalled": "Not installed",
                   "openDesktopOnMac": "Open Orca Desktop on this Mac to use",
-                  "needsMacAccess": "Needs macOS access"
+                  "needsMacAccess": "Needs macOS access",
+                  "requiresOrcaDesktop": "Requires Orca Desktop"
                 }
               }
             }

@@ -36,6 +36,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
 }))
 
 vi.mock('@/components/settings/CliSkillRuntimeSetup', () => ({
+  getAgentSkillCliPrerequisite: () => ({ ensureCli: async () => {} }),
   buildSkillCommandForRuntime: (command: string) => command,
   buildSkillSetupTerminalCommand: (command: string) => command,
   ensureWslCliAvailableForAgentSkillTerminal: vi.fn(),
