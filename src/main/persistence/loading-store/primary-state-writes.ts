@@ -171,11 +171,14 @@ export function enqueueWrite(
   const queued = context.queuedSnapshot
   if (batchable && queued) {
     queued.capture.skipIfClean &&= options.skipIfClean === true
+    // Merged explicit flushes must retain the full capture that covered untracked getter edits.
+    queued.capture.fullCheckpoint ||= !queued.capture.skipIfClean
     queued.capture.pendingSnapshotFileWork = runtime.pendingSnapshotFileWork
     return queued.completion
   }
   const capture = {
     skipIfClean: options.skipIfClean === true,
+    fullCheckpoint: options.fullCheckpoint === true,
     pendingSnapshotFileWork: runtime.pendingSnapshotFileWork
   }
   const completion = enqueuePrimaryStateOperation(owner, async () => {
@@ -199,7 +202,7 @@ export function enqueueWrite(
       return
     }
     // A queued predecessor can clear dirty domains before this checkpoint runs.
-    if (options.fullCheckpoint) {
+    if (capture.fullCheckpoint) {
       runtime.dirtyProfileStateDomains = null
     }
     const authority = runtime.profileStateAuthority

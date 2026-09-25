@@ -8,6 +8,10 @@ export type PrimaryStateWriteOperationsContext = {
   backups: BackupRecoveryRotationOperations
   queuedSnapshot?: {
     completion: Promise<void>
-    capture: { skipIfClean: boolean; pendingSnapshotFileWork: Promise<void> | null }
+    capture: {
+      skipIfClean: boolean
+      fullCheckpoint: boolean
+      pendingSnapshotFileWork: Promise<void> | null
+    }
   }
 }

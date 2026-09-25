@@ -197,7 +197,7 @@ describe('worker-owned Store writes', () => {
     gate.finish.resolve()
     await Promise.all(waiters)
     expect(readState().settings.terminalFontSize).toBe(32)
-    expect(fullCapture).not.toHaveBeenCalled()
+    expect(fullCapture).toHaveBeenCalledOnce()
     expect(authority.captures).toHaveLength(2)
   })
 
