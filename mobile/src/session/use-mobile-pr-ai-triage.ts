@@ -69,7 +69,7 @@ export function useMobilePrAiTriage(input: Input) {
           prompt,
           ...TRIAGE_LAUNCH[key]
         })
-        const notice = promptedLaunchNotice(result, prompt)
+        const notice = promptedLaunchNotice(result)
         if (notice.succeeded) {
           triggerSuccess()
         } else {

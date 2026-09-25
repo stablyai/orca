@@ -126,6 +126,46 @@ describe('launchAgentWithPrompt', () => {
     expect(launchParams(sendRequest)).toMatchObject({ agent: 'claude' })
   })
 
+  it("wraps the prompt in the action's saved template, as the desktop does", async () => {
+    const { client, sendRequest } = hostClient({
+      settings: {
+        defaultTuiAgent: 'claude',
+        sourceControlAi: {
+          actions: { fixChecks: { commandInputTemplate: '/review first\n\n{basePrompt}' } }
+        }
+      },
+      launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    })
+    await run(client)
+    expect(launchParams(sendRequest)).toMatchObject({
+      prompt: { text: '/review first\n\nFix the failing checks', delivery: 'submit' }
+    })
+  })
+
+  it('refuses to launch with an empty saved template rather than send no prompt', async () => {
+    const { client, sendRequest } = hostClient({
+      settings: {
+        defaultTuiAgent: 'claude',
+        sourceControlAi: { actions: { fixChecks: { commandInputTemplate: '   ' } } }
+      }
+    })
+    await expect(run(client)).resolves.toMatchObject({ kind: 'not-started' })
+    expect(launchParams(sendRequest)).toBeUndefined()
+  })
+
+  it('falls back to the default agent on an older host that publishes no recipes', async () => {
+    const { client, sendRequest } = hostClient({
+      // A host before the recipe projection: settings.get carries no sourceControlAi at all.
+      settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] },
+      launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    })
+    await expect(run(client)).resolves.toEqual({ kind: 'sent' })
+    expect(launchParams(sendRequest)).toMatchObject({
+      agent: 'codex',
+      prompt: { text: 'Fix the failing checks' }
+    })
+  })
+
   it("sends the action's saved agent arguments, as the desktop does", async () => {
     const { client, sendRequest } = hostClient({
       settings: {
@@ -177,7 +217,10 @@ describe('launchAgentWithPrompt', () => {
     const { client } = hostClient({
       launch: launchedWith({ delivery: 'submit', outcome: 'not-delivered' })
     })
-    await expect(run(client)).resolves.toEqual({ kind: 'prompt-not-sent' })
+    await expect(run(client)).resolves.toEqual({
+      kind: 'prompt-not-sent',
+      prompt: 'Fix the failing checks'
+    })
   })
 
   it('passes the host warning through', async () => {
@@ -211,17 +254,17 @@ describe('launchAgentWithPrompt', () => {
 
 describe('promptedLaunchNotice', () => {
   it('keeps the prompt only when the agent started without it', () => {
-    expect(promptedLaunchNotice({ kind: 'prompt-not-sent' }, 'p')).toEqual({
+    expect(promptedLaunchNotice({ kind: 'prompt-not-sent', prompt: 'p' })).toEqual({
       succeeded: false,
       error: AGENT_PROMPT_NOT_SENT_MESSAGE,
       undeliveredPrompt: 'p'
     })
-    expect(promptedLaunchNotice({ kind: 'sent' }, 'p')).toEqual({
+    expect(promptedLaunchNotice({ kind: 'sent' })).toEqual({
       succeeded: true,
       error: null,
       undeliveredPrompt: null
     })
-    expect(promptedLaunchNotice({ kind: 'unconfirmed', message: 'm' }, 'p')).toEqual({
+    expect(promptedLaunchNotice({ kind: 'unconfirmed', message: 'm' })).toEqual({
       succeeded: false,
       error: 'm',
       undeliveredPrompt: null

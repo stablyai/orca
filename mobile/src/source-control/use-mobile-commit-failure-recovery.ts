@@ -77,7 +77,7 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
         actionId: 'fixCommitFailure',
         launchSource: 'source_control_recovery'
       })
-      const notice = promptedLaunchNotice(result, prompt)
+      const notice = promptedLaunchNotice(result)
       if (notice.succeeded) {
         triggerSuccess()
       } else {

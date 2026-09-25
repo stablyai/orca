@@ -20,8 +20,9 @@ import { isMobileTuiAgent } from '../tasks/mobile-tui-agents'
 import type { MobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
 
 export type MobileSourceControlLaunchAgent =
-  /** `agentArgs`: the recipe's saved launch arguments, sent as the desktop sends them. */
-  { kind: 'agent'; agent: TuiAgent; agentArgs?: string } | { kind: 'unavailable'; message: string }
+  /** `recipe`: the action's saved prompt template and agent arguments; null with no action. */
+  | { kind: 'agent'; agent: TuiAgent; recipe: SourceControlActionRecipe | null }
+  | { kind: 'unavailable'; message: string }
 
 type LaunchAgentSettings = Pick<
   GlobalSettings,
@@ -55,11 +56,7 @@ export function resolveMobileSourceControlLaunchAgent(
     disabledAgents: settings?.disabledTuiAgents
   })
   return agent
-    ? {
-        kind: 'agent',
-        agent,
-        ...(recipe?.agentArgs !== undefined ? { agentArgs: recipe.agentArgs } : {})
-      }
+    ? { kind: 'agent', agent, recipe }
     : { kind: 'unavailable', message: 'No enabled AI agent was detected on this workspace host.' }
 }
 
