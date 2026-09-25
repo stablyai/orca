@@ -318,6 +318,21 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
   })
 
+  it('leaves nothing chosen when a picked option is unpicked over kept text', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    clickOption('Tabs')
+
+    expect(optionPressed('Tabs')).toBe('false')
+    expect(
+      [...container.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Skip')
+    ).toBe(true)
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
   it('sends picked options and typed text together on a multi-select question', () => {
     const onAnswer = vi.fn()
     render(
@@ -335,8 +350,10 @@ describe('NativeChatQuestionCard', () => {
 
     clickOption('Mobile')
     typeAnswer('Desktop')
+    typeAnswer('')
+    typeAnswer('Desktop app')
     clickAction('Submit')
 
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'Desktop' }])
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'Desktop app' }])
   })
 })

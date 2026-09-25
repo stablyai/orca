@@ -18,6 +18,10 @@ export type NativeChatQuestionCardProps = {
   answerInputRef?: RefObject<HTMLInputElement | null>
 }
 
+// Selection entry for the typed answer (never a real option index), so a single-select
+// question holds exactly one choice: an option or the typed answer.
+const TYPED_ANSWER = -1
+
 /**
  * Native renderer for an agent's AskUserQuestion prompt: a numbered pick-list
  * (mobile/Claude-Code parity) with a header + close, a hover-highlighted row per
@@ -45,20 +49,24 @@ export function NativeChatQuestionCard({
   const q = prompt.questions[index]!
   const questionAllowsOther = Array.isArray(allowOther) ? (allowOther[index] ?? false) : allowOther
 
-  // A single-select question holds one answer: typing replaces a picked option, and
-  // picking an option keeps the typed text in the field but no longer sends it.
+  // Picking an option replaces a chosen typed answer on single-select; the text stays in
+  // the field, unsent, until the user types or clicks there again.
   const typedAnswerChosen = (qi: number, sel = selections, oth = otherText): boolean =>
-    (oth[qi] ?? '').trim().length > 0 &&
-    (prompt.questions[qi]?.multiSelect === true || (sel[qi] ?? []).length === 0)
+    (sel[qi] ?? []).includes(TYPED_ANSWER) && (oth[qi] ?? '').trim().length > 0
 
   const chooseTypedAnswer = (qi: number): void => {
-    if (prompt.questions[qi]?.multiSelect) {
-      return
-    }
-    setSelections((prev) =>
-      (prev[qi] ?? []).length > 0 ? prev.map((s, i) => (i === qi ? [] : s)) : prev
-    )
+    setSelections((prev) => {
+      const cur = prev[qi] ?? []
+      if (cur.includes(TYPED_ANSWER)) {
+        return prev
+      }
+      const chosen = prompt.questions[qi]?.multiSelect ? [...cur, TYPED_ANSWER] : [TYPED_ANSWER]
+      return prev.map((s, i) => (i === qi ? chosen : s))
+    })
   }
+
+  const pickedOptions = (qi: number, sel = selections): number[] =>
+    (sel[qi] ?? []).filter((choice) => choice !== TYPED_ANSWER)
 
   const setOther = (qi: number, value: string): void => {
     setOtherText((prev) => {
@@ -74,7 +82,7 @@ export function NativeChatQuestionCard({
   // The resolved answer for a question: picked labels plus the typed answer when chosen.
   const answerFor = (qi: number, sel = selections, oth = otherText): string => {
     const question = prompt.questions[qi]
-    const picked = (sel[qi] ?? [])
+    const picked = pickedOptions(qi, sel)
       .map((optionIndex) => question?.options[optionIndex]?.label ?? '')
       .filter((label) => label.length > 0)
     const other = typedAnswerChosen(qi, sel, oth) ? (oth[qi] ?? '').trim() : ''
@@ -87,7 +95,7 @@ export function NativeChatQuestionCard({
   const submitAll = (sel: number[][], oth: string[]): void => {
     const resolved: AskAnswerSelection[] = prompt.questions.map((_, i) => {
       return {
-        indices: [...(sel[i] ?? [])],
+        indices: pickedOptions(i, sel),
         other: typedAnswerChosen(i, sel, oth) ? (oth[i] ?? '').trim() : ''
       }
     })
