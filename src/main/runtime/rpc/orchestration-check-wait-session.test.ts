@@ -101,7 +101,7 @@ describe('the wait cap per provider', () => {
   it('stays below each shell tool, keeps a shorter wait, and leaves a terminal alone', () => {
     const codexChat = testOrcaSessionId('9c2e4a61-3f7b-4d8e-b105-6a2d8e4f1c93')
     const claudeChat = testOrcaSessionId('1d7f3a52-6b8e-4c19-a2d4-7e5f9b3c0a18')
-    const records = new Map([
+    const records = new Map<string, { provider: string }>([
       [codexChat, { provider: 'codex' }],
       [claudeChat, { provider: 'claude' }]
     ])
