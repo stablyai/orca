@@ -434,11 +434,6 @@ const DIRECT_SINGLE_SOURCE_SURFACES: readonly {
     path: 'mobile/src/session/mobile-native-chat-image-send.ts',
     classification: 'action-consumer',
     marker: 'pasteMobileNativeChatImagePaths'
-  },
-  {
-    path: 'mobile/src/session/pr-ai-triage-launch.ts',
-    classification: 'action-consumer',
-    marker: 'createTerminalAndSendPrompt'
   }
 ]
 
