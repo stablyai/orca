@@ -20,6 +20,7 @@ import {
   type CapturedHook
 } from './agent-cancel-capture.test-fixture'
 import type { AgentInterruptInputIntent } from '../../shared/agent-interrupt-intent'
+import { captureAgentInterruptTurnBaseline } from '../../shared/agent-interrupt-turn-baseline'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -65,16 +66,23 @@ async function post(server: AgentHookServer, hook: CapturedHook): Promise<void> 
   ).resolves.toMatchObject({ status: 204 })
 }
 
-/** The renderer's part of a cancel: capture the row as the baseline and ask the server to infer
- *  the interrupt (Ctrl+C after the settle window; a Codex Esc flushes immediately). */
-function pressCancel(server: AgentHookServer, intent: AgentInterruptInputIntent): boolean {
-  const baseline = row(server)
+/** The renderer's part of a cancel: capture the row as the baseline at the keypress and ask the
+ *  server to infer the interrupt (Ctrl+C after the settle window; a Codex Esc flushes immediately). */
+function pressCancel(
+  server: AgentHookServer,
+  intent: AgentInterruptInputIntent,
+  baseline = row(server)
+): boolean {
+  const turn = captureAgentInterruptTurnBaseline({ ...baseline, updatedAt: baseline.receivedAt })
   return server.inferInterrupt({
     paneKey: PANE,
-    baselineUpdatedAt: baseline.receivedAt,
-    baselineStateStartedAt: baseline.stateStartedAt,
-    baselinePrompt: baseline.prompt,
+    baselineUpdatedAt: turn.updatedAt,
+    baselineStateStartedAt: turn.stateStartedAt,
+    baselinePrompt: turn.prompt,
     baselineAgentType: 'codex',
+    ...(turn.mainAgentStateStartedAt !== undefined
+      ? { baselineMainAgentStateStartedAt: turn.mainAgentStateStartedAt }
+      : {}),
     intent
   })
 }
@@ -163,6 +171,46 @@ describe('a Codex cancel with a live subagent and background terminals (captured
       expect(row(server)).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
       expect(row(server).mainAgent).not.toHaveProperty('outcome')
       expect(row(server).interrupted).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+})
+
+describe('a Codex Ctrl+C whose settle window a subagent hook lands in (captured hooks)', () => {
+  const records = loadCapture('codex-cancel-bg-subagent-hooks')
+
+  it('still cancels the main agent and settles done on the SubagentStop', async () => {
+    const server = await startServer()
+    try {
+      for (const index of [0, 1, 2, 3, 4, 5, 6]) {
+        await post(server, hookAt(records, index))
+      }
+      const keypressRow = row(server)
+      expect(keypressRow).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
+
+      // The subagent's own PreToolUse lands between the keypress and the settle-window flush.
+      const childPreToolUse = hookAt(records, 7)
+      expect(childPreToolUse.payload).toMatchObject({ hook_event_name: 'PreToolUse' })
+      expect(childPreToolUse.payload.agent_id).toBeDefined()
+      await vi.waitFor(() => expect(Date.now()).toBeGreaterThan(keypressRow.receivedAt))
+      await post(server, childPreToolUse)
+      expect(row(server).receivedAt).not.toBe(keypressRow.receivedAt)
+
+      expect(pressCancel(server, 'ctrl-c', keypressRow)).toBe(true)
+      expect(row(server)).toMatchObject({
+        state: 'working',
+        mainAgent: { state: 'done', outcome: 'cancellation' },
+        subagents: [expect.objectContaining({ state: 'working' })]
+      })
+
+      await post(server, hookAt(records, 11))
+      await post(server, hookAt(records, 12))
+      expect(row(server)).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
     } finally {
       server.stop()
     }

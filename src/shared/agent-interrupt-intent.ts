@@ -10,6 +10,9 @@ export type AgentInterruptInferenceRequest = {
   baselineStateStartedAt: number
   baselinePrompt: string
   baselineAgentType: AgentType | undefined
+  /** The working main agent's `stateStartedAt` at the keypress. Optional so either side may
+   *  predate it: absent, the server keeps the row-write-time match. */
+  baselineMainAgentStateStartedAt?: number
   intent: AgentInterruptInputIntent
   inputCount?: number
 }

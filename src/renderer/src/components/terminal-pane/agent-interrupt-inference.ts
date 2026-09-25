@@ -9,6 +9,11 @@ import {
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
+import {
+  captureAgentInterruptTurnBaseline,
+  isAgentInterruptTurnCurrent,
+  type AgentInterruptTurnBaseline
+} from '../../../../shared/agent-interrupt-turn-baseline'
 import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 
@@ -31,11 +36,7 @@ type AgentInterruptInferenceDeps = {
   clearTimer?: (timer: ReturnType<typeof setTimeout>) => void
 }
 
-type CapturedInterruptBaseline = {
-  updatedAt: number
-  stateStartedAt: number
-  prompt: string
-  agentType: AgentStatusEntry['agentType']
+type CapturedInterruptBaseline = AgentInterruptTurnBaseline & {
   intent: AgentInterruptInputIntent
   inputCount?: number
 }
@@ -154,7 +155,6 @@ export function createAgentInterruptInference({
     entry: AgentStatusEntry,
     intent: AgentInterruptInputIntent
   ): CapturedInterruptBaseline | null => {
-    const agentType = entry.agentType
     if (
       !canInferInterrupt(entry, intent) ||
       !isExplicitAgentStatusFresh(entry, now(), AGENT_STATUS_STALE_AFTER_MS)
@@ -162,10 +162,7 @@ export function createAgentInterruptInference({
       return null
     }
     return {
-      updatedAt: entry.updatedAt,
-      stateStartedAt: entry.stateStartedAt,
-      prompt: entry.prompt,
-      agentType,
+      ...captureAgentInterruptTurnBaseline(entry),
       intent
     }
   }
@@ -185,10 +182,7 @@ export function createAgentInterruptInference({
     if (
       entry &&
       (!canInferInterrupt(entry, baseline.intent) ||
-        entry.agentType !== baseline.agentType ||
-        entry.prompt !== baseline.prompt ||
-        entry.updatedAt !== baseline.updatedAt ||
-        entry.stateStartedAt !== baseline.stateStartedAt ||
+        !isAgentInterruptTurnCurrent(baseline, entry) ||
         !isExplicitAgentStatusFresh(entry, now(), AGENT_STATUS_STALE_AFTER_MS))
     ) {
       return false
@@ -203,6 +197,9 @@ export function createAgentInterruptInference({
       baselineStateStartedAt: baseline.stateStartedAt,
       baselinePrompt: baseline.prompt,
       baselineAgentType: baseline.agentType,
+      ...(baseline.mainAgentStateStartedAt !== undefined
+        ? { baselineMainAgentStateStartedAt: baseline.mainAgentStateStartedAt }
+        : {}),
       intent: baseline.intent,
       ...(baseline.inputCount !== undefined ? { inputCount: baseline.inputCount } : {})
     })
@@ -226,7 +223,15 @@ export function createAgentInterruptInference({
       }
       const currentEntry = getStatusEntry()
       // Why: an older acknowledged write must not replace a newer turn's pending inference.
-      if (capturedEntry !== undefined && currentEntry && currentEntry !== capturedEntry) {
+      if (
+        capturedEntry !== undefined &&
+        currentEntry &&
+        (capturedEntry === null ||
+          !isAgentInterruptTurnCurrent(
+            captureAgentInterruptTurnBaseline(capturedEntry),
+            currentEntry
+          ))
+      ) {
         return
       }
       const entry = capturedEntry === undefined ? currentEntry : capturedEntry

@@ -25,15 +25,6 @@ export function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined)
     : 'other'
 }
 
-export function equivalentInterruptAgentType(
-  actual: AgentType | undefined,
-  baseline: AgentType | undefined
-): boolean {
-  const normalizedActual = actual === 'unknown' ? undefined : actual
-  const normalizedBaseline = baseline === 'unknown' ? undefined : baseline
-  return normalizedActual === normalizedBaseline
-}
-
 // Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.
 export function isValidPaneKey(value: unknown): value is string {
   return (

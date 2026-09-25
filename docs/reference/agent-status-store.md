@@ -273,6 +273,18 @@ that publishes `mainAgent`, the inference is admitted only when
 `mainAgent.state` is `working`, so Orca does not treat a Ctrl+C at the idle
 prompt of a row held open by child work as a turn cancel (a row without
 `mainAgent` keeps the child-evidence guard).
+The inference waits a short settle window so a real hook can win, and then
+checks the row still shows the turn the key was pressed in
+(`isAgentInterruptTurnCurrent` in `src/shared/agent-interrupt-turn-baseline.ts`,
+used by both the renderer and the server). For a row that publishes
+`mainAgent`, that turn is the main agent's: same agent type and prompt,
+`mainAgent.state` still `working`, same `mainAgent.stateStartedAt`. A Stop, a
+wait or a new prompt moves it; a subagent hook or a same-state main agent
+restatement re-stamps the row but not the turn, so it no longer voids the
+cancel (measured live: a subagent tool hook inside the window left the main
+agent `working` for good). A row without `mainAgent`, or a request without
+`baselineMainAgentStateStartedAt` from an older renderer, keeps the exact
+row-write-time match.
 The keypress itself is not inert, though: measured live, Claude 2.1.280 stops
 its background subagents on a single idle-prompt Ctrl+C (shells survive) and
 Codex 0.156.1 quits outright, so refusing the inference can leave the row
