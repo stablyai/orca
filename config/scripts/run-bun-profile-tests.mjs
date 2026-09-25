@@ -75,6 +75,8 @@ run(runtimePath, [
         'src/main/persistence/profile-state',
         'src/main/persistence/loading-store/profile-state',
         'src/main/sqlite',
+        'src/main/orcad/orcad-entry.test.ts',
+        'src/main/orcad/orcad-push-startup.test.ts',
         ...(artifact
           ? [
               'src/main/daemon/pty-subprocess/bun-pty-process.integration.test.ts',
