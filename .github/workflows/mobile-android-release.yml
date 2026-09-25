@@ -163,3 +163,50 @@ jobs:
               --notes-file "$notes_file" \
               android/app/build/outputs/apk/release/*.apk
           fi
+
+      # Why: desktop releases own GitHub's releases/latest, so Android needs its own
+      # fixed-URL release for README, docs and in-app download links to point at.
+      - name: Update rolling latest Android release
+        if: steps.release.outputs.publish_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          latest_tag="mobile-android-latest"
+
+          # Why: a re-run of an older version must not replace a newer latest APK.
+          newest_tag="$(
+            gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,isDraft \
+              --jq '.[] | select(.isDraft | not) | .tagName' \
+              | grep '^mobile-android-v' | sort -V | tail -1 || true
+          )"
+          if [ "$newest_tag" != "$tag" ]; then
+            echo "Skipping: $tag is not the newest Android release ($newest_tag)"
+            exit 0
+          fi
+
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one release APK, found ${#apks[@]}"
+            exit 1
+          fi
+          stable_apk="$RUNNER_TEMP/orca-android.apk"
+          cp "${apks[0]}" "$stable_apk"
+
+          # Why: only the APK is kept current; the tag and its source archives stay at first publish.
+          notes="Always the newest Orca Mobile Android APK. It is currently [$tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag); use that release for its source and changelog."
+          if gh release view "$latest_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$latest_tag" --repo "$GITHUB_REPOSITORY" --clobber "$stable_apk"
+            gh release edit "$latest_tag" --repo "$GITHUB_REPOSITORY" --notes "$notes"
+          else
+            gh release create "$latest_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Orca Mobile Android (latest)" \
+              --prerelease \
+              --latest=false \
+              --notes "$notes" \
+              "$stable_apk"
+          fi
