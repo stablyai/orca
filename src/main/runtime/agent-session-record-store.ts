@@ -1,0 +1,359 @@
+import { setVisibleSessionId } from './agent-session-visible-tab-index'
+import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
+import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
+/** Durable single-writer session records and their operation ledger. */
+
+import {
+  agentSessionOperationKey,
+  type AgentSessionOperationClaim,
+  type AgentSessionOperationDecision,
+  type AgentSessionOperationOutcome,
+  type AgentSessionOperationRow
+} from '../../shared/agent-session-operation-ledger'
+import {
+  admitAgentSessionGlobalOperationInto,
+  admitAgentSessionMutationOperation,
+  evaluateAgentSessionMutationOperation,
+  admitAgentSessionOperationInto,
+  claimAgentSessionOperationInto,
+  settleAgentSessionOperationInto,
+  type AgentSessionMutationOperationAdmission,
+  type AgentSessionOperationAdmission
+} from './agent-session-operation-admission'
+import {
+  isAgentSessionClaimKeyVerifiable,
+  retireAgentSessionClaimKey
+} from './agent-session-claim-key-retention'
+import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
+import { classifyObservedAgentSessionSpawnToken } from '../../shared/agent-session-lease-adjudication'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import {
+  agentSessionScopeKey,
+  type AgentSessionExecutionLocation,
+  type AgentSessionJournalCheckpoint,
+  type AgentSessionOptionsReplacement,
+  type AgentSessionRecord
+} from '../../shared/agent-session-record'
+import {
+  commitAgentSessionProcessIdentity,
+  evictAgentSessionOwner,
+  proveAgentSessionOwner,
+  setAgentSessionJournalCheckpoint,
+  type AgentSessionProcessIdentityCommit
+} from './agent-session-lease-transitions'
+import {
+  settleFailedAgentSessionAcquisition,
+  settleFailedAgentSessionPostAcquisitionAttachment,
+  type AgentSessionFailedAcquisitionSettlement,
+  type AgentSessionFailedPostAcquisitionAttachmentSettlement
+} from './agent-session-acquisition-failure-settlement'
+import {
+  renewAgentSessionLeases,
+  type AgentSessionLeaseRenewal
+} from './agent-session-lease-renewal'
+import {
+  applyAgentSessionRestartProbes,
+  collectAgentSessionRestartProbes,
+  type AgentSessionRestartProbeArgs
+} from './agent-session-restart-reconciliation'
+import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
+import {
+  setAgentSessionReservationProcesslessProof,
+  type AgentSessionReservationProcesslessProof
+} from './agent-session-processless-reservation'
+import {
+  commitAgentSessionReservation,
+  type AgentSessionReserveRequest,
+  type AgentSessionReserveResult
+} from './agent-session-reservation-admission'
+import {
+  agentSessionStoreRevision,
+  agentSessionStorePath,
+  type AgentSessionStoreState,
+  backfillAgentSessionSurfaceTabIds
+} from './agent-session-record-store-file'
+import { loadProtectedAgentSessionStore } from './agent-session-record-store-security'
+import {
+  AgentSessionStoreTransactionQueue,
+  markAgentSessionStoreLeasesUnreconciled
+} from './agent-session-store-transaction-queue'
+
+export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
+  AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
+
+export class AgentSessionRecordStore {
+  private constructor(private readonly transactions: AgentSessionStoreTransactionQueue) {}
+
+  static async open(args: { directory: string; hostId: string }): Promise<AgentSessionRecordStore> {
+    const filePath = agentSessionStorePath(args.directory)
+    const loaded = await loadProtectedAgentSessionStore(filePath, args.hostId)
+    // Why: every persisted lease is unreconciled until this host adjudicates it, so a restart
+    // grants no writer on the strength of what the previous process wrote.
+    const diskRevision = agentSessionStoreRevision(loaded.state)
+    // After the revision, so the file still hashes to what was read. The filled ids reach disk
+    // with this store's first transaction rather than a write here: a rewrite at open would read
+    // as an external change to any other holder of the file mid-restart.
+    const backfilled = backfillAgentSessionSurfaceTabIds(loaded.state)
+    markAgentSessionStoreLeasesUnreconciled(loaded.state)
+    const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
+      filePath,
+      args.hostId,
+      { ...loaded, needsRewrite: loaded.needsRewrite || backfilled > 0 },
+      diskRevision
+    )
+    if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {
+      await transactions.persistLoadedRewrite()
+    }
+    return new AgentSessionRecordStore(transactions)
+  }
+
+  private get state(): AgentSessionStoreState {
+    return this.transactions.state
+  }
+
+  get readOnly(): boolean {
+    return this.transactions.readOnly
+  }
+
+  get recoveredFromBackup(): boolean {
+    return this.transactions.recoveredFromBackup
+  }
+
+  get hostId(): string {
+    return this.state.hostId
+  }
+
+  getRecord = (sessionId: string): AgentSessionRecord | null =>
+    this.state.records.get(sessionId) ?? null
+
+  listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
+
+  listVisibleSessionIds = (): string[] =>
+    [...this.state.visibleSessionIds].filter((sessionId) => this.state.records.has(sessionId))
+
+  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
+    present: this.state.visibleSessionIdsIndexPresent,
+    sessionIds: this.listVisibleSessionIds()
+  })
+
+  /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
+  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
+    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
+  }
+
+  listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
+    const scope = agentSessionScopeKey(location)
+    return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
+  }
+
+  setConversationCommand(
+    sessionId: string,
+    fence: number,
+    command: NonNullable<AgentSessionRecord['conversationCommand']>
+  ): Promise<void> {
+    return this.transact(() =>
+      commitConversationCommandRecord(this.state, sessionId, fence, command)
+    )
+  }
+
+  /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
+   *  writer lease. `null` clears it. */
+  setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      setAgentSessionRecordConversationName(record, name, Date.now())
+    )
+
+  /** A record this build cannot validate: readable as present, never grantable as a writer. */
+  isSessionUnreadable(sessionId: string): boolean {
+    return this.state.unreadableRecords.has(sessionId)
+  }
+
+  listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
+
+  getOperationRow = (callerKey: string, operationId: string): AgentSessionOperationRow | null =>
+    this.state.operations.get(agentSessionOperationKey(callerKey, operationId)) ?? null
+
+  isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
+    isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
+
+  /** Spawn tokens observed on the host with no matching lease. Stop them; never adopt them. */
+  listOrphanSpawnTokens(observedTokens: readonly string[]): string[] {
+    const leases = this.listRecords().map((record) => record.lease)
+    return observedTokens.filter(
+      (spawnToken) => classifyObservedAgentSessionSpawnToken({ spawnToken, leases }) === 'orphan'
+    )
+  }
+
+  async reserveOwner(request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> {
+    return this.transact(() =>
+      commitAgentSessionReservation(this.state, request, AGENT_SESSION_LEASE_TTL_MS)
+    )
+  }
+
+  async commitProcessIdentity(
+    args: AgentSessionProcessIdentityCommit
+  ): Promise<AgentSessionRecord> {
+    return this.mutate(args.sessionId, (record) =>
+      commitAgentSessionProcessIdentity({ ...args, record })
+    )
+  }
+
+  setReservationProcesslessProof = (
+    args: AgentSessionReservationProcesslessProof & { processlessAt: number | null }
+  ): Promise<AgentSessionRecord> =>
+    this.mutate(args.sessionId, (record) =>
+      setAgentSessionReservationProcesslessProof({ ...args, record })
+    )
+
+  async proveOwner(args: {
+    sessionId: string
+    fence: number
+    link: AgentSessionProviderHandleLink
+    now: number
+    leaseTtlMs?: number
+    options?: Readonly<Record<string, string>>
+  }): Promise<AgentSessionRecord> {
+    return this.mutate(args.sessionId, (record) => {
+      const proved = proveAgentSessionOwner({
+        record,
+        fence: args.fence,
+        link: args.link,
+        now: args.now,
+        leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
+      })
+      return args.options
+        ? replaceAgentSessionRecordOptions(proved, { ...args, options: args.options })
+        : proved
+    })
+  }
+
+  /** Settle the failed attach and its reservation in one durable transaction. */
+  settleFailedAcquisition = (args: AgentSessionFailedAcquisitionSettlement) =>
+    this.transact(() => settleFailedAgentSessionAcquisition(this.state, args))
+
+  settleFailedPostAcquisitionAttachment = (
+    args: AgentSessionFailedPostAcquisitionAttachmentSettlement
+  ) => this.transact(() => settleFailedAgentSessionPostAcquisitionAttachment(this.state, args))
+
+  async renewLease(args: AgentSessionLeaseRenewal): Promise<AgentSessionRecord> {
+    const [renewed] = await this.renewLeases([args])
+    return renewed
+  }
+
+  async renewLeases(renewals: readonly AgentSessionLeaseRenewal[]): Promise<AgentSessionRecord[]> {
+    return this.transact(() =>
+      renewAgentSessionLeases(this.state, renewals, AGENT_SESSION_LEASE_TTL_MS)
+    )
+  }
+
+  async evictProvenDeadOwner(args: {
+    sessionId: string
+    expectedFence: number
+    probe: AgentSessionOwnerProbe
+    now: number
+  }): Promise<AgentSessionRecord> {
+    return this.mutate(args.sessionId, (record) =>
+      evictAgentSessionOwner({ ...args, record, journalSettlement: 'required' })
+    )
+  }
+
+  async transitionHandoff(
+    sessionId: string,
+    transition: (record: AgentSessionRecord) => AgentSessionRecord
+  ): Promise<AgentSessionRecord> {
+    return this.mutate(sessionId, transition)
+  }
+
+  async setJournalCheckpoint(args: {
+    sessionId: string
+    fence: number
+    checkpoint: AgentSessionJournalCheckpoint
+    now: number
+  }): Promise<AgentSessionRecord> {
+    return this.mutate(args.sessionId, (record) =>
+      setAgentSessionJournalCheckpoint({ ...args, record })
+    )
+  }
+
+  /** Adjudicate every lease this host loaded. No lease grants a writer until it appears here. */
+  async reconcileOnRestart(
+    args: AgentSessionRestartProbeArgs
+  ): Promise<Map<string, AgentSessionRecord>> {
+    const pending = this.listRecords().filter((record) => record.lease.unreconciled)
+    const probes = await collectAgentSessionRestartProbes(pending, args)
+    return this.transact(() => applyAgentSessionRestartProbes(this.state, probes, args.now))
+  }
+
+  /** Admits one non-reservation mutation through the durable ledger. */
+  admitOperation = (args: AgentSessionOperationAdmission): Promise<AgentSessionOperationDecision> =>
+    this.transact(() => admitAgentSessionOperationInto(this.state, args))
+
+  /** Send ids stay global after a caller reconnects under a different identity. */
+  admitGlobalOperation = (
+    args: AgentSessionOperationAdmission
+  ): Promise<AgentSessionOperationDecision> =>
+    this.transact(() => admitAgentSessionGlobalOperationInto(this.state, args))
+
+  admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+    this.transact(() => admitAgentSessionMutationOperation(this.state, args))
+
+  /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
+  evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+    evaluateAgentSessionMutationOperation(this.state, args)
+
+  /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
+   *  read `pending`, and only a conditional swap tells the one that may run from the one that must
+   *  replay. */
+  claimOperation = (args: {
+    callerKey: string
+    operationId: string
+  }): Promise<AgentSessionOperationClaim> =>
+    this.transact(() => claimAgentSessionOperationInto(this.state, args))
+
+  async recordOperationOutcome(args: {
+    callerKey?: string
+    operationId: string
+    outcome: AgentSessionOperationOutcome
+  }): Promise<void> {
+    await this.transact(() => settleAgentSessionOperationInto(this.state, args))
+  }
+
+  async markClaimConflicted(sessionId: string, now: number): Promise<AgentSessionRecord> {
+    return this.mutate(sessionId, (record) => ({
+      ...record,
+      updatedAt: now,
+      // Why: a conflicted key must stay conflicted across a restart; it cannot resolve to free
+      // merely because the process that observed the conflict is gone.
+      lease: { ...record.lease, claimStatus: 'conflicted', handoffStage: 'manual-recovery' }
+    }))
+  }
+
+  replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
+    this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
+
+  async retireClaimKey(keyId: string, now: number): Promise<void> {
+    await this.transact(() => retireAgentSessionClaimKey(this.state, keyId, now))
+  }
+
+  private async mutate(
+    sessionId: string,
+    apply: (record: AgentSessionRecord) => AgentSessionRecord
+  ): Promise<AgentSessionRecord> {
+    return this.transact(() => {
+      const record = this.state.records.get(sessionId)
+      if (!record) {
+        throw new Error(
+          this.isSessionUnreadable(sessionId)
+            ? 'execution_owner_reconciling'
+            : 'agent_session_identity_required'
+        )
+      }
+      const next = apply(record)
+      this.state.records.set(sessionId, next)
+      return next
+    })
+  }
+
+  /** Serialize every mutation against the latest committed disk state. */
+  private transact = <T>(apply: () => T): Promise<T> => this.transactions.transact(apply)
+}

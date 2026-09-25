@@ -7,6 +7,10 @@ import type {
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
+import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
+import type { NativeChatContextUsageSummary } from './native-chat-context-usage-summary'
+import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
@@ -23,6 +27,11 @@ export type NativeChatComposerActionsProps = {
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
+  sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  /** Present while the composer is in goal mode; the chip calls it to leave. */
+  onExitGoalMode?: () => void
+  /** Absent until the session has reported or the transcript can estimate. */
+  contextUsage?: NativeChatContextUsageSummary | null
 }
 
 export function NativeChatComposerActions({
@@ -39,8 +48,23 @@ export function NativeChatComposerActions({
   onSend,
   onStop,
   sessionOptionsSurface,
-  sessionOptionsSnapshot
+  sessionOptionsSnapshot,
+  sessionOptionsPickerRequest,
+  onExitGoalMode,
+  contextUsage
 }: NativeChatComposerActionsProps): React.JSX.Element {
+  const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    // A double-click commonly lands after the first send has started and the button has
+    // changed to Stop; ignore the second click instead of cancelling the new turn.
+    if (event.detail > 1) {
+      return
+    }
+    if (isWorking) {
+      onStop?.()
+    } else {
+      onSend()
+    }
+  }
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
@@ -65,15 +89,18 @@ export function NativeChatComposerActions({
             {translate('components.native-chat.composer.attach', 'Attach file')}
           </TooltipContent>
         </Tooltip>
+        {onExitGoalMode ? <NativeChatComposerGoalChip onExit={onExitGoalMode} /> : null}
       </div>
       <div className="ml-auto flex items-center gap-1.5">
         {/* Why: keep session controls beside the actions they affect; the
-        model trigger is ordered last so it sits directly next to dictation. */}
+        model trigger is ordered last so only the context ring separates it from dictation. */}
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
+          pickerRequest={sessionOptionsPickerRequest}
         />
+        {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -120,13 +147,14 @@ export function NativeChatComposerActions({
         </Tooltip>
         <Button
           type="button"
+          data-native-chat-critical-action={isWorking ? 'stop' : undefined}
           aria-label={
             isWorking
               ? translate('components.native-chat.stop', 'Stop the agent')
               : translate('components.native-chat.composer.send', 'Send')
           }
           disabled={sendDisabled}
-          onClick={isWorking ? onStop : onSend}
+          onClick={handleCriticalAction}
           variant={isWorking ? 'secondary' : 'default'}
           size="icon"
           className="size-8 rounded-full pointer-coarse:size-10"

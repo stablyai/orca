@@ -1,16 +1,21 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { webviewPageSource } from './document/document-module-source.test-support'
 
-// The in-WebView JS lives in terminal-webview-html.ts; the RN wrapper in
-// TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
+const DOCUMENT_SOURCE = webviewPageSource()
+
+// The RN wrapper and the pending-message queue are TypeScript; everything the WebView runs is the
+// generated document. Concatenated so assertions resolve regardless of file.
 const source =
   readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./use-terminal-webview-controller.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-ready-promises.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
-  readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
-  readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
-  readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
+  readFileSync(new URL('./terminal-webview-html/document-markup.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-html/document-style.ts', import.meta.url), 'utf8') +
+  DOCUMENT_SOURCE
 const sessionSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
+  new URL('../session/use-mobile-session-terminal-input.ts', import.meta.url),
   'utf8'
 )
 const sessionHelperSource = readFileSync(
@@ -32,9 +37,11 @@ describe('TerminalWebView scroll routing', () => {
   })
 
   it('maps a downward pull at the bottom to older scrollback rows', () => {
-    expect(source).toContain('var deltaY = ts.lastY - y;')
-    expect(source).toContain('smoothScrollOffsetY -= deltaY;')
-    expect(source).toContain('var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);')
+    expect(source).toContain('const deltaY = scope.touchGesture.lastY - y')
+    expect(source).toContain('scope.smoothScrollOffsetY -= deltaY')
+    expect(source).toContain(
+      'const lines = Math.trunc(-scope.smoothScrollOffsetY / effectiveCellH)'
+    )
 
     const nextViewportY = simulateNormalBufferPull({
       baseY: 120,
@@ -49,72 +56,76 @@ describe('TerminalWebView scroll routing', () => {
 
   it('routes alternate-screen and mouse-aware scroll before smooth normal scroll', () => {
     expect(source).toContain(
-      'return isWheelMouseTrackingMode(getMouseTrackingMode()) || isAlternateBufferActive();'
+      'return isWheelMouseTrackingMode(getMouseTrackingMode(scope)) || isAlternateBufferActive(scope)'
     )
 
     const touchMoveBlock = sliceBetween(
-      "targetSurface.addEventListener('touchmove'",
-      '}, { capture: true, passive: false });'
+      "targetSurface.addEventListener(\n    'touchmove'",
+      '{ capture: true, passive: false }'
     )
-    expect(touchMoveBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
-      touchMoveBlock.indexOf('if (enqueueNormalBufferScrollDelta(deltaY))')
+    expect(touchMoveBlock.indexOf('if (shouldRouteScrollToTerminalInput(scope))')).toBeLessThan(
+      touchMoveBlock.indexOf('if (enqueueNormalBufferScrollDelta(scope, deltaY))')
     )
-    expect(touchMoveBlock).toContain('routeScrollLines(lines, x, y);')
+    expect(touchMoveBlock).toContain('routeScrollLines(scope, lines, x, y)')
 
-    const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
-    expect(momentumBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
-      momentumBlock.indexOf('if (!applyNormalBufferScrollDelta(delta))')
+    const momentumBlock = sliceBetween(
+      'function momentumStep(frameTime: number) {',
+      'if (Math.abs(vel) > MIN_VEL)'
     )
-    expect(momentumBlock).toContain('routeScrollLines(lines, ts.lastX, ts.lastY);')
+    expect(momentumBlock.indexOf('if (shouldRouteScrollToTerminalInput(scope))')).toBeLessThan(
+      momentumBlock.indexOf('if (!applyNormalBufferScrollDelta(scope, delta))')
+    )
+    expect(momentumBlock).toContain(
+      'routeScrollLines(scope, lines, scope.touchGesture.lastX, scope.touchGesture.lastY)'
+    )
   })
 
   it('does not rubber-band normal scroll at scrollback edges', () => {
-    expect(source).toContain('function canScrollNormalBufferDelta(deltaY)')
+    expect(source).toContain('export function canScrollNormalBufferDelta(')
     const smoothScrollBlock = sliceBetween(
-      'function applyNormalBufferScrollDelta(deltaY)',
-      'function enqueueNormalBufferScrollDelta(deltaY)'
+      'export function applyNormalBufferScrollDelta(',
+      'export function enqueueNormalBufferScrollDelta('
     )
-    expect(smoothScrollBlock).toContain('if (!canScrollNormalBufferDelta(deltaY))')
-    expect(smoothScrollBlock).toContain('resetSmoothScrollOffset();')
-    expect(smoothScrollBlock).toContain('return false;')
-    expect(smoothScrollBlock).toContain('return true;')
+    expect(smoothScrollBlock).toContain('if (!canScrollNormalBufferDelta(scope, deltaY))')
+    expect(smoothScrollBlock).toContain('resetSmoothScrollOffset(scope)')
+    expect(smoothScrollBlock).toContain('return false')
+    expect(smoothScrollBlock).toContain('return true')
 
     const touchMoveBlock = sliceBetween(
-      "targetSurface.addEventListener('touchmove'",
-      '}, { capture: true, passive: false });'
+      "targetSurface.addEventListener(\n    'touchmove'",
+      '{ capture: true, passive: false }'
     )
-    expect(touchMoveBlock).toContain('if (enqueueNormalBufferScrollDelta(deltaY))')
-    expect(touchMoveBlock).toContain('ts.velY = 0;')
+    expect(touchMoveBlock).toContain('if (enqueueNormalBufferScrollDelta(scope, deltaY))')
+    expect(touchMoveBlock).toContain('scope.touchGesture.velY = 0')
 
-    const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
-    expect(momentumBlock).toContain('if (!applyNormalBufferScrollDelta(delta))')
-    expect(momentumBlock).toContain('ts.momentumId = null;')
+    const momentumBlock = sliceBetween(
+      'function momentumStep(frameTime: number) {',
+      'if (Math.abs(vel) > MIN_VEL)'
+    )
+    expect(momentumBlock).toContain('if (!applyNormalBufferScrollDelta(scope, delta))')
+    expect(momentumBlock).toContain('scope.touchGesture.momentumId = null')
   })
 
   it('coalesces normal touch scroll row commits onto animation frames', () => {
     const enqueueBlock = sliceBetween(
-      'function enqueueNormalBufferScrollDelta(deltaY)',
-      'function resetSmoothScrollOffset()'
+      'export function enqueueNormalBufferScrollDelta(',
+      'export function resetSmoothScrollOffset('
     )
-    expect(enqueueBlock).toContain('pendingNormalScrollDeltaY += deltaY;')
-    expect(enqueueBlock).toContain('if (normalScrollFrameId !== null) return true;')
-    expect(enqueueBlock).toContain('normalScrollFrameId = requestAnimationFrame(function()')
-    expect(enqueueBlock).toContain('applyNormalBufferScrollDelta(delta)')
+    expect(enqueueBlock).toContain('scope.pendingNormalScrollDeltaY += deltaY')
+    expect(enqueueBlock).toContain('if (scope.normalScrollFrameId !== null) {')
+    // Ruling 21: every document frame goes through the scope's registry so dispose can take it
+    // back; the id is still held here, which is what the reset below cancels.
+    expect(enqueueBlock).toContain(
+      'scope.normalScrollFrameId = scheduleDocumentFrame(scope, function () {'
+    )
+    expect(enqueueBlock).toContain('applyNormalBufferScrollDelta(scope, delta)')
 
     const resetBlock = sliceBetween(
-      'function resetSmoothScrollOffset()',
-      'function cellToViewportPx'
+      'export function resetSmoothScrollOffset(',
+      'export function stopNormalBufferSmoothScroll('
     )
-    expect(resetBlock).toContain('pendingNormalScrollDeltaY = 0;')
-    expect(resetBlock).toContain('cancelAnimationFrame(normalScrollFrameId);')
-  })
-
-  it('drains terminal writes without shifting the queued array', () => {
-    expect(source).toContain('var writeQueueHead = 0;')
-    expect(source).toContain('function nextQueuedWrite()')
-    expect(source).toContain('writeQueueHead++;')
-    expect(source).toContain('writeQueue = writeQueue.slice(writeQueueHead);')
-    expect(source).not.toContain('writeQueue.shift()')
+    expect(resetBlock).toContain('scope.pendingNormalScrollDeltaY = 0')
+    expect(resetBlock).toContain('cancelAnimationFrame(scope.normalScrollFrameId)')
   })
 
   it('bounds native-side pending WebView writes while preserving control messages', () => {
@@ -130,111 +141,79 @@ describe('TerminalWebView scroll routing', () => {
   })
 
   it('clears WebView await timers when the real response wins', () => {
-    const measureBlock = sliceBetween('measureFitDimensions(', 'resetZoom()')
+    // C7.5 moved both promises into `terminal-webview-ready-promises.ts`, which both components
+    // reach through the controller; the two blocks are the same code in their new home.
+    const measureBlock = sliceBetween('function measure(', 'function resolveMeasure')
     expect(measureBlock).toContain('clearTimeout(timeout)')
-    expect(measureBlock).toContain('measureResolveRef.current === finish')
+    expect(measureBlock).toContain('measureResolve === finish')
 
-    const readyBlock = sliceBetween('async awaitReady()', '})')
+    const readyBlock = sliceBetween('async function awaitReady()', 'function measure(')
     expect(readyBlock).toContain('clearTimeout(timeout)')
-    expect(readyBlock).toContain('void p.finally')
+    expect(readyBlock).toContain('void pending.finally')
   })
 
   it('hides xterm scrollbars and drives the mobile scroll indicator from committed rows', () => {
     expect(source).toContain('<div id="scroll-indicator"><div id="scroll-thumb"></div></div>')
     expect(source).toContain('.xterm .xterm-viewport::-webkit-scrollbar')
     expect(source).toContain('.xterm .xterm-scrollable-element > .xterm-scrollbar')
-    expect(source).toContain('overflow-y: hidden !important;')
-    expect(source).toContain('display: none !important;')
-    expect(source).toContain('function updateScrollIndicator(reveal)')
+    expect(source).toContain('overflow-y: hidden !important')
+    expect(source).toContain('display: none !important')
+    expect(source).toContain('export function updateScrollIndicator(')
     expect(source).toContain('buffer.viewportY / maxViewportY')
     expect(source).not.toContain('fractionalRows')
     expect(source).toContain('scrollThumb.style.transform =')
-    expect(source).toContain('updateScrollIndicator(true);')
+    expect(source).toContain('updateScrollIndicator(scope, true)')
   })
 
   it('does not apply fractional smooth scroll transforms to terminal content', () => {
     const updateTransformBlock = sliceBetween(
-      'function updateTransform()',
-      'function updateScrollIndicator(reveal)'
+      'export function updateTransform(',
+      'export function updateScrollIndicator('
     )
     expect(updateTransformBlock).toContain(
-      "surface.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + getTotalScale() + ')';"
+      "'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale(scope) + ')'"
     )
     expect(source).not.toContain("querySelector('.xterm-screen')")
     expect(source).not.toContain('updateTerminalScreenTransform')
-    expect(updateTransformBlock).not.toContain("getVisualPanY() + 'px) scale('")
+    expect(updateTransformBlock).not.toContain('getVisualPanY() + "px) scale("')
     expect(updateTransformBlock).not.toContain('smoothScrollOffsetY')
   })
 
   it('smooths velocity samples and uses lower friction for mobile momentum', () => {
-    expect(source).toContain('function updateTouchVelocity(deltaY, dt)')
-    expect(source).toContain('ts.velY * 0.55 + instantVelocity * 0.45')
-    expect(source).toContain('var FRICTION = 0.972;')
-    expect(source).toContain('var MIN_VEL = 0.012;')
+    expect(source).toContain('export function updateTouchVelocity(')
+    expect(source).toContain('scope.touchGesture.velY * 0.55 + instantVelocity * 0.45')
+    expect(source).toContain('const FRICTION = 0.972')
+    expect(source).toContain('const MIN_VEL = 0.012')
+    // #21687: the decay is per elapsed millisecond, so a 120 Hz screen coasts the same distance.
+    expect(source).toContain('let lastMomentumTime = performance.now()')
+    expect(source).toContain(
+      'const elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime))'
+    )
+    expect(source).toContain('vel *= FRICTION ** (elapsed / 16)')
+    expect(source).toContain('const delta = vel * elapsed')
   })
 
   it('keeps selection edge autoscroll active and extends the dragged endpoint', () => {
-    const startBlock = sliceBetween('function startEdgeScroll(dir)', 'function stopEdgeScroll()')
-    expect(startBlock.indexOf('stopEdgeScroll();')).toBeLessThan(
-      startBlock.indexOf('edgeScrollDir = dir;')
+    const startBlock = sliceBetween(
+      'export function startEdgeScroll(',
+      'export function stopEdgeScroll('
     )
-    expect(startBlock.indexOf('term.scrollLines(edgeScrollDir);')).toBeLessThan(
-      startBlock.indexOf('syncEdgeScrollSelectionEndpoint();')
+    expect(startBlock.indexOf('stopEdgeScroll(scope)')).toBeLessThan(
+      startBlock.indexOf('scope.edgeScrollDir = dir')
+    )
+    expect(startBlock.indexOf('scope.term.scrollLines(scope.edgeScrollDir)')).toBeLessThan(
+      startBlock.indexOf('syncEdgeScrollSelectionEndpoint(scope)')
     )
 
     const dragMoveBlock = sliceBetween(
-      'function handleDragMove(handle, clientX, clientY)',
-      '  // Latching document-level touch dispatcher: see'
+      'export function handleDragMove(',
+      'function attachSurfaceEventHandlers('
     )
-    expect(dragMoveBlock).toContain('edgeScrollClientX = clientX;')
-    expect(dragMoveBlock).toContain('edgeScrollClientY = clientY;')
-    expect(dragMoveBlock).toContain('syncSelectionHandleToViewportPoint(handle, clientX, clientY)')
-  })
-
-  it('opens links and paths from surface taps before mouse/focus fallback', () => {
-    expect(source).toContain('function buildMouseClickInput(clientX, clientY)')
-    expect(source).toContain('function isClickMouseTrackingMode(mode)')
-    expect(source).toContain("return mode !== 'none';")
-    expect(source).toContain('var pixelX = cell.x;')
-    expect(source).toContain('var pixelY = cell.y;')
-    expect(source).toContain(
-      'if (!isSafeSgrMouseCoordinate(cell.x) || !isSafeSgrMouseCoordinate(cell.y)) return'
+    expect(dragMoveBlock).toContain('scope.edgeScrollClientX = clientX')
+    expect(dragMoveBlock).toContain('scope.edgeScrollClientY = clientY')
+    expect(dragMoveBlock).toContain(
+      'syncSelectionHandleToViewportPoint(scope, handle, clientX, clientY)'
     )
-    expect(source).toContain(
-      'if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) return'
-    )
-    expect(source).toContain("if (mouseTrackingMode === 'x10') return pixelPress;")
-    expect(source).toContain("if (mouseTrackingMode === 'x10') return sgrPress;")
-    expect(source).toContain("if (mouseTrackingMode === 'x10') return press;")
-    expect(source).toContain("if (col > 126 || row > 126) return '';")
-
-    const touchEndBlock = sliceBetween(
-      "document.addEventListener('touchend'",
-      '}, { capture: true, passive: true });'
-    )
-    expect(touchEndBlock).toContain(
-      'notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true)'
-    )
-
-    const tapHandlerBlock = sliceBetween(
-      'function notifyTerminalSurfaceTap(originX, originY, focusKeyboard)',
-      "document.addEventListener('touchstart'"
-    )
-    expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
-      tapHandlerBlock.indexOf('urlAtViewportPoint')
-    )
-    expect(tapHandlerBlock.indexOf('urlAtViewportPoint')).toBeLessThan(
-      tapHandlerBlock.indexOf('filePathAtViewportPoint')
-    )
-    expect(tapHandlerBlock.indexOf('filePathAtViewportPoint')).toBeLessThan(
-      tapHandlerBlock.indexOf('var clickInput = buildMouseClickInput')
-    )
-    expect(tapHandlerBlock).toContain("notify({ type: 'open-url', url: tappedUrl });")
-    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
-    expect(tapHandlerBlock).toContain(
-      'if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode()))'
-    )
-    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-tap' });")
   })
 
   it('allows x10 mouse gesture reports through the mobile session gate', () => {

@@ -100,6 +100,7 @@ function createPane(id: number, webglAddon: unknown): ManagedPaneInternal {
     hasComplexScriptOutput: false,
     webglAddon: webglAddon as never,
     ligaturesAddon: null,
+    imageAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     fitAddon: {} as never,
@@ -116,6 +117,46 @@ function createPane(id: number, webglAddon: unknown): ManagedPaneInternal {
 describe('splitManagedPane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('focuses the new pane before publishing an unresolved cwd spawn hint', () => {
+    const existingPane = createPane(1, null)
+    const newPane = createPane(2, null)
+    const panes = new Map<number, ManagedPaneInternal>([[existingPane.id, existingPane]])
+    const root = new MockElement(['root'])
+    const existingContainer = existingPane.container as unknown as MockElement
+    existingContainer.parentElement = root
+    const cwdPromise = new Promise<string>(() => {
+      // Keep CWD pending across every synchronous split assertion.
+    })
+    const setActivePaneId = vi.fn()
+    const publishPaneCreated = vi.fn(() => {
+      expect(newPane.terminal.focus).toHaveBeenCalledOnce()
+    })
+
+    const result = splitManagedPane({
+      paneId: existingPane.id,
+      direction: 'vertical',
+      opts: { cwdPromise },
+      panes,
+      root: root as unknown as HTMLElement,
+      styleOptions: {},
+      managerOptions: { linkOpenHint: () => '' },
+      createPaneInternal: () => {
+        panes.set(newPane.id, newPane)
+        return newPane
+      },
+      createDivider: () => new MockElement(['pane-divider']) as unknown as HTMLElement,
+      publishPaneCreated,
+      getDragCallbacks: () => ({}) as never,
+      setActivePaneId,
+      isDestroyed: () => false
+    })
+
+    expect(result?.id).toBe(newPane.id)
+    expect(setActivePaneId).toHaveBeenCalledWith(newPane.id)
+    expect(newPane.terminal.focus).toHaveBeenCalledOnce()
+    expect(publishPaneCreated).toHaveBeenCalledWith(newPane, { cwdPromise })
   })
 
   it('prepares every pane under a moved mounted subtree for split reparenting', () => {

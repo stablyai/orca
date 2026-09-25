@@ -259,6 +259,40 @@ describe('RelayAuthCoordinator transient recovery', () => {
 })
 
 describe('RelayAuthCoordinator liveness safety net', () => {
+  it('withholds a dead broker from control work while identity matching still sees it', async () => {
+    vi.useFakeTimers()
+    const dead = { closeNow: vi.fn(), isLive: () => false }
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: vi.fn().mockResolvedValue(dead),
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(coordinator.getActiveBroker()).toBe(dead)
+    expect(coordinator.getLiveBroker()).toBeNull()
+  })
+
+  it('treats a broker that cannot report liveness as usable, not dead', async () => {
+    // Why: unverifiable is not exited — only a broker that proves its control
+    // died is withheld; silence must never cost a working relay.
+    vi.useFakeTimers()
+    const unverifiable = { closeNow: vi.fn() }
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: vi.fn().mockResolvedValue(unverifiable),
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(coordinator.getLiveBroker()).toBe(unverifiable)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(unverifiable)
+  })
+
   it('reopens a broker that died leaving no retry timer behind', async () => {
     // Why: an auth refresh failing past token expiry closes the broker with
     // no timer; only ensureLive (periodic/power-resume) can revive it.

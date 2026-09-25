@@ -7,6 +7,10 @@ import { PRCommentsSection } from './PRCommentsSection'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  AppState: {
+    currentState: 'active',
+    addEventListener: () => ({ remove: () => {} })
+  },
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View'

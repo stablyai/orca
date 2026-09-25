@@ -55,7 +55,7 @@ describe('WSL vault intermediate-symlink reproduction', () => {
   it.each([
     ['file-shaped', `${FIXTURE_ROOT}/linked-project/session.json`, false],
     ['directory-shaped', `${FIXTURE_ROOT}/linked-project/session`, true]
-  ])('rejects a %s target before removal', async (_shape, target, recursive) => {
+  ])('rejects a %s target before removal', async (_targetKind, target, recursive) => {
     const options = { recursive, approvedRoots: [unc(FIXTURE_ROOT)] }
     let rejection: unknown
 

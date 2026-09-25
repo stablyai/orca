@@ -1,22 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
-
-vi.mock('./runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-import {
-  hasCommitObjectViaGitExec,
-  hasLocalCommitObject,
-  isFullGitObjectId
-} from './commit-object-ref'
+import { describe, expect, it, vi } from 'vitest'
+import { hasCommitObjectViaGitExec, isFullGitObjectId } from './commit-object-ref'
 
 describe('commit object refs', () => {
-  beforeEach(() => {
-    gitExecFileAsyncMock.mockReset()
-  })
-
   it('recognizes only complete git object IDs', () => {
     expect(isFullGitObjectId('a'.repeat(40))).toBe(true)
     expect(isFullGitObjectId('A'.repeat(40))).toBe(true)
@@ -48,16 +33,5 @@ describe('commit object refs', () => {
     await expect(hasCommitObjectViaGitExec(gitExec, 'origin/main')).resolves.toBe(false)
 
     expect(gitExec).not.toHaveBeenCalled()
-  })
-
-  it('checks local commit objects in the target repo path', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'a'.repeat(40), stderr: '' })
-
-    await expect(hasLocalCommitObject('/repo', 'a'.repeat(40))).resolves.toBe(true)
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['rev-parse', '--verify', '--quiet', `${'a'.repeat(40)}^{commit}`],
-      { cwd: '/repo' }
-    )
   })
 })

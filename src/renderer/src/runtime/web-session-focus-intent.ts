@@ -10,6 +10,7 @@
 // snapshots, unlike a transient per-snapshot flag).
 
 import { webSessionIntentOwnerKey, type WebSessionIntentOwner } from './web-session-intent-owner'
+import { toVisibleTabType } from '../../../shared/tab-types'
 import type { AppState } from '../store/types'
 
 export type WebSessionFocusIntent = {
@@ -18,16 +19,20 @@ export type WebSessionFocusIntent = {
   expectedCurrentLocalTabId?: string | null
 }
 
+export const MAX_WEB_SESSION_FOCUS_INTENTS = 512
+
 const pendingFocusByOwnerAndWorktree = new Map<string, WebSessionFocusIntent>()
 
 type WebSessionVisibleTabState = Pick<
   AppState,
   | 'activeBrowserTabIdByWorktree'
   | 'activeFileIdByWorktree'
+  | 'activeGroupIdByWorktree'
   | 'activeTabIdByWorktree'
   | 'activeTabType'
   | 'activeTabTypeByWorktree'
   | 'activeWorktreeId'
+  | 'groupsByWorktree'
   | 'unifiedTabsByWorktree'
 >
 
@@ -36,12 +41,53 @@ export function resolveWebSessionVisibleTabId(
   worktreeId: string,
   tabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
 ): string | null {
+  // Why: the coarse (activeTabType, entityId) address inverts a many-to-one projection and cannot
+  // tell editor-family kinds apart; group state is what is actually on screen.
+  const groups = state.groupsByWorktree?.[worktreeId] ?? []
+  if (groups.length > 0) {
+    const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? null
+    const activeGroup =
+      (activeGroupId ? groups.find((group) => group.id === activeGroupId) : null) ?? groups[0]
+    // Why: authoritative that nothing is visible too — never resolve into an unfocused group.
+    if (activeGroup?.activeTabId == null) {
+      return null
+    }
+    const activeTabId = activeGroup.activeTabId
+    const direct = tabs.find((tab) => tab.id === activeTabId && tab.groupId === activeGroup.id)
+    if (direct) {
+      return direct.id
+    }
+    // Why: reconcile can rematerialize the visible tab under a new id (local -> mirrored), so
+    // follow its entity rather than dropping focus. Stays inside the group to avoid a pane jump.
+    const previous = (state.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
+      (tab) => tab.id === activeTabId
+    )
+    if (!previous) {
+      return null
+    }
+    const previousType = toVisibleTabType(previous.contentType)
+    return (
+      tabs.find(
+        (tab) =>
+          tab.groupId === activeGroup.id &&
+          tab.entityId === previous.entityId &&
+          toVisibleTabType(tab.contentType) === previousType
+      )?.id ?? null
+    )
+  }
+
+  // Why: no group records at all (fresh slice, or first remote reconcile before groups exist).
   const currentType =
     state.activeTabTypeByWorktree?.[worktreeId] ??
     (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
   if (currentType === 'terminal') {
     const tabId = state.activeTabIdByWorktree?.[worktreeId]
     return tabId && tabs.some((tab) => tab.id === tabId) ? tabId : null
+  }
+  // Why: a structured chat tab has no per-worktree active-entity map to address it by, so the
+  // entityId lookup below would always miss. There is at most one per worktree here.
+  if (currentType === 'agent-session') {
+    return tabs.find((tab) => tab.contentType === 'agent-session')?.id ?? null
   }
   const entityId =
     currentType === 'browser'
@@ -50,8 +96,37 @@ export function resolveWebSessionVisibleTabId(
         ? state.activeFileIdByWorktree?.[worktreeId]
         : null
   return (
-    tabs.find((tab) => tab.contentType === currentType && tab.entityId === entityId)?.id ?? null
+    tabs.find(
+      (tab) => toVisibleTabType(tab.contentType) === currentType && tab.entityId === entityId
+    )?.id ?? null
   )
+}
+
+export function resolveWebSessionSiblingVisibleTabId(
+  state: WebSessionVisibleTabState,
+  worktreeId: string,
+  tabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+): string | null {
+  const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? null
+  const preferredType =
+    state.activeTabTypeByWorktree?.[worktreeId] ??
+    (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
+  const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
+  let fallback: string | null = null
+  for (const group of state.groupsByWorktree?.[worktreeId] ?? []) {
+    if (group.id === activeGroupId || group.activeTabId == null) {
+      continue
+    }
+    const tab = tabById.get(group.activeTabId)
+    if (!tab || tab.groupId !== group.id) {
+      continue
+    }
+    if (preferredType && toVisibleTabType(tab.contentType) === preferredType) {
+      return tab.id
+    }
+    fallback ??= tab.id
+  }
+  return fallback
 }
 
 function focusIntentPartitionKey(owner: WebSessionIntentOwner, worktreeId: string): string {
@@ -70,11 +145,20 @@ export function recordWebSessionFocusIntent(
     return
   }
   const trimmedLeafId = leafId?.trim()
-  pendingFocusByOwnerAndWorktree.set(focusIntentPartitionKey(owner, worktreeId), {
+  const key = focusIntentPartitionKey(owner, worktreeId)
+  pendingFocusByOwnerAndWorktree.delete(key)
+  pendingFocusByOwnerAndWorktree.set(key, {
     hostTabId: trimmed,
     ...(trimmedLeafId ? { leafId: trimmedLeafId } : {}),
     ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {})
   })
+  while (pendingFocusByOwnerAndWorktree.size > MAX_WEB_SESSION_FOCUS_INTENTS) {
+    const oldest = pendingFocusByOwnerAndWorktree.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    pendingFocusByOwnerAndWorktree.delete(oldest.value)
+  }
 }
 
 export function peekWebSessionFocusIntent(
@@ -91,10 +175,12 @@ export function clearWebSessionFocusIntent(owner: WebSessionIntentOwner, worktre
 export function clearWebSessionFocusIntentIfMatches(
   owner: WebSessionIntentOwner,
   worktreeId: string,
-  hostTabId: string
+  hostTabId: string,
+  leafId?: string
 ): void {
   const key = focusIntentPartitionKey(owner, worktreeId)
-  if (pendingFocusByOwnerAndWorktree.get(key)?.hostTabId === hostTabId) {
+  const intent = pendingFocusByOwnerAndWorktree.get(key)
+  if (intent?.hostTabId === hostTabId && (leafId === undefined || intent.leafId === leafId)) {
     pendingFocusByOwnerAndWorktree.delete(key)
   }
 }

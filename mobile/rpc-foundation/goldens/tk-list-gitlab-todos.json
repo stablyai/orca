@@ -1,0 +1,175 @@
+{
+  "operation": "tasks.task-list-gitlab-todos",
+  "family": "tasks.task-list-gitlab-todos",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "ba91378284c5dc3dc470f0601e4ff0202622a8d1fb97f27ab45c096d65c0bb48",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "038bb64a38ce": {
+      "name": "gitlab.todos#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.todos\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "2ee5e836afb7": {
+      "name": "items",
+      "ordinal": 5,
+      "value": [
+        {
+          "key": "gitlab-todo:1",
+          "provider": "gitlabTodo",
+          "source": {
+            "actionName": "review_requested",
+            "authorAvatarUrl": "",
+            "authorUsername": "octocat",
+            "id": 1,
+            "projectPath": "group/project",
+            "state": "pending",
+            "targetIid": 4,
+            "targetTitle": "A GitLab todo",
+            "targetType": "Issue",
+            "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          },
+          "status": "review requested",
+          "subtitle": "group/project #4",
+          "title": "A GitLab todo",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "39f99cf479f0": {
+      "name": "error",
+      "ordinal": 1,
+      "value": ""
+    },
+    "609f32a21704": {
+      "name": "loading",
+      "ordinal": 2,
+      "value": true
+    },
+    "6d7869e6f6ea": {
+      "name": "loading",
+      "ordinal": 6,
+      "value": false
+    },
+    "8511d41d7490": {
+      "name": "gitlab.todos#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.todos"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": [
+            {
+              "actionName": "review_requested",
+              "authorAvatarUrl": "",
+              "authorUsername": "octocat",
+              "id": 1,
+              "projectPath": "group/project",
+              "state": "pending",
+              "targetIid": 4,
+              "targetTitle": "A GitLab todo",
+              "targetType": "Issue",
+              "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+              "updatedAt": "2020-01-01T00:00:00.000Z"
+            }
+          ]
+        }
+      }
+    },
+    "88d78bf42794": {
+      "name": "refreshing",
+      "ordinal": 7,
+      "value": false
+    },
+    "d57ec76a49a3": {
+      "error": "",
+      "items": [
+        {
+          "key": "gitlab-todo:1",
+          "provider": "gitlabTodo",
+          "source": {
+            "actionName": "review_requested",
+            "authorAvatarUrl": "",
+            "authorUsername": "octocat",
+            "id": 1,
+            "projectPath": "group/project",
+            "state": "pending",
+            "targetIid": 4,
+            "targetTitle": "A GitLab todo",
+            "targetType": "Issue",
+            "targetUrl": "https://gitlab.example.com/group/project/-/issues/4",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          },
+          "status": "review requested",
+          "subtitle": "group/project #4",
+          "title": "A GitLab todo",
+          "updatedAt": "2020-01-01T00:00:00.000Z"
+        }
+      ],
+      "loading": false,
+      "refreshing": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tk-list-gitlab-todos",
+    "checkpoints": [
+      {
+        "id": "load-settled",
+        "observation": {
+          "sender": ["8511d41d7490"],
+          "payloads": ["038bb64a38ce"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "load-0": "eb79a9b3682a"
+          },
+          "state": "d57ec76a49a3",
+          "effects": [
+            "39f99cf479f0",
+            "609f32a21704",
+            "2ee5e836afb7",
+            "6d7869e6f6ea",
+            "88d78bf42794"
+          ]
+        }
+      }
+    ]
+  }
+}

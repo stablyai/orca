@@ -198,42 +198,19 @@ export function closeTerminalTab(
     : getWorktreeTerminalTabIds(state, owningWorktreeId)
   const terminalCountBeforeClose =
     precomputedCloseState?.terminalCountBeforeClose ?? currentTerminalTabIds!.length
-  if (terminalCountBeforeClose <= 1) {
-    closeLocalTerminalTabState(terminalTabId, {
-      reason: options?.reason,
-      ...(options?.captureRecentlyClosed !== undefined
-        ? { captureRecentlyClosed: options.captureRecentlyClosed }
-        : {}),
-      ...(options?.localPtyTeardownOwnedExternally
-        ? { localPtyTeardownOwnedExternally: true }
-        : {}),
-      ...(options?.precomputedRetirementPlan
-        ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
-        : {})
-    })
-    if (state.activeWorktreeId === owningWorktreeId) {
-      // Why: only deactivate the worktree when no tabs of any kind remain.
-      // Editor files are a separate tab type; closing the last terminal tab
-      // should switch to the editor view instead of tearing down the workspace.
-      const worktreeFile = state.openFiles.find((f) => f.worktreeId === owningWorktreeId)
-      if (worktreeFile) {
-        state.setActiveFile(worktreeFile.id)
-        state.setActiveTabType('editor')
-      } else {
-        const browserTab = (state.browserTabsByWorktree?.[owningWorktreeId] ?? [])[0]
-        if (browserTab) {
-          state.setActiveBrowserTab(browserTab.id)
-          state.setActiveTabType('browser')
-        } else {
-          state.setActiveWorktree(null)
-        }
-      }
-    }
-    options?.onClosed?.()
-    return
-  }
-
-  if (state.activeWorktreeId === owningWorktreeId && terminalTabId === state.activeTabId) {
+  // Why: a terminal with a unified row must leave successor choice to closeUnifiedTab's
+  // MRU/neighbor repair — a terminal-only pre-pick skips agent-session/simulator neighbors
+  // and re-stamps the group active before the canonical repair can run.
+  const hasUnifiedRow = (state.unifiedTabsByWorktree?.[owningWorktreeId] ?? []).some(
+    (tab) =>
+      tab.contentType === 'terminal' && (tab.entityId === terminalTabId || tab.id === terminalTabId)
+  )
+  if (
+    !hasUnifiedRow &&
+    terminalCountBeforeClose > 1 &&
+    state.activeWorktreeId === owningWorktreeId &&
+    terminalTabId === state.activeTabId
+  ) {
     const currentIndex = currentTerminalTabIds?.indexOf(terminalTabId) ?? -1
     const nextTabId = precomputedCloseState
       ? precomputedCloseState.nextTerminalTabId
@@ -253,5 +230,31 @@ export function closeTerminalTab(
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})
   })
+  if (terminalCountBeforeClose <= 1 && state.activeWorktreeId === owningWorktreeId) {
+    // Why: re-read after the close — closeUnifiedTab may have already deactivated or
+    // repaired the surface, and the pre-close snapshot must not clobber that outcome.
+    const current = useAppStore.getState()
+    if (current.activeWorktreeId === owningWorktreeId) {
+      // Why: agent-session and simulator tabs render without a terminal/editor/browser
+      // entity, so only the unified renderable count can prove the worktree is empty
+      // (mirrors leaveWorktreeIfEmpty in useTabGroupTabCloseCommands).
+      const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
+      if (renderableTabCount === 0) {
+        const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)
+        if (worktreeFile) {
+          current.setActiveFile(worktreeFile.id)
+          current.setActiveTabType('editor', owningWorktreeId)
+        } else {
+          const browserTab = (current.browserTabsByWorktree?.[owningWorktreeId] ?? [])[0]
+          if (browserTab) {
+            current.setActiveBrowserTab(browserTab.id)
+            current.setActiveTabType('browser', owningWorktreeId)
+          } else {
+            current.setActiveWorktree(null)
+          }
+        }
+      }
+    }
+  }
   options?.onClosed?.()
 }

@@ -76,7 +76,8 @@ describe('gitlab client — MR operations', () => {
 
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', '--hostname', 'git.internal', 'projects/g%2Fp/jobs/99/trace'],
-        {}
+        // Why: a trace outlives the runner's 30s default, so the fetch raises it.
+        { timeout: 60_000 }
       )
     })
 

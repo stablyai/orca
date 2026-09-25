@@ -2,6 +2,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
+import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
 import { getExperimentalSearchEntry } from './experimental-search'
@@ -18,8 +20,12 @@ export function NativeChatExperimentalSetting({
   updateSettings
 }: NativeChatExperimentalSettingProps): React.JSX.Element {
   const nativeChatEnabled = settings.experimentalNativeChat === true
-  const openByDefault = settings.openAgentTabsInChatByDefault === true
-  const defaultView: NativeChatDefaultView = openByDefault ? 'native-chat' : 'terminal-chat'
+  const structuredNativeChatEnabled = settings.experimentalStructuredNativeChat === true
+  const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
+  const defaultView: NativeChatDefaultView =
+    settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
+  // Structured-only settings; terminal-backed chat never reads them.
+  const structuredChatActive = defaultView === 'native-chat' && structuredNativeChatEnabled
 
   return (
     <SearchableSetting
@@ -40,9 +46,10 @@ export function NativeChatExperimentalSetting({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.nativeChat.copy',
-              'Adds a Chat UI view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.'
+              'Enables the experimental Chat UI for newly created supported local sessions. Existing terminal sessions keep the terminal chat path while we tune transcript fidelity, streaming, and parity.'
             )}
           </p>
+          <NativeChatSupportedAgents />
         </div>
         <SettingsSwitch
           checked={nativeChatEnabled}
@@ -58,7 +65,7 @@ export function NativeChatExperimentalSetting({
         />
       </div>
       {nativeChatEnabled ? (
-        <div className="ml-4 border-l border-border pl-4">
+        <div className="ml-4 space-y-4 border-l border-border pl-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
               <Label>
@@ -108,6 +115,82 @@ export function NativeChatExperimentalSetting({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Structured chat rides the Chat UI default view; it has no entry path under Terminal
+              chat. Hidden only — the opt-in keeps its persisted value for when Chat UI returns. */}
+          {defaultView === 'native-chat' ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.structuredTitle',
+                    'Use updated structured native chat'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.structuredCopy',
+                    'Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.'
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
+                    'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={structuredNativeChatEnabled}
+                ariaLabel={translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.structuredToggleLabel',
+                  'Toggle updated structured native chat'
+                )}
+                onChange={() =>
+                  updateSettings({
+                    experimentalStructuredNativeChat: !structuredNativeChatEnabled
+                  })
+                }
+              />
+            </div>
+          ) : null}
+
+          {/* Only structured sessions have a resume cursor to continue from. */}
+          {structuredChatActive ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.resumeTitle',
+                    'Resume working chats automatically after a restart'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
+                    'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={resumeOnRestartEnabled}
+                ariaLabel={translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
+                  'Toggle automatic resume after a restart'
+                )}
+                onChange={() =>
+                  updateSettings({ nativeChatResumeWorkOnRestart: !resumeOnRestartEnabled })
+                }
+              />
+            </div>
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatShellEnvironmentSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
+          ) : null}
         </div>
       ) : null}
     </SearchableSetting>

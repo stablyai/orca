@@ -198,7 +198,9 @@ describe('bulk git helpers', () => {
         ':(literal)scratch'
       ],
       {
-        cwd: '/repo'
+        cwd: '/repo',
+        // Why: this read buffers, so it fences the WSL login shell's rc banner off its first NUL record.
+        captureWslLoginShellOutput: true
       }
     )
     // Why: a pathspec is tracked if git reports either the exact path or a
@@ -217,6 +219,31 @@ describe('bulk git helpers', () => {
         cwd: '/repo'
       }
     )
+    expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves bulk discard action selection and original path order for path edges', async () => {
+    const filePaths = ['new', 'docs\\', '[ab].txt', 'docs///', 'new', 'src/file', 'docs\\']
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'docs/readme\0src/file-extra\0[ab].txt\0' })
+      .mockResolvedValue({ stdout: '' })
+
+    await bulkDiscardChanges('/repo', filePaths)
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
+      [
+        'restore',
+        '--worktree',
+        '--source=HEAD',
+        '--',
+        ':(literal)docs\\',
+        ':(literal)[ab].txt',
+        ':(literal)docs///',
+        ':(literal)docs\\'
+      ],
+      ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
+    ])
     expect(rmMock).not.toHaveBeenCalled()
   })
 

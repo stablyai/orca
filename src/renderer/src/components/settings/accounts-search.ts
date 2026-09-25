@@ -134,13 +134,14 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
       'OpenCode Go Session Cookie'
     ),
     description: translate(
-      'auto.components.settings.accounts.search.d1d2ae383c',
-      'Paste your opencode.ai session cookie for rate limit fetching.'
+      'auto.components.settings.accounts.search.25591bf95b',
+      'Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.accounts.search.8dcbef1856', 'opencode'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.37020a02c2', 'console'),
       ...translateSearchKeyword(
         'auto.components.settings.accounts.search.e949b08ffb',
         'rate limit'
@@ -176,12 +177,16 @@ export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
     title: translate('auto.components.settings.accounts.search.733f9e2a93', 'MiniMax Usage'),
     description: translate(
       'auto.components.settings.accounts.search.f8374c3151',
-      'Paste your platform.minimax.io session cookie for local rate-limit fetching.'
+      'Configure MiniMax usage tracking. Pick the overseas or China endpoint, then paste a session cookie or save an API key that works on either host.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.accounts.search.d16378a88f', 'minimax'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.b2c4e7f1a8', 'endpoint'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.3a9b6d2c4e', 'api key'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5d8f1a3b7c', 'china'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.7e2a4b8c1d', 'overseas'),
       ...translateSearchKeyword(
         'auto.components.settings.accounts.search.e949b08ffb',
         'rate limit'

@@ -5,7 +5,7 @@ import {
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
-import type { BrowserFindSource } from '../../shared/browser-find-source'
+import type { BrowserFindTarget } from '../../shared/browser-find-source'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 
 export type ShouldForwardDictationShortcut = () => boolean
@@ -46,7 +46,10 @@ export function forwardGuestShortcutInput(
     return true
   }
   if (input.isAutoRepeat) {
-    if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
+    if (
+      (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
+      action?.type === 'deleteCurrentWorkspace'
+    ) {
       event.preventDefault()
       return true
     }
@@ -132,35 +135,37 @@ export function forwardGuestShortcutInput(
   } else if (
     keybindingMatchesAction('browser.focusAddressBar', input, process.platform, keybindings)
   ) {
-    // Why: the address bar lives in renderer chrome, not the guest page; forward so the active BrowserPane can focus its input.
-    renderer.send('ui:focusBrowserAddressBar')
+    // Why: the address bar lives in renderer chrome, not the guest page; forward so the pane owning it can focus its input.
+    renderer.send('ui:focusBrowserAddressBar', { browserPageId: browserTabId })
   } else if (keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)) {
     // Why: forward hard reload so reloadIgnoringCache() runs on the renderer's parked-webview ref that owns the guest surface.
-    renderer.send('ui:hardReloadBrowserPage')
+    renderer.send('ui:hardReloadBrowserPage', { browserPageId: browserTabId })
   } else if (keybindingMatchesAction('browser.reload', input, process.platform, keybindings)) {
     // Why: forward soft reload so the renderer's reload() hits the parked-webview eviction the guest's built-in shortcut skips.
-    renderer.send('ui:reloadBrowserPage')
+    renderer.send('ui:reloadBrowserPage', { browserPageId: browserTabId })
   } else if (keybindingMatchesAction('browser.find', input, process.platform, keybindings)) {
-    const browserWorkspaceId = resolveWorkspaceId?.(browserTabId)
-    if (browserWorkspaceId) {
-      const source: BrowserFindSource = {
-        browserPageId: browserTabId,
-        browserWorkspaceId
-      }
-      // Why: active browser splits share one renderer; preserve the registered guest owner so only its Find bar opens.
-      renderer.send('ui:findInBrowserPage', source)
-    }
+    // Why: active browser splits share one renderer; preserve the registered guest owner so only
+    // its Find bar opens. A client-hosted guest has no registered workspace, and dropping the
+    // chord there both suppressed it in the guest and delivered nothing.
+    const browserWorkspaceId = resolveWorkspaceId?.(browserTabId) || undefined
+    const target: BrowserFindTarget = { browserPageId: browserTabId, browserWorkspaceId }
+    renderer.send('ui:findInBrowserPage', target)
   } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
     // Why: macOS Logitech side-button remaps arrive as history keystrokes, not mouse events; forward so the renderer can goBack().
-    renderer.send('ui:browserHistoryNavigate', 'back')
+    renderer.send('ui:browserHistoryNavigate', { browserPageId: browserTabId, direction: 'back' })
   } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
     // Why: same as browser.back; the focused guest cannot call the renderer-owned webview's goForward() directly.
-    renderer.send('ui:browserHistoryNavigate', 'forward')
+    renderer.send('ui:browserHistoryNavigate', {
+      browserPageId: browserTabId,
+      direction: 'forward'
+    })
   } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
     if (isFloatingGuest) {
       renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })
     } else {
-      renderer.send('ui:closeActiveTab')
+      // Why: carry the guest's page id — activeTabType/activeBrowserTabId can be stale in split
+      // layouts (guest focus doesn't reach the group's focus-capture), silently dropping the close.
+      renderer.send('ui:closeActiveTab', { sourceId: browserTabId })
     }
   } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
     renderer.send('ui:switchTab', 1)
@@ -176,10 +181,14 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:toggleQuickCommandsMenu')
   } else if (action?.type === 'openNewWorkspace') {
     renderer.send('ui:openNewWorkspace')
+  } else if (action?.type === 'deleteCurrentWorkspace') {
+    renderer.send('ui:deleteCurrentWorkspace')
   } else if (action?.type === 'openWorkspaceBoard') {
     renderer.send('ui:openWorkspaceBoard')
   } else if (action?.type === 'openTasks') {
     renderer.send('ui:openTasks')
+  } else if (action?.type === 'toggleAgentDashboard') {
+    renderer.send('ui:toggleAgentDashboard')
   } else if (action?.type === 'openSettings') {
     renderer.send('ui:openSettings')
   } else if (action?.type === 'forceReload') {

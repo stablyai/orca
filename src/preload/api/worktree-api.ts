@@ -98,6 +98,9 @@ export type WorktreeApi = {
     // may waive the proof that every PTY stopped.
     allowUnverifiedPtyStop?: boolean
     skipArchive?: boolean
+    // Why (#19334): distinct from `skipArchive` (never runs the hook) and never implied by
+    // `force` — this waives a hook that ran and FAILED.
+    allowFailedArchiveHook?: boolean
     snapshotPruneBatchId?: string
   }) => Promise<RemoveWorktreeResult>
   // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
@@ -112,7 +115,11 @@ export type WorktreeApi = {
     expectedHead: string
     hostId?: ExecutionHostId
   }) => Promise<ForceDeleteWorktreeBranchResult>
-  updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
+  updateMeta: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    updates: Partial<WorktreeMeta>
+  }) => Promise<Worktree>
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
     workspaceLineage?: Record<string, WorkspaceLineage>

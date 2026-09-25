@@ -28,13 +28,15 @@ async function postCodexHookEvent(
   expect(response.status).toBe(204)
 }
 
-test('shows Caffeinate mode and Agent activity in the status bar', async ({
+test('shows keep-awake mode and Agent activity in the status bar', async ({
   electronApp,
   orcaPage
 }) => {
   await waitForSessionReady(orcaPage)
 
-  const offStatus = orcaPage.getByRole('button', { name: 'Caffeinate, Off · Inactive' })
+  const offStatus = orcaPage.getByRole('button', {
+    name: 'Keep computer awake, Off · Inactive'
+  })
   await expect(offStatus).toBeVisible()
   await expect(offStatus).toHaveText('Off')
   await offStatus.click()
@@ -48,14 +50,14 @@ test('shows Caffeinate mode and Agent activity in the status bar', async ({
   await orcaPage.getByRole('menuitemradio', { name: /^Agent/ }).click()
 
   const agentInactiveStatus = orcaPage.getByRole('button', {
-    name: 'Caffeinate, Agent · Inactive'
+    name: 'Keep computer awake, Agent · Inactive'
   })
   await expect(agentInactiveStatus).toBeVisible()
 
   const paneKey = `e2e-caffeinate-tab:${randomUUID()}`
   await postCodexHookEvent(electronApp, paneKey, 'UserPromptSubmit')
   const agentActiveStatus = orcaPage.getByRole('button', {
-    name: 'Caffeinate, Agent · Active'
+    name: 'Keep computer awake, Agent · Active'
   })
   await expect(agentActiveStatus).toBeVisible()
   await expect(agentActiveStatus).toHaveText('Agent')

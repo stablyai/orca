@@ -121,6 +121,25 @@ describe('buildMobileAiVaultResumeCommand', () => {
 })
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  it('routes Kimi through the resumable-agent startup plan', () => {
+    // Why: kimi joining RESUMABLE_TUI_AGENTS moves it off the plain command fallback, so the
+    // cd prefix Kimi needs (sessions are work-dir-scoped) must survive the new branch.
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'kimi',
+        sessionId: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
+      }),
+      hostPlatform: 'darwin'
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && kimi '--yolo' '--session' 'session_431324d7-2165-42f0-9ecd-9f93437b3201'",
+      launchConfig: { agentCommand: "kimi '--yolo'" },
+      launchAgent: 'kimi'
+    })
+  })
+
   it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
@@ -297,7 +316,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
     const sendRequest = vi.fn().mockResolvedValueOnce({ ok: true, result: { tab: { id: 'x' } } })
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' })
-    ).rejects.toThrow('Created terminal response was invalid')
+    ).rejects.toThrow('The host sent a reply this app could not read (session.tabs.createTerminal)')
   })
 
   it('throws when terminal send fails or is locked', async () => {

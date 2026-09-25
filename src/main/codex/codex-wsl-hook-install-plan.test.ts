@@ -6,7 +6,11 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
-import { _internals, createCodexWslRuntimeHookInstallPlan } from './codex-wsl-hook-install-plan'
+import {
+  MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES,
+  _internals,
+  createCodexWslRuntimeHookInstallPlan
+} from './codex-wsl-hook-install-plan'
 
 const originalPlatform = process.platform
 
@@ -24,6 +28,26 @@ afterEach(() => {
 })
 
 describe('canonicalizeWslLinuxPath', () => {
+  it('bounds successful canonical path entries', () => {
+    setPlatform('win32')
+    execFileMock.mockImplementation(
+      (
+        _file: string,
+        _args: string[],
+        _options: unknown,
+        callback: (error: null, stdout: string) => void
+      ) => callback(null, '/home/canonical\n')
+    )
+
+    for (let index = 0; index < MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES + 4; index += 1) {
+      _internals.canonicalizeWslLinuxPath('Ubuntu', `/home/path-${index}`)
+    }
+
+    expect(_internals.getWslCanonicalPathCacheSizeForTests()).toBe(
+      MAX_WSL_CANONICAL_PATH_CACHE_ENTRIES
+    )
+  })
+
   it('joins guest paths without producing a double slash at the filesystem root', () => {
     const plan = createCodexWslRuntimeHookInstallPlan(
       'C:\\runtime',
@@ -52,7 +76,7 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(args).toEqual([
       '-d',
       'Ubuntu',
-      '--',
+      '--exec',
       'sh',
       '-c',
       `if [ ! -d "$1" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$1"`,
@@ -91,7 +115,7 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(args).toEqual([
       '-d',
       'Ubuntu',
-      '--',
+      '--exec',
       'sh',
       '-c',
       `resolved=$(wslpath -a -u "$1") || exit; if [ ! -d "$resolved" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$resolved"`,

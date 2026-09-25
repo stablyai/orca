@@ -64,14 +64,12 @@ function transport(
     getUpdaterStatus: vi.fn(async () => availableSnapshot),
     check: vi.fn(async () => availableSnapshot),
     download: vi.fn(async () => availableSnapshot),
-    install: vi.fn(
-      async (): Promise<RemoteServerUpdateInstallResult> => ({
-        accepted: true,
-        fromVersion: '1.4.0',
-        targetVersion: '1.5.0',
-        runtimeId: 'runtime-old'
-      })
-    ),
+    install: vi.fn(async (): Promise<RemoteServerUpdateInstallResult> => ({
+      accepted: true,
+      fromVersion: '1.4.0',
+      targetVersion: '1.5.0',
+      runtimeId: 'runtime-old'
+    })),
     wait: vi.fn(async (milliseconds) => {
       clock += milliseconds
     }),

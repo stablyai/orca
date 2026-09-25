@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createHookListenerState,
-  normalizeHookPayload,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener'
+import { markClaudeLeadTurnInterrupted } from './agent-hook-listener/providers/claude-roster-state'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import {
   CLAUDE_PREVIOUS_PROMPT_ID,
@@ -223,22 +224,23 @@ describe('shared agent-hook-listener', () => {
     expect(event).toBeNull()
   })
 
-  it('maps an identity-matched Claude manual compact lifecycle', () => {
+  it('maps a Claude manual compact lifecycle, ignoring the pre-validation event', () => {
     normalizeAndAccept(state, 'claude', {
       hook_event_name: 'UserPromptSubmit',
       prompt: 'work before compact',
       prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
       session_id: 'session-a'
     })
+    // Why: PreCompact fires before the compact is validated — an aborted compact emits it alone —
+    // so it is neither registered nor mapped. Only the completion may move the pane.
     const pre = normalizeAndAccept(state, 'claude', {
       hook_event_name: 'PreCompact',
       trigger: 'manual',
       prompt_id: CLAUDE_PROMPT_ID,
       session_id: 'session-a'
     })
-    expect(pre).not.toBeNull()
-    expect(pre!.payload.state).toBe('working')
-    expect(pre!.payload.agentType).toBe('claude')
+    expect(pre).toBeNull()
+    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
 
     const post = normalizeAndAccept(state, 'claude', {
       hook_event_name: 'PostCompact',
@@ -249,6 +251,7 @@ describe('shared agent-hook-listener', () => {
     expect(post).not.toBeNull()
     expect(post!.payload.state).toBe('done')
     expect(post!.payload.agentType).toBe('claude')
+    expect(post!.payload.sessionBoundary).toBe(true)
   })
 
   it('keeps the preceding user prompt on the completed compact row', () => {
@@ -256,12 +259,6 @@ describe('shared agent-hook-listener', () => {
       hook_event_name: 'UserPromptSubmit',
       prompt: 'work before compact',
       prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
-      session_id: 'session-a'
-    })
-    normalizeAndAccept(state, 'claude', {
-      hook_event_name: 'PreCompact',
-      trigger: 'manual',
-      prompt_id: CLAUDE_PROMPT_ID,
       session_id: 'session-a'
     })
     const post = normalizeAndAccept(state, 'claude', {
@@ -402,5 +399,114 @@ describe('shared agent-hook-listener', () => {
     expect(state.lastPromptByPaneKey.has(`${scopedPrefix}thread-0`)).toBe(false)
     expect(state.lastPromptByPaneKey.get(`${scopedPrefix}thread-39`)).toBe('prompt 39')
     expect(latestPrompt).toBe('prompt 39')
+  })
+})
+
+describe('the main agent verdict across a child-induced wait', () => {
+  let state: HookListenerState
+
+  beforeEach(() => {
+    state = createHookListenerState()
+  })
+
+  function claude(payload: Record<string, unknown>) {
+    return normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
+      ?.payload
+  }
+
+  it('restores the cancelled verdict when a child permission pause clears', () => {
+    claude({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+    claude({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
+    const cancelled = claude({ hook_event_name: 'Stop', is_interrupt: true })
+    expect(cancelled?.mainAgent).toEqual({
+      state: 'done',
+      outcome: 'cancellation',
+      stateStartedAt: expect.any(Number)
+    })
+    const settledAt = cancelled?.mainAgent?.stateStartedAt
+
+    const wait = claude({
+      hook_event_name: 'PermissionRequest',
+      agent_id: 'a1',
+      tool_name: 'Bash',
+      tool_input: { command: 'rm -rf build' }
+    })
+    // The child's wait is child work: the main agent is still the cancelled turn, on its own clock.
+    expect(wait).toMatchObject({
+      state: 'waiting',
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: settledAt }
+    })
+
+    // The child's pause displaced the main agent; clearing it must give the verdict and clock back.
+    const drained = claude({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+    expect(drained).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: settledAt }
+    })
+  })
+
+  it('publishes the displaced main agent, not the child, while a child owns the wait', () => {
+    claude({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+    const running = claude({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
+    const childWait = claude({
+      hook_event_name: 'PermissionRequest',
+      agent_id: 'a1',
+      tool_name: 'Bash',
+      tool_input: { command: 'rm -rf build' }
+    })
+    expect(childWait).toMatchObject({
+      state: 'waiting',
+      mainAgent: { state: 'working', stateStartedAt: running?.mainAgent?.stateStartedAt }
+    })
+
+    // A wait the main agent raised itself is its own state.
+    const ownWait = claude({
+      hook_event_name: 'PermissionRequest',
+      tool_name: 'Bash',
+      tool_input: { command: 'rm -rf dist' }
+    })
+    expect(ownWait).toMatchObject({ state: 'waiting', mainAgent: { state: 'waiting' } })
+  })
+
+  it('clears the verdict when a new turn starts', () => {
+    claude({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+    claude({ hook_event_name: 'StopFailure', error: 'invalid_request' })
+    expect(claude({ hook_event_name: 'UserPromptSubmit', prompt: 'again' })?.mainAgent).toEqual({
+      state: 'working',
+      stateStartedAt: expect.any(Number)
+    })
+  })
+})
+
+describe('the main agent verdict from an inferred interrupt', () => {
+  let state: HookListenerState
+
+  beforeEach(() => {
+    state = createHookListenerState()
+  })
+
+  function claude(payload: Record<string, unknown>) {
+    return normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
+      ?.payload
+  }
+
+  // Current Claude sends no hook on a cancel and no `is_interrupt` on Stop, so the cancellation
+  // enters the main agent record from Orca's inferred interrupt and rides into the next real Stop.
+  it('carries the inferred cancellation into the next plain Stop', () => {
+    claude({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+    markClaudeLeadTurnInterrupted(state, PANE_KEY)
+    expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toMatchObject({
+      state: 'done',
+      outcome: 'cancellation'
+    })
+    const settledAt = state.claudeLeadStateByPaneKey.get(PANE_KEY)?.stateStartedAt
+
+    const stop = claude({ hook_event_name: 'Stop' })
+    expect(stop).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: settledAt }
+    })
   })
 })

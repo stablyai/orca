@@ -13,6 +13,7 @@ export type WorkspaceCleanupDialogLifecycle = {
   mountedContent: boolean
   loading: boolean
   closeModal: () => void
+  /** Host-qualified row identities, not worktree ids (STA-4343). */
   selectedIds: Set<string>
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>
   removal: WorkspaceCleanupRemovalController
@@ -27,19 +28,22 @@ export function useWorkspaceCleanupDialogLifecycle(): WorkspaceCleanupDialogLife
   const open = activeModal === 'workspace-cleanup'
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
 
-  const deselectRemovedIds = useCallback((removedIds: readonly string[]) => {
-    if (removedIds.length === 0) {
+  const deselectRemovedIdentities = useCallback((removedIdentities: readonly string[]) => {
+    if (removedIdentities.length === 0) {
       return
     }
     setSelectedIds((current) => {
       const next = new Set(current)
-      for (const id of removedIds) {
-        next.delete(id)
+      for (const identity of removedIdentities) {
+        next.delete(identity)
       }
       return next
     })
   }, [])
-  const removal = useWorkspaceCleanupRemoval({ onDeselect: deselectRemovedIds, closeModal })
+  const removal = useWorkspaceCleanupRemoval({
+    onDeselect: deselectRemovedIdentities,
+    closeModal
+  })
   const { removalInFlightRef, resetForReopen, resetRowFailures } = removal
 
   const onFreshOpen = useCallback(() => {

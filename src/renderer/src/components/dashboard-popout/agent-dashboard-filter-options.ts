@@ -1,33 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import type { DashboardCard, DashboardFilterOption } from '../../../../shared/dashboard-snapshot'
 import type { DashboardReviewFilter } from './agent-board-filtering'
-import type { AgentMapState } from './agent-map-filter'
 
 /** Option rows and labels for the shared dashboard filter menu. */
 export type FilterOption = { id: string; label: string; count: number; color?: string }
-
-export const AGENT_STATE_ROWS: {
-  state: AgentMapState
-  dotState: 'waiting' | 'working' | 'done' | 'idle'
-}[] = [
-  { state: 'attention', dotState: 'waiting' },
-  { state: 'working', dotState: 'working' },
-  { state: 'done', dotState: 'done' },
-  { state: 'idle', dotState: 'idle' }
-]
-
-export function agentStateLabel(state: AgentMapState): string {
-  switch (state) {
-    case 'attention':
-      return translate('dashboardPopout.bucket.attention', 'Needs You')
-    case 'working':
-      return translate('dashboardPopout.bucket.working', 'Working')
-    case 'done':
-      return translate('dashboardPopout.bucket.done', 'Done')
-    case 'idle':
-      return translate('dashboardPopout.bucket.idle', 'Idle')
-  }
-}
 
 function countBy(
   cards: DashboardCard[],

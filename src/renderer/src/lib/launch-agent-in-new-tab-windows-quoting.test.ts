@@ -3,6 +3,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const mockIsWebRuntimeSessionActive = vi.fn(() => false)
+const mockCreateWebRuntimeAgentSessionTerminal = vi.fn()
+const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
@@ -102,13 +105,21 @@ vi.mock('@/lib/telemetry', () => ({
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: vi.fn(() => false),
+  isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive,
+  createWebRuntimeAgentSessionTerminal: mockCreateWebRuntimeAgentSessionTerminal,
+  createWebRuntimeAgentSessionTerminalWithLaunchDraft:
+    mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft,
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
 
 describe('launchAgentInNewTab Windows shell quoting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockIsWebRuntimeSessionActive.mockReturnValue(false)
+    mockCreateWebRuntimeAgentSessionTerminal.mockResolvedValue({
+      outcome: { status: 'created' },
+      promptDelivered: true
+    })
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
     store.settings = {
@@ -145,6 +156,29 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     store.ptyIdsByTabId = {}
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+  })
+
+  it('forces oversized Windows drafts through the paired-host paste fallback without submitting', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const prompt = 'x'.repeat(25_000)
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt,
+      promptDelivery: 'draft',
+      launchPlatform: 'win32'
+    })
+
+    expect(mockCreateWebRuntimeAgentSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promptAfterReady: prompt,
+        submitPrompt: false,
+        forcePromptPaste: true
+      })
+    )
+    expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).not.toHaveBeenCalled()
   })
 
   it('uses the explicit startup shell platform when building draft launch commands', async () => {
@@ -238,7 +272,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
+        command: `claude '--dangerously-skip-permissions' --prefill 'review Bob'"'"'s change'`
       })
     )
   })
@@ -293,7 +327,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
+        command: `claude '--dangerously-skip-permissions' --prefill 'review Bob'"'"'s change'`
       })
     )
   })
@@ -326,7 +360,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     const queued = mockQueueTabStartupCommand.mock.calls.at(-1)?.[1] as { command: string }
-    expect(queued.command).toContain("'don'\\''t'")
+    expect(queued.command).toContain(`'don'"'"'t'`)
     expect(queued.command).not.toContain("'don''t'")
   })
 })

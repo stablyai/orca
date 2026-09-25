@@ -10,8 +10,8 @@ import { toast } from 'sonner'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
-  /** Terminal-only opt-in for routing a runtime-owned source through its managed browser. */
-  allowRuntimeInApp?: boolean
+  /** Terminal-only opt-in for routing a remote-owned source through its managed browser. */
+  allowRemoteInApp?: boolean
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
@@ -47,14 +47,15 @@ type StoreAccessor = () => {
   workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
 }
 
-type RuntimeHttpLinkBrowserRequest = {
+type WorkspaceHttpLinkBrowserRequest = {
   workspaceId: string
   url: string
   intent: { kind: 'url' }
-  expectedRuntimeEnvironmentId: string
+  expectedRuntimeEnvironmentId?: string
+  expectedSshConnectionId?: string
 }
 
-type RuntimeHttpLinkBrowserOpener = (request: RuntimeHttpLinkBrowserRequest) => Promise<void>
+type WorkspaceHttpLinkBrowserOpener = (request: WorkspaceHttpLinkBrowserRequest) => Promise<void>
 
 type LocalhostLinkRepo = {
   id: string
@@ -74,16 +75,16 @@ type LocalhostLinkWorktree = {
 // the break, several renderer test files that load this module first see
 // `createEditorSlice` as undefined at store/index.ts initialization.
 let storeAccessor: StoreAccessor | null = null
-let runtimeHttpLinkBrowserOpener: RuntimeHttpLinkBrowserOpener | null = null
+let workspaceHttpLinkBrowserOpener: WorkspaceHttpLinkBrowserOpener | null = null
 
 export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
   storeAccessor = fn
 }
 
-export function registerRuntimeHttpLinkBrowserOpener(
-  fn: RuntimeHttpLinkBrowserOpener | null
+export function registerWorkspaceHttpLinkBrowserOpener(
+  fn: WorkspaceHttpLinkBrowserOpener | null
 ): void {
-  runtimeHttpLinkBrowserOpener = fn
+  workspaceHttpLinkBrowserOpener = fn
 }
 
 // Scope: http(s) URLs only. file: URIs and in-worktree markdown targets are
@@ -115,7 +116,7 @@ export function resolveModifierRouting(
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
   const {
     worktreeId,
-    allowRuntimeInApp,
+    allowRemoteInApp,
     forceSystemBrowser,
     forceInApp,
     modifierHeld,
@@ -126,7 +127,10 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
   }
   const state = storeAccessor?.()
   const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
-  const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
+  const effectiveSourceOwner = sourceOwner
+  const sourceIsLocal = effectiveSourceOwner
+    ? effectiveSourceOwner.kind === 'local'
+    : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
     Boolean(modifierHeld),
@@ -139,13 +143,24 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     Boolean(worktreeId) &&
     (forceInApp || openLinksInApp || modifier.wantsOrca)
 
-  if (wantsOrca && allowRuntimeInApp && worktreeId && sourceOwner?.kind === 'runtime') {
-    if (runtimeHttpLinkBrowserOpener) {
-      void runtimeHttpLinkBrowserOpener({
+  if (
+    wantsOrca &&
+    allowRemoteInApp &&
+    worktreeId &&
+    (effectiveSourceOwner?.kind === 'runtime' ||
+      effectiveSourceOwner?.kind === 'ssh' ||
+      (!effectiveSourceOwner && remoteRuntimeActive))
+  ) {
+    if (workspaceHttpLinkBrowserOpener) {
+      void workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
         url,
         intent: { kind: 'url' },
-        expectedRuntimeEnvironmentId: sourceOwner.runtimeEnvironmentId
+        ...(effectiveSourceOwner?.kind === 'runtime'
+          ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
+          : effectiveSourceOwner?.kind === 'ssh'
+            ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
+            : {})
       }).catch((error) => {
         toast.error(
           error instanceof Error

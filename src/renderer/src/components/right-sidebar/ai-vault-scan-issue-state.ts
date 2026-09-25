@@ -12,7 +12,9 @@ export function blockingAiVaultScanIssue(
 // Host and scope issues carry their own scanner-authored copy, so they get their
 // own rows instead of being counted as skipped transcripts — a partial scan
 // (one SSH host down, rest fine) must not report a connectivity failure as a
-// skipped transcript file.
+// skipped transcript file, and an unreadable *source* (a whole locked
+// opencode.db holding every OpenCode session) must not read as "1 transcript
+// skipped".
 export function aiVaultScanNoticeIssues(result: AiVaultListResult | null): AiVaultScanIssue[] {
   if (!result) {
     return []

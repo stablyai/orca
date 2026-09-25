@@ -73,7 +73,11 @@ async function removeWorktreeViaStore(
       return { ok: false as const, error: 'store unavailable' }
     }
 
-    const result = await store.getState().removeWorktree(id, true)
+    const state = store.getState()
+    const result = await state.removeWorktree(
+      { id, executionHostId: state.getKnownWorktreeById(id)?.hostId ?? null },
+      true
+    )
     return result
   }, worktreeId)
 }
@@ -101,7 +105,11 @@ test.describe('Worktree Lifecycle', () => {
     await orcaPage
       .evaluate(async (id) => {
         try {
-          await window.__store?.getState().removeWorktree(id, true)
+          const state = window.__store?.getState()
+          await state?.removeWorktree(
+            { id, executionHostId: state.getKnownWorktreeById(id)?.hostId ?? null },
+            true
+          )
         } catch {
           /* best-effort cleanup */
         }

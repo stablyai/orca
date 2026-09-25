@@ -7,6 +7,13 @@ import {
 } from '../../../src/shared/worktree/retired-name-cache'
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc-client'
+import { retiredWorktreeNamesRead } from './worktree-catalog-operations'
+
+export function buildRetiredWorktreeNamesRefreshKey(
+  existingWorktreePaths: readonly string[] | undefined
+): string {
+  return [...(existingWorktreePaths ?? [])].sort().join('\0')
+}
 
 /** Names already spent in a repo, including workspaces that have since been deleted.
  *
@@ -36,13 +43,16 @@ export function useRetiredWorktreeNames(
         setLoaded((previous) => retiredNamesAfterRefresh(previous, activeRepoId, registry))
       }
     }
-    void client
-      .sendRequest('worktree.listRetiredNames', { repo: `id:${activeRepoId}` })
-      .then((response) =>
+    void retiredWorktreeNamesRead
+      .request(client, { repo: `id:${activeRepoId}` })
+      .then((reply) => {
+        const names = retiredWorktreeNamesRead.interpret(reply)
+        // A refusal is not a failure here: it settles as an empty registry, which un-retires the
+        // repo's names until the next refresh. Preserved from main, not repaired.
         settle(
-          readRetiredNameRegistryForRepo((response as { result?: unknown }).result, activeRepoId)
+          readRetiredNameRegistryForRepo(names.accepted ? names.value : undefined, activeRepoId)
         )
-      )
+      })
       .catch(() => settle(null))
     return () => {
       cancelled = true

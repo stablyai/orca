@@ -3,16 +3,20 @@ import type { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 
+// Frozen at module scope: every run row formats a date, and constructing a
+// DateTimeFormat per cell dominates the render of a long runs table.
+const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit'
+})
+
 export function formatAutomationDateTime(value: number | null | undefined): string {
   if (!value) {
     return 'Never'
   }
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(value)
+  return automationDateTimeFormatter.format(value)
 }
 
 export function formatAutomationRelativeTime(
@@ -91,18 +95,23 @@ export function getAutomationRunStatusLabel(status: AutomationRun['status']): st
   }
 }
 
+export const AUTOMATION_EDITOR_SECTION_LABEL_CLASS =
+  'text-[11px] font-semibold uppercase tracking-[0.05em]'
+
 export function Field({
   label,
   children,
-  className
+  className,
+  labelClassName
 }: {
   label: React.ReactNode
   children: React.ReactNode
   className?: string
+  labelClassName?: string
 }): React.JSX.Element {
   return (
     <div className={cn('min-w-0 space-y-1.5', className)}>
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn('text-xs text-muted-foreground', labelClassName)}>{label}</div>
       {children}
     </div>
   )

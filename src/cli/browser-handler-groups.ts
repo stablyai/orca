@@ -4,6 +4,11 @@ import type { HandlerGroup } from './handler-group-manifest'
 // changes as a unit, so it keeps handler-group-manifest.ts readable at a glance.
 export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'browser-identity',
+    keys: ['browser identity get', 'browser identity set'],
+    load: async () => (await import('./handlers/browser-identity.js')).BROWSER_IDENTITY_HANDLERS
+  },
+  {
     name: 'browser-nav',
     keys: [
       'snapshot',
@@ -53,7 +58,16 @@ export const BROWSER_HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'browser-tab',
-    keys: ['tab list', 'tab show', 'tab current', 'tab switch', 'tab create', 'tab close', 'exec'],
+    keys: [
+      'open-url',
+      'tab list',
+      'tab show',
+      'tab current',
+      'tab switch',
+      'tab create',
+      'tab close',
+      'exec'
+    ],
     load: async () => (await import('./handlers/browser-tab.js')).BROWSER_TAB_HANDLERS
   },
   {

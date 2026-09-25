@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,6 +25,7 @@ function createMockSubprocess(): SubprocessHandle & {
     pause: vi.fn(),
     resume: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExit?.(0), 0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => setTimeout(() => onExit?.(137), 0)),
     signal: vi.fn(),
     onData(callback) {

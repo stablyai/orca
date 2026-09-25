@@ -11,6 +11,10 @@ import {
   makeProject,
   makeProjectHostSetup
 } from './persistence-test-harness'
+import {
+  getLocalWorktreeScanGeneration,
+  isLocalWorktreeScanGenerationCurrent
+} from './local-worktree-scan-generation'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -73,6 +77,25 @@ describe('Store', () => {
     expect(updated).not.toBeNull()
     expect(updated!.displayName).toBe('renamed')
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
+  })
+
+  it('invalidates local worktree scans across a git-folder-git update round trip', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'scan-round-trip', kind: 'git' }))
+
+    const initialGeneration = getLocalWorktreeScanGeneration('scan-round-trip')
+    expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', initialGeneration)).toBe(true)
+
+    const folder = store.updateRepo('scan-round-trip', { kind: 'folder' })
+    expect(folder?.kind).toBe('folder')
+    expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', initialGeneration)).toBe(false)
+
+    const folderGeneration = getLocalWorktreeScanGeneration('scan-round-trip')
+    expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', folderGeneration)).toBe(true)
+
+    const git = store.updateRepo('scan-round-trip', { kind: 'git' })
+    expect(git?.kind).toBe('git')
+    expect(isLocalWorktreeScanGenerationCurrent('scan-round-trip', folderGeneration)).toBe(false)
   })
 
   it('updateRepo targets one host when repo ids collide', async () => {
@@ -519,6 +542,23 @@ describe('Store', () => {
     store.flush()
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
+  })
+
+  it('updateRepo persists and clears ghAccount bindings', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      ghAccount: { host: ' GitHub.COM ', user: ' Alice ' }
+    })
+    expect(updated!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
+
+    const cleared = reloaded.updateRepo('r1', { ghAccount: null })
+    expect(cleared!.ghAccount).toBeUndefined()
   })
 
   it('updateRepo persists fork sync mode across reloads', async () => {

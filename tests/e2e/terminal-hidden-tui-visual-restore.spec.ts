@@ -2,6 +2,7 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { alternateScreenFixtureScript } from './alternate-screen-fixture-script'
 import { test, expect } from './helpers/orca-app'
 import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
@@ -87,7 +88,7 @@ function writeHiddenFrameScript(scriptPath: string, runId: string): void {
   mkdirSync(path.dirname(scriptPath), { recursive: true })
   writeFileSync(
     scriptPath,
-    `setTimeout(() => process.stdout.write(${JSON.stringify(frames.join(''))}), ${HIDDEN_FRAME_SCRIPT_DELAY_MS})\n`
+    alternateScreenFixtureScript(frames.join(''), HIDDEN_FRAME_SCRIPT_DELAY_MS)
   )
 }
 
@@ -246,59 +247,63 @@ test.describe('Hidden terminal TUI visual restore', () => {
     const scriptPath = path.join(testRepoPath, `.orca-hidden-tui-visual-${runId}.mjs`)
     writeHiddenFrameScript(scriptPath, runId)
     await resetHiddenDebug(orcaPage)
-    await writeHiddenFrames(orcaPage, hiddenPane.ptyId, scriptPath)
-    await resetHiddenDebug(orcaPage)
+    try {
+      await writeHiddenFrames(orcaPage, hiddenPane.ptyId, scriptPath)
+      await resetHiddenDebug(orcaPage)
 
-    // Why: hidden-delivery gate contract — the bulk TUI frames must be
-    // withheld in main (dropped after model ingestion), not delivered and
-    // skipped renderer-side.
-    await expect
-      .poll(() => readMainHiddenDeliveryDroppedChars(orcaPage), {
-        timeout: 10_000,
-        message: 'visually rich hidden TUI output was not withheld from the renderer'
-      })
-      .toBeGreaterThan(1024)
-    await expect
-      .poll(() => readMainSnapshotSource(orcaPage, hiddenPane.ptyId!), {
-        timeout: 10_000,
-        message: 'visually rich hidden TUI source did not come from headless model'
-      })
-      .toBe('headless')
+      // Why: hidden-delivery gate contract — the bulk TUI frames must be
+      // withheld in main (dropped after model ingestion), not delivered and
+      // skipped renderer-side.
+      await expect
+        .poll(() => readMainHiddenDeliveryDroppedChars(orcaPage), {
+          timeout: 10_000,
+          message: 'visually rich hidden TUI output was not withheld from the renderer'
+        })
+        .toBeGreaterThan(1024)
+      await expect
+        .poll(() => readMainSnapshotSource(orcaPage, hiddenPane.ptyId!), {
+          timeout: 10_000,
+          message: 'visually rich hidden TUI source did not come from headless model'
+        })
+        .toBe('headless')
 
-    await switchToWorktree(orcaPage, secondWorktreeId)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+      await switchToWorktree(orcaPage, secondWorktreeId)
+      await ensureTerminalVisible(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
 
-    await expect
-      .poll(() => getTerminalContent(orcaPage, 12_000), {
-        timeout: 10_000,
-        message: 'hidden TUI final frame did not restore when the workspace became visible'
-      })
-      .toContain(finalMarker)
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 12_000), {
+          timeout: 10_000,
+          message: 'hidden TUI final frame did not restore when the workspace became visible'
+        })
+        .toContain(finalMarker)
 
-    const content = await getTerminalContent(orcaPage, 12_000)
-    expect(content).toContain(`Frame 024`)
-    expect(content).toContain('╭')
-    expect(content).toContain('├')
-    expect(content).toContain('█')
-    expect(content).not.toContain('Orca skipped hidden terminal output')
-    await expect
-      .poll(() => readTuiCursorState(orcaPage), {
-        timeout: 5_000,
-        message: 'restored TUI cursor stayed hidden after final frame'
-      })
-      .toMatchObject({
-        hidden: false,
-        initialized: true
-      })
+      const content = await getTerminalContent(orcaPage, 12_000)
+      expect(content).toContain(`Frame 024`)
+      expect(content).toContain('╭')
+      expect(content).toContain('├')
+      expect(content).toContain('█')
+      expect(content).not.toContain('Orca skipped hidden terminal output')
+      await expect
+        .poll(() => readTuiCursorState(orcaPage), {
+          timeout: 5_000,
+          message: 'restored TUI cursor stayed hidden after final frame'
+        })
+        .toMatchObject({
+          hidden: false,
+          initialized: true
+        })
 
-    const screenshotPath = testInfo.outputPath('hidden-tui-restore-final.png')
-    await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
-    await testInfo.attach('hidden-tui-restore-final.png', {
-      path: screenshotPath,
-      contentType: 'image/png'
-    })
-    rmSync(scriptPath, { force: true })
+      const screenshotPath = testInfo.outputPath('hidden-tui-restore-final.png')
+      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+      await testInfo.attach('hidden-tui-restore-final.png', {
+        path: screenshotPath,
+        contentType: 'image/png'
+      })
+    } finally {
+      await sendToTerminal(orcaPage, hiddenPane.ptyId, '\x03').catch(() => undefined)
+      rmSync(scriptPath, { force: true })
+    }
   })
 
   test('keeps newer live output correct after plain hidden output restores', async ({
@@ -480,6 +485,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
         contentType: 'image/png'
       })
     } finally {
+      await sendToTerminal(orcaPage, hiddenPane.ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })
     }
   })

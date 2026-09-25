@@ -1,126 +1,34 @@
-import { basename } from 'node:path'
-import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
-import { createInterface } from 'node:readline'
-import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
-import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
+import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import {
-  canonicalizePath,
   getLegacySourceSkipBytesByPath,
   listCodexSessionFiles,
   yieldToEventLoop
 } from './codex-session-file-discovery'
-import {
-  attributeCodexUsageEvent,
-  type CodexUsageWorktreeRef
-} from './codex-usage-event-attribution'
-import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
+import type { CodexUsageWorktreeRef } from './codex-usage-event-attribution'
+import { codexUsageAggregation } from './codex-usage-aggregation'
+import { getProcessedFileInfo, parseCodexUsageFile } from './codex-rollout-file-parse'
+import { resolveCodexRolloutResume } from './codex-rollout-resume-state'
 import type {
-  CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
+  CodexUsageParseResumeState,
   CodexUsagePersistedFile,
-  CodexUsageProcessedFile,
   CodexUsageSession
 } from './types'
 
 const YIELD_EVERY_FILES = 10
 
-export async function getProcessedFileInfo(filePath: string): Promise<CodexUsageProcessedFile> {
-  const fileStat = await stat(filePath)
-  return {
-    path: filePath,
-    mtimeMs: fileStat.mtimeMs,
-    size: fileStat.size
-  }
-}
-
-async function buildWorktreesWithCanonicalPaths(
-  worktrees: CodexUsageWorktreeRef[]
-): Promise<(CodexUsageWorktreeRef & { canonicalPath: string })[]> {
-  return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
-}
-
-type CodexUsageMetric = { hasInferredPricing: boolean }
-
-const codexUsageAggregation = createUsageEventAggregation<
-  CodexUsageAttributedEvent,
-  CodexUsageMetric
->({
-  metric: {
-    empty: () => ({ hasInferredPricing: false }),
-    fromEvent: (event) => ({ hasInferredPricing: event.hasInferredPricing }),
-    fold: (target, source) => {
-      target.hasInferredPricing ||= source.hasInferredPricing
-    }
-  },
-  cloneSessionForMerge: (session) => ({
-    ...session,
-    locationBreakdown: session.locationBreakdown.map((entry) => ({ ...entry })),
-    modelBreakdown: session.modelBreakdown.map((entry) => ({ ...entry })),
-    locationModelBreakdown: session.locationModelBreakdown.map((entry) => ({ ...entry }))
-  })
-})
-
 const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregates } =
   codexUsageAggregation
 
-export async function parseCodexUsageFile(
-  filePath: string,
-  worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[],
-  options: { skipInitialBytes?: number; claimEventKey?: (eventKey: string) => boolean } = {}
-): Promise<CodexUsagePersistedFile> {
-  const processedFile = await getProcessedFileInfo(filePath)
-  const lines = createInterface({
-    input: createReadStream(filePath, {
-      encoding: 'utf-8',
-      start: options.skipInitialBytes ?? 0
-    }),
-    crlfDelay: Infinity
-  })
-  const events: CodexUsageAttributedEvent[] = []
-  const context: CodexUsageParseContext = {
-    sessionId: basename(filePath, '.jsonl'),
-    sessionCwd: null,
-    currentCwd: null,
-    currentModel: null,
-    previousTotals: null,
-    // Why: suffix-only legacy copy parsing lacks the copied prefix context. A
-    // leading total-only snapshot is a baseline, not the suffix's billable delta.
-    totalOnlyBaselinePending: (options.skipInitialBytes ?? 0) > 0
-  }
-
-  const ownedEventKeys = new Set<string>()
-  let hasDeferredClaims = false
-  for await (const line of lines) {
-    const parsed = parseCodexUsageRecord(line, context)
-    if (!parsed) {
-      continue
-    }
-    // Why: fork/resume rollouts start with a copied prefix of the parent file.
-    // Events another file already owns are dropped here, but the record still
-    // advanced context.previousTotals above, so later deltas stay correct.
-    if (options.claimEventKey && !options.claimEventKey(parsed.eventKey)) {
-      hasDeferredClaims = true
-      continue
-    }
-    ownedEventKeys.add(parsed.eventKey)
-    const attributed = await attributeCodexUsageEvent(parsed, worktrees)
-    if (attributed) {
-      events.push(attributed)
-    }
-  }
-
-  return {
-    ...processedFile,
-    ...codexUsageAggregation.aggregate(events),
-    ownedEventKeys: [...ownedEventKeys],
-    hasDeferredClaims
-  }
+type CodexRolloutResumePlan = {
+  state: CodexUsageParseResumeState
+  previous: CodexUsagePersistedFile
 }
 
 export async function scanCodexUsageFiles(
   worktrees: CodexUsageWorktreeRef[],
-  previousProcessedFiles: CodexUsagePersistedFile[]
+  previousProcessedFiles: CodexUsagePersistedFile[],
+  onFilesScanned?: (count: number) => void
 ): Promise<{
   processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
@@ -128,7 +36,8 @@ export async function scanCodexUsageFiles(
 }> {
   const files = await listCodexSessionFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
-  const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
+  // Why: one resolver for the whole scan so every file shares the per-cwd memo.
+  const resolveWorktree = await createUsageWorktreeResolver(worktrees)
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
 
   const currentPaths = new Set(files)
@@ -144,6 +53,7 @@ export async function scanCodexUsageFiles(
   )
 
   const reusedByPath = new Map<string, CodexUsagePersistedFile>()
+  const resumeByPath = new Map<string, CodexRolloutResumePlan>()
   const pathsToParse: string[] = []
   for (const [index, filePath] of files.entries()) {
     const legacySourceSkipBytes = legacySourceSkipBytesByPath.get(filePath) ?? 0
@@ -162,8 +72,18 @@ export async function scanCodexUsageFiles(
     if (canReuse) {
       reusedByPath.set(filePath, previous)
     } else {
+      // Why: rollouts are append-only and grow all day, so re-reading each one
+      // from byte 0 dominated scans (#20940). A reclaim or a legacy suffix
+      // offset still needs the whole file, so neither may resume.
+      if (!mustReclaimDeferred && legacySourceSkipBytes === 0 && previous) {
+        const state = await resolveCodexRolloutResume(filePath, previous)
+        if (state) {
+          resumeByPath.set(filePath, { state, previous })
+        }
+      }
       pathsToParse.push(filePath)
     }
+    onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
       await yieldToEventLoop()
     }
@@ -172,13 +92,14 @@ export async function scanCodexUsageFiles(
   // Why: resuming or forking a Codex session copies the parent rollout's
   // token_count records into a new file, so per-file parsing re-counts the
   // whole copied history once per descendant (#8006). Cross-file ownership
-  // counts each record for exactly one file; cached files keep the claims
-  // they persisted, and new files claim in sorted-path order so rescans stay
-  // deterministic.
+  // counts each record for exactly one file; cached and resumed files keep the
+  // claims they persisted, and the rest claim in sorted-path order so rescans
+  // stay deterministic.
   const eventOwnerByKey = new Map<string, string>()
-  for (const [filePath, previous] of reusedByPath) {
-    for (const eventKey of previous.ownedEventKeys) {
-      // First cached claim wins so conflicting projections stay deterministic.
+  for (const filePath of files) {
+    const retained = reusedByPath.get(filePath) ?? resumeByPath.get(filePath)?.previous
+    for (const eventKey of retained?.ownedEventKeys ?? []) {
+      // First retained claim wins so conflicting projections stay deterministic.
       if (!eventOwnerByKey.has(eventKey)) {
         eventOwnerByKey.set(eventKey, filePath)
       }
@@ -187,8 +108,9 @@ export async function scanCodexUsageFiles(
 
   const parsedByPath = new Map<string, CodexUsagePersistedFile>()
   for (const [index, filePath] of pathsToParse.entries()) {
-    const processed = await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths, {
-      skipInitialBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
+    const processed = await parseCodexUsageFile(filePath, resolveWorktree, {
+      legacySourceSkipBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
+      resume: resumeByPath.get(filePath),
       claimEventKey: (eventKey) => {
         const owner = eventOwnerByKey.get(eventKey)
         if (owner !== undefined && owner !== filePath) {
@@ -203,6 +125,7 @@ export async function scanCodexUsageFiles(
     // Why: Codex session history can grow large, and scans run on the Electron
     // main process. Yield regularly so opening Settings does not stall while
     // a background refresh walks old JSONL files.
+    onFilesScanned?.(1)
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
       await yieldToEventLoop()
     }

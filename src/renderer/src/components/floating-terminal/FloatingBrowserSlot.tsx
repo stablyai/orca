@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import BrowserPane from '@/components/browser-pane/BrowserPane'
-import { registerBrowserOverlaySlotViewport } from '@/components/browser-pane/browser-page-viewport'
+import { registerBrowserOverlaySlotViewport } from '@/components/browser-pane/host-guest/browser-page-viewport'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 
 // Why: BrowserPane mounts its persistent Electron <webview> into a slot viewport
@@ -25,9 +25,17 @@ export function FloatingBrowserSlot({
   )
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      data-browser-overlay-tab-id={browserTab.id}
+    >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
-      <BrowserPane browserTab={browserTab} isActive={isActive} />
+      <BrowserPane
+        browserTab={browserTab}
+        isActive={isActive}
+        // Why: floating chrome chords must not also fire the focused split's browser, nor it ours.
+        chromeShortcutScope={isActive ? 'owned-target' : 'inactive'}
+      />
     </div>
   )
 }

@@ -23,6 +23,10 @@ export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x
 // Why: the normal-buffer fallback can follow a dead TUI, so its stale pen and saved pen must not reach the surviving shell.
 export const POST_REPLAY_REATTACH_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l${SAVE_GROUNDED_CURSOR}`
 
+// Why: a foreground shell proves an alternate-screen owner died without its
+// ?1049l cleanup; leave the renderer on the shell's normal buffer as well.
+export const POST_REPLAY_DEAD_TUI_RESET = `\x1b[?1049l${POST_REPLAY_REATTACH_RESET}`
+
 // Why: an alt-screen reattach replays the daemon's rehydrateSequences, which re-arm the live TUI's
 // mouse modes; wiping them one write later hands drags back to xterm's row selection (#8291).
 // Normal-buffer panes keep RESET_MOUSE_REPORTING so a dead TUI's stale modes never reach a shell (#7893).
@@ -34,14 +38,36 @@ export const POST_REPLAY_LIVE_AGENT_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_ST
 // Why: a live agent owns cursor/focus here; forcing ?25h/?1004l breaks a parked agent that only arms ?1004h at startup.
 export const POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET = RESET_TERMINAL_CURSOR_STYLE
 
-/** Dead-TUI bytes feed a fresh shell; clear their pen and mouse modes before re-serialization. */
-export const COLD_RESTORE_SEED_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_MOUSE_REPORTING}`
-
 // CAN, not a bare ESC: xterm dispatches OSC/DCS/APC with
 // `success = code !== 0x18 && code !== 0x1a`, so ESC grounds the parser but
 // COMMITS what the gap truncated — a half-read OSC 0 retitles the pane, OSC 52
 // writes the clipboard.
 export const ABORT_TRUNCATED_CONTROL_STRING = '\x18'
+
+// Why the DECSC first: xterm's `?1049l` runs restoreCursor() even on the normal
+// buffer, so saving in place keeps the cursor put there; on the alt buffer the
+// save lands in the alt register and `?1049l` restores the shell's position.
+const LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR = `${SAVE_GROUNDED_CURSOR}\x1b[?1049l`
+// UTF-8 and urxvt encodings RESET_MOUSE_REPORTING leaves out; xterm ignores them, other hosts may not.
+const RESET_LEGACY_MOUSE_ENCODINGS = '\x1b[?1005l\x1b[?1015l'
+const RESET_FOCUS_REPORTING = '\x1b[?1004l'
+const RESET_BRACKETED_PASTE = '\x1b[?2004l'
+const RESET_APPLICATION_CURSOR_AND_KEYPAD = '\x1b[?1l\x1b[?66l'
+const SHOW_CURSOR = '\x1b[?25h'
+
+/**
+ * The one "the process that armed these modes is gone" reset, for every boundary
+ * the daemon or main knows (cold-restore seed) or proves (recovery barrier). It must stay
+ * inert for ownership: no OSC 133 and no enables the lifecycle scanner treats as a new owner.
+ * Kitty is reset on both sides of `?1049l` because kitty stacks are per screen.
+ * `keepFocusReporting`: the terminal host (ConPTY) armed `?1004h` for the pane's life.
+ */
+export function buildProcessBoundaryGround(opts: { keepFocusReporting: boolean }): string {
+  const focus = opts.keepFocusReporting ? '' : RESET_FOCUS_REPORTING
+  return `${RESET_KITTY_KEYBOARD_PROTOCOL}${LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR}${RESET_MOUSE_REPORTING}${RESET_LEGACY_MOUSE_ENCODINGS}${focus}${RESET_BRACKETED_PASTE}${RESET_APPLICATION_CURSOR_AND_KEYPAD}${SHOW_CURSOR}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_GRAPHIC_RENDITION}${SAVE_GROUNDED_CURSOR}`
+}
+
+export const PROCESS_BOUNDARY_GROUND = buildProcessBoundaryGround({ keepFocusReporting: false })
 
 // Live-stream grounding: the drop marker and the abandon paths, which drain
 // queued chunks instead of repainting. Parser + pen only — a live TUI keeps

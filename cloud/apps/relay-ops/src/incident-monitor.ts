@@ -1,0 +1,1061 @@
+import type { RelayOpsRegion } from './environment-config.js'
+import {
+  exactAdmissionSelector,
+  type AdmissionSelector,
+  type AdmissionState
+} from './incident-selector.js'
+
+export const INCIDENT_MONITOR_THRESHOLDS = {
+  activeProbeMaxAgeMs: 60_000,
+  // Why: Cloud Monitoring publishes on Google's clock, not ours. Per the metric
+  // list read 2026-09-05, Cloud Run instance_count / cpu / memory /
+  // max_request_concurrencies / request_count are "Sampled every 60 seconds.
+  // After sampling, data is not visible for up to 120 seconds" (60+120=180 s),
+  // and Cloud SQL cpu / memory / num_backends / backends_in_wait /
+  // deadlock_count say "up to 165 seconds" (60+165=225 s). Window-sum signals
+  // age differently: observedAt is the newest point in the 5-minute query
+  // window, so a label series that stops emitting reads as 300 s old while its
+  // summed value is still complete. 330 s clears the worst of the three (the
+  // 300 s query window) plus ~30 s of collect-to-evaluate latency. The old
+  // 180 s bar restarted healthy 15-minute windows at 181 s, 189 s and 255 s on
+  // 2026-09-04/05, once burning the whole 25-minute lineage with no verdict.
+  cloudDataMaxAgeMs: 330_000,
+  // Why: the director admin API answers live on our own request, so hold its
+  // freshness bar where it sat while it shared cloudDataMaxAgeMs.
+  directorAdminMaxAgeMs: 180_000,
+  // Why: how long a nonzero backends-in-wait point is carried before it reads as
+  // zero. Held at the pre-2026-09-05 cloud bar: carrying it for the full
+  // cloudDataMaxAgeMs would hand the evaluator a point older than its own
+  // freshness bar as soon as collection latency is added.
+  cloudLockWaitCarryMs: 180_000,
+  relayLogMaxAgeMs: 180_000,
+  heartbeatMaxAgeMs: 45_000,
+  endpointLatencyMs: 2_000,
+  // Why: a cell's /ready fetches the auth JWKS and runs SELECT 1 against Cloud SQL,
+  // both in us-central1, so from the US runner asia-east2 cells measure p50 0.88 s /
+  // max 2.7 s against 0.08-0.5 s for us-central1. The flat 2 000 bar froze three
+  // healthy 15-minute gates on 2026-09-05 (c27 at 2568/2668/2685 ms); hard faults
+  // are still caught by the .health/.ready equal-1 checks and the 8 s fetch timeout.
+  cellEndpointLatencyMs: {
+    'us-central1': 2_000,
+    'asia-east2': 4_000
+  } as const satisfies Record<RelayOpsRegion, number>,
+  cloudSqlCpuUtilization: 0.8,
+  cloudSqlMemoryUtilization: 0.9,
+  // Why: 320, recalibrated 2026-09-17 from 250. The auth instance sums seven
+  // databases, and its steady load has grown past the 2026-08-26 measurement the
+  // old bar came from. Measured latest-sum over the 24 h to 2026-09-17, aligned
+  // per minute exactly as this signal reads it: p50 118 / p90 165 / p95 212 /
+  // p99 262 / max 282. 250 was under the observed max, so 1.95% of minutes and
+  // 21.8% of 15-minute pre-drain gates froze on ordinary load. 320 clears every
+  // measured healthy minute with 13% of headroom above the peak and still fires
+  // at 65% of the 490 connections the budget work (#21165) treats as usable out
+  // of max_connections 500, so exhaustion-class growth is caught with 170
+  // connections still in hand. The retry signals below discriminate incident-class
+  // contention. Re-tighten when the auth connection model lands (#21165).
+  cloudSqlBackends: 320,
+  // Bound the observed recovery load; deadlocks remain zero-tolerance.
+  cloudSqlLockWaits: 20,
+  cloudSqlDeadlocks: 0,
+  // Why: pool amplitude cannot discriminate the 2026-08-23 incident. Healthy
+  // fleet-wide bursts reach 43 waiters / 2.03s waits several times an hour,
+  // and a cell roll's reconnect surge peaks at 676 waiters, while the real
+  // incident peaked at 356 waiters and never crossed 2.5s (waits cap ~2s
+  // structurally). The old bars of 30/1000 froze pre-drain gates on baseline
+  // noise (~17% per 15-minute window). Incident-class contention is caught by
+  // the retry signals below at ~10x separation; these bars now fence only
+  // genuinely unbounded queueing, which grows past both.
+  relayPoolWaiting: 800,
+  relayPoolWaitMs: 2_500,
+  // Why: successful lock retries are the contention machinery working, not harm.
+  // Recalibrated 2026-09-04 from 300, which was set 2026-08-26 when healthy bursts
+  // reached 234/5min. The global relay_cells FOR UPDATE lock has since become the
+  // fleet's steady state: measured fleet-wide (director + cells, summed per five
+  // minutes) 2026-09-03T05Z..2026-09-04T05Z p50 430 / p90 924 / p99 1320 / max
+  // 1504, with 55% of windows over 300 and only 22% of 15-minute gates clean, so
+  // the bar blocked the very cell roll that carries the 500 ms lock wait (#18521)
+  // and the beginProof crash guard to the cells. The 2026-08-23 lock incident on
+  // this same metric peaked at 1510 in one window and 646 in the next, so it is
+  // not separable from today's contention by retries alone; it is caught by
+  // relayPostgresRetryExhausted (467 at the peak vs a 300 bar), director
+  // concurrency, and the pool bars. 2000 passes every healthy 15-minute window
+  // measured in the last 24 h and still fences unbounded growth. Re-tighten once
+  // the fleet is on the 500 ms lock wait and the baseline is re-measured.
+  relayPostgresRetries: 2000,
+  // Why: 300 per five minutes, recalibrated 2026-09-04 from a bar of zero that no
+  // production window has cleared since #18521 shipped to the director. That
+  // change cut the request-path cell-inventory wait from the 1 s pool lock_timeout
+  // to 500 ms, so a contended waiter now fails fast (one /v1/assign 503 with
+  // Retry-After, which the client retries) instead of succeeding slowly, and the
+  // exhaustion count became a steady-state contention rate rather than an
+  // anomaly. Measured fleet-wide (director + cells) per five minutes over
+  // 2026-09-03T03Z..2026-09-04T02Z: every one of 236 windows was non-zero;
+  // quiet hours p50 2 / max 36; pre-#18521 daytime p50 10 / p90 25 / max 87;
+  // post-#18521 p50 42 / p90 147 / max 220. The 2026-08-23 lock incident peaked
+  // at 467. 300 clears every measured healthy window and still sits below the
+  // incident shape; retries above fence only unbounded growth.
+  // User-facing /v1/assign 503 share did not move with #18521 (13.9% old image
+  // vs 12.3% new, same evening), so exhaustion is not a proxy for user harm.
+  relayPostgresRetryExhausted: 300,
+  // Why: public admission is a per-instance semaphore, so fleet assignment capacity is
+  // concurrency x instances. A floor of 1 let the 2026-08-04 collapse from five instances
+  // to two pass unnoticed, which is the exact failure this monitor exists to catch. Keep in
+  // step with relay_min_instances in infra/terraform/environments/production.tfvars.
+  directorInstancesMin: 5,
+  // Five serving instances plus one warm scale-to-zero rollback during recovery.
+  directorInstancesMax: 6,
+  directorCpuUtilization: 0.8,
+  directorMemoryUtilization: 0.8,
+  directorConcurrency: 64,
+  // Why: 15, recalibrated 2026-09-17 from 3. This counts non-503 5xx answers from
+  // the director over the rolling five-minute query window; 503s are excluded
+  // because they are the documented back-pressure answer a client retries.
+  // Measured over the 24 h to 2026-09-17 (272 non-503 5xx against 71 941 503s):
+  // p50 0 / p90 3 / p95 5 / p99 9 / max 52. A bar of 3 sits at the p90, so 9.2%
+  // of windows and 29.0% of 15-minute pre-drain gates froze on the chronic 500
+  // bursts that /v1/assign, /v1/regions and /v1/resolve emit alongside the
+  // recurring Cloud SQL stall. 15 clears the chronic p99 with margin and drops
+  // the baseline gate-freeze rate to 1.5%, while leaving the exceptional 20-52
+  // bursts detectable. A director that is actually broken answers 5xx on a large
+  // share of its traffic: it serves ~50 requests a minute in 503s alone, so a
+  // real fault lands in the hundreds per window, an order of magnitude clear of
+  // this bar.
+  directorErrors: 15,
+  authErrors: 0,
+  // Why: 800 exceeded the 600 hard cap, so this could never trigger on a capped cell. 500 is
+  // the ordinary admission limit a cell actually stops at (600 cap - 100 control-rebind reserve).
+  cellConnections: 500,
+  cellQueuedBytes: 48 * 1024 * 1024,
+  migrationBlocked: 0,
+  // Why: one sample is one HTTP round trip from one GitHub runner to one cell, so
+  // a single bad reading is evidence about that round trip, not about the fleet.
+  // The asia-east2 cells' readiness probe runs SELECT 1 against Cloud SQL in
+  // us-central1 over a 176 ms round trip behind a 2 s statement timeout, so a
+  // saturated pool makes the load balancer answer "no healthy upstream" for about
+  // 30 s. That answer is an HTTP 503, not a transport failure, so provenance
+  // cannot separate it from a cell that genuinely serves health=0 -- persistence
+  // can. At the 60 s sample interval a 30 s outage shows up in one sample and at
+  // worst two, so a cell's probe must fail more than this many consecutive samples
+  // before it freezes the run. The streak is per cell, not per signal, so a cell
+  // that alternates between slow and unanswered still accumulates one. This applies
+  // to per-cell probes and the director instance count; the director and auth health
+  // probes stay at zero tolerance.
+  cellProbeToleranceSamples: 2
+} as const
+
+export const INCIDENT_CHECKPOINT_MINUTES = [0, 5, 15, 30, 45, 60, 75, 90] as const
+// Why: 35 minutes, raised 2026-09-17 from 25. A 15-minute window plus one
+// restart must fit: a continuity reset on the window's last sample restarts at
+// minute 16 and finishes at 31. Under 25 a reset past minute 9 cost the whole
+// verdict, which is what run 35258662628 hit on a healthy fleet.
+export const INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS = 35 * 60_000
+
+export type IncidentSourceName =
+  | 'active-probe'
+  | 'cloud-monitoring'
+  | 'relay-logs'
+  | 'director-admin'
+
+export type IncidentMigrationPolicy =
+  | 'strict'
+  | 'recover-forward'
+  | 'capacity-transition'
+
+export type IncidentSignal = {
+  value: number
+  observedAt: string
+}
+
+export type IncidentSource = {
+  observedAt: string
+  signals: Record<string, IncidentSignal>
+}
+
+export type IncidentCellExpectation = {
+  cellId: string
+  region: RelayOpsRegion
+  runtimeKnown: boolean
+  powered: boolean
+  expectedAdmissionState: AdmissionState
+}
+
+export type IncidentSample = {
+  collectedAt: string
+  selector: AdmissionSelector
+  expectedSelector: AdmissionSelector
+  sources: Partial<Record<IncidentSourceName, IncidentSource>>
+  cells: IncidentCellExpectation[]
+}
+
+export type IncidentFailure = {
+  code: string
+  source: IncidentSourceName
+  signal?: string
+  observed?: number
+  threshold?: number
+}
+
+export type IncidentEvaluation = {
+  status: 'green' | 'freeze'
+  evaluatedAt: string
+  failures: IncidentFailure[]
+}
+
+export type IncidentCheckpoint = {
+  schemaVersion: 4
+  incidentId: string
+  environment: 'production' | 'staging'
+  expectedSelector: AdmissionSelector
+  preDrainDryRun: boolean
+  migrationPolicy: IncidentMigrationPolicy
+  recoverySourceCellId: string | null
+  capacityCellId: string | null
+  windowSequence: number
+  windowStartedAt: string
+  checkpointMinute: number
+  scheduledAt: string
+  recordedAt: string
+  status: 'green' | 'freeze'
+  frozenAt: string | null
+  sampleCount: number
+  failures: IncidentFailure[]
+  thresholds: typeof INCIDENT_MONITOR_THRESHOLDS
+}
+
+export type IncidentMonitorState = {
+  schemaVersion: 4
+  incidentId: string
+  environment: 'production' | 'staging'
+  expectedSelector: AdmissionSelector
+  preDrainDryRun: boolean
+  migrationPolicy: IncidentMigrationPolicy
+  recoverySourceCellId: string | null
+  capacityCellId: string | null
+  startedAt: string
+  windowStartedAt: string | null
+  windowSequence: number
+  durationMinutes: number
+  intervalMs: number
+  nextCheckpointIndex: number
+  sampleCount: number
+  totalSampleCount: number
+  lastSampleAt: string | null
+  continuityEvents: {
+    recordedAt: string
+    windowSequence: number
+    tolerated: boolean
+    failures: IncidentFailure[]
+  }[]
+  frozenAt: string | null
+  failures: IncidentFailure[]
+  // Consecutive samples each tolerated reading has currently been failing for,
+  // keyed by cell so its health, ready and latency readings share one streak, and
+  // by signal for the director instance count.
+  probeStreaks: Record<string, number>
+  // Cell-probe breaches absorbed by the tolerance, kept so a green artifact still
+  // shows what the gate chose not to freeze on.
+  toleratedProbeEvents: {
+    recordedAt: string
+    windowSequence: number
+    failures: IncidentFailure[]
+  }[]
+  completedAt: string | null
+}
+
+type NumericRule = {
+  source: IncidentSourceName
+  signal: string
+  comparison: 'max' | 'min' | 'equal'
+  threshold: number
+}
+
+const NUMERIC_RULES: NumericRule[] = [
+  { source: 'active-probe', signal: 'director.health', comparison: 'equal', threshold: 1 },
+  { source: 'active-probe', signal: 'director.ready', comparison: 'equal', threshold: 1 },
+  {
+    source: 'active-probe',
+    signal: 'director.latency_ms',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs
+  },
+  { source: 'active-probe', signal: 'auth.health', comparison: 'equal', threshold: 1 },
+  {
+    source: 'active-probe',
+    signal: 'auth.latency_ms',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'cloud_sql.cpu',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.cloudSqlCpuUtilization
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'cloud_sql.memory',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.cloudSqlMemoryUtilization
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'cloud_sql.backends',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.cloudSqlBackends
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'director.instances',
+    comparison: 'min',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.directorInstancesMin
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'director.instances',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.directorInstancesMax
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'director.cpu',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.directorCpuUtilization
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'director.memory',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.directorMemoryUtilization
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'director.concurrency',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.directorConcurrency
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'director.errors',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.directorErrors
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'auth.errors',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.authErrors
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'cloud_sql.lock_waits',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.cloudSqlLockWaits
+  },
+  {
+    source: 'cloud-monitoring',
+    signal: 'cloud_sql.deadlocks',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.cloudSqlDeadlocks
+  },
+  {
+    source: 'relay-logs',
+    signal: 'relay.pool_waiting',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.relayPoolWaiting
+  },
+  {
+    source: 'relay-logs',
+    signal: 'relay.pool_wait_ms',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.relayPoolWaitMs
+  },
+  {
+    source: 'relay-logs',
+    signal: 'relay.postgres_retries',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.relayPostgresRetries
+  },
+  {
+    source: 'relay-logs',
+    signal: 'relay.postgres_retry_exhausted',
+    comparison: 'max',
+    threshold: INCIDENT_MONITOR_THRESHOLDS.relayPostgresRetryExhausted
+  }
+]
+
+const SOURCE_MAX_AGE: Record<IncidentSourceName, number> = {
+  'active-probe': INCIDENT_MONITOR_THRESHOLDS.activeProbeMaxAgeMs,
+  'cloud-monitoring': INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs,
+  'relay-logs': INCIDENT_MONITOR_THRESHOLDS.relayLogMaxAgeMs,
+  'director-admin': INCIDENT_MONITOR_THRESHOLDS.directorAdminMaxAgeMs
+}
+
+function ageMs(timestamp: string, nowMs: number): number {
+  const parsed = Date.parse(timestamp)
+  return Number.isFinite(parsed) ? nowMs - parsed : Number.POSITIVE_INFINITY
+}
+
+function addMissingSignal(
+  failures: IncidentFailure[],
+  source: IncidentSourceName,
+  signal: string
+): void {
+  failures.push({ code: 'signal_missing', source, signal })
+}
+
+function checkRule(
+  failures: IncidentFailure[],
+  source: IncidentSourceName,
+  signals: Record<string, IncidentSignal>,
+  rule: NumericRule
+): void {
+  const signal = signals[rule.signal]
+  if (!signal) return addMissingSignal(failures, source, rule.signal)
+  const failed =
+    (rule.comparison === 'max' && signal.value > rule.threshold) ||
+    (rule.comparison === 'min' && signal.value < rule.threshold) ||
+    (rule.comparison === 'equal' && signal.value !== rule.threshold)
+  if (failed) {
+    failures.push({
+      code: `threshold_${rule.comparison}`,
+      source,
+      signal: rule.signal,
+      observed: signal.value,
+      threshold: rule.threshold
+    })
+  }
+}
+
+function checkCell(
+  failures: IncidentFailure[],
+  sample: IncidentSample,
+  cell: IncidentCellExpectation,
+  migrationPolicy: IncidentMigrationPolicy,
+  recoverySourceCellId: string | null,
+  capacityCellId: string | null
+): void {
+  const probe = sample.sources['active-probe']?.signals
+  const relay = sample.sources['relay-logs']?.signals
+  const admin = sample.sources['director-admin']?.signals
+  if (!cell.runtimeKnown) {
+    failures.push({
+      code: 'runtime_power_unknown',
+      source: 'cloud-monitoring',
+      signal: `cell.${cell.cellId}.powered`
+    })
+  }
+  if (
+    cell.runtimeKnown &&
+    cell.expectedAdmissionState !== 'existing-only' &&
+    !cell.powered
+  ) {
+    failures.push({
+      code: 'expected_admission_without_runtime',
+      source: 'director-admin',
+      signal: `cell.${cell.cellId}.powered`,
+      observed: 0,
+      threshold: 1
+    })
+  }
+  const checks = [
+    ['active-probe', probe, `cell.${cell.cellId}.health`, cell.powered ? 1 : 0, 'equal'],
+    ['active-probe', probe, `cell.${cell.cellId}.ready`, cell.powered ? 1 : 0, 'equal'],
+    [
+      'active-probe',
+      probe,
+      `cell.${cell.cellId}.latency_ms`,
+      INCIDENT_MONITOR_THRESHOLDS.cellEndpointLatencyMs[cell.region],
+      'max'
+    ],
+    [
+      'director-admin',
+      admin,
+      `cell.${cell.cellId}.admission_state`,
+      ['existing-only', 'migration-only', 'general'].indexOf(
+        cell.expectedAdmissionState
+      ),
+      'equal'
+    ],
+    [
+      'director-admin',
+      admin,
+      `cell.${cell.cellId}.heartbeat_fresh`,
+      1,
+      'equal'
+    ],
+    [
+      'director-admin',
+      admin,
+      `cell.${cell.cellId}.heartbeat_age_ms`,
+      INCIDENT_MONITOR_THRESHOLDS.heartbeatMaxAgeMs,
+      'max'
+    ],
+    [
+      'director-admin',
+      admin,
+      `cell.${cell.cellId}.migration_blocked`,
+      INCIDENT_MONITOR_THRESHOLDS.migrationBlocked,
+      'max'
+    ],
+    [
+      'director-admin',
+      admin,
+      `cell.${cell.cellId}.migration_target_inactive`,
+      INCIDENT_MONITOR_THRESHOLDS.migrationBlocked,
+      'max'
+    ],
+    [
+      'relay-logs',
+      relay,
+      `cell.${cell.cellId}.connections`,
+      (admin?.[`cell.${cell.cellId}.connection_hard_cap`]?.value ??
+        INCIDENT_MONITOR_THRESHOLDS.cellConnections + 1) - 1,
+      'max'
+    ],
+    [
+      'relay-logs',
+      relay,
+      `cell.${cell.cellId}.queued_bytes`,
+      INCIDENT_MONITOR_THRESHOLDS.cellQueuedBytes,
+      'max'
+    ]
+  ] as const
+  for (const [source, signals, signalName, threshold, comparison] of checks) {
+    if (
+      migrationPolicy === 'recover-forward' &&
+      cell.cellId === recoverySourceCellId &&
+      signalName.endsWith('.migration_target_inactive')
+    ) {
+      if (!signals?.[signalName]) addMissingSignal(failures, source, signalName)
+      continue
+    }
+    if (
+      migrationPolicy === 'capacity-transition' &&
+      capacityCellId !== null &&
+      cell.cellId !== capacityCellId &&
+      cell.expectedAdmissionState === 'existing-only' &&
+      signalName.endsWith('.migration_target_inactive')
+    ) {
+      if (!signals?.[signalName]) addMissingSignal(failures, source, signalName)
+      continue
+    }
+    if (
+      cell.expectedAdmissionState === 'existing-only' &&
+      signalName.endsWith('.connections')
+    ) {
+      continue
+    }
+    if (
+      !cell.powered &&
+      [
+        'latency_ms',
+        'heartbeat_fresh',
+        'heartbeat_age_ms',
+        'connections',
+        'queued_bytes'
+      ].some((suffix) => signalName.endsWith(suffix))
+    ) {
+      continue
+    }
+    if (!signals?.[signalName]) {
+      addMissingSignal(failures, source, signalName)
+      continue
+    }
+    const value = signals[signalName].value
+    const failed = comparison === 'equal' ? value !== threshold : value > threshold
+    if (failed) {
+      failures.push({
+        code: `threshold_${comparison}`,
+        source,
+        signal: signalName,
+        observed: value,
+        threshold
+      })
+    }
+  }
+}
+
+export function evaluateIncidentSample(
+  sample: IncidentSample,
+  nowMs = Date.now(),
+  migrationPolicy: IncidentMigrationPolicy = 'strict',
+  recoverySourceCellId: string | null = null,
+  capacityCellId: string | null = null
+): IncidentEvaluation {
+  const failures: IncidentFailure[] = []
+  if (!exactAdmissionSelector(sample.selector, sample.expectedSelector)) {
+    failures.push({
+      code: 'selector_mismatch',
+      source: 'director-admin',
+      signal: 'selector.generation',
+      observed: sample.selector.generation,
+      threshold: sample.expectedSelector.generation
+    })
+  }
+  for (const [sourceName, maxAge] of Object.entries(SOURCE_MAX_AGE) as [
+    IncidentSourceName,
+    number
+  ][]) {
+    const source = sample.sources[sourceName]
+    if (!source) {
+      failures.push({ code: 'source_missing', source: sourceName })
+      continue
+    }
+    if (ageMs(source.observedAt, nowMs) < 0 || ageMs(source.observedAt, nowMs) > maxAge) {
+      failures.push({
+        code: 'source_stale',
+        source: sourceName,
+        observed: ageMs(source.observedAt, nowMs),
+        threshold: maxAge
+      })
+    }
+    for (const [signalName, signal] of Object.entries(source.signals)) {
+      if (ageMs(signal.observedAt, nowMs) < 0 || ageMs(signal.observedAt, nowMs) > maxAge) {
+        failures.push({
+          code: 'signal_stale',
+          source: sourceName,
+          signal: signalName,
+          observed: ageMs(signal.observedAt, nowMs),
+          threshold: maxAge
+        })
+      }
+    }
+  }
+  for (const rule of NUMERIC_RULES) {
+    const source = sample.sources[rule.source]
+    if (source) checkRule(failures, rule.source, source.signals, rule)
+  }
+  for (const cell of sample.cells) {
+    checkCell(
+      failures,
+      sample,
+      cell,
+      migrationPolicy,
+      recoverySourceCellId,
+      capacityCellId
+    )
+  }
+  return {
+    status: failures.length === 0 ? 'green' : 'freeze',
+    evaluatedAt: new Date(nowMs).toISOString(),
+    failures
+  }
+}
+
+export function initialIncidentMonitorState(input: {
+  incidentId: string
+  environment: 'production' | 'staging'
+  expectedSelector: AdmissionSelector
+  preDrainDryRun: boolean
+  migrationPolicy: IncidentMigrationPolicy
+  recoverySourceCellId: string | null
+  capacityCellId: string | null
+  startedAt: string
+  durationMinutes: number
+  intervalMs: number
+}): IncidentMonitorState {
+  if (input.intervalMs < 1_000 || input.intervalMs > 60_000) {
+    throw new Error('incident monitor interval must be between 1 and 60 seconds')
+  }
+  if (input.durationMinutes < 15 || input.durationMinutes > 90) {
+    throw new Error('incident monitor duration must be between 15 and 90 minutes')
+  }
+  return {
+    schemaVersion: 4,
+    ...input,
+    windowStartedAt: input.startedAt,
+    windowSequence: 0,
+    nextCheckpointIndex: 0,
+    sampleCount: 0,
+    totalSampleCount: 0,
+    lastSampleAt: null,
+    continuityEvents: [],
+    frozenAt: null,
+    failures: [],
+    probeStreaks: {},
+    toleratedProbeEvents: [],
+    completedAt: null
+  }
+}
+
+export type IncidentMonitorDependencies = {
+  now(): number
+  wait(ms: number): Promise<void>
+  collect(): Promise<IncidentSample>
+  persist(state: IncidentMonitorState): Promise<void>
+  checkpoint(summary: IncidentCheckpoint): Promise<void>
+  warn?(message: string): void
+}
+
+function checkpointMinutes(durationMinutes: number): number[] {
+  return INCIDENT_CHECKPOINT_MINUTES.filter((minute) => minute <= durationMinutes)
+}
+
+// Freshness-only failures: we could not read a signal this sample. Distinct from
+// collector_failed / monitor_gap, where the whole sample is absent.
+export const FRESHNESS_FAILURE_CODES = new Set([
+  'signal_missing',
+  'signal_stale',
+  'source_missing',
+  'source_stale'
+])
+
+const CONTINUITY_FAILURE_CODES = new Set([
+  'collector_failed',
+  'monitor_gap',
+  ...FRESHNESS_FAILURE_CODES
+])
+
+// A whole sample we could not read gets the same consecutive-sample budget as an
+// unread signal, for the same reason: one failed collector round trip is evidence
+// about that round trip, not about the fleet. `monitor_gap` is excluded because it
+// means the run itself stopped sampling, so the window genuinely has a hole.
+const TOLERABLE_CONTINUITY_FAILURE_CODES = new Set([
+  'collector_failed',
+  ...FRESHNESS_FAILURE_CODES
+])
+
+// Why: Cloud Monitoring overshoots its own publish bar, and one unread sample is
+// not evidence of an unhealthy fleet. Under the 25-minute lineage cap in force
+// then, a restart past minute 10 cost the entire verdict, so a healthy fleet
+// produced none on 2026-09-05. A signal may miss this many consecutive samples before the window
+// restarts; the sample is still evaluated against every threshold it can read,
+// and a threshold breach still freezes the run outright.
+export const INCIDENT_FRESHNESS_TOLERANCE_SAMPLES = 2
+
+function freshnessKey(failure: IncidentFailure): string {
+  return `${failure.source}/${failure.signal ?? '*'}`
+}
+
+// The streak key for a per-cell active-probe reading, or null if the failure is not
+// one. A cell probe is a single HTTP round trip and so is subject to
+// cellProbeToleranceSamples; director and auth probes return null on purpose,
+// because they are the single points of failure this gate exists to catch.
+//
+// Why the key is the cell and not the signal: health, ready and latency_ms all
+// describe the same round trip. Keyed per signal, a cell that alternates between
+// answering slowly and not answering at all holds every individual streak at one and
+// never reaches the tolerance, so a continuously unhealthy cell passes the gate.
+export function cellProbeStreakKey(failure: IncidentFailure): string | null {
+  const signal = failure.signal
+  if (failure.source !== 'active-probe' || signal === undefined) return null
+  if (!signal.startsWith('cell.')) return null
+  const lastDot = signal.lastIndexOf('.')
+  if (lastDot < 'cell.'.length) return null
+  return `${failure.source}/${signal.slice(0, lastDot)}`
+}
+
+// Cloud Run replaces director instances in place rather than holding the count,
+// so the reading leaves [min, max] for about one sample roughly twice a day, and a
+// deploy that briefly serves two revisions raises it the same way. Neither is an
+// unhealthy fleet, and on 2026-09-17 this was one of the signals freezing the
+// pre-drain gate on a condition the roll exists to fix. Min and max share one
+// streak on purpose: a count that alternates above and below the band would
+// otherwise hold each individual streak at one and never reach the tolerance.
+export function directorInstancesStreakKey(failure: IncidentFailure): string | null {
+  if (failure.source !== 'cloud-monitoring' || failure.signal !== 'director.instances') {
+    return null
+  }
+  return `${failure.source}/${failure.signal}`
+}
+
+// The streak key for any reading subject to cellProbeToleranceSamples, or null
+// for a reading that freezes the run on its first bad sample.
+export function toleratedStreakKey(failure: IncidentFailure): string | null {
+  return cellProbeStreakKey(failure) ?? directorInstancesStreakKey(failure)
+}
+
+// Rebuild the per-signal tolerated streak from the trailing continuity events so a
+// resumed monitor cannot hand a signal a fresh budget.
+function resumeFreshnessStreaks(
+  state: IncidentMonitorState
+): Map<string, number> {
+  const events = state.continuityEvents
+  const streaks = new Map<string, number>()
+  const last = events[events.length - 1]
+  if (!last?.tolerated) return streaks
+  for (const key of new Set(last.failures.map(freshnessKey))) {
+    let streak = 0
+    let laterAt: number | null = null
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]!
+      const recordedAt = Date.parse(event.recordedAt)
+      if (!event.tolerated) break
+      if (laterAt !== null && laterAt - recordedAt > state.intervalMs * 1.5) break
+      if (!event.failures.some((failure) => freshnessKey(failure) === key)) break
+      streak++
+      laterAt = recordedAt
+    }
+    streaks.set(key, streak)
+  }
+  return streaks
+}
+
+function resetContinuousWindow(
+  state: IncidentMonitorState,
+  recordedAt: string,
+  failures: IncidentFailure[]
+): void {
+  if (state.windowStartedAt !== null) {
+    state.windowSequence++
+    state.windowStartedAt = null
+    state.nextCheckpointIndex = 0
+    state.sampleCount = 0
+    state.completedAt = null
+  }
+  state.continuityEvents.push({
+    recordedAt,
+    windowSequence: state.windowSequence,
+    tolerated: false,
+    failures
+  })
+}
+
+function completeContinuityDeadline(
+  state: IncidentMonitorState,
+  nowMs: number,
+  lineageStartMs: number
+): void {
+  const recordedAt = new Date(nowMs).toISOString()
+  state.frozenAt ??= recordedAt
+  state.failures.push({
+    code: 'continuity_deadline_exceeded',
+    source: 'active-probe',
+    observed: nowMs - lineageStartMs,
+    threshold: INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS
+  })
+  state.completedAt = recordedAt
+}
+
+export async function runIncidentMonitor(
+  initialState: IncidentMonitorState,
+  dependencies: IncidentMonitorDependencies
+): Promise<IncidentMonitorState> {
+  const state = structuredClone(initialState)
+  const lineageStartMs = Date.parse(state.startedAt)
+  if (!Number.isFinite(lineageStartMs)) {
+    throw new Error('incident monitor start time is invalid')
+  }
+  const checkpoints = checkpointMinutes(state.durationMinutes)
+  const lineageDeadlineMs = state.preDrainDryRun
+    ? lineageStartMs + INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS
+    : Number.POSITIVE_INFINITY
+  const resumedAt = dependencies.now()
+  const priorSampleMs = state.lastSampleAt
+    ? Date.parse(state.lastSampleAt)
+    : lineageStartMs
+  const gapThreshold = state.intervalMs
+  if (resumedAt - priorSampleMs > gapThreshold) {
+    resetContinuousWindow(state, new Date(resumedAt).toISOString(), [{
+      code: 'monitor_gap',
+      source: 'active-probe',
+      observed: resumedAt - priorSampleMs,
+      threshold: gapThreshold
+    }])
+  }
+  if (state.completedAt !== null) {
+    await dependencies.persist(state)
+    return state
+  }
+  const freshnessStreaks = resumeFreshnessStreaks(state)
+  while (state.completedAt === null) {
+    if (dependencies.now() > lineageDeadlineMs) {
+      completeContinuityDeadline(state, dependencies.now(), lineageStartMs)
+      await dependencies.persist(state)
+      break
+    }
+    const sampleStartedAt = dependencies.now()
+    let evaluation: IncidentEvaluation
+    try {
+      evaluation = evaluateIncidentSample(
+        await dependencies.collect(),
+        dependencies.now(),
+        state.migrationPolicy,
+        state.recoverySourceCellId,
+        state.capacityCellId
+      )
+    } catch (error) {
+      dependencies.warn?.(
+        `incident monitor collector failed: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      )
+      evaluation = {
+        status: 'freeze',
+        evaluatedAt: new Date(dependencies.now()).toISOString(),
+        failures: [{
+          code: 'collector_failed',
+          source: 'cloud-monitoring'
+        }]
+      }
+    }
+    state.totalSampleCount++
+    state.lastSampleAt = evaluation.evaluatedAt
+    const continuityFailures = evaluation.failures.filter((failure) =>
+      CONTINUITY_FAILURE_CODES.has(failure.code)
+    )
+    const thresholdFailures = evaluation.failures.filter((failure) =>
+      !CONTINUITY_FAILURE_CODES.has(failure.code)
+    )
+    const toleratedKeys = new Set(
+      state.windowStartedAt !== null &&
+        continuityFailures.length > 0 &&
+        continuityFailures.every((failure) =>
+          TOLERABLE_CONTINUITY_FAILURE_CODES.has(failure.code))
+        ? continuityFailures.map(freshnessKey)
+        : []
+    )
+    for (const key of [...freshnessStreaks.keys()]) {
+      if (!toleratedKeys.has(key)) freshnessStreaks.delete(key)
+    }
+    let tolerated = toleratedKeys.size > 0
+    for (const key of toleratedKeys) {
+      const streak = (freshnessStreaks.get(key) ?? 0) + 1
+      freshnessStreaks.set(key, streak)
+      if (streak > INCIDENT_FRESHNESS_TOLERANCE_SAMPLES) tolerated = false
+    }
+    if (continuityFailures.length > 0 && !tolerated) {
+      freshnessStreaks.clear()
+      resetContinuousWindow(state, evaluation.evaluatedAt, continuityFailures)
+    } else {
+      if (tolerated) {
+        state.continuityEvents.push({
+          recordedAt: evaluation.evaluatedAt,
+          windowSequence: state.windowSequence,
+          tolerated: true,
+          failures: continuityFailures
+        })
+      }
+      if (state.windowStartedAt === null) {
+        state.windowStartedAt = evaluation.evaluatedAt
+      }
+      state.sampleCount++
+    }
+    const probeFailures = new Map<string, IncidentFailure[]>()
+    for (const failure of thresholdFailures) {
+      const key = toleratedStreakKey(failure)
+      if (key === null) continue
+      probeFailures.set(key, [...(probeFailures.get(key) ?? []), failure])
+    }
+    for (const key of Object.keys(state.probeStreaks)) {
+      if (!probeFailures.has(key)) delete state.probeStreaks[key]
+    }
+    const sustainedProbeFailures: IncidentFailure[] = []
+    const toleratedProbeFailures: IncidentFailure[] = []
+    for (const [key, entries] of probeFailures) {
+      const streak = (state.probeStreaks[key] ?? 0) + 1
+      state.probeStreaks[key] = streak
+      const target =
+        streak > INCIDENT_MONITOR_THRESHOLDS.cellProbeToleranceSamples
+          ? sustainedProbeFailures
+          : toleratedProbeFailures
+      target.push(...entries)
+    }
+    if (toleratedProbeFailures.length > 0) {
+      state.toleratedProbeEvents.push({
+        recordedAt: evaluation.evaluatedAt,
+        windowSequence: state.windowSequence,
+        failures: toleratedProbeFailures
+      })
+    }
+    const freezingFailures = [
+      ...thresholdFailures.filter((failure) => toleratedStreakKey(failure) === null),
+      ...sustainedProbeFailures
+    ]
+    if (freezingFailures.length > 0) {
+      state.frozenAt ??= evaluation.evaluatedAt
+      state.failures = [...state.failures, ...freezingFailures]
+    }
+    if (state.windowStartedAt === null) {
+      if (dependencies.now() >= lineageDeadlineMs) {
+        completeContinuityDeadline(state, dependencies.now(), lineageStartMs)
+        await dependencies.persist(state)
+        break
+      }
+      await dependencies.persist(state)
+      await dependencies.wait(
+        Math.max(0, Math.min(state.intervalMs, lineageDeadlineMs - dependencies.now()))
+      )
+      continue
+    }
+    const startMs = Date.parse(state.windowStartedAt)
+    const endMs = startMs + state.durationMinutes * 60_000
+    const elapsedMinutes = (dependencies.now() - startMs) / 60_000
+    while (
+      state.nextCheckpointIndex < checkpoints.length &&
+      elapsedMinutes >= checkpoints[state.nextCheckpointIndex]!
+    ) {
+      const minute = checkpoints[state.nextCheckpointIndex]!
+      await dependencies.checkpoint({
+        schemaVersion: 4,
+        incidentId: state.incidentId,
+        environment: state.environment,
+        expectedSelector: state.expectedSelector,
+        preDrainDryRun: state.preDrainDryRun,
+        migrationPolicy: state.migrationPolicy,
+        recoverySourceCellId: state.recoverySourceCellId,
+        capacityCellId: state.capacityCellId,
+        windowSequence: state.windowSequence,
+        windowStartedAt: state.windowStartedAt,
+        checkpointMinute: minute,
+        scheduledAt: new Date(startMs + minute * 60_000).toISOString(),
+        recordedAt: new Date(dependencies.now()).toISOString(),
+        status: state.frozenAt ? 'freeze' : 'green',
+        frozenAt: state.frozenAt,
+        sampleCount: state.sampleCount,
+        failures: state.failures,
+        thresholds: INCIDENT_MONITOR_THRESHOLDS
+      })
+      state.nextCheckpointIndex++
+    }
+    if (state.preDrainDryRun && state.frozenAt !== null) {
+      state.completedAt = new Date(dependencies.now()).toISOString()
+      await dependencies.persist(state)
+      break
+    }
+    if (dependencies.now() >= endMs) {
+      state.completedAt = new Date(dependencies.now()).toISOString()
+      await dependencies.persist(state)
+      break
+    }
+    if (dependencies.now() >= lineageDeadlineMs) {
+      completeContinuityDeadline(state, dependencies.now(), lineageStartMs)
+      await dependencies.persist(state)
+      break
+    }
+    await dependencies.persist(state)
+    await dependencies.wait(
+      Math.max(
+        0,
+        Math.min(sampleStartedAt + state.intervalMs, endMs, lineageDeadlineMs) - dependencies.now()
+      )
+    )
+  }
+  return state
+}
+
+export function preDrainDryRunPassed(state: Pick<
+  IncidentMonitorState,
+  | 'completedAt'
+  | 'durationMinutes'
+  | 'frozenAt'
+  | 'intervalMs'
+  | 'preDrainDryRun'
+  | 'sampleCount'
+  | 'startedAt'
+>): boolean {
+  const minimumSamples =
+    Math.ceil((state.durationMinutes * 60_000) / state.intervalMs) + 1
+  const lineageElapsedMs = state.completedAt === null
+    ? Number.POSITIVE_INFINITY
+    : Date.parse(state.completedAt) - Date.parse(state.startedAt)
+  return (
+    state.preDrainDryRun &&
+    state.durationMinutes === 15 &&
+    state.completedAt !== null &&
+    lineageElapsedMs >= 0 &&
+    lineageElapsedMs <= INCIDENT_PRE_DRAIN_MAX_LINEAGE_MS &&
+    state.frozenAt === null &&
+    state.sampleCount >= minimumSamples
+  )
+}

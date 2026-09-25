@@ -25,6 +25,8 @@ export type UsageRateLimitFailureKind =
   | 'deferred-by-live-session'
   | 'keychain-unavailable'
   | 'missing-scope'
+  /** The account is authenticated but not entitled to the product being polled. */
+  | 'no-subscription'
   | 'network'
   | 'server'
   | 'parse'
@@ -131,6 +133,20 @@ export type RateLimitState = {
    * between snapshot refreshes.
    */
   minimaxCookieConfigured: boolean
+  /**
+   * True when a MiniMax API key is persisted on disk. The key value itself
+   * never leaves main, so the renderer only sees this boolean. The status bar
+   * ORs it with the cookie flag to decide whether to keep the MiniMax bar
+   * visible across reloads.
+   */
+  minimaxApiKeyConfigured: boolean
+  /**
+   * True when main resolved an OpenCode Go API key (Orca settings,
+   * OPENCODE_API_KEY, or what OpenCode stored on /connect). The key itself
+   * never leaves main; the status bar ORs this with the session cookie to
+   * decide whether the OpenCode Go bar stays visible.
+   */
+  opencodeGoApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget

@@ -1,0 +1,1156 @@
+{
+  "operation": "tasks.workspace-sparse",
+  "family": "tasks.workspace-sparse",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "3453024581230908d1e0e9335f5310e7b4ae03faf50d93654b9ff28c464fb95f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "003266639675": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "The host sent a reply this app could not read (ssh.getState)",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "02daf4600c50": {
+      "name": "repo.saveSparsePreset#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
+    },
+    "0ca333d433d1": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "The host sent a reply this app could not read (ssh.getState)",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "196cd7f8b6a9": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1bc7cf6bcbaf": {
+      "name": "workspaceSparsePresets",
+      "ordinal": 8,
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ]
+    },
+    "2e370b6bc6d3": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "3f5e10171cd3": {
+      "name": "workspaceSparsePresetId",
+      "ordinal": 10,
+      "value": "p1"
+    },
+    "404305aa2e3a": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "47b768ac4603": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "Unknown method",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "4b7e30ea1543": {
+      "name": "repo.saveSparsePreset#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "preset": {
+              "directories": ["docs"],
+              "id": "p1",
+              "name": "docs"
+            }
+          }
+        }
+      }
+    },
+    "57be9babbecd": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "Unknown method",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "5e69d5600126": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "transport failure",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "68ca812c8120": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "disconnected",
+        "targetId": "ssh-1"
+      }
+    },
+    "6daeb33f37f8": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "transport failure",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "7e5ba73897a1": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "Unknown method",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "813df5a46a4a": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "86a756c43eee": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "8b039cc0966c": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "8c02db2af9ff": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "9367b086d487": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "outer refused",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "973f31a4e64b": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 5,
+      "value": ""
+    },
+    "9a06a8b0c07a": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "disconnected",
+        "targetId": "ssh-1"
+      }
+    },
+    "a11809a84754": {
+      "name": "ssh.getState#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "a16210531185": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "outer refused",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "a71abdbfefa8": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "af0d2d6c02df": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "The host sent a reply this app could not read (ssh.getState)",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "b40e13ca49f3": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "outer refused",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "b53739a58194": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "state": {
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "ssh-1"
+            }
+          }
+        }
+      }
+    },
+    "b99b1a08e886": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ba8c7cc161da": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "c1ae182c7519": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 12,
+      "value": false
+    },
+    "c88e803973a6": {
+      "name": "workspaceSparsePresetsLoaded",
+      "ordinal": 9,
+      "value": true
+    },
+    "cd050477e049": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "d4293c213b99": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "dbf775cf1bdc": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "de95b19c6158": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "ea6e5bf810d9": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 4,
+      "value": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ee3a941d5e9c": {
+      "presets": [],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "ef27a7ecb258": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": "transport failure",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "f0dd78640cf3": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f54b3364071f": {
+      "name": "workspaceSparseDraft",
+      "ordinal": 11,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "f7885da6b9c0": {
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "saving": false,
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "disconnected",
+        "targetId": "ssh-1"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.workspace-sparse-ssh.getstate-1",
+    "checkpoints": [
+      {
+        "id": "tw-workspace-sparse-saved.normal:ssh-state-read",
+        "observation": {
+          "sender": ["b53739a58194"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "ee3a941d5e9c",
+          "effects": ["de95b19c6158"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.normal:preset-saved",
+        "observation": {
+          "sender": ["b53739a58194", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "404305aa2e3a",
+          "effects": [
+            "de95b19c6158",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.result-absent:ssh-state-read",
+        "observation": {
+          "sender": ["2e370b6bc6d3"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "0ca333d433d1",
+          "effects": ["003266639675"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.result-absent:preset-saved",
+        "observation": {
+          "sender": ["2e370b6bc6d3", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "af0d2d6c02df",
+          "effects": [
+            "003266639675",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.result-null:ssh-state-read",
+        "observation": {
+          "sender": ["ba8c7cc161da"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "0ca333d433d1",
+          "effects": ["003266639675"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.result-null:preset-saved",
+        "observation": {
+          "sender": ["ba8c7cc161da", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "af0d2d6c02df",
+          "effects": [
+            "003266639675",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-ok-missing:ssh-state-read",
+        "observation": {
+          "sender": ["d4293c213b99"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "68ca812c8120",
+          "effects": ["9a06a8b0c07a"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-ok-missing:preset-saved",
+        "observation": {
+          "sender": ["d4293c213b99", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "f7885da6b9c0",
+          "effects": [
+            "9a06a8b0c07a",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-false-string-error:ssh-state-read",
+        "observation": {
+          "sender": ["dbf775cf1bdc"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "68ca812c8120",
+          "effects": ["9a06a8b0c07a"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-false-string-error:preset-saved",
+        "observation": {
+          "sender": ["dbf775cf1bdc", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "f7885da6b9c0",
+          "effects": [
+            "9a06a8b0c07a",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-false-object-error:ssh-state-read",
+        "observation": {
+          "sender": ["196cd7f8b6a9"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "68ca812c8120",
+          "effects": ["9a06a8b0c07a"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.inner-false-object-error:preset-saved",
+        "observation": {
+          "sender": ["196cd7f8b6a9", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "f7885da6b9c0",
+          "effects": [
+            "9a06a8b0c07a",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.outer-refused:ssh-state-read",
+        "observation": {
+          "sender": ["8c02db2af9ff"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "a16210531185",
+          "effects": ["b40e13ca49f3"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.outer-refused:preset-saved",
+        "observation": {
+          "sender": ["8c02db2af9ff", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "9367b086d487",
+          "effects": [
+            "b40e13ca49f3",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.outer-refused-no-message:ssh-state-read",
+        "observation": {
+          "sender": ["f0dd78640cf3"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "813df5a46a4a",
+          "effects": ["a71abdbfefa8"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.outer-refused-no-message:preset-saved",
+        "observation": {
+          "sender": ["f0dd78640cf3", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "cd050477e049",
+          "effects": [
+            "a71abdbfefa8",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.method-not-found:ssh-state-read",
+        "observation": {
+          "sender": ["86a756c43eee"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "7e5ba73897a1",
+          "effects": ["47b768ac4603"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.method-not-found:preset-saved",
+        "observation": {
+          "sender": ["86a756c43eee", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "57be9babbecd",
+          "effects": [
+            "47b768ac4603",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.transport-rejection:ssh-state-read",
+        "observation": {
+          "sender": ["8b039cc0966c"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "6daeb33f37f8",
+          "effects": ["5e69d5600126"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.transport-rejection:preset-saved",
+        "observation": {
+          "sender": ["8b039cc0966c", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "ef27a7ecb258",
+          "effects": [
+            "5e69d5600126",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.transport-rejection-no-message:ssh-state-read",
+        "observation": {
+          "sender": ["b99b1a08e886"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "813df5a46a4a",
+          "effects": ["a71abdbfefa8"]
+        }
+      },
+      {
+        "id": "tw-workspace-sparse-saved.transport-rejection-no-message:preset-saved",
+        "observation": {
+          "sender": ["b99b1a08e886", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "cd050477e049",
+          "effects": [
+            "a71abdbfefa8",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
+          ]
+        }
+      }
+    ]
+  }
+}

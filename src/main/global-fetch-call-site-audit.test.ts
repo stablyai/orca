@@ -23,20 +23,38 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/orca-profiles/profile-cloud-client.ts', 1],
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],
+  ['main/runtime/push/push-gateway-client.ts', 1],
   ['main/runtime/relay/relay-http-client.ts', 2],
+  ['main/runtime/relay/relay-region-catalog-fetch.ts', 1],
+  // Measurement reuses the audited catalog/probe consumers, which consume or cancel every body.
   ['main/runtime/relay/relay-region-preference.ts', 3],
+  ['main/runtime/relay/relay-region-probe.ts', 1],
   ['main/source-control/hosted-review-api-request.ts', 1],
   ['main/speech/openai-transcription-client.ts', 1],
-  // fetch appears only inside injected-page script source strings, not as a
+  // Main HTTP port: one type declaration plus the Node fallback call. The fallback
+  // returns the Response to its caller without inspecting it, so the consume/cancel
+  // obligation stays with the caller — unchanged from when those callers used
+  // Electron's net directly.
+  ['main/network/http-client.ts', 2],
+  // fetch appears only inside injected browser script source strings, not as a
   // call this process makes
   ['main/amp/agent-status-plugin-source.ts', 1],
-  ['main/opencode/hook-service.ts', 1],
+  ['main/browser/browser-route-h3-egress-electron-main.ts', 1],
+  ['main/browser/browser-route-persisted-worker-fixture.ts', 3],
+  ['main/browser/browser-route-tcp-egress-fixture.ts', 1],
+  // Electron-test rig: the CDP poll cancels its unread body and the version probe consumes
+  // the body through response.json(), so neither leaves an unread undici response.
+  ['main/browser/browser-session-ua-cdp-collector.ts', 2],
+  // Every hit is inside an injected page/worker script source string, not a call this
+  // process makes.
+  ['main/browser/browser-session-ua-wire-probe-server.ts', 10],
+  ['main/opencode/status-plugin-post-source.ts', 1],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP
   ['main/ipc/worktree-remote.ts', 2],
-  ['relay/git-handler.ts', 1],
+  ['relay/git-handler-fetch-operations.ts', 1],
   // fetch mentioned only in a comment
-  ['main/ipc/feedback.ts', 1]
+  ['main/ipc/feedback-request.ts', 1]
 ])
 
 // A line is a hit when it calls bare `fetch(` or touches `globalThis.fetch` /

@@ -1,14 +1,14 @@
 ## ELI5
 
-<!-- Simple high-level explanation -->
+<!-- Simple high-level explanation, in plain language. No jargon. -->
 
 ## What Changed
 
-<!-- Describe the change clearly and keep scope tight. -->
+<!-- Describe the change clearly and keep scope tight. Cover the before and after as the user experiences it, and the mechanism you changed — not just the symptom. -->
 
 ## Why
 
-<!-- What problem does this solve, and why is this approach right? -->
+<!-- What problem does this solve, and why is this approach better than the alternatives you considered? -->
 
 ## Linked Issue
 
@@ -47,13 +47,8 @@ Ensure no issues in: Security, Cross-platoform support (Linux, Windows, Mac), Re
 ## Checklist
 
 - [ ] This PR is small and focused
-- [ ] I explained what changed and why (including ELI5)
+- [ ] I explained what changed and why (ELI5, the user-facing before/after, the mechanism, and why over the alternatives)
 - [ ] Before/after screenshots or videos attached for UI changes, or `N/A` with reason
 - [ ] Self-reviewed for correctness, security, and performance
 - [ ] Cross-platform, SSH/remote, and path/shortcut impact considered (or N/A)
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` pass (or CI will cover; local preferred)
-
-## Author
-
-- X / Twitter: @your_handle
-  <!-- Optional but appreciated -->

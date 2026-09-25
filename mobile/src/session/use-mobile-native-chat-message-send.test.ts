@@ -4,6 +4,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Type-only, so it is erased before the `./mobile-native-chat-send` mock below applies.
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
@@ -36,6 +38,9 @@ describe('useMobileNativeChatMessageSend', () => {
   let renderer: ReactTestRenderer | null = null
   let api: Send | null = null
   const acceptSend = vi.fn()
+  const captureSendOrigin = vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never)
+  const clearDraftForSend = vi.fn()
+  const restoreRejectedDraft = vi.fn()
   const holdUnconfirmedSend = vi.fn()
   const onCommandSend = vi.fn()
   const commandSendRef = { current: onCommandSend }
@@ -55,10 +60,10 @@ describe('useMobileNativeChatMessageSend', () => {
         deviceTokenRef: { current: 'device' },
         agentRef,
         commandSendRef,
-        captureSendOrigin: () => ({ draftKey: 'k', pendingKey: 'p' }) as never,
+        captureSendOrigin,
         readSeededLaunchDraftSeed,
-        clearDraftForSend: () => {},
-        restoreRejectedDraft: () => {},
+        clearDraftForSend,
+        restoreRejectedDraft,
         acceptSend,
         holdUnconfirmedSend,
         onSendError
@@ -71,11 +76,11 @@ describe('useMobileNativeChatMessageSend', () => {
   }
 
   const sentArgs = (): {
-    clearInputFirst?: boolean
+    text?: string
     resolvedLaunchDraft?: { text: string; createdAt: number }
   } =>
     sendWithOutcome.mock.calls[0]![0] as {
-      clearInputFirst?: boolean
+      text?: string
       resolvedLaunchDraft?: { text: string; createdAt: number }
     }
   const clearArgs = (): { clearInput?: string } =>
@@ -89,6 +94,9 @@ describe('useMobileNativeChatMessageSend', () => {
     typeCommandWithOutcome.mockReset()
     typeCommandWithOutcome.mockResolvedValue('accepted')
     acceptSend.mockReset()
+    captureSendOrigin.mockClear()
+    clearDraftForSend.mockReset()
+    restoreRejectedDraft.mockReset()
     holdUnconfirmedSend.mockReset()
     onCommandSend.mockReset()
     commandSendRef.current = onCommandSend
@@ -136,32 +144,36 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sendWithOutcome).not.toHaveBeenCalled()
   })
 
-  it('drops the body write\u2019s own Ctrl+U prefix once the dedicated clear ran', async () => {
+  it('keeps the body write free of the dedicated terminal control', async () => {
     // A Ctrl+U written immediately before body text in the SAME write arrives as
     // a literal control character, so it would head the received message.
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {
       await api!.send('hello')
     })
-    expect(sentArgs().clearInputFirst).toBe(false)
+    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
-  it('keeps the single-Ctrl+U prefix when no dedicated clear ran', async () => {
+  it('writes a single Ctrl+U separately when no launch draft is parked', async () => {
     mount(() => null)
     await act(async () => {
       await api!.send('hello')
     })
-    expect(sentArgs().clearInputFirst).toBe(true)
+    expect(clearArgs().clearInput).toBe('\x15')
+    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
   })
 
-  it('writes no clear at all when nothing is parked on the line', async () => {
+  it('writes the ordinary clear before the body', async () => {
     mount(() => null)
     await act(async () => {
       await api!.send('hello')
     })
-    expect(clearInputWrite).not.toHaveBeenCalled()
+    expect(clearInputWrite).toHaveBeenCalledTimes(1)
+    expect(clearInputWrite.mock.invocationCallOrder[0]).toBeLessThan(
+      sendWithOutcome.mock.invocationCallOrder[0]!
+    )
   })
 
   it('reads the draft at send time, so a retired seed stops widening the clear', async () => {
@@ -174,9 +186,11 @@ describe('useMobileNativeChatMessageSend', () => {
     await act(async () => {
       await api!.send('second')
     })
-    expect(sendWithOutcome.mock.calls[1]![0]).toMatchObject({ clearInputFirst: true })
-    expect(clearInputWrite).toHaveBeenCalledTimes(1)
-    expect(sendWithOutcome.mock.calls[0]![0]).toMatchObject({ clearInputFirst: false })
+    expect(clearInputWrite).toHaveBeenCalledTimes(2)
+    expect(clearInputWrite.mock.calls[0]![0]).toMatchObject({
+      clearInput: buildAgentTuiClearInputForText(DRAFT)
+    })
+    expect(clearInputWrite.mock.calls[1]![0]).toMatchObject({ clearInput: '\x15' })
   })
 
   it('does not clear an image send after the image was pasted', async () => {
@@ -186,7 +200,7 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('caption', ['file:///a.png'])
     })
     expect(clearInputWrite).not.toHaveBeenCalled()
-    expect(sentArgs().clearInputFirst).toBe(false)
+    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
@@ -380,5 +394,54 @@ describe('useMobileNativeChatMessageSend', () => {
     // The answer released its own hold on the way out.
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
     releaseMobileNativeChatTerminalWrite('term')
+  })
+
+  // The host writes these bytes verbatim, so whitespace the match key drops must
+  // not reach the agent's input line and glue the next rapid send onto it (#14262).
+  it('trims trailing whitespace without changing leading prompt content', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('  run the tests \n')
+    })
+    expect(sentArgs().text).toBe('  run the tests')
+    expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests')
+    expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
+  })
+
+  it('trims trailing whitespace on a question answer too', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.answerQuestion('\n 1 ')
+    })
+    expect(sentArgs().text).toBe('\n 1')
+  })
+
+  // #14819: the trim is a wire concern only. A rejected send hands the composer
+  // back to the user, and it has to be the draft they typed, blank lines included.
+  it('restores the untrimmed draft when the send is rejected', async () => {
+    const draft = 'first line\n\nsecond line\n\n'
+    sendWithOutcome.mockResolvedValue('rejected')
+    mount(() => null)
+
+    await act(async () => {
+      await api!.send(draft)
+    })
+
+    expect(sentArgs().text).toBe('first line\n\nsecond line')
+    expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
+    expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
+  })
+
+  it('restores the untrimmed draft when the launch-draft pre-clear is rejected', async () => {
+    const draft = 'ship it   '
+    clearInputWrite.mockResolvedValue(false)
+    mount(() => ({ text: DRAFT, createdAt: 1 }))
+
+    await act(async () => {
+      await api!.send(draft)
+    })
+
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
   })
 })

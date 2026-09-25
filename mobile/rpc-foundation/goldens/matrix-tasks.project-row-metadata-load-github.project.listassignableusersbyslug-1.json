@@ -1,0 +1,1107 @@
+{
+  "operation": "tasks.project-row-metadata-load",
+  "family": "tasks.project-row-metadata-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
+  "scenarioSha256": "2303fc902e5a6cf6a43db58ef2938538a7b770d1509cc22a9811f4c83051aea1",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "012f4b9b6415": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "06512b81879b": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 18,
+      "value": "The host sent a reply this app could not read (github.project.listAssignableUsersBySlug)"
+    },
+    "21ea4fab050f": {
+      "name": "projectAssignableUsers",
+      "ordinal": 18,
+      "value": [
+        {
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ]
+    },
+    "24d2fb22914c": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "users": [
+              {
+                "login": "octocat",
+                "name": "Octo"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "25899527b47b": {
+      "name": "projectAssignableUsersLoading",
+      "ordinal": 19,
+      "value": false
+    },
+    "2ff3fe127fb9": {
+      "name": "projectAssignableUsers",
+      "ordinal": 5,
+      "value": []
+    },
+    "363425334cb3": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 18,
+      "value": "outer refused"
+    },
+    "3902ea43121b": {
+      "name": "projectAssignableUsersLoading",
+      "ordinal": 7,
+      "value": true
+    },
+    "40d665705e40": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "4171776f506e": {
+      "name": "github.project.listLabelsBySlug#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listLabelsBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "labels": ["bug"],
+            "ok": true
+          }
+        }
+      }
+    },
+    "41f997281eb8": {
+      "name": "reply-salvage",
+      "ordinal": 18,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "github.project.listAssignableUsersBySlug",
+        "operation": "github.project.assignable-users",
+        "variant": "github-project-assignable-users"
+      }
+    },
+    "485d9242f6f3": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "4963b09b1b19": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 18,
+      "value": "inner refused"
+    },
+    "49eca723a0e2": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "4b33e1366553": {
+      "name": "projectIssueTypesLoading",
+      "ordinal": 21,
+      "value": false
+    },
+    "55fc5237a996": {
+      "name": "github.project.listIssueTypesBySlug#1",
+      "ordinal": 15,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listIssueTypesBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"}}"
+    },
+    "580a93d48297": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [],
+      "usersError": "Unknown method"
+    },
+    "5dd15ec04d86": {
+      "name": "projectAvailableLabels",
+      "ordinal": 1,
+      "value": []
+    },
+    "5e21dd8c2308": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 18,
+      "value": "transport failure"
+    },
+    "5f79a4527d55": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 18,
+      "value": "Unknown method"
+    },
+    "61e9a9d3f2b6": {
+      "name": "projectAvailableLabels",
+      "ordinal": 16,
+      "value": ["bug"]
+    },
+    "6d2454f3b7b9": {
+      "name": "projectLabelsLoading",
+      "ordinal": 3,
+      "value": true
+    },
+    "81eea9b1a14a": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "9137611226ab": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 19,
+      "value": "Failed to load assignees"
+    },
+    "9912fbdd457c": {
+      "name": "projectIssueTypesLoading",
+      "ordinal": 11,
+      "value": true
+    },
+    "9b3320d7d510": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [],
+      "usersError": ""
+    },
+    "9f8ede7fd42e": {
+      "name": "github.project.listIssueTypesBySlug#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listIssueTypesBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "types": [
+              {
+                "id": "type-1",
+                "name": "Bug"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "a71d7fbf7517": {
+      "name": "projectIssueTypes",
+      "ordinal": 21,
+      "value": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ]
+    },
+    "aa05f01a4255": {
+      "name": "projectIssueTypesLoading",
+      "ordinal": 22,
+      "value": false
+    },
+    "bee3fb4d48da": {
+      "name": "projectIssueTypes",
+      "ordinal": 9,
+      "value": []
+    },
+    "bfc236dc2e45": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c1ec04d6cffb": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [],
+      "usersError": "inner refused"
+    },
+    "cfcd8b229efe": {
+      "name": "github.project.listLabelsBySlug#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listLabelsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\"}}"
+    },
+    "d36a9b596499": {
+      "name": "projectLabelsError",
+      "ordinal": 2,
+      "value": ""
+    },
+    "d41a9829423a": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [],
+      "usersError": "Failed to load assignees"
+    },
+    "d5d91d8a5bac": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [
+        {
+          "login": "octocat",
+          "name": "Octo"
+        }
+      ],
+      "usersError": ""
+    },
+    "d663624b0741": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 18,
+      "value": ""
+    },
+    "d6657538c321": {
+      "name": "projectAssignableUsersLoading",
+      "ordinal": 20,
+      "value": false
+    },
+    "e004f7afb559": {
+      "name": "projectLabelsLoading",
+      "ordinal": 17,
+      "value": false
+    },
+    "e2f2bc801b88": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [],
+      "usersError": "The host sent a reply this app could not read (github.project.listAssignableUsersBySlug)"
+    },
+    "e8838734c6bb": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listAssignableUsersBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"seedLogins\":[\"octocat\"]}}"
+    },
+    "e908dbbdccb4": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "e918604a4f49": {
+      "name": "projectIssueTypesError",
+      "ordinal": 10,
+      "value": ""
+    },
+    "ea550b5ecd87": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f0b34eeec04a": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "f1e41c753708": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [],
+      "usersError": "outer refused"
+    },
+    "f2b2738ca710": {
+      "name": "github.project.listAssignableUsersBySlug#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAssignableUsersBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "repo": "repo",
+            "seedLogins": ["octocat"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f3677b2e5ed9": {
+      "name": "projectIssueTypes",
+      "ordinal": 20,
+      "value": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ]
+    },
+    "f3849a7f0dff": {
+      "name": "projectAssignableUsersError",
+      "ordinal": 6,
+      "value": ""
+    },
+    "faf207372749": {
+      "labels": ["bug"],
+      "labelsError": "",
+      "types": [
+        {
+          "id": "type-1",
+          "name": "Bug"
+        }
+      ],
+      "typesError": "",
+      "users": [],
+      "usersError": "transport failure"
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.project-row-metadata-load-github.project.listassignableusersbyslug-1",
+    "checkpoints": [
+      {
+        "id": "tk-project-row-metadata-load.normal:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "24d2fb22914c", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d5d91d8a5bac",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "21ea4fab050f",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.result-absent:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "012f4b9b6415", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e2f2bc801b88",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "06512b81879b",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.result-null:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "81eea9b1a14a", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e2f2bc801b88",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "06512b81879b",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.inner-ok-missing:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "ea550b5ecd87", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d41a9829423a",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "41f997281eb8",
+            "9137611226ab",
+            "d6657538c321",
+            "a71d7fbf7517",
+            "aa05f01a4255"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.inner-false-string-error:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "40d665705e40", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d41a9829423a",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "41f997281eb8",
+            "9137611226ab",
+            "d6657538c321",
+            "a71d7fbf7517",
+            "aa05f01a4255"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.inner-false-object-error:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "485d9242f6f3", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "c1ec04d6cffb",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "4963b09b1b19",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.outer-refused:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "49eca723a0e2", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "f1e41c753708",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "363425334cb3",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.outer-refused-no-message:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "f0b34eeec04a", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "9b3320d7d510",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "d663624b0741",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.method-not-found:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "e908dbbdccb4", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "580a93d48297",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "5f79a4527d55",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.transport-rejection:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "bfc236dc2e45", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "faf207372749",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "5e21dd8c2308",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-row-metadata-load.transport-rejection-no-message:mounted",
+        "observation": {
+          "sender": ["4171776f506e", "f2b2738ca710", "9f8ede7fd42e"],
+          "payloads": ["cfcd8b229efe", "e8838734c6bb", "55fc5237a996"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "9b3320d7d510",
+          "effects": [
+            "5dd15ec04d86",
+            "d36a9b596499",
+            "6d2454f3b7b9",
+            "2ff3fe127fb9",
+            "f3849a7f0dff",
+            "3902ea43121b",
+            "bee3fb4d48da",
+            "e918604a4f49",
+            "9912fbdd457c",
+            "61e9a9d3f2b6",
+            "e004f7afb559",
+            "d663624b0741",
+            "25899527b47b",
+            "f3677b2e5ed9",
+            "4b33e1366553"
+          ]
+        }
+      }
+    ]
+  }
+}

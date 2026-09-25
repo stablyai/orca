@@ -130,9 +130,20 @@ async function verifySkill(input: {
   directory: string
   manifest: SkillBundleManifestV1['skills'][number]
   signal?: AbortSignal
+  platform: NodeJS.Platform
 }): Promise<void> {
   throwIfCancelled(input.signal)
-  const observed = await observeSkillPackage(input.directory, undefined, undefined, input.signal)
+  const executablePaths =
+    input.platform === 'win32'
+      ? new Set(input.manifest.files.filter((file) => file.executable).map((file) => file.path))
+      : undefined
+  const observed = await observeSkillPackage(
+    input.directory,
+    undefined,
+    executablePaths,
+    input.signal,
+    input.platform
+  )
   throwIfCancelled(input.signal)
   if (
     observed.observedDigest !== input.manifest.digest ||
@@ -163,6 +174,7 @@ export async function extractSkillBundleArchive(input: {
   expectedPackageId?: string
   expectedVersionId?: string
   signal?: AbortSignal
+  platform?: NodeJS.Platform
 }): Promise<SkillBundleExtractionResult> {
   const archive = await openSkillTarGzip(input.archivePath)
   let destinationCreated = false
@@ -227,7 +239,8 @@ export async function extractSkillBundleArchive(input: {
           verifySkill({
             directory: join(skillsDirectory, skill.name),
             manifest: skill,
-            signal: input.signal
+            signal: input.signal,
+            platform: input.platform ?? process.platform
           })
         )
       )

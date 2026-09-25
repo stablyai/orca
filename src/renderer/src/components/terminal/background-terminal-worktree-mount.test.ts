@@ -277,6 +277,21 @@ describe('cold activation tab deferral', () => {
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
   })
 
+  it('passes the owning worktree to the live-tab predicate', () => {
+    const isTabLive = vi.fn(() => false)
+    planColdActivationTabDeferral({
+      restrictions: new Map(),
+      deferredMountTabIdsByWorktree: new Map(),
+      worktreeId: 'wt-scoped',
+      allTabIds: ['tab-1'],
+      isTabLive,
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set(['tab-1'])
+    })
+
+    expect(isTabLive).toHaveBeenCalledWith('tab-1', 'wt-scoped')
+  })
+
   it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', async () => {
     const worktreeId = 'wt-1'
     const allTabIds = tabIds(7)
@@ -354,7 +369,7 @@ describe('cold activation tab deferral', () => {
     expect(resolve).toHaveBeenCalledOnce()
   })
 
-  it('does not defer when most tabs are already live', () => {
+  it('does not defer when every tab must mount anyway', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
     const deferring = planColdActivationTabDeferral({
@@ -362,12 +377,29 @@ describe('cold activation tab deferral', () => {
       deferredMountTabIdsByWorktree,
       worktreeId: 'wt-1',
       allTabIds: tabIds(10),
-      isTabLive: (tabId) => tabId !== 'tab-10',
+      isTabLive: () => true,
       isTabDeferrable: () => true,
       immediateTabIds: new Set()
     })
     expect(deferring).toBe(false)
     expect(restrictions.has('wt-1')).toBe(false)
+  })
+
+  it('defers a single hidden tab so an ordinary switch mounts only what is visible', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(2),
+      isTabLive: () => false,
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set(['tab-1'])
+    })
+    expect(deferring).toBe(true)
+    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1']))
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-2']))
   })
 
   it('reveals newly visible tabs and lifts the restriction once all are revealed', () => {

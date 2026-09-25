@@ -10,7 +10,9 @@ export function normalizeComputerActionResult(result: ComputerActionResult): Com
       ? ('synthetic_input' as const)
       : action.path === 'clipboard'
         ? ('clipboard_paste' as const)
-        : null
+        : action.path === 'accessibility'
+          ? ('accessibility_action_unasserted' as const)
+          : null
   if (!verificationReason || action.verification) {
     return result
   }

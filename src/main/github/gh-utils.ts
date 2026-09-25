@@ -12,7 +12,8 @@ export { ghExecFileAsync, gitExecFileAsync, extractExecError, parseRetryAfterMs 
 export {
   classifyGhError,
   classifyListIssuesError,
-  classifyListPrsError
+  classifyListPrsError,
+  classifyPullRequestUpdateError
 } from './gh-error-classification'
 export {
   _getOwnerRepoCacheSize,
@@ -26,6 +27,7 @@ export {
 } from './github-repository-identity'
 export type {
   GitHubRemoteIdentity,
+  GitHubRemoteIdentityProbeOptions,
   GitHubRepoContext,
   LocalGitExecOptions,
   OwnerRepo

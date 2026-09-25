@@ -57,6 +57,9 @@ export type ImportedWorktreesCardRow = {
   repo: Repo
   hiddenWorktrees: DetectedWorktree[]
   placement: 'repo-group' | 'pinned-fallback'
+  /** Set only when the row's project is checked out on more than one host. */
+  hostContextLabel?: string
+  hostContextHostId?: ExecutionHostId
 }
 
 export type NewExternalWorktreesInboxCandidate = {
@@ -69,6 +72,9 @@ export type NewExternalWorktreesInboxRow = {
   key: string
   repo: Repo
   inboxWorktrees: DetectedWorktree[]
+  /** Set only when the row's project is checked out on more than one host. */
+  hostContextLabel?: string
+  hostContextHostId?: ExecutionHostId
 }
 
 export type PendingCreationRow = {

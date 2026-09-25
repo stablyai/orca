@@ -1,5 +1,8 @@
 import { scheduleSharedControlReconnect } from './remote-runtime-shared-control-state'
 
+const ACTIVE_RECONNECT_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000]
+const IDLE_RECONNECT_DELAYS_MS = [...ACTIVE_RECONNECT_DELAYS_MS, 60_000, 120_000, 300_000]
+
 export class SharedControlReconnectScheduler {
   private timer: ReturnType<typeof setTimeout> | null = null
   private attempt = 0
@@ -40,9 +43,34 @@ export class SharedControlReconnectScheduler {
   scheduleWithDefaultBackoff(intentionallyClosed: boolean, open: () => void): void {
     this.schedule({
       intentionallyClosed,
-      delaysMs: [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000],
+      delaysMs: ACTIVE_RECONNECT_DELAYS_MS,
       open
     })
+  }
+
+  scheduleWithIdleBackoff(intentionallyClosed: boolean, open: () => void): void {
+    this.schedule({ intentionallyClosed, delaysMs: IDLE_RECONNECT_DELAYS_MS, open })
+  }
+
+  scheduleAfterSocketClose(args: {
+    intentionallyClosed: boolean
+    manuallyDisconnected: boolean
+    capabilityPaused: boolean
+    subscriptionCount: number
+    open: () => void
+  }): void {
+    if (
+      args.intentionallyClosed ||
+      args.manuallyDisconnected ||
+      (args.subscriptionCount === 0 && args.capabilityPaused)
+    ) {
+      return
+    }
+    if (args.subscriptionCount > 0) {
+      this.scheduleWithDefaultBackoff(args.intentionallyClosed, args.open)
+      return
+    }
+    this.scheduleWithIdleBackoff(args.intentionallyClosed, args.open)
   }
 
   // Why: OS resume / browser online should advance an already-scheduled reconnect, not start a new one.
@@ -64,12 +92,6 @@ export class SharedControlReconnectScheduler {
       this.timer = null
     }
     this.pendingOpen = null
-  }
-
-  clearWhenIdle(isIdle: boolean): void {
-    if (isIdle) {
-      this.clear()
-    }
   }
 
   resetAttempt(): void {

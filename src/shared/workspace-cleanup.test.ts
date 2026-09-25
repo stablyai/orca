@@ -3,7 +3,6 @@ import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   applyWorkspaceCleanupPolicy,
   canQueueWorkspaceCleanupCandidate,
-  canSelectWorkspaceCleanupCandidate,
   createWorkspaceCleanupFingerprint,
   shouldForceWorkspaceCleanupRemoval,
   shouldHideWorkspaceCleanupCandidate,
@@ -60,44 +59,47 @@ describe('workspace cleanup policy', () => {
 
     expect(candidate.tier).toBe('ready')
     expect(candidate.selectedByDefault).toBe(true)
-    expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(true)
   })
 
-  it('requires an inactivity reason before selecting a workspace', () => {
+  it('keeps legacy verdict fields stable for older clients', () => {
     const candidate = applyWorkspaceCleanupPolicy(makeCandidate({ reasons: [] }))
 
-    expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(false)
     expect(candidate.tier).toBe('review')
     expect(candidate.selectedByDefault).toBe(false)
   })
 
-  it('keeps not-suggested candidates queueable when git evidence is clean', () => {
+  it('queues risk-labelled and recently active candidates', () => {
     const candidate = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['unpushed-commits'] }))
+    const recent = applyWorkspaceCleanupPolicy(makeCandidate({ reasons: [] }))
 
     expect(candidate.tier).toBe('protected')
     expect(candidate.selectedByDefault).toBe(false)
-    expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(false)
     expect(canQueueWorkspaceCleanupCandidate(candidate)).toBe(true)
+    expect(canQueueWorkspaceCleanupCandidate(recent)).toBe(true)
     expect(shouldForceWorkspaceCleanupRemoval(candidate)).toBe(true)
   })
 
-  it('does not queue main worktrees or folder projects for cleanup removal', () => {
+  it('keeps active and live-agent rows manually queueable', () => {
+    expect(
+      canQueueWorkspaceCleanupCandidate(makeCandidate({ blockers: ['active-workspace'] }))
+    ).toBe(true)
+    expect(canQueueWorkspaceCleanupCandidate(makeCandidate({ blockers: ['live-agent'] }))).toBe(
+      true
+    )
+  })
+
+  it('refuses only operations that cannot be routed', () => {
     const mainWorktree = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['main-worktree'] }))
     const folderProject = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['folder-repo'] }))
+    const disconnected = applyWorkspaceCleanupPolicy(
+      makeCandidate({ blockers: ['ssh-disconnected'] })
+    )
+    const dismissed = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['dismissed'] }))
 
     expect(canQueueWorkspaceCleanupCandidate(mainWorktree)).toBe(false)
     expect(canQueueWorkspaceCleanupCandidate(folderProject)).toBe(false)
-  })
-
-  it('requires current git status before selecting a workspace', () => {
-    const candidate = applyWorkspaceCleanupPolicy(
-      makeCandidate({
-        git: { clean: null, checkedAt: null }
-      })
-    )
-
-    expect(candidate.tier).toBe('review')
-    expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(false)
+    expect(canQueueWorkspaceCleanupCandidate(disconnected)).toBe(false)
+    expect(canQueueWorkspaceCleanupCandidate(dismissed)).toBe(true)
   })
 
   it('matches dismissals only for the current classifier fingerprint', () => {

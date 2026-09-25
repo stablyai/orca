@@ -11,7 +11,11 @@ import {
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 import { startSkillPhaseOperation } from './skill-operation-observability'
-import { observeSkillPackage, type ObservedSkillPackage } from './skill-package-identity'
+import {
+  observedSkillPackagesMatch,
+  observeSkillPackage,
+  type ObservedSkillPackage
+} from './skill-package-identity'
 import { extractSkillPackageArchive } from './skill-package-extraction'
 import { writeSkillTarGzip, type SkillTarWriteEntry } from './skill-package-tar'
 
@@ -24,23 +28,6 @@ export type CreatedSkillPackage = {
 
 export type SkillPackageCreationDependencies = {
   afterSourceObserved?: () => Promise<void>
-}
-
-function observationsMatch(left: ObservedSkillPackage, right: ObservedSkillPackage): boolean {
-  return (
-    left.files.length === right.files.length &&
-    left.files.every((file, index) => {
-      const other = right.files[index]
-      return (
-        file.path === other.path &&
-        file.size === other.size &&
-        file.executable === other.executable &&
-        file.classification === other.classification &&
-        file.exactSha256 === other.exactSha256 &&
-        file.identitySha256 === other.identitySha256
-      )
-    })
-  )
 }
 
 function packageManifest(input: {
@@ -98,7 +85,7 @@ async function createSkillPackageArchiveUnobserved(
       errorOnExist: true
     })
     const stagedObservation = await observeSkillPackage(stagedSkill)
-    if (!observationsMatch(sourceObservation, stagedObservation)) {
+    if (!observedSkillPackagesMatch(sourceObservation, stagedObservation)) {
       throw new Error('skill-package-source-changed-during-staging')
     }
     const summary = summarizeSkillMarkdown(await readFile(join(stagedSkill, 'SKILL.md'), 'utf8'))

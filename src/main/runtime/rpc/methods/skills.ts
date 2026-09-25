@@ -1,6 +1,13 @@
-import { defineMethod, type RpcMethod } from '../core'
-import { z } from 'zod'
-import { SkillDiscoveryTargetSchema } from '../../../../shared/skills'
+import { defineMethod } from '../core'
+import type { z } from 'zod'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
+import {
+  previewSkillDeleteRequest,
+  runSkillDeleteRequest,
+  type SkillDeleteRequestDependencies
+} from '../../../skills/skill-delete/request-service'
+import type { SkillDiscoveryTargetSchema } from '../../../../shared/skills'
 import {
   SkillInstallPreviewRequestSchema,
   SkillInstallRequestSchema,
@@ -26,8 +33,15 @@ import {
   AgentSkillShareRequestSchema,
   AgentSkillSharingError
 } from '../../../../shared/agent-skill-sharing-contract'
+import {
+  SkillsCancelInstallParams,
+  SkillsDiscoverParams,
+  SkillsGetInstallProgressParams
+} from '../../../../shared/rpc-contract/skills-params'
 
-function resolveDiscoveryTarget(
+/** Exported so the delete plan's root rebuild resolves its target exactly the
+ *  way `skills.discover` resolved the scan's — including WSL. */
+export function resolveDiscoveryTarget(
   params: z.infer<typeof SkillDiscoveryTargetSchema>,
   runtime: Pick<OrcaRuntimeService, 'resolveProjectRuntimeForWorktree'>
 ) {
@@ -40,10 +54,20 @@ function resolveDiscoveryTarget(
   return resolveSkillDiscoveryTarget(target)
 }
 
-export const SKILL_METHODS: RpcMethod[] = [
+function skillDeleteDependencies(
+  runtime: Pick<OrcaRuntimeService, 'listRepos' | 'resolveSkillDiscoveryProviderRoots'>
+): SkillDeleteRequestDependencies {
+  return {
+    repos: () => runtime.listRepos(),
+    resolveProviderRootOverrides: (target) => runtime.resolveSkillDiscoveryProviderRoots(target),
+    userDataPath: getAppEnvironment().getPath('userData')
+  }
+}
+
+export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.discover',
-    params: SkillDiscoveryTargetSchema.default({}),
+    params: SkillsDiscoverParams,
     handler: async (params, { runtime }) => {
       // Why: the executing runtime owns WSL project preferences. Remote callers
       // send worktree identity only; trusting their projectRuntime absence
@@ -54,6 +78,26 @@ export const SKILL_METHODS: RpcMethod[] = [
         refresh: params.refresh === true
       })
     }
+  }),
+  defineMethod({
+    name: 'skills.previewDelete',
+    params: SkillDeleteRequestSchema,
+    handler: async (params, { runtime }) =>
+      previewSkillDeleteRequest(
+        params,
+        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        skillDeleteDependencies(runtime)
+      )
+  }),
+  defineMethod({
+    name: 'skills.delete',
+    params: SkillDeleteRequestSchema,
+    handler: async (params, { runtime }) =>
+      runSkillDeleteRequest(
+        params,
+        resolveDiscoveryTarget(params.target ?? {}, runtime),
+        skillDeleteDependencies(runtime)
+      )
   }),
   defineMethod({
     name: 'skills.share',
@@ -107,14 +151,14 @@ export const SKILL_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'skills.cancelInstall',
-    params: z.object({ operationId: z.string().min(1).max(128) }).strict(),
+    params: SkillsCancelInstallParams,
     handler: (params, { runtime }) => ({
       cancelled: runtime.cancelSharedSkillInstall(params.operationId)
     })
   }),
   defineMethod({
     name: 'skills.getInstallProgress',
-    params: z.object({ operationId: z.string().min(1).max(128) }).strict(),
+    params: SkillsGetInstallProgressParams,
     handler: (params, { runtime }) => {
       const progress = runtime.getSharedSkillInstallProgress(params.operationId)
       return progress ? SkillBundleInstallProgressSchema.parse(progress) : null

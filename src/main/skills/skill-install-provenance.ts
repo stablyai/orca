@@ -25,10 +25,13 @@ export type SkillInstallReceiptV1 = {
   wslDistro?: string
 }
 
+function normalizedSkillInstallPath(canonicalPath: string): string {
+  const normalized = resolve(canonicalPath)
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
 export function skillInstallStateKey(canonicalPath: string): string {
-  const normalized =
-    process.platform === 'win32' ? resolve(canonicalPath).toLowerCase() : resolve(canonicalPath)
-  return createHash('sha256').update(normalized).digest('hex')
+  return createHash('sha256').update(normalizedSkillInstallPath(canonicalPath)).digest('hex')
 }
 
 export function skillInstallReceiptPath(stateDirectory: string, canonicalPath: string): string {
@@ -136,7 +139,8 @@ export async function readSkillInstallReceipt(
     const parsed: unknown = JSON.parse(
       await readFile(skillInstallReceiptPath(stateDirectory, canonicalPath), 'utf8')
     )
-    return isReceipt(parsed) && resolve(parsed.canonicalPath) === resolve(canonicalPath)
+    return isReceipt(parsed) &&
+      normalizedSkillInstallPath(parsed.canonicalPath) === normalizedSkillInstallPath(canonicalPath)
       ? parsed
       : null
   } catch {

@@ -13,16 +13,19 @@ import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { museHookService } from '../muse/hook-service'
+import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
-  /** Explicit CODEX_HOME dir for redirected runtimes (WSL managed runtime
-   *  home). Codex-only: it is the one agent whose home Orca redirects. Also
-   *  defers the config.toml trust write until that file exists, so the
-   *  launch path's only-if-absent seed is never pre-empted. */
+  /** Explicit CODEX_HOME dir for redirected runtimes (for example WSL's managed runtime home). */
   codexHomeDir?: string
+  /** Skip the trust write when a redirected runtime config is seeded by the launch path. */
+  deferTrustUntilConfigToml?: boolean
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
+  /** Version reported by Claude on this execution host. */
+  claudeVersion?: string
   /** Stops before starting the next installer when the owning relay request
    *  is cancelled. Individual filesystem mutations remain atomic. */
   signal?: AbortSignal
@@ -41,18 +44,21 @@ type RemoteManagedHookInstaller = readonly [
 ]
 
 const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
-  ['claude', (sftp, remoteHome) => claudeHookService.installRemote(sftp, remoteHome)],
+  [
+    'claude',
+    (sftp, remoteHome, options) =>
+      claudeHookService.installRemote(sftp, remoteHome, {
+        claudeVersion: options?.claudeVersion
+      })
+  ],
   ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],
   [
     'codex',
     (sftp, remoteHome, options) =>
-      codexHookService.installRemote(
-        sftp,
-        remoteHome,
-        options?.codexHomeDir
-          ? { codexHomeDir: options.codexHomeDir, deferTrustUntilConfigToml: true }
-          : undefined
-      )
+      codexHookService.installRemote(sftp, remoteHome, {
+        codexHomeDir: options?.codexHomeDir,
+        deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml
+      })
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
@@ -68,7 +74,9 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
-  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
+  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
+  ['muse', (sftp, remoteHome) => museHookService.installRemote(sftp, remoteHome)],
+  ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant

@@ -27,6 +27,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
@@ -97,7 +98,7 @@ describe('repos:addRemote', () => {
     })
     mockWindow.webContents.send.mockReset()
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('registers the repos:addRemote handler', () => {

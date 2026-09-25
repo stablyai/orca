@@ -14,7 +14,6 @@ import {
   removeInstalledPlugin
 } from '../plugins/plugin-install'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
-import { buildPluginList, type PluginListEntry } from '../plugins/plugin-list-projection'
 import type { PluginService } from '../plugins/plugin-service'
 import { bindPluginPanelOwnerLifecycle } from '../plugins/plugin-panel-owner-lifecycle'
 import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
@@ -68,13 +67,10 @@ const removeArgsSchema = z.object({
 })
 const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
 
-export async function listPluginsForClients(
-  pluginService: PluginService
-): Promise<PluginListEntry[]> {
-  await pluginService.whenReady()
-  const lock = await readPluginLockfile(getUserPluginsDir(pluginService.options.userDataPath))
-  return buildPluginList(pluginService, lock)
-}
+// Why re-exported: moved to ../plugins/plugin-client-list so the runtime RPC can reach
+// it without ipcMain. Existing importers of this path keep working.
+export { listPluginsForClients } from '../plugins/plugin-client-list'
+import { listPluginsForClients } from '../plugins/plugin-client-list'
 
 export function canRemoveInstalledPlugin(
   pluginService: PluginService,
@@ -219,12 +215,13 @@ export function registerPluginHandlers(
     if (!canRemoveInstalledPlugin(pluginService, parsed.pluginKey, lock)) {
       throw new Error(`cannot remove protected or non-installed plugin ${parsed.pluginKey}`)
     }
-    await pluginService.deactivatePlugin(parsed.pluginKey)
-    await removeInstalledPlugin({
-      pluginsDir,
-      pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
-      pluginKey: parsed.pluginKey
-    })
+    await pluginService.removePlugin(parsed.pluginKey, () =>
+      removeInstalledPlugin({
+        pluginsDir,
+        pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
+        pluginKey: parsed.pluginKey
+      })
+    )
     // Drop the stale consent so a later reinstall re-prompts from scratch.
     const settings = store.getSettings()
     const consents = { ...settings.pluginConsents }

@@ -12,7 +12,7 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
-import { notifyReposChanged } from './repos'
+import { notifyReposChanged } from './repos/repos-changed-notification'
 import { notifyWorktreesChanged } from './worktree-remote'
 import { setFolderRepoGitUpgradeWakeListener } from './folder-repo-git-upgrade-wake'
 import {
@@ -101,7 +101,9 @@ function resolveRealPath(pathValue: string): string {
  *   the path the user picked; when a symlinked parent makes those differ, the root reads
  *   as an *external* worktree, and hiding those would hide the project's only workspace.
  */
-function resolveUpgrade(repoPath: string): { externalWorktreeVisibility?: 'hide' } | null {
+function resolveUpgrade(
+  repoPath: string
+): { folderUpgradeGitRootPath: string; externalWorktreeVisibility?: 'hide' } | null {
   if (!isGitRepo(repoPath)) {
     return null
   }
@@ -110,8 +112,8 @@ function resolveUpgrade(repoPath: string): { externalWorktreeVisibility?: 'hide'
     return null
   }
   return normalizeRuntimePathForComparison(gitRoot) === normalizeRuntimePathForComparison(repoPath)
-    ? { externalWorktreeVisibility: 'hide' }
-    : {}
+    ? { folderUpgradeGitRootPath: gitRoot, externalWorktreeVisibility: 'hide' }
+    : { folderUpgradeGitRootPath: gitRoot }
 }
 
 type UpgradeResult = 'upgraded' | 'blocked' | 'rejected'

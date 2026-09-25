@@ -1,0 +1,1819 @@
+{
+  "operation": "tasks.provider-load",
+  "family": "tasks.provider-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
+  "scenarioSha256": "f02acd2ed6319b8cb674c04b41a1e96c50e53123a8914790acc8af5410d63f98",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "009043ac6f6a": {
+      "name": "settings.update#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultLinearTeamSelection": ["team-1"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "03d32b26cde1": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": 4
+        }
+      }
+    },
+    "0577812165ed": {
+      "connected": false,
+      "selectedTeams": [],
+      "teams": [],
+      "workspaceId": {
+        "$rpc": "null"
+      },
+      "workspaces": []
+    },
+    "057c9900ad0c": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.countWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"is:issue bug\"}}"
+    },
+    "084da53ea1e3": {
+      "name": "linear.status#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
+    "0bb4194037b8": {
+      "name": "selectedLinearTeamIds",
+      "ordinal": 6,
+      "value": []
+    },
+    "0d5034d2e543": {
+      "name": "linearTeams",
+      "ordinal": 8,
+      "value": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "157fb9fea561": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "before": {
+              "$rpc": "undefined"
+            },
+            "limit": 36,
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:9",
+                "labels": [],
+                "number": 9,
+                "state": "open",
+                "title": "An issue",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ],
+            "sources": {
+              "issues": "upstream"
+            }
+          }
+        }
+      }
+    },
+    "172b8103e27d": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "413e4f429e18": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": 4
+    },
+    "470893ebd4a7": {
+      "name": "linearWorkspaces",
+      "ordinal": 4,
+      "value": [
+        {
+          "id": "linear-workspace",
+          "name": "Workspace"
+        }
+      ]
+    },
+    "49c5fd241816": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "failedCount": 0,
+        "items": [
+          {
+            "key": "github:repo-1:issue:9",
+            "provider": "github",
+            "source": {
+              "author": {
+                "$rpc": "null"
+              },
+              "id": "issue:9",
+              "labels": [],
+              "number": 9,
+              "repoId": "repo-1",
+              "repoName": "Repo",
+              "state": "open",
+              "title": "An issue",
+              "type": "issue",
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "url": ""
+            },
+            "status": "Open",
+            "subtitle": "Repo #9",
+            "title": "An issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          }
+        ],
+        "sourceErrors": [],
+        "sourceFallbacks": [],
+        "sourcesByRepoId": {
+          "repo-1": {
+            "issues": "upstream"
+          }
+        }
+      }
+    },
+    "520f24cdfcf1": {
+      "name": "settings.update#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultLinearTeamSelection": ["team-1"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "5366baec14b8": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "53e0412296fa": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "5e1882223b41": {
+      "name": "linear.listTeams#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\",\"params\":{\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "5efa1426d38f": {
+      "name": "selectedLinearWorkspaceId",
+      "ordinal": 5,
+      "value": "linear-workspace"
+    },
+    "67b5ebc67646": {
+      "connected": true,
+      "selectedTeams": ["team-1"],
+      "teams": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ],
+      "workspaceId": "linear-workspace",
+      "workspaces": [
+        {
+          "id": "linear-workspace",
+          "name": "Workspace"
+        }
+      ]
+    },
+    "729000943a27": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\"}}"
+    },
+    "76b875abfbaf": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "before": {
+              "$rpc": "undefined"
+            },
+            "limit": 36,
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:9",
+                "labels": [],
+                "number": 9,
+                "state": "open",
+                "title": "An issue",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ],
+            "sources": {
+              "issues": "upstream"
+            }
+          }
+        }
+      }
+    },
+    "7a279381c58b": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\"}}"
+    },
+    "7a62c289f0fb": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"is:issue bug\"}}"
+    },
+    "813bf7c818e8": {
+      "name": "linearTeams",
+      "ordinal": 5,
+      "value": []
+    },
+    "9050cedbf1cf": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 15,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.countWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"is:issue bug\"}}"
+    },
+    "91220356fb85": {
+      "name": "selectedLinearTeamIds",
+      "ordinal": 9,
+      "value": ["team-1"]
+    },
+    "93695401e4f8": {
+      "name": "linear.listTeams#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listTeams"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            }
+          ]
+        }
+      }
+    },
+    "97e7c25aba4e": {
+      "name": "linearWorkspaces",
+      "ordinal": 4,
+      "value": []
+    },
+    "a1fb4998554b": {
+      "name": "settings.update#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
+    },
+    "a2c4c90609f8": {
+      "name": "settings.update#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
+    },
+    "a3b6191b3861": {
+      "name": "settings.update#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultLinearTeamSelection\":[\"team-1\"]}}"
+    },
+    "a5efc434135f": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": 4
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "b972a52a94fe": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "connected": true,
+            "selectedWorkspaceId": "linear-workspace",
+            "workspaces": [
+              {
+                "id": "linear-workspace",
+                "name": "Workspace"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "bd4e7772cf07": {
+      "name": "settings.update#1",
+      "ordinal": 10,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.update"
+        },
+        {
+          "name": "params",
+          "value": {
+            "defaultLinearTeamSelection": ["team-1"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "bda85b2bbb48": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c25b7af04e44": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "c4473d58d751": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c72324e5f439": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.countWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"is:issue bug\"}}"
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ce76e0581f87": {
+      "name": "linearConnected",
+      "ordinal": 3,
+      "value": false
+    },
+    "d44ba8747c4c": {
+      "name": "selectedLinearWorkspaceId",
+      "ordinal": 7,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "d8435d112a09": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "db17b820bb60": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (linear.status)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "de7bfe07e04b": {
+      "name": "github.countWorkItems#1",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.countWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": 4
+        }
+      }
+    },
+    "e93bedf82315": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "before": {
+              "$rpc": "undefined"
+            },
+            "limit": 36,
+            "query": "is:issue bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:9",
+                "labels": [],
+                "number": 9,
+                "state": "open",
+                "title": "An issue",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ],
+            "sources": {
+              "issues": "upstream"
+            }
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "edab56c7253d": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "f57b6504f168": {
+      "name": "linearConnected",
+      "ordinal": 3,
+      "value": true
+    },
+    "f6c223a2d25f": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "fa74ad96f499": {
+      "name": "linear.status#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.provider-load-linear.status-1",
+    "checkpoints": [
+      {
+        "id": "tk-provider-load.normal:linear-context-settled",
+        "observation": {
+          "sender": ["b972a52a94fe", "93695401e4f8"],
+          "payloads": ["084da53ea1e3", "5e1882223b41"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.normal:persist-teams-settled",
+        "observation": {
+          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07"],
+          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.normal:github-page-settled",
+        "observation": {
+          "sender": ["b972a52a94fe", "93695401e4f8", "bd4e7772cf07", "e93bedf82315"],
+          "payloads": ["084da53ea1e3", "5e1882223b41", "a3b6191b3861", "7a279381c58b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.normal:github-count-settled",
+        "observation": {
+          "sender": [
+            "b972a52a94fe",
+            "93695401e4f8",
+            "bd4e7772cf07",
+            "e93bedf82315",
+            "de7bfe07e04b"
+          ],
+          "payloads": [
+            "084da53ea1e3",
+            "5e1882223b41",
+            "a3b6191b3861",
+            "7a279381c58b",
+            "9050cedbf1cf"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "67b5ebc67646",
+          "effects": [
+            "f57b6504f168",
+            "470893ebd4a7",
+            "5efa1426d38f",
+            "0d5034d2e543",
+            "91220356fb85"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.result-absent:linear-context-settled",
+        "observation": {
+          "sender": ["edab56c7253d"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.result-absent:persist-teams-settled",
+        "observation": {
+          "sender": ["edab56c7253d", "520f24cdfcf1"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.result-absent:github-page-settled",
+        "observation": {
+          "sender": ["edab56c7253d", "520f24cdfcf1", "76b875abfbaf"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.result-absent:github-count-settled",
+        "observation": {
+          "sender": ["edab56c7253d", "520f24cdfcf1", "76b875abfbaf", "a5efc434135f"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.result-null:linear-context-settled",
+        "observation": {
+          "sender": ["d8435d112a09"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.result-null:persist-teams-settled",
+        "observation": {
+          "sender": ["d8435d112a09", "520f24cdfcf1"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.result-null:github-page-settled",
+        "observation": {
+          "sender": ["d8435d112a09", "520f24cdfcf1", "76b875abfbaf"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.result-null:github-count-settled",
+        "observation": {
+          "sender": ["d8435d112a09", "520f24cdfcf1", "76b875abfbaf", "a5efc434135f"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "db17b820bb60",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-ok-missing:linear-context-settled",
+        "observation": {
+          "sender": ["fa74ad96f499"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-ok-missing:persist-teams-settled",
+        "observation": {
+          "sender": ["fa74ad96f499", "009043ac6f6a"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-ok-missing:github-page-settled",
+        "observation": {
+          "sender": ["fa74ad96f499", "009043ac6f6a", "157fb9fea561"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b", "729000943a27"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-ok-missing:github-count-settled",
+        "observation": {
+          "sender": ["fa74ad96f499", "009043ac6f6a", "157fb9fea561", "03d32b26cde1"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b", "729000943a27", "c72324e5f439"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-string-error:linear-context-settled",
+        "observation": {
+          "sender": ["c25b7af04e44"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-string-error:persist-teams-settled",
+        "observation": {
+          "sender": ["c25b7af04e44", "009043ac6f6a"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-string-error:github-page-settled",
+        "observation": {
+          "sender": ["c25b7af04e44", "009043ac6f6a", "157fb9fea561"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b", "729000943a27"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-string-error:github-count-settled",
+        "observation": {
+          "sender": ["c25b7af04e44", "009043ac6f6a", "157fb9fea561", "03d32b26cde1"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b", "729000943a27", "c72324e5f439"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-object-error:linear-context-settled",
+        "observation": {
+          "sender": ["53e0412296fa"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-object-error:persist-teams-settled",
+        "observation": {
+          "sender": ["53e0412296fa", "009043ac6f6a"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-object-error:github-page-settled",
+        "observation": {
+          "sender": ["53e0412296fa", "009043ac6f6a", "157fb9fea561"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b", "729000943a27"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.inner-false-object-error:github-count-settled",
+        "observation": {
+          "sender": ["53e0412296fa", "009043ac6f6a", "157fb9fea561", "03d32b26cde1"],
+          "payloads": ["084da53ea1e3", "a1fb4998554b", "729000943a27", "c72324e5f439"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "eb79a9b3682a",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": [
+            "ce76e0581f87",
+            "97e7c25aba4e",
+            "813bf7c818e8",
+            "0bb4194037b8",
+            "d44ba8747c4c"
+          ]
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused:linear-context-settled",
+        "observation": {
+          "sender": ["172b8103e27d"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "32a7c0ae7918"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused:persist-teams-settled",
+        "observation": {
+          "sender": ["172b8103e27d", "520f24cdfcf1"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "32a7c0ae7918",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused:github-page-settled",
+        "observation": {
+          "sender": ["172b8103e27d", "520f24cdfcf1", "76b875abfbaf"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "32a7c0ae7918",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused:github-count-settled",
+        "observation": {
+          "sender": ["172b8103e27d", "520f24cdfcf1", "76b875abfbaf", "a5efc434135f"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "32a7c0ae7918",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused-no-message:linear-context-settled",
+        "observation": {
+          "sender": ["bda85b2bbb48"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "f3b516f62081"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused-no-message:persist-teams-settled",
+        "observation": {
+          "sender": ["bda85b2bbb48", "520f24cdfcf1"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "f3b516f62081",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused-no-message:github-page-settled",
+        "observation": {
+          "sender": ["bda85b2bbb48", "520f24cdfcf1", "76b875abfbaf"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "f3b516f62081",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.outer-refused-no-message:github-count-settled",
+        "observation": {
+          "sender": ["bda85b2bbb48", "520f24cdfcf1", "76b875abfbaf", "a5efc434135f"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "f3b516f62081",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.method-not-found:linear-context-settled",
+        "observation": {
+          "sender": ["f6c223a2d25f"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "b948e8307e81"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.method-not-found:persist-teams-settled",
+        "observation": {
+          "sender": ["f6c223a2d25f", "520f24cdfcf1"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "b948e8307e81",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.method-not-found:github-page-settled",
+        "observation": {
+          "sender": ["f6c223a2d25f", "520f24cdfcf1", "76b875abfbaf"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "b948e8307e81",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.method-not-found:github-count-settled",
+        "observation": {
+          "sender": ["f6c223a2d25f", "520f24cdfcf1", "76b875abfbaf", "a5efc434135f"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "b948e8307e81",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection:linear-context-settled",
+        "observation": {
+          "sender": ["c4473d58d751"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "a947768bc0ed"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection:persist-teams-settled",
+        "observation": {
+          "sender": ["c4473d58d751", "520f24cdfcf1"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "a947768bc0ed",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection:github-page-settled",
+        "observation": {
+          "sender": ["c4473d58d751", "520f24cdfcf1", "76b875abfbaf"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "a947768bc0ed",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection:github-count-settled",
+        "observation": {
+          "sender": ["c4473d58d751", "520f24cdfcf1", "76b875abfbaf", "a5efc434135f"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "a947768bc0ed",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection-no-message:linear-context-settled",
+        "observation": {
+          "sender": ["5366baec14b8"],
+          "payloads": ["084da53ea1e3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "c7584e82c72f"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection-no-message:persist-teams-settled",
+        "observation": {
+          "sender": ["5366baec14b8", "520f24cdfcf1"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "c7584e82c72f",
+            "persist-teams-1": "eb79a9b3682a"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection-no-message:github-page-settled",
+        "observation": {
+          "sender": ["5366baec14b8", "520f24cdfcf1", "76b875abfbaf"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "c7584e82c72f",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      },
+      {
+        "id": "tk-provider-load.transport-rejection-no-message:github-count-settled",
+        "observation": {
+          "sender": ["5366baec14b8", "520f24cdfcf1", "76b875abfbaf", "a5efc434135f"],
+          "payloads": ["084da53ea1e3", "a2c4c90609f8", "7a62c289f0fb", "057c9900ad0c"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "linear-context-0": "c7584e82c72f",
+            "persist-teams-1": "eb79a9b3682a",
+            "github-page-2": "49c5fd241816",
+            "github-count-3": "413e4f429e18"
+          },
+          "state": "0577812165ed",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors } from '../theme/mobile-theme'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
@@ -214,8 +215,11 @@ export function MobileSourceControlPanel({
     void refetchPr({ includeDetails: false })
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
 
-  // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip safe-area chrome (the dock column owns it).
-  const onBack = embedded ? (onRequestClose ?? (() => router.back())) : () => router.back()
+  // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip
+  // safe-area chrome (the dock column owns it). Two handlers rather than one chosen by mode,
+  // because the header renders a Close or a Back and they are not the same control.
+  const onBack = () => router.back()
+  const onClose = onRequestClose ?? (() => router.back())
   // Chromeless PR body has no header, so surface open-on-web on the hub chrome while the PR segment is active.
   const prWebUrl =
     activeTab === 'pr' &&
@@ -231,12 +235,20 @@ export function MobileSourceControlPanel({
       worktreeLabel={worktreeLabel}
       ioBusy={ioBusy}
       onBack={onBack}
+      onClose={onClose}
       onRefresh={onRefresh}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
     />
   )
 
+  // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
+  const statusRetry = connectionRetryAction({
+    hostId,
+    needsReconnect: connState !== 'connected',
+    forceReconnect,
+    reload: () => void loadStatus()
+  })
   const statusGate =
     screenState.kind === 'loading' ? (
       <View style={styles.state}>
@@ -248,18 +260,8 @@ export function MobileSourceControlPanel({
           {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
         </Text>
         <Text style={styles.stateText}>{screenState.message}</Text>
-        {screenState.kind === 'error' ? (
-          <Pressable
-            style={styles.retryButton}
-            onPress={() => {
-              // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
-              if (connState !== 'connected' && hostId) {
-                void forceReconnect(hostId)
-                return
-              }
-              void loadStatus()
-            }}
-          >
+        {screenState.kind === 'error' && statusRetry ? (
+          <Pressable style={styles.retryButton} onPress={statusRetry}>
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         ) : null}

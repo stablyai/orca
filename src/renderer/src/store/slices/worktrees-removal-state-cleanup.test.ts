@@ -52,7 +52,7 @@ describe('removeWorktree state cleanup', () => {
     const staleProbe = beginHugeRepoWarningProbe(removed)
     expect(markHugeRepoWarningDismissed(staleProbe)).toBe(true)
 
-    await store.getState().removeWorktree(removed.id)
+    await store.getState().removeWorktree({ id: removed.id, executionHostId: null })
 
     // The same-path replacement can reuse persisted instance metadata.
     const replacementProbe = beginHugeRepoWarningProbe({ ...removed })
@@ -74,7 +74,7 @@ describe('removeWorktree state cleanup', () => {
     expect(markHugeRepoWarningDismissed(retainedProbe)).toBe(true)
     mockApi.worktrees.remove.mockRejectedValueOnce(new Error('delete failed'))
 
-    const result = await store.getState().removeWorktree(retained.id)
+    const result = await store.getState().removeWorktree({ id: retained.id, executionHostId: null })
 
     expect(result).toEqual({ ok: false, error: 'delete failed' })
     expect(hasDismissedHugeRepoWarning(retainedProbe)).toBe(true)
@@ -99,7 +99,7 @@ describe('removeWorktree state cleanup', () => {
     expect(getHostedReviewLinkMutationGenerationForTests(removed.id)).toBeGreaterThan(0)
     expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
 
-    await store.getState().removeWorktree(removed.id)
+    await store.getState().removeWorktree({ id: removed.id, executionHostId: null })
 
     expect(getHostedReviewLinkMutationGenerationForTests(removed.id)).toBe(0)
     expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
@@ -121,7 +121,7 @@ describe('removeWorktree state cleanup', () => {
       canExpandPaneByTabId: { 'removed-tab': false, 'surviving-tab': true }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree(removed.id)
+    await store.getState().removeWorktree({ id: removed.id, executionHostId: null })
 
     expect(store.getState().expandedPaneByTabId).toEqual({ 'surviving-tab': false })
     expect(store.getState().canExpandPaneByTabId).toEqual({ 'surviving-tab': true })
@@ -160,7 +160,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree(removed.id)
+    await store.getState().removeWorktree({ id: removed.id, executionHostId: null })
 
     expect(store.getState().automaticAgentResumeClaimsByTabId).toEqual({
       'surviving-tab': {
@@ -197,7 +197,7 @@ describe('removeWorktree state cleanup', () => {
       }
     ])
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     // Only the orphaned runtime-owned project setup is purged; the user's SSH project is untouched.
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
@@ -228,7 +228,9 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree('repo1::/path/wt1')
+    const result = await store
+      .getState()
+      .removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(result).toEqual({ ok: true })
     // Draft for file-1 should be removed, draft for file-2 should remain
@@ -254,7 +256,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree(wt.id)
+    await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
 
     expect(store.getState().worktreeLineageById).toEqual({
       'repo1::/path/wt2': siblingLineage
@@ -285,7 +287,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().markdownViewMode).toEqual({ 'file-2': 'source' })
   })
@@ -314,7 +316,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
   })
@@ -343,7 +345,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({ 'file-2': true })
   })
@@ -372,7 +374,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({ 'file-2': true })
   })
@@ -395,7 +397,7 @@ describe('removeWorktree state cleanup', () => {
     }
 
     try {
-      await store.getState().removeWorktree(wt.id)
+      await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
     } finally {
       globalWithDocument.document = originalDocument
     }
@@ -417,7 +419,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().expandedDirs).toEqual({
       'repo1::/path/wt2': new Set(['test'])
@@ -436,7 +438,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().showDotfilesByWorktree).toEqual({
       'repo1::/path/wt2': false
@@ -455,7 +457,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().activeTabIdByWorktree).toEqual({
       'repo1::/path/wt2': 'tab-2'
@@ -474,7 +476,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().tabBarOrderByWorktree).toEqual({
       'repo1::/path/wt2': ['tab-2']
@@ -513,7 +515,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().pendingReconnectTabByWorktree).toEqual({
       'repo1::/path/wt2': ['tab-2']
@@ -580,7 +582,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().gitStatusByWorktree).toEqual({
       'repo1::/path/wt2': [{ path: 'b.ts' }]
@@ -627,7 +629,7 @@ describe('removeWorktree state cleanup', () => {
       }
     } as unknown as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     expect(store.getState().recentlyClosedBrowserTabsByWorktree).toEqual({
       'repo1::/path/wt2': [{ workspace: { id: 'workspace-2' }, pages: [] }]
@@ -645,7 +647,7 @@ describe('removeWorktree state cleanup', () => {
       editorDrafts: drafts
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree('repo1::/path/wt1')
+    await store.getState().removeWorktree({ id: 'repo1::/path/wt1', executionHostId: null })
 
     // The same reference should be returned (no unnecessary shallow copy)
     expect(store.getState().editorDrafts).toBe(drafts)

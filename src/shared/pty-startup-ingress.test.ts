@@ -4,10 +4,6 @@ import {
   parsePtyStartupIngressIntent,
   type PtyIngressEmission
 } from './pty-startup-ingress'
-import type {
-  PtySlaveEchoProbe,
-  PtySlaveLineDisciplineEcho
-} from './pty-slave-line-discipline-echo'
 
 const COLORS = { foreground: '#2e3434', background: '#ffffff' }
 const FOREGROUND_REPLY = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
@@ -23,7 +19,6 @@ function createHarness(
   options: {
     projection?: boolean
     nested?: (data: string) => void
-    echoProbe?: PtySlaveEchoProbe
   } = {}
 ) {
   const emissions: PtyIngressEmission[] = []
@@ -35,7 +30,6 @@ function createHarness(
       deadlineMs: 5_000
     },
     ...(options.projection ? { ownerBackend: 'windows-conpty' as const } : {}),
-    ...(options.echoProbe ? { echoProbe: options.echoProbe } : {}),
     write: (data) => {
       writes.push(data)
       options.nested?.(data)
@@ -46,18 +40,6 @@ function createHarness(
 }
 
 /** Probe that answers from a script, repeating its last answer once exhausted. */
-function scriptedEchoProbe(...states: PtySlaveLineDisciplineEcho[]) {
-  let index = 0
-  const probe: PtySlaveEchoProbe & { calls: number } = Object.assign(
-    async () => {
-      probe.calls += 1
-      return states[Math.min(index++, states.length - 1)] ?? 'unknown'
-    },
-    { calls: 0 }
-  )
-  return probe
-}
-
 function visible(emissions: readonly PtyIngressEmission[]): string {
   return emissions.map((emission) => emission.data).join('')
 }
@@ -74,16 +56,14 @@ describe('PtyStartupIngress', () => {
     expect(parsePtyStartupIngressIntent({ ...intent, deadlineMs: 30_001 })).toBeUndefined()
   })
 
-  it('recognizes BEL/ST queries at every split and defers canonical replies', () => {
+  it('recognizes BEL/ST queries at every split and answers both in order', () => {
     vi.useFakeTimers()
     const query = '\x1b]10;?\x07\x1b]11;?\x1b\\'
     for (let split = 0; split <= query.length; split += 1) {
       const { ingress, writes, emissions } = createHarness()
       ingress.accept(query.slice(0, split))
       ingress.accept(query.slice(split))
-      // Why: answering inside the query's own turn beats the querying program's
-      // tcsetattr, so a cooked tty echoes the reply as text instead (#12112).
-      expect(writes, `split ${split}`).toEqual([])
+      // Answered in the accepting turn, in query order — no queue to reorder them.
       vi.advanceTimersByTime(0)
       ingress.drainAndClose()
       expect(visible(emissions), `split ${split}`).toBe('')
@@ -442,28 +422,6 @@ describe('PtyStartupIngress', () => {
     expect(visible(emissions)).toBe('')
   })
 
-  it('writes a reply the startup deadline raced instead of dropping it', () => {
-    // Why: the query span was already consumed, so nobody downstream can answer it.
-    vi.useFakeTimers()
-    const writes: string[] = []
-    const emissions: PtyIngressEmission[] = []
-    const ingress = new PtyStartupIngress({
-      intent: { colors: COLORS, deadlineMs: 5_000 },
-      ownerBackend: 'posix-pty',
-      write: (data) => writes.push(data),
-      onEmission: (emission) => emissions.push(emission)
-    })
-
-    vi.advanceTimersByTime(4_999)
-    ingress.accept('\x1b]10;?\x07')
-    expect(writes).toEqual([])
-    vi.advanceTimersByTime(1)
-
-    expect(visible(emissions)).toBe('')
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    ingress.drainAndClose()
-  })
-
   it('keeps the synchronous write for ConPTY-hosted wsl.exe panes', () => {
     // Why: a Windows-hosted pty must be answered before conhost's own responder.
     const writes: string[] = []
@@ -818,139 +776,36 @@ describe('PtyStartupIngress', () => {
     expect(visible(emissions)).toBe(']10;rgb:2e2e/')
   })
 
-  it('withholds the reply while the slave would echo it, then writes once it is quiet', async () => {
-    vi.useFakeTimers()
-    const echoProbe = scriptedEchoProbe('echoing', 'echoing', 'quiet')
-    const { ingress, writes } = createHarness({ echoProbe })
+  it('suppresses the readline echo, which no reading of the ECHO bit could predict', () => {
+    const { ingress, writes, emissions } = createHarness()
     ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(0)
-    // Nothing may go out while the line discipline is still cooked: that write is the
-    // one that comes straight back as visible junk (#12112).
-    expect(writes).toEqual([])
-    await vi.advanceTimersByTimeAsync(20)
-    expect(writes).toEqual([])
-    await vi.advanceTimersByTimeAsync(20)
     expect(writes).toEqual([FOREGROUND_REPLY])
-    expect(echoProbe.calls).toBe(3)
-    ingress.drainAndClose()
-  })
-
-  it('retires only the kernel caret projection once the probe proves ECHO is clear', async () => {
-    vi.useFakeTimers()
-    const { ingress, writes, emissions } = createHarness({
-      echoProbe: scriptedEchoProbe('quiet')
-    })
-    ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    // A cleared ECHO bit proves the kernel cannot produce the caret form, so output
-    // that merely resembles it is ordinary program output and must survive.
-    const caret = POSIX_COOKED_ECHOES[0]?.(FOREGROUND_REPLY) ?? ''
-    ingress.accept(caret)
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe(caret)
-  })
-
-  it('still suppresses the readline echo on a slave the probe called quiet', async () => {
-    vi.useFakeTimers()
-    const { ingress, writes, emissions } = createHarness({
-      echoProbe: scriptedEchoProbe('quiet')
-    })
-    ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    // Why: readline echoes a master write in software with the tty already raw and
-    // ECHO off, so `quiet` is no evidence at all about this shape. Verified on a live
-    // pty: at a bash prompt the probe reports quiet and readline still emits it.
+    // Why this shape is the reason projections are load-bearing: readline echoes a
+    // master write in software with the tty already raw and ECHO off, so the kernel's
+    // ECHO bit says nothing about it. Verified on a live pty: at a bash prompt the
+    // kernel reports quiet and readline still emits this.
     ingress.accept(POSIX_COOKED_ECHOES[1]?.(FOREGROUND_REPLY) ?? '')
     ingress.drainAndClose()
     expect(visible(emissions)).toBe('')
   })
 
-  it('falls back to recognizing echo shapes when the probe cannot answer', async () => {
-    vi.useFakeTimers()
-    const { ingress, writes, emissions } = createHarness({
-      echoProbe: scriptedEchoProbe('unknown')
-    })
+  it('suppresses the kernel caret echo', () => {
+    const { ingress, writes, emissions } = createHarness()
     ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(0)
     expect(writes).toEqual([FOREGROUND_REPLY])
-    // `unknown` is not evidence of quiet, so the guess stays armed and swallows the echo.
+    // The ECHOCTL caret form is the POSIX default, and it is always armed now: there is
+    // no verdict that could retire it, and nothing is gained by trying.
     ingress.accept(POSIX_COOKED_ECHOES[0]?.(FOREGROUND_REPLY) ?? '')
     ingress.drainAndClose()
     expect(visible(emissions)).toBe('')
   })
 
-  it('falls back immediately when the echo probe rejects', async () => {
-    vi.useFakeTimers()
-    const echoProbe: PtySlaveEchoProbe = async () => {
-      throw new Error('probe failed')
-    }
-    const { ingress, writes, emissions } = createHarness({ echoProbe })
-    ingress.accept('\x1b]10;?\x07')
-
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    ingress.accept(POSIX_COOKED_ECHOES[0]?.(FOREGROUND_REPLY) ?? '')
+  it('writes the reply in the accepting turn, with no probe and no wait', () => {
+    const { ingress, writes } = createHarness()
+    ingress.accept('\u001b]10;?\u0007')
+    // No deferral at all: withholding is what let a later reply overtake a held one
+    // (#15559), and it never removed the echo anyway — the projections do that.
+    expect(writes).toEqual(['\u001b]10;rgb:2e2e/3434/3434\u001b\\'])
     ingress.drainAndClose()
-    expect(visible(emissions)).toBe('')
-  })
-
-  it('stops polling a tty that never leaves cooked mode and answers it anyway', async () => {
-    vi.useFakeTimers()
-    const echoProbe = scriptedEchoProbe('echoing')
-    const { ingress, writes, emissions } = createHarness({ echoProbe })
-    ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(1_000)
-    // Waiting past this point only delays a reply that will echo whenever it is sent,
-    // so the reply goes out with the shape guess armed rather than being dropped.
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    // Bounded in wall-clock, not in probes: under fork contention each probe takes
-    // longer and the budget buys fewer of them, instead of the wait growing.
-    expect(echoProbe.calls).toBeLessThanOrEqual(10)
-    ingress.accept(POSIX_COOKED_ECHOES[0]?.(FOREGROUND_REPLY) ?? '')
-    ingress.drainAndClose()
-    expect(visible(emissions)).toBe('')
-  })
-
-  it('gives a later query its own probe budget, not the first query remainder', async () => {
-    vi.useFakeTimers()
-    const echoProbe = scriptedEchoProbe('echoing')
-    const { ingress, writes } = createHarness({ echoProbe })
-    ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    const spentOnFirst = echoProbe.calls
-    // Why: OSC 10 and OSC 11 routinely arrive more than a budget apart over SSH. A
-    // counter carried across them would send the second reply out entirely unprobed.
-    ingress.accept('\x1b]11;?\x07')
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(writes).toEqual([FOREGROUND_REPLY, BACKGROUND_REPLY])
-    expect(echoProbe.calls).toBeGreaterThan(spentOnFirst)
-    ingress.drainAndClose()
-  })
-
-  it('answers a still-pending reply when the startup deadline expires mid-poll', async () => {
-    vi.useFakeTimers()
-    const { ingress, writes } = createHarness({ echoProbe: scriptedEchoProbe('echoing') })
-    ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(60)
-    expect(writes).toEqual([])
-    // The deadline is the outer bound: a reply held by a cooked tty still gets sent
-    // rather than dropped, because the querying program is blocked on it.
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(writes).toEqual([FOREGROUND_REPLY])
-    ingress.drainAndClose()
-  })
-
-  it('drops a held reply on teardown instead of writing to a dead pty', async () => {
-    vi.useFakeTimers()
-    const { ingress, writes } = createHarness({ echoProbe: scriptedEchoProbe('echoing') })
-    ingress.accept('\x1b]10;?\x07')
-    await vi.advanceTimersByTimeAsync(20)
-    ingress.drainAndClose()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(writes).toEqual([])
   })
 })

@@ -42,6 +42,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -140,7 +143,7 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('force-deletes an SSH branch that was preserved by safe worktree removal', async () => {
+  it('force-deletes a preserved SSH branch without borrowing colliding local metadata', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -151,6 +154,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeBaseRef: null
     }
     const worktreeId = 'repo-ssh::/remote/feature-wt'
+    const localRepo = { ...repo, path: '/workspace/repo', connectionId: undefined }
     const provider = {
       exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
       forceDeletePreservedBranch: vi.fn().mockResolvedValue(undefined),
@@ -175,16 +179,21 @@ describe('registerWorktreeHandlers', () => {
       }),
       worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
-    store.getRepos.mockReturnValue([repo])
-    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([localRepo, repo])
+    store.getRepo.mockReturnValue(localRepo)
+    store.getWorktreeMeta.mockReturnValue(
+      makeWorktreeMeta({ hostId: 'local', preserveBranchOnDelete: true })
+    )
     getSshGitProviderMock.mockReturnValue(provider)
     getActiveMultiplexerMock.mockReturnValue({ request: vi.fn(), notify: vi.fn() })
 
-    await handlers['worktrees:remove'](null, { worktreeId })
+    await handlers['worktrees:remove'](null, { worktreeId, hostId: 'ssh:conn-1' })
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
     const result = await handlers['worktrees:forceDeletePreservedBranch'](null, {
       worktreeId,
       branchName: 'feature/test',
-      expectedHead: 'def456'
+      expectedHead: 'def456',
+      hostId: 'ssh:conn-1'
     })
 
     expect(result).toMatchObject({ deleted: true })

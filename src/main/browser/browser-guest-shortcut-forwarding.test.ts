@@ -16,6 +16,9 @@ import {
 import { setupGuestContextMenu } from './browser-guest-context-menu'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 
+const zoomTo = (direction: 'in' | 'out' | 'reset') => ({ browserPageId: 'tab-1', direction })
+const historyTo = (direction: 'back' | 'forward') => ({ browserPageId: 'tab-1', direction })
+
 describe('setupGuestContextMenu', () => {
   const browserTabId = 'tab-1'
   let rendererSendMock: ReturnType<typeof vi.fn>
@@ -366,8 +369,8 @@ describe('guest mouse wheel browser zoom', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(outPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', zoomTo('in'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', zoomTo('out'))
   })
 
   it('consumes guest ctrl wheel even when the renderer is unavailable', () => {
@@ -537,12 +540,12 @@ describe('setupGuestShortcutForwarding', () => {
     expect(numpadSubtractPreventDefault).toHaveBeenCalledTimes(1)
     expect(resetPreventDefault).toHaveBeenCalledTimes(1)
     expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', 'reset')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', zoomTo('in'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', zoomTo('in'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', zoomTo('out'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', zoomTo('out'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', zoomTo('reset'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('forwards browser history shortcuts from focused guest pages', () => {
@@ -566,8 +569,16 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(backPreventDefault).toHaveBeenCalledTimes(1)
     expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserHistoryNavigate', 'back')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(
+      1,
+      'ui:browserHistoryNavigate',
+      historyTo('back')
+    )
+    expect(rendererSendMock).toHaveBeenNthCalledWith(
+      2,
+      'ui:browserHistoryNavigate',
+      historyTo('forward')
+    )
   })
 
   it('forwards browser Find with its registered page and workspace owner', () => {
@@ -587,7 +598,9 @@ describe('setupGuestShortcutForwarding', () => {
     })
   })
 
-  it('does not broadcast browser Find without a registered workspace owner', () => {
+  // A client-hosted guest is registered by main's host runtime, whose wire command carries no
+  // workspace. Withholding the chord there suppressed Cmd+F in the guest and delivered nothing.
+  it('forwards browser Find by page alone when no workspace owner is registered', () => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -597,7 +610,10 @@ describe('setupGuestShortcutForwarding', () => {
     const preventDefault = triggerBeforeInput({ code: 'KeyF', key: 'f' })
 
     expect(preventDefault).toHaveBeenCalledOnce()
-    expect(rendererSendMock).not.toHaveBeenCalled()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:findInBrowserPage', {
+      browserPageId: browserTabId,
+      browserWorkspaceId: undefined
+    })
   })
 
   it('forwards quick-command menu shortcuts from focused guest pages', () => {
@@ -621,6 +637,47 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
+  })
+
+  it('forwards workspace delete shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: isMac,
+      control: !isMac,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
+  })
+
+  it('consumes repeated workspace delete shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: isMac,
+      control: !isMac,
+      shift: true,
+      isAutoRepeat: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).not.toHaveBeenCalled()
   })
 
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
@@ -651,7 +708,7 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(defaultPreventDefault).not.toHaveBeenCalled()
     expect(customPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('forwards native guest zoom commands to browser page zoom when default zoom keys are bound', () => {
@@ -668,8 +725,8 @@ describe('setupGuestShortcutForwarding', () => {
     expect(zoomOutPreventDefault).toHaveBeenCalledTimes(1)
     expect(zoomInPreventDefault).toHaveBeenCalledTimes(1)
     expect(resetPreventDefault).not.toHaveBeenCalled()
-    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'out')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', zoomTo('out'))
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('does not double-forward ctrl wheel when Electron also emits a native zoom command', () => {
@@ -698,7 +755,7 @@ describe('setupGuestShortcutForwarding', () => {
     expect(wheelPreventDefault).toHaveBeenCalledTimes(1)
     expect(zoomCommandPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', zoomTo('in'))
   })
 
   it('ignores native guest zoom commands when matching default zoom keys are unbound', () => {
@@ -826,7 +883,9 @@ describe('setupGuestShortcutForwarding', () => {
       expect(rendererSendMock).toHaveBeenCalledWith('ui:closeFloatingItem', {
         sourceId: browserTabId
       })
-      expect(rendererSendMock).not.toHaveBeenCalledWith('ui:closeActiveTab')
+      expect(rendererSendMock.mock.calls.some(([channel]) => channel === 'ui:closeActiveTab')).toBe(
+        false
+      )
     })
 
     it('routes workspace/tab index chords to ui:selectFloatingIndex for a floating guest', () => {
@@ -857,7 +916,7 @@ describe('setupGuestShortcutForwarding', () => {
       triggerBeforeInput(closeInput)
       triggerBeforeInput(workspaceIndexInput)
 
-      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab')
+      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab', { sourceId: browserTabId })
       expect(rendererSendMock).toHaveBeenCalledWith('ui:jumpToWorktreeIndex', 0)
       expect(rendererSendMock).not.toHaveBeenCalledWith('ui:closeFloatingItem', expect.anything())
       expect(rendererSendMock).not.toHaveBeenCalledWith('ui:selectFloatingIndex', expect.anything())
@@ -872,7 +931,7 @@ describe('setupGuestShortcutForwarding', () => {
 
       triggerBeforeInput(closeInput)
 
-      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab')
+      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab', { sourceId: browserTabId })
       expect(rendererSendMock).not.toHaveBeenCalledWith('ui:closeFloatingItem', expect.anything())
     })
 

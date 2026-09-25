@@ -1,6 +1,6 @@
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
-import { PINNED_GROUP_KEY, getLineageGroupKey } from '../grouping/group-keys'
+import { PINNED_GROUP_KEY, getWorktreeLineageGroupKey } from '../grouping/group-keys'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 
@@ -37,7 +37,7 @@ export function buildLineageRowRekeyMap(rows: readonly RenderRow[]): ReadonlyMap
     // child deleted) is exactly when the count is already 0 but an anchor still
     // holds the group key.
     rekeyed.set(
-      `lineage-group:${row.sectionKey}:${getLineageGroupKey(row.worktree.id)}`,
+      `lineage-group:${row.sectionKey}:${getWorktreeLineageGroupKey(row.worktree)}`,
       getRenderRowKey(row)
     )
   }

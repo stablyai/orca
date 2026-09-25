@@ -5,12 +5,15 @@ import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 const mocks = vi.hoisted(() => ({
-  status: 'active'
+  status: 'active',
+  sleeping: false
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Tooltip: ({ children }: { children: ReactNode }) => <span data-tooltip-root="">{children}</span>,
+  TooltipContent: ({ children }: { children: ReactNode }) => (
+    <span data-tooltip-content="">{children}</span>
+  ),
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
@@ -18,9 +21,14 @@ vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => mocks.status
 }))
 
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => mocks.sleeping
+}))
+
 describe('WorktreeCardStatusSlot', () => {
   beforeEach(() => {
     mocks.status = 'active'
+    mocks.sleeping = false
   })
 
   const review: WorktreeCardPrDisplay = {
@@ -69,7 +77,6 @@ describe('WorktreeCardStatusSlot', () => {
         onPointerDown={vi.fn()}
         onToggleUnread={vi.fn()}
         newCardStyle
-        hasBranchIdentity={false}
       />
     )
 
@@ -96,7 +103,6 @@ describe('WorktreeCardStatusSlot', () => {
         onPointerDown={vi.fn()}
         onToggleUnread={vi.fn()}
         newCardStyle
-        hasBranchIdentity={false}
       />
     )
 
@@ -121,7 +127,6 @@ describe('WorktreeCardStatusSlot', () => {
         onPointerDown={vi.fn()}
         onToggleUnread={vi.fn()}
         newCardStyle
-        hasBranchIdentity={false}
       />
     )
 
@@ -171,6 +176,7 @@ describe('WorktreeCardStatusSlot', () => {
 
     expect(markup).toContain('Active · Mark as unread')
     expect(markup).toContain('bg-emerald-500')
+    expect(markup.match(/data-tooltip-root/g)).toHaveLength(1)
   })
 
   it('keeps the quiet active dot ahead of PR status by default', () => {
@@ -212,6 +218,7 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('size-[13px] translate-x-px')
     expect(markup).toContain('text-rose-500/85')
     expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).not.toContain('data-tooltip-root')
   })
 
   it('uses the unified compact review glyph for GitLab MR status', () => {
@@ -256,8 +263,11 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('bg-emerald-500')
   })
 
-  it('uses PR status instead of the inactive dot when new card style is on', () => {
-    mocks.status = 'inactive'
+  it('keeps sleeping distinct from PR status when new card style is on', () => {
+    // Why done, not inactive: a slept workspace keeps its retained done rows,
+    // so its status still reads 'done' — the exact case from #19624.
+    mocks.status = 'done'
+    mocks.sleeping = true
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -272,12 +282,17 @@ describe('WorktreeCardStatusSlot', () => {
       />
     )
 
-    expect(markup).toContain('PR checks: Failed')
-    expect(markup).toContain('text-rose-500/85')
+    // Why: sleep must stay distinct from awake completion; sleeping never collapses into PR.
+    expect(markup).toContain('Sleeping')
+    expect(markup).toContain('lucide-moon')
+    expect(markup).not.toContain('PR checks: Failed')
+    expect(markup).not.toContain('text-rose-500/85')
     expect(markup).not.toContain('bg-neutral-500/40')
   })
 
-  it('uses a branch icon with branch-only tooltip copy by default', () => {
+  it('keeps sleeping moon distinct from the awake green dot when new card style is on', () => {
+    mocks.status = 'done'
+    mocks.sleeping = true
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -288,20 +303,19 @@ describe('WorktreeCardStatusSlot', () => {
         onPointerDown={vi.fn()}
         onToggleUnread={vi.fn()}
         newCardStyle
-        hasBranchIdentity
       />
     )
 
-    expect(markup).toContain('Branch')
-    expect(markup).not.toContain('Branch or folder path')
-    expect(markup).toContain('lucide-git-branch')
-    expect(markup).toContain('size-[13px] translate-x-px text-muted-foreground/70')
-    expect(markup).toContain('text-muted-foreground/70')
+    expect(markup).toContain('Sleeping')
+    expect(markup).toContain('lucide-moon')
+    expect(markup).not.toContain('lucide-git-branch')
     expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).not.toContain('bg-neutral-500/40')
   })
 
-  it('uses context-aware branch or folder path tooltip copy', () => {
-    const markup = renderToStaticMarkup(
+  it('distinguishes awake branch from sleeping moon when new card style is on', () => {
+    mocks.status = 'done'
+    const awakeMarkup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
         showStatus
@@ -312,15 +326,33 @@ describe('WorktreeCardStatusSlot', () => {
         onToggleUnread={vi.fn()}
         newCardStyle
         hasBranchIdentity
-        branchIdentityLabel="Branch or folder path"
       />
     )
-
-    expect(markup).toContain('Branch or folder path')
-    expect(markup).toContain('lucide-git-branch')
+    expect(awakeMarkup).toContain('Branch')
+    expect(awakeMarkup).toContain('lucide-git-branch')
+    expect(awakeMarkup).not.toContain('lucide-moon')
+    mocks.sleeping = true
+    const sleepingMarkup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        hasBranchIdentity
+      />
+    )
+    // Why: sleeping wins over the branch lane, even with an identity present.
+    expect(sleepingMarkup).toContain('Sleeping')
+    expect(sleepingMarkup).toContain('lucide-moon')
+    expect(sleepingMarkup).not.toContain('lucide-git-branch')
   })
 
-  it('keeps the quiet dot when the row has no branch identity', () => {
+  it('shows the green awake dot for quiet done workspaces when new card style is on', () => {
+    mocks.status = 'done'
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -331,13 +363,14 @@ describe('WorktreeCardStatusSlot', () => {
         onPointerDown={vi.fn()}
         onToggleUnread={vi.fn()}
         newCardStyle
-        hasBranchIdentity={false}
       />
     )
 
-    expect(markup).toContain('Active')
+    expect(markup).toContain('Done')
     expect(markup).toContain('bg-emerald-500')
     expect(markup).not.toContain('lucide-git-branch')
+    expect(markup).not.toContain('lucide-moon')
+    expect(markup).toContain('data-tooltip-root')
   })
 
   it('keeps working activity ahead of PR status in new card style', () => {
@@ -359,6 +392,8 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('Working')
     expect(markup).toContain('inline-flex size-5 items-center justify-center')
     expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('data-tooltip-root')
+    expect(markup).toContain('data-tooltip-content="">Working')
     expect(markup).not.toContain('PR checks: Failed')
   })
 
@@ -381,6 +416,8 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).toContain('Needs permission')
     expect(markup).toContain('lucide-message-circle-question-mark')
     expect(markup).toContain('text-agent-question')
+    expect(markup).toContain('data-tooltip-root')
+    expect(markup).toContain('data-tooltip-content="">Needs permission')
     expect(markup).not.toContain('PR checks: Failed')
   })
 
@@ -433,9 +470,12 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('lucide-bell')
     expect(markup).not.toContain('text-amber-500')
     expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).not.toContain('data-tooltip-root')
   })
 
-  it('overlays an unread badge on the branch icon in new card style', () => {
+  it('overlays an unread badge on the sleeping moon in new card style', () => {
+    mocks.status = 'done'
+    mocks.sleeping = true
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -446,20 +486,20 @@ describe('WorktreeCardStatusSlot', () => {
         onPointerDown={vi.fn()}
         onToggleUnread={vi.fn()}
         newCardStyle
-        hasBranchIdentity
       />
     )
 
-    expect(markup).toContain('Branch · Unread')
+    expect(markup).toContain('Sleeping · Unread')
     expect(markup).toContain('data-worktree-status-lane-unread=""')
     expect(markup).toContain('data-worktree-unread-alert=""')
     expect(markup).not.toContain('Mark as read')
     expect(markup).not.toContain('group/unread')
     expect(markup).not.toContain('cursor-pointer')
-    expect(markup).toContain('lucide-git-branch')
+    expect(markup).toContain('lucide-moon')
     expect(markup).toContain('bg-amber-500')
     expect(markup).not.toContain('lucide-bell')
     expect(markup).not.toContain('text-amber-500')
     expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).not.toContain('data-tooltip-root')
   })
 })

@@ -1,9 +1,13 @@
 import { execFile } from 'node:child_process'
+import type { JobTerminationOutcome } from './windows/windows-pty-job'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
   verifyWindowsTreeKillTarget,
   type WindowsTreeKillTarget
 } from './windows-pty-root-identity'
+import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
+
+export { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
@@ -11,21 +15,25 @@ export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
 // truncation would silently drop descendants from the snapshot.
 const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
 
-export type ProcessTableRow = {
-  pid: number
-  ppid: number
-  pgid: number
-  /** ps lstart text, kept verbatim. Delayed SIGKILL additionally requires an
-   * unambiguous capture-second boundary and matching pgid. */
-  startedAt: string
-}
+export type PosixProcessIdentity = Pick<ProcessTableRow, 'pid' | 'startedAt'>
 
 export type DescendantSnapshot = {
+  /** Identity of the root observed in the same process-table capture. */
+  root?: PosixProcessIdentity
   rootPgid: number | null
   descendants: ProcessTableRow[]
-  /** Wall-clock boundary for deciding whether ps's second-resolution lstart
-   *  can safely distinguish this process from a later PID reuse. */
+  /** Wall-clock boundary for an unmerged snapshot (or legacy callers). */
   capturedAtMs: number
+  /** Per-PID identity boundaries for merged captures. */
+  capturedAtMsByPid?: Readonly<Record<string, number>>
+  /**
+   * PIDs this walk re-derived from a live root. A ppid walk only reaches what
+   * the root actually parents, so membership is proof of ownership that owes
+   * nothing to `lstart`'s one-second resolution: a stranger would have to have
+   * been forked into our own tree, and then it is not a stranger. Rows a merge
+   * retained from an earlier walk are absent, and still answer to start time.
+   */
+  reDerivedPids?: ReadonlySet<number>
 }
 
 export type ProcessTableCapture = {
@@ -36,25 +44,6 @@ export type ProcessTableCapture = {
 
 export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
-
-export function parseProcessTable(psOutput: string): ProcessTableRow[] {
-  const rows: ProcessTableRow[] = []
-  for (const line of psOutput.split('\n')) {
-    // lstart itself contains spaces ("Mon Jul 13 12:54:47 2026"), so only the
-    // three leading numeric columns are positional.
-    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$/)
-    if (!match) {
-      continue
-    }
-    rows.push({
-      pid: Number(match[1]),
-      ppid: Number(match[2]),
-      pgid: Number(match[3]),
-      startedAt: match[4]
-    })
-  }
-  return rows
-}
 
 function readFreshProcessTable(
   timeoutMs = DESCENDANT_SNAPSHOT_TIMEOUT_MS
@@ -119,9 +108,9 @@ export function createProcessTableSnapshotReader(
   }
 }
 
-const readProcessTable = createProcessTableSnapshotReader(readFreshProcessTable)
+export const readProcessTable = createProcessTableSnapshotReader(readFreshProcessTable)
 
-function readProcessTableBeforeDeadline(
+export function readProcessTableBeforeDeadline(
   readTable: ProcessTableReader,
   timeoutMs: number
 ): Promise<ProcessTableCapture | null> {
@@ -155,9 +144,13 @@ export function collectDescendantRows(
 ): DescendantSnapshot {
   const childrenByPpid = new Map<number, ProcessTableRow[]>()
   let rootRow: ProcessTableRow | null = null
+  let duplicateRoot = false
   for (const row of table) {
     if (row.pid === rootPid) {
-      rootRow = row
+      // A non-atomic process-table read can contain both an old and a recycled
+      // root row. There is no safe identity to retain in that case.
+      duplicateRoot = rootRow !== null
+      rootRow ??= row
       continue
     }
     const siblings = childrenByPpid.get(row.ppid)
@@ -171,7 +164,7 @@ export function collectDescendantRows(
   // An absent root has already exited — its real descendants reparent to pid 1 and
   // become unreachable by ppid, so any rows still pointing at the vacated PID are a
   // PID-reuse coincidence. Sweeping them could signal an unrelated process, so bail.
-  if (!rootRow) {
+  if (!rootRow || duplicateRoot) {
     return { rootPgid: null, descendants: [], capturedAtMs }
   }
   const descendants: ProcessTableRow[] = []
@@ -190,7 +183,13 @@ export function collectDescendantRows(
       queue.push(child.pid)
     }
   }
-  return { rootPgid: rootRow.pgid, descendants, capturedAtMs }
+  return {
+    root: { pid: rootRow.pid, startedAt: rootRow.startedAt },
+    rootPgid: rootRow.pgid,
+    descendants,
+    capturedAtMs,
+    reDerivedPids: new Set(descendants.map((row) => row.pid))
+  }
 }
 
 type SnapshotDeps = {
@@ -228,6 +227,14 @@ export async function captureDescendantSnapshot(
 type KillSweepDeps = SnapshotDeps &
   TerminateDeps & {
     ownsRoot?: () => boolean
+    /** Shutdown can retain the owner until descendant escalation finishes. */
+    terminateDescendants?: (snapshot: DescendantSnapshot) => void | Promise<unknown>
+    awaitEscalation?: boolean | (() => boolean)
+    /**
+     * Terminate the PTY's job object. Returns `unavailable` when this tree has
+     * no job, which is not permission to assume it is gone.
+     */
+    terminateOwnedTree?: () => JobTerminationOutcome
     /** Injectable Windows tree killer (defaults to taskkill /T /F). */
     killWindowsTree?: WindowsTreeKiller
     /** Injectable Windows root-identity probe (defaults to a live process query). */
@@ -237,9 +244,11 @@ type KillSweepDeps = SnapshotDeps &
 /**
  * Standard agent-session kill sequencing.
  * - POSIX: snapshot the descendant tree, signal members, then killRoot.
- * - Windows: taskkill /T /F walks the ConPTY tree only when the identity probe
- *   returns `own` (and ownsRoot still holds). `unknown`/`foreign`/`absent` skip
- *   tree kill; killRoot always runs. Detached children may survive probe failure.
+ * - Windows: terminate the PTY's job object, which is exact and needs no
+ *   identity probe. Only when this build has no job does it fall back to the
+ *   old scheme — a process-table scrape gating `taskkill /T /F` on a
+ *   parent-pid walk, which refuses whenever it cannot prove ownership and so
+ *   leaves the tree running (#9045, #10475).
  * Callers must not signal the root before this runs on POSIX — a dead root's
  * descendants reparent to pid 1 and become unfindable. Snapshot failure
  * degrades to killRoot alone on POSIX.
@@ -253,6 +262,12 @@ export async function killWithDescendantSweep(
   if (platform === 'win32') {
     try {
       if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
+        // Why first: the job names the tree Orca created, so it is immune to the
+        // pid recycling the probe below exists to guard against, and it reaches
+        // descendants that reparented away from the shell.
+        if (deps.terminateOwnedTree?.() === 'terminated') {
+          return
+        }
         // Why: ownsRoot() is JS state only, and node-pty's ConPTY exit watcher closes
         // the last shell handle before it queues the JS exit callback — Windows may
         // already have recycled this PID while the map still looks live. taskkill /T /F
@@ -261,7 +276,9 @@ export async function killWithDescendantSweep(
         const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
         // Re-check ownership: the identity query awaits, so exit can land meanwhile.
         if (target === 'own' && (deps.ownsRoot?.() ?? true)) {
-          const killTree = deps.killWindowsTree ?? terminateWindowsProcessTree
+          const killTree =
+            deps.killWindowsTree ??
+            ((pid: number) => terminateWindowsProcessTree(pid, { site: 'pty-descendant-sweep' }))
           // Why: taskkill may race an already-exited tree; never block killRoot on that.
           await killTree(rootPid).catch(() => {})
         }
@@ -273,18 +290,36 @@ export async function killWithDescendantSweep(
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
+  let descendants: void | Promise<unknown> = undefined
+  const awaitEscalation =
+    typeof deps.awaitEscalation === 'function' ? deps.awaitEscalation() : deps.awaitEscalation
+  if (awaitEscalation) {
+    try {
+      if (snapshot && (deps.ownsRoot?.() ?? true)) {
+        descendants = deps.terminateDescendants
+          ? deps.terminateDescendants(snapshot)
+          : terminateDescendantSnapshot(snapshot, deps)
+      }
+      await descendants
+    } finally {
+      killRoot()
+    }
+    return
+  }
   try {
     // Signal the captured descendants while their parent links still exist;
     // killing the root first creates a reparent/PID-reuse window.
     if (snapshot && (deps.ownsRoot?.() ?? true)) {
-      terminateDescendantSnapshot(snapshot, deps)
+      descendants = deps.terminateDescendants
+        ? deps.terminateDescendants(snapshot)
+        : terminateDescendantSnapshot(snapshot, deps)
     }
   } finally {
     killRoot()
   }
 }
 
-function defaultSendSignal(pid: number, signal: NodeJS.Signals): void {
+export function sendDescendantSignal(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(pid, signal)
   } catch {
@@ -292,15 +327,19 @@ function defaultSendSignal(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-type TerminateDeps = {
+export type TerminateDeps = {
   readTable?: ProcessTableReader
   sendSignal?: SignalSender
   graceMs?: number
   timeoutMs?: number
 }
 
-function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
-  const startedAtMs = Date.parse(row.startedAt)
+export function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
+  return hasUnambiguousStartTime(row.startedAt, capturedAtMs)
+}
+
+export function hasUnambiguousStartTime(startedAt: string, capturedAtMs: number): boolean {
+  const startedAtMs = Date.parse(startedAt)
   if (!Number.isFinite(startedAtMs)) {
     return false
   }
@@ -319,7 +358,7 @@ export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
 ): void {
-  const sendSignal = deps.sendSignal ?? defaultSendSignal
+  const sendSignal = deps.sendSignal ?? sendDescendantSignal
   const readTable = deps.readTable ?? readProcessTable
   for (const row of snapshot.descendants) {
     sendSignal(row.pid, 'SIGTERM')
@@ -348,7 +387,10 @@ export function terminateDescendantSnapshot(
       for (const row of snapshot.descendants) {
         const live = liveTargets.get(row.pid)
         if (
-          hasUnambiguousStartIdentity(row, snapshot.capturedAtMs) &&
+          hasUnambiguousStartIdentity(
+            row,
+            snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+          ) &&
           live?.startedAt === row.startedAt &&
           live.pgid === row.pgid
         ) {

@@ -2,11 +2,11 @@ import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
+  buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
-  escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
-import { getMarkerlessShellLaunchConfig } from './local-pty-shell-ready'
+import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {
   encodePowerShellCommand,
@@ -14,7 +14,8 @@ import {
 } from '../powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
 
-const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
+/** cmd.exe's own documented ceiling; callers that go through sshd budget below it. */
+export const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
@@ -34,7 +35,7 @@ function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
   }
 
   ensureShellReadyWrappersAt()
-  const wrapperArgs = getMarkerlessShellLaunchConfig('bash').args
+  const wrapperArgs = getBashWrapperLaunchArgs()
   if (!wrapperArgs) {
     return GIT_BASH_UTF8_LOGIN_COMMAND
   }
@@ -146,8 +147,7 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   ].join(' && ')
   // Why: WSL users often customize zsh rather than bash; launch the distro's
   // login shell so terminal PATH matches the environment Orca detects.
-  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(setupCommand)]
-  return distro ? ['-d', distro, ...shellArgs] : shellArgs
+  return buildWslExecArgs(distro, ['sh', '-c', setupCommand])
 }
 
 /** Converts an MSYS drive spelling to the native cwd used by Windows terminal processes. */
@@ -203,6 +203,7 @@ export function resolveWindowsShellLaunchArgs(
     const powerShellCommand = getPowerShellEncodedCommand(nativeCwd, startupCommand)
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
     // PowerShell needs a prompt/readline bootstrap after profiles finish.
+    // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
     return {
       shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
       ...(powerShellCommand.startupCommandDeliveredInShellArgs

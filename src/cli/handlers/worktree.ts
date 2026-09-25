@@ -6,7 +6,12 @@ import type {
   RuntimeWorktreeRemoveResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
+import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
+import {
+  annotateOmittedHostScope,
+  type WithAnnotatedHostScope
+} from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalNullableNumberFlag,
@@ -33,30 +38,6 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-
-type HookWarningResult = {
-  warning?: string
-}
-
-type PreservedBranchResult = {
-  preservedBranch?: {
-    branchName: string
-  }
-}
-
-function printHookWarning(result: HookWarningResult, json: boolean): void {
-  if (!json && result.warning) {
-    console.error(`warning: ${result.warning}`)
-  }
-}
-
-function printPreservedBranchWarning(result: PreservedBranchResult, json: boolean): void {
-  if (!json && result.preservedBranch) {
-    console.error(
-      `warning: local branch "${result.preservedBranch.branchName}" was kept because Git could not safely delete it`
-    )
-  }
-}
 
 function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
@@ -171,16 +152,22 @@ async function getCreateRepoSelector(
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
-    const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreePsResult>>(
+      'worktree.ps',
+      { limit: getOptionalPositiveIntegerFlag(flags, 'limit') }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatWorktreePs)
   },
   'worktree list': async ({ flags, client, json }) => {
-    const result = await client.call<RuntimeWorktreeListResult>('worktree.list', {
-      repo: getOptionalStringFlag(flags, 'repo'),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreeListResult>>(
+      'worktree.list',
+      {
+        repo: getOptionalStringFlag(flags, 'repo'),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+      }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatWorktreeList)
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
@@ -229,15 +216,22 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const activate = flags.get('activate') === true || flags.get('run-hooks') === true
+    const name = getRequiredStringFlag(flags, 'name')
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
-      name: getRequiredStringFlag(flags, 'name'),
+      name,
+      displayName: name,
+      displayNameKind: 'user',
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
-      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
+      activate,
+      // Why: the CLI pairs as a runtime device but is not a viewer, so caller-scoped
+      // delivery would make --activate a no-op against a remote runtime.
+      ...(activate ? { navigation: 'all' as const } : {}),
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
@@ -277,12 +271,35 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
+    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+      worktree
+    })
+    const hostId = resolved.result.worktree.hostId
+    if (!hostId) {
+      throw new RuntimeClientError(
+        'worktree_host_unresolved',
+        'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
+      )
+    }
+    // Why (#19334): the waiver only ever applies to a hook that ran, so without --run-hooks it
+    // silently does nothing. Rejecting it beats letting someone believe they waived something.
+    if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no hook runs at all. Pass --run-hooks too, or drop the waiver.'
+      )
+    }
     const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      worktree,
+      hostId,
       force: flags.get('force') === true,
       // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
       allowUnverifiedPtyStop: flags.get('force') === true,
-      runHooks: flags.get('run-hooks') === true
+      runHooks: flags.get('run-hooks') === true,
+      // Why (#19334): deliberately NOT coupled to --force, which above already waives PTY-stop
+      // proof. Waiving a failed archive hook is a separate decision about the user's data.
+      allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)

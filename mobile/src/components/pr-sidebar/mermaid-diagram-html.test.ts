@@ -23,6 +23,28 @@ describe('buildHtml source escaping', () => {
     expect(buildHtml(payload)).toContain('\\u003c/script')
   })
 
+  it('does not let a config value break out of the inline script either', async () => {
+    // The config is spliced into the same `<script>` as the source and is not a fixed set of hex
+    // colours by nature: a `themeCSS` or a font stack is free text, and `JSON.stringify` leaves
+    // `<` and `>` raw. Mocked rather than edited in place, because what is under test is the
+    // splice and not today's values.
+    vi.resetModules()
+    vi.doMock('./mermaid-diagram-config', () => ({
+      MERMAID_DIAGRAM_CONFIG: { themeCSS: '</script><script>window.evil=1</script>' }
+    }))
+    try {
+      const hostile = await import('./MermaidDiagram')
+      const countClosers = (html: string) => (html.match(/<\/script>/gi) ?? []).length
+      const benign = countClosers(buildHtml('graph TD; A-->B'))
+      const built = hostile.buildHtml('graph TD; A-->B')
+      expect(countClosers(built)).toBe(benign)
+      expect(built).toContain('\\u003c/script')
+    } finally {
+      vi.doUnmock('./mermaid-diagram-config')
+      vi.resetModules()
+    }
+  })
+
   it('escapes the U+2028/U+2029 line separators that would break the JS literal', () => {
     const payload = `a${String.fromCharCode(0x2028)}b${String.fromCharCode(0x2029)}c`
     const html = buildHtml(payload)

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const SCRIPT_PATH = import.meta.filename
 const BEGIN = '\x1b[200~'
@@ -66,7 +67,7 @@ function runCommand(command, args, options = {}) {
       reject(
         Object.assign(
           new Error(`${command} ${args.join(' ')} exited ${code}${detail ? `: ${detail}` : ''}`),
-          { stderr }
+          { stdout, stderr }
         )
       )
     })
@@ -76,10 +77,24 @@ function runCommand(command, args, options = {}) {
 async function callOrca(cli, args, cwd) {
   const command = cli.endsWith('.mjs') ? process.execPath : cli
   const prefixArgs = cli.endsWith('.mjs') ? [cli] : []
-  const { stdout } = await runCommand(command, [...prefixArgs, ...args, '--json'], { cwd })
+  let stdout
+  try {
+    const result = await runCommand(command, [...prefixArgs, ...args, '--json'], { cwd })
+    stdout = result.stdout
+  } catch (error) {
+    const parsed = JSON.parse(error?.stdout?.trim() ?? 'null')
+    if (parsed?.ok === false) {
+      throw Object.assign(new Error(parsed.error?.message ?? JSON.stringify(parsed.error)), {
+        code: parsed.error?.code
+      })
+    }
+    throw error
+  }
   const parsed = JSON.parse(stdout.trim())
   if (parsed.ok === false) {
-    throw new Error(parsed.error?.message ?? JSON.stringify(parsed.error))
+    throw Object.assign(new Error(parsed.error?.message ?? JSON.stringify(parsed.error)), {
+      code: parsed.error?.code
+    })
   }
   return parsed.result ?? parsed
 }
@@ -104,6 +119,20 @@ async function closeTerminal(cli, handle, cwd) {
   }
 }
 
+async function waitForPermissionPrompt(cli, handle, cwd) {
+  const deadline = Date.now() + 10_000
+  let lastTerminal = null
+  while (Date.now() < deadline) {
+    const shown = await callOrca(cli, ['terminal', 'show', '--terminal', handle], cwd)
+    lastTerminal = shown.terminal ?? null
+    if (lastTerminal?.agentWait) {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(`terminal permission prompt was not observed: ${JSON.stringify(lastTerminal)}`)
+}
+
 async function waitForWorktreeSelector(cli, repoId, cwd) {
   const deadline = Date.now() + 10_000
   const expectedPath = path.resolve(cwd)
@@ -124,18 +153,25 @@ async function waitForWorktreeSelector(cli, repoId, cwd) {
 }
 
 async function createFakeCodexCommand(tempDir, args) {
+  const launcherPath = path.join(tempDir, 'codex')
+  const runnerPath = path.join(tempDir, 'fake-agent.mjs')
+  await writeFile(runnerPath, `import ${JSON.stringify(pathToFileURL(SCRIPT_PATH).href)}\n`, 'utf8')
   if (process.platform === 'win32') {
-    const launcherPath = path.join(tempDir, 'codex.cmd')
+    const commandPath = path.join(tempDir, 'codex.cmd')
     await writeFile(
-      launcherPath,
-      `@echo off\r\n"${process.execPath}" "${SCRIPT_PATH}" %*\r\n`,
+      commandPath,
+      `@echo off\r\n"${process.execPath}" "%~dp0fake-agent.mjs" %*\r\n`,
       'utf8'
     )
-    return [shellQuote(launcherPath), ...args].join(' ')
+    return [shellQuote(commandPath), ...args].join(' ')
   }
-  const launcherPath = path.join(tempDir, 'codex')
-  await symlink(process.execPath, launcherPath)
-  return [shellQuote(launcherPath), shellQuote(SCRIPT_PATH), ...args].join(' ')
+  await writeFile(
+    launcherPath,
+    `#!/usr/bin/env sh\n"${process.execPath}" "${runnerPath}" "$@"\n`,
+    'utf8'
+  )
+  await chmod(launcherPath, 0o755)
+  return [shellQuote(launcherPath), ...args].join(' ')
 }
 
 async function parentMain() {
@@ -146,59 +182,88 @@ async function parentMain() {
   const reportPath = path.resolve(argValue('report', path.join(tempDir, 'report.json')))
   const marker = argValue('marker', `ORCA_TERMINAL_SEND_${process.pid}_${Date.now()}`)
   const prompt = `${marker} ${'slow composer payload '.repeat(24)}`
+  const expectUnsubmitted = hasFlag('expect-unsubmitted')
+  const expectBlocked = hasFlag('expect-blocked')
+  const providedHandle = argValue('terminal')
   await mkdir(tempDir, { recursive: true })
-
-  const command =
-    argValue('agent-command') ??
-    (await createFakeCodexCommand(tempDir, [
-      '--fake-agent',
-      '--report',
-      shellQuote(reportPath),
-      '--marker',
-      shellQuote(marker),
-      '--timeout-ms',
-      String(timeoutMs),
-      ...(process.platform === 'win32' ? ['--allow-unframed-paste'] : [])
-    ]))
-  const added = await callOrca(cli, ['repo', 'add', '--path', cwd], cwd)
-  const repoId = added.repo?.id
-  if (!repoId) {
-    throw new Error('repo add returned no id')
+  if (!providedHandle) {
+    await rm(reportPath, { force: true })
   }
-  const worktreeSelector = await waitForWorktreeSelector(cli, repoId, cwd)
-  const created = await callOrca(
-    cli,
-    [
-      'terminal',
-      'create',
-      '--worktree',
-      worktreeSelector,
-      '--title',
-      'terminal send submit repro',
-      '--command',
-      command
-    ],
-    cwd
-  )
-  const handle = created.terminal?.handle
+
+  let handle = providedHandle
+  if (!handle) {
+    const command =
+      argValue('agent-command') ??
+      (await createFakeCodexCommand(tempDir, [
+        '--fake-agent',
+        '--report',
+        shellQuote(reportPath),
+        '--marker',
+        shellQuote(marker),
+        '--timeout-ms',
+        String(timeoutMs),
+        ...(expectUnsubmitted ? ['--swallow-first-enter'] : []),
+        ...(expectBlocked ? ['--permission-before-send'] : []),
+        ...(process.platform === 'win32' ? ['--allow-unframed-paste'] : [])
+      ]))
+    const added = await callOrca(cli, ['repo', 'add', '--path', cwd], cwd)
+    const repoId = added.repo?.id
+    if (!repoId) {
+      throw new Error('repo add returned no id')
+    }
+    const worktreeSelector = await waitForWorktreeSelector(cli, repoId, cwd)
+    const created = await callOrca(
+      cli,
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        worktreeSelector,
+        '--title',
+        'terminal send submit repro',
+        '--command',
+        command
+      ],
+      cwd
+    )
+    handle = created.terminal?.handle
+  }
   if (!handle) {
     throw new Error('terminal create returned no handle')
   }
 
   try {
-    await callOrca(
-      cli,
-      ['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '10000'],
-      cwd
-    )
-    await callOrca(
-      cli,
-      ['terminal', 'send', '--terminal', handle, '--text', prompt, '--enter'],
-      cwd
-    )
+    if (expectBlocked) {
+      const setupReport = await readReport(reportPath, 10_000)
+      if (!setupReport) {
+        throw new Error('terminal permission prompt did not materialize')
+      }
+      await waitForPermissionPrompt(cli, handle, cwd)
+    } else {
+      await callOrca(
+        cli,
+        ['terminal', 'wait', '--terminal', handle, '--for', 'tui-idle', '--timeout-ms', '10000'],
+        cwd
+      )
+    }
+    let sendErrorCode = null
+    let sendReceipt = null
+    try {
+      sendReceipt = await callOrca(
+        cli,
+        ['terminal', 'send', '--terminal', handle, '--text', prompt, '--enter'],
+        cwd
+      )
+    } catch (error) {
+      const expectedError = expectBlocked && error?.code === 'agent_prompt_blocked'
+      if (!expectedError) {
+        throw error
+      }
+      sendErrorCode = error.code
+    }
     let report = await readReport(reportPath, 1_000)
     let rescueSent = false
-    if (!report) {
+    if (!report && !expectUnsubmitted && !expectBlocked) {
       rescueSent = true
       await callOrca(cli, ['terminal', 'send', '--terminal', handle, '--enter'], cwd)
       report = await readReport(reportPath, timeoutMs)
@@ -210,10 +275,28 @@ async function parentMain() {
       handle,
       promptBytes: Buffer.byteLength(prompt, 'utf8'),
       rescueSent,
+      sendErrorCode,
+      promptStages: sendReceipt?.send?.prompt?.stages ?? null,
       ...report
     }
     console.log(JSON.stringify(summary, null, 2))
-    if (!report.contractOk || rescueSent) {
+    const expectedUnsubmittedObserved =
+      sendErrorCode === null &&
+      summary.promptStages?.includes('input_accepted') &&
+      !summary.promptStages?.includes('turn_started') &&
+      report.submitted === false &&
+      report.receivedEnters === 1 &&
+      report.swallowedEnters === 1
+    const expectedBlockObserved =
+      sendErrorCode === 'agent_prompt_blocked' &&
+      report.receivedBytes === 0 &&
+      report.receivedEnters === 0
+    if (
+      !report.contractOk ||
+      rescueSent ||
+      (expectUnsubmitted && !expectedUnsubmittedObserved) ||
+      (expectBlocked && !expectedBlockObserved)
+    ) {
       process.exitCode = 1
     }
   } finally {
@@ -227,10 +310,13 @@ async function parentMain() {
 }
 
 async function fakeAgentMain() {
+  process.title = 'codex'
   const reportPath = argValue('report')
   const marker = argValue('marker')
   const timeoutMs = parsePositiveInteger('timeout-ms', DEFAULT_TIMEOUT_MS)
   const pasteFramingRequired = !hasFlag('allow-unframed-paste')
+  const swallowFirstEnter = hasFlag('swallow-first-enter')
+  const permissionBeforeSend = hasFlag('permission-before-send')
   if (!reportPath || !marker) {
     throw new Error('--fake-agent requires --report and --marker')
   }
@@ -238,50 +324,86 @@ async function fakeAgentMain() {
     process.stdin.setRawMode(true)
   }
   process.stdin.resume()
-  process.stdout.write('OpenAI Codex\nmodel: fake\ndirectory: fixture\n> ')
+  process.stdout.write('\x1b]0;Codex working\x07')
+  setTimeout(() => {
+    const title = permissionBeforeSend ? 'Codex permission' : 'Codex Ready'
+    process.stdout.write(`\x1b]0;${title}\x07OpenAI Codex\nmodel: fake\ndirectory: fixture\n> `)
+    if (permissionBeforeSend) {
+      process.stdout.write('\nPermission required\nAllow once\nAllow always\nReject\n')
+    }
+  }, 100)
 
   let input = ''
   let countedCarriages = 0
   let prematureEnters = 0
+  let receivedEnters = 0
+  let swallowedEnters = 0
   let composerReady = false
   let renderScheduled = false
   let finished = false
 
-  const finish = async () => {
-    if (finished) {
-      return
-    }
-    finished = true
+  const writeReport = async (submitted) => {
     const hasBracketedPasteFrame = input.includes(BEGIN) && input.includes(END)
     const report = {
-      contractOk: prematureEnters === 0 && (!pasteFramingRequired || hasBracketedPasteFrame),
-      submitted: true,
+      configuredTimeoutMs: timeoutMs,
+      contractOk:
+        prematureEnters === 0 &&
+        (permissionBeforeSend || !pasteFramingRequired || hasBracketedPasteFrame),
+      submitted,
       prematureEnters,
+      receivedEnters,
+      swallowedEnters,
       pasteFramingRequired,
       hasBracketedPasteFrame,
       markerReceived: input.includes(marker),
       receivedBytes: Buffer.byteLength(input, 'utf8')
     }
     await writeFile(reportPath, JSON.stringify(report, null, 2))
+    return report
+  }
+
+  const finish = async () => {
+    if (finished) {
+      return
+    }
+    finished = true
+    const report = await writeReport(true)
     process.stdout.write(`\nORCA_TERMINAL_SEND_REPORT ${report.contractOk ? 'ok' : 'rescued'}\n`)
     process.exit(report.contractOk ? 0 : 7)
   }
 
   const timeout = setTimeout(() => process.exit(8), timeoutMs)
+  if (permissionBeforeSend) {
+    setTimeout(() => void writeReport(false), 250)
+  }
   process.stdin.on('data', (chunk) => {
     input += chunk.toString('utf8')
     if (!renderScheduled && input.includes(marker)) {
       renderScheduled = true
       setTimeout(() => {
         composerReady = true
-        process.stdout.write('\x1b[?25hcomposer rendered')
+        const pasteStart = input.indexOf(BEGIN)
+        const pasteEnd = input.indexOf(END, pasteStart + BEGIN.length)
+        const composer =
+          pasteStart !== -1 && pasteEnd !== -1
+            ? input.slice(pasteStart + BEGIN.length, pasteEnd)
+            : input
+        process.stdout.write(`\x1b[?25h\x1b[2J\x1b[H› ${composer}`)
       }, COMPOSER_RENDER_MS)
     }
     let nextCarriage = input.indexOf('\r', countedCarriages)
     while (nextCarriage !== -1) {
       countedCarriages = nextCarriage + 1
       if (composerReady) {
+        receivedEnters += 1
+        if (swallowFirstEnter && swallowedEnters === 0) {
+          swallowedEnters += 1
+          void writeReport(false)
+          nextCarriage = input.indexOf('\r', countedCarriages)
+          continue
+        }
         clearTimeout(timeout)
+        process.stdout.write('\x1b]0;Codex working\x07')
         void finish()
         return
       }

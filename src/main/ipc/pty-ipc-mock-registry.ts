@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as Wsl from '../wsl'
@@ -17,10 +16,14 @@ export const mkdirSyncMock: Mock = vi.fn()
 export const readFileSyncMock: Mock = vi.fn()
 export const writeFileSyncMock: Mock = vi.fn()
 export const chmodSyncMock: Mock = vi.fn()
+export const linuxCliShimMock: Mock = vi.fn()
+export const renameSyncMock: Mock = vi.fn()
+export const rmSyncMock: Mock = vi.fn()
 export const getPathMock: Mock = vi.fn()
 export const loginPreflightExecFileMock: Mock = vi.fn()
 export const spawnMock: Mock = vi.fn()
 export const openCodeBuildPtyEnvMock: Mock = vi.fn()
+export const openCode2BuildPtyEnvMock: Mock = vi.fn()
 export const mimoCodeBuildPtyEnvMock: Mock = vi.fn()
 export const isPwshAvailableMock: Mock = vi.fn()
 export const wslUncDirectoryExistsAsyncMock: Mock = vi.fn()
@@ -83,6 +86,9 @@ export const fsModuleMock = () => ({
   readFileSync: readFileSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: chmodSyncMock,
+  renameSync: renameSyncMock,
+  rmSync: rmSyncMock,
+  mkdtempSync: () => '/tmp/orca-watcher-canary-test',
   constants: {
     X_OK: 1,
     R_OK: 4
@@ -102,6 +108,12 @@ export const childProcessModuleMock = (original: Record<string, unknown>) => ({
 export const openCodeHookServiceModuleMock = () => ({
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
+    clearPty: openCodeClearPtyMock
+  },
+  // Separate mock per variant: assembly.ts picks the service by variant, and a shared
+  // mock would hide a regression that hands an OpenCode 2 pane the v1 plugin.
+  openCode2HookService: {
+    buildPtyEnv: openCode2BuildPtyEnvMock,
     clearPty: openCodeClearPtyMock
   }
 })
@@ -124,6 +136,7 @@ export const agentHookServerModuleMock = () => ({
 export const piTitlebarExtensionModuleMock = () => ({
   piTitlebarExtensionService: {
     buildPtyEnv: piBuildPtyEnvMock,
+    buildFreshOmpEnv: () => ({ ORCA_OMP_FRESH_CONFIG: '/tmp/orca-fresh-session.yml' }),
     clearPty: piClearPtyMock
   }
 })
@@ -147,8 +160,7 @@ export const classifyErrorModuleMock = () => ({
 
 // Why: the real ensure writes to process.resourcesPath (absent under vitest); env assembly only needs the returned dir path.
 export const linuxCliShimModuleMock = () => ({
-  ensureLinuxTerminalOrcaCliShimDir: (options: { userDataPath: string }) =>
-    join(options.userDataPath, 'linux-orca-cli-shim')
+  ensureLinuxTerminalOrcaCliShimDir: linuxCliShimMock
 })
 
 export const ptyRegistryModuleMock = () => ({

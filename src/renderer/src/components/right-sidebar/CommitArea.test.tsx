@@ -197,6 +197,35 @@ describe('CommitArea', () => {
     expect(markupWin).toContain('Enter')
   })
 
+  it('renders no tooltip on enabled Stage All — the label already states the action', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: {
+        kind: 'stage',
+        disabled: false,
+        label: 'Stage All',
+        title: 'Stage all changes'
+      }
+    })
+    expect(firstButton(markup)).not.toContain('title=')
+    expect(markup).not.toContain('Stage all changes')
+  })
+
+  it('renders the disabled reason in the primary button tooltip', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: {
+        kind: 'commit',
+        disabled: true,
+        label: 'Commit',
+        title: 'Enter a commit message to commit'
+      }
+    })
+    expect(markup).toContain('Enter a commit message to commit')
+  })
+
   it('only handles Cmd+Enter when focus is within the Source Control sidebar', () => {
     setUserAgent('Macintosh')
     const onPrimaryAction = vi.fn()
@@ -583,8 +612,8 @@ describe('CommitArea', () => {
     expect(stageAllButton).not.toContain('disabled=""')
     expect(stageAllButton).toContain('lucide-plus')
     expect(stageAllButton).toContain('rounded-r-none')
+    expect(stageAllButton).not.toContain('title=')
     expect(markup).toContain('aria-label="More commit and remote actions"')
-    expect(markup).toContain('Stage all changes')
     expect(
       (markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []).some((button) =>
         button.includes('Commit</button>')

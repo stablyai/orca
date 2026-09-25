@@ -471,9 +471,12 @@ describe('connectPanePty', () => {
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
       routingRevoked: true,
+      routingConfirmationPending: true,
       shellForeground: false
     })
-    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+    // The provider read is asynchronous; keep the last known safe capability
+    // so a second Shift+Enter cannot become Pi's submit chord in the gap.
+    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
 
     await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
@@ -522,7 +525,8 @@ describe('connectPanePty', () => {
     foreground = 'cmd.exe'
     sendTerminalInputThroughPane(pane, '\x03')
     await flushAsyncTicks()
-    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+    // A provider read is pending; do not turn the next Pi Shift+Enter into submit.
+    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
     await vi.advanceTimersByTimeAsync(
       VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
     )

@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
@@ -68,26 +68,6 @@ async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promis
   return false
 }
 
-async function preflightAgentTrust(args: {
-  agent: TuiAgent
-  workspacePath: string
-  connectionId: string | null | undefined
-}): Promise<void> {
-  const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust
-  if (!preset || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset,
-      workspacePath: args.workspacePath,
-      ...(args.connectionId ? { connectionId: args.connectionId } : {})
-    })
-  } catch {
-    // Why: a failed best-effort trust write should not discard a prepared handoff.
-  }
-}
-
 export async function launchAgentSessionContinuation({
   agent,
   prompt,
@@ -105,15 +85,26 @@ export async function launchAgentSessionContinuation({
   await preflightAgentTrust({ agent, workspacePath, connectionId })
 
   const label = getAgentLabel(agent)
+  // Why: the paste helper writes blind when the agent's composer was never observed, so a
+  // written prompt is not a delivered one. Claiming success there is how the whole handoff
+  // could vanish silently (#22479).
+  let deliveryUnconfirmed = false
   const result = launchAgentInNewTab({
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: 'submit-after-ready',
+    promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
-    onPromptDelivered: () =>
+    onPromptDeliveryUnconfirmed: () => {
+      deliveryUnconfirmed = true
+    },
+    onPromptDelivered: () => {
+      if (deliveryUnconfirmed) {
+        notifyDeliveryUnconfirmed(label, prompt)
+        return
+      }
       toast.success(
         translate(
           'components.agentSessionContinuation.sent',
@@ -121,6 +112,7 @@ export async function launchAgentSessionContinuation({
           { agent: label }
         )
       )
+    }
   })
   if (!result) {
     notifyLaunchFailed(label)
@@ -131,12 +123,12 @@ export async function launchAgentSessionContinuation({
     void result.promptDeliveryResult
       .then((delivery) => {
         if (!delivery.delivered && !delivery.failureNotified) {
-          notifyDeliveryFailed(label)
+          notifyDeliveryFailed(label, prompt)
         }
       })
       .catch((error) => {
         console.error('Agent session continuation prompt delivery failed', error)
-        notifyDeliveryFailed(label)
+        notifyDeliveryFailed(label, prompt)
       })
   }
   return true
@@ -152,12 +144,38 @@ function notifyLaunchFailed(agentLabel: string): void {
   )
 }
 
-function notifyDeliveryFailed(agentLabel: string): void {
+function notifyDeliveryFailed(agentLabel: string, prompt: string): void {
   toast.error(
     translate(
       'components.agentSessionContinuation.deliveryFailed',
       'The new {{agent}} session started, but its context could not be sent.',
       { agent: agentLabel }
-    )
+    ),
+    copyPromptToastAction(prompt)
   )
+}
+
+/** The prompt was written to the PTY but the agent never showed an input-ready composer. */
+function notifyDeliveryUnconfirmed(agentLabel: string, prompt: string): void {
+  toast.warning(
+    translate(
+      'components.agentSessionContinuation.deliveryUnconfirmed',
+      'Orca could not confirm {{agent}} received the session context. Check the new session, and paste it yourself if its input is empty.',
+      { agent: agentLabel }
+    ),
+    copyPromptToastAction(prompt)
+  )
+}
+
+function copyPromptToastAction(prompt: string): {
+  action: { label: string; onClick: () => void }
+} {
+  return {
+    action: {
+      label: translate('components.agentSessionContinuation.copyPrompt', 'Copy prompt'),
+      onClick: () => {
+        void window.api.ui.writeClipboardText(prompt)
+      }
+    }
+  }
 }

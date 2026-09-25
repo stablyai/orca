@@ -1,0 +1,146 @@
+{
+  "operation": "session.diff-review-actions",
+  "family": "session.review-send-sheet",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
+  "scenarioSha256": "8b4a06c1b2918d5ed5f40102c1c7cb411e02aba5e7601e98658d673634784bb0",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "697177595a0a": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "ready",
+        "terminals": [
+          {
+            "id": "tab-1",
+            "terminal": "terminal-1",
+            "title": "codex"
+          }
+        ]
+      }
+    },
+    "6eb439bad25e": {
+      "name": "reply-salvage",
+      "ordinal": 3,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["1"],
+        "method": "session.tabs.list",
+        "operation": "session.review-terminal-list",
+        "variant": "review-terminal-tabs"
+      }
+    },
+    "9a3dbd49ee14": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tabs": [
+              {
+                "id": "tab-1",
+                "terminal": "terminal-1",
+                "title": "codex",
+                "type": "terminal"
+              },
+              {
+                "id": "tab-2",
+                "title": "notes.md",
+                "type": "markdown"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "acb5ae38e750": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "review-send-sheet-lists-terminals",
+    "checkpoints": [
+      {
+        "id": "listed",
+        "observation": {
+          "sender": ["9a3dbd49ee14"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "697177595a0a",
+          "effects": ["6eb439bad25e"]
+        }
+      }
+    ]
+  }
+}

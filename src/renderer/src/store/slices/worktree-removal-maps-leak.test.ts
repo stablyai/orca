@@ -155,7 +155,7 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     const store = createTestStore()
     seedWorktreeKeyedMaps(store)
 
-    const result = await store.getState().removeWorktree(WT1)
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
     expect(result).toEqual({ ok: true })
 
     const s = store.getState()
@@ -255,7 +255,7 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
       }
     })
 
-    const result = await store.getState().removeWorktree(WT1)
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
 
     expect(result).toEqual({ ok: true })
     const s = store.getState()

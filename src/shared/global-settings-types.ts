@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from './execution-host'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
+import type { AiVaultSearchSettings } from './ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
@@ -41,6 +42,9 @@ import type {
   ExternalWorktreeVisibility,
   WorktreeVisibilitySourcePreferences
 } from './repo-types'
+
+/** MiniMax account region used to select the quota endpoint. */
+export type MiniMaxEndpoint = 'overseas' | 'cn'
 
 export type WorktreeVisibilityDefaults = {
   /** Default for worktrees outside a recognized source. */
@@ -126,6 +130,11 @@ export type GlobalSettings = {
    *  - `'on'` / `'off'`: explicit override. Never changes when the user
    *    switches fonts, so "off" always stays off. */
   terminalLigatures: 'auto' | 'on' | 'off'
+  /** Whether inline terminal images are rendered via `@xterm/addon-image`
+   *  (SIXEL, iTerm2 IIP, and Kitty graphics). The addon is lazy-loaded and its
+   *  canvas layers are only created once a pane actually receives an image, so
+   *  idle panes retain parser/decoder setup but no decoded image storage. */
+  terminalInlineImages: boolean
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean
@@ -141,6 +150,10 @@ export type GlobalSettings = {
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
   terminalBackgroundOpacity?: number
+  /** xterm minimumContrastRatio floor for terminal panes (#10754). Undefined keeps the automatic,
+   *  background-luminance-gated floor (3 dark / 4.5 light); 1 disables contrast correction so TUIs
+   *  that rely on deliberately low contrast (Powerline seams, dimmed secondary text) render as sent. */
+  terminalMinimumContrastRatio?: number
   terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number
   terminalPaddingY?: number
@@ -159,6 +172,10 @@ export type GlobalSettings = {
   terminalRightClickToPasteDefaultedForPlatform?: boolean
   /** Windows-only: COMSPEC always points to cmd.exe, so this explicit shell (default 'powershell.exe') overrides it. */
   terminalWindowsShell: string
+  /** Optional shell executable for new terminals on macOS and Linux. */
+  terminalDefaultShell?: string
+  /** Optional argv passed to the configured Unix shell for ordinary interactive panes. */
+  terminalDefaultShellArgs?: string[]
   /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
   /** Account/auth location; auto follows the global Windows runtime while host/wsl pin it. */
@@ -176,6 +193,8 @@ export type GlobalSettings = {
   terminalFocusFollowsMouse: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
+  /** Drops the left gutter agent CLIs paint their output behind when copying a terminal selection; default on. */
+  terminalCopyTrimsGutter: boolean
   /** Enables OSC 52 clipboard writes for TUIs (tmux/Zellij/nvim, incl. over SSH); default on. Clipboard *queries* stay blocked and payload size is capped, so this is write-only exposure. */
   terminalAllowOsc52Clipboard: boolean
   /** One-shot stamp: profiles saved under the old off default get flipped on once, after which an explicit opt-out sticks. */
@@ -199,12 +218,26 @@ export type GlobalSettings = {
   openLinksInAppPreferencePrompted: boolean
   /** Opt-in: Shift+modifier click inverts openLinksInApp instead of always forcing the system browser. Off keeps the historical one-way escape hatch. */
   openLinksInAppModifierInverts?: boolean
-  /** Show terminal link actions on plain click; off restores modifier-click-only terminal links. */
+  /** Show link actions on plain click in the terminal and chat; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
+  /** Plain-click behavior for terminal links; optional for profiles saved before this setting existed. */
+  terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
+  /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
+  terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */
   experimentalNativeChat?: boolean
+  /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
+  experimentalStructuredNativeChat?: boolean
+  /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
+   *  the list, so the user sees exactly what would run before anything spends tokens. */
+  nativeChatResumeWorkOnRestart?: boolean
+  /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
+   *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
+  nativeChatInheritShellEnvironment?: boolean
+  /** Login-shell variable names structured chat inherits while the whole environment is off. */
+  nativeChatShellEnvironmentVariables?: string[]
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
@@ -230,6 +263,10 @@ export type GlobalSettings = {
   artifactSharingEnabled?: boolean
   /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
   agentSkillSharingEnabled?: boolean
+  /** How deep dispatched workers may nest. 1 = workers cannot dispatch sub-workers.
+   *  Renderer-writable only: omitted from the SettingsUpdate RPC schema so a worker
+   *  cannot raise its own cap via `orca settings update`. */
+  nestedWorkerMaxDepth?: number
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
@@ -244,6 +281,14 @@ export type GlobalSettings = {
   terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
+  /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
+  browserClientHostedRemoteEnabled?: boolean
+  /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
+  browserSshWorkspaceRoutingEnabled?: boolean
+  /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
+  browserSshWorkspaceRoutingDisabledTargetIds?: string[]
+  /** Targets whose forwarding preflight the user overrode via "Try anyway" (e.g. PermitOpen allows their sites); skips the probe, never changes egress. */
+  browserSshWorkspaceRoutingProbeSkippedTargetIds?: string[]
   /** One-shot migration flag for the floating-workspace default-on rollout; after migration an explicit off sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
   /** Start dir for new floating-workspace terminal tabs; empty or '~' = home dir. */
@@ -258,6 +303,9 @@ export type GlobalSettings = {
   keybindings?: KeybindingOverrides
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
+  diffShowWhitespace: boolean
+  /** Opt-in: single-file diffs collapse unchanged regions, as the combined diff view already does; optional for legacy settings. */
+  diffCollapseUnchangedRegions?: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
   /** Bot-marked comment-author logins (stored lowercased); escape hatch for review bots on regular accounts that defeat provider metadata/heuristics. */
   prBotAuthorOverrides: string[]
@@ -274,7 +322,8 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
+  /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
+   *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean
@@ -340,10 +389,14 @@ export type GlobalSettings = {
   opencodeSessionCookie: string
   /** Optional OpenCode Go workspace ID override; when set, skips the workspaces lookup and fetches usage directly. */
   opencodeWorkspaceId: string
+  /** Optional OpenCode Go API key override. Takes precedence over OpenCode's own stored key and OPENCODE_API_KEY. Stored encrypted. */
+  opencodeGoApiKey: string
   /** Optional MiniMax group id. When empty, the usage fetcher extracts minimax_group_id_v2 from the cookie. */
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */
   minimaxUsageModels: string
+  /** MiniMax account region; defaults to overseas for existing users. */
+  minimaxEndpoint: MiniMaxEndpoint
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
@@ -370,6 +423,8 @@ export type GlobalSettings = {
   tabAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
+  /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
+  editorPreviewTabsEnabled: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
@@ -402,6 +457,8 @@ export type GlobalSettings = {
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */
   mobilePairingCustomAddresses?: string[]
+  /** Name this runtime reports to paired clients; empty uses the host's detected name. */
+  machineName: string
   /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
    *  off never mounts the overlay, and toggling takes effect instantly (renderer-side). */
   experimentalPet: boolean
@@ -411,6 +468,10 @@ export type GlobalSettings = {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
+  agentsSidebarIntroShown?: boolean
+  /** True when the profile previously opted into the legacy Agents view. */
+  agentsSidebarMigratedFromExperimental?: boolean
   /** How the Agent Dashboard opens: an in-window companion board or a separate pop-out window. Defaults to in-window. */
   experimentalAgentDashboardMode?: AgentDashboardMode
   /** Includes stale quiet agents as a fourth Agent Dashboard column. */
@@ -457,6 +518,8 @@ export type GlobalSettings = {
   tabSwitchKeybindingSeed?: 'pending' | 'done'
   /** Local voice/dictation config. Optional for pre-voice profiles; getDefaultSettings() hydrates defaults via the persistence merge. */
   voice?: VoiceSettings
+  /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
+  aiVaultSearch?: AiVaultSearchSettings
 }
 
 export type OrcaWorkspaceLayout = {
@@ -464,11 +527,6 @@ export type OrcaWorkspaceLayout = {
   nestWorkspaces: boolean
 }
 
-export type GhosttyImportPreview = {
-  found: boolean
-  configPath?: string
-  configPaths?: string[]
-  diff: Partial<GlobalSettings>
-  unsupportedKeys: string[]
-  error?: string
-}
+// Re-exported so existing importers keep one entry point; the shape lives in its
+// own file because this one is at the max-lines ceiling.
+export type { GhosttyImportPreview } from './ghostty-import-preview'

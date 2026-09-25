@@ -352,7 +352,8 @@ describe('remote runtime outbound admission', () => {
 
 async function createServer(): Promise<{ pairing: PairingOffer; server: WebSocketServer }> {
   const keyPair = generateKeyPair()
-  const server = new WebSocketServer({ port: 0 })
+  // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+  const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(server)
   await new Promise<void>((resolve) => server.once('listening', resolve))
   const address = server.address() as AddressInfo

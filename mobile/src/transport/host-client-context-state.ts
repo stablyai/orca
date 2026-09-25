@@ -1,6 +1,7 @@
 import type { RpcClient } from './rpc-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostClientStoreEntry } from './host-entry-opener'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
@@ -79,6 +80,7 @@ export function createHostClientSelectors(
   return {
     getKnownState,
     getState: (hostId: string): ConnectionState => getKnownState(hostId) ?? 'disconnected',
+    getClientId: (hostId: string): string | null => entries.get(hostId)?.clientId ?? null,
     getReconnectAttempt: (hostId: string): number =>
       entries.get(hostId)?.client.getReconnectAttempt() ?? 0,
     getLastConnectedAt: (hostId: string): number | null =>
@@ -86,8 +88,22 @@ export function createHostClientSelectors(
     getActivePath: (hostId: string): MobileConnectionPath =>
       clientActivePath(entries.get(hostId)?.client),
     getPendingPath: (hostId: string): MobileConnectionPath | null =>
-      clientPendingPath(entries.get(hostId)?.client)
+      clientPendingPath(entries.get(hostId)?.client),
+    isPairingRejected: (hostId: string): boolean =>
+      clientPairingRejected(entries.get(hostId)?.client),
+    getRelayHostReachability: (hostId: string): RelayHostReachability =>
+      clientRelayHostReachability(entries.get(hostId)?.client)
   }
+}
+
+export function clientRelayHostReachability(client: RpcClient | undefined): RelayHostReachability {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.getRelayHostReachability?.() ?? 'connecting'
+}
+
+export function clientPairingRejected(client: RpcClient | undefined): boolean {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.isPairingRejected?.() ?? false
 }
 
 export function clientActivePath(client: RpcClient | undefined): MobileConnectionPath {

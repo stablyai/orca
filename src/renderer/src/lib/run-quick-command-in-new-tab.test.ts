@@ -120,7 +120,9 @@ describe('runQuickCommandInNewTab', () => {
   })
 
   it('launches agent quick commands through the programmatic agent prompt path', () => {
-    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-agent' })
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-agent' }
+    })
     mockState.unifiedTabsByWorktree['repo::worktree'] = [
       { entityId: 'tab-agent', contentType: 'terminal', groupId: 'group-1' }
     ]
@@ -150,9 +152,67 @@ describe('runQuickCommandInNewTab', () => {
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'agent-review')
   })
 
+  it('submits OpenCode2 quick prompts after its TUI is ready', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-opencode2' }
+    })
+    mockState.unifiedTabsByWorktree['repo::worktree'] = [
+      { entityId: 'tab-opencode2', contentType: 'terminal', groupId: 'group-1' }
+    ]
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-opencode2',
+        label: 'OpenCode2 review',
+        action: 'agent-prompt',
+        agent: 'opencode2',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      agent: 'opencode2',
+      prompt: 'Review this diff',
+      promptDelivery: 'submit-after-ready',
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1',
+      launchSource: 'quick_command',
+      quickCommandLabel: 'OpenCode2 review'
+    })
+  })
+
+  it('uses the same ready-state path for plain OpenCode installs', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-opencode' }
+    })
+    mockState.unifiedTabsByWorktree['repo::worktree'] = [
+      { entityId: 'tab-opencode', contentType: 'terminal', groupId: 'group-1' }
+    ]
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-opencode',
+        label: 'OpenCode review',
+        action: 'agent-prompt',
+        agent: 'opencode',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'opencode', promptDelivery: 'submit-after-ready' })
+    )
+  })
+
   it('falls back to the active group when context-menu group resolution is missing', () => {
     mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
-    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-agent' })
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-agent' }
+    })
 
     const result = runQuickCommandInNewTab({
       command: {
@@ -175,6 +235,63 @@ describe('runQuickCommandInNewTab', () => {
       launchSource: 'quick_command',
       quickCommandLabel: 'Review'
     })
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'active-group',
+      'agent-review'
+    )
+  })
+
+  it('records history while a structured agent quick command publishes asynchronously', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: {
+        kind: 'local-agent-session',
+        tabId: 'agent-session:codex-session-1',
+        sessionId: 'codex-session-1'
+      }
+    })
+
+    const result = runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1',
+      historyId: 'runtime:local\u0000agent-review'
+    })
+
+    expect(result).toEqual({ tabId: 'agent-session:codex-session-1' })
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'group-1',
+      'runtime:local\u0000agent-review'
+    )
+  })
+
+  it('uses the active group for structured history when the caller has no group', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: {
+        kind: 'local-agent-session',
+        tabId: 'agent-session:codex-session-1',
+        sessionId: 'codex-session-1'
+      }
+    })
+    mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: null
+    })
+
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
       'active-group',
       'agent-review'

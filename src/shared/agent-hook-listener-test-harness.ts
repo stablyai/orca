@@ -1,4 +1,8 @@
-import { normalizeHookPayload, type HookListenerState } from './agent-hook-listener'
+import { normalizeHookPayload } from './agent-hook-listener'
+import {
+  seedLegacyAgentStatusForTests,
+  type HookListenerState
+} from './agent-hook-listener/listener-state'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -13,7 +17,7 @@ export function normalizeAndAccept(
 ): ReturnType<typeof normalizeHookPayload> {
   const event = normalizeHookPayload(state, source, { paneKey: PANE_KEY, payload }, 'production')
   if (event) {
-    state.lastStatusByPaneKey.set(PANE_KEY, event)
+    seedLegacyAgentStatusForTests(state, event)
   }
   return event
 }

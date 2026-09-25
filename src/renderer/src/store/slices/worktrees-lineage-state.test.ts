@@ -453,7 +453,11 @@ describe('worktree lineage state', () => {
     })
     expect(mockApi.worktrees.updateLineage).not.toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
-    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
+    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual({
+      ...updatedChild,
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
     expect(store.getState().sortEpoch).toBe(4)
   })
 
@@ -537,7 +541,11 @@ describe('worktree lineage state', () => {
     })
     expect(mockApi.worktrees.updateLineage).not.toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
-    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
+    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual({
+      ...updatedChild,
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
     expect(store.getState().sortEpoch).toBe(4)
 
     runtimeEnvironmentCall
@@ -701,7 +709,11 @@ describe('worktree lineage state', () => {
       timeoutMs: 15_000
     })
     expect(store.getState().worktreeLineageById).toEqual({})
-    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
+    expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual({
+      ...updatedChild,
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
   })
 
   // An unresolvable owner route must reach the caller so the sidebar can toast it, rather than

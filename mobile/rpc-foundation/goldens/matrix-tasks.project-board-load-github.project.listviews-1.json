@@ -1,0 +1,2303 @@
+{
+  "operation": "tasks.project-board-load",
+  "family": "tasks.project-board-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
+  "scenarioSha256": "c5cc9a11a75a86780195be7d1055d1064c8aba78bb8e4e8bbdf033409c2b2aa5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0056704adc0b": {
+      "name": "githubProjectTable",
+      "ordinal": 31,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "00ef2dbe5026": {
+      "name": "github.project.resolveRef#1",
+      "ordinal": 21,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.resolveRef"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.com",
+            "input": "https://github.com/orgs/owner/projects/3"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "host": "github.com",
+            "number": 3,
+            "ok": true,
+            "owner": "owner",
+            "ownerType": "organization",
+            "title": "Board",
+            "viewNumber": 1
+          }
+        }
+      }
+    },
+    "0388fa155721": {
+      "name": "githubProjectError",
+      "ordinal": 11,
+      "value": ""
+    },
+    "060dcedb3fdb": {
+      "name": "githubProjectError",
+      "ordinal": 10,
+      "value": ""
+    },
+    "0af48d475813": {
+      "name": "appliedGithubProjectSearch",
+      "ordinal": 29,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "0f1aa264f581": {
+      "name": "github.project.viewTable#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.viewTable"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3,
+            "viewId": "view-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "data": {
+              "fields": [],
+              "project": {
+                "id": "project-1",
+                "number": 3,
+                "title": "Board"
+              },
+              "rows": [],
+              "selectedView": {
+                "filter": "is:open",
+                "id": "view-1",
+                "layout": "TABLE_LAYOUT",
+                "name": "Table",
+                "number": 1
+              }
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "10e9934ad7b2": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (github.project.listViews)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "15cb97c93333": {
+      "name": "github.project.listViews#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3}}"
+    },
+    "170fad8cb36b": {
+      "name": "githubProjectPartialFailures",
+      "ordinal": 6,
+      "value": []
+    },
+    "193f89ca85cf": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "1b3350f71e56": {
+      "name": "githubProjectError",
+      "ordinal": 19,
+      "value": ""
+    },
+    "1f18fe0af060": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "2085118de92f": {
+      "name": "githubProjectError",
+      "ordinal": 1,
+      "value": ""
+    },
+    "26921f3a7c09": {
+      "name": "githubProjectPasteError",
+      "ordinal": 18,
+      "value": ""
+    },
+    "2aa8c7b4bd52": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "2ab1b35ff194": {
+      "error": "",
+      "loading": false,
+      "pasteError": "",
+      "projects": [
+        {
+          "host": "github.com",
+          "number": 3,
+          "owner": "owner",
+          "ownerType": "organization",
+          "title": "Board"
+        }
+      ],
+      "table": {
+        "fields": [],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [],
+        "selectedView": {
+          "filter": "is:open",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      },
+      "views": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "2f290fa2acf5": {
+      "name": "githubProjectLoading",
+      "ordinal": 9,
+      "value": true
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "3493818a7239": {
+      "name": "githubProjectPasteBusy",
+      "ordinal": 33,
+      "value": false
+    },
+    "34de2d655a0a": {
+      "name": "githubProjectTable",
+      "ordinal": 32,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "376c9e8bd72a": {
+      "error": "",
+      "loading": false,
+      "pasteError": "",
+      "projects": [
+        {
+          "host": "github.com",
+          "number": 3,
+          "owner": "owner",
+          "ownerType": "organization",
+          "title": "Board"
+        }
+      ],
+      "table": {
+        "$rpc": "null"
+      },
+      "views": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "3791ddcb2808": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "3985399034a2": {
+      "name": "githubProjectPasteBusy",
+      "ordinal": 17,
+      "value": true
+    },
+    "3a8617cc8fd8": {
+      "name": "githubProjectSearch",
+      "ordinal": 14,
+      "value": "is:open"
+    },
+    "43352776b1e1": {
+      "name": "githubProjectTable",
+      "ordinal": 14,
+      "value": {
+        "fields": [],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [],
+        "selectedView": {
+          "filter": "is:open",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      }
+    },
+    "47507819e28a": {
+      "name": "githubProjectPasteInput",
+      "ordinal": 23,
+      "value": ""
+    },
+    "4809ea7ad5b0": {
+      "name": "github.project.viewTable#1",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.viewTable\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3,\"viewId\":\"view-1\"}}"
+    },
+    "4c9b1e4ad1f5": {
+      "name": "githubProjectViews",
+      "ordinal": 28,
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "4eb521bbefdd": {
+      "name": "githubProjectSearch",
+      "ordinal": 15,
+      "value": "is:open"
+    },
+    "528af16518e6": {
+      "name": "githubProjectViews",
+      "ordinal": 16,
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "5a4fc5c86d0c": {
+      "name": "githubProjectPasteBusy",
+      "ordinal": 34,
+      "value": false
+    },
+    "5f5f56db9d64": {
+      "name": "github.project.viewTable#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.viewTable"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3,
+            "viewId": "view-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "data": {
+              "fields": [],
+              "project": {
+                "id": "project-1",
+                "number": 3,
+                "title": "Board"
+              },
+              "rows": [],
+              "selectedView": {
+                "filter": "is:open",
+                "id": "view-1",
+                "layout": "TABLE_LAYOUT",
+                "name": "Table",
+                "number": 1
+              }
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "61ce1ab88e79": {
+      "name": "github.project.viewTable#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.viewTable\",\"params\":{\"owner\":\"owner\",\"host\":\"github.enterprise.test\",\"ownerType\":\"organization\",\"projectNumber\":3,\"viewId\":\"view-1\"}}"
+    },
+    "621b6b7b4159": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "654693493b51": {
+      "name": "githubProjectLoading",
+      "ordinal": 10,
+      "value": true
+    },
+    "685bc2bda05d": {
+      "name": "githubProjects",
+      "ordinal": 5,
+      "value": [
+        {
+          "host": "github.com",
+          "number": 3,
+          "owner": "owner",
+          "ownerType": "organization",
+          "title": "Board"
+        }
+      ]
+    },
+    "68febdb4aa87": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "6b03ace1146a": {
+      "name": "githubProjectError",
+      "ordinal": 25,
+      "value": ""
+    },
+    "7a9df0d1a484": {
+      "name": "githubProjectLoading",
+      "ordinal": 25,
+      "value": true
+    },
+    "7b9d3b33c08b": {
+      "name": "githubProjectPasteError",
+      "ordinal": 19,
+      "value": ""
+    },
+    "7d488eda1d1c": {
+      "name": "githubProjectViews",
+      "ordinal": 15,
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "842c950ee7cc": {
+      "name": "githubProjectLoading",
+      "ordinal": 16,
+      "value": false
+    },
+    "8792541c60ad": {
+      "name": "githubProjectError",
+      "ordinal": 26,
+      "value": ""
+    },
+    "8a0577280bad": {
+      "name": "showGitHubProjectPicker",
+      "ordinal": 23,
+      "value": false
+    },
+    "8e4dec1aad1f": {
+      "name": "github.project.listViews#2",
+      "ordinal": 28,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.com\",\"ownerType\":\"organization\",\"projectNumber\":3}}"
+    },
+    "8f3ee6c510b1": {
+      "name": "github.project.resolveRef#1",
+      "ordinal": 22,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.resolveRef\",\"params\":{\"input\":\"https://github.com/orgs/owner/projects/3\",\"host\":\"github.com\"}}"
+    },
+    "97bc7dc12b92": {
+      "name": "githubProjectLoading",
+      "ordinal": 32,
+      "value": false
+    },
+    "9b9f8dd75514": {
+      "name": "githubProjectViews",
+      "ordinal": 9,
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "9f9a21ac7b9e": {
+      "name": "github.project.listViews#2",
+      "ordinal": 27,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listViews\",\"params\":{\"owner\":\"owner\",\"host\":\"github.com\",\"ownerType\":\"organization\",\"projectNumber\":3}}"
+    },
+    "a15abed7d4f0": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a4a1ff5df287": {
+      "name": "githubProjectPasteBusy",
+      "ordinal": 18,
+      "value": true
+    },
+    "a5a3530ec11c": {
+      "name": "githubProjectPartialFailures",
+      "ordinal": 2,
+      "value": []
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "ab1b10183665": {
+      "name": "githubProjectLoading",
+      "ordinal": 24,
+      "value": true
+    },
+    "ae89e058b351": {
+      "name": "github.project.listViews#2",
+      "ordinal": 26,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.com",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "views": [
+              {
+                "id": "view-1",
+                "layout": "TABLE_LAYOUT",
+                "name": "Table",
+                "number": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    "b42c8edc0d53": {
+      "name": "github.project.listAccessible#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.listAccessible\",\"params\":{\"host\":\"github.com\"}}"
+    },
+    "b49ff9f109a5": {
+      "name": "github.project.listViews#2",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.com",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "views": [
+              {
+                "id": "view-1",
+                "layout": "TABLE_LAYOUT",
+                "name": "Table",
+                "number": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    "b5e354ed6023": {
+      "name": "githubProjectLoading",
+      "ordinal": 17,
+      "value": false
+    },
+    "b66c4f75c9ae": {
+      "name": "githubProjectViews",
+      "ordinal": 29,
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "be0da5b53ffb": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      ]
+    },
+    "be93253869e6": {
+      "name": "github.project.resolveRef#1",
+      "ordinal": 21,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.resolveRef\",\"params\":{\"input\":\"https://github.com/orgs/owner/projects/3\",\"host\":\"github.com\"}}"
+    },
+    "bf8bc6347470": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "c41a1840af6d": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "c453f220a7e2": {
+      "name": "githubProjectLoading",
+      "ordinal": 33,
+      "value": false
+    },
+    "c4c4250b0567": {
+      "name": "showGitHubProjectPicker",
+      "ordinal": 24,
+      "value": false
+    },
+    "c5c018cf9a70": {
+      "name": "githubProjectTable",
+      "ordinal": 13,
+      "value": {
+        "fields": [],
+        "project": {
+          "id": "project-1",
+          "number": 3,
+          "title": "Board"
+        },
+        "rows": [],
+        "selectedView": {
+          "filter": "is:open",
+          "id": "view-1",
+          "layout": "TABLE_LAYOUT",
+          "name": "Table",
+          "number": 1
+        }
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d05b2d417b9c": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "inner refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "d254913957c1": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "views": [
+              {
+                "id": "view-1",
+                "layout": "TABLE_LAYOUT",
+                "name": "Table",
+                "number": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    "dc8dd7739c49": {
+      "name": "githubProjectPasteInput",
+      "ordinal": 22,
+      "value": ""
+    },
+    "dfe16215433b": {
+      "name": "github.project.listAccessible#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listAccessible"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.com"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "partialFailures": [],
+            "projects": [
+              {
+                "host": "github.com",
+                "number": 3,
+                "owner": "owner",
+                "ownerType": "organization",
+                "title": "Board"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "e87bea4bcd3c": {
+      "name": "githubProjectSearch",
+      "ordinal": 30,
+      "value": ""
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "f6003aed2098": {
+      "name": "github.project.resolveRef#1",
+      "ordinal": 20,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.resolveRef"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.com",
+            "input": "https://github.com/orgs/owner/projects/3"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "host": "github.com",
+            "number": 3,
+            "ok": true,
+            "owner": "owner",
+            "ownerType": "organization",
+            "title": "Board",
+            "viewNumber": 1
+          }
+        }
+      }
+    },
+    "fa1d1b339394": {
+      "name": "appliedGithubProjectSearch",
+      "ordinal": 30,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fb9764680a74": {
+      "name": "githubProjectError",
+      "ordinal": 20,
+      "value": ""
+    },
+    "fc799562716c": {
+      "name": "github.project.listViews#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.listViews"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "owner": "owner",
+            "ownerType": "organization",
+            "projectNumber": 3
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "fe075936e563": {
+      "name": "githubProjectSearch",
+      "ordinal": 31,
+      "value": ""
+    },
+    "ff43b5ec92a9": {
+      "error": "",
+      "loading": false,
+      "pasteError": "",
+      "projects": [
+        {
+          "host": "github.com",
+          "number": 3,
+          "owner": "owner",
+          "ownerType": "organization",
+          "title": "Board"
+        }
+      ],
+      "table": {
+        "$rpc": "null"
+      },
+      "views": []
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.project-board-load-github.project.listviews-1",
+    "checkpoints": [
+      {
+        "id": "tk-project-board-load.prelude:projects-settled",
+        "observation": {
+          "sender": ["dfe16215433b"],
+          "payloads": ["b42c8edc0d53"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.normal:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "d254913957c1"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "be0da5b53ffb"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "9b9f8dd75514"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.normal:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "d254913957c1", "5f5f56db9d64"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "61ce1ab88e79"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "be0da5b53ffb",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "9b9f8dd75514",
+            "654693493b51",
+            "0388fa155721",
+            "43352776b1e1",
+            "4eb521bbefdd",
+            "528af16518e6",
+            "b5e354ed6023"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.normal:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "d254913957c1",
+            "5f5f56db9d64",
+            "00ef2dbe5026",
+            "b49ff9f109a5"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "61ce1ab88e79",
+            "8f3ee6c510b1",
+            "8e4dec1aad1f"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "be0da5b53ffb",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "9b9f8dd75514",
+            "654693493b51",
+            "0388fa155721",
+            "43352776b1e1",
+            "4eb521bbefdd",
+            "528af16518e6",
+            "b5e354ed6023",
+            "a4a1ff5df287",
+            "7b9d3b33c08b",
+            "fb9764680a74",
+            "47507819e28a",
+            "c4c4250b0567",
+            "7a9df0d1a484",
+            "8792541c60ad",
+            "b66c4f75c9ae",
+            "fa1d1b339394",
+            "fe075936e563",
+            "34de2d655a0a",
+            "c453f220a7e2",
+            "5a4fc5c86d0c"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.result-absent:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "3791ddcb2808"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.result-absent:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "3791ddcb2808", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.result-absent:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "3791ddcb2808",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.result-null:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "fc799562716c"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.result-null:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "fc799562716c", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.result-null:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "fc799562716c",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-ok-missing:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "bf8bc6347470"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-ok-missing:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "bf8bc6347470", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-ok-missing:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "bf8bc6347470",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-false-string-error:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "2aa8c7b4bd52"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-false-string-error:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "2aa8c7b4bd52", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-false-string-error:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "2aa8c7b4bd52",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "10e9934ad7b2",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-false-object-error:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "a15abed7d4f0"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "d05b2d417b9c"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-false-object-error:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "a15abed7d4f0", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "d05b2d417b9c",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.inner-false-object-error:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "a15abed7d4f0",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "d05b2d417b9c",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.outer-refused:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "193f89ca85cf"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "32a7c0ae7918"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.outer-refused:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "193f89ca85cf", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "32a7c0ae7918",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.outer-refused:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "193f89ca85cf",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "32a7c0ae7918",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.outer-refused-no-message:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "c41a1840af6d"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "f3b516f62081"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.outer-refused-no-message:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "c41a1840af6d", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "f3b516f62081",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.outer-refused-no-message:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "c41a1840af6d",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "f3b516f62081",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.method-not-found:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "1f18fe0af060"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "b948e8307e81"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.method-not-found:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "1f18fe0af060", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "b948e8307e81",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.method-not-found:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "1f18fe0af060",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "b948e8307e81",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.transport-rejection:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "68febdb4aa87"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "a947768bc0ed"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.transport-rejection:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "68febdb4aa87", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "a947768bc0ed",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.transport-rejection:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "68febdb4aa87",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "a947768bc0ed",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.transport-rejection-no-message:views-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "621b6b7b4159"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "c7584e82c72f"
+          },
+          "state": "ff43b5ec92a9",
+          "effects": ["2085118de92f", "a5a3530ec11c", "685bc2bda05d", "170fad8cb36b"]
+        }
+      },
+      {
+        "id": "tk-project-board-load.transport-rejection-no-message:table-settled",
+        "observation": {
+          "sender": ["dfe16215433b", "621b6b7b4159", "0f1aa264f581"],
+          "payloads": ["b42c8edc0d53", "15cb97c93333", "4809ea7ad5b0"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "c7584e82c72f",
+            "table-2": "eb79a9b3682a"
+          },
+          "state": "2ab1b35ff194",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc"
+          ]
+        }
+      },
+      {
+        "id": "tk-project-board-load.transport-rejection-no-message:paste-settled",
+        "observation": {
+          "sender": [
+            "dfe16215433b",
+            "621b6b7b4159",
+            "0f1aa264f581",
+            "f6003aed2098",
+            "ae89e058b351"
+          ],
+          "payloads": [
+            "b42c8edc0d53",
+            "15cb97c93333",
+            "4809ea7ad5b0",
+            "be93253869e6",
+            "9f9a21ac7b9e"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "projects-0": "eb79a9b3682a",
+            "views-1": "c7584e82c72f",
+            "table-2": "eb79a9b3682a",
+            "paste-3": "eb79a9b3682a"
+          },
+          "state": "376c9e8bd72a",
+          "effects": [
+            "2085118de92f",
+            "a5a3530ec11c",
+            "685bc2bda05d",
+            "170fad8cb36b",
+            "2f290fa2acf5",
+            "060dcedb3fdb",
+            "c5c018cf9a70",
+            "3a8617cc8fd8",
+            "7d488eda1d1c",
+            "842c950ee7cc",
+            "3985399034a2",
+            "26921f3a7c09",
+            "1b3350f71e56",
+            "dc8dd7739c49",
+            "8a0577280bad",
+            "ab1b10183665",
+            "6b03ace1146a",
+            "4c9b1e4ad1f5",
+            "0af48d475813",
+            "e87bea4bcd3c",
+            "0056704adc0b",
+            "97bc7dc12b92",
+            "3493818a7239"
+          ]
+        }
+      }
+    ]
+  }
+}

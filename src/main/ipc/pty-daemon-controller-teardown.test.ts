@@ -153,7 +153,63 @@ describe('registerPtyHandlers', () => {
         })
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
-      it('does not accept an incarnation-less exit as proof that the current PTY stopped', async () => {
+      it('bounds keep-history inventory polls by the settlement deadline', async () => {
+        vi.useFakeTimers()
+        try {
+          const listProcesses = vi.fn(async (_opts?: { deadlineMs?: number }) => [])
+          setLocalPtyProvider({
+            spawn: vi.fn(),
+            write: vi.fn(),
+            resize: vi.fn(),
+            shutdown: vi.fn(async () => undefined),
+            sendSignal: vi.fn(),
+            getCwd: vi.fn(),
+            getInitialCwd: vi.fn(),
+            clearBuffer: vi.fn(),
+            acknowledgeDataEvent: vi.fn(),
+            hasChildProcesses: vi.fn(),
+            getForegroundProcess: vi.fn(),
+            serialize: vi.fn(),
+            revive: vi.fn(),
+            onData: vi.fn(() => () => {}),
+            onReplay: vi.fn(() => () => {}),
+            onExit: vi.fn(() => () => {}),
+            listProcesses,
+            getDefaultShell: vi.fn(),
+            getProfiles: vi.fn()
+          } as never)
+          const runtime = {
+            setPtyController: vi.fn(),
+            onPtyExit: vi.fn()
+          }
+          handlers.clear()
+          registerPtyHandlers(mainWindow as never, runtime as never)
+          const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+            stopAndWait: (
+              ptyId: string,
+              opts?: { keepHistory?: boolean; deadlineMs?: number }
+            ) => Promise<boolean>
+          }
+          const callerDeadlineMs = Date.now() + 5_000
+          const stopPromise = controller.stopAndWait('local-pty', {
+            keepHistory: true,
+            deadlineMs: callerDeadlineMs
+          })
+
+          await vi.advanceTimersByTimeAsync(1_000)
+          await expect(stopPromise).resolves.toBe(true)
+
+          expect(listProcesses.mock.calls[0]?.[0]).toEqual({ deadlineMs: callerDeadlineMs })
+          const settlementDeadlines = listProcesses.mock.calls
+            .slice(1)
+            .map(([opts]) => opts?.deadlineMs)
+          expect(settlementDeadlines.length).toBeGreaterThan(0)
+          expect(new Set(settlementDeadlines)).toEqual(new Set([callerDeadlineMs - 4_000]))
+        } finally {
+          vi.useRealTimers()
+        }
+      })
+      it('uses inventory, not an incarnation-less exit, to confirm the current PTY stopped', async () => {
         const exitListeners = new Set<
           (payload: { id: string; code: number; incarnationId?: string }) => void
         >()
@@ -203,7 +259,7 @@ describe('registerPtyHandlers', () => {
         await controller.spawn({ cols: 80, rows: 24 })
         await expect(controller.stopAndWait('local-incarnated')).resolves.toBe(true)
 
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-incarnated', -1, 'incarnation-live')
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-incarnated', 0, 'incarnation-live')
       })
       it('runtime controller kill routes app-scoped SSH ids through the parsed provider when ownership is absent', async () => {
         const localShutdown = vi.fn()
@@ -230,7 +286,7 @@ describe('registerPtyHandlers', () => {
           getProfiles: vi.fn()
         } as never)
         const shutdown = vi.fn(async () => undefined)
-        const store = { markSshRemotePtyLease: vi.fn() }
+        const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
         const runtime = {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
@@ -301,7 +357,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        const store = { markSshRemotePtyLease: vi.fn() }
+        const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
         const runtime = {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
@@ -319,7 +375,9 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
-        expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
+        // The lease is tombstoned, but nothing observed the detached relay PTY
+        // stop, so the stop itself is reported as unconfirmed.
+        expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(false)
 
         expect(localShutdown).not.toHaveBeenCalled()
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
@@ -327,7 +385,8 @@ describe('registerPtyHandlers', () => {
       })
       it('marks a detached SSH lease terminated when runtime controller kill has no provider', async () => {
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),
@@ -347,7 +406,7 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
-        expect(controller.kill('remote-pty')).toBe(true)
+        expect(controller.kill('remote-pty')).toBe(false)
 
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
           'ssh-1',
@@ -356,14 +415,16 @@ describe('registerPtyHandlers', () => {
         )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
       })
-      it('retires a rejected SSH PTY after generic kill shutdown fails transiently', async () => {
+      it('keeps a rejected SSH PTY unverifiable after kill shutdown fails transiently', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const store = {
-          markSshRemotePtyLease: vi.fn()
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
         }
         const runtime = {
           setPtyController: vi.fn(),
-          onPtyExit: vi.fn()
+          onPtyExit: vi.fn(),
+          markPtyLivenessUnverifiable: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
           spawn: vi.fn(),
@@ -399,7 +460,7 @@ describe('registerPtyHandlers', () => {
         )
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           kill: (ptyId: string) => boolean
-          retireRejectedPty: (ptyId: string) => void
+          retireRejectedPty: (ptyId: string, stopConfirmed: boolean) => void
         }
 
         try {
@@ -410,19 +471,23 @@ describe('registerPtyHandlers', () => {
             'remote-pty',
             'terminated'
           )
-          controller.retireRejectedPty('remote-pty')
+          controller.retireRejectedPty('remote-pty', false)
         } finally {
           warnSpy.mockRestore()
           deletePtyOwnership('remote-pty')
         }
 
-        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
           'ssh-1',
           'remote-pty',
           'terminated'
         )
+        expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
+          'remote-pty',
+          'a follow-up stop was issued but its outcome could not be verified'
+        )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 0, undefined)
+        expect(runtime.onPtyExit).not.toHaveBeenCalledWith('remote-pty', 0, undefined)
       })
       it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {
         const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
@@ -464,6 +529,8 @@ describe('registerPtyHandlers', () => {
               ORCA_TAB_ID: 'tab-1',
               ORCA_WORKTREE_ID: 'wt-1'
             },
+            tabId: 'tab-1',
+            leafId: '11111111-1111-4111-8111-111111111111',
             connectionId: 'ssh-1'
           })
           const env = sshSpawn.mock.calls.at(-1)![0].env

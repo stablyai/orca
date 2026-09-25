@@ -253,7 +253,9 @@ describe('SkillInstallDialog', () => {
     })
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
     await inspectSkill()
-    await screen.findByRole('button', { name: 'Installing for: Codex' })
+    // Canonical-root agents (for example Muse) are shown alongside the
+    // detected provider, so keep this assertion focused on the detected one.
+    await screen.findByRole('button', { name: /Installing for: Codex/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Install skill' }))
     await waitFor(() => expect(skills.installShare).toHaveBeenCalled())
@@ -281,6 +283,8 @@ describe('SkillInstallDialog', () => {
     const description = screen.getByText(sharedVersion.description)
     expect(description.className).toContain('line-clamp-1')
     expect(description.className).toContain('group-data-[state=open]/row:line-clamp-none')
+    expect(description.className).toContain('group-data-[state=open]/row:max-h-none')
+    expect(description.className).not.toContain('group-data-[state=open]/row:max-h-40')
   })
 
   // Why: "view the full skill contents" is the point of the row — the file list
@@ -321,7 +325,7 @@ describe('SkillInstallDialog', () => {
     expect(screen.queryByText(char.repeat(64))).toBeNull()
     expect(screen.queryByText('Immutable version')).toBeNull()
     expect(screen.queryByText('0 scripts')).toBeNull()
-    expect(screen.getAllByText(/Instructions only/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/^1 file$/).length).toBeGreaterThan(0)
   })
 
   it('warns about supporting files without blocking installation', async () => {
@@ -349,6 +353,8 @@ describe('SkillInstallDialog', () => {
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
 
     await inspectSkill()
+    expect(screen.getByText(/^2 files$/)).toBeTruthy()
+    expect(screen.queryByText(/supporting$/, { selector: 'span' })).toBeNull()
     expect(screen.getByText('Includes supporting files')).toBeTruthy()
     expect(screen.getByText(/include 1 file beyond SKILL.md/)).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: /I trust the sender/ })).toBeNull()

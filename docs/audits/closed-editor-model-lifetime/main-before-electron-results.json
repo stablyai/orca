@@ -1,0 +1,68 @@
+{
+  "runtime": {
+    "node": "24.21.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.2",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "148",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "0.0.0",
+    "simdjson": "4.6.7",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2025c",
+    "undici": "7.29.1",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "15.0.245.31-electron.0",
+    "zlib": "1.3.2.1-motley",
+    "zstd": "1.6.0",
+    "electron": "43.7.0",
+    "chrome": "150.0.7871.250"
+  },
+  "variant": "before",
+  "graph": "main",
+  "sourceFence": {
+    "sources": 1017,
+    "graphSha256": "9b092ce86caf62164bc106a6ac8a382b9b487c5abbaadcfaedd371c3755a1a50",
+    "manifestSha256": "c3f9b3b2e3c669a5565df1c73adb4a0b6468835f7ef5674e822032d08bf6459b",
+    "scenarioSha256": "afc0b7e45e056d1f730ac58f266094471b58187646c91b4436b909544a3a4e29",
+    "loaderSha256": "d5914770eb9db3c75b153b55d7f2f94415d3ab1850bc5b021be1165d104828be"
+  },
+  "observations": [
+    {
+      "control": "eight-last-file-closes",
+      "openFiles": 0,
+      "retainedModels": 8,
+      "logicalCharacters": 2097208
+    },
+    {
+      "control": "panel-stays-mounted",
+      "closedDisposed": true,
+      "liveDisposed": false
+    },
+    {
+      "control": "hidden-close-and-remount",
+      "retainedClosedModel": true,
+      "openFiles": 1,
+      "models": 2
+    },
+    {
+      "control": "normal-switch",
+      "originalModelPreserved": true
+    }
+  ],
+  "scope": "Actual legacy surface, cleanup hook, disposal, Store close action and installed Monaco models. Shell/Panel bodies are controlled ports; files/models are seeded. Eight distinct fixture paths, 256 KiB characters each. No native editor widget, app window, field file sizes, heap bytes or incident allocation rate."
+}

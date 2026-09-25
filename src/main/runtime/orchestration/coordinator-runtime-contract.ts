@@ -1,3 +1,5 @@
+import type { DispatchPreambleSendOptions } from './preamble'
+
 /** The terminal/worktree capabilities the coordinator needs from the runtime it drives. */
 export type WorktreeDrift = {
   base: string
@@ -6,7 +8,11 @@ export type WorktreeDrift = {
 } | null
 
 export type CoordinatorRuntime = {
-  sendTerminalAgentPrompt(handle: string, prompt: string): Promise<unknown>
+  sendTerminalAgentPrompt(
+    handle: string,
+    prompt: string,
+    options?: DispatchPreambleSendOptions
+  ): Promise<unknown>
   listTerminals(
     worktreeSelector?: string,
     limit?: number,
@@ -26,6 +32,8 @@ export type CoordinatorRuntime = {
   probeWorktreeDrift(worktreeSelector: string): Promise<WorktreeDrift>
   // Why: pane-only fallback preserves reservation identity for lightweight runtime fakes.
   getTerminalPaneKey?(handle: string): string | null
+  // Why optional: lightweight fakes omit it and get the fail-closed default.
+  getNestedWorkerMaxDepth?(): number
   // Why: automatic dispatch persists the same authenticated pane/process tuple as manual dispatch.
   getOrchestrationDispatchAuthority?(handle: string): {
     paneKey: string | null
@@ -33,5 +41,5 @@ export type CoordinatorRuntime = {
     launchTokenHash: string | null
   } | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
-  getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
+  getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-dev' | 'orca-ide'
 }

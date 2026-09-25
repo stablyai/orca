@@ -14,9 +14,11 @@ let tempHome = ''
 
 async function loadStoreModule() {
   vi.resetModules()
-  vi.doMock('electron', () => ({
-    safeStorage: safeStorageMock
-  }))
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    ...safeStorageMock,
+    describeProtectionGap: () => null
+  })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }

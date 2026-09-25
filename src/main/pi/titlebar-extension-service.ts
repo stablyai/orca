@@ -1,7 +1,8 @@
+import { materializeOmpFreshConfig } from '../../shared/omp-fresh-config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { createHash } from 'node:crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
@@ -58,8 +59,9 @@ const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   'prime-agent': '.prime'
 }
 
-function getDefaultPiAgentDir(kind: PiAgentKind): string {
-  return join(homedir(), AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
+function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
+  const root = kind === 'omp' ? configDirName || AGENT_HOME_DIR_NAME.omp : AGENT_HOME_DIR_NAME[kind]
+  return join(homedir(), root, PI_AGENT_SUBDIR)
 }
 
 function toSafeOverlayDirName(ptyId: string): string {
@@ -74,7 +76,7 @@ function withOrcaManagedExtensionMarker(source: string): string {
 
 export class PiTitlebarExtensionService {
   private getOverlayRoot(kind: LegacyOverlayAgentKind): string {
-    return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
+    return join(getAppEnvironment().getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
   private getSourceOverlayDir(sourceAgentDir: string, kind: LegacyOverlayAgentKind): string {
@@ -122,7 +124,10 @@ export class PiTitlebarExtensionService {
   }
 
   private writeOmpFallbackStatusExtension(source: string): string | undefined {
-    const fallbackDir = join(app.getPath('userData'), OMP_MANAGED_STATUS_EXTENSION_DIR)
+    const fallbackDir = join(
+      getAppEnvironment().getPath('userData'),
+      OMP_MANAGED_STATUS_EXTENSION_DIR
+    )
     try {
       mkdirSync(fallbackDir, { recursive: true })
     } catch {
@@ -147,7 +152,7 @@ export class PiTitlebarExtensionService {
     if (kind !== 'prime-agent') {
       this.writeManagedExtension(
         join(extensionsDir, ORCA_PI_EXTENSION_FILE),
-        withOrcaManagedExtensionMarker(getPiTitlebarExtensionSource())
+        withOrcaManagedExtensionMarker(getPiTitlebarExtensionSource(kind))
       )
       this.writeManagedExtension(
         join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
@@ -170,13 +175,24 @@ export class PiTitlebarExtensionService {
     }
   }
 
+  buildFreshOmpEnv(): Record<string, string> {
+    return {
+      ORCA_OMP_FRESH_CONFIG: materializeOmpFreshConfig(
+        join(getAppEnvironment().getPath('userData'), OMP_MANAGED_STATUS_EXTENSION_DIR)
+      )
+    }
+  }
+
   buildPtyEnv(
     ptyId: string,
     existingAgentDir: string | undefined,
     kind: PiAgentKind,
-    options?: { materializeDefaultHome?: boolean }
+    options?: { materializeDefaultHome?: boolean; configDirName?: string }
   ): Record<string, string> {
-    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
+    const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
+    // The caller resolves the effective launch environment before this point.
+    const sourceAgentDir =
+      existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
     if (kind !== 'prime-agent') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
@@ -196,7 +212,9 @@ export class PiTitlebarExtensionService {
       if (kind === 'omp') {
         const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
         const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)
-        return statusExtensionPath ? { ORCA_OMP_STATUS_EXTENSION: statusExtensionPath } : {}
+        return statusExtensionPath
+          ? { ...freshConfigEnv, ORCA_OMP_STATUS_EXTENSION: statusExtensionPath }
+          : freshConfigEnv
       }
       return {}
     }
@@ -206,7 +224,7 @@ export class PiTitlebarExtensionService {
     }
 
     const installed = this.installManagedExtensions(sourceAgentDir, kind)
-    const env: Record<string, string> = {}
+    const env: Record<string, string> = { ...freshConfigEnv }
     if (kind === 'omp') {
       env.ORCA_OMP_SOURCE_AGENT_DIR = installed.sourceAgentDir
       if (installed.statusExtensionPath) {

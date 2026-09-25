@@ -18,6 +18,17 @@ public enum SyntheticMouseClickDelivery {
         }
     }
 
+    public enum RecipientObservation: Equatable, Sendable {
+        case focused(Recipient)
+        case dismissed
+        case unavailable
+
+        var recipient: Recipient? {
+            guard case let .focused(recipient) = self else { return nil }
+            return recipient
+        }
+    }
+
     public enum FenceFailure: Error, Equatable {
         case recipientChanged(expected: Recipient, actual: Recipient?, deliveredPresses: Int)
     }
@@ -69,19 +80,20 @@ public enum SyntheticMouseClickDelivery {
     public static func deliver<Event>(
         clickCount: Int,
         target: Recipient,
-        currentRecipient: () -> Recipient?,
+        currentObservation: () -> RecipientObservation,
         makeEvent: (Step) throws -> Event,
         post: (Event) -> Void,
         pause: (UInt32) -> Void
     ) throws {
         post(try makeEvent(.move))
         pause(interEventPauseMicroseconds)
-        for pressIndex in 1...min(max(clickCount, 1), maxClickCount) {
-            let beforeDown = currentRecipient()
-            guard beforeDown == target else {
+        let pressCount = min(max(clickCount, 1), maxClickCount)
+        for pressIndex in 1...pressCount {
+            let beforeDown = currentObservation()
+            guard beforeDown == .focused(target) else {
                 throw FenceFailure.recipientChanged(
                     expected: target,
-                    actual: beforeDown,
+                    actual: beforeDown.recipient,
                     deliveredPresses: pressIndex - 1
                 )
             }
@@ -90,11 +102,13 @@ public enum SyntheticMouseClickDelivery {
             post(down)
             pause(interEventPauseMicroseconds)
             post(up)
-            let afterUp = currentRecipient()
-            guard afterUp == target else {
+            let afterUp = currentObservation()
+            // A final mouse-up may dismiss the target, but an unavailable probe is unsafe.
+            let finalDismissal = pressIndex == pressCount && afterUp == .dismissed
+            guard afterUp == .focused(target) || finalDismissal else {
                 throw FenceFailure.recipientChanged(
                     expected: target,
-                    actual: afterUp,
+                    actual: afterUp.recipient,
                     deliveredPresses: pressIndex
                 )
             }

@@ -55,6 +55,7 @@ describe('registerPtyHandlers', () => {
     createMockProc,
     getPtyWriteListener,
     getPtySetRendererPtyVisibleListener,
+    getPtySetHiddenRendererPtyListener,
     getPtyRendererDispatcherReadyListener,
     getMainFrameNavigationListener,
     getPtyResizeListener
@@ -164,7 +165,7 @@ describe('registerPtyHandlers', () => {
       vi.useRealTimers()
     }
   })
-  it('preserves background-origin metadata for repaint output caused by a hidden resize', async () => {
+  it('does not tag output read after reveal as background when the hidden resize repaint was gated', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -177,29 +178,30 @@ describe('registerPtyHandlers', () => {
         cwd: '/tmp'
       })) as { id: string }
       const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
+      const setHidden = getPtySetHiddenRendererPtyListener()
       const resizePty = getPtyResizeListener()
       mainWindow.webContents.send.mockClear()
 
       setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
+      setHidden(null, { id: spawnResult.id, hidden: true })
       resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
+      mockProc.emitData('\x1b[2Khidden-resize repaint')
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        'pty:data',
+        expect.objectContaining({ data: '\x1b[2Khidden-resize repaint' })
+      )
+
+      setHidden(null, { id: spawnResult.id, hidden: false })
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
-      mockProc.emitData('\x1b[2Khidden-resize redraw')
-      vi.advanceTimersByTime(2)
-
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-        id: spawnResult.id,
-        data: '\x1b[2Khidden-resize redraw',
-        background: true
-      })
-
       mainWindow.webContents.send.mockClear()
-      resizePty(null, { id: spawnResult.id, cols: 80, rows: 24 })
-      mockProc.emitData('visible repaint')
+      // The app's post-reveal full repaint: a background tag makes the renderer drop it.
+      mockProc.emitData('\x1b[2Kfull repaint')
       vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: 'visible repaint'
+        data: '\x1b[2Kfull repaint'
       })
     } finally {
       vi.useRealTimers()
@@ -260,9 +262,10 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Why: the reply leaves the query's own turn so a still-cooked tty cannot
-      // echo it back as text instead of delivering it to the agent (#12112).
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      // Answered in the query's own turn. A cooked tty echoes the reply as well as
+      // delivering it, and the echo is contained by the output-side projections (#12112);
+      // withholding the write is what let replies overtake each other (#15559).
+      expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
@@ -299,8 +302,8 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Why: both slots of a duplicate-slot query leave the query's own turn too (#12112).
-      expect(mockProc.proc.write).not.toHaveBeenCalled()
+      // Both slots of a duplicate-slot query are answered in that same turn.
+      expect(mockProc.proc.write).toHaveBeenCalledTimes(2)
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')

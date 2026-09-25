@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { workItemsCacheKey } from './github'
+import { workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
   githubSourceContext,
@@ -13,6 +13,15 @@ describe('createGitHubSlice.patchWorkItem', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+  })
+
+  it('does not notify when a patch has no matching cached work item', () => {
+    const store = createTestStore()
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
+    store.getState().patchWorkItem('pr:missing', { title: 'Missing' }, 'repo-1')
+    unsubscribe()
+    expect(subscriber).not.toHaveBeenCalled()
   })
 
   it('can scope patches to one repo when different repos have the same work-item id', () => {

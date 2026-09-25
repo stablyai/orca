@@ -1,30 +1,23 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+
+/** What a native-chat write takes, named from an operation so no module names the raw port. */
+export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
 type MobileTerminalClient = {
   id: string
   type: 'mobile'
 }
 
-// Why: Ctrl+U kills the TUI's current input line (desktop native chat sends the
-// same byte before its body), so a launch-context prefill parked there cannot
-// concatenate with a mobile chat message. The host writes text bytes verbatim.
-//
-// One Ctrl+U clears ONE logical line, which is all this prefix can do. A parked
-// launch draft is routinely multi-line (every Linear block is); callers that know
-// one is parked must call clearMobileNativeChatInput FIRST — see
-// src/shared/agent-tui-input-clear.ts for the measured 2N-1 law.
-const CLEAR_UNSUBMITTED_INPUT = '\x15'
-
 type MobileNativeChatSendArgs = {
   client: RpcClient
   terminal: string
   text: string
   enter?: boolean
-  clearInputFirst?: boolean
   /** Exact host launch draft this submitting write resolves when accepted. */
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
@@ -61,11 +54,11 @@ export async function sendMobileNativeChatMessageWithOutcome(
     return 'rejected'
   }
   try {
-    const response = await args.client.sendRequest(
-      'terminal.send',
+    const response = await nativeChatTerminalWrite.request(
+      args.client,
       {
         terminal: args.terminal,
-        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${args.text}` : args.text,
+        text: args.text,
         enter: args.enter ?? true,
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
         ...(args.mobileClient ? { client: args.mobileClient } : {})
@@ -75,7 +68,11 @@ export async function sendMobileNativeChatMessageWithOutcome(
       // pins the composer for twice as long.
       { timeoutMs, budgetSpansConnect: true }
     )
-    return isTerminalSendRpcAccepted(response) ? 'accepted' : 'rejected'
+    if (nativeChatTerminalWrite.interpret(response) !== true) {
+      return 'rejected'
+    }
+    reportWorkerTerminalUserInput(args.client, args.terminal)
+    return 'accepted'
   } catch (error) {
     // Why: a logical relay↔direct cutover rejects the in-flight send without
     // knowing whether its frame reached the wire (the desktop may have delivered
@@ -145,8 +142,8 @@ export async function clearMobileNativeChatInput(args: {
     return false
   }
   try {
-    const response = await args.client.sendRequest(
-      'terminal.send',
+    const response = await nativeChatTerminalWrite.request(
+      args.client,
       {
         terminal: args.terminal,
         text: args.clearInput,
@@ -155,7 +152,7 @@ export async function clearMobileNativeChatInput(args: {
       },
       { timeoutMs, budgetSpansConnect: true }
     )
-    return isTerminalSendRpcAccepted(response)
+    return nativeChatTerminalWrite.interpret(response) === true
   } catch {
     // A failed clear must not send the body on top of an uncleared line.
     return false

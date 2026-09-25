@@ -23,10 +23,13 @@ export function useMobilePairingGeneration(params: {
   hasGeneratedRef: MutableRef<boolean>
   pairingRequestIdRef: MutableRef<number>
   setPairQrDataUrl: (value: string | null) => void
+  setPairQrSize: (value: number | null) => void
   setPairingUrl: (value: string | null) => void
   setPairingQrError: (value: boolean) => void
   setPairLoading: (value: boolean) => void
   setRelayMintFailure: (value: MobileRelayMintFailure | null) => void
+  /** Re-read on a Relay mint failure: a revoked session is the likeliest cause. */
+  refreshAuthStatus: () => void
 }): {
   generatePairing: (
     rotate: boolean,
@@ -42,10 +45,12 @@ export function useMobilePairingGeneration(params: {
     hasGeneratedRef,
     pairingRequestIdRef,
     setPairQrDataUrl,
+    setPairQrSize,
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
-    setRelayMintFailure
+    setRelayMintFailure,
+    refreshAuthStatus
   } = params
 
   const generatePairing = useCallback(
@@ -76,6 +81,7 @@ export function useMobilePairingGeneration(params: {
         if (result.available) {
           if (mountedRef.current) {
             setPairQrDataUrl(result.qrDataUrl)
+            setPairQrSize(result.qrSize)
             setPairingUrl(result.pairingUrl)
             setPairingQrError(result.qrDataUrl === null)
             setRelayMintFailure(null)
@@ -84,10 +90,12 @@ export function useMobilePairingGeneration(params: {
           // Why: keep hasGenerated so step-2 auto-mint does not loop on failure.
           if (mountedRef.current) {
             setPairQrDataUrl(null)
+            setPairQrSize(null)
             setPairingUrl(null)
             setPairingQrError(false)
             if (result.reason === 'relay_mint_failed' && result.relayFailure) {
               setRelayMintFailure(result.relayFailure)
+              refreshAuthStatus()
             } else {
               setRelayMintFailure(null)
               // Why: IPC now forwards reason/guidance for all unavailability paths;
@@ -106,6 +114,7 @@ export function useMobilePairingGeneration(params: {
         if (mountedRef.current && requestId === pairingRequestIdRef.current) {
           hasGeneratedRef.current = false
           setPairQrDataUrl(null)
+          setPairQrSize(null)
           setPairingUrl(null)
           setPairingQrError(false)
           setRelayMintFailure(null)
@@ -127,9 +136,11 @@ export function useMobilePairingGeneration(params: {
       hasGeneratedRef,
       mountedRef,
       pairingRequestIdRef,
+      refreshAuthStatus,
       selectedAddress,
       setPairLoading,
       setPairQrDataUrl,
+      setPairQrSize,
       setPairingUrl,
       setPairingQrError,
       setRelayMintFailure,

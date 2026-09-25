@@ -1,0 +1,675 @@
+{
+  "operation": "home.host-stats",
+  "family": "home.host-stats",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "a9e0780298a1443664e7ae02056168aa34d67556c9c056d51a82c7b4a73ad35b",
+  "scenarioSha256": "5518e08c1b20f0ddd4cb6bc81ff9af032b1a38daf24f3d3497bac5df8b2d0ec5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1ac8bfa526f1": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "4211139e96bd": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "556edbbc8712": {
+      "host-1": {
+        "$rpc": "null"
+      }
+    },
+    "5691d0e49e5a": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "570b0ab475a2": {
+      "name": "stats",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "5b3b2e4ed756": {
+      "name": "stats",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "error": "refused"
+        }
+      }
+    },
+    "5f68a32120c1": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "6437faa290bd": {
+      "name": "stats",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "error": {
+            "message": "inner refused"
+          },
+          "ok": false
+        }
+      }
+    },
+    "8c4863e9051a": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "94616379becc": {
+      "name": "stats",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "activeWorktrees": 1,
+          "totalWorktrees": 3
+        }
+      }
+    },
+    "9698bf4d8a23": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "activeWorktrees": 1,
+            "totalWorktrees": 3
+          }
+        }
+      }
+    },
+    "9a84a7559023": {
+      "host-1": {
+        "activeWorktrees": 1,
+        "totalWorktrees": 3
+      }
+    },
+    "9c34abfa17e7": {
+      "host-1": {
+        "error": {
+          "message": "inner refused"
+        },
+        "ok": false
+      }
+    },
+    "af5ba5c22147": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "b474d2a02a6a": {
+      "host-1": {
+        "error": "refused"
+      }
+    },
+    "c5bfd5f18460": {
+      "host-1": {
+        "$rpc": "undefined"
+      }
+    },
+    "c60ee6b032a7": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "cf7f6575cf73": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "d3ca24e5a81b": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "d548975ae3f5": {
+      "name": "stats",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "error": "inner refused",
+          "ok": false
+        }
+      }
+    },
+    "d66672644411": {
+      "name": "stats.summary#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"stats.summary\"}"
+    },
+    "db6e2ff86f92": {
+      "name": "stats",
+      "ordinal": 3,
+      "value": {
+        "host-1": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "dccf8acd7784": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "e05986a4b6e2": {
+      "host-1": {
+        "error": "inner refused",
+        "ok": false
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fa85158f27a0": {
+      "name": "stats.summary#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "stats.summary"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-home.host-stats-stats.summary-1",
+    "checkpoints": [
+      {
+        "id": "home-host-stats.prelude:stats-pending",
+        "observation": {
+          "sender": ["cf7f6575cf73"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-stats.normal:settled",
+        "observation": {
+          "sender": ["9698bf4d8a23"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "9a84a7559023",
+          "effects": ["94616379becc"]
+        }
+      },
+      {
+        "id": "home-host-stats.result-absent:settled",
+        "observation": {
+          "sender": ["dccf8acd7784"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "c5bfd5f18460",
+          "effects": ["db6e2ff86f92"]
+        }
+      },
+      {
+        "id": "home-host-stats.result-null:settled",
+        "observation": {
+          "sender": ["af5ba5c22147"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "556edbbc8712",
+          "effects": ["570b0ab475a2"]
+        }
+      },
+      {
+        "id": "home-host-stats.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["5691d0e49e5a"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "b474d2a02a6a",
+          "effects": ["5b3b2e4ed756"]
+        }
+      },
+      {
+        "id": "home-host-stats.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["d3ca24e5a81b"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "e05986a4b6e2",
+          "effects": ["d548975ae3f5"]
+        }
+      },
+      {
+        "id": "home-host-stats.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["4211139e96bd"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "9c34abfa17e7",
+          "effects": ["6437faa290bd"]
+        }
+      },
+      {
+        "id": "home-host-stats.outer-refused:settled",
+        "observation": {
+          "sender": ["8c4863e9051a"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-stats.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["5f68a32120c1"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-stats.method-not-found:settled",
+        "observation": {
+          "sender": ["c60ee6b032a7"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-stats.transport-rejection:settled",
+        "observation": {
+          "sender": ["fa85158f27a0"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "home-host-stats.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["1ac8bfa526f1"],
+          "payloads": ["d66672644411"],
+          "settlements": {
+            "load": "eb79a9b3682a"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

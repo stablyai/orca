@@ -2,6 +2,7 @@ import type { StoreApi } from 'zustand'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import type { HostLineageSnapshot } from '../../../shared/host-lineage-contract'
 import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-contract'
+import { applyManualRepoOrder } from '../../../shared/manual-repo-order'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '../store/types'
@@ -17,7 +18,7 @@ import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
 
 export const DIRECT_SSH_HOST_READ_TIMEOUT_MS = 5_000
 
-type HostReadTimer = unknown
+type HostReadTimer = ReturnType<typeof setTimeout>
 
 export type DirectSshHostHydrationDeps = {
   store: Pick<StoreApi<AppState>, 'getState' | 'setState'>
@@ -63,12 +64,14 @@ function mergeExactHostCatalog(state: AppState, snapshot: HostRepoCatalogSnapsho
     return state
   }
   const hostId = snapshot.authority.executionHostId
+  // Why re-apply the overlay: re-appending the host's rows puts them at the tail, which would
+  // undo the user's manual cross-host order on every connect.
   return {
     ...state,
-    repos: [
-      ...state.repos.filter((repo) => getRepoExecutionHostId(repo) !== hostId),
-      ...snapshot.repos
-    ]
+    repos: applyManualRepoOrder(
+      [...state.repos.filter((repo) => getRepoExecutionHostId(repo) !== hostId), ...snapshot.repos],
+      state.manualRepoOrder
+    )
   }
 }
 
@@ -118,7 +121,7 @@ export function createDirectSshHostHydration(
   const setTimer: NonNullable<DirectSshHostHydrationDeps['setTimer']> =
     deps.setTimer ?? ((callback, delayMs) => setTimeout(callback, delayMs))
   const clearTimer: NonNullable<DirectSshHostHydrationDeps['clearTimer']> =
-    deps.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>))
+    deps.clearTimer ?? ((timer) => clearTimeout(timer))
   const catalogRevisionByTarget = new Map<string, number>()
   const catalogInFlight = new Map<string, Promise<'complete' | 'degraded' | 'stale'>>()
   const pendingDeadlines = new Set<{ timer: HostReadTimer; settle: () => void }>()

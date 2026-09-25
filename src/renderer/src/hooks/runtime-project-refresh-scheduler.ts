@@ -23,6 +23,8 @@ type RefreshEntry = {
 const DEFAULT_DEBOUNCE_MS = 250
 const DEFAULT_MIN_INTERVAL_MS = 5_000
 const DEFAULT_REFRESH_CONCURRENCY = 5
+/** Connect is one-shot and the user is waiting, so it cannot storm the way the coalesced event lane can. */
+export const INTERACTIVE_CONNECT_REFRESH_CONCURRENCY = 15
 
 export async function refreshRuntimeProjectWorktrees(
   environmentId: string,
@@ -70,16 +72,18 @@ export async function refreshRuntimeProjectWorktrees(
   }
 }
 
+/** Interactive connect: probes the catalog, then applies one host-wide lineage snapshot. */
 export async function refreshRuntimeProjectWorktreesAndLineage(
   environmentId: string,
   repos: readonly { id: string }[],
   fetchWorktrees: Parameters<typeof refreshRuntimeProjectWorktrees>[2],
-  fetchWorktreeLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>
+  fetchWorktreeLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>,
+  concurrency = INTERACTIVE_CONNECT_REFRESH_CONCURRENCY
 ): Promise<void> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
   let worktreeFailure: { error: unknown } | null = null
   try {
-    await refreshRuntimeProjectWorktrees(environmentId, repos, fetchWorktrees)
+    await refreshRuntimeProjectWorktrees(environmentId, repos, fetchWorktrees, concurrency)
   } catch (error) {
     worktreeFailure = { error }
   }

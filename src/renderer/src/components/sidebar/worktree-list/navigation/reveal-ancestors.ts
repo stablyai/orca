@@ -92,12 +92,14 @@ export function getSidebarRowRevealAncestorKeys(args: {
 
 export function getPinnedWorktreeRevealCollapsedGroupKeys({
   worktree,
-  collapsedGroups
+  collapsedGroups,
+  inPinnedSection = worktree.isPinned
 }: {
   worktree: Worktree
   collapsedGroups: ReadonlySet<string>
+  inPinnedSection?: boolean
 }): string[] {
-  if (!worktree.isPinned) {
+  if (!inPinnedSection) {
     return []
   }
   const keys: string[] = []

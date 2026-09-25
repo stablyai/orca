@@ -1,0 +1,83 @@
+{
+  "backgroundLaunch": "All tests and proofs used ORCA_BACKGROUND_LAUNCH=1; Electron only ran with ELECTRON_RUN_AS_NODE=1. No app or native PTY.",
+  "fixedTests": {
+    "passed": 45,
+    "failed": 0,
+    "files": 4,
+    "newTests": 8,
+    "config": "config/vitest.config.ts"
+  },
+  "baselineOverlay": {
+    "passed": 41,
+    "failed": 4,
+    "config": "docs/audits/osc133-carry-retention/before.config.mjs",
+    "intendedFailures": [
+      {
+        "test": "OSC 133 carry with Bufferless copying=false owns a retained fish suffix \"\\u001b]133;A;click_events=1\"",
+        "assertion": "AssertionError: expected 33560392 to be less than 2097152",
+        "retainedBytes": 33560392
+      },
+      {
+        "test": "OSC 133 carry with Bufferless copying=false owns a retained fish suffix \"\\u001b]133;C;cmdline_url=npx\"",
+        "assertion": "AssertionError: expected 33565360 to be less than 2097152",
+        "retainedBytes": 33565360
+      },
+      {
+        "test": "OSC 133 carry with Bufferless copying=true owns a retained fish suffix \"\\u001b]133;A;click_events=1\"",
+        "assertion": "AssertionError: expected 33557160 to be less than 2097152",
+        "retainedBytes": 33557160
+      },
+      {
+        "test": "OSC 133 carry with Bufferless copying=true owns a retained fish suffix \"\\u001b]133;C;cmdline_url=npx\"",
+        "assertion": "AssertionError: expected 33550680 to be less than 2097152",
+        "retainedBytes": 33550680
+      }
+    ]
+  },
+  "portableProofs": {
+    "nodeCases": 117,
+    "electronCases": 117,
+    "crlfSourceAndPatchReads": 2,
+    "evaluatedModules": 28,
+    "nonEvaluatedCallerFiles": 7,
+    "variants": ["baseline", "fixed Buffer copier", "fixed Bufferless copier"]
+  },
+  "typechecks": {
+    "node": "Passed full Node project; parent root rerun after resolving its concurrent viewport-test typing.",
+    "web": "Passed full Web project in parent root shared desktop run.",
+    "cli": "Passed full CLI project in parent root shared desktop run."
+  },
+  "fullPublicationQuality": {
+    "paths": [
+      "src/shared/terminal-osc133-command-finished.ts",
+      "src/shared/terminal-osc133-carry-retention.test.ts",
+      "docs/audits/osc133-carry-retention/sources.cjs",
+      "docs/audits/osc133-carry-retention/scenario.cjs",
+      "docs/audits/osc133-carry-retention/reproduce.cjs",
+      "docs/audits/osc133-carry-retention/before.config.mjs"
+    ],
+    "scans": [
+      "default rules and unused suppression",
+      "casting",
+      "type-aware",
+      "React Doctor",
+      "design system"
+    ],
+    "result": "All five full-file scans passed with --deny-warnings, including CJS/MJS artifact files."
+  },
+  "changedQuality": {
+    "base": "4a09b1d108cfd8b57ffcc5d727b3a3bd71ae71fb",
+    "result": "Passed all five scans plus SAFETY rationale gate across six concurrent changed files; artifacts separately covered by explicit full-file scans."
+  },
+  "productHashes": [
+    {
+      "path": "src/shared/terminal-osc133-command-finished.ts",
+      "sha256": "92bc1aa5eb975672c3b8761cce0da37d7ff6263c8f38c69d0715f73bd8e075d0"
+    },
+    {
+      "path": "src/shared/terminal-osc133-carry-retention.test.ts",
+      "sha256": "f123ddacc2d395f5896dc91acba13fbd9447f9152d36b8164a11d83271d9279d"
+    }
+  ],
+  "limits": "Synthetic parent size/boundary with captured fish sequence syntax. Heap deltas are not RSS. No historical whole-app or incident attribution. Baseline overlay retains current dependency implementations."
+}

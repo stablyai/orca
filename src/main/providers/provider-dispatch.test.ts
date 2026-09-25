@@ -1,4 +1,6 @@
+import { settledWriteStub } from './settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
+import { setPtyHostBindings } from '../ipc/pty-host-bindings'
 
 const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -82,6 +84,16 @@ describe('PTY provider dispatch', () => {
     onMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
+    // Why: pty.ts registers against an injected surface now, so the mocked ipcMain must
+    // be installed for this suite's own `handlers` map to capture registrations.
+    setPtyHostBindings({
+      ipc: {
+        handle: handleMock,
+        on: onMock,
+        removeHandler: removeHandlerMock,
+        removeAllListeners: removeAllListenersMock
+      }
+    })
     registerPtyHandlers(mainWindow as never)
   }
 
@@ -90,6 +102,7 @@ describe('PTY provider dispatch', () => {
       spawn: vi.fn().mockResolvedValue({ id }),
       attach: vi.fn(),
       write: vi.fn(),
+      writeWithSettlement: vi.fn(settledWriteStub()),
       resize: vi.fn(),
       shutdown: vi.fn(),
       sendSignal: vi.fn(),
@@ -151,7 +164,10 @@ describe('PTY provider dispatch', () => {
         ...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS,
         'CLAUDE_CODE_CHILD_SESSION',
         'CLAUDE_CODE_SESSION_ID',
-        'CLAUDE_CODE_BRIDGE_SESSION_ID'
+        'CLAUDE_CODE_BRIDGE_SESSION_ID',
+        'ORCA_PI_STATUS_OWNED',
+        'ORCA_PRIME_AGENT_STATUS_OWNED',
+        'ORCA_PI_TITLE_MARKER_OWNED'
       ].sort()
     )
     expect(mockSshProvider.spawn).toHaveBeenCalledWith(
@@ -169,7 +185,7 @@ describe('PTY provider dispatch', () => {
         rows: 24,
         connectionId: 'unknown-conn'
       })
-    ).rejects.toThrow('No PTY provider for connection "unknown-conn"')
+    ).rejects.toThrow(/^No PTY provider for connection "unknown-conn"/)
   })
 
   it('unregisterSshPtyProvider removes the provider', async () => {
@@ -185,7 +201,7 @@ describe('PTY provider dispatch', () => {
         rows: 24,
         connectionId: 'conn-456'
       })
-    ).rejects.toThrow('No PTY provider for connection "conn-456"')
+    ).rejects.toThrow(/^No PTY provider for connection "conn-456"/)
   })
 
   it('keeps same relay PTY ids distinct across SSH targets', () => {

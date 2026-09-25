@@ -15,6 +15,7 @@ export type TerminalHostOptions = {
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
     shellOverride?: string
+    terminalShellArgs?: string[]
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     isCanceled?: () => boolean
@@ -23,6 +24,10 @@ export type TerminalHostOptions = {
   }) => SubprocessHandle | Promise<SubprocessHandle>
   // Why: login-session death detection (#7936) needs subprocess exits even when no client is attached.
   onSessionReaped?: (sessionId: string) => void
+  /** Reports a shell-readiness outcome worth diagnosing. Why threaded rather
+   *  than console: the detached daemon runs with stdio 'ignore', so the only
+   *  durable sink is its NDJSON file log. */
+  reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
   // Why: graceful shutdown checkpoints must finish in-process before teardown.
   onFinalCheckpoint?: (
     sessionId: string,

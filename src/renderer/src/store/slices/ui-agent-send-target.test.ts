@@ -342,6 +342,37 @@ describe('createUISlice agent send target mode', () => {
     expect(store.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
+  it('acknowledges delivery when the picker closes before the send completes', async () => {
+    const store = createUIStore()
+    const onPromptDelivered = vi.fn()
+    const write = deferred<{ status: 'sent' }>()
+    seedAgentSendState(store)
+    mocks.sendNotesToActiveAgentSession.mockReturnValue(write.promise)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptDelivered
+    })
+
+    const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
+    store.getState().closeAgentSendPopoverTargetMode('send-1')
+    write.resolve({ status: 'sent' })
+
+    await expect(send).resolves.toBe(true)
+    expect(onPromptDelivered).toHaveBeenCalledTimes(1)
+    expect(mocks.track).toHaveBeenCalledWith('agent_prompt_sent', {
+      agent_kind: 'codex',
+      launch_source: 'notes_send',
+      request_kind: 'followup'
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
+    expect(store.getState().agentSendPopoverTargetMode).toBeNull()
+  })
+
   it('does not let an older send close a reopened popover with the same id', async () => {
     const store = createUIStore()
     const onPromptDelivered = vi.fn()
@@ -371,7 +402,7 @@ describe('createUISlice agent send target mode', () => {
     const reopenedMode = store.getState().agentSendPopoverTargetMode
 
     write.resolve({ status: 'sent' })
-    await expect(send).resolves.toBe(false)
+    await expect(send).resolves.toBe(true)
 
     expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
     expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
@@ -379,9 +410,9 @@ describe('createUISlice agent send target mode', () => {
       prompt: 'Review this again',
       status: 'open'
     })
-    expect(onPromptDelivered).not.toHaveBeenCalled()
-    expect(mocks.track).not.toHaveBeenCalled()
-    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(onPromptDelivered).toHaveBeenCalledTimes(1)
+    expect(mocks.track).toHaveBeenCalledTimes(1)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
@@ -509,24 +540,28 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
 
     store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
 
-    expect(dismiss).toHaveBeenCalledWith([
-      buildAgentNotificationId({
-        worktreeId: 'wt-live',
-        paneKey: livePaneKey,
-        stateStartedAt: 1_000
-      }),
-      buildAgentNotificationId({
-        worktreeId: 'wt-retained',
-        paneKey: retainedPaneKey,
-        stateStartedAt: 2_000
-      })
-    ])
+    expect(dismiss).toHaveBeenCalledWith(
+      [
+        buildAgentNotificationId({
+          worktreeId: 'wt-live',
+          paneKey: livePaneKey,
+          stateStartedAt: 1_000
+        }),
+        buildAgentNotificationId({
+          worktreeId: 'wt-retained',
+          paneKey: retainedPaneKey,
+          stateStartedAt: 2_000
+        })
+      ],
+      [livePaneKey, retainedPaneKey, skippedPaneKey]
+    )
 
     dismiss.mockClear()
     vi.setSystemTime(new Date('2026-06-02T12:00:01Z'))
     store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey])
 
-    expect(dismiss).not.toHaveBeenCalled()
+    // Nothing rebuilt twice; main still gets the subjects so it can retire what it announced.
+    expect(dismiss).toHaveBeenCalledWith([], [livePaneKey, retainedPaneKey])
   })
 
   it('falls back to live entry worktree attribution and skips unresolved live entries', () => {
@@ -548,13 +583,16 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
 
     store.getState().acknowledgeAgents([fallbackPaneKey, livePaneKey])
 
-    expect(dismiss).toHaveBeenCalledWith([
-      buildAgentNotificationId({
-        worktreeId: 'wt-from-entry',
-        paneKey: fallbackPaneKey,
-        stateStartedAt: 1_000
-      })
-    ])
+    expect(dismiss).toHaveBeenCalledWith(
+      [
+        buildAgentNotificationId({
+          worktreeId: 'wt-from-entry',
+          paneKey: fallbackPaneKey,
+          stateStartedAt: 1_000
+        })
+      ],
+      [fallbackPaneKey, livePaneKey]
+    )
   })
 
   it('dedupes identical live and retained notification ids for the same pane', () => {
@@ -581,13 +619,16 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
 
     store.getState().acknowledgeAgents([livePaneKey])
 
-    expect(dismiss).toHaveBeenCalledWith([
-      buildAgentNotificationId({
-        worktreeId: 'wt-live',
-        paneKey: livePaneKey,
-        stateStartedAt: 1_000
-      })
-    ])
+    expect(dismiss).toHaveBeenCalledWith(
+      [
+        buildAgentNotificationId({
+          worktreeId: 'wt-live',
+          paneKey: livePaneKey,
+          stateStartedAt: 1_000
+        })
+      ],
+      [livePaneKey]
+    )
   })
 })
 

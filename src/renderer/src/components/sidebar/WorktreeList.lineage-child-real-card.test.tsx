@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
+}))
+
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -398,7 +402,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
 
   it('renders GitLab MR metadata from a child through the real WorktreeCard path', async () => {
     const container = await renderWorktreeList()
-    const childOption = container.querySelector('[id="worktree-list-option-all%3Achild"]')
+    const childOption = container.querySelector('[id="worktree-list-option-all%3A%7Cchild"]')
 
     expect(childOption?.textContent).toContain('MR #42')
     expect(childOption?.textContent).toContain('Child GitLab MR')
@@ -422,9 +426,11 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     const wrappers = [
       ...container.querySelectorAll<HTMLElement>('[data-worktree-lineage-children]')
     ]
-    const childRow = container.querySelector<HTMLElement>('[id="worktree-list-option-all%3Achild"]')
+    const childRow = container.querySelector<HTMLElement>(
+      '[id="worktree-list-option-all%3A%7Cchild"]'
+    )
     const grandchildRow = container.querySelector<HTMLElement>(
-      '[id="worktree-list-option-all%3Agrandchild"]'
+      '[id="worktree-list-option-all%3A%7Cgrandchild"]'
     )
     const childSurface = childRow?.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
     const grandchildSurface = grandchildRow?.querySelector<HTMLElement>(
@@ -456,7 +462,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
   it('double-clicking a nested child opens edit metadata for the child only', async () => {
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(
-      '[id="worktree-list-option-all%3Achild"] [data-worktree-card-surface="true"]'
+      '[id="worktree-list-option-all%3A%7Cchild"] [data-worktree-card-surface="true"]'
     )
 
     expect(childCard).not.toBeNull()
@@ -483,7 +489,7 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     setLineageState({ deletingChild: true })
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(
-      '[id="worktree-list-option-all%3Achild"] [data-worktree-card-surface="true"]'
+      '[id="worktree-list-option-all%3A%7Cchild"] [data-worktree-card-surface="true"]'
     )
 
     expect(childCard?.textContent).toContain('Deleting')

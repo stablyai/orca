@@ -6,10 +6,12 @@ import {
   toError
 } from './mobile-endpoint-supervisor-support'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
+import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
 import type { HostProfile } from './types'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
@@ -39,7 +41,7 @@ export class MobileRelaySessionEstablisher {
       adoptBundle: (bundle: MobileRelayCredentialBundle) => void
       // Hysteresis stamp + rotation-pending clear + recovery log line.
       recordMigration: () => void
-      // Owns the stopped/background null-out so a late resolve never re-arms a stale timer.
+      // Owns the stopped/disconnected guard so late bookkeeping cannot arm a stale timer.
       scheduleLease: (expiry: number | null) => void
       scheduleDirectProbe: () => void
       onBookkeepingError: (error: Error) => void
@@ -65,7 +67,7 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (!this.args.controller.shouldTryGraceAfterRelayFailure(result.error)) {
+      if (!relayFailureAllowsGraceRetry(result.error)) {
         break
       }
       // Why: a rejected version stays invalid; retry only the grace credential.
@@ -100,14 +102,26 @@ export class MobileRelaySessionEstablisher {
     const session = args.openRelay(
       relay,
       credential,
-      `confirm-${encodeBase64Url(args.randomBytes(16))}`
+      `confirm-${encodeBase64Url(args.randomBytes(16))}`,
+      // Asserted on the controller's latch, not on the dial result: the close
+      // that carries the reason can land after this dial has already reported
+      // its failure. Only a connection retires it.
+      (reason) => {
+        if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
+          args.controller.assertHostReachability('signed-out')
+        }
+      }
     )
     try {
-      // Why: if an authenticated non-relay session appears while this dial is in
-      // flight (the grace race), withdraw instead of cutting over the winner.
-      await args.logical.migrateTo(session, 'relay', undefined, () => directWon(args.logical))
+      // Why: backgrounding or a direct winner withdraws this dial before cutover.
+      await args.logical.migrateTo(
+        session,
+        'relay',
+        undefined,
+        () => !args.isActive() || directWon(args.logical)
+      )
     } catch (error) {
-      if (directWon(args.logical)) {
+      if (!args.isActive() || directWon(args.logical)) {
         return { ok: false, error: new RelayDialAbortedError() }
       }
       return { ok: false, error: session.getFailure() ?? toError(error) }

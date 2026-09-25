@@ -12,11 +12,10 @@ import {
   ingestGitGrepLine,
   ingestRgJsonLine,
   MAX_LINE_CONTENT_LENGTH,
-  normalizeRelativePath,
-  SEARCH_JSON_STRUCTURE_LIMITS,
-  splitSearchGlobPatterns,
-  toGitGlobPathspec
+  SEARCH_JSON_STRUCTURE_LIMITS
 } from './text-search'
+import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
+import { normalizeRelativePath } from './text-search-paths'
 
 describe('normalizeRelativePath', () => {
   it('collapses mixed separators and strips leading slashes', () => {
@@ -240,6 +239,18 @@ describe('buildGitGrepArgs', () => {
     expect(args).toContain(':(exclude,glob)dist/**')
   })
 
+  it('excludes a directory subtree the way rg --glob does', () => {
+    const args = buildGitGrepArgs('q', { excludePattern: 'node_modules' })
+    expect(args).toContain(':(exclude,glob)**/node_modules')
+    expect(args).toContain(':(exclude,glob)**/node_modules/**')
+  })
+
+  it('includes a directory subtree the way rg --glob does', () => {
+    const args = buildGitGrepArgs('q', { includePattern: 'src' })
+    expect(args).toContain(':(glob)**/src')
+    expect(args).toContain(':(glob)**/src/**')
+  })
+
   it('keeps escaped commas inside one generated folder pathspec', () => {
     const args = buildGitGrepArgs('q', { includePattern: 'foo\\,bar/**, *.ts' })
     expect(args).toContain(':(glob)foo\\,bar/**')
@@ -247,11 +258,29 @@ describe('buildGitGrepArgs', () => {
   })
 })
 
-describe('toGitGlobPathspec', () => {
+describe('toGitGlobPathspecs', () => {
   it('wraps bare globs with **/ to match recursively', () => {
-    expect(toGitGlobPathspec('*.ts')).toBe(':(glob)**/*.ts')
-    expect(toGitGlobPathspec('src/*.ts')).toBe(':(glob)src/*.ts')
-    expect(toGitGlobPathspec('*.ts', true)).toBe(':(exclude,glob)**/*.ts')
+    expect(toGitGlobPathspecs('*.ts')).toContain(':(glob)**/*.ts')
+    expect(toGitGlobPathspecs('src/*.ts')).toContain(':(glob)src/*.ts')
+    expect(toGitGlobPathspecs('*.ts', true)).toContain(':(exclude,glob)**/*.ts')
+  })
+
+  it('also covers the subtree so a directory name behaves like rg --glob', () => {
+    expect(toGitGlobPathspecs('node_modules', true)).toEqual([
+      ':(exclude,glob)**/node_modules',
+      ':(exclude,glob)**/node_modules/**'
+    ])
+    expect(toGitGlobPathspecs('src')).toEqual([':(glob)**/src', ':(glob)**/src/**'])
+    expect(toGitGlobPathspecs('build/out')).toEqual([':(glob)build/out', ':(glob)build/out/**'])
+  })
+
+  it('keeps trailing-slash patterns directory-only', () => {
+    expect(toGitGlobPathspecs('node_modules/', true)).toEqual([':(exclude,glob)**/node_modules/**'])
+    expect(toGitGlobPathspecs('src/')).toEqual([':(glob)**/src/**'])
+  })
+
+  it('drops a pattern that is only separators', () => {
+    expect(toGitGlobPathspecs('/')).toEqual([])
   })
 })
 
@@ -317,6 +346,23 @@ describe('ingestGitGrepLine', () => {
         [2, 1],
         [2, 19]
       ])
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true })
+    }
+  })
+
+  it('does not broaden a separator-only include pattern to the repository', () => {
+    const rootPath = mkdtempSync(join(tmpdir(), 'orca-search-git-'))
+    try {
+      execFileSync('git', ['init'], { cwd: rootPath, stdio: 'ignore' })
+      writeFileSync(join(rootPath, 'target.ts'), 'needle\n')
+
+      expect(() =>
+        execFileSync('git', buildGitGrepArgs('needle', { includePattern: '/' }), {
+          cwd: rootPath,
+          stdio: 'ignore'
+        })
+      ).toThrow()
     } finally {
       rmSync(rootPath, { recursive: true, force: true })
     }

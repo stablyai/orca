@@ -10,6 +10,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import {
   resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteForHost,
   settingsForWorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
 import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from './worktree-slice-constants'
@@ -97,9 +98,12 @@ export function trySettingsForWorktreeOwner(
     | 'runtimeEnvironmentCatalogHydrated'
     | 'removedRuntimeEnvironmentIds'
   >,
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): AppState['settings'] | null {
-  const route = resolveWorktreeOperationRoute(state, worktreeId)
+  const route = executionHostId
+    ? resolveWorktreeOperationRouteForHost(state, worktreeId, executionHostId)
+    : resolveWorktreeOperationRoute(state, worktreeId)
   if (!route) {
     return null
   }
@@ -108,9 +112,10 @@ export function trySettingsForWorktreeOwner(
 
 export function settingsForWorktreeOwner(
   state: Parameters<typeof trySettingsForWorktreeOwner>[0],
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ) {
-  const settings = trySettingsForWorktreeOwner(state, worktreeId)
+  const settings = trySettingsForWorktreeOwner(state, worktreeId, executionHostId)
   if (!settings) {
     throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
   }
@@ -120,6 +125,13 @@ export function settingsForWorktreeOwner(
 // Why: activity bumps fire on every PTY event, so an ambiguous workspace would warn continuously.
 // One line per workspace is enough to diagnose it (#10634).
 export const ambiguousOwnerWarnedWorktreeIds = new Set<string>()
+
+/** Re-arms the once-per-workspace warning; called from every worktree teardown path. */
+export function forgetAmbiguousOwnerWarnings(worktreeIds: Iterable<string>): void {
+  for (const worktreeId of worktreeIds) {
+    ambiguousOwnerWarnedWorktreeIds.delete(worktreeId)
+  }
+}
 
 export function warnAmbiguousOwnerOnce(worktreeId: string, errorLabel: string): void {
   if (ambiguousOwnerWarnedWorktreeIds.has(worktreeId)) {

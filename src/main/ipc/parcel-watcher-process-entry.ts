@@ -8,6 +8,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as ParcelWatcher from '@parcel/watcher'
+import { startShallowWatcher } from './parcel-watcher-shallow-subscription'
+import { detectShallowWatchDelivery } from './shallow-watch-delivery-probe'
 import {
   createWatcherProcessEventDeliveryQueue,
   type WatcherProcessEventDeliveryQueue
@@ -23,6 +25,10 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+type WatcherSubscription = {
+  unsubscribe: () => Promise<void>
+}
+
 // Canary self-check. Why: @parcel/watcher can wedge silently — a lock-order
 // inversion between Debounce::notify (debounce mutex → watcher mutex) and
 // Watcher teardown (watcher mutex → debounce mutex in ~Watcher) deadlocks the
@@ -35,9 +41,9 @@ const CANARY_EVENT_TIMEOUT_MS = 5_000
 const CANARY_MAX_MISSES = 2
 
 async function startCanary(getStableActivityRevision: () => number | null): Promise<void> {
+  const configuredCanaryDir = process.env.ORCA_WATCHER_CANARY_DIR
   let canaryDir: string
   let lastEventAt = 0
-  const configuredCanaryDir = process.env.ORCA_WATCHER_CANARY_DIR
   try {
     canaryDir = configuredCanaryDir ?? mkdtempSync(join(tmpdir(), 'orca-watcher-canary-'))
     const watcher = await import('@parcel/watcher')
@@ -140,7 +146,7 @@ function main(): void {
   // Subscribe promises are kept (not just subscriptions) so an unsubscribe
   // that races a still-crawling subscribe awaits it instead of leaking the
   // native handle — on Windows a leaked handle keeps the worktree dir locked.
-  const subscriptions = new Map<number, Promise<ParcelWatcher.AsyncSubscription | null>>()
+  const subscriptions = new Map<number, Promise<WatcherSubscription | null>>()
   const liveSubscriptionIds = new Set<number>()
   const eventDeliveries = new Map<number, WatcherProcessEventDeliveryQueue>()
   let pendingSubscriptionCrawls = 0
@@ -172,7 +178,7 @@ function main(): void {
     dir: string,
     opts: WatcherProcessSubscribeOptions,
     delivery: WatcherProcessDeliveryOptions | undefined
-  ): Promise<ParcelWatcher.AsyncSubscription | null> => {
+  ): Promise<WatcherSubscription | null> => {
     const eventDelivery = createWatcherProcessEventDeliveryQueue(
       delivery,
       async (events) => {
@@ -194,6 +200,17 @@ function main(): void {
         beginSubscriptionCrawl()
         send({ op: 'subscribe-started', id })
         try {
+          if (opts.mode === 'shallow') {
+            // Why: registration succeeding proves nothing on a host whose
+            // notification path is dead. Fail the subscribe so the caller falls
+            // back to polling rather than going quietly stale.
+            if (!(await detectShallowWatchDelivery())) {
+              throw new Error('Shallow watcher delivery unavailable on this host')
+            }
+            return startShallowWatcher(dir, opts.include ?? [], eventDelivery.enqueue, (error) =>
+              send({ op: 'watch-error', id, message: errorMessage(error) })
+            )
+          }
           const watcher = await import('@parcel/watcher')
           return await watcher.subscribe(
             dir,

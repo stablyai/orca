@@ -76,7 +76,7 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)
 
-    expect(service.getMirroredHostHomePathForStatus()).toBeNull()
+    expect(service.getMirroredHostHomePathForStatus()).toEqual({ kind: 'ready', homePath: null })
   })
 
   it('returns the selected account own home, which is what its mirror targets', async () => {
@@ -84,7 +84,10 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(createStore([account], account.id) as never)
 
-    expect(service.getMirroredHostHomePathForStatus()).toBe(account.managedHomePath)
+    expect(service.getMirroredHostHomePathForStatus()).toEqual({
+      kind: 'ready',
+      homePath: account.managedHomePath
+    })
   })
 
   it('returns the shared runtime home when a custom CODEX_HOME keeps the mirror lane', async () => {
@@ -95,6 +98,9 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
 
     // Why: compare against the real helper, not a repeated literal, so the
     // status cannot silently drift if the managed home layout ever moves.
-    expect(service.getMirroredHostHomePathForStatus()).toBe(getOrcaManagedCodexHomePath())
+    expect(service.getMirroredHostHomePathForStatus()).toEqual({
+      kind: 'ready',
+      homePath: getOrcaManagedCodexHomePath()
+    })
   })
 })

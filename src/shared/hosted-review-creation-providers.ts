@@ -7,8 +7,10 @@ export type HostedReviewCreationProvider =
   | 'azure-devops'
   | 'gitea'
 
+// Takes a plain string: the provider a client holds may be a token the host named and this build
+// does not list, and answering "may I create with this?" for an unknown token is the whole job.
 export function supportsHostedReviewCreation(
-  provider: HostedReviewProvider | null | undefined
+  provider: string | null | undefined
 ): provider is HostedReviewCreationProvider {
   return (
     provider === 'github' ||

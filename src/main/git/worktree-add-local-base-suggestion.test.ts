@@ -1,5 +1,5 @@
 // addWorktree: advisory local-base-ref update suggestions when the refresh setting is off.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   gitExecFileAsyncMock,
@@ -32,7 +32,10 @@ import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 registerWorktreeSuiteHooks()
 
 describe('addWorktree', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(() => {
+    // These branch-safety assertions use POSIX argv; Windows flags have separate coverage.
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     gitExecFileAsyncMock.mockReset()
     gitExecFileSyncMock.mockReset()
     translateWslOutputPathsMock.mockClear()

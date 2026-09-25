@@ -71,7 +71,7 @@ describe('generateCommitMessageFromContext', () => {
       error:
         'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
     })
-    expectChildTerminated(child)
+    await expectChildTerminated(child)
   })
 
   it('passes prepared provider environment to local agent subprocesses', async () => {
@@ -162,9 +162,13 @@ describe('generateCommitMessageFromContext', () => {
       })
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu 24.04', '--', 'sh', '-lc', expect.any(String)],
+        ['-d', 'Ubuntu 24.04', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({
-          cwd: undefined,
+          // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
+          // Orca's own cwd, a deletable WSL UNC path when it was launched from a
+          // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
+          // asserted below), so the Windows-side cwd never decides where the agent runs.
+          cwd: expect.any(String),
           windowsHide: true,
           env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
         })
@@ -173,7 +177,7 @@ describe('generateCommitMessageFromContext', () => {
       expect(spawnEnv.ORCA_HOST_ONLY_SECRET).toBeUndefined()
       const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'agent'")
       expect(shellCommand).toContain('--mode')

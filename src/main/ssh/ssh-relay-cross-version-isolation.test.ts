@@ -134,7 +134,7 @@ describe('cross-version isolation', () => {
       if (command.includes('.gc-claim') && command.includes('echo LOCKED || echo OPEN')) {
         return Promise.resolve('OPEN')
       }
-      if (command.includes('.install-lock') && command.includes('&& echo OK || echo BUSY')) {
+      if (command.startsWith('if mkdir ') && command.includes('.install-lock')) {
         return Promise.resolve('OK')
       }
       if (command.includes('ORCA-NPTY-PROBE-OK')) {

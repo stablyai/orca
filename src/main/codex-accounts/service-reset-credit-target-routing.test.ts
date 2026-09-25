@@ -168,7 +168,7 @@ describe('CodexAccountService config sync', () => {
       consumeCodexRateLimitResetCredit: consume
     }
     const runtimeHome = createRuntimeHome()
-    runtimeHome.prepareForRateLimitFetch.mockReturnValue(null)
+    runtimeHome.prepareForRateLimitFetch.mockReturnValue({ kind: 'ready', codexHomePath: null })
     const { CodexAccountService } = await import('./service')
     const service = new CodexAccountService(
       createStore(settings) as never,

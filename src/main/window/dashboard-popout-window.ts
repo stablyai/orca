@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
+import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
@@ -18,7 +19,6 @@ const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 720
-const DEFAULT_VIEW = 'board'
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
 // Why: singleton — the dashboard is a companion surface, so a second "Pop Out"
@@ -98,14 +98,13 @@ function broadcastPopoutOpenChanged(open: boolean): void {
   }
 }
 
-function loadDashboardPopout(window: BrowserWindow, view: string): void {
-  const search = `view=${encodeURIComponent(view)}`
+function loadDashboardPopout(window: BrowserWindow): void {
   // Why: mirror loadMainWindow's dev/prod branch — the dev server serves the
   // second HTML entry, prod loads the emitted file.
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html?${search}`)
+    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html`)
   } else {
-    void window.loadFile(join(__dirname, '../renderer/popout.html'), { search })
+    void window.loadFile(join(__dirname, '../renderer/popout.html'))
   }
 }
 
@@ -134,25 +133,21 @@ function resolveRestoredBounds(store: Store | null): {
  * Open the pop-out dashboard window, or focus it if already open. The window is
  * a standalone top-level BrowserWindow with a native frame that reuses the same
  * preload/window.api as the main window but renders its own React root
- * (popout.html?view=…).
+ * (popout.html).
  */
 export function createOrFocusDashboardPopout(
   store: Store | null,
-  view?: string,
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
 ): BrowserWindow {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
     if (dashboardPopoutWindow.isMinimized()) {
       dashboardPopoutWindow.restore()
     }
-    dashboardPopoutWindow.focus()
-    if (view) {
-      dashboardPopoutWindow.webContents.send('dashboard:viewRequested', view)
+    if (!isBackgroundLaunch()) {
+      dashboardPopoutWindow.focus()
     }
     return dashboardPopoutWindow
   }
-
-  const initialView = view ?? DEFAULT_VIEW
 
   const savedBounds = resolveRestoredBounds(store)
 
@@ -177,7 +172,9 @@ export function createOrFocusDashboardPopout(
       // Why: Chromium shares zoom by origin; a separate in-memory session keeps pop-out zoom window-local.
       partition: DASHBOARD_POPOUT_PARTITION,
       // Why: the dashboard is plain DOM — no <webview> guests — so keep the
-      // guest-embedding surface off for this window.
+      // guest-embedding surface off for this window. For the same reason it is
+      // deliberately not stamped with the browser-host id: no guest of ours can
+      // run here, so every client-placed page is a mirror to this renderer.
       webviewTag: false
     }
   })
@@ -240,9 +237,7 @@ export function createOrFocusDashboardPopout(
   })
 
   window.once('ready-to-show', () => {
-    if (!window.isDestroyed()) {
-      window.show()
-    }
+    showWindowWithoutStealingFocus(window)
   })
 
   // Bounds persistence — mirrors the main window's debounced/frozen approach so
@@ -288,7 +283,7 @@ export function createOrFocusDashboardPopout(
     broadcastPopoutOpenChanged(false)
   })
 
-  loadDashboardPopout(window, initialView)
+  loadDashboardPopout(window)
   return window
 }
 

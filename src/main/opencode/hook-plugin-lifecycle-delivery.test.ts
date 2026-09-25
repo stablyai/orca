@@ -19,6 +19,12 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+
+/** The plugin probes both SDK call conventions — current `(parameters, options)` and legacy
+ *  single-options — so fixtures for one session-client method differ in arity. */
+type SessionClientCall = (...args: never[]) => Promise<{ data: SessionFixture[] }>
+
+type SessionClientFixture = { list: SessionClientCall; get?: SessionClientCall }
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
@@ -83,7 +89,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     return loadHooksWithSession({ list })
   }
 
-  async function loadHooksWithSession(session: object): Promise<PluginHooks> {
+  async function loadHooksWithSession(session: SessionClientFixture): Promise<PluginHooks> {
     const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     const module = (await import(pathToFileURL(pluginPath).href)) as {
@@ -130,6 +136,61 @@ describe('OpenCode plugin lifecycle delivery', () => {
       signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
     })
   }
+
+  it('maps only root session.created to SessionStart', async () => {
+    const handler = await loadHandler()
+
+    await handler({
+      event: { type: 'session.created', properties: { info: { id: 'root' } } }
+    })
+    await handler({
+      event: {
+        type: 'session.created',
+        properties: { info: { id: 'child', parentID: 'root' } }
+      }
+    })
+
+    expect(posts).toEqual([{ hook_event_name: 'SessionStart', sessionID: 'root' }])
+  })
+
+  it('falls back per coordinate when the endpoint file is partial or malformed', async () => {
+    const endpointPath = join(tempDir, 'endpoint.env')
+    writeFileSync(
+      endpointPath,
+      'not-an-assignment\nORCA_AGENT_HOOK_TOKEN=file-token\nBROKEN LINE\n'
+    )
+    process.env.ORCA_AGENT_HOOK_ENDPOINT = endpointPath
+
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(null, { status: 204 })
+    )
+    globalThis.fetch = fetchMock as typeof globalThis.fetch
+    const handler = await loadHandler()
+
+    await handler({ event: status('busy') })
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toBe('http://127.0.0.1:45678/hook/opencode')
+    expect(new Headers(init?.headers).get('X-Orca-Agent-Hook-Token')).toBe('file-token')
+  })
+
+  it('warns once for an unreadable endpoint without exposing hook credentials', async () => {
+    process.env.ORCA_AGENT_HOOK_ENDPOINT = tempDir
+    process.env.ORCA_AGENT_HOOK_TOKEN = 'fallback-secret-token'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const handler = await loadHandler()
+      await handler({ event: status('busy') })
+      await handler({ event: delta('still working') })
+
+      expect(warn).toHaveBeenCalledOnce()
+      expect(warn.mock.calls.flat().join(' ')).not.toContain('fallback-secret-token')
+    } finally {
+      warn.mockRestore()
+    }
+  })
 
   it('preserves FIFO lifecycle order while the first session lookup is delayed', async () => {
     let releaseFirstLookup: (() => void) | undefined

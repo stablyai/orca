@@ -1,3 +1,7 @@
+import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
+
+export { sliceAtCodeUnitLimit }
+
 const SESSION_TITLE_TEXT_LIMIT = 96
 const SESSION_PREVIEW_TEXT_LIMIT = 220
 const ELLIPSIS = '...'
@@ -40,15 +44,6 @@ export function extractPreviewContentText(value: unknown): string | null {
 
 export function normalizePreviewText(value: string): string | null {
   return finalizeNormalizedText(normalizeStringText(value, SESSION_PREVIEW_TEXT_LIMIT))
-}
-
-/** Cut to `limit` UTF-16 code units without splitting a trailing surrogate pair. */
-export function sliceAtCodeUnitLimit(value: string, limit: number): string {
-  if (value.length <= limit) {
-    return value
-  }
-  const end = limit > 0 && isHighSurrogate(value.charCodeAt(limit - 1)) ? limit - 1 : limit
-  return value.slice(0, end)
 }
 
 function normalizeContentText(value: unknown, limit: number): string | null {

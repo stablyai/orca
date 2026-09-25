@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
-import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
-import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
 const dispatchAgentHookTerminalLifecycle = vi.fn()
@@ -48,17 +48,10 @@ type MockStoreState = {
   getAgentLaunchConfigForStatusEntry: (entry: {
     paneKey: string
   }) => { agentArgs: string; agentEnv: Record<string, string> } | undefined
-  getAgentLaunchConfigForStatusMetadata: (metadata: {
-    paneKey: string
-    launchToken?: string
-  }) => { agentArgs: string; agentEnv: Record<string, string> } | undefined
 }
 
 let mockStoreState: MockStoreState
 const HOOK_DONE_QUIET_MS = 1_500
-// Why: Codex attention notifications are debounced (issue #8387), so a genuine
-// permission pause only notifies once this quiet window elapses without resuming.
-const CODEX_ATTENTION_QUIET_MS = 1_500
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -83,14 +76,10 @@ function hookStatus(state: ParsedAgentStatusPayload['state']): ParsedAgentStatus
   }
 }
 
-function seedCodexPaneLaunchConfig(
-  paneKey: string,
-  agentArgs: string,
-  launchToken = 'launch-token-1'
-): void {
+function seedCodexPane(paneKey: string, launchToken = 'launch-token-1'): void {
   mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
     launchConfig: {
-      agentArgs,
+      agentArgs: '',
       agentEnv: {}
     },
     launchToken
@@ -109,8 +98,7 @@ function seedCodexPaneLaunchConfig(
 describe('agent hook completion notifications', () => {
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
 
-  // Why: the Codex permission-pause tests share a working→pause→quiet-window
-  // sequence; centralizing it keeps the debounce advance (issue #8387) in one spot.
+  // Why: the Codex permission-pause tests share a working→pause sequence.
   async function observeCodexPermissionPause(state: 'waiting' | 'blocked'): Promise<void> {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
@@ -130,7 +118,6 @@ describe('agent hook completion notifications', () => {
         toolInput: 'git status'
       }
     })
-    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
   }
 
   beforeEach(() => {
@@ -157,19 +144,13 @@ describe('agent hook completion notifications', () => {
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
       getAgentLaunchConfigForStatusEntry: (entry) =>
-        mockStoreState.agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig,
-      getAgentLaunchConfigForStatusMetadata: (metadata) =>
-        metadata.launchToken &&
-        metadata.launchToken ===
-          mockStoreState.agentLaunchConfigByPaneKey[metadata.paneKey]?.launchToken
-          ? mockStoreState.agentLaunchConfigByPaneKey[metadata.paneKey]?.launchConfig
-          : undefined
+        mockStoreState.agentLaunchConfigByPaneKey[entry.paneKey]?.launchConfig
     }
   })
 
   afterEach(() => vi.useRealTimers())
 
-  it('requires fresh working after notifications start disabled and later re-enable', async () => {
+  it('keeps completion tracking active across desktop notification changes', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
     const {
       observeAgentHookCompletionForNotification,
@@ -186,7 +167,7 @@ describe('agent hook completion notifications', () => {
       payload: hookStatus('done')
     })
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
 
     observeAgentHookCompletionForNotification({
       paneKey,
@@ -200,6 +181,7 @@ describe('agent hook completion notifications', () => {
     })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(2)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
       expect.objectContaining({
@@ -215,7 +197,7 @@ describe('agent hook completion notifications', () => {
     )
   }, 15_000)
 
-  it('accepts hook lifecycle while every completion alert consumer is disabled', async () => {
+  it('offers hook completion to mobile while desktop notifications and attention are disabled', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
     mockStoreState.settings.experimentalTerminalAttention = false
     const {
@@ -239,13 +221,13 @@ describe('agent hook completion notifications', () => {
       paneKey,
       expect.objectContaining({ state: 'done', agentType: 'codex' })
     )
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
 
     mockStoreState.settings.notifications.agentTaskComplete = true
     syncAgentHookCompletionNotificationSettings()
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
 
   it('tracks hook completion for terminal attention when OS completion notifications are disabled', async () => {
@@ -265,8 +247,7 @@ describe('agent hook completion notifications', () => {
       'wt-1',
       expect.objectContaining({
         source: 'agent-task-complete',
-        paneKey,
-        suppressOsNotification: true
+        paneKey
       })
     )
   }, 15_000)
@@ -621,15 +602,8 @@ describe('agent hook completion notifications', () => {
     )
   })
 
-  it('fails open for Codex auto-approved permission requests without launch proof', async () => {
-    seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
-    await observeCodexPermissionPause('waiting')
-
-    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
-  })
-
-  it('still notifies for manual Codex permission requests', async () => {
-    seedCodexPaneLaunchConfig(paneKey, '')
+  it('notifies for a Codex permission request', async () => {
+    seedCodexPane(paneKey)
     await observeCodexPermissionPause('waiting')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
@@ -643,8 +617,8 @@ describe('agent hook completion notifications', () => {
     )
   })
 
-  it('fails open for Codex auto-approved blocked permission requests without launch proof', async () => {
-    seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
+  it('notifies for a blocked Codex permission request', async () => {
+    seedCodexPane(paneKey)
     await observeCodexPermissionPause('blocked')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)

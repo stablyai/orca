@@ -1,28 +1,38 @@
 import React from 'react'
-import { AlertTriangle, Loader2, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Loader2, Monitor, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import {
+  shouldForceWorkspaceCleanupRemoval,
+  type WorkspaceCleanupCandidate
+} from '../../../../shared/workspace-cleanup'
 import type { WorkspaceCleanupRemovalProgress } from './workspace-cleanup-background-removal'
 import {
-  getCandidateFactStatus,
-  getContextPillLabel,
+  getCandidateFactStatuses,
+  formatContextDetailLabels,
   getDirtyGitLabel,
-  getReviewPillTone,
   shouldShowGitMetadataChip
 } from './workspace-cleanup-candidate-row-data'
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
+import { getReviewStateTone } from '@/components/github/review-state-presentation'
+import { getReviewStateSrText } from './workspace-cleanup-row-labels'
 import { StatusPill } from './workspace-cleanup-status-pill'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import {
   getWorkspaceCleanupCandidateHostId,
+  getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
 } from './workspace-cleanup-host-identity'
+import {
+  getWorkspaceCleanupCandidateAccessibleName,
+  getWorkspaceCleanupCandidateHostLabel
+} from './workspace-cleanup-host-label'
+import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
 
 const CONFIRM_REMOVE_ROW_ESTIMATE_PX = 76
 
@@ -54,6 +64,7 @@ export function WorkspaceCleanupConfirmRemove({
 }): React.JSX.Element {
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null)
   const count = candidates.length
+  const riskCount = candidates.filter(shouldForceWorkspaceCleanupRemoval).length
   const deleting = progress !== null
   const progressValue = progress
     ? Math.min(100, Math.max(0, (progress.processedCount / progress.totalCount) * 100))
@@ -130,15 +141,31 @@ export function WorkspaceCleanupConfirmRemove({
               { value0: count }
             )}
           </div>
+          {riskCount > 0 ? (
+            <div className="text-xs text-destructive">
+              {riskCount === 1
+                ? translate(
+                    'components.workspace.cleanup.browse.forceDeleteProjectionOne',
+                    '{{count}} workspace currently shows risk and may need a force delete',
+                    { count: riskCount }
+                  )
+                : translate(
+                    'components.workspace.cleanup.browse.forceDeleteProjectionMany',
+                    '{{count}} workspaces currently show risk and may need a force delete',
+                    { count: riskCount }
+                  )}
+            </div>
+          ) : null}
         </div>
         <ScrollArea className="min-h-0 flex-1" viewportRef={setScrollElement}>
           <WorkspaceCleanupCandidateList
             rows={candidates}
+            getRowKey={getWorkspaceCleanupCandidateIdentity}
             scrollElement={scrollElement}
             estimatedRowHeight={CONFIRM_REMOVE_ROW_ESTIMATE_PX}
             renderRow={(candidate, index) => (
               <ConfirmRemoveRow
-                key={candidate.worktreeId}
+                key={getWorkspaceCleanupCandidateIdentity(candidate)}
                 candidate={candidate}
                 now={now}
                 reviewInfo={
@@ -197,13 +224,25 @@ function ConfirmRemoveRow({
 }): React.JSX.Element {
   const dirtyLabel = getDirtyGitLabel(candidate)
   const branchDiffersFromName = candidate.branch !== candidate.displayName
-  const contextPillLabel = getContextPillLabel(candidate)
+  const contextPillLabels = formatContextDetailLabels(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
-  const factStatus = getCandidateFactStatus(candidate)
+  const factStatuses = getCandidateFactStatuses(candidate)
+  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
   return (
-    <div className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}>
+    <div
+      role="group"
+      aria-label={getWorkspaceCleanupCandidateAccessibleName(candidate)}
+      className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}
+    >
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
+        <WorkspaceCleanupMetadataChip
+          icon={Monitor}
+          label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+            value0: hostLabel
+          })}
+          value={hostLabel}
+        />
         <span className="text-xs text-muted-foreground">
           {translate(
             'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
@@ -211,11 +250,20 @@ function ConfirmRemoveRow({
           )}{' '}
           {formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)}
         </span>
-        {factStatus ? <StatusPill tone={factStatus.tone}>{factStatus.label}</StatusPill> : null}
+        {factStatuses.map((status) => (
+          <StatusPill key={status.label} tone={status.tone}>
+            {status.label}
+          </StatusPill>
+        ))}
         {reviewInfo.label ? (
-          <StatusPill tone={getReviewPillTone(reviewInfo)}>{reviewInfo.label}</StatusPill>
+          <StatusPill toneClassName={getReviewStateTone(reviewInfo.state)}>
+            {reviewInfo.label}
+            <span className="sr-only">{getReviewStateSrText(reviewInfo)}</span>
+          </StatusPill>
         ) : null}
-        {contextPillLabel ? <StatusPill>{contextPillLabel}</StatusPill> : null}
+        {contextPillLabels.map((label) => (
+          <StatusPill key={label}>{label}</StatusPill>
+        ))}
         {dirtyLabel && showGitMetadataChip ? (
           <StatusPill tone="destructive">{dirtyLabel}</StatusPill>
         ) : null}

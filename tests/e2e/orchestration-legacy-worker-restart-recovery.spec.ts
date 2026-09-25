@@ -24,6 +24,11 @@ import {
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { listAllOrchestrationRuns } from './orchestration-run-pages'
+import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from './helpers/fake-agent-command-override'
+import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
@@ -31,6 +36,9 @@ const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
 const authorityLedgerPath = path.join(fakeCliDir, 'authority.jsonl')
 const lifecycleLedgerPath = path.join(fakeCliDir, 'lifecycle.jsonl')
+const fakeCodexCommand = buildFakeAgentCommandOverride(
+  path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
@@ -41,7 +49,7 @@ function appendLedger(envName, event) {
     appendFileSync(ledgerPath, JSON.stringify({ pid: process.pid, at: Date.now(), ...event }) + '\\n')
   } catch {}
 }
-async function emitAuthorityHook() {
+async function emitAuthorityHook(hookEventName) {
   const port = process.env.ORCA_AGENT_HOOK_PORT
   const token = process.env.ORCA_AGENT_HOOK_TOKEN
   const launchToken = process.env.ORCA_AGENT_LAUNCH_TOKEN
@@ -61,12 +69,16 @@ async function emitAuthorityHook() {
         version: process.env.ORCA_AGENT_HOOK_VERSION,
         launchToken,
         payload: {
-          hook_event_name: 'UserPromptSubmit',
+          hook_event_name: hookEventName,
           prompt: 'Respond ACK and remain idle'
         }
       })
     })
-    appendLedger('ORCA_E2E_AUTHORITY_LEDGER', { event: 'authority-hook', status: response.status })
+    appendLedger('ORCA_E2E_AUTHORITY_LEDGER', {
+      event: 'authority-hook',
+      hookEventName,
+      status: response.status
+    })
   } catch (error) {
     appendLedger('ORCA_E2E_AUTHORITY_LEDGER', {
       event: 'authority-hook-error',
@@ -80,17 +92,28 @@ if (process.argv.slice(2).includes('app-server')) {
 }
 appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn', argv: process.argv.slice(2) })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
-void emitAuthorityHook()
+const sessionStartHook = emitAuthorityHook('SessionStart')
 let acknowledged = false
 let lifecycleSent = false
+${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
+  const pasteEndScan = scanFakeAgentPasteEnd(fakeAgentPasteEndTail, input)
+  fakeAgentPasteEndTail = pasteEndScan.tail
+  if (pasteEndScan.pasteEndOffset !== null) {
+    process.stdout.write('\\x1b[?25h')
+  }
   if (input.includes('\\x03')) {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
   }
-  if (!acknowledged && input.includes('\\r')) {
-    acknowledged = true
-    process.stdout.write('ACK\\n')
+  if (!acknowledged) {
+    fakeAgentMaybeAck(pasteEndScan, input, (mode) => {
+      acknowledged = true
+      void sessionStartHook.then(() => emitAuthorityHook('UserPromptSubmit'))
+      const message = mode === 'bracketed' ? 'ACK' : 'PASTE_PROTOCOL_ERROR'
+      process.stdout.write('\\u001b]0;Codex Working\\u0007' + message + '\\n')
+      setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
+    })
   }
   const legacyCompletion = input.match(/ORCA_E2E_RUN_LEGACY_DONE:([A-Za-z0-9+/=]+)/)
   if (!lifecycleSent && legacyCompletion) {
@@ -132,6 +155,7 @@ process.stdin.on('data', (chunk) => {
     process.stdout.write(String(result.stdout || '') + String(result.stderr || ''))
   }
 })
+process.stdin.setRawMode?.(true)
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
   process.on(signal, () => {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
@@ -163,6 +187,7 @@ type LedgerEvent = {
   stdout?: string
   stderr?: string
   error?: string
+  hookEventName?: string
 }
 
 type PersistedWorkspaceSession = {
@@ -414,6 +439,15 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       firstApp = first.app
       const worktreeId = await attachRepoAndOpenTerminal(first.page, repoPath)
       await waitForSessionReady(first.page)
+      await first.page.evaluate(
+        async ({ agentCommand, terminalWindowsShell }) => {
+          await window.__store?.getState().updateSettings({
+            agentCmdOverrides: { codex: agentCommand },
+            terminalWindowsShell
+          })
+        },
+        { agentCommand: fakeCodexCommand, terminalWindowsShell: FAKE_AGENT_WINDOWS_SHELL }
+      )
       await ensureTerminalVisible(first.page)
       const coordinatorTabId = await getActiveTabId(first.page)
       expect(coordinatorTabId).toBeTruthy()
@@ -511,11 +545,29 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       expect(readLedger(interruptionLedgerPath)).toEqual([])
       await expect
         .poll(() => readLedger(authorityLedgerPath))
-        .toEqual([expect.objectContaining({ event: 'authority-hook', status: 204 })])
+        .toEqual([
+          expect.objectContaining({
+            event: 'authority-hook',
+            hookEventName: 'SessionStart',
+            status: 204
+          }),
+          expect.objectContaining({
+            event: 'authority-hook',
+            hookEventName: 'UserPromptSubmit',
+            status: 204
+          })
+        ])
 
       const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
       await first.page.evaluate(
-        ({ paneKey, tabId, worktreeId: workerWorktreeId, terminalHandle, transcript }) => {
+        ({
+          agentCommand,
+          paneKey,
+          tabId,
+          worktreeId: workerWorktreeId,
+          terminalHandle,
+          transcript
+        }) => {
           window.__store?.getState().setAgentStatus(
             paneKey,
             { state: 'working', prompt: 'Respond ACK and remain idle', agentType: 'codex' },
@@ -529,7 +581,10 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
                 transcriptPath: transcript
               },
               launchConfig: {
-                agentCommand: 'codex',
+                // Why not bare 'codex': resume prefers the captured command over
+                // agentCmdOverrides, so a bare name would resolve the machine's real
+                // Codex off PATH and unpin the adoption leg this spec exercises.
+                agentCommand,
                 agentArgs: '--dangerously-bypass-approvals-and-sandbox',
                 agentEnv: {}
               }
@@ -538,6 +593,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
           window.__store?.getState().captureAllSleepingAgentSessions('quit')
         },
         {
+          agentCommand: fakeCodexCommand,
           paneKey: workerPaneKey,
           tabId: worker!.tabId,
           worktreeId: worker!.worktreeId,

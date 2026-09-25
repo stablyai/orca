@@ -1,0 +1,763 @@
+{
+  "operation": "notifications.desktop-stream",
+  "family": "notifications.desktop-stream",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "eacf859143588ae6bee2804975d642b6c1088d57ae77ffe298620250d9a9f0e4",
+  "scenarioSha256": "53c8aa2ecfc045a50180dc707e353e22eef8511c0815ebacd3bda8cfb69d65c0",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "18a100fb6bae": {
+      "name": "notifications.getMissedSince#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-2",
+                "notificationSeq": 8
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "dismissedPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ]
+          }
+        }
+      }
+    },
+    "240eb3112b9a": {
+      "name": "stream-listener-crash",
+      "ordinal": 6,
+      "value": {
+        "error": {
+          "category": "TypeError",
+          "isRpcDeliveryUnknown": false,
+          "message": "Cannot read properties of null (reading 'type')"
+        },
+        "frame": "notifications.subscribe#1"
+      }
+    },
+    "2637263140a2": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
+    },
+    "41b12aedee99": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unsubscribe"
+        },
+        {
+          "name": "params",
+          "value": {
+            "subscriptionId": "sub-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "4510854e3d64": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unsubscribe"
+        },
+        {
+          "name": "params",
+          "value": {
+            "subscriptionId": "sub-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "unsubscribed": true
+          }
+        }
+      }
+    },
+    "45aca32cac62": {
+      "name": "notification-tray.dismiss",
+      "ordinal": 7,
+      "value": {
+        "identifier": "tray-2"
+      }
+    },
+    "4924583cde9d": {
+      "name": "device-store.setItem",
+      "ordinal": 6,
+      "value": {
+        "key": "orca:pushDismissalWatermarks:v1",
+        "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-2\\\"]\",\"seq\":8,\"expiresAt\":1767312000000}]"
+      }
+    },
+    "4c376c5d53ac": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
+    },
+    "5359579cc62d": {
+      "running": true
+    },
+    "67485a6a910e": {
+      "name": "notifications.getMissedSince#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              },
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-2",
+                "notificationSeq": 8
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "6c8af7ab87ce": {
+      "name": "stream-listener-crash",
+      "ordinal": 6,
+      "value": {
+        "error": {
+          "category": "TypeError",
+          "isRpcDeliveryUnknown": false,
+          "message": "Cannot read properties of undefined (reading 'type')"
+        },
+        "frame": "notifications.subscribe#1"
+      }
+    },
+    "6efd92e320ef": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unsubscribe"
+        },
+        {
+          "name": "params",
+          "value": {
+            "subscriptionId": "sub-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "96f940529e7e": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unsubscribe"
+        },
+        {
+          "name": "params",
+          "value": {
+            "subscriptionId": "sub-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "97d75ba51dcd": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unsubscribe"
+        },
+        {
+          "name": "params",
+          "value": {
+            "subscriptionId": "sub-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "unsubscribed": true
+          }
+        }
+      }
+    },
+    "a0b2bcfcde77": {
+      "running": false
+    },
+    "ab0e4b79457f": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
+    },
+    "e074c0b6fa0a": {
+      "name": "notifications.getMissedSince#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.getMissedSince\",\"params\":{\"lastSeenSeq\":9007199254740991,\"deliveredPushes\":[{\"notificationId\":\"note-1\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":7},{\"notificationId\":\"note-2\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":8}]}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f552b5040ec7": {
+      "name": "notifications.subscribe#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.subscribe\",\"params\":{\"includeDesktopSuppressed\":true}}"
+    },
+    "f56cd17671f6": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unsubscribe"
+        },
+        {
+          "name": "params",
+          "value": {
+            "subscriptionId": "sub-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "unsubscribed": true
+          }
+        }
+      }
+    },
+    "f79cc42f0819": {
+      "name": "notification-tray.dismiss",
+      "ordinal": 5,
+      "value": {
+        "identifier": "tray-1"
+      }
+    },
+    "ff11f542ada5": {
+      "name": "device-store.setItem",
+      "ordinal": 4,
+      "value": {
+        "key": "orca:pushDismissalWatermarks:v1",
+        "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-1\\\"]\",\"seq\":7,\"expiresAt\":1767312000000}]"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-notifications.desktop-stream-notifications.subscribe-1-2",
+    "checkpoints": [
+      {
+        "id": "notifications-desktop-stream.prelude:subscribed",
+        "observation": {
+          "sender": [],
+          "payloads": ["f552b5040ec7"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": []
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.prelude:ready",
+        "observation": {
+          "sender": ["67485a6a910e"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": []
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.prelude:caught-up",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.normal:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "4924583cde9d", "45aca32cac62"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.normal:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "96f940529e7e"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "4c376c5d53ac"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "4924583cde9d", "45aca32cac62"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.normal:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "97d75ba51dcd"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "4c376c5d53ac"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "4924583cde9d", "45aca32cac62"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.result-absent:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "6c8af7ab87ce"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.result-absent:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "41b12aedee99"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "6c8af7ab87ce"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.result-absent:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "f56cd17671f6"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "6c8af7ab87ce"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.result-null:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "240eb3112b9a"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.result-null:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "41b12aedee99"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "240eb3112b9a"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.result-null:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "f56cd17671f6"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819", "240eb3112b9a"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-ok-missing:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-ok-missing:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "6efd92e320ef"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-ok-missing:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "4510854e3d64"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-false-string-error:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-false-string-error:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "6efd92e320ef"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-false-string-error:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "4510854e3d64"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-false-object-error:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-false-object-error:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "6efd92e320ef"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.inner-false-object-error:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "4510854e3d64"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.outer-refused:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.outer-refused:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "6efd92e320ef"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.outer-refused:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "4510854e3d64"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.outer-refused-no-message:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.outer-refused-no-message:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "6efd92e320ef"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.outer-refused-no-message:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "4510854e3d64"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.method-not-found:dismissed",
+        "observation": {
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a"],
+          "settlements": {
+            "start": "eb79a9b3682a"
+          },
+          "state": "5359579cc62d",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.method-not-found:unsubscribing",
+        "observation": {
+          "sender": ["18a100fb6bae", "6efd92e320ef"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      },
+      {
+        "id": "notifications-desktop-stream.method-not-found:stopped",
+        "observation": {
+          "sender": ["18a100fb6bae", "4510854e3d64"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "ab0e4b79457f"],
+          "settlements": {
+            "start": "eb79a9b3682a",
+            "stop": "eb79a9b3682a"
+          },
+          "state": "a0b2bcfcde77",
+          "effects": ["ff11f542ada5", "f79cc42f0819"]
+        }
+      }
+    ]
+  }
+}

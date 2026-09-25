@@ -1,0 +1,193 @@
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  MAX_SSH_PENDING_PTY_KILLS_PER_TARGET,
+  isSshPendingPtyKillExpired,
+  pendingSshPtyKillEntries,
+  prunePendingSshPtyKills,
+  type SshPendingPtyKill,
+  type SshPendingPtyKillEntry
+} from '../../../shared/ssh-pending-pty-kill'
+import { sshRemotePtyLeaseAllowsReattach, type SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { SshPtyLeaseOperations } from './ssh-pty-lease-operations'
+
+/** A row whose only content was the kill order: no pane identity, and a state that names a route
+ *  nothing can reattach.
+ *
+ *  `expired` alone is not that. It records that this CLIENT lost its handle, never that the shell
+ *  died, and the row is the client's last route back to it — dropping it takes the id out of the
+ *  bulk reattach set (`reattachKnownPtys`) and out of the orphan sweep's leave-alone list in the
+ *  same write, turning a process left running on purpose into a sweepable one. Only a lease
+ *  carrying `supersededBy` or `relayIdRecycled` has a route that died for good, which is exactly
+ *  what `sshRemotePtyLeaseAllowsReattach` already distinguishes. */
+function isDisposableKillOnlyLease(lease: SshRemotePtyLease): boolean {
+  return (
+    lease.pendingKill === undefined &&
+    !sshRemotePtyLeaseAllowsReattach(lease) &&
+    lease.worktreeId === undefined &&
+    lease.tabId === undefined &&
+    lease.leafId === undefined
+  )
+}
+
+/** Every recorded-but-undelivered stop for a target, newest first, TTL-filtered and capped.
+ *  Returned with stored (target-local) relay pty ids, which is what `pty.shutdown` takes. */
+export function getSshRemotePtyKillIntents(
+  state: PersistedState,
+  targetId: string,
+  now: number
+): SshPendingPtyKillEntry[] {
+  const leases = (state.sshRemotePtyLeases ?? []).filter((lease) => lease.targetId === targetId)
+  return prunePendingSshPtyKills(pendingSshPtyKillEntries(leases), now)
+}
+
+/** Deletes orders past their TTL, durably.
+ *
+ *  The read path filters them out too, but filtering alone would leave the field on disk forever
+ *  and make the cap the only thing that ever reclaimed it. This is the TTL retirement path, and it
+ *  deliberately leaves `state` alone: an order aging out observes nothing about the process. */
+export function pruneExpiredSshRemotePtyKillIntents(
+  operations: SshPtyLeaseOperations,
+  targetId: string,
+  now: number
+): void {
+  let changed = false
+  const leases = operations.state.sshRemotePtyLeases ?? []
+  for (const lease of leases) {
+    if (
+      lease.targetId === targetId &&
+      lease.pendingKill &&
+      isSshPendingPtyKillExpired(lease.pendingKill, now)
+    ) {
+      delete lease.pendingKill
+      lease.updatedAt = now
+      changed = true
+    }
+  }
+  if (changed) {
+    operations.state.sshRemotePtyLeases = leases.filter(
+      (lease) => !isDisposableKillOnlyLease(lease)
+    )
+    operations.flush()
+  }
+}
+
+/** Drops the oldest intents past the cap so an unreachable target cannot grow the store. Runs over
+ *  the whole target rather than the arriving id, because the cap is what bounds the target. */
+function capPendingKillsForTarget(
+  leases: SshRemotePtyLease[],
+  targetId: string,
+  now: number
+): void {
+  const scoped = leases.filter((lease) => lease.targetId === targetId && lease.pendingKill)
+  if (scoped.length <= MAX_SSH_PENDING_PTY_KILLS_PER_TARGET) {
+    return
+  }
+  const kept = new Set(
+    prunePendingSshPtyKills(pendingSshPtyKillEntries(scoped), now).map((entry) => entry.ptyId)
+  )
+  const disposable = new Set<SshRemotePtyLease>()
+  for (const lease of scoped) {
+    if (!kept.has(lease.ptyId)) {
+      delete lease.pendingKill
+      lease.updatedAt = now
+      if (isDisposableKillOnlyLease(lease)) {
+        disposable.add(lease)
+      }
+    }
+  }
+  if (disposable.size > 0) {
+    for (let index = leases.length - 1; index >= 0; index -= 1) {
+      if (disposable.has(leases[index])) {
+        leases.splice(index, 1)
+      }
+    }
+  }
+}
+
+/** Records a stop this client asked for and could not confirm.
+ *
+ *  Creates the lease when none exists — a kill that found no provider registered writes no lease of
+ *  its own, and that offline close is the case most likely to strand a remote process. It is
+ *  created `terminated`, carrying no pane identity, because the user closed this PTY: reattach must
+ *  not adopt it. That is a routing tombstone and not a claim the process died — the process
+ *  question is exactly what `pendingKill` is now tracking, and the replay reads every lease state. */
+export function recordSshRemotePtyKillIntent(
+  operations: SshPtyLeaseOperations,
+  targetId: string,
+  ptyId: string,
+  intent: SshPendingPtyKill
+): void {
+  const relayPtyId = operations.toStoredPtyId(targetId, ptyId)
+  const now = intent.requestedAt
+  operations.state.sshRemotePtyLeases ??= []
+  const leases = operations.state.sshRemotePtyLeases
+  const existing = leases.find((entry) => entry.targetId === targetId && entry.ptyId === relayPtyId)
+  if (existing) {
+    const prior = existing.pendingKill
+    // Same incarnation means a repeated close; a recycled relay id starts a new intent lifetime.
+    existing.pendingKill =
+      prior?.incarnationId === intent.incarnationId
+        ? {
+            ...intent,
+            requestedAt: Math.min(prior.requestedAt, now),
+            attempts: prior.attempts
+          }
+        : intent
+    existing.updatedAt = now
+  } else {
+    leases.push({
+      targetId,
+      ptyId: relayPtyId,
+      state: 'terminated',
+      createdAt: now,
+      updatedAt: now,
+      pendingKill: intent
+    })
+  }
+  capPendingKillsForTarget(leases, targetId, now)
+  operations.flush()
+}
+
+/** Retires the intent. Deliberately does not touch `state`: the caller decides whether it earned a
+ *  `terminated` tombstone, because only some retirement paths observed the host. */
+export function clearSshRemotePtyKillIntent(
+  operations: SshPtyLeaseOperations,
+  targetId: string,
+  ptyId: string
+): void {
+  const relayPtyId = operations.toStoredPtyId(targetId, ptyId)
+  const leases = operations.state.sshRemotePtyLeases ?? []
+  const leaseIndex = leases.findIndex(
+    (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
+  )
+  const lease = leases[leaseIndex]
+  if (!lease?.pendingKill) {
+    return
+  }
+  delete lease.pendingKill
+  if (isDisposableKillOnlyLease(lease)) {
+    leases.splice(leaseIndex, 1)
+  } else {
+    lease.updatedAt = Date.now()
+  }
+  operations.flush()
+}
+
+/** Counts one replay against the intent so a target that never answers stays visible in the record
+ *  without changing what it is allowed to do. */
+export function noteSshRemotePtyKillReplayAttempt(
+  operations: SshPtyLeaseOperations,
+  targetId: string,
+  ptyId: string
+): void {
+  const relayPtyId = operations.toStoredPtyId(targetId, ptyId)
+  const lease = (operations.state.sshRemotePtyLeases ?? []).find(
+    (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
+  )
+  if (!lease?.pendingKill) {
+    return
+  }
+  lease.pendingKill = { ...lease.pendingKill, attempts: lease.pendingKill.attempts + 1 }
+  lease.updatedAt = Date.now()
+  operations.flush()
+}

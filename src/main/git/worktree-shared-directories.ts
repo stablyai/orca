@@ -4,11 +4,16 @@ import { checkIgnoredPaths } from './check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { loadHooks } from '../hooks'
 import type { Repo } from '../../shared/repo-types'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // Why: a fresh worktree has no node_modules/.cache, and copying them is slow and
 // duplicates disk; `orca.yaml` names the ones every worktree should share instead.
 
 const CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS = 30_000
+export const MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES = 512
+// Why: resolving a worktree may list many generated directories; overlap
+// independent local probes without flooding the filesystem threadpool.
+const SHARED_DIRECTORY_STAT_CONCURRENCY = 8
 const configuredSharedDirectoriesByRepoPath = new Map<
   string,
   { directories: string[]; expiresAt: number }
@@ -29,6 +34,8 @@ export function getConfiguredWorktreeSharedDirectories(repoPath: string): readon
   const cached = configuredSharedDirectoriesByRepoPath.get(repoPath)
   const now = Date.now()
   if (cached && cached.expiresAt > now) {
+    configuredSharedDirectoriesByRepoPath.delete(repoPath)
+    configuredSharedDirectoriesByRepoPath.set(repoPath, cached)
     return cached.directories
   }
   const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
@@ -36,12 +43,25 @@ export function getConfiguredWorktreeSharedDirectories(repoPath: string): readon
     directories: configured,
     expiresAt: now + CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS
   })
+  while (
+    configuredSharedDirectoriesByRepoPath.size > MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES
+  ) {
+    const oldest = configuredSharedDirectoriesByRepoPath.keys().next()
+    if (oldest.done || oldest.value === repoPath) {
+      break
+    }
+    configuredSharedDirectoriesByRepoPath.delete(oldest.value)
+  }
   return configured
 }
 
 /** Reset the process cache between tests. */
 export function clearConfiguredWorktreeSharedDirectoriesCacheForTests(): void {
   configuredSharedDirectoriesByRepoPath.clear()
+}
+
+export function getConfiguredWorktreeSharedDirectoriesCacheSizeForTests(): number {
+  return configuredSharedDirectoriesByRepoPath.size
 }
 
 /** Every path Orca may have symlinked into a worktree: the per-user Worktree
@@ -76,19 +96,34 @@ export async function resolveWorktreeSharedDirectories(
     }
 
     // Keep only entries that exist as directories; a listed but absent path
-    // (node_modules before install) has nothing to share.
-    const existing: string[] = []
-    for (const relativePath of configured) {
-      try {
-        if ((await stat(join(repoPath, relativePath))).isDirectory()) {
-          existing.push(relativePath)
-        } else {
-          console.warn(
-            `[worktree-shared-directories] Skipping "${relativePath}": sharedDirectories entries must be directories`
-          )
+    // (node_modules before install) has nothing to share. The mapper retains
+    // configured order; warnings are emitted below in that same order.
+    const probes = await mapWithConcurrency(
+      configured,
+      SHARED_DIRECTORY_STAT_CONCURRENCY,
+      async (relativePath) => {
+        try {
+          return {
+            relativePath,
+            exists: true,
+            isDirectory: (await stat(join(repoPath, relativePath))).isDirectory()
+          }
+        } catch {
+          return { relativePath, exists: false, isDirectory: false }
         }
-      } catch {
-        // Absent in the primary checkout — nothing to share.
+      }
+    )
+    const existing: string[] = []
+    for (const probe of probes) {
+      if (!probe.exists) {
+        continue
+      }
+      if (probe.isDirectory) {
+        existing.push(probe.relativePath)
+      } else {
+        console.warn(
+          `[worktree-shared-directories] Skipping "${probe.relativePath}": sharedDirectories entries must be directories`
+        )
       }
     }
     if (existing.length === 0) {

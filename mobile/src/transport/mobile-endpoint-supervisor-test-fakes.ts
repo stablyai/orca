@@ -1,8 +1,11 @@
 import { vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
+import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
 import type { RpcClient } from './rpc-client'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile, RpcResponse } from './types'
 
@@ -25,7 +28,8 @@ export class FakeSession implements RpcClient {
 
   getState = () => this.state
   getReconnectAttempt = () => 0
-  getLastConnectedAt = () => null
+  // Nullable: the escalation suites replace this with a real timestamp.
+  getLastConnectedAt: () => number | null = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -51,6 +55,10 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
   // Why: production-realistic defaults — fictional fake values hid three
   // live defects in this subsystem (latch, churn, int32 timer overflow).
   getAttachDeadlineAt = () => Date.now() + 10_000
+  readonly dialStage = new RelayDialStageTracker()
+  getDialStage = () => this.dialStage.getDialStage()
+  onDialStageChange = (listener: (stage: RelayDialStage) => void) =>
+    this.dialStage.onDialStageChange(listener)
   getResumeExpiresAt = () => this.resumeExpiry
   getResumeConfirmation = () => ({
     v: 1 as const,
@@ -66,6 +74,7 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
 export class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   private path: MobileConnectionPath
   private recoveryPath: MobileConnectionPath | null = null
+  private recoveryAttempt = 0
   private generation = 1
   private readonly pathListeners = new Set<() => void>()
 
@@ -92,18 +101,65 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
       }
       this.path = path
       this.recoveryPath = null
+      this.recoveryAttempt = 0
       this.generation += 1
       // Connected-state publication carries the migration cleanup.
       this.publishState('connected')
     }
   )
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
+  getReconnectAttempt = () => (this.getPendingPath() === 'relay' ? this.recoveryAttempt : 0)
   getActivePath = () => this.path
   getPendingPath = () => (this.getState() === 'connected' ? null : this.recoveryPath)
-  setRecoveryPath = vi.fn((path: MobileConnectionPath | null) => {
+  setRecoveryPath = vi.fn((path: MobileConnectionPath | null, attempt?: number) => {
     const previous = this.getPendingPath()
+    const previousAttempt = this.getReconnectAttempt()
     this.recoveryPath = path
-    if (previous !== this.getPendingPath()) {
+    if (path === null) {
+      this.recoveryAttempt = 0
+    } else if (attempt !== undefined) {
+      this.recoveryAttempt = attempt
+    }
+    if (previous !== this.getPendingPath() || previousAttempt !== this.getReconnectAttempt()) {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+  })
+  private pairingRejected = false
+  setPairingRejected = vi.fn((rejected: boolean) => {
+    if (this.pairingRejected === rejected) {
+      return
+    }
+    this.pairingRejected = rejected
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isPairingRejected = () => this.pairingRejected
+  private relayHostReachability: RelayHostReachability = 'connecting'
+  setRelayHostReachability = vi.fn((reachability: RelayHostReachability) => {
+    if (this.relayHostReachability === reachability) {
+      return
+    }
+    this.relayHostReachability = reachability
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  getRelayHostReachability = () => this.relayHostReachability
+  // Mirrors LogicalClientConnectionPath.clearAfterConnected.
+  publishState(state: ConnectionState): void {
+    if (state === 'connected') {
+      this.pairingRejected = false
+      this.relayHostReachability = 'connecting'
+    }
+    super.publishState(state)
+  }
+  setRecoveryAttempt = vi.fn((attempt: number) => {
+    const previous = this.getReconnectAttempt()
+    this.recoveryAttempt = attempt
+    if (previous !== this.getReconnectAttempt()) {
       for (const listener of this.pathListeners) {
         listener()
       }
@@ -162,8 +218,8 @@ export function dependencies(
     saveHost: vi.fn(async () => {}),
     now: Date.now,
     randomBytes: (length) => new Uint8Array(length).fill(1),
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: defaultScheduleTimer,
+    clearTimer: defaultCancelTimer,
     ...overrides
   }
 }

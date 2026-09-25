@@ -86,6 +86,28 @@ describe('Store', () => {
     expect(persisted.automations[0].baseBranch).toBeNull()
   })
 
+  it('returns the existing automation for a repeated creation key', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const input = {
+      creationKey: 'move-retry-1',
+      name: 'Retry-safe move',
+      prompt: 'Run checks',
+      agentId: 'claude' as const,
+      projectId: 'r1',
+      workspaceMode: 'new_per_run' as const,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    }
+
+    const first = store.createAutomation(input)
+    const retry = store.createAutomation({ ...input, name: 'Changed by a retry' })
+
+    expect(retry.id).toBe(first.id)
+    expect(store.listAutomations()).toHaveLength(1)
+  })
+
   it('persists session reuse only for existing-workspace automations', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -172,6 +194,48 @@ describe('Store', () => {
     ).toBe('run')
   })
 
+  it('treats undefined update fields as omitted, never as explicit clears', async () => {
+    // The renderer forwards a Partial verbatim, so an untouched field arrives as explicit undefined
+    // and must not take the `null` clear branch reserved for a real user clear.
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      baseBranch: 'origin/release',
+      setupDecision: 'run',
+      precheck: { command: 'pnpm lint', timeoutSeconds: 30 },
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const updated = store.updateAutomation(automation.id, {
+      precheck: undefined,
+      runContext: undefined,
+      sourceContext: undefined,
+      baseBranch: undefined,
+      setupDecision: undefined
+    })
+
+    expect(updated.precheck).toEqual(automation.precheck)
+    expect(updated.runContext).toEqual(automation.runContext)
+    expect(updated.sourceContext).toEqual(automation.sourceContext)
+    expect(updated.baseBranch).toBe('origin/release')
+    expect(updated.setupDecision).toBe('run')
+    // Explicit nulls still clear.
+    expect(store.updateAutomation(automation.id, { baseBranch: null }).baseBranch).toBeNull()
+
+    const existing = store.updateAutomation(automation.id, {
+      workspaceMode: 'existing',
+      workspaceId: 'wt1'
+    })
+    expect(store.updateAutomation(existing.id, { workspaceId: undefined }).workspaceId).toBe('wt1')
+  })
+
   it('derives automation source and run contexts from the project host setup', async () => {
     const store = await createStore()
     store.addRepo(
@@ -209,6 +273,72 @@ describe('Store', () => {
       repoId: 'r1',
       providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
     })
+  })
+
+  it('stores its own contexts over a client-perspective create runContext', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime(),
+      // A paired client names this host 'runtime:<id>' — an id the client assigned,
+      // which this store cannot interpret and must not persist.
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'github:stablyai/orca',
+        hostId: toRuntimeExecutionHostId('client-env'),
+        projectHostSetupId: 'client-setup',
+        repoId: 'client-repo',
+        path: '/client/checkout'
+      }
+    })
+
+    expect(automation.runContext).toMatchObject({ hostId: 'local', repoId: 'r1' })
+    expect(store.listAutomationsForScope().items[0]?.selector).toEqual({ kind: 'self' })
+  })
+
+  it('re-derives a stored client-perspective context on an explicit move, not on a toggle', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const persisted = readDataFile() as { automations: Record<string, unknown>[] }
+    // A record a pre-fix host stored from a paired client's create input.
+    persisted.automations[0].runContext = {
+      kind: 'workspace-run',
+      projectId: 'github:stablyai/orca',
+      hostId: toRuntimeExecutionHostId('client-env'),
+      projectHostSetupId: 'client-setup',
+      repoId: 'client-repo',
+      path: '/client/checkout'
+    }
+    writeDataFile(persisted)
+
+    const reloaded = await createStore()
+    expect(reloaded.listAutomationsForScope().items[0]?.selector.kind).toBe('orphan')
+
+    // A toggle is not a move: the record must not silently re-adopt.
+    reloaded.updateAutomation(automation.id, { enabled: false })
+    expect(reloaded.listAutomationsForScope().items[0]?.selector.kind).toBe('orphan')
+
+    const healed = reloaded.updateAutomation(automation.id, { projectId: 'r1' })
+    expect(healed.runContext).toMatchObject({ hostId: 'local', repoId: 'r1' })
+    expect(reloaded.listAutomationsForScope().items[0]?.selector).toEqual({ kind: 'self' })
   })
 
   it('marks runtime-owned automations as remote-host scheduled', async () => {

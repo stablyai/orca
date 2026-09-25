@@ -1,5 +1,55 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import Database from '../sqlite/sync-database'
+
+export async function writeOpenCode2SqliteFixture(root: string): Promise<string> {
+  // Why: opencode2 (beta) sessions come from the channel-scoped SQLite DB
+  // (session_v2/session_message schema) alongside the v1 store.
+  const opencode2DbPath = join(root, 'opencode-next.db')
+  const db = new Database(opencode2DbPath)
+  db.exec(`
+    CREATE TABLE session_v2 (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      parent_id TEXT,
+      slug TEXT NOT NULL,
+      directory TEXT NOT NULL,
+      title TEXT,
+      version TEXT NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      time_archived INTEGER
+    );
+    CREATE TABLE session_message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      time_created INTEGER NOT NULL,
+      time_updated INTEGER NOT NULL,
+      data TEXT NOT NULL
+    );
+  `)
+  db.prepare(
+    `INSERT INTO session_v2
+      (id, project_id, parent_id, slug, directory, title, version, time_created, time_updated)
+     VALUES (?, 'proj-1', NULL, 'slug', '/tmp/opencode2', 'OpenCode 2 title', '0.0.0-next-1', 1777634000000, 1777634001000)`
+  ).run('opencode2-session')
+  db.prepare(
+    `INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data)
+     VALUES (?, 'opencode2-session', 'user', 1, 1777634000500, 1777634000500, ?)`
+  ).run(
+    'msg_opencode2_1',
+    JSON.stringify({
+      id: 'msg_opencode2_1',
+      type: 'user',
+      text: 'OpenCode 2 title',
+      time: { created: 1777634000500 }
+    })
+  )
+  db.close()
+  return opencode2DbPath
+}
 
 export function isolatedScanRoots(root: string) {
   return {
@@ -24,7 +74,9 @@ export function isolatedScanRoots(root: string) {
     primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    clineSessionsDir: join(root, 'cline-sessions'),
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    museSessionsDir: join(root, 'muse-sessions')
   }
 }
 
@@ -32,9 +84,12 @@ export function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
 }
 
+// Newline-terminated, the way an agent writes each record: a file whose last
+// line has no break is a transcript mid-write, and the reader deliberately
+// withholds that line from consumers until it is complete.
 export async function writeJsonlFile(filePath: string, records: unknown[]): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, jsonLines(records))
+  await writeFile(filePath, `${jsonLines(records)}\n`)
 }
 
 export async function writeAntigravityTranscript(
@@ -135,4 +190,77 @@ export function writeAntigravityScannerFixture(
       content: 'Done'
     }
   ])
+}
+
+// Muse sessions are date-sharded <root>/YYYY/MM/DD/<uuid>/session.jsonl
+// envelopes mixing bare records, retained_frame envelopes, and
+// omitted_live_only retention markers (verified against muse 1.0.3).
+export async function writeMuseScannerFixture(sessionsDir: string): Promise<string> {
+  const sessionFile = join(sessionsDir, '2026', '05', '01', 'muse-session', 'session.jsonl')
+  const bare = (payloadType: string, payload: unknown, recordedAt: number) => ({
+    record_type: 'event',
+    payload_type: payloadType,
+    recorded_at: recordedAt,
+    payload
+  })
+  await writeJsonlFile(sessionFile, [
+    bare(
+      'runtime.session.metadata',
+      { kind: 'metadata', record: { workspace_root: '/tmp/muse', provider_id: 'meta' } },
+      1780000000000000
+    ),
+    bare(
+      'runtime.user_intent.accepted',
+      { intent_id: 'intent-1', refill_blocks: [{ kind: 'text', text: 'Muse vault title' }] },
+      1780000001000000
+    ),
+    // Why: every turn also emits `run :: started` carrying the same prompt —
+    // the parser must fold it once (messageCount stays 2 below).
+    bare(
+      'runtime.session',
+      { kind: 'run', run_id: 'run-1', event: { kind: 'started', prompt: 'Muse vault title' } },
+      1780000001000007
+    ),
+    {
+      retained_frame: true,
+      frame_schema_version: 1,
+      outer_log_ordinal: 3,
+      transaction_id: 'txn-1',
+      children: [
+        {
+          child_index: 0,
+          record_json: JSON.stringify(
+            bare(
+              'runtime.session',
+              {
+                kind: 'run',
+                run_id: 'run-1',
+                event: { kind: 'assistant_message_committed', text: 'Muse answer' }
+              },
+              1780000002000000
+            )
+          )
+        }
+      ]
+    },
+    bare(
+      'runtime.session',
+      {
+        kind: 'run',
+        run_id: 'run-1',
+        event: {
+          kind: 'model_completed',
+          model: 'muse-spark-test',
+          usage: { input_tokens: 10, output_tokens: 5 }
+        }
+      },
+      1780000003000000
+    ),
+    {
+      retained_marker: 'omitted_live_only',
+      schema_version: 1,
+      stream: { kind: 'session', id: 'muse-session' }
+    }
+  ])
+  return sessionFile
 }

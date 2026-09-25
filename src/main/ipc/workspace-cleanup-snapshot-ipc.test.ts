@@ -260,6 +260,41 @@ describe('workspace cleanup snapshot IPC', () => {
     expect(vi.mocked(ipcMain.removeHandler)).toHaveBeenCalledWith('workspaceCleanup:getCachedScan')
   })
 
+  it('persists same-id dismissals by host and prunes every key by worktree id', async () => {
+    let dismissals = {}
+    const store = {
+      ...makeEmptyStore(),
+      getUI: () => ({ workspaceCleanup: { dismissals } }),
+      updateUI: (update: { workspaceCleanup: { dismissals: typeof dismissals } }) => {
+        dismissals = update.workspaceCleanup.dismissals
+      }
+    } as unknown as Store
+    registerWorkspaceCleanupHandlers(store)
+    const handler = Object.fromEntries(vi.mocked(ipcMain.handle).mock.calls)[
+      'workspaceCleanup:dismiss'
+    ]
+    const base = {
+      worktreeId: 'repo-1::/same',
+      dismissedAt: NOW,
+      fingerprint: 'fp',
+      classifierVersion: 2
+    }
+
+    await handler?.({} as never, {
+      dismissals: [
+        { ...base, executionHostId: 'local' },
+        { ...base, executionHostId: 'ssh:ssh-1' }
+      ]
+    })
+
+    expect(Object.keys(dismissals).sort()).toEqual(
+      ['local\0repo-1::/same', 'ssh:ssh-1\0repo-1::/same'].sort()
+    )
+
+    await handler?.({} as never, { dismissals: [], removedWorktreeIds: [base.worktreeId] })
+    expect(dismissals).toEqual({})
+  })
+
   it('routes a validated removal snapshot prune batch through its explicit boundary', async () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
     const handlers = Object.fromEntries(vi.mocked(ipcMain.handle).mock.calls)

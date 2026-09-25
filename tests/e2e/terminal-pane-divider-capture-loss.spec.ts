@@ -1,4 +1,4 @@
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
   splitActiveTerminalPane,
@@ -21,32 +21,6 @@ type DividerGeometry = {
 }
 
 test.use({ seedTestRepo: false })
-
-async function setFullscreen(electronApp: ElectronApplication, page: Page): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        return await electronApp.evaluate(({ BrowserWindow }) => {
-          const window = BrowserWindow.getAllWindows()[0]
-          if (!window) {
-            return false
-          }
-          if (window.isMinimized()) {
-            window.restore()
-          }
-          window.show()
-          window.focus()
-          window.setFullScreen(true)
-          return window.isFullScreen()
-        })
-      } catch {
-        return false
-      }
-    })
-    .toBe(true)
-  await expect.poll(() => page.evaluate(() => innerWidth >= 1000 && innerHeight >= 700)).toBe(true)
-  await page.waitForTimeout(1200)
-}
 
 async function addTestRepo(page: Page, repoPath: string): Promise<void> {
   const repoId = await page.evaluate(async (path) => {
@@ -122,16 +96,20 @@ function gridsMatch(geometry: DividerGeometry): boolean {
 }
 
 test('@headful keeps resizing after the divider loses pointer capture', async ({
-  electronApp,
   orcaPage,
   testRepoPath
 }, testInfo) => {
-  await setFullscreen(electronApp, orcaPage)
+  // Keep the 260px drag above the fit floor regardless of the CI display resolution.
+  await orcaPage.setViewportSize({ width: 1600, height: 1000 })
   await addTestRepo(orcaPage, testRepoPath)
   await ensureTerminalVisible(orcaPage, 30_000)
   await waitForActiveTerminalManager(orcaPage, 30_000)
   await splitActiveTerminalPane(orcaPage, 'vertical')
   await waitForPaneCount(orcaPage, 2, 30_000)
+
+  await expect
+    .poll(async () => (await readDividerGeometry(orcaPage)).second.width)
+    .toBeGreaterThan(400)
 
   const divider = orcaPage.locator('.pane-divider.is-vertical').first()
   await expect(divider).toBeVisible()
@@ -170,11 +148,11 @@ test('@headful keeps resizing after the divider loses pointer capture', async ({
     }
     element.releasePointerCapture(pointerId)
   })
+  // Pending capture changes are dispatched with the next pointer event.
+  await orcaPage.mouse.move(startX + 260, startY, { steps: 10 })
   await expect
     .poll(() => divider.evaluate((element) => Number(element.dataset.captureLossCount ?? '0')))
     .toBe(1)
-
-  await orcaPage.mouse.move(startX + 260, startY, { steps: 10 })
   await orcaPage.mouse.up()
   await expect.poll(async () => gridsMatch(await readDividerGeometry(orcaPage))).toBe(true)
   const after = await readDividerGeometry(orcaPage)

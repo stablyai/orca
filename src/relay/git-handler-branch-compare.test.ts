@@ -29,7 +29,7 @@ describe('relay branchCompare', () => {
         return Promise.resolve({ stdout: 'merge-base\n', stderr: '' })
       }
       if (args[0] === 'rev-list') {
-        return Promise.resolve({ stdout: '1\n', stderr: '' })
+        return Promise.resolve({ stdout: '2\t1\n', stderr: '' })
       }
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
@@ -52,7 +52,13 @@ describe('relay branchCompare', () => {
     changes.resolve([{ path: 'file.ts' }])
 
     await expect(pending).resolves.toMatchObject({
-      summary: { compareRef: 'feature', changedFiles: 1, commitsAhead: 1, status: 'ready' }
+      summary: {
+        compareRef: 'feature',
+        changedFiles: 1,
+        commitsAhead: 1,
+        commitsBehind: 2,
+        status: 'ready'
+      }
     })
   })
 })

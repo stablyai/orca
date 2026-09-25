@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
@@ -35,9 +36,12 @@ import type { PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
   createPtyRequestHelpers,
-  endPtyHandlerTest
+  endPtyHandlerTest,
+  testPtyId
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+
+const PTY_1 = testPtyId(1)
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -96,7 +100,7 @@ describe('PtyHandler', () => {
   it('accepts SIGWINCH for restored TUI repaint', async () => {
     await dispatcher.callRequest('pty.spawn', {})
 
-    await dispatcher.callRequest('pty.sendSignal', { id: 'pty-1', signal: 'SIGWINCH' })
+    await dispatcher.callRequest('pty.sendSignal', { id: PTY_1, signal: 'SIGWINCH' })
 
     const term = mockPtySpawn.mock.results[0].value
     expect(term.kill).toHaveBeenCalledWith('SIGWINCH')
@@ -112,7 +116,7 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+    await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
   })
 
@@ -153,7 +157,7 @@ describe('PtyHandler', () => {
       await withWindowsPlatform(async () => {
         const mockKill = mockKillablePty()
         await dispatcher.callRequest('pty.spawn', {})
-        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
         expectBareKills(mockKill, 1)
       })
     })
@@ -171,7 +175,7 @@ describe('PtyHandler', () => {
           })
         })
         await dispatcher.callRequest('pty.spawn', {})
-        const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+        const shutdown = dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: true })
         onExitCb!({ exitCode: 137 })
         await shutdown
         expectBareKills(mockKill, 1)
@@ -193,9 +197,9 @@ describe('PtyHandler', () => {
           })
         })
         await dispatcher.callRequest('pty.spawn', {})
-        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
         const immediate = dispatcher.callRequest('pty.shutdown', {
-          id: 'pty-1',
+          id: PTY_1,
           immediate: true
         })
 
@@ -227,7 +231,7 @@ describe('PtyHandler', () => {
       await withWindowsPlatform(async () => {
         const mockKill = mockKillablePty()
         await dispatcher.callRequest('pty.spawn', {})
-        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
         expectBareKills(mockKill, 1)
         vi.advanceTimersByTime(5000)
         expectBareKills(mockKill, 1)
@@ -270,12 +274,12 @@ describe('PtyHandler', () => {
 
     await dispatcher.callRequest('pty.spawn', {})
     dataCallback!('last words')
-    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: true })
     onExitCb!({ exitCode: 137 })
     await shutdown
 
     expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
-      id: 'pty-1',
+      id: PTY_1,
       data: 'last words'
     })
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
@@ -296,7 +300,7 @@ describe('PtyHandler', () => {
     handler.setExitListener((evt) => exits.push(evt))
 
     const spawn = await spawnPty({ env: { ORCA_PANE_KEY: 'tab-fallback:0' } })
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+    await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
     vi.advanceTimersByTime(5000)
 
     expect(handler.activePtyCount).toBe(1)
@@ -307,11 +311,11 @@ describe('PtyHandler', () => {
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', {
-      id: 'pty-1',
+      id: PTY_1,
       code: 137,
       incarnationId: spawn.incarnationId
     })
-    expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-fallback:0' }])
+    expect(exits).toEqual([{ id: PTY_1, paneKey: 'tab-fallback:0' }])
     expect(handler.activePtyCount).toBe(0)
   })
 
@@ -333,7 +337,7 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+    await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
     vi.advanceTimersByTime(5000)
 
     expect(mockKill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
@@ -362,7 +366,7 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: true })
     onExitCb!({ exitCode: 137 })
     await shutdown
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')

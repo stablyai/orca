@@ -1,5 +1,6 @@
+import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
+import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { delimiter } from 'node:path'
@@ -7,6 +8,7 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
+import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -57,6 +59,166 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it('does not install managed Pi extensions when Pi is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      buildPtyHostEnv(
+        'pty-pi-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['pi']
+        }
+      )
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
+
+    it('does not install managed OMP extensions when OMP is disabled', () => {
+      piBuildPtyEnvMock.mockClear()
+
+      const env = buildPtyHostEnv(
+        'pty-omp-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          launchCommand: 'omp',
+          launchAgent: 'omp',
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['omp']
+        }
+      )
+
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
+    })
+
+    it('threads disabled Pi settings through a bare PTY spawn', async () => {
+      piBuildPtyEnvMock.mockClear()
+
+      await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        agentStatusHooksEnabled: true,
+        disabledTuiAgents: ['pi']
+      }))
+
+      expect(piBuildPtyEnvMock.mock.calls.map(([, , kind]) => kind)).toEqual(['omp'])
+    })
+    it('prepares fresh OMP settings even when status hooks are disabled', () => {
+      const env = buildPtyHostEnv(
+        'fresh-without-hooks',
+        { ORCA_OMP_FRESH_CONFIG: '/other-host/stale.yml' },
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: false,
+          launchCommand: withFreshOmpLaunch('omp', 'posix')
+        }
+      )
+      expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+    })
+
+    it('routes headless browser launches through the owning Orca workspace', () => {
+      const inheritedBrowser = process.env.BROWSER
+      delete process.env.BROWSER
+      try {
+        const env = buildPtyHostEnv(
+          'pty-headless',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            agentStatusHooksEnabled: false,
+            routeBrowserOpensToClient: true
+          }
+        )
+
+        expect(env.BROWSER).toBe('orca open-url --url %s')
+      } finally {
+        if (inheritedBrowser === undefined) {
+          delete process.env.BROWSER
+        } else {
+          process.env.BROWSER = inheritedBrowser
+        }
+      }
+    })
+
+    it('preserves an explicit browser command on headless runtimes', () => {
+      const env = buildPtyHostEnv(
+        'pty-custom-browser',
+        { BROWSER: 'custom-browser %s' },
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: false,
+          routeBrowserOpensToClient: true
+        }
+      )
+
+      expect(env.BROWSER).toBe('custom-browser %s')
+    })
+
+    it('uses the registered WSL CLI name for headless browser launches', () => {
+      const inheritedBrowser = process.env.BROWSER
+      delete process.env.BROWSER
+      try {
+        const env = buildPtyHostEnv(
+          'pty-headless-wsl',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: null,
+            isWsl: true,
+            agentStatusHooksEnabled: false,
+            routeBrowserOpensToClient: true
+          }
+        )
+
+        expect(env.BROWSER).toBe('orca-ide open-url --url %s')
+      } finally {
+        if (inheritedBrowser === undefined) {
+          delete process.env.BROWSER
+        } else {
+          process.env.BROWSER = inheritedBrowser
+        }
+      }
+    })
+
+    it('passes the PTY-resolved Codex home to the WSL relay lane', () => {
+      const runtimeHome =
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
+      const ensureForDistro = vi
+        .spyOn(wslHookRelayManager, 'ensureForDistro')
+        .mockImplementation(async () => {})
+
+      try {
+        buildPtyHostEnv(
+          'pty-wsl',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: runtimeHome,
+            isWsl: true,
+            wslDistro: 'Ubuntu',
+            agentStatusHooksEnabled: true
+          }
+        )
+        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome, undefined)
+      } finally {
+        ensureForDistro.mockRestore()
+      }
+    })
+
     it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {
       const originalPlatform = process.platform
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -201,6 +363,10 @@ describe('registerPtyHandlers', () => {
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Orca')
+    })
+    it('hints inline-image support to agents via ORCA_IMAGE_PROTOCOL', async () => {
+      const env = await spawnAndGetEnv()
+      expect(env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
     })
     it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')

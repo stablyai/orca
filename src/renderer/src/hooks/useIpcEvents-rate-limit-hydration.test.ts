@@ -1,5 +1,6 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createEmptyRateLimitState } from '../../../shared/rate-limit-state-factory'
 
 describe('useIpcEvents rate-limit hydration', () => {
   beforeEach(() => {
@@ -9,17 +10,7 @@ describe('useIpcEvents rate-limit hydration', () => {
 
   it('does not miss startup usage updates that land between get and subscription', async () => {
     const setRateLimitsFromPush = vi.fn()
-    const staleState = {
-      claude: null,
-      codex: null,
-      gemini: null,
-      opencodeGo: null,
-      kimi: null,
-      claudeTarget: { runtime: 'host', wslDistro: null },
-      codexTarget: { runtime: 'host', wslDistro: null },
-      inactiveClaudeAccounts: [],
-      inactiveCodexAccounts: []
-    }
+    const staleState = createEmptyRateLimitState()
     const freshState = {
       ...staleState,
       claude: {
@@ -127,8 +118,8 @@ describe('useIpcEvents rate-limit hydration', () => {
     const makeEvents = (target: Record<string, unknown> = {}): Record<string, unknown> =>
       new Proxy(target, {
         get: (namespace, prop) => {
-          if (prop in namespace) {
-            return Reflect.get(namespace, prop)
+          if (typeof prop === 'string' && prop in namespace) {
+            return namespace[prop]
           }
           return () => () => {}
         }
@@ -148,6 +139,7 @@ describe('useIpcEvents rate-limit hydration', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: makeEvents(),
+        automations: makeEvents(),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),
@@ -181,7 +173,9 @@ describe('useIpcEvents rate-limit hydration', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} },
         ui: makeEvents({

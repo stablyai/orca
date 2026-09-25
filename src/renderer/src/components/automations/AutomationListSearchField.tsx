@@ -4,12 +4,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import {
+  isAutomationListArrowKey,
+  shouldHandleAutomationListSearchArrowKey,
+  shouldHandleAutomationListSearchEnterKey,
+  type AutomationListArrowKey
+} from './automation-list-keyboard-navigation'
 
 type AutomationListSearchFieldProps = {
   query: string
   isTooLarge: boolean
   onQueryChange: (query: string) => void
   onClear: () => void
+  onArrowNavigate?: (key: AutomationListArrowKey) => void
+  onEnter?: () => void
   className?: string
 }
 
@@ -18,6 +26,8 @@ export function AutomationListSearchField({
   isTooLarge,
   onQueryChange,
   onClear,
+  onArrowNavigate,
+  onEnter,
   className
 }: AutomationListSearchFieldProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -57,6 +67,21 @@ export function AutomationListSearchField({
         )}
         onChange={(event) => onQueryChange(event.target.value)}
         onKeyDown={(event) => {
+          if (
+            onArrowNavigate &&
+            isAutomationListArrowKey(event.key) &&
+            shouldHandleAutomationListSearchArrowKey(event)
+          ) {
+            // Why: ArrowUp/Down should step the visible list instead of moving the input caret.
+            event.preventDefault()
+            onArrowNavigate(event.key)
+            return
+          }
+          if (onEnter && shouldHandleAutomationListSearchEnterKey(event)) {
+            event.preventDefault()
+            onEnter()
+            return
+          }
           if (event.key !== 'Escape' || event.nativeEvent.isComposing) {
             return
           }

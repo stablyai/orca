@@ -16,21 +16,8 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 
 describe('GitHub Enterprise slug routing boundaries', () => {
   it('keeps work-item URL hosts on TaskPage metadata and issue mutations', () => {
-    const source = componentSource('TaskPage.tsx')
-    // Why: the end sentinel just bounds GHStatusCell's body — formatPRDelta moved out to
-    // task-page-pr-delta-summary.ts, so the next declaration is the boundary now.
-    const statusSection = sourceBetween(
-      source,
-      'function GHStatusCell',
-      'function ReviewChipAvatar'
-    )
-    // Why: the end sentinel just bounds GHAssigneesCell's body — getChecksLabel moved out to
-    // task-page-checks-pill.ts, so the next declaration is the boundary now.
-    const assigneeSection = sourceBetween(
-      source,
-      'function GHAssigneesCell',
-      'function sameOptionalGitHubOwnerRepo'
-    )
+    const statusSection = componentSource('task-page/github/StatusCell.tsx')
+    const assigneeSection = componentSource('task-page/github/AssigneesCell.tsx')
 
     expect(statusSection).toContain('host: githubProjectHost(parsedOwnerRepo.host)')
     expect(assigneeSection).toContain('parsed?.slug.host')
@@ -38,20 +25,21 @@ describe('GitHub Enterprise slug routing boundaries', () => {
   })
 
   it('uses URL-host fallback for TaskPage reviewer and merge mutations', () => {
-    const source = componentSource('TaskPage.tsx')
-    const reviewSection = sourceBetween(source, 'function PRReviewCell', 'function PRChecksCell')
-    // Why: the end sentinel just bounds PRMergeCell's body — getPageNumbers moved out to
-    // task-page-pagination-page-numbers.ts, so the next declaration is the boundary now.
-    const mergeSection = sourceBetween(source, 'function PRMergeCell', 'function PaginationBar')
+    const reviewSection = componentSource('task-page/github/ReviewCell.tsx')
+    const reviewActionsSection = componentSource('task-page-github-reviewer-actions.ts')
+    const mergeSection = componentSource('task-page/github/MergeCell.tsx')
 
     expect(reviewSection).toContain('resolveTaskPullRequestRepo(item)')
-    expect(reviewSection.match(/prRepo: reviewRepo/g)).toHaveLength(4)
+    expect(reviewSection).toContain('reviewRepo,')
+    expect(reviewActionsSection.match(/prRepo: reviewRepo/g)).toHaveLength(4)
     expect(mergeSection).toContain('const prRepo = resolveTaskPullRequestRepo(item)')
     expect(mergeSection).not.toContain('prRepo: item.prRepo ?? null')
   })
 
   it('keeps PR base-repository hosts on checks-sidebar comment writes', () => {
-    const source = componentSource('right-sidebar/ChecksPanel.tsx')
+    const source = componentSource(
+      'right-sidebar/checks-panel/use-checks-panel-comment-mutations.tsx'
+    )
     const conversationSection = sourceBetween(
       source,
       'const handleEditComment = useCallback',

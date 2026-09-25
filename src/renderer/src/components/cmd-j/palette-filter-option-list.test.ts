@@ -29,6 +29,29 @@ describe('rankPaletteFilterOptions', () => {
     option('d', 'Delta Host', 2, 'ssh')
   ]
 
+  it('moves a toggled option to the front, so a cursor must track ids not positions', () => {
+    // Why pinned here: PaletteFilterFieldOptions derives its highlight from the option id
+    // precisely because this re-rank invalidates any stored index the moment a user toggles.
+    const before = rankPaletteFilterOptions({
+      options,
+      query: '',
+      selectedIds: new Set(),
+      rankMode: 'registry'
+    })
+    expect(before.ordered.map((entry) => entry.id)).toEqual(['a', 'b', 'c', 'd'])
+
+    // Toggling the option the user had arrowed onto pins it to the front; an index of 1
+    // would now point at a different option than it did a render earlier.
+    const after = rankPaletteFilterOptions({
+      options,
+      query: '',
+      selectedIds: new Set(['c']),
+      rankMode: 'registry'
+    })
+    expect(after.ordered[0]?.id).toBe('c')
+    expect(before.ordered[1]?.id).not.toBe(after.ordered[1]?.id)
+  })
+
   it('pins selected matches first and ranks the rest by popularity', () => {
     const ranked = rankPaletteFilterOptions({
       options,

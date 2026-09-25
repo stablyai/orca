@@ -2,6 +2,7 @@ import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
+import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
 import { isEditorTabContentType } from './editor-tab-content-type'
 
 export function openWorkspaceEditorItem(
@@ -36,10 +37,14 @@ export function openWorkspaceEditorItem(
   return created?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
-  state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree'>,
+  state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,
   worktreeId: string,
   targetGroupId: string | undefined
 ): string | null {
+  // Why: callers resolve intent first, but this helper is shared by five open paths — keep it correct for a caller that doesn't.
+  if (!areEditorPreviewTabsEnabled(state)) {
+    return null
+  }
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []
   if (targetGroupId) {
     const previewTab = tabsForWorktree.find(
@@ -77,6 +82,7 @@ export function removeEditorStateForReplacedPreview(
     | 'editorDrafts'
     | 'editorCursorLine'
     | 'markdownViewMode'
+    | 'markdownRichModeSizeOverride'
     | 'editorViewMode'
     | 'markdownFrontmatterVisible'
     | 'markdownTableOfContentsVisible'
@@ -89,6 +95,7 @@ export function removeEditorStateForReplacedPreview(
   | 'editorDrafts'
   | 'editorCursorLine'
   | 'markdownViewMode'
+  | 'markdownRichModeSizeOverride'
   | 'editorViewMode'
   | 'markdownFrontmatterVisible'
   | 'markdownTableOfContentsVisible'
@@ -110,6 +117,7 @@ export function removeEditorStateForReplacedPreview(
       editorDrafts: state.editorDrafts,
       editorCursorLine: state.editorCursorLine,
       markdownViewMode: state.markdownViewMode,
+      markdownRichModeSizeOverride: state.markdownRichModeSizeOverride,
       editorViewMode: state.editorViewMode,
       markdownFrontmatterVisible: state.markdownFrontmatterVisible,
       markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
@@ -124,6 +132,11 @@ export function removeEditorStateForReplacedPreview(
     ),
     markdownViewMode: Object.fromEntries(
       Object.entries(state.markdownViewMode).filter(([fileId]) => fileId !== replacedFile.id)
+    ),
+    markdownRichModeSizeOverride: Object.fromEntries(
+      Object.entries(state.markdownRichModeSizeOverride).filter(
+        ([fileId]) => fileId !== replacedFile.id
+      )
     ),
     editorViewMode: Object.fromEntries(
       Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFile.id)

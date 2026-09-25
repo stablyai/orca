@@ -1,0 +1,281 @@
+{
+  "operation": "tasks.workspace-source",
+  "family": "tasks.workspace-source",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "046dd3a125a3c9abcf5a0dd122818939b516adb91cbda2554b3409d4bb3a7980",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02e24a49522e": {
+      "name": "repo.sparsePresets#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.sparsePresets\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "215f6b1d86cd": {
+      "name": "workspaceBaseBranchLoading",
+      "ordinal": 13,
+      "value": true
+    },
+    "2198c28257cb": {
+      "name": "repo.searchRefs#1",
+      "ordinal": 15,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "main",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "refs": ["main"]
+          }
+        }
+      }
+    },
+    "22b30d5c0550": {
+      "name": "workspaceSparsePresetId",
+      "ordinal": 11,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "329626b87ebb": {
+      "name": "workspaceBaseBranchLoading",
+      "ordinal": 18,
+      "value": false
+    },
+    "395b11d2530a": {
+      "name": "workspaceSparsePresetsLoading",
+      "ordinal": 12,
+      "value": false
+    },
+    "4efabea114c4": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 3,
+      "value": ""
+    },
+    "57f06e6e349e": {
+      "branchError": "",
+      "branches": [],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "653409308f6c": {
+      "name": "workspaceSparsePresetsLoaded",
+      "ordinal": 10,
+      "value": true
+    },
+    "666bd27e7019": {
+      "name": "workspaceSparsePresetsLoaded",
+      "ordinal": 2,
+      "value": false
+    },
+    "802594b0307e": {
+      "name": "workspaceBaseBranchLoading",
+      "ordinal": 6,
+      "value": false
+    },
+    "826410120272": {
+      "name": "workspaceSparsePresets",
+      "ordinal": 9,
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ]
+    },
+    "94be039bc034": {
+      "name": "repo.searchRefs#1",
+      "ordinal": 16,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
+    },
+    "a135d4b358aa": {
+      "name": "workspaceBaseBranchResults",
+      "ordinal": 17,
+      "value": [
+        {
+          "localBranchName": "main",
+          "refName": "main"
+        }
+      ]
+    },
+    "b2d70a96a17a": {
+      "name": "workspaceBaseBranchResults",
+      "ordinal": 5,
+      "value": []
+    },
+    "b78bcf7ca596": {
+      "branchError": "",
+      "branches": [
+        {
+          "localBranchName": "main",
+          "refName": "main"
+        }
+      ],
+      "presets": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ],
+      "presetsError": "",
+      "presetsLoaded": true
+    },
+    "b7cb2292ffa2": {
+      "name": "repo.sparsePresets#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.sparsePresets"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "presets": [
+              {
+                "directories": ["docs"],
+                "id": "p1",
+                "name": "docs"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "d8718329d555": {
+      "name": "workspaceBaseBranchError",
+      "ordinal": 14,
+      "value": ""
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f7ab22c990a5": {
+      "name": "workspaceBaseBranchError",
+      "ordinal": 7,
+      "value": ""
+    },
+    "faf6e6083f43": {
+      "name": "workspaceSparsePresetsLoading",
+      "ordinal": 1,
+      "value": true
+    }
+  },
+  "recording": {
+    "scenario": "tw-workspace-source-presets",
+    "checkpoints": [
+      {
+        "id": "presets-loaded",
+        "observation": {
+          "sender": ["b7cb2292ffa2"],
+          "payloads": ["02e24a49522e"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "57f06e6e349e",
+          "effects": [
+            "faf6e6083f43",
+            "666bd27e7019",
+            "4efabea114c4",
+            "b2d70a96a17a",
+            "802594b0307e",
+            "f7ab22c990a5",
+            "826410120272",
+            "653409308f6c",
+            "22b30d5c0550",
+            "395b11d2530a"
+          ]
+        }
+      },
+      {
+        "id": "branches-loaded",
+        "observation": {
+          "sender": ["b7cb2292ffa2", "2198c28257cb"],
+          "payloads": ["02e24a49522e", "94be039bc034"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "branch-query": "eb79a9b3682a"
+          },
+          "state": "b78bcf7ca596",
+          "effects": [
+            "faf6e6083f43",
+            "666bd27e7019",
+            "4efabea114c4",
+            "b2d70a96a17a",
+            "802594b0307e",
+            "f7ab22c990a5",
+            "826410120272",
+            "653409308f6c",
+            "22b30d5c0550",
+            "395b11d2530a",
+            "215f6b1d86cd",
+            "d8718329d555",
+            "a135d4b358aa",
+            "329626b87ebb"
+          ]
+        }
+      }
+    ]
+  }
+}

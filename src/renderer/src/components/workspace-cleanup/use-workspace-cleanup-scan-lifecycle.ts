@@ -56,19 +56,13 @@ export function useWorkspaceCleanupScanLifecycle({
             return
           }
           latestReadyToastScanAtRef.current = result.scannedAt
-          const suggestedCount = result.candidates.filter(
-            (candidate) => candidate.selectedByDefault
-          ).length
           toast.success(
             translate(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0e2d235c63',
               'Workspace scan ready'
             ),
             {
-              description: formatWorkspaceCleanupReadyToast(
-                result.candidates.length,
-                suggestedCount
-              ),
+              description: formatWorkspaceCleanupReadyToast(result.candidates.length),
               action: {
                 label: translate(
                   'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4a35c08764',

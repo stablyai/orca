@@ -3,7 +3,9 @@ import type { ReactNode } from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getWorkspaceCleanupCandidateIdentity } from './workspace-cleanup-host-identity'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
+import { getWorkspaceCleanupCandidateAccessibleName } from './workspace-cleanup-host-label'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -37,6 +39,7 @@ describe('CandidateRow', () => {
     act(() => {
       root?.render(
         <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
           candidate={candidate}
           expanded={false}
           last
@@ -68,6 +71,7 @@ describe('CandidateRow', () => {
     act(() => {
       root?.render(
         <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
           candidate={candidate}
           expanded={false}
           last
@@ -103,6 +107,7 @@ describe('CandidateRow', () => {
     act(() => {
       root?.render(
         <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
           candidate={candidate}
           expanded={false}
           last
@@ -124,7 +129,9 @@ describe('CandidateRow', () => {
       )
     })
 
-    const openButton = container?.querySelector(`[aria-label="Open ${candidate.displayName}"]`)
+    const openButton = container?.querySelector(
+      `[aria-label="Open ${getWorkspaceCleanupCandidateAccessibleName(candidate)}"]`
+    )
     expect(openButton?.querySelector('.lucide-external-link')).not.toBeNull()
   })
 
@@ -134,6 +141,7 @@ describe('CandidateRow', () => {
     act(() => {
       root?.render(
         <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
           candidate={candidate}
           expanded={false}
           last
@@ -156,8 +164,9 @@ describe('CandidateRow', () => {
       )
     })
 
-    expect(container?.querySelector(`[aria-label="Select ${candidate.displayName}"]`)).toBeNull()
-    expect(container?.querySelector(`[aria-label="Remove ${candidate.displayName}"]`)).toBeNull()
+    const accessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
+    expect(container?.querySelector(`[aria-label="Select ${accessibleName}"]`)).toBeNull()
+    expect(container?.querySelector(`[aria-label="Remove ${accessibleName}"]`)).toBeNull()
   })
 
   it.each([
@@ -169,6 +178,7 @@ describe('CandidateRow', () => {
     act(() => {
       root?.render(
         <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
           candidate={candidate}
           deletionPhase={deletionPhase}
           expanded={false}
@@ -194,5 +204,121 @@ describe('CandidateRow', () => {
 
     expect(container?.textContent).toContain(label)
     expect(container?.textContent).not.toContain('Ready')
+  })
+
+  it('visibly and accessibly distinguishes colliding local and SSH rows', () => {
+    const local = makeCandidate({ executionHostId: 'local' })
+    const remote = makeCandidate({ connectionId: 'builder', executionHostId: 'ssh:builder' })
+
+    act(() => {
+      root?.render(
+        <>
+          {[local, remote].map((candidate) => (
+            <CandidateRow
+              key={candidate.executionHostId}
+              identity={getWorkspaceCleanupCandidateIdentity(candidate)}
+              candidate={candidate}
+              expanded={false}
+              last={false}
+              lastActivityLabel="1d ago"
+              reviewInfo={{
+                hasReview: false,
+                label: null,
+                provider: null,
+                state: null,
+                title: null
+              }}
+              selected={false}
+              onIgnore={vi.fn()}
+              onRemove={vi.fn()}
+              onToggleExpanded={vi.fn()}
+              onToggleSelected={vi.fn()}
+              onView={vi.fn()}
+            />
+          ))}
+        </>
+      )
+    })
+
+    const localName = getWorkspaceCleanupCandidateAccessibleName(local)
+    const remoteName = getWorkspaceCleanupCandidateAccessibleName(remote)
+    expect(localName).not.toBe(remoteName)
+    expect(container?.querySelector(`[aria-label="Select ${localName}"]`)).not.toBeNull()
+    expect(container?.querySelector(`[aria-label="Select ${remoteName}"]`)).not.toBeNull()
+    expect(container?.querySelector(`[aria-label="Host: builder"]`)).not.toBeNull()
+  })
+
+  it('colors the review pill by state the way the PR page and item dialog do', () => {
+    const states = [
+      { state: 'merged' as const, label: 'PR #1', hue: 'purple' },
+      { state: 'closed' as const, label: 'PR #2', hue: 'rose' },
+      { state: 'open' as const, label: 'PR #3', hue: 'emerald' },
+      { state: 'draft' as const, label: 'PR #4', hue: 'slate' }
+    ]
+
+    for (const { state, label, hue } of states) {
+      const candidate = makeCandidate()
+
+      act(() => {
+        root?.render(
+          <CandidateRow
+            identity={getWorkspaceCleanupCandidateIdentity(candidate)}
+            candidate={candidate}
+            expanded={false}
+            last
+            lastActivityLabel="1d ago"
+            reviewInfo={{
+              hasReview: true,
+              label,
+              provider: 'github',
+              state,
+              title: 'Some change'
+            }}
+            selected={false}
+            onIgnore={vi.fn()}
+            onRemove={vi.fn()}
+            onToggleExpanded={vi.fn()}
+            onToggleSelected={vi.fn()}
+            onView={vi.fn()}
+          />
+        )
+      })
+
+      const pill = container?.querySelector(`[aria-label*="${label}"]`)
+      expect(pill?.className).toContain(`text-${hue}-`)
+      expect(pill?.className).not.toContain('text-muted-foreground')
+    }
+  })
+
+  it('leaves a review with an unfetched state neutral', () => {
+    const candidate = makeCandidate()
+
+    act(() => {
+      root?.render(
+        <CandidateRow
+          identity={getWorkspaceCleanupCandidateIdentity(candidate)}
+          candidate={candidate}
+          expanded={false}
+          last
+          lastActivityLabel="1d ago"
+          reviewInfo={{
+            hasReview: true,
+            label: 'PR #9',
+            provider: 'github',
+            state: 'unknown',
+            title: null
+          }}
+          selected={false}
+          onIgnore={vi.fn()}
+          onRemove={vi.fn()}
+          onToggleExpanded={vi.fn()}
+          onToggleSelected={vi.fn()}
+          onView={vi.fn()}
+        />
+      )
+    })
+
+    const pill = container?.querySelector('[aria-label*="PR #9"]')
+    expect(pill?.className).toContain('text-muted-foreground')
   })
 })

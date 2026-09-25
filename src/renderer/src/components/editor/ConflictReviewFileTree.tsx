@@ -9,6 +9,7 @@ import {
   flattenSourceControlTree,
   type SourceControlTreeNode
 } from '@/components/right-sidebar/source-control-tree'
+import { VirtualizedList } from '@/components/virtualized-list'
 import type { ConflictReviewEntry } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { translate } from '@/i18n/i18n'
@@ -22,15 +23,15 @@ type ConflictReviewTreeNode = SourceControlTreeNode<ConflictReviewTreeEntry, 'co
 const CONFLICT_REVIEW_TREE_INDENT_PX = 12
 const CONFLICT_REVIEW_DIRECTORY_PADDING_PX = 8
 const CONFLICT_REVIEW_FILE_PADDING_PX = 20
+// Why: the status badge makes file rows slightly taller than the 24px directory rows.
+export const CONFLICT_REVIEW_ROW_HEIGHT_PX = 25
 
 function buildConflictReviewRows(
   entries: readonly ConflictReviewTreeEntry[],
   collapsedDirectoryKeys: ReadonlySet<string>
 ): ConflictReviewTreeNode[] {
-  const roots = compactSourceControlTree(
-    buildSourceControlTree('conflict-review', [...entries])
-  ) as ConflictReviewTreeNode[]
-  return flattenSourceControlTree(roots, collapsedDirectoryKeys) as ConflictReviewTreeNode[]
+  const roots = compactSourceControlTree(buildSourceControlTree('conflict-review', [...entries]))
+  return flattenSourceControlTree(roots, collapsedDirectoryKeys)
 }
 
 export function ConflictReviewFileTree({
@@ -53,6 +54,8 @@ export function ConflictReviewFileTree({
     () => buildConflictReviewRows(entries, collapsedDirectoryKeys),
     [collapsedDirectoryKeys, entries]
   )
+  // Why: state, not a ref — a ref is not attached when the virtualizer first observes.
+  const [listScrollElement, setListScrollElement] = React.useState<HTMLDivElement | null>(null)
   const toggleDirectory = React.useCallback((key: string) => {
     setCollapsedDirectoryKeys((prev) => {
       const next = new Set(prev)
@@ -91,7 +94,7 @@ export function ConflictReviewFileTree({
           </Button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
+      <div ref={setListScrollElement} className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
         {rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             {translate(
@@ -100,16 +103,22 @@ export function ConflictReviewFileTree({
             )}
           </div>
         ) : (
-          rows.map((node) => (
-            <ConflictReviewFileTreeRow
-              key={node.key}
-              node={node}
-              isCollapsed={collapsedDirectoryKeys.has(node.key)}
-              isSelected={node.type === 'file' && node.entry.path === selectedPath}
-              onToggleDirectory={toggleDirectory}
-              onOpenEntry={onOpenEntry}
-            />
-          ))
+          <VirtualizedList
+            rows={rows}
+            scrollElement={listScrollElement}
+            estimateRowHeightPx={CONFLICT_REVIEW_ROW_HEIGHT_PX}
+            getRowKey={(node) => node.key}
+            renderRow={(node) => (
+              <ConflictReviewFileTreeRow
+                key={node.key}
+                node={node}
+                isCollapsed={collapsedDirectoryKeys.has(node.key)}
+                isSelected={node.type === 'file' && node.entry.path === selectedPath}
+                onToggleDirectory={toggleDirectory}
+                onOpenEntry={onOpenEntry}
+              />
+            )}
+          />
         )}
       </div>
     </aside>
@@ -178,7 +187,9 @@ function ConflictReviewFileTreeRow({
         }
       }}
     >
-      <FileIcon className={cn('size-3.5 shrink-0', isStillUnresolved && 'text-destructive')} />
+      {React.createElement(FileIcon, {
+        className: cn('size-3.5 shrink-0', isStillUnresolved && 'text-destructive')
+      })}
       <span className="min-w-0 flex-1 truncate">
         <span className="text-foreground">{node.name}</span>
       </span>

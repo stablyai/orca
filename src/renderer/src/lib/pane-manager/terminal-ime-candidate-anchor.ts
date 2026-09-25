@@ -71,6 +71,22 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
   }
 
+  // Why: xterm's patched CompositionHelper already pulls this box back inside the screen when an
+  // over-wide preedit would push it past the right edge, and it is the only one of the two that
+  // can, because CoreBrowserTerminal drives it from `onRender` as well as from composition
+  // events. This listener runs after xterm's on every compositionupdate, so writing a bare
+  // `cursorLeft` here would revert that correction for as long as no render followed. Applying
+  // the same clamp keeps the two writers in agreement instead of racing. The width is the inline
+  // value xterm wrote moments ago — a CSSOM read, so the update path still forces no layout.
+  const anchorLeft = (column: number, cells: ImeAnchorCellMetrics): number => {
+    const cursorLeft = column * cells.cellWidth
+    const width = Number.parseFloat(textarea.style.width)
+    if (!Number.isFinite(width)) {
+      return cursorLeft
+    }
+    return Math.max(0, Math.min(cursorLeft, cells.cols * cells.cellWidth - width))
+  }
+
   const applyAnchor = (
     row: number,
     column: number,
@@ -80,7 +96,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     const top = `${row * cells.cellHeight}px`
     const left = `${column * cells.cellWidth}px`
     writeStyle(textarea, 'top', top)
-    writeStyle(textarea, 'left', left)
+    writeStyle(textarea, 'left', `${anchorLeft(column, cells)}px`)
     if (isCursorAgent && compositionView) {
       const height = `${cells.cellHeight}px`
       writeStyle(compositionView, 'top', top)

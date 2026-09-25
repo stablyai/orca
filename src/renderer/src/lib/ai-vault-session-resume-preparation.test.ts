@@ -19,6 +19,7 @@ describe('prepareAiVaultSessionForResume', () => {
     expect(prepared.codexHome).toBeNull()
     expect(prepareSessionResume).toHaveBeenCalledWith({
       agent: 'codex',
+      sessionId: legacy.sessionId,
       filePath: legacy.filePath,
       codexHome: legacy.codexHome,
       executionHostId: 'local'
@@ -42,6 +43,18 @@ describe('prepareAiVaultSessionForResume', () => {
     expect(prepareSessionResume).not.toHaveBeenCalled()
   })
 
+  it('does not prepare a legacy CLI resume for a native structured session', async () => {
+    const prepareSessionResume = vi.fn()
+    stubPreparation(prepareSessionResume)
+    const native = session({
+      codexHome: '/tmp/orca/codex-runtime-home/home',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    await expect(prepareAiVaultSessionForResume(native)).resolves.toBe(native)
+    expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
   it('repins a per-account session to the home the host substitutes', async () => {
     const prepareSessionResume = vi.fn().mockResolvedValue({
       useRealCodexHome: false,
@@ -55,6 +68,7 @@ describe('prepareAiVaultSessionForResume', () => {
     expect(prepared.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
     expect(prepareSessionResume).toHaveBeenCalledWith({
       agent: 'codex',
+      sessionId: current.sessionId,
       filePath: current.filePath,
       codexHome: current.codexHome,
       executionHostId: 'local'

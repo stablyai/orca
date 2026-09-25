@@ -1,0 +1,1294 @@
+{
+  "operation": "tasks.workspace-ssh",
+  "family": "tasks.workspace-ssh",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "35771ab92d0d4ff44a1dd6e5f1e5d3137570a2e013bddea5ca77ecac7989ed53",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ba2cee4b538": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      }
+    },
+    "11405363c62d": {
+      "name": "workspaceAgent",
+      "ordinal": 1,
+      "value": "claude"
+    },
+    "12edfd2bbf02": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "13e6d0c47ca4": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": ["codex"]
+    },
+    "18e6a3ac6471": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "1c0d00da9586": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "2bdbcded5f9b": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "38ce16e16515": {
+      "name": "ssh.connect#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "4177bbc4d896": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "419b5c4f79c2": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "43ead075ce12": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      },
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "50c5123e1f42": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "630e2f27face": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": []
+    },
+    "680836f92e72": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "71225024ccf5": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "73c44e3e321b": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "7a1b524f17d0": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": {
+        "command": "pnpm install",
+        "kind": "prompt",
+        "setupTrust": {
+          "contentHash": "hash-1",
+          "scriptContent": "pnpm install"
+        },
+        "source": "repo"
+      },
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "80ffce5fa2b3": {
+      "name": "workspaceSshState",
+      "ordinal": 11,
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "84149cfb1467": {
+      "name": "workspaceSshState",
+      "ordinal": 8,
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connecting",
+        "targetId": "ssh-1"
+      }
+    },
+    "9637248df9cb": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 3,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "97f2f33b0349": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9f0676ba0d67": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": "unresolved",
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "9f089dfe58b4": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "a1f755a38636": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex"],
+      "setup": "unresolved",
+      "ssh": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connected",
+        "targetId": "ssh-1"
+      }
+    },
+    "a9ec92743b9e": {
+      "name": "workspaceAgentOverridden",
+      "ordinal": 2,
+      "value": false
+    },
+    "bf0c0c00caf9": {
+      "name": "repo.hooks#1",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "c75dad7868ad": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "d68ba9a6772a": {
+      "name": "workspaceSshConnecting",
+      "ordinal": 7,
+      "value": true
+    },
+    "d760f20b60ad": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "e44d3b580ab0": {
+      "name": "workspaceSshConnecting",
+      "ordinal": 12,
+      "value": false
+    },
+    "e65f26fdbe1a": {
+      "name": "repo.hooks#1",
+      "ordinal": 13,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "hooks": {
+              "scripts": {
+                "setup": "  pnpm install  "
+              }
+            },
+            "setupRunPolicy": "ask",
+            "setupTrust": {
+              "contentHash": "hash-1",
+              "scriptContent": "pnpm install"
+            },
+            "source": "repo"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "edf7372929cd": {
+      "name": "ssh.connect#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 120000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "state": {
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "ssh-1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.workspace-ssh-preflight.detectremoteagents-1",
+    "checkpoints": [
+      {
+        "id": "tw-workspace-ssh-connected.normal:agents-detected",
+        "observation": {
+          "sender": ["2bdbcded5f9b"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "18e6a3ac6471",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "13e6d0c47ca4"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.normal:connected",
+        "observation": {
+          "sender": ["2bdbcded5f9b", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "a1f755a38636",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "13e6d0c47ca4",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.normal:setup-prompted",
+        "observation": {
+          "sender": ["2bdbcded5f9b", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "43ead075ce12",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "13e6d0c47ca4",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.result-absent:agents-detected",
+        "observation": {
+          "sender": ["1c0d00da9586"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.result-absent:connected",
+        "observation": {
+          "sender": ["1c0d00da9586", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.result-absent:setup-prompted",
+        "observation": {
+          "sender": ["1c0d00da9586", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.result-null:agents-detected",
+        "observation": {
+          "sender": ["c75dad7868ad"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.result-null:connected",
+        "observation": {
+          "sender": ["c75dad7868ad", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.result-null:setup-prompted",
+        "observation": {
+          "sender": ["c75dad7868ad", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-ok-missing:agents-detected",
+        "observation": {
+          "sender": ["9f089dfe58b4"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-ok-missing:connected",
+        "observation": {
+          "sender": ["9f089dfe58b4", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-ok-missing:setup-prompted",
+        "observation": {
+          "sender": ["9f089dfe58b4", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-false-string-error:agents-detected",
+        "observation": {
+          "sender": ["12edfd2bbf02"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-false-string-error:connected",
+        "observation": {
+          "sender": ["12edfd2bbf02", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-false-string-error:setup-prompted",
+        "observation": {
+          "sender": ["12edfd2bbf02", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-false-object-error:agents-detected",
+        "observation": {
+          "sender": ["73c44e3e321b"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-false-object-error:connected",
+        "observation": {
+          "sender": ["73c44e3e321b", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.inner-false-object-error:setup-prompted",
+        "observation": {
+          "sender": ["73c44e3e321b", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.outer-refused:agents-detected",
+        "observation": {
+          "sender": ["4177bbc4d896"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.outer-refused:connected",
+        "observation": {
+          "sender": ["4177bbc4d896", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.outer-refused:setup-prompted",
+        "observation": {
+          "sender": ["4177bbc4d896", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.outer-refused-no-message:agents-detected",
+        "observation": {
+          "sender": ["419b5c4f79c2"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.outer-refused-no-message:connected",
+        "observation": {
+          "sender": ["419b5c4f79c2", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.outer-refused-no-message:setup-prompted",
+        "observation": {
+          "sender": ["419b5c4f79c2", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.method-not-found:agents-detected",
+        "observation": {
+          "sender": ["50c5123e1f42"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.method-not-found:connected",
+        "observation": {
+          "sender": ["50c5123e1f42", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.method-not-found:setup-prompted",
+        "observation": {
+          "sender": ["50c5123e1f42", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.transport-rejection:agents-detected",
+        "observation": {
+          "sender": ["680836f92e72"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.transport-rejection:connected",
+        "observation": {
+          "sender": ["680836f92e72", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.transport-rejection:setup-prompted",
+        "observation": {
+          "sender": ["680836f92e72", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.transport-rejection-no-message:agents-detected",
+        "observation": {
+          "sender": ["97f2f33b0349"],
+          "payloads": ["d760f20b60ad"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "71225024ccf5",
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "630e2f27face"]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.transport-rejection-no-message:connected",
+        "observation": {
+          "sender": ["97f2f33b0349", "edf7372929cd"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "9f0676ba0d67",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      },
+      {
+        "id": "tw-workspace-ssh-connected.transport-rejection-no-message:setup-prompted",
+        "observation": {
+          "sender": ["97f2f33b0349", "edf7372929cd", "e65f26fdbe1a"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a",
+            "setup": "0ba2cee4b538"
+          },
+          "state": "7a1b524f17d0",
+          "effects": [
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "80ffce5fa2b3",
+            "e44d3b580ab0"
+          ]
+        }
+      }
+    ]
+  }
+}

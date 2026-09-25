@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,6 +7,12 @@ import { DaemonClient } from './client'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
+type DaemonServerInternals = {
+  preparations: {
+    pending: Map<string, Set<{ canceled: boolean }>>
+  }
+  host: { listSessions: () => unknown[] }
+}
 
 describe('daemon async spawn cancellation', () => {
   let directory: string
@@ -82,14 +89,11 @@ describe('daemon async spawn cancellation', () => {
     await spawnStarted
 
     client.disconnect()
-    const daemon = server as unknown as {
-      pendingPtySpawnPreparations: Map<string, Set<{ canceled: boolean }>>
-      host: { listSessions: () => unknown[] }
-    }
+    const daemon = server as unknown as DaemonServerInternals
     await vi.waitFor(() =>
-      expect(
-        [...(daemon.pendingPtySpawnPreparations.get('disconnected-spawn') ?? [])][0]?.canceled
-      ).toBe(true)
+      expect([...(daemon.preparations.pending.get('disconnected-spawn') ?? [])][0]?.canceled).toBe(
+        true
+      )
     )
     releaseSpawn()
     await create
@@ -145,14 +149,10 @@ describe('daemon async spawn cancellation', () => {
       30_000,
       abort.signal
     )
-    const daemon = server as unknown as {
-      pendingPtySpawnPreparations: Map<string, Set<unknown>>
-    }
+    const daemon = server as unknown as DaemonServerInternals
     // Attach-only used to register nothing, so the daemon could not match the
     // cancel and the client dropped its only timeout.
-    await vi.waitFor(() =>
-      expect(daemon.pendingPtySpawnPreparations.get('shared-session')?.size).toBe(2)
-    )
+    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
 
     abort.abort()
     await expect(attach).rejects.toThrow('client_disconnected')
@@ -175,12 +175,8 @@ describe('daemon async spawn cancellation', () => {
       abort.signal
     )
     await spawnStarted
-    const daemon = server as unknown as {
-      pendingPtySpawnPreparations: Map<string, Set<unknown>>
-    }
-    await vi.waitFor(() =>
-      expect(daemon.pendingPtySpawnPreparations.get('shared-session')?.size).toBe(2)
-    )
+    const daemon = server as unknown as DaemonServerInternals
+    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
 
     abort.abort()
     await expect(second).rejects.toThrow('client_disconnected')

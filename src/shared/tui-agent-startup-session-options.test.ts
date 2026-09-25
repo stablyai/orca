@@ -54,6 +54,41 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
+  it('forwards Antigravity worker model and effort without dropping permission defaults', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'antigravity',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'gemini-3.1-pro-high', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--dangerously-skip-permissions'
+    })
+    expect(plan?.launchCommand).toBe(
+      "agy '--dangerously-skip-permissions' '--model' 'gemini-3.1-pro-high' '--effort' 'high'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe("agy '--dangerously-skip-permissions'")
+    expect(plan?.sessionOptions).toEqual({ model: 'gemini-3.1-pro-high', effort: 'high' })
+  })
+
+  it('forwards Muse worker model and effort after its workspace-trust default', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'muse',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { model: 'muse-spark-1.3', effort: 'xhigh' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--model muse-spark-1.2'
+    })
+    expect(plan?.launchCommand).toBe(
+      "muse --trust-workspace '--model' 'muse-spark-1.3' '--reasoning-effort' 'xhigh'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'muse-spark-1.3', effort: 'xhigh' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
@@ -125,7 +160,7 @@ describe('tui agent startup session options', () => {
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: "team's-model", effort: 'high' }
     })
-    expect(plan?.launchCommand).toContain("'team'\\''s-model'")
+    expect(plan?.launchCommand).toContain(`'team'"'"'s-model'`)
   })
 
   it('threads options through native draft launches', () => {
@@ -140,15 +175,40 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   })
 
-  it('never injects session options into resume commands', () => {
+  it('lets explicit worker preferences override configured arguments in draft launches', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'claude',
+      draft: 'review this',
+      cmdOverrides: {},
+      platform: 'linux',
+      agentArgs: '--model haiku --effort low',
+      sessionOptions: { model: 'opus', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true
+    })
+
+    expect(plan?.launchCommand).toContain(
+      "claude '--model' 'opus' '--effort' 'high' --prefill 'review this'"
+    )
+    expect(plan?.launchCommand).not.toContain('haiku')
+    expect(plan?.launchCommand).not.toContain("'low'")
+  })
+
+  it('applies explicit session options to resume commands', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'thread-1' },
       cmdOverrides: {},
       platform: 'linux',
-      sessionOptions: { model: 'gpt-5.5', effort: 'high' }
+      agentArgs: '-m gpt-5.6-sol -c model_reasoning_effort=medium',
+      sessionOptions: { model: 'gpt-5.5', effort: 'high' },
+      sessionOptionsOverrideAgentArgs: true
     })
-    expect(plan?.launchCommand).toBe("codex 'resume' 'thread-1'")
-    expect(plan?.sessionOptions).toBeUndefined()
+    expect(plan?.launchCommand).toBe(
+      "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high' 'resume' 'thread-1'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe(
+      "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium'"
+    )
+    expect(plan?.sessionOptions).toEqual({ model: 'gpt-5.5', effort: 'high' })
   })
 })

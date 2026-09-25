@@ -287,6 +287,29 @@ describe('Store', () => {
     ])
   })
 
+  it('persists the exact folder workspace path provided on create and update', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      folderPath: '/workspace/platform '
+    })
+
+    expect(workspace.folderPath).toBe('/workspace/platform ')
+    expect(
+      store.updateFolderWorkspace(workspace.id, { folderPath: '/workspace/platform-next ' })
+        ?.folderPath
+    ).toBe('/workspace/platform-next ')
+
+    store.flush()
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.folderPath).toBe('/workspace/platform-next ')
+  })
+
   it('round-trips Jira item and source context for repo-less folder workspaces', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
@@ -339,6 +362,29 @@ describe('Store', () => {
     const group = store.createProjectGroup({ name: 'Manual', createdFrom: 'manual' })
 
     expect(() => store.createFolderWorkspace({ projectGroupId: group.id })).toThrow(
+      'Folder-backed project group not found.'
+    )
+  })
+
+  it('trims the group parentPath fallback and rejects a blank one', async () => {
+    // parentPath is persisted verbatim, so a padded scan result would otherwise become a folderPath
+    // that no path comparison matches.
+    const store = await createStore()
+    const padded = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '  /workspace/platform  ',
+      createdFrom: 'folder-scan'
+    })
+    const blank = store.createProjectGroup({
+      name: 'Blank',
+      parentPath: '   ',
+      createdFrom: 'folder-scan'
+    })
+
+    expect(store.createFolderWorkspace({ projectGroupId: padded.id }).folderPath).toBe(
+      '/workspace/platform'
+    )
+    expect(() => store.createFolderWorkspace({ projectGroupId: blank.id })).toThrow(
       'Folder-backed project group not found.'
     )
   })
@@ -604,5 +650,53 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['folder-tab']).toBeUndefined()
     expect(session.terminalLayoutsByTabId['repo-tab']).toBeDefined()
     expect(session.browserPagesByWorkspace?.['browser-workspace']).toBeUndefined()
+  })
+
+  it('removes an ssh folder workspace from the partition that owns it', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote',
+      parentPath: '/remote/platform',
+      createdFrom: 'folder-scan',
+      connectionId: 'target-1'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Remote fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [key]: [makeTerminalTab({ id: 'remote-folder-tab', worktreeId: key })] }
+      },
+      'ssh:target-1'
+    )
+
+    expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
+
+    // Boot enumerates partitions from persistence itself, so a row left in `ssh:target-1` comes
+    // back on the next launch as a workspace the user already deleted.
+    expect(store.getWorkspaceSession('ssh:target-1').tabsByWorktree[key]).toBeUndefined()
+  })
+
+  it('removes a deleted project group’s folder workspaces from every partition', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Remote group',
+      parentPath: '/remote/group',
+      createdFrom: 'folder-scan',
+      connectionId: 'target-1'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Group fix' })
+    const key = folderWorkspaceKey(workspace.id)
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: { [key]: [makeTerminalTab({ id: 'group-folder-tab', worktreeId: key })] }
+      },
+      'ssh:target-1'
+    )
+
+    expect(store.deleteProjectGroup(group.id)).toBe(true)
+
+    expect(store.getWorkspaceSession('ssh:target-1').tabsByWorktree[key]).toBeUndefined()
   })
 })

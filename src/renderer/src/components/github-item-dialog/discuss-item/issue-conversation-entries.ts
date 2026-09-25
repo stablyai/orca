@@ -27,24 +27,20 @@ export function getIssueConversationEntries(
   timelineItems: GitHubIssueTimelineItem[]
 ): IssueConversationEntry[] {
   return [
-    ...comments.map(
-      (comment, index): IssueConversationEntry => ({
-        kind: 'comment',
-        id: `comment:${comment.id}`,
-        createdAt: comment.createdAt,
-        comment,
-        index
-      })
-    ),
-    ...timelineItems.map(
-      (activity, index): IssueConversationEntry => ({
-        kind: 'activity',
-        id: `activity:${activity.id}`,
-        createdAt: activity.createdAt,
-        activity,
-        index: comments.length + index
-      })
-    )
+    ...comments.map((comment, index): IssueConversationEntry => ({
+      kind: 'comment',
+      id: `comment:${comment.id}`,
+      createdAt: comment.createdAt,
+      comment,
+      index
+    })),
+    ...timelineItems.map((activity, index): IssueConversationEntry => ({
+      kind: 'activity',
+      id: `activity:${activity.id}`,
+      createdAt: activity.createdAt,
+      activity,
+      index: comments.length + index
+    }))
   ].sort((a, b) => {
     const diff = getTimelineSortValue(a.createdAt) - getTimelineSortValue(b.createdAt)
     return diff === 0 ? a.index - b.index : diff

@@ -7,8 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+
+const { activateAndRevealWorktree } = vi.hoisted(() => ({
+  activateAndRevealWorktree: vi.fn(() => false)
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
@@ -175,15 +182,18 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
 }
 
 function getWorktreeRows(): string[] {
-  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item^="worktree:"]')].map(
-    (node) => node.textContent ?? ''
-  )
+  return [
+    ...testContainer.querySelectorAll<HTMLElement>(
+      `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
+    )
+  ].map((node) => node.textContent ?? '')
 }
 
 describe('WorktreeJumpPalette', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
+    activateAndRevealWorktree.mockClear()
     useAppStore.setState(initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
@@ -354,6 +364,152 @@ describe('WorktreeJumpPalette', () => {
     expect(testContainer.textContent).toContain('Feature workspace')
   })
 
+  it('reseeds the repository filter when reopened during the close linger', async () => {
+    const secondRepo = {
+      ...makeRepo(),
+      id: 'repo-2',
+      path: '/repos/repo-2',
+      displayName: 'Repo 2'
+    }
+    const first = makeWorktree('first', 'First repository workspace')
+    const second = makeWorktree('second', 'Second repository workspace', { repoId: 'repo-2' })
+
+    await renderPalette({
+      repos: [makeRepo(), secondRepo],
+      worktreesByRepo: { 'repo-1': [first], 'repo-2': [second] },
+      filterRepoIds: ['repo-1'],
+      showSleepingWorkspaces: true
+    })
+
+    expect(testContainer.textContent).toContain('First repository workspace')
+    expect(testContainer.textContent).not.toContain('Second repository workspace')
+
+    await act(async () => {
+      useAppStore.setState({ activeModal: 'none', filterRepoIds: ['repo-2'] })
+    })
+    await flushEffects()
+    await act(async () => useAppStore.getState().openModal('worktree-palette'))
+    await flushEffects()
+
+    expect(testContainer.textContent).not.toContain('First repository workspace')
+    expect(testContainer.textContent).toContain('Second repository workspace')
+  })
+
+  // STA-4343 closed: two workspaces sharing `repoId::path` across hosts are two distinct
+  // rows. The documents map and worktreeMap are keyed by host identity, so each row resolves
+  // to its OWN worktree, and render keys keep the two apart for React and cmdk.
+  it('routes activation to each row own host when two same-id rows collide', async () => {
+    const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
+    const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
+    const state = {
+      worktreesByRepo: { 'repo-1': [local, ssh] },
+      showSleepingWorkspaces: true
+    }
+
+    await renderPalette(state)
+
+    // Host-qualified command values keep both rows independently selectable.
+    const rows = testContainer.querySelectorAll<HTMLButtonElement>(
+      `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
+    )
+    expect(rows).toHaveLength(2)
+    expect([...rows].map((candidate) => candidate.getAttribute('data-command-item'))).toEqual([
+      encodePaletteIdentity(['worktree', 'local|shared']),
+      encodePaletteIdentity(['worktree', 'ssh:box|shared'])
+    ])
+
+    // The first row names ITS OWN host — the wrong-host open is gone.
+    await act(async () => fireEvent.click(rows[0]!))
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+      executionHostId: 'local'
+    })
+  })
+
+  // Why a separate render: activating closes the palette, so the sibling row is detached
+  // before a second click in the same test could reach it.
+  it('routes the second same-id row to the other host', async () => {
+    const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
+    const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
+
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [local, ssh] },
+      showSleepingWorkspaces: true
+    })
+
+    const rows = testContainer.querySelectorAll<HTMLButtonElement>(
+      `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
+    )
+    expect(rows).toHaveLength(2)
+
+    await act(async () => fireEvent.click(rows[1]!))
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+      executionHostId: 'ssh:box'
+    })
+  })
+
+  it('keeps the host in a lone row command value', async () => {
+    const ssh = makeWorktree('single', 'SSH workspace', { hostId: 'ssh:box' })
+
+    await renderPalette({ worktreesByRepo: { 'repo-1': [ssh] }, showSleepingWorkspaces: true })
+
+    expect(
+      testContainer.querySelector(
+        `[data-command-item="${encodePaletteIdentity(['worktree', 'ssh:box|single'])}"]`
+      )?.textContent
+    ).toContain('SSH workspace')
+  })
+
+  it('routes same-target SSH rows through their paired runtime owner', async () => {
+    const hubA = makeWorktree('shared-runtime', 'Hub A workspace', {
+      hostId: 'ssh:same-private-target',
+      runtimeOwnerEnvironmentId: 'hub-a'
+    })
+    const hubB = makeWorktree('shared-runtime', 'Hub B workspace', {
+      hostId: 'ssh:same-private-target',
+      runtimeOwnerEnvironmentId: 'hub-b'
+    })
+
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [hubA, hubB] },
+      showSleepingWorkspaces: true
+    })
+    await act(async () => setCommandQuery?.('workspace'))
+    await flushEffects()
+
+    const hubARow = testContainer.querySelector<HTMLButtonElement>(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-a|shared-runtime'])}"]`
+    )
+    const hubBRow = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-b|shared-runtime'])}"]`
+    )
+    expect(hubARow).not.toBeNull()
+    expect(hubBRow).not.toBeNull()
+
+    await act(async () => fireEvent.click(hubARow!))
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared-runtime', {
+      executionHostId: 'runtime:hub-a'
+    })
+  })
+
+  it('does not badge a runtime-owned row with its physical SSH repo', async () => {
+    const worktree = makeWorktree('runtime-repo', 'Runtime workspace', {
+      hostId: 'ssh:box',
+      runtimeOwnerEnvironmentId: 'missing-runtime'
+    })
+
+    await renderPalette({
+      repos: [{ ...makeRepo(), displayName: 'Physical SSH repo', executionHostId: 'ssh:box' }],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      showSleepingWorkspaces: true
+    })
+
+    const row = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:missing-runtime|runtime-repo'])}"]`
+    )
+    expect(row?.textContent).toContain('Runtime workspace')
+    expect(row?.textContent).not.toContain('Physical SSH repo')
+  })
+
   it('replaces a completed emoji shortcode in the search query', async () => {
     await renderPalette({ worktreesByRepo: { 'repo-1': [] } })
     const input = testContainer.querySelector<HTMLInputElement>('[data-command-input="true"]')
@@ -364,5 +520,33 @@ describe('WorktreeJumpPalette', () => {
     })
 
     expect(input?.value).toBe('😉')
+  })
+
+  it('renders last active timestamp when worktree has lastActivityAt', async () => {
+    const twentyThreeDaysAgo = Date.now() - 23 * 24 * 60 * 60 * 1000
+    const activeWorktree = makeWorktree('active-wt', 'Active workspace', {
+      lastActivityAt: twentyThreeDaysAgo
+    })
+    const noActivityWorktree = makeWorktree('no-activity-wt', 'No activity workspace', {
+      lastActivityAt: 0
+    })
+
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [activeWorktree, noActivityWorktree] },
+      showSleepingWorkspaces: true
+    })
+
+    const activeRow = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', '|active-wt'])}"]`
+    )
+    expect(activeRow?.textContent).toContain('23d')
+    const activeSpan = activeRow?.querySelector('span[aria-label="Last active 23d ago"]')
+    expect(activeSpan).not.toBeNull()
+    expect(activeSpan?.textContent).toBe('23d')
+
+    const noActivityRow = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', '|no-activity-wt'])}"]`
+    )
+    expect(noActivityRow?.querySelector('span[aria-label*="Last active"]')).toBeNull()
   })
 })

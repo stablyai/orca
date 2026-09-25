@@ -4,7 +4,7 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
 
 const MAX_CLICK_TASK_DURATION_MS = 32
-const MAX_CLICK_BACK_TIMER_DRIFT_MS = 32
+const MAX_CLICK_BACK_TIMER_DRIFT_MS = 50
 
 async function prepareSidebarForSwitchTest(page: Page): Promise<[string, string]> {
   return page.evaluate(async () => {

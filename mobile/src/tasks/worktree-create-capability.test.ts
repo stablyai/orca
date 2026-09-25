@@ -1,9 +1,27 @@
 import { describe, expect, it } from 'vitest'
+import {
+  AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
+import {
+  WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS,
+  WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
+} from './worktree-create-idempotency-policy'
 
-function statusClient(outcomes: Array<'cutover' | 'error' | string[]>): RpcClient {
+type StatusOutcome =
+  | 'cutover'
+  | 'error'
+  | string[]
+  | {
+      capabilities?: string[]
+      worktreeCreateIdempotency?: unknown
+    }
+
+function statusClient(outcomes: StatusOutcome[]): RpcClient {
   let call = 0
   return {
     sendRequest: async () => {
@@ -15,10 +33,13 @@ function statusClient(outcomes: Array<'cutover' | 'error' | string[]>): RpcClien
       if (outcome === 'error') {
         throw new Error('offline')
       }
+      const result = Array.isArray(outcome)
+        ? { capabilities: outcome, hostPlatform: 'darwin' }
+        : { ...outcome, hostPlatform: 'darwin' }
       return {
         id: '1',
         ok: true,
-        result: { capabilities: outcome, hostPlatform: 'darwin' },
+        result,
         _meta: { runtimeId: 'r' }
       }
     }
@@ -29,23 +50,189 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
   it('reads task and idempotent-create support from status.get', async () => {
     await expect(
       readNewWorktreeRuntimeCapabilities(
-        statusClient([['mobile.tasks.v1', 'worktree.create-idempotency.v1']])
+        statusClient([
+          {
+            capabilities: ['mobile.tasks.v1', 'worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: { dedupeTtlMs: 20_000 }
+          }
+        ])
       )
     ).resolves.toEqual({
       tasksSupported: true,
-      idempotentWorktreeCreateSupported: true,
+      worktreeCreateIdempotency: { dedupeTtlMs: 20_000 },
+      agentLaunch: false,
       hostPlatform: 'darwin'
     })
   })
 
-  it('retries the safe status probe after a connection cutover', async () => {
+  it('reads agent.launch support from the same status.get probe', async () => {
+    // Why: mobile must not send `agent.launch` to a host that never advertised it, and one probe
+    // has to answer that alongside create idempotency so a create cannot straddle two answers.
     await expect(
       readNewWorktreeRuntimeCapabilities(
-        statusClient(['cutover', ['worktree.create-idempotency.v1']])
+        statusClient([{ capabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY] }])
       )
     ).resolves.toEqual({
       tasksSupported: false,
-      idempotentWorktreeCreateSupported: true,
+      worktreeCreateIdempotency: false,
+      // Advertising the method is not advertising the ledger: `operationId` degrades silently on a
+      // host that has one and not the other, so the two are answered separately.
+      agentLaunch: { replay: false },
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it('reads launch replay support only when the host advertises the ledger', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: [
+              AGENT_LAUNCH_RUNTIME_CAPABILITY,
+              AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
+            ]
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      tasksSupported: false,
+      worktreeCreateIdempotency: false,
+      agentLaunch: { replay: true },
+      hostPlatform: 'darwin'
+    })
+  })
+
+  // A host cannot admit an operation for a method it does not have, so the ledger capability alone
+  // must not turn the launch route on.
+  it('ignores the replay capability on a host without agent.launch', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([{ capabilities: [AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY] }])
+      )
+    ).resolves.toMatchObject({ agentLaunch: false })
+  })
+
+  it('does not authorize replay from the optional-identity capability alone', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY, AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY]
+          }
+        ])
+      )
+    ).resolves.toMatchObject({ agentLaunch: { replay: false } })
+  })
+
+  it('uses the bounded fallback for an old idempotent host without an advertisement', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(statusClient([['worktree.create-idempotency.v1']]))
+    ).resolves.toEqual({
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_CLIENT_CEILING_MS },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it('fails closed when a valid idempotency container omits dedupeTtlMs', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: ['worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: {}
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it.each([
+    { label: 'null', value: null },
+    { label: 'string', value: 'nonsense' },
+    { label: 'number', value: 20_000 },
+    { label: 'empty array', value: [] }
+  ])(
+    'fails closed for a malformed idempotency container ($label)',
+    async ({ value: worktreeCreateIdempotency }) => {
+      await expect(
+        readNewWorktreeRuntimeCapabilities(
+          statusClient([
+            {
+              capabilities: ['worktree.create-idempotency.v1'],
+              worktreeCreateIdempotency
+            }
+          ])
+        )
+      ).resolves.toEqual({
+        tasksSupported: false,
+        worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+        agentLaunch: false,
+        hostPlatform: 'darwin'
+      })
+    }
+  )
+
+  it('clamps an over-large host advertisement to the client fallback ceiling', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          {
+            capabilities: ['worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: { dedupeTtlMs: 600_000 }
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS },
+      agentLaunch: false,
+      hostPlatform: 'darwin'
+    })
+  })
+
+  it.each(['60000', -1, Number.NaN, 60_000.5, {}])(
+    'fails closed for malformed host advertisement %j',
+    async (advertisedDedupeTtlMs) => {
+      await expect(
+        readNewWorktreeRuntimeCapabilities(
+          statusClient([
+            {
+              capabilities: ['worktree.create-idempotency.v1'],
+              worktreeCreateIdempotency: { dedupeTtlMs: advertisedDedupeTtlMs }
+            }
+          ])
+        )
+      ).resolves.toEqual({
+        tasksSupported: false,
+        worktreeCreateIdempotency: { dedupeTtlMs: 0 },
+        agentLaunch: false,
+        hostPlatform: 'darwin'
+      })
+    }
+  )
+
+  it('retries the safe status probe after a connection cutover', async () => {
+    await expect(
+      readNewWorktreeRuntimeCapabilities(
+        statusClient([
+          'cutover',
+          {
+            capabilities: ['worktree.create-idempotency.v1'],
+            worktreeCreateIdempotency: { dedupeTtlMs: 30_000 }
+          }
+        ])
+      )
+    ).resolves.toEqual({
+      tasksSupported: false,
+      worktreeCreateIdempotency: { dedupeTtlMs: 30_000 },
+      agentLaunch: false,
       hostPlatform: 'darwin'
     })
   })
@@ -53,7 +240,8 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
   it('fails closed when capability detection is unavailable', async () => {
     await expect(readNewWorktreeRuntimeCapabilities(statusClient(['error']))).resolves.toEqual({
       tasksSupported: false,
-      idempotentWorktreeCreateSupported: false,
+      worktreeCreateIdempotency: false,
+      agentLaunch: false,
       hostPlatform: null
     })
   })

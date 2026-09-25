@@ -1,6 +1,6 @@
-import { execFile } from 'node:child_process'
 import { posix as pathPosix } from 'node:path'
-import { buildEncodedWslBashCommand, quoteBashString } from '../wsl-bash-command'
+import { quoteBashString } from '../wsl-bash-command'
+import { runWslProcess } from '../wsl/wsl-runner'
 import {
   getClaudePluginMetadataPaths,
   resolveClaudePluginSkillSources,
@@ -10,7 +10,7 @@ import type { SkillScanRoot } from './skill-discovery-sources'
 
 const MAX_PLUGIN_METADATA_BYTES = 4 * 1024 * 1024
 const WSL_METADATA_TIMEOUT_MS = 5_000
-const WSL_METADATA_MAX_BUFFER_BYTES = 32 * 1024 * 1024
+const WSL_METADATA_MAX_OUTPUT_BYTES = 32 * 1024 * 1024
 
 export function buildWslClaudePluginMetadataCommand(paths: readonly string[]): string {
   const lines = [
@@ -31,7 +31,7 @@ export function buildWslClaudePluginMetadataCommand(paths: readonly string[]): s
   paths.forEach((pathValue, index) => {
     lines.push(`read_metadata ${index} ${quoteBashString(pathValue)}`)
   })
-  return buildEncodedWslBashCommand(lines.join('\n'))
+  return lines.join('\n')
 }
 
 export function parseWslClaudePluginMetadataOutput(
@@ -56,26 +56,25 @@ export function parseWslClaudePluginMetadataOutput(
   return contents
 }
 
-function executeWslMetadataRead(distro: string, command: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      'wsl.exe',
-      ['-d', distro, '--', 'bash', '-c', command],
-      {
-        encoding: 'utf8',
-        maxBuffer: WSL_METADATA_MAX_BUFFER_BYTES,
-        timeout: WSL_METADATA_TIMEOUT_MS,
-        windowsHide: true
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve(stdout)
-      }
-    )
+async function executeWslMetadataRead(distro: string, script: string): Promise<string> {
+  // Why bash: this payload was authored for bash, and the migration must not
+  // quietly change its interpreter.
+  const result = await runWslProcess({
+    distro,
+    // 'none': base64/printf/stat over $HOME paths. The probe would spend up
+    // to 4s of a 5s budget before the read of a file up to 4MB begins.
+    loginPath: 'none',
+    script,
+    shell: 'bash',
+
+    timeoutMs: WSL_METADATA_TIMEOUT_MS,
+    maxOutputBytes: WSL_METADATA_MAX_OUTPUT_BYTES
   })
+  // Truncated-but-well-formed output would otherwise parse as real metadata.
+  if (result.code !== 0 || result.timedOut) {
+    throw new Error('claude-plugin-skill-sources-wsl-read-failed')
+  }
+  return result.stdout
 }
 
 export async function discoverClaudePluginSkillSourcesInWsl(args: {

@@ -13,12 +13,14 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 import {
   NATIVE_CHAT_CLEAR_CONFIRM_MS,
   NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
-  NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS,
   resetNativeChatPtySendQueuesForTests,
-  sendNativeChatMessage,
-  sendNativeChatMessageWithImageAttachments
+  sendNativeChatMessage
 } from './native-chat-runtime-send'
+import {
+  NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
+  sendNativeChatMessageWithImageAttachments
+} from './native-chat-runtime-image-send'
 import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
 import {
   AGENT_TUI_CLEAR_INPUT_MAX,
@@ -159,7 +161,7 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
 describe('image sends with a parked multi-line draft', () => {
   it('clears every draft line before pasting, so no line rides along with the image', () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
+    sendNativeChatMessageWithImageAttachments('claude', SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
       clearInput
     })
     expect(writes()[0]).toBe(clearInput)
@@ -167,7 +169,7 @@ describe('image sends with a parked multi-line draft', () => {
 
   it('clears exactly once — a second Ctrl+U would wipe the just-pasted image', () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
+    sendNativeChatMessageWithImageAttachments('claude', SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
       clearInput
     })
     vi.advanceTimersByTime(10_000)
@@ -176,7 +178,7 @@ describe('image sends with a parked multi-line draft', () => {
 
   it('submits the image send before a queued message starts', async () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
+    sendNativeChatMessageWithImageAttachments('claude', SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
       clearInput,
       confirmCleared: () => true
     })

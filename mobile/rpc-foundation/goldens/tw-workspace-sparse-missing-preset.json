@@ -1,0 +1,169 @@
+{
+  "operation": "tasks.workspace-sparse",
+  "family": "tasks.workspace-sparse",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
+  "scenarioSha256": "865a659012dd882fd6073813585e2911a1d6252404fbf5a5e273f062b89fc91d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02daf4600c50": {
+      "name": "repo.saveSparsePreset#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
+    },
+    "0df082978757": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 8,
+      "value": "Failed to save sparse preset."
+    },
+    "137e0fd71a21": {
+      "name": "repo.saveSparsePreset#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.saveSparsePreset"
+        },
+        {
+          "name": "params",
+          "value": {
+            "directories": ["docs"],
+            "name": "docs",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {}
+        }
+      }
+    },
+    "193c0bc3cf2a": {
+      "presets": [],
+      "presetsError": "Failed to save sparse preset.",
+      "saving": false,
+      "ssh": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "37c5cc533ab4": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 9,
+      "value": false
+    },
+    "4e16f40bd113": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "forbidden",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "973f31a4e64b": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 5,
+      "value": ""
+    },
+    "a11809a84754": {
+      "name": "ssh.getState#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "a71abdbfefa8": {
+      "name": "workspaceSshState",
+      "ordinal": 3,
+      "value": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "ea6e5bf810d9": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 4,
+      "value": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-workspace-sparse-missing-preset",
+    "checkpoints": [
+      {
+        "id": "saved-without-preset",
+        "observation": {
+          "sender": ["4e16f40bd113", "137e0fd71a21"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "save": "eb79a9b3682a"
+          },
+          "state": "193c0bc3cf2a",
+          "effects": [
+            "a71abdbfefa8",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "0df082978757",
+            "37c5cc533ab4"
+          ]
+        }
+      }
+    ]
+  }
+}

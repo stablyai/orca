@@ -1,0 +1,66 @@
+{
+  "node": "v26.6.0",
+  "electron": null,
+  "v8": "14.6.202.34-node.26",
+  "fixed": true,
+  "sourceMode": "mapped modules with working-tree dependencies",
+  "sourceHashes": {
+    "src/main/daemon/session-output-pipeline.ts": "94f6f221d85388274d585ad714fda25c32a824942950074e4e95b85c94a6771f",
+    "src/main/daemon/terminal-host-session-create.ts": "d54cbaff13c8daba1766e4fec24a6903ecdf1486249f1a9e5d96a207de410309",
+    "src/main/daemon/terminal-host.ts": "f22856504559a6bb78498c6d5aae07cbbd80a21019723278a560628e0142236f"
+  },
+  "reports": [
+    {
+      "case": "completed-inputs",
+      "whileLive": {
+        "options": 0,
+        "env": 0,
+        "history": 0,
+        "signal": 0
+      },
+      "afterDispose": {
+        "options": 0,
+        "env": 0,
+        "history": 0,
+        "signal": 0
+      },
+      "liveSessionCountAtCollection": 3
+    },
+    {
+      "case": "pending-inputs",
+      "duringSpawn": {
+        "options": 1,
+        "env": 1,
+        "history": 1,
+        "signal": 1
+      },
+      "afterPublication": {
+        "options": 0,
+        "env": 0,
+        "history": 0,
+        "signal": 0
+      },
+      "afterDispose": {
+        "options": 0,
+        "env": 0,
+        "history": 0,
+        "signal": 0
+      }
+    },
+    {
+      "case": "exit-and-recreate",
+      "exitVerdict": "exited",
+      "exitReason": "pty_exit_7",
+      "reaped": ["claimed", "claimed"],
+      "newIncarnation": true,
+      "newGeneration": true
+    },
+    {
+      "case": "foreground-confirmation",
+      "confirmations": 1,
+      "preservedReceiver": true,
+      "owner": "shell",
+      "queuedPromptReleased": true
+    }
+  ]
+}

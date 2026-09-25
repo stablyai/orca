@@ -4,11 +4,12 @@ import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getPairedMobileDevicesSnapshot,
-  replacePairedMobileDevices,
   usePairedMobileDevices
 } from '../mobile/paired-mobile-devices'
 import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
+import { useMobilePairedDeviceRevocation } from './use-mobile-paired-device-revocation'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
+import { MachineNameField } from './MachineNameField'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
 import { MobilePairedDevicesSection } from './MobilePairedDevicesSection'
 import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
@@ -31,6 +32,7 @@ export function MobilePane(): React.JSX.Element {
   const autoRestoreFitMs = useAppStore((s) => s.settings?.mobileAutoRestoreFitMs ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [qrSize, setQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [qrError, setQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
@@ -64,6 +66,7 @@ export function MobilePane(): React.JSX.Element {
     loaded: devicesLoaded,
     refresh: refreshDevices
   } = usePairedMobileDevices({ refreshOnMount: false })
+  const revokeDevice = useMobilePairedDeviceRevocation(refreshDevices)
 
   useEffect(() => {
     qrDisplayedRef.current = qrDataUrl != null
@@ -81,6 +84,7 @@ export function MobilePane(): React.JSX.Element {
     pairingRequestIdRef.current += 1
     const hadPending = qrDisplayedRef.current || loadingRef.current
     setQrDataUrl(null)
+    setQrSize(null)
     setPairingUrl(null)
     setQrError(false)
     setRelayMintFailure(null)
@@ -197,6 +201,7 @@ export function MobilePane(): React.JSX.Element {
           useAppStore.getState().recordFeatureInteraction('mobile-pairing')
           if (mountedRef.current) {
             setQrDataUrl(result.qrDataUrl)
+            setQrSize(result.qrSize)
             setPairingUrl(result.pairingUrl)
             setQrError(result.qrDataUrl === null)
             setRelayMintFailure(null)
@@ -209,11 +214,15 @@ export function MobilePane(): React.JSX.Element {
           }
         } else if (mountedRef.current) {
           setQrDataUrl(null)
+          setQrSize(null)
           setPairingUrl(null)
           setQrError(false)
           setEndpoint(null)
           if (result.reason === 'relay_mint_failed' && result.relayFailure) {
             setRelayMintFailure(result.relayFailure)
+            // Why: a revoked session is the likeliest cause; re-read it so the
+            // notice can offer sign-in instead of a retry that cannot succeed.
+            void useAppStore.getState().fetchOrcaProfileAuthStatus()
           } else {
             setRelayMintFailure(null)
             // Why: IPC now forwards reason/guidance for all unavailability paths;
@@ -354,37 +363,10 @@ export function MobilePane(): React.JSX.Element {
     loadDevices
   })
 
-  async function revokeDevice(deviceId: string) {
-    try {
-      const { revoked } = await window.api.mobile.revokeDevice({ deviceId })
-      // Why: the backend can resolve revoked=false without removing the device;
-      // surface that as an error instead of a false "Device revoked".
-      if (!revoked) {
-        throw new Error('mobile.revokeDevice returned revoked=false')
-      }
-      try {
-        // Why: the backend may have learned about another phone while Settings
-        // was open, so refresh from source-of-truth after mutating it.
-        await refreshDevices({ force: true })
-      } catch (err) {
-        console.error('mobile.listDevices failed after revoke', err)
-        const nextDevices = getPairedMobileDevicesSnapshot().filter((d) => d.deviceId !== deviceId)
-        replacePairedMobileDevices(nextDevices)
-      }
-      if (mountedRef.current) {
-        toast.success(translate('auto.components.settings.MobilePane.2e3dd0bc29', 'Device revoked'))
-      }
-    } catch {
-      if (mountedRef.current) {
-        toast.error(
-          translate('auto.components.settings.MobilePane.870e1b5ca5', 'Failed to revoke device')
-        )
-      }
-    }
-  }
-
   return (
     <div className="space-y-6">
+      <MachineNameField id="mobile-machine-name" />
+
       <MobilePairingSetupSection
         connectionMode={connectionMode}
         canGenerate={canMintMobilePairingOffer({ connectionMode, signedIn })}
@@ -432,6 +414,7 @@ export function MobilePane(): React.JSX.Element {
 
       <MobilePairingQrSection
         qrDataUrl={qrDataUrl}
+        qrSize={qrSize}
         qrError={qrError}
         pairingUrl={pairingUrl}
         endpoint={endpoint}

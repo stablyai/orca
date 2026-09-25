@@ -123,6 +123,16 @@ describe('browserManager', () => {
       permission: 'media',
       origin: 'https://example.com'
     })
+    browserManager.notifyPermissionDenied({
+      guestWebContentsId: guest.id,
+      permission: 'geolocation',
+      rawUrl: ''
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:permission-denied', {
+      browserPageId: 'browser-1',
+      permission: 'geolocation',
+      origin: 'unknown'
+    })
     expect(rendererSendMock).toHaveBeenCalledWith(
       'browser:download-requested',
       expect.objectContaining({

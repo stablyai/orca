@@ -19,11 +19,19 @@ import Database from '../../src/main/sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from './helpers/fake-agent-command-override'
+import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const PROVIDER_SESSION_ID = 'e2e-missing-legacy-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-missing-legacy-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
+const fakeCodexCommand = buildFakeAgentCommandOverride(
+  path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 function appendLedger(envName, event) {
@@ -40,16 +48,27 @@ if (process.argv.slice(2).includes('app-server')) {
 appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn' })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 let acknowledged = false
+${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
+  const pasteEndScan = scanFakeAgentPasteEnd(fakeAgentPasteEndTail, input)
+  fakeAgentPasteEndTail = pasteEndScan.tail
+  if (pasteEndScan.pasteEndOffset !== null) {
+    process.stdout.write('\\x1b[?25h')
+  }
   if (input.includes('\\x03')) {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
   }
-  if (!acknowledged && input.includes('\\r')) {
-    acknowledged = true
-    process.stdout.write('ACK\\n')
+  if (!acknowledged) {
+    fakeAgentMaybeAck(pasteEndScan, input, (mode) => {
+      acknowledged = true
+      const message = mode === 'bracketed' ? 'ACK' : 'PASTE_PROTOCOL_ERROR'
+      process.stdout.write('\\u001b]0;Codex Working\\u0007' + message + '\\n')
+      setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
+    })
   }
 })
+process.stdin.setRawMode?.(true)
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
   process.on(signal, () => {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
@@ -200,6 +219,15 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     firstApp = first.app
     const worktreeId = await attachRepoAndOpenTerminal(first.page, repoPath)
     await waitForSessionReady(first.page)
+    await first.page.evaluate(
+      async ({ agentCommand, terminalWindowsShell }) => {
+        await window.__store?.getState().updateSettings({
+          agentCmdOverrides: { codex: agentCommand },
+          terminalWindowsShell
+        })
+      },
+      { agentCommand: fakeCodexCommand, terminalWindowsShell: FAKE_AGENT_WINDOWS_SHELL }
+    )
     await ensureTerminalVisible(first.page)
     await getActiveTabId(first.page)
     await waitForActivePanePtyId(first.page)
@@ -265,7 +293,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
 
     const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
     await first.page.evaluate(
-      ({ paneKey, tabId, workerWorktreeId, terminalHandle, transcript }) => {
+      ({ agentCommand, paneKey, tabId, workerWorktreeId, terminalHandle, transcript }) => {
         window.__store?.getState().setAgentStatus(
           paneKey,
           { state: 'working', prompt: 'Respond ACK and remain idle', agentType: 'codex' },
@@ -279,7 +307,10 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
               transcriptPath: transcript
             },
             launchConfig: {
-              agentCommand: 'codex',
+              // Why not bare 'codex': resume prefers the captured command over
+              // agentCmdOverrides, so a bare name would resolve the machine's real
+              // Codex off PATH and unpin the adoption leg this spec exercises.
+              agentCommand,
               agentArgs: '--dangerously-bypass-approvals-and-sandbox',
               agentEnv: {}
             }
@@ -288,6 +319,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
         window.__store?.getState().captureAllSleepingAgentSessions('quit')
       },
       {
+        agentCommand: fakeCodexCommand,
         paneKey: workerPaneKey,
         tabId: worker!.tabId,
         workerWorktreeId: worker!.worktreeId,

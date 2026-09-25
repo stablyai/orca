@@ -17,8 +17,15 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
     : base
 }
 
+// Why quit is excluded: it is an explicit request to keep resumable work. A
+// live interrupted checkpoint is also active work; interrupted worktree-sleep
+// records retain their existing passive/cleanup semantics.
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
-  return record.origin !== 'quit' && record.origin !== 'live' && record.state === 'done'
+  return (
+    record.origin !== 'quit' &&
+    !(record.origin === 'live' && record.interrupted === true) &&
+    record.state === 'done'
+  )
 }
 
 function getLegacyPaneTabId(record: SleepingAgentSessionRecord): string | null {
@@ -87,7 +94,7 @@ function hasRestorableStablePanePty(
 // the pane that reconnects on activation. Liveness comes from the runtime
 // live-PTY map (ptyIdsByTabId), not the layout's ptyIdsByLeafId snapshot, which
 // persists stale across sleep/restart.
-function stablePaneHasLivePty(
+export function stablePaneHasLivePty(
   tabId: string,
   leafId: string,
   ptyIdsByTabId: Record<string, string[]>,

@@ -7,14 +7,12 @@ type Props = {
   childAgentCount?: number
   childAgentsExpanded: boolean
   onToggleChildAgents?: () => void
-  reserveDisclosureGutter: boolean
 }
 
 export function DashboardAgentChildDisclosure({
   childAgentCount,
   childAgentsExpanded,
-  onToggleChildAgents,
-  reserveDisclosureGutter
+  onToggleChildAgents
 }: Props) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -38,13 +36,9 @@ export function DashboardAgentChildDisclosure({
   }, [])
 
   if (!hasChildDisclosure) {
-    return reserveDisclosureGutter ? (
-      <span aria-hidden className="-ml-0.5 inline-block size-4 shrink-0" />
-    ) : null
+    return null
   }
 
-  // Why: the chevron owns child disclosure; leaf spacers keep the leading
-  // state-dot column aligned across the card.
   return (
     <button
       type="button"

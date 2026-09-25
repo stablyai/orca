@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,8 +10,10 @@ import {
   View
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
+import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
@@ -27,15 +30,23 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { mobileNativeChatInputStyles } from './mobile-native-chat-input-styles'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
 type Props = {
+  structuredCommands?: readonly AgentSessionConversationCommand[]
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
   onChangeText: (text: string) => void
   onSend: (text: string) => Promise<boolean>
+  /** Changes whenever the route focuses a different chat composer surface. */
+  sendSurfaceId: string
+  /** Reads the retained route's focus generation without forcing a screen render. */
+  getSendCompletionGeneration: () => number
+  /** Reads user draft mutations owned above this renderable composer. */
+  getComposerEditGeneration: () => number
   /** Active tab's agent — the slash autocomplete serves its command catalog. */
   agent?: string | null
   /** Model/session-option pickers shown in the composer action row; null when
@@ -50,7 +61,7 @@ type Props = {
   onMicPress?: () => void
   micActive?: boolean
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
-  dictationMode?: 'toggle' | 'hold'
+  dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   disabled?: boolean
@@ -63,7 +74,11 @@ export function MobileNativeChatComposer({
   value,
   onChangeText,
   onSend,
+  sendSurfaceId,
+  getSendCompletionGeneration,
+  getComposerEditGeneration,
   agent,
+  structuredCommands,
   sessionOptions,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
@@ -87,6 +102,15 @@ export function MobileNativeChatComposer({
     null
   )
   const sendingRef = useRef(false)
+  const mountedRef = useRef(true)
+  const sendSurfaceIdRef = useRef(sendSurfaceId)
+  const sendSurfaceGenerationRef = useRef(0)
+  useLayoutEffect(() => {
+    if (sendSurfaceIdRef.current !== sendSurfaceId) {
+      sendSurfaceIdRef.current = sendSurfaceId
+      sendSurfaceGenerationRef.current += 1
+    }
+  }, [sendSurfaceId])
   const [sending, setSending] = useState(false)
   const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
@@ -105,7 +129,12 @@ export function MobileNativeChatComposer({
       return []
     }
     if (trigger.kind === 'slash') {
-      const commands = agent ? getVerifiedNativeChatCommands(agent) : []
+      const commands =
+        structuredCommands !== undefined
+          ? structuredSlashCommands(structuredCommands, agent)
+          : agent
+            ? getVerifiedNativeChatCommands(agent)
+            : []
       // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
       // (~5 rows visible), so an uncapped `/` would mount every row and
       // re-reconcile them on each streaming tick right above the transcript.
@@ -118,13 +147,21 @@ export function MobileNativeChatComposer({
       kind: 'file' as const,
       path
     }))
-  }, [trigger, filePaths, agent])
+  }, [trigger, filePaths, agent, structuredCommands])
 
   useEffect(() => {
     if (trigger?.kind === 'file') {
       onNeedFiles?.(trigger.query)
     }
   }, [onNeedFiles, trigger?.kind, trigger?.query])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      sendSurfaceGenerationRef.current += 1
+    }
+  }, [])
 
   const handleChange = (next: string): void => {
     onChangeText(next)
@@ -150,10 +187,24 @@ export function MobileNativeChatComposer({
     }
     sendingRef.current = true
     setSending(true)
+    const sendSurfaceGeneration = sendSurfaceGenerationRef.current
+    const sendCompletionGeneration = getSendCompletionGeneration()
+    const composerEditGeneration = getComposerEditGeneration()
     try {
-      const accepted = await onSend(value.trimEnd())
-      if (accepted) {
+      // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
+      // to hand the user back exactly what they typed (#14819).
+      const accepted = await onSend(value)
+      if (
+        accepted &&
+        mountedRef.current &&
+        sendSurfaceGeneration === sendSurfaceGenerationRef.current &&
+        sendCompletionGeneration === getSendCompletionGeneration() &&
+        composerEditGeneration === getComposerEditGeneration()
+      ) {
         setCursor(0)
+        // Why: the turn is now the agent's — the keyboard would cover the reply.
+        // A rejected send keeps it up so the handed-back draft stays editable.
+        Keyboard.dismiss()
       }
     } finally {
       sendingRef.current = false
@@ -198,7 +249,7 @@ export function MobileNativeChatComposer({
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
           <TextInput
-            style={styles.input}
+            style={mobileNativeChatInputStyles.input}
             value={value}
             onChangeText={handleChange}
             // Controlled only transiently right after an autocomplete insert.
@@ -346,18 +397,6 @@ const styles = StyleSheet.create({
   },
   actionSpacer: {
     flex: 1
-  },
-  input: {
-    width: '100%',
-    maxHeight: 140,
-    minHeight: 40,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
   },
   iconButton: {
     width: 40,

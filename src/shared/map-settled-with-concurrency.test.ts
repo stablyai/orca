@@ -24,11 +24,10 @@ describe('mapSettledWithConcurrency', () => {
 
     expect(peak).toBe(limit)
     expect(results).toEqual(
-      items.map(
-        (item): PromiseSettledResult<string> =>
-          item % 97 === 0
-            ? { status: 'rejected', reason: `rejected-${item}` }
-            : { status: 'fulfilled', value: `fulfilled-${item}` }
+      items.map((item): PromiseSettledResult<string> =>
+        item % 97 === 0
+          ? { status: 'rejected', reason: `rejected-${item}` }
+          : { status: 'fulfilled', value: `fulfilled-${item}` }
       )
     )
   })

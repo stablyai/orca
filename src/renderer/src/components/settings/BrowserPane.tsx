@@ -14,6 +14,10 @@ import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
 import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
+import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
+import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
+import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
+import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
 import {
@@ -110,6 +114,13 @@ export function BrowserPane({
   ])
   const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
   const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[7]])
+  const showClientHostedRemote = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[8]
+  ])
+  const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[9]
+  ])
+  const showUserAgent = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[10]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -241,6 +252,8 @@ export function BrowserPane({
         />
       ) : null}
 
+      {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
+
       {showLinkRouting ? (
         <BrowserLinkRoutingSetting
           settings={settings}
@@ -271,6 +284,25 @@ export function BrowserPane({
           settings={settings}
           updateSettings={updateSettings}
         />
+      ) : null}
+
+      {showClientHostedRemote || showSshWorkspaceRouting ? (
+        <SettingsSubsectionHeader
+          className="pt-2"
+          title={translate('settings.browser.remoteBrowsing.heading', 'Remote browsing')}
+          description={translate(
+            'settings.browser.remoteBrowsing.headingDescription',
+            'Where remote workspace pages render, and where their network traffic leaves from.'
+          )}
+        />
+      ) : null}
+
+      {showClientHostedRemote ? (
+        <BrowserClientHostedRemoteSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showSshWorkspaceRouting ? (
+        <BrowserSshWorkspaceRoutingSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showCookies ? (

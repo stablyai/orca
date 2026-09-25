@@ -14,6 +14,8 @@ import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
+import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
+import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
@@ -34,6 +36,8 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -158,6 +162,9 @@ export function registerSettingsHandlers(
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
     }
+    if ('aiVaultSearch' in args) {
+      sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
+    }
     if ('terminalCustomThemes' in args) {
       sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
     }
@@ -194,6 +201,28 @@ export function registerSettingsHandlers(
       notifyListeners: true,
       originWebContentsId: event.sender.id
     })
+    const proxySettingsChanged =
+      ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
+      ('httpProxyBypassRules' in sanitizedArgs &&
+        before.httpProxyBypassRules !== result.httpProxyBypassRules)
+    if (proxySettingsChanged) {
+      // Start both authorities before yielding so requests cannot enter between their barriers.
+      const defaultSessionApply = applyElectronProxySettings(result)
+      const browserSessionsApply = applyBrowserSessionProxies(
+        browserSessionRegistry.listProfiles(),
+        result
+      )
+      const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
+        defaultSessionApply,
+        browserSessionsApply
+      ])
+      if (defaultSessionResult.status === 'rejected') {
+        console.warn('[settings] failed to apply network proxy settings')
+      }
+      if (browserSessionsResult.status === 'rejected') {
+        console.warn('[settings] failed to apply network proxy settings to browser sessions')
+      }
+    }
     if (
       'computerAwakeMode' in sanitizedArgs ||
       'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
@@ -210,6 +239,7 @@ export function registerSettingsHandlers(
     if (hookSettingChanged) {
       try {
         await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
+          userInitiated: true,
           shouldHydrateShellPath: app.isPackaged,
           onInstallError: recordManagedHookInstallFailure,
           shouldContinue: (agent) => {
@@ -238,15 +268,11 @@ export function registerSettingsHandlers(
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
     }
-    if ('httpProxyUrl' in sanitizedArgs || 'httpProxyBypassRules' in sanitizedArgs) {
-      try {
-        await applyElectronProxySettings(result)
-      } catch {
-        console.warn('[settings] failed to apply network proxy settings')
-      }
-    }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)
+    }
+    if ('aiVaultSearch' in sanitizedArgs) {
+      applySessionSearchSettingsChange(before, result)
     }
 
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for

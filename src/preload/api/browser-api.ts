@@ -1,5 +1,14 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserIdentityModeSetResult,
+  BrowserIdentityModeStatus,
+  BrowserUserAgentMode
+} from '../../shared/browser-user-agent-mode'
+import type {
+  BrowserClientPageMetadataParams,
+  BrowserClientPageMetadataPublishOutcome
+} from '../../shared/browser-client-page-metadata-protocol'
+import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
@@ -29,13 +38,24 @@ import type {
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
-  BrowserViewportOverride
+  BrowserViewportOverride,
+  BrowserViewportScrollState
 } from '../../shared/browser-workspace-types'
+import type {
+  BrowserClientPageRendererOutcome,
+  BrowserClientPageRendererRequest
+} from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
+  /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
+  readClientHostId?: () => string | null
+  onClientPageRendererRequest?: (
+    callback: (
+      request: BrowserClientPageRendererRequest
+    ) => BrowserClientPageRendererOutcome | Promise<BrowserClientPageRendererOutcome>
+  ) => () => void
   registerGuest: (args: {
     browserPageId: string
     workspaceId: string
@@ -62,7 +82,16 @@ export type BrowserApi = {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  reportViewportScrollState?: (args: {
+    browserPageId: string
+    state: BrowserViewportScrollState
+  }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
+  /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
+  publishClientPageMetadata: (args: {
+    environmentId: string
+    params: BrowserClientPageMetadataParams
+  }) => Promise<BrowserClientPageMetadataPublishOutcome>
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
@@ -90,11 +119,14 @@ export type BrowserApi = {
   onActivateView: (
     callback: (data: { worktreeId?: string; browserPageId?: string }) => void
   ) => () => void
+  onCapturePaintHold: (
+    callback: (data: { browserPageId: string; held: boolean }) => void
+  ) => () => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
   onOpenLinkInOrcaTab: (
-    callback: (event: { browserPageId: string; url: string }) => void
+    callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
   ) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
   setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>
@@ -109,21 +141,42 @@ export type BrowserApi = {
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
-  sessionCreateProfile: (
-    args: {
-      scope: BrowserSessionProfileScope
-      label: string
-    } & BrowserSessionProfileCreateOptions
-  ) => Promise<BrowserSessionProfile | null>
+  /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
+  prepareSshWorkspacePartition: (args: {
+    targetId: string
+    browserProfileId?: string
+    skipProbe?: boolean
+  }) => Promise<{ partition: string }>
+  sessionCreateProfile: (args: {
+    scope: BrowserSessionProfileScope
+    label: string
+  }) => Promise<BrowserSessionProfile | null>
+  identityGet: () => Promise<BrowserIdentityModeStatus | null>
+  identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
+  /** Null when the environment's pages are not client-hosted on this desktop. */
+  sessionDetectBrowsersForClientHost: (args: {
+    environmentId: string
+  }) => Promise<DetectedBrowserInfo[] | null>
   sessionImportFromBrowser: (args: {
     profileId: string
     browserFamily: string
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult>
+  /** Null when the environment's pages are not client-hosted on this desktop. */
+  sessionImportFromBrowserForClientHost: (args: {
+    environmentId: string
+    profileId: string
+    browserFamily: string
+    browserProfile?: string
+  }) => Promise<BrowserCookieImportResult | null>
+  /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
+  sessionClientRouteImportSources: (args: {
+    environmentId: string
+  }) => Promise<Record<string, BrowserSessionProfileSource>>
   sessionClearDefaultCookies: () => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
 }

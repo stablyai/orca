@@ -11,7 +11,7 @@ export type ReadDirThrowSite = 'ssh-provider' | 'authorize' | 'readdir'
  * even though breadcrumbs are path-redacted downstream, never collecting the
  * raw path is the safer default.
  */
-export function describeReadDirPathShape(
+export function classifyReadDirPath(
   dirPath: string,
   connectionId: string | undefined
 ): CrashReportBreadcrumbData {
@@ -52,6 +52,6 @@ export function buildReadDirErrorBreadcrumb(args: {
     throwSite: args.throwSite,
     errorName: args.error instanceof Error ? args.error.name : typeof args.error,
     ...(errorCode(args.error) ? { errorCode: errorCode(args.error)! } : {}),
-    ...describeReadDirPathShape(args.dirPath, args.connectionId)
+    ...classifyReadDirPath(args.dirPath, args.connectionId)
   }
 }

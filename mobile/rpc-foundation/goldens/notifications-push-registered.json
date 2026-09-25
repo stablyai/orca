@@ -1,0 +1,131 @@
+{
+  "operation": "notifications.push-registration",
+  "family": "notifications.push-registration",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "2e3d939dc162dbc5a38d8a7207111688204a825fd70348721917b3016e1c9470",
+  "scenarioSha256": "90f49e430518bfc6e662da1d0c55b0084f30ab54dabdd15293b1f8ad9d2fa592",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "70a555b8bb94": {
+      "name": "notifications.registerPush#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
+    },
+    "79ed32a5bb02": {
+      "name": "notifications.registerPush#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.registerPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": {
+              "onlyWhenDesktopAway": true,
+              "sound": true
+            },
+            "platform": "ios",
+            "token": "apns-token-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "registered": true,
+            "registrationId": "registration-1"
+          }
+        }
+      }
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "caff83b6525e": {
+      "name": "notifications.unregisterPush#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.unregisterPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "unregistered": true
+          }
+        }
+      }
+    },
+    "d92e80fc55a0": {
+      "name": "notifications.unregisterPush#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unregisterPush\",\"params\":null}"
+    },
+    "deec5cecd49f": {
+      "register": true,
+      "unregister": true
+    }
+  },
+  "recording": {
+    "scenario": "notifications-push-registered",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["79ed32a5bb02", "caff83b6525e"],
+          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "settlements": {
+            "register": "84e5ca07cb7a",
+            "unregister": "84e5ca07cb7a"
+          },
+          "state": "deec5cecd49f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

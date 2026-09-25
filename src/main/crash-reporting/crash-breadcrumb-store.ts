@@ -6,8 +6,8 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
-// Why: retain two thresholds for each renderer surface without growing the ring.
-const MAX_RETAINED_BREADCRUMBS = 4
+// Two threshold ladders, two marks each, across both renderer surfaces.
+const MAX_RETAINED_BREADCRUMBS = 8
 // Why: coalesceKey embeds an open-string agentType (length-trimmed only, never
 // enum-checked), so the key space is unbounded over a long multi-agent/SSH session.
 // Bound the coalesce map the same way ProcessGoneDedupe bounds its key map.
@@ -30,6 +30,7 @@ type CoalescedBreadcrumbState = {
   emitted?: CrashReportBreadcrumb
   /** Newest suppressed payload, sanitized only if a snapshot actually asks for it. */
   pending?: CrashReportBreadcrumbData
+  origin?: string
 }
 
 let breadcrumbs: CrashReportBreadcrumb[] = []
@@ -41,20 +42,28 @@ function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null
     return null
   }
   const surface = breadcrumb.data?.rendererSurface
-  const threshold = breadcrumb.data?.thresholdPct
-  return `${breadcrumb.name}:${String(surface)}:${String(threshold)}`
+  // Why both: the heap-ratio marks and the private-footprint marks are separate
+  // one-shot ladders. Keying only on `thresholdPct` collapses every footprint
+  // crumb onto one `undefined` slot, so the second mark evicts the first.
+  const threshold =
+    breadcrumb.data?.thresholdPct !== undefined
+      ? `pct${String(breadcrumb.data.thresholdPct)}`
+      : `privMB${String(breadcrumb.data?.thresholdPrivateMB)}`
+  return `${breadcrumb.name}:${String(surface)}:${threshold}:${breadcrumb.origin ?? 'global'}`
 }
 
 /** Returns the stored breadcrumb so coalescing can refresh the entry it owns. */
 export function recordCrashBreadcrumb(
   name: string,
-  data?: CrashReportBreadcrumbData
+  data?: CrashReportBreadcrumbData,
+  origin?: string
 ): CrashReportBreadcrumb | undefined {
   const sanitized = sanitizeCrashReportBreadcrumbs([
     {
       createdAt: new Date().toISOString(),
       name,
-      data
+      data,
+      ...(origin ? { origin } : {})
     }
   ])
   const breadcrumb = sanitized?.[0]
@@ -76,21 +85,96 @@ export function recordCrashBreadcrumb(
   }
   breadcrumbs.push(breadcrumb)
   if (breadcrumbs.length > MAX_BREADCRUMBS) {
-    breadcrumbs.shift()
+    breadcrumbs.splice(evictionIndex(breadcrumbs), 1)
   }
   return breadcrumb
+}
+
+/**
+ * Index of the entry to drop when the ring overflows: the oldest entry of
+ * whichever name currently occupies the most slots.
+ *
+ * Why not the oldest overall: a once-a-minute sampler outnumbers the whole
+ * lifecycle trail within the hour, so plain FIFO spends the ring on the one
+ * series that repeats and evicts the singletons that explain the death. Across
+ * 293 field reports, `renderer_memory`, `agent_state_changed` and
+ * `pr_refresh_queue` held 77% of every slot ever shipped and 39% of reports
+ * arrived with no lifecycle crumb at all. Charging the overflow to the most
+ * redundant name instead bounds any series without naming it, so a new periodic
+ * emitter cannot reopen the hole the way an allowlist lets it.
+ *
+ * Every name appearing once degenerates to the oldest entry, i.e. plain FIFO.
+ */
+function evictionGroupKey(entry: CrashReportBreadcrumb): string {
+  // Why origin is part of the group: the snapshot is filtered per reporter, so a name that
+  // is a singleton on THIS surface is not redundant just because a busy popout also emits
+  // it. Counting them together let one surface delete the other's trail.
+  return `${entry.name}\u0000${entry.origin ?? ''}`
+}
+
+/** Whether a coalesce key still owns this entry and has repeats it has not folded in. */
+function ownsUnresolvedRepeats(entry: CrashReportBreadcrumb): boolean {
+  for (const state of coalescedBreadcrumbs.values()) {
+    if (state.emitted === entry && state.suppressed > state.resolved) {
+      return true
+    }
+  }
+  return false
+}
+
+function evictionIndex(ring: CrashReportBreadcrumb[]): number {
+  const counts = new Map<string, number>()
+  for (const entry of ring) {
+    const key = evictionGroupKey(entry)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  let crowdedKey = ''
+  let crowdedCount = 0
+  for (const entry of ring) {
+    const key = evictionGroupKey(entry)
+    const count = counts.get(key) ?? 0
+    // Why strictly greater: `ring` is oldest-first, so the first group to reach the
+    // maximum is the one whose oldest entry is oldest. Accepting ties walks to a later
+    // group and thins the wrong series.
+    if (count > crowdedCount) {
+      crowdedKey = key
+      crowdedCount = count
+    }
+  }
+  let oldestOfGroup = 0
+  let foundGroup = false
+  // Why the newest entry is never a candidate: it is the crumb that just arrived, and its
+  // coalesce state has not been linked to it yet, so it would always look unowned.
+  for (let index = 0; index < ring.length - 1; index += 1) {
+    if (evictionGroupKey(ring[index]) !== crowdedKey) {
+      continue
+    }
+    if (!foundGroup) {
+      oldestOfGroup = index
+      foundGroup = true
+    }
+    // Why skip a live owner: that entry carries its key's running suppressed count, and a
+    // crash report is the LAST snapshot — "the next emit re-claims it" never happens. Take
+    // the next entry in the same group instead; fall back only if every one is owned.
+    if (!ownsUnresolvedRepeats(ring[index])) {
+      return index
+    }
+  }
+  return oldestOfGroup
 }
 
 export function recordCoalescedCrashBreadcrumb({
   name,
   data,
   coalesceKey,
-  minIntervalMs
+  minIntervalMs,
+  origin
 }: {
   name: string
   data?: CrashReportBreadcrumbData
   coalesceKey: string
   minIntervalMs: number
+  origin?: string
 }): { suppressedSinceLast: number } | undefined {
   const now = monotonicNow()
   const previous = coalescedBreadcrumbs.get(coalesceKey)
@@ -136,7 +220,8 @@ export function recordCoalescedCrashBreadcrumb({
     windowStartedAtMs: now,
     suppressed: 0,
     carried: suppressedSinceLast,
-    resolved: 0
+    resolved: 0,
+    ...(origin ? { origin } : {})
   }
   coalescedBreadcrumbs.set(coalesceKey, state)
   while (coalescedBreadcrumbs.size > MAX_COALESCE_KEYS) {
@@ -149,7 +234,8 @@ export function recordCoalescedCrashBreadcrumb({
   }
   state.emitted = recordCrashBreadcrumb(
     name,
-    suppressedSinceLast > 0 ? { ...data, suppressedSinceLast } : data
+    suppressedSinceLast > 0 ? { ...data, suppressedSinceLast } : data,
+    origin
   )
   return { suppressedSinceLast }
 }
@@ -157,22 +243,53 @@ export function recordCoalescedCrashBreadcrumb({
 /** Whether any future snapshot can still include this crumb. The ring only
  *  appends and the retained map only grows toward its cap, so an entry pushed
  *  past the snapshot budget is invisible forever, not just for now. */
-function isCoalescedCrumbStillInEvidence(crumb: CrashReportBreadcrumb): boolean {
-  const visibleFrom = breadcrumbs.length - (MAX_BREADCRUMBS - retainedBreadcrumbs.size)
-  const index = breadcrumbs.indexOf(crumb)
-  if (index !== -1 && index >= visibleFrom) {
+function isCoalescedCrumbStillInEvidence(
+  crumb: CrashReportBreadcrumb,
+  reporterOrigin?: string
+): boolean {
+  const retained = [...retainedBreadcrumbs.values()].filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  if (retained.some((retainedBreadcrumb) => retainedBreadcrumb === crumb)) {
     return true
   }
-  for (const retained of retainedBreadcrumbs.values()) {
-    if (retained === crumb) {
-      return true
-    }
+  const visibleRecent = breadcrumbs.filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  return visibleReportWindow(visibleRecent, MAX_BREADCRUMBS - retained.length).some(
+    (recentBreadcrumb) => recentBreadcrumb === crumb
+  )
+}
+
+/**
+ * The ring entries a report will actually carry, once the retained lane has taken its
+ * share of the budget.
+ *
+ * Why not a plain tail slice: fair-share eviction parks the one-off crumbs at the ring's
+ * HEAD and the repeating series at its tail, so trimming the head discards exactly what
+ * eviction just protected. The retained lane fills under memory pressure — the same
+ * condition that produces the `renderer_memory` flood — so the two would cancel out
+ * precisely when the trail matters most. Trim with the same policy instead.
+ */
+function visibleReportWindow(
+  visibleRecent: CrashReportBreadcrumb[],
+  budget: number
+): CrashReportBreadcrumb[] {
+  if (visibleRecent.length <= budget) {
+    return visibleRecent
   }
-  return false
+  const window = [...visibleRecent]
+  while (window.length > budget) {
+    window.splice(evictionIndex(window), 1)
+  }
+  return window
 }
 
 /** Fold a key's newest suppressed payload into the ring entry it owns. */
-function resolvePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): void {
+function resolvePendingCoalescedBreadcrumb(
+  state: CoalescedBreadcrumbState,
+  reporterOrigin?: string
+): void {
   // `data` is optional, so the count—not pending payload presence—marks unresolved work.
   if (!state.emitted || state.suppressed <= state.resolved) {
     return
@@ -182,7 +299,7 @@ function resolvePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): voi
   // then claim nothing — the burst vanishes from the record entirely. Drop the
   // handle (keeping `resolved` for folds that landed while it was live) so a
   // later emit or bounded cleanup can materialize the unclaimed repeats.
-  if (!isCoalescedCrumbStillInEvidence(state.emitted)) {
+  if (!isCoalescedCrumbStillInEvidence(state.emitted, reporterOrigin)) {
     state.emitted = undefined
     return
   }
@@ -201,30 +318,46 @@ function resolvePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): voi
 /** Resolve into the owned crumb, or emit the unclaimed repeats before bounded
  *  cleanup drops an orphan's last accounting state. */
 function preservePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): void {
-  resolvePendingCoalescedBreadcrumb(state)
+  resolvePendingCoalescedBreadcrumb(state, state.origin)
   const unresolved = state.suppressed - state.resolved
   if (state.emitted || unresolved <= 0) {
     return
   }
-  recordCrashBreadcrumb(state.name, {
-    ...state.pending,
-    suppressedSinceLast: unresolved
-  })
+  recordCrashBreadcrumb(
+    state.name,
+    { ...state.pending, suppressedSinceLast: unresolved },
+    state.origin
+  )
   state.resolved = state.suppressed
   state.pending = undefined
 }
 
-function resolveAllPendingCoalescedBreadcrumbs(): void {
+function resolveAllPendingCoalescedBreadcrumbs(reporterOrigin?: string): void {
   for (const state of coalescedBreadcrumbs.values()) {
-    resolvePendingCoalescedBreadcrumb(state)
+    if (reporterOrigin && state.origin && state.origin !== reporterOrigin) {
+      continue
+    }
+    resolvePendingCoalescedBreadcrumb(state, reporterOrigin)
   }
 }
 
-export function getCrashBreadcrumbSnapshot(): CrashReportBreadcrumb[] {
-  resolveAllPendingCoalescedBreadcrumbs()
+function isVisibleToReporter(
+  breadcrumb: CrashReportBreadcrumb,
+  reporterOrigin: string | undefined
+): boolean {
+  return !reporterOrigin || !breadcrumb.origin || breadcrumb.origin === reporterOrigin
+}
+
+export function getCrashBreadcrumbSnapshot(reporterOrigin?: string): CrashReportBreadcrumb[] {
+  resolveAllPendingCoalescedBreadcrumbs(reporterOrigin)
   // Why: long sessions must retain threshold profiles without growing the 30-entry budget.
-  const retained = [...retainedBreadcrumbs.values()]
-  const recent = breadcrumbs.slice(-(MAX_BREADCRUMBS - retained.length))
+  const retained = [...retainedBreadcrumbs.values()].filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  const visibleRecent = breadcrumbs.filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  const recent = visibleReportWindow(visibleRecent, MAX_BREADCRUMBS - retained.length)
   return [...retained, ...recent]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .map((breadcrumb) => ({

@@ -10,7 +10,7 @@ const {
   spawnMock,
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
-  readWindowsConptyProcessIdsMock,
+  readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsMock,
@@ -24,7 +24,7 @@ const {
   spawnMock: vi.fn(),
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
-  readWindowsConptyProcessIdsMock: vi.fn(),
+  readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
@@ -38,6 +38,8 @@ vi.mock('fs', () => ({
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
 
@@ -82,8 +84,9 @@ vi.mock('./agent-foreground-process', () => ({
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('./windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: (...args: unknown[]) => readWindowsConptyProcessIdsMock(...args)
+vi.mock('./windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
+  isWindowsPtyJobReadable: () => true
 }))
 
 vi.mock('../wsl', () => ({
@@ -122,7 +125,7 @@ import {
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
   let mockProc: LocalPtyMockProcess
-  let exitCb: ((info: { exitCode: number }) => void) | undefined
+  let exitCb: ((info: { exitCode: number; signal?: number }) => void) | undefined
 
   installLocalPtyProviderEnvSandbox()
 
@@ -135,7 +138,7 @@ describe('LocalPtyProvider', () => {
       writeFileSyncMock,
       prepareMacosTccLoginShellMock,
       resolveAgentForegroundProcessMock,
-      readWindowsConptyProcessIdsMock,
+      readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
       wslUncDirectoryExistsMock,
@@ -311,7 +314,29 @@ describe('LocalPtyProvider', () => {
       // Simulate node-pty exit event
       exitCb?.({ exitCode: 0 })
 
-      expect(exitHandler).toHaveBeenCalledWith({ id, code: 0, incarnationId })
+      expect(exitHandler).toHaveBeenCalledWith({
+        id,
+        code: 0,
+        incarnationId,
+        cause: { kind: 'exited', exitCode: 0 }
+      })
+    })
+
+    it('reports a signalled death as a signal, not as the zero node-pty pairs with it', async () => {
+      const exitHandler = vi.fn()
+      provider.onExit(exitHandler)
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+
+      // node-pty reports an OOM/SIGKILL as {exitCode: 0, signal: 9}; dropping
+      // the signal is what made a crash read as a clean finish (STA-4536).
+      exitCb?.({ exitCode: 0, signal: 9 })
+
+      expect(exitHandler).toHaveBeenCalledWith({
+        id,
+        code: 0,
+        incarnationId,
+        cause: { kind: 'signaled', signal: 9 }
+      })
     })
 
     it('allows unsubscribing from events', async () => {

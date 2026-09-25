@@ -17,7 +17,11 @@ const badgeVariants = cva(
         outline:
           'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         ghost: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 [a&]:hover:underline'
+        link: 'text-primary underline-offset-4 [a&]:hover:underline',
+        /** The chip naming the machine a workspace runs on — quieter and squarer than `secondary`,
+         *  so it reads as context beside a workspace name rather than as a status of its own. */
+        hostContext:
+          'h-4 rounded border-border bg-accent px-1.5 text-[10px] leading-none text-muted-foreground dark:border-border/50 dark:bg-accent/80'
       }
     },
     defaultVariants: {

@@ -54,7 +54,7 @@ type IndexedProjectGroupOwnerResolution =
   | { kind: 'missing' }
   | { kind: 'ambiguous' }
 
-function catalogOwnerHostId(owner: {
+export function getCatalogOwnerHostId(owner: {
   connectionId?: string | null
   executionHostId?: string | null
 }): ExecutionHostId {
@@ -74,11 +74,11 @@ function buildCatalogOwnerIndex<
   const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
   for (const record of records) {
     const id = record.id
-    const hostId = catalogOwnerHostId(record)
+    const hostId = getCatalogOwnerHostId(record)
     const current = next.get(id)
     if (!current) {
       next.set(id, { kind: 'resolved', owner: record })
-    } else if (current.kind === 'resolved' && catalogOwnerHostId(current.owner) !== hostId) {
+    } else if (current.kind === 'resolved' && getCatalogOwnerHostId(current.owner) !== hostId) {
       next.set(id, { kind: 'ambiguous' })
     }
     next.set(`${id}\0${hostId}`, {
@@ -265,24 +265,25 @@ export function findIndexedRepoOwner(
   return resolution.kind === 'resolved' ? resolution.owner : null
 }
 
-export function findIndexedRepoOwnerForHost(
-  repos: readonly RepoOwnerRecord[] | undefined,
+export function findIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
+  repos: readonly T[] | undefined,
   repoId: string,
   executionHostId: ExecutionHostId
-): RepoOwnerRecord | null {
+): T | null {
   if (!repos) {
     return null
   }
   resolveIndexedRepoOwner(repos, repoId)
   const resolution = repoOwnerIndexCache.get(repos)?.get(`${repoId}\0${executionHostId}`)
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  // The cache is keyed by this exact array, so its owner retains the caller's row type.
+  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedFolderWorkspaceOwner(
-  folderWorkspaces: readonly FolderWorkspaceOwnerRecord[] | undefined,
+export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
+  folderWorkspaces: readonly T[] | undefined,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): FolderWorkspaceOwnerRecord | null {
+): T | null {
   if (!folderWorkspaces) {
     return null
   }
@@ -294,14 +295,15 @@ export function findIndexedFolderWorkspaceOwner(
   const resolution = index.get(
     executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
   )
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  // The cache is keyed by this exact array, so its owner retains the caller's row type.
+  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedProjectGroupOwner(
-  projectGroups: readonly ProjectGroupOwnerRecord[] | undefined,
+export function findIndexedProjectGroupOwner<T extends ProjectGroupOwnerRecord>(
+  projectGroups: readonly T[] | undefined,
   projectGroupId: string,
   executionHostId?: ExecutionHostId
-): ProjectGroupOwnerRecord | null {
+): T | null {
   if (!projectGroups) {
     return null
   }
@@ -313,5 +315,6 @@ export function findIndexedProjectGroupOwner(
   const resolution = index.get(
     executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
   )
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  // The cache is keyed by this exact array, so its owner retains the caller's row type.
+  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }

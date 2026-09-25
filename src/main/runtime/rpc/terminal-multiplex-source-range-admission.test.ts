@@ -69,7 +69,7 @@ describe('terminal multiplex RPC', () => {
         (bytes) => decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.SnapshotEnd
       )
       expect(snapshotEndIndex).toBeGreaterThanOrEqual(0)
-      harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+      harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
       await harness.dispatchPromise
     }
   )
@@ -237,7 +237,7 @@ describe('terminal multiplex RPC', () => {
         ptyIdentities: 0
       })
 
-      harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+      harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
       await harness.dispatchPromise
       intake.dispose()
     }
@@ -312,7 +312,7 @@ describe('terminal multiplex RPC', () => {
 
     expect(attach).not.toHaveBeenCalled()
     expect(reserve).not.toHaveBeenCalled()
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -568,7 +568,7 @@ describe('terminal multiplex RPC', () => {
       expect.objectContaining({ deliveryToken: 'token-2', sourceStartSu: 100 })
     ])
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 

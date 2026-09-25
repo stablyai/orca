@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import {
+  handleMock,
   removeHandlerMock,
   listWorktreesMock,
   getPullRequestPushTargetMock,
@@ -13,6 +14,35 @@ import {
   makeWorktreeMeta
 } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+
+const WORKTREE_HANDLER_CHANNELS = [
+  'worktrees:listAll',
+  'worktrees:list',
+  'worktrees:listRetiredNames',
+  'worktrees:listDetected',
+  'worktrees:listKnownForExecutionHost',
+  'worktrees:forgetRemovedForExecutionHost',
+  'worktrees:cancelListDetected',
+  'worktrees:create',
+  'worktrees:adoptProvisionedRoot',
+  'worktrees:prefetchCreateBase',
+  'worktrees:resolvePrBase',
+  'worktrees:resolveMrBase',
+  'worktrees:remove',
+  'worktrees:forgetLocal',
+  'worktrees:forceDeletePreservedBranch',
+  'worktrees:updateMeta',
+  'worktrees:listLineage',
+  'worktrees:listLineageForHost',
+  'worktrees:updateLineage',
+  'worktrees:persistSortOrder',
+  'worktrees:getBranchRenameFailureOutput',
+  'hooks:check',
+  'hooks:inspectSetupScriptImports',
+  'hooks:createIssueCommandRunner',
+  'hooks:readIssueCommand',
+  'hooks:writeIssueCommand'
+] as const
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -47,6 +77,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -110,6 +143,20 @@ describe('registerWorktreeHandlers', () => {
     expect(handlers['worktrees:getBranchRenameFailureOutput']).toBeDefined()
   })
 
+  it('removes exactly the installed channel set before installing the first handler', () => {
+    const removedChannels = removeHandlerMock.mock.calls.map(([channel]) => channel)
+    const installedChannels = handleMock.mock.calls.map(([channel]) => channel)
+
+    expect(new Set(removedChannels)).toEqual(new Set(WORKTREE_HANDLER_CHANNELS))
+    expect(new Set(removedChannels)).toEqual(new Set(installedChannels))
+    expect(new Set(installedChannels)).toEqual(new Set(WORKTREE_HANDLER_CHANNELS))
+    expect(removedChannels).toHaveLength(WORKTREE_HANDLER_CHANNELS.length)
+    expect(installedChannels).toHaveLength(WORKTREE_HANDLER_CHANNELS.length)
+    expect(Math.max(...removeHandlerMock.mock.invocationCallOrder)).toBeLessThan(
+      Math.min(...handleMock.mock.invocationCallOrder)
+    )
+  })
+
   it('persistSortOrder only reorders existing worktrees and never mints meta for a stale id', () => {
     const liveId = 'repo-1::/workspace/repo'
     const staleId = 'removed-repo::/workspace/gone'
@@ -158,6 +205,36 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(result).toMatchObject({ comment: 'keep me', isPinned: true })
   })
+  it('routes metadata updates through the explicitly selected host', () => {
+    store.setWorktreeMetaForHost.mockImplementation((_worktreeId, _executionHostId, meta) => meta)
+
+    const result = handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      executionHostId: 'ssh:build-box',
+      updates: { comment: 'remote note' }
+    })
+
+    expect(store.setWorktreeMetaForHost).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      'ssh:build-box',
+      { comment: 'remote note' }
+    )
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ comment: 'remote note' })
+  })
+
+  it('rejects malformed execution-host identities at the IPC boundary', () => {
+    expect(() =>
+      handlers['worktrees:updateMeta'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        executionHostId: 'container:untrusted',
+        updates: { comment: 'must not write' }
+      })
+    ).toThrow('Invalid execution host identity.')
+
+    expect(store.setWorktreeMetaForHost).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
 
   it('pushes a remote-client invalidation for renames but not read-state updates', () => {
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
@@ -174,6 +251,20 @@ describe('registerWorktreeHandlers', () => {
       updates: { displayName: 'Renamed workspace' }
     })
     expect(runtimeStub.notifyWorktreesChangedForRemoteClients).toHaveBeenCalledWith('repo-1')
+  })
+
+  it('persists display-name provenance at the host boundary', () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { displayName: 'Agent label' }
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      expect.objectContaining({ displayName: 'Agent label', displayNameIsPinned: true })
+    )
   })
 
   it('does not trust renderer-authored automation provenance during local create', async () => {
@@ -240,6 +331,29 @@ describe('registerWorktreeHandlers', () => {
         displayName: 'Fix: dashboards for PRs'
       })
     })
+  })
+
+  it('pins a legacy name-only user create when the branch matches', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature',
+        head: 'abc123',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature'
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature',
+      expect.objectContaining({ displayName: 'feature', displayNameIsPinned: true })
+    )
   })
 
   it('persists linked issue and PR metadata during local create', async () => {
@@ -313,7 +427,10 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('configures a PR push target during local create', async () => {
+  // Was "configures a PR push target during local create": create used to mint the
+  // fork remote up front. It now defers to first sync (#17828); the minting itself is
+  // covered by worktree-remote-push-target-materialization.test.ts.
+  it('defers the fork-PR remote during local create and persists the target unmaterialized', async () => {
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -335,19 +452,28 @@ describe('registerWorktreeHandlers', () => {
       }
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
-      { cwd: '/workspace/repo' }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
-        'fetch',
+        'remote',
+        'add',
+        '-t',
+        'prateek/fix-sidebar-agents-toggle',
+        '--no-tags',
         'pr-prateek-orca',
-        '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle'
+        'git@github.com:prateek/orca.git'
       ],
       { cwd: '/workspace/repo' }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      [
+        'fetch',
+        'pr-prateek-orca',
+        '+refs/heads/prateek/fix-sidebar-agents-toggle*:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle*'
+      ],
+      { cwd: '/workspace/repo' }
+    )
+    // Upstream can only be set once the remote exists, so it defers with the remote.
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
         'branch',
         '--set-upstream-to',
@@ -356,20 +482,25 @@ describe('registerWorktreeHandlers', () => {
       ],
       { cwd: '/workspace/improve-dashboard' }
     )
+    // Exact object, not objectContaining: `remoteCreated` must stay absent until
+    // something actually mints the remote.
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
-        pushTarget: expect.objectContaining({
+        pushTarget: {
           remoteName: 'pr-prateek-orca',
           branchName: 'prateek/fix-sidebar-agents-toggle',
-          remoteUrl: 'git@github.com:prateek/orca.git',
-          remoteCreated: true
-        })
+          remoteUrl: 'git@github.com:prateek/orca.git'
+        }
       })
     )
   })
 
-  it('keeps the Orca-created marker when a new worktree reuses an Orca-created fork remote', async () => {
+  // Was "keeps the Orca-created marker ...": create used to inherit the marker while
+  // minting. With minting deferred (#17828) create must not claim ownership it has not
+  // earned; marker inheritance now happens at materialization and is covered by
+  // worktree-push-target-setup.test.ts.
+  it('does not claim the Orca-created marker at create when a sibling worktree minted the fork remote', async () => {
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -416,12 +547,11 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
-        pushTarget: expect.objectContaining({
+        pushTarget: {
           remoteName: 'pr-contributor-orca',
           branchName: 'contributor/new-fix',
-          remoteUrl: 'https://github.com/contributor/orca.git',
-          remoteCreated: true
-        })
+          remoteUrl: 'https://github.com/contributor/orca.git'
+        }
       })
     )
   })

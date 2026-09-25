@@ -20,6 +20,7 @@ import {
   gitSpawnAfterWindowsEnvironmentReady,
   gitStreamStdout
 } from './runner'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
@@ -64,6 +65,7 @@ describe('Windows host Git environment readiness', () => {
   })
 
   afterEach(() => {
+    _resetGitAdmissionForTests()
     configureWindowsHostGitEnvironmentReadiness(null)
     if (originalPath === undefined) {
       delete process.env.Path

@@ -4,7 +4,7 @@ import type {
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
@@ -16,6 +16,7 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
+import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -38,16 +39,21 @@ export type PtyApi = {
     // Why: lets a single tab open in a different shell than the user's default.
     shellOverride?: string
     projectRuntime?: ProjectExecutionRuntimeResolution
+    terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
     tabId?: string
     leafId?: string
+    // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
+    replacesPtyId?: string
     // Why: main fires `agent_started` only on spawn success, so launch metadata rides this field (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }) => Promise<{
     id: string
+    /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
+    incarnationId?: string
     launchAgent?: TuiAgent
     launchConfig?: SleepingAgentLaunchConfig
     snapshot?: string
@@ -57,6 +63,7 @@ export type PtyApi = {
     snapshotFrameAnsi?: string
     snapshotFrameRestoreAnsi?: string
     snapshotKittyKeyboardFlags?: number
+    snapshotTerminalOwner?: 'shell'
     snapshotSeq?: number
     isReattach?: boolean
     isAlternateScreen?: boolean
@@ -65,6 +72,8 @@ export type PtyApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
+    shellReadyArmed?: boolean
   }>
   write: (id: string, data: string) => void
   writeAccepted: (id: string, data: string) => Promise<boolean>
@@ -106,15 +115,18 @@ export type PtyApi = {
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
   hasChildProcesses: (id: string) => Promise<boolean>
   getForegroundProcess: (id: string) => Promise<string | null>
-  inspectProcess: (id: string) => Promise<{
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-    unavailable?: true
-  }>
+  inspectProcess: (
+    id: string,
+    options?: {
+      expectedIncarnationId?: string
+      scanChildProcesses?: boolean
+      steadyState?: boolean
+    }
+  ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
-  listSessions: () => Promise<PtyListedSession[]>
+  listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
@@ -143,6 +155,7 @@ export type PtyApi = {
     /** Effective kitty flags the snapshot owner proved at `seq`. Absent means
      *  unknown; consumers must not turn that into a known `0`. */
     kittyKeyboardFlags?: number
+    terminalOwner?: 'shell'
   } | null>
   getRendererDeliveryDebugSnapshot: () => Promise<{
     pendingPtyCount: number
@@ -194,14 +207,24 @@ export type PtyApi = {
   /** Title-only replay snapshot for (re)attach; attention facts never replay. */
   getSideEffectSnapshot: (id: string) => Promise<TerminalSideEffectBatch | null>
   onExit: (
-    callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+    callback: (data: {
+      id: string
+      code: number
+      preserveRendererBinding?: boolean
+      /** Which lifetime of `id` died; absent when the execution host predates the field. */
+      incarnationId?: string
+      /** Set only when the owning relay disowned this id; never a claim that the process died. */
+      ptySourceDisowned?: true
+      /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
+      replacedByRestart?: true
+    }) => void
   ) => () => void
   onSpawned: (callback: (data: { id: string }) => void) => () => void
   onSerializeBufferRequest: (
     callback: (data: {
       requestId: string
       ptyId: string
-      opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      opts?: { scrollbackRows?: number }
     }) => void
   ) => () => void
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void

@@ -97,6 +97,15 @@ describe('remote URL probe', () => {
     await expect(assertRemoteUrlReadable({ repoPath: '/repo' })).resolves.toBeUndefined()
   })
 
+  it('keeps a failed SSH command unverifiable even without a transport error string', async () => {
+    const failure = new Error('relay request failed')
+    getSshGitProviderMock.mockReturnValue({ exec: vi.fn().mockRejectedValue(failure) })
+
+    await expect(
+      assertRemoteUrlReadable({ repoPath: '/repo', connectionId: 'ssh-1' })
+    ).rejects.toBe(failure)
+  })
+
   it('does not turn a missing SSH provider into a false readable result', async () => {
     getSshGitProviderMock.mockReturnValue(null)
 

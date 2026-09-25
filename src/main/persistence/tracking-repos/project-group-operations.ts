@@ -6,11 +6,10 @@ import {
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
-import { removeWorkspaceSessionOwner } from '../restoring-sessions/session-owner-removal'
+import { removeWorkspaceSessionOwnerEverywhere } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   scheduleSave: () => void
   removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
@@ -106,10 +105,8 @@ export class ProjectGroupPersistenceOperations {
     for (const workspace of this.state.folderWorkspaces ?? []) {
       if (deletedGroupIds.has(workspace.projectGroupId)) {
         removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
-        this.state.workspaceSession = removeWorkspaceSessionOwner(
-          this.state.workspaceSession,
-          folderWorkspaceKey(workspace.id)
-        )!
+        // Every partition, not just the local blob: the same reason `removeFolderWorkspace` does.
+        removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(workspace.id))
         this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
     }

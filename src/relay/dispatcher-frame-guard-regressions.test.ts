@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
+import type { RelayClient } from './dispatcher-contract'
 import type { JsonRpcNotification } from './protocol'
 
 type DispatcherInternals = {
-  primaryClient: object
+  primaryClient: RelayClient
   estimateFrameBytes: (msg: JsonRpcNotification) => number
-  enqueueFrame: (client: object, msg: JsonRpcNotification, lane: string) => boolean
+  enqueueFrame: (client: RelayClient, msg: JsonRpcNotification, lane: string) => boolean
 }
 
 describe('RelayDispatcher frame guards', () => {

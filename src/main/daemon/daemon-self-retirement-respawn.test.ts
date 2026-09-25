@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +16,7 @@ function fixtureSubprocess(): SubprocessHandle {
     write: () => {},
     resize: () => {},
     kill: () => queueMicrotask(() => onExit?.(0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => queueMicrotask(() => onExit?.(137)),
     signal: () => {},
     onData: () => {},

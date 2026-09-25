@@ -55,6 +55,7 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     (left.linkedGitLabIssue ?? null) === (right.linkedGitLabIssue ?? null) &&
     (left.comment ?? '') === (right.comment ?? '') &&
     (left.status ?? null) === (right.status ?? null) &&
+    (left.workingMode ?? null) === (right.workingMode ?? null) &&
     arePullRequestsEqual(left.linkedPR, right.linkedPR) &&
     areAgentRowsEqual(left.agents ?? [], right.agents ?? [])
   )
@@ -102,6 +103,7 @@ function areAgentRowsEqual(
       a.paneKey !== b.paneKey ||
       a.parentPaneKey !== b.parentPaneKey ||
       a.state !== b.state ||
+      a.workingMode !== b.workingMode ||
       a.agentType !== b.agentType ||
       a.prompt !== b.prompt ||
       a.lastAssistantMessage !== b.lastAssistantMessage ||

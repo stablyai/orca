@@ -1,8 +1,64 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+type StorageDouble = { rejection: unknown; written: string[] }
+
+const storage = vi.hoisted((): StorageDouble => ({ rejection: null, written: [] }))
+
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: {
+    setItem: async (_key: string, value: string) => {
+      if (storage.rejection !== null) {
+        throw storage.rejection
+      }
+      storage.written.push(value)
+    },
+    removeItem: async () => undefined
+  }
+}))
+
 import {
   readLastVisitedWorktreeRecord,
-  readLastVisitedWorktreeRepoId
+  readLastVisitedWorktreeRepoId,
+  writeLastVisitedWorktree
 } from './last-visited-worktree-repo'
+
+/** Node reports an unhandled rejection at the end of a microtask checkpoint, so one macrotask is
+ *  long enough to see it, and a listener is the only way to observe one from inside a test. */
+async function unhandledRejectionsWhile(run: () => void): Promise<unknown[]> {
+  const seen: unknown[] = []
+  const listener = (reason: unknown) => seen.push(reason)
+  process.on('unhandledRejection', listener)
+  try {
+    run()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  } finally {
+    process.off('unhandledRejection', listener)
+  }
+  return seen
+}
+
+// Why: the mirror reports this key as written the moment it is noted, so a store write that
+// rejects must be handled where it is made. Nothing above it is holding a catch.
+describe('writeLastVisitedWorktree', () => {
+  it('handles a store that refuses the write instead of leaving the rejection loose', async () => {
+    storage.rejection = new Error('quota exceeded')
+    const loose = await unhandledRejectionsWhile(() => {
+      writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'repo-2::/tmp/worktree' })
+    })
+    storage.rejection = null
+    expect(loose).toEqual([])
+  })
+
+  it('still persists the record when the store takes it', async () => {
+    storage.written.length = 0
+    writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'repo-2::/tmp/worktree' })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(storage.written).toEqual([
+      JSON.stringify({ hostId: 'host-1', worktreeId: 'repo-2::/tmp/worktree' })
+    ])
+  })
+})
 
 describe('last visited worktree repo', () => {
   it('extracts the repo id for the current host', () => {

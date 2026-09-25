@@ -108,6 +108,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
           entries: [],
           summary: {
             status: 'ready',
+            errorMessage: undefined,
             baseRef: 'main',
             baseOid: 'base',
             compareRef: 'HEAD',

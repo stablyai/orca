@@ -6,7 +6,13 @@
 // here must be plain JSON: these values cross the IPC boundary, so no class
 // instances, Maps, or Dates.
 
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskRunState
+} from './agent-session-background-task-wire'
+import type { AgentJournalMessageSendMode } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
+import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 
 export type { AgentType }
 
@@ -31,15 +37,51 @@ export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 export type NativeChatTextBlock = {
   type: 'text'
   text: string
+  /** Optional journal display hints; readers narrow only the values they know. */
+  presentation?: string
+  tone?: string
+  /** Optional structured detail for an otherwise ordinary fallback line. */
+  providerFrame?: {
+    provider: string
+    kind: string
+    payload: {
+      head: string
+      byteLength: number
+      digest: string
+      truncated: boolean
+    }
+  }
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
  *  argument payload; kept as `unknown` because each tool's shape differs and
  *  the renderer only previews it. */
-export type NativeChatToolCallBlock = {
+export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   type: 'tool-call'
   name: string
   input: unknown
+  /** Provider-supplied identity within this item stream; absent on legacy transcripts and peers. */
+  callId?: string
+  /** Provider lifecycle when the structured app-server path can supply it. */
+  state?: 'running' | 'completed' | 'failed'
+}
+
+/** One resolved hunk from a provider's edit result, carrying true file ranges. */
+export type NativeChatEditPatchHunk = {
+  oldStart: number
+  oldLines: number
+  newStart: number
+  newLines: number
+  /** Signed unified rows, as the provider emitted them. */
+  lines: string[]
+}
+
+/** Hunks the provider resolved against the real file before reporting the edit.
+ *  Claude supplies these on its edit results; Codex resolves equivalently before
+ *  sending, so its patch already carries ranges and needs no companion. */
+export type NativeChatEditPatch = {
+  filePath?: string
+  hunks: NativeChatEditPatchHunk[]
 }
 
 /** The result returned to the agent for a prior tool call. */
@@ -47,6 +89,8 @@ export type NativeChatToolResultBlock = {
   type: 'tool-result'
   output: string
   isError?: boolean
+  /** Present only for edit tools whose result reported resolved hunks. */
+  editPatch?: NativeChatEditPatch
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field
@@ -58,11 +102,87 @@ export type NativeChatImageRefBlock = {
   alt?: string
 }
 
+/** Lifecycle of one spawned child agent, as the display collapses it.
+ *  `unverifiable` is the repo's loss-of-contact verdict (see
+ *  docs/reference/ssh-execution-boundary.md): the child stopped reporting and
+ *  nothing proves it exited. Every in-flight provider state collapses to
+ *  `working`; `idle` is a child that exists but is not currently working. */
+export const NATIVE_CHAT_SUBAGENT_STATES = [
+  'working',
+  'idle',
+  'completed',
+  'failed',
+  'stopped',
+  'unverifiable'
+] as const
+export type NativeChatSubagentState = (typeof NATIVE_CHAT_SUBAGENT_STATES)[number]
+
+/** One child agent in a spawn group. */
+export type NativeChatSubagentEntry = {
+  /** Provider's child id (Codex: the child thread id). The roster key. */
+  id: string
+  /** Row label — the provider's task name, disambiguated by ordinal on collision. */
+  label: string
+  state: NativeChatSubagentState
+  /** Latest total tokens the provider reported FOR THIS CHILD, never a running sum. */
+  tokens?: number
+  /** Epoch ms of the first event that created the entry. */
+  startedAt?: number
+  /** Epoch ms the entry latched terminal. */
+  settledAt?: number
+}
+
+/** One spawn group's roster, revised in place as its children report activity.
+ *  Provider-agnostic on purpose: the Codex and Claude lanes both feed this. */
+export type NativeChatSubagentGroupBlock = {
+  type: 'subagent-group'
+  /** Stable group key — the parent turn that spawned these children. */
+  groupId: string
+  agents: NativeChatSubagentEntry[]
+}
+
+/** One provider background task — a shell command, workflow or monitor run
+ *  beside the turn — as its own durable row, revised in place from the
+ *  provider's lifecycle frames. Sibling of the roster block rather than a
+ *  one-child roster: a backgrounded `sleep 20` is not a subagent, and a group
+ *  holding it would read "Ran 1 subagent".
+ *
+ *  Outcome is a STATUS FIELD, never a red row: a task that failed is a task
+ *  with a terminal state, and the row that reports it is the same row that
+ *  reported it starting. */
+export type NativeChatBackgroundTaskBlock = {
+  type: 'background-task'
+  /** Provider task id — the row key, stable across a resume. */
+  taskId: string
+  kind: AgentSessionBackgroundTask['kind']
+  /** Display name: the provider's description, else the identity it reported. */
+  label: string
+  /** Run state, in the vocabulary the background-tasks strip already renders. */
+  state: AgentSessionBackgroundTaskRunState
+  /** The tool call that spawned this task. The transcript has no structural
+   *  parent link for a row, so the relationship is carried as a field here and
+   *  consumers co-locate the row with that tool call. */
+  parentToolUseId?: string
+  /** The provider's own sentence about the outcome, when it sent one. */
+  summary?: string
+  /** The provider's error text, when it reported one apart from the summary. */
+  error?: string
+  /** Where the provider wrote the task's output. */
+  outputFile?: string
+  /** Latest total tokens the provider reported FOR THIS TASK. */
+  tokens?: number
+  startedAt?: number
+  /** Epoch ms the row latched terminal. */
+  settledAt?: number
+}
+
 export type NativeChatBlock =
   | NativeChatTextBlock
   | NativeChatToolCallBlock
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
+  | NativeChatSubagentGroupBlock
+  | NativeChatBackgroundTaskBlock
 
 export type NativeChatMessage = {
   /** Stable across re-reads/appends so the assembler and the renderer list can
@@ -77,6 +197,8 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** How a user message was delivered when it was not an ordinary prompt. */
+  sentAs?: AgentJournalMessageSendMode
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const
@@ -145,4 +267,16 @@ export function isInterruptedStatusMessage(message: NativeChatMessage): boolean 
 
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
   return block.type === 'image-ref'
+}
+
+export function isSubagentGroupBlock(
+  block: NativeChatBlock
+): block is NativeChatSubagentGroupBlock {
+  return block.type === 'subagent-group'
+}
+
+export function isBackgroundTaskBlock(
+  block: NativeChatBlock
+): block is NativeChatBackgroundTaskBlock {
+  return block.type === 'background-task'
 }

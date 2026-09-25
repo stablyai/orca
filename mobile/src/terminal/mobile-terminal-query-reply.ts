@@ -1,6 +1,6 @@
 import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
 import type { RpcClient } from '../transport/rpc-client'
-import { isTerminalSendRpcAccepted } from './terminal-send-rpc-response'
+import { terminalInputSend } from './mobile-terminal-operations'
 
 type TerminalSubscriptionRegistry = {
   has: (handle: string) => boolean
@@ -8,7 +8,7 @@ type TerminalSubscriptionRegistry = {
 
 type MobileTerminalQueryReplyOptions = {
   bytes: string
-  client: Pick<RpcClient, 'sendRequest'> | null
+  client: RpcClient | null
   clientId: string | null
   connected: boolean
   handle: string
@@ -39,13 +39,16 @@ export function sendMobileTerminalQueryReply({
     return Promise.resolve(false)
   }
 
-  return client
-    .sendRequest('terminal.send', {
+  return terminalInputSend
+    .request(client, {
       terminal: handle,
       text: bytes,
       enter: false,
       inputKind: 'query-reply',
       ...(clientId ? { client: { id: clientId, type: 'mobile' as const } } : {})
     })
-    .then(isTerminalSendRpcAccepted, () => false)
+    .then(
+      (reply) => terminalInputSend.interpret(reply) === true,
+      () => false
+    )
 }

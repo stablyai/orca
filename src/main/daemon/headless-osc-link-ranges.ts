@@ -1,10 +1,14 @@
-import type { Terminal } from '@xterm/headless'
+import type { IBuffer, IBufferCell, IBufferLine, Terminal } from '@xterm/headless'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 
 type TerminalWithOscLinks = Terminal & {
   _core?: {
     _oscLinkService?: {
       getLinkData: (linkId: number) => { uri?: string } | undefined
+      // Why read it: xterm registers every OSC 8 id here, so an empty registry
+      // proves the buffer holds no hyperlink and the per-cell scan can be skipped.
+      // Optional because it is private — an xterm that renames it just scans.
+      _dataByLinkId?: { size?: number }
     }
   }
 }
@@ -14,10 +18,37 @@ type CellWithOscLink = {
   hasExtendedAttrs?: () => boolean
 }
 
+/** True when xterm holds no OSC 8 registration at all, so no cell can carry one. */
+function hasNoRegisteredOscLinks(service: { _dataByLinkId?: { size?: number } }): boolean {
+  return service._dataByLinkId?.size === 0
+}
+
 export function collectHeadlessOscLinkRanges(
   terminal: Terminal,
   scrollbackRows: number | undefined,
   restoredLinks: TerminalOscLinkRange[] = []
+): TerminalOscLinkRange[] {
+  const buffer = terminal.buffer.active
+  const startRow =
+    scrollbackRows === undefined ? 0 : Math.max(0, buffer.length - terminal.rows - scrollbackRows)
+  return collectOscLinkRangesInRows(terminal, buffer, startRow, buffer.length, restoredLinks)
+}
+
+/** Links in normal-buffer rows [0, endRow), whichever buffer is active. */
+export function collectNormalBufferOscLinkRanges(
+  terminal: Terminal,
+  endRow: number
+): TerminalOscLinkRange[] {
+  const buffer = terminal.buffer.normal
+  return collectOscLinkRangesInRows(terminal, buffer, 0, Math.min(endRow, buffer.length), [])
+}
+
+function collectOscLinkRangesInRows(
+  terminal: Terminal,
+  buffer: IBuffer,
+  startRow: number,
+  endRow: number,
+  restoredLinks: TerminalOscLinkRange[]
 ): TerminalOscLinkRange[] {
   // Why: headless xterm exposes OSC 8 metadata only via this private service.
   // Keep this boundary explicit so xterm upgrades are audited here.
@@ -25,11 +56,18 @@ export function collectHeadlessOscLinkRanges(
   if (!service) {
     return []
   }
-  const buffer = terminal.buffer.active
-  const startRow =
-    scrollbackRows === undefined ? 0 : Math.max(0, buffer.length - terminal.rows - scrollbackRows)
+  // Why before the scan: the walk below reads every cell of every row, and a
+  // session that never emitted a hyperlink — the overwhelming majority — would
+  // pay that for a guaranteed-empty result. `restoredLinks` still needs mapping.
+  if (hasNoRegisteredOscLinks(service) && restoredLinks.length === 0) {
+    return []
+  }
   const ranges: TerminalOscLinkRange[] = []
-  for (let row = startRow; row < buffer.length; row += 1) {
+  // Why one cell for the whole walk: xterm's getCell allocates a fresh CellData
+  // per call unless handed a target, which is a per-cell allocation across the
+  // entire scrollback. See the IBufferLine.getCell docs.
+  const scratchCell = buffer.getNullCell()
+  for (let row = startRow; row < endRow; row += 1) {
     const line = buffer.getLine(row)
     if (!line) {
       continue
@@ -38,7 +76,7 @@ export function collectHeadlessOscLinkRanges(
     let currentUrlId = 0
     let currentStart = -1
     for (let col = 0; col <= lineLength; col += 1) {
-      const urlId = col < lineLength ? getOscLinkIdAtCell(line, col) : 0
+      const urlId = col < lineLength ? getOscLinkIdAtCell(line, col, scratchCell) : 0
       if (urlId === currentUrlId) {
         continue
       }
@@ -53,7 +91,7 @@ export function collectHeadlessOscLinkRanges(
     }
   }
   for (const link of restoredLinks) {
-    if (link.row < startRow || link.row >= buffer.length) {
+    if (link.row < startRow || link.row >= endRow) {
       continue
     }
     const startCol = Math.max(0, Math.min(terminal.cols, link.startCol))
@@ -83,8 +121,8 @@ function dedupeOscLinkRanges(ranges: TerminalOscLinkRange[]): TerminalOscLinkRan
   })
 }
 
-function getOscLinkIdAtCell(line: { getCell: (col: number) => unknown }, col: number): number {
-  const cell = line.getCell(col) as CellWithOscLink | undefined
+function getOscLinkIdAtCell(line: IBufferLine, col: number, scratchCell: IBufferCell): number {
+  const cell = line.getCell(col, scratchCell) as (IBufferCell & CellWithOscLink) | undefined
   // Why: OSC link IDs live in extended cell attrs; missing attrs means no link.
   return cell?.hasExtendedAttrs?.() && cell.extended?.urlId ? cell.extended.urlId : 0
 }

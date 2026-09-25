@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
@@ -89,6 +90,7 @@ describe('stable logical RPC client', () => {
     const nextSession = new FakeSession('connecting')
     const pending = deferred<RpcResponse>()
     oldSession.sendRequest.mockReturnValue(pending.promise)
+    oldSession.close.mockImplementation(() => pending.reject(new Error('Client closed')))
     nextSession.sendRequest.mockResolvedValue(success('next'))
     const client = createStableLogicalRpcClient(oldSession, 'lan')
     const stream = vi.fn()
@@ -205,6 +207,19 @@ describe('stable logical RPC client', () => {
     )
   })
 
+  it('preserves a committed response when logical close wins the callback race', async () => {
+    const session = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    const client = createStableLogicalRpcClient(session, 'lan')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    inFlight.resolve(success('accepted'))
+    client.close()
+
+    await expect(request).resolves.toEqual(success('accepted'))
+  })
+
   it('publishes the replacement dial phases while the client is suspended', async () => {
     const oldSession = new FakeSession('connected')
     const replacement = new FakeSession('connecting')
@@ -302,6 +317,38 @@ describe('stable logical RPC client', () => {
     expect(paths).toEqual(['relay', null])
   })
 
+  it('publishes supervisor Relay attempts without replacing the physical retry count', () => {
+    const direct = new FakeSession('reconnecting')
+    direct.getReconnectAttempt = () => 5
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const attempts: number[] = []
+    client.onConnectionPathChange(() => attempts.push(client.getReconnectAttempt()))
+
+    client.setRecoveryPath('relay', 3)
+    expect(client.getReconnectAttempt()).toBe(5)
+
+    client.setRecoveryAttempt(7)
+    expect(client.getReconnectAttempt()).toBe(7)
+    expect(attempts).toEqual([5, 7])
+
+    client.setRecoveryPath(null)
+    expect(client.getReconnectAttempt()).toBe(5)
+    expect(attempts).toEqual([5, 7, 5])
+  })
+
+  it('notifies connection-path subscribers when the pairing-rejected latch flips', () => {
+    const direct = new FakeSession('reconnecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const rejected: boolean[] = []
+    client.onConnectionPathChange(() => rejected.push(client.isPairingRejected()))
+
+    client.setPairingRejected(true)
+    client.setPairingRejected(true)
+    client.setPairingRejected(false)
+
+    expect(rejected).toEqual([true, false])
+  })
+
   it('does not revive a stale recovery path after a connection later drops', () => {
     const direct = new FakeSession('reconnecting')
     const client = createStableLogicalRpcClient(direct, 'tailscale')
@@ -367,6 +414,34 @@ describe('stable logical RPC client', () => {
     expect(client.getPendingPath()).toBeNull()
   })
 
+  // Pins the shipping wiring: migrateTo's bound honors the replacement's dial stages.
+  it('outlives the flat bound when the relay cell holds the dial', async () => {
+    vi.useFakeTimers()
+    try {
+      const oldSession = new FakeSession('connected')
+      const replacement = Object.assign(new FakeSession('connecting'), {
+        dialStage: new RelayDialStageTracker(),
+        getDialStage(): RelayDialStage {
+          return this.dialStage.getDialStage()
+        },
+        onDialStageChange(listener: (stage: RelayDialStage) => void) {
+          return this.dialStage.onDialStageChange(listener)
+        }
+      })
+      const client = createStableLogicalRpcClient(oldSession, 'lan')
+      const migrating = client.migrateTo(replacement, 'relay', 12_000)
+      await vi.advanceTimersByTimeAsync(1_000)
+      replacement.dialStage.advance('awaiting-hello')
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(replacement.close).not.toHaveBeenCalled()
+      replacement.setState('connected')
+      await migrating
+      expect(client.getActivePath()).toBe('relay')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('closes a replacement that fails authentication and preserves the active session', async () => {
     const oldSession = new FakeSession('connected')
     const replacement = new FakeSession('connecting')
@@ -379,5 +454,52 @@ describe('stable logical RPC client', () => {
     expect(oldSession.close).not.toHaveBeenCalled()
     expect(client.getActivePath()).toBe('lan')
     expect(client.getGeneration()).toBe(1)
+  })
+})
+
+describe('stable logical RPC client subscription fencing', () => {
+  /** A physical session with an inert disposer, so only the logical guard can fence a late event. */
+  function leakySession() {
+    const session = new FakeSession('connected')
+    const listeners = new Set<(result: unknown) => void>()
+    session.subscribe.mockImplementation((_method, _params, listener) => {
+      listeners.add(listener)
+      return () => {}
+    })
+    return {
+      session,
+      emit(value: unknown): void {
+        for (const listener of listeners) {
+          listener(value)
+        }
+      }
+    }
+  }
+
+  it('delivers a stream event to a live subscription', () => {
+    const physical = leakySession()
+    const client = createStableLogicalRpcClient(physical.session, 'lan')
+    const listener = vi.fn()
+    client.subscribe('notifications.subscribe', { includeDesktopSuppressed: true }, listener)
+
+    physical.emit({ type: 'ready', subscriptionId: 'sub-1' })
+
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ type: 'ready', subscriptionId: 'sub-1' })
+  })
+
+  it('drops a stream event that lands after the caller unsubscribed', () => {
+    const physical = leakySession()
+    const client = createStableLogicalRpcClient(physical.session, 'lan')
+    const listener = vi.fn()
+    const unsubscribe = client.subscribe(
+      'notifications.subscribe',
+      { includeDesktopSuppressed: true },
+      listener
+    )
+
+    unsubscribe()
+    physical.emit({ type: 'ready', subscriptionId: 'sub-1' })
+
+    expect(listener).not.toHaveBeenCalled()
   })
 })

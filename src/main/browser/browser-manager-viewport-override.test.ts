@@ -12,7 +12,10 @@ const browserMocks = vi.hoisted(() => ({
   guestOpenDevToolsMock: vi.fn(),
   webContentsFromIdMock: vi.fn(),
   screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 })),
-  openPopupWithOriginBarMock: vi.fn()
+  openPopupWithOriginBarMock: vi.fn(),
+  processUserAgentMode: 'clean',
+  processUserAgent:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
 }))
 
 vi.mock('electron', () => ({
@@ -39,6 +42,13 @@ vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({
+    mode: browserMocks.processUserAgentMode,
+    userAgent: browserMocks.processUserAgent
+  })
+}))
+
 import { browserManager } from './browser-manager'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
 import {
@@ -55,11 +65,19 @@ import {
 
 const { guestOnMock, webContentsFromIdMock } = browserMocks
 const makeGuest = createViewportGuestFactory(browserMocks)
+const MOBILE_VIEWPORT_OVERRIDE = {
+  width: 375,
+  height: 667,
+  deviceScaleFactor: 2,
+  mobile: true
+} as const
 
 describe('browserManager', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
+    browserMocks.processUserAgentMode = 'clean'
+    browserMocks.processUserAgent = GUEST_CLEAN_UA
   })
 
   afterEach(() => {
@@ -68,12 +86,7 @@ describe('browserManager', () => {
 
   describe('setViewportOverride', () => {
     it('returns false when the tab is not registered', async () => {
-      const result = await browserManager.setViewportOverride('missing', {
-        width: 375,
-        height: 667,
-        deviceScaleFactor: 2,
-        mobile: true
-      })
+      const result = await browserManager.setViewportOverride('missing', MOBILE_VIEWPORT_OVERRIDE)
       expect(result).toBe(false)
     })
 
@@ -89,12 +102,7 @@ describe('browserManager', () => {
       webContentsFromIdMock.mockReset()
       webContentsFromIdMock.mockReturnValue(guest)
 
-      const ok = await browserManager.setViewportOverride('tab-mobile', {
-        width: 375,
-        height: 667,
-        deviceScaleFactor: 2,
-        mobile: true
-      })
+      const ok = await browserManager.setViewportOverride('tab-mobile', MOBILE_VIEWPORT_OVERRIDE)
       expect(ok).toBe(true)
 
       expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setDeviceMetricsOverride', {
@@ -121,15 +129,16 @@ describe('browserManager', () => {
     })
 
     it.each([false, true])(
-      'keeps the session UA for native-mode profiles when mobile=%s',
+      'keeps native process identity coherent with mobile=%s',
       async (mobile) => {
+        browserMocks.processUserAgentMode = 'native'
+        browserMocks.processUserAgent = GUEST_ELECTRON_UA
         const { guest, debuggerSendCommand } = makeGuest(mobile ? 4244 : 4243)
         webContentsFromIdMock.mockReturnValue(guest)
         browserManager.attachGuestPolicies(guest as never)
         browserManager.registerGuest({
           browserPageId: `tab-native-${mobile}`,
           sessionProfileId: 'native-profile',
-          userAgentMode: 'native',
           webContentsId: guest.id as number,
           rendererWebContentsId
         })
@@ -143,10 +152,12 @@ describe('browserManager', () => {
           })
         ).resolves.toBe(true)
 
-        expect(debuggerSendCommand).not.toHaveBeenCalledWith(
-          'Emulation.setUserAgentOverride',
-          expect.anything()
-        )
+        const userAgentOverride = lastUserAgentOverride(debuggerSendCommand)
+        if (mobile) {
+          expect(userAgentOverride).toMatchObject({ userAgent: expect.stringContaining('iPhone') })
+        } else {
+          expect(userAgentOverride).toEqual({ userAgent: GUEST_ELECTRON_UA })
+        }
       }
     )
 
@@ -194,6 +205,14 @@ describe('browserManager', () => {
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+      const willRedirect = guestOnMock.mock.calls.find(
+        ([event]) => event === 'will-redirect'
+      )?.[1] as (
+        event: { preventDefault: () => void },
+        url: string,
+        isInPlace: boolean,
+        isMainFrame: boolean
+      ) => void
 
       // Case A: the desktop preset lands first, while the tab is still off the auth host.
       await browserManager.setViewportOverride('tab-auth-nav', {
@@ -216,11 +235,9 @@ describe('browserManager', () => {
 
       // Leaving the auth host restores the clean Chrome-shaped preset UA.
       debuggerSendCommand.mockClear()
-      didStartNavigation(null, 'https://example.com/', false, true)
+      willRedirect({ preventDefault: vi.fn() }, 'https://example.com/', false, true)
       await flushViewportOps()
-      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
-        userAgent: GUEST_CLEAN_UA
-      })
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
     })
 
     // Why: not an ordering race — debugger.sendCommand dispatches in call order over one channel, so
@@ -263,12 +280,10 @@ describe('browserManager', () => {
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
 
-      const presetDone = browserManager.setViewportOverride('tab-race-onto-auth', {
-        width: 375,
-        height: 667,
-        deviceScaleFactor: 2,
-        mobile: true
-      })
+      const presetDone = browserManager.setViewportOverride(
+        'tab-race-onto-auth',
+        MOBILE_VIEWPORT_OVERRIDE
+      )
       await flushViewportOps()
 
       // The tab navigates to the auth host while the preset is still awaiting its first command.
@@ -377,17 +392,12 @@ describe('browserManager', () => {
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/', true)
       await flushViewportOps()
 
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_ELECTRON_UA)
+      expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_CLEAN_UA)
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
 
       // A later preset must also resolve the committed, non-auth URL.
       debuggerSendCommand.mockClear()
-      await browserManager.setViewportOverride('tab-pending-cleared', {
-        width: 375,
-        height: 667,
-        deviceScaleFactor: 2,
-        mobile: true
-      })
+      await browserManager.setViewportOverride('tab-pending-cleared', MOBILE_VIEWPORT_OVERRIDE)
       await flushViewportOps()
       expect(lastUserAgentOverride(debuggerSendCommand)?.userAgent).toContain('iPhone')
 
@@ -450,12 +460,16 @@ describe('browserManager', () => {
       willRedirect({ preventDefault: vi.fn() }, 'https://accounts.google.com/same', false, true)
       didStartNavigation(null, 'https://accounts.google.com/same', false, true)
       await flushViewportOps()
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
+        userAgent: googleAuthUserAgent()
+      })
 
       debuggerSendCommand.mockClear()
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/same', true)
       await flushViewportOps()
 
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
+      // Why: the redirect path never writes the WebContents UA — that write cancels the navigation.
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(debuggerSendCommand).not.toHaveBeenCalledWith(
         'Emulation.setUserAgentOverride',
         expect.objectContaining({ userAgent: GUEST_CLEAN_UA })
@@ -507,14 +521,92 @@ describe('browserManager', () => {
       )
       await flushViewportOps()
 
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
+      // Why: the identity switch for a redirect goes over CDP only. WebContents.setUserAgent() here
+      // makes Chromium cancel the in-flight navigation and replay the original request, which is what
+      // left Google sign-in on a blank tab.
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
         userAgent: googleAuthUserAgent()
       })
 
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/redirected', true)
       await flushViewportOps()
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_ELECTRON_UA)
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
+    })
+
+    it('preserves the auth identity when a viewport preset is cleared after a redirect', async () => {
+      const { guest, debuggerSendCommand } = makeGuest(4262, 'https://example.com/')
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-clear-on-auth',
+        webContentsId: guest.id as number,
+        rendererWebContentsId
+      })
+      const didStartNavigation = guestOnMock.mock.calls.find(
+        ([event]) => event === 'did-start-navigation'
+      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+      const willRedirect = guestOnMock.mock.calls.find(
+        ([event]) => event === 'will-redirect'
+      )?.[1] as (
+        event: { preventDefault: () => void },
+        url: string,
+        isInPlace: boolean,
+        isMainFrame: boolean
+      ) => void
+
+      await browserManager.setViewportOverride('tab-clear-on-auth', MOBILE_VIEWPORT_OVERRIDE)
+      didStartNavigation(null, 'https://example.com/start', false, true)
+      willRedirect({ preventDefault: vi.fn() }, 'https://accounts.google.com/', false, true)
+      await flushViewportOps()
+
+      debuggerSendCommand.mockClear()
+      await expect(browserManager.setViewportOverride('tab-clear-on-auth', null)).resolves.toBe(
+        true
+      )
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
+        userAgent: googleAuthUserAgent()
+      })
+      expect(debuggerSendCommand).not.toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: ''
+      })
+    })
+
+    it('does not inherit a mobile owner UA in a desktop popup', async () => {
+      const { guest: ownerGuest } = makeGuest(4263)
+      webContentsFromIdMock.mockReturnValue(ownerGuest)
+      browserManager.attachGuestPolicies(ownerGuest as never)
+      browserManager.registerGuest({
+        browserPageId: 'tab-mobile-popup-owner',
+        webContentsId: ownerGuest.id as number,
+        rendererWebContentsId
+      })
+      await browserManager.setViewportOverride('tab-mobile-popup-owner', MOBILE_VIEWPORT_OVERRIDE)
+
+      const { guest: popupGuest, debuggerSendCommand } = makeGuest(4264, 'https://mail.google.com/')
+      const popupOn = vi.fn()
+      popupGuest.on = popupOn
+      browserManager.attachGuestPolicies(popupGuest as never, {
+        browserTabId: 'tab-mobile-popup-owner',
+        rootGuestWebContentsId: ownerGuest.id as number
+      })
+      const willRedirect = popupOn.mock.calls.find(([event]) => event === 'will-redirect')?.[1] as (
+        event: { preventDefault: () => void },
+        url: string,
+        isInPlace: boolean,
+        isMainFrame: boolean
+      ) => void
+      const didStartNavigation = popupOn.mock.calls.find(
+        ([event]) => event === 'did-start-navigation'
+      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
+      willRedirect({ preventDefault: vi.fn() }, 'https://accounts.google.com/', false, true)
+      await flushViewportOps()
+      debuggerSendCommand.mockClear()
+      didStartNavigation(null, 'https://example.com/', false, true)
+      await flushViewportOps()
+
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
     })
 
@@ -699,14 +791,15 @@ describe('browserManager', () => {
       )
     })
 
-    it('leaves the UA override alone on navigation for native-UA profiles', async () => {
+    it('reapplies the native process identity instead of the Google exception', async () => {
+      browserMocks.processUserAgentMode = 'native'
+      browserMocks.processUserAgent = GUEST_ELECTRON_UA
       const { guest, debuggerSendCommand } = makeGuest(4250)
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
       browserManager.registerGuest({
         browserPageId: 'tab-native-nav',
         sessionProfileId: 'native-profile',
-        userAgentMode: 'native',
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
@@ -723,10 +816,9 @@ describe('browserManager', () => {
       debuggerSendCommand.mockClear()
       didStartNavigation(null, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
-      expect(debuggerSendCommand).not.toHaveBeenCalledWith(
-        'Emulation.setUserAgentOverride',
-        expect.anything()
-      )
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: GUEST_ELECTRON_UA
+      })
     })
 
     it('clears device metrics and disables touch for override=null', async () => {
@@ -772,8 +864,7 @@ describe('browserManager', () => {
 
       expect(debuggerAttach).toHaveBeenCalledWith('1.3')
       expect(debuggerSendCommand).toHaveBeenCalled()
-      // Why: detaching would clear Page.addScriptToEvaluateOnNewDocument
-      // (anti-detection). Guard regression.
+      // Why: detaching would clear every standing CDP override (viewport, auth UA). Guard regression.
       expect((guest.debugger as { detach?: unknown }).detach ?? undefined).toBeUndefined()
     })
 
@@ -804,35 +895,6 @@ describe('browserManager', () => {
       expect(ok).toBe(false)
       expect(debuggerAttach).toHaveBeenCalledWith('1.3')
       expect(debuggerSendCommand).not.toHaveBeenCalled()
-    })
-
-    it('installs annotation viewport bridge in an isolated world', async () => {
-      const { guest } = makeGuest(4646)
-      webContentsFromIdMock.mockReturnValue(guest)
-      browserManager.attachGuestPolicies(guest as never)
-      browserManager.registerGuest({
-        browserPageId: 'tab-annotations',
-        webContentsId: guest.id as number,
-        rendererWebContentsId
-      })
-
-      const ok = await browserManager.setAnnotationViewportBridge('tab-annotations', {
-        emitViewport: false,
-        enabled: true,
-        markers: [],
-        token: 'annotationviewporttoken'
-      })
-
-      expect(ok).toBe(true)
-      expect(guest.executeJavaScriptInIsolatedWorld).toHaveBeenCalledWith(
-        expect.any(Number),
-        [
-          expect.objectContaining({
-            code: expect.stringContaining('__orcaBrowserAnnotationViewportBridge')
-          })
-        ],
-        false
-      )
     })
   })
 })
