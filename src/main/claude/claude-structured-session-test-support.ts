@@ -16,6 +16,8 @@ import {
 } from './claude-structured-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
+export { invokeCanUseTool } from './claude-can-use-tool-test-support'
+
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
 export const USER_MESSAGE: AgentJournalMessageItem = {
@@ -296,32 +298,4 @@ export function recordingJournalSink(): StructuredAgentSessionEventSink {
 
 export function tick(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
-}
-
-export function invokeCanUseTool(
-  connection: FakeConnection,
-  toolName: string,
-  requestId: string,
-  toolUseID: string,
-  extra: {
-    input?: Record<string, unknown>
-    suggestions?: unknown[]
-    signal?: AbortSignal
-    agentID?: string
-  } = {}
-): { promise: Promise<unknown>; settled: () => boolean } {
-  const options = {
-    requestId,
-    toolUseID,
-    signal: extra.signal ?? new AbortController().signal,
-    ...(extra.suggestions ? { suggestions: extra.suggestions } : {})
-  } as unknown as Parameters<NonNullable<ClaudeStreamJsonConnectionHandlers['canUseTool']>>[2]
-  const asked = extra.agentID ? { ...options, agentID: extra.agentID } : options
-  let done = false
-  const promise = Promise.resolve(
-    connection.handlers.canUseTool?.(toolName, extra.input ?? {}, asked)
-  ).finally(() => {
-    done = true
-  })
-  return { promise, settled: () => done }
 }
