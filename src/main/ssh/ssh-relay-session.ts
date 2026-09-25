@@ -117,6 +117,7 @@ import {
 } from '../../shared/ssh-ai-vault-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
 import {
   openSshPtyConsumerSession,
   type OpenSshPtyConsumerSessionOptions,
@@ -2700,9 +2701,19 @@ export class SshRelaySession {
     if (hasLiveCurrentBinding) {
       return false
     }
-    return [lease.tabId, ...currentTabIds]
-      .filter((tabId) => isValidTerminalTabId(tabId))
-      .some(tombstoneMatches)
+    // Why only when no tab holds the leaf: a pane moved out of the tab before it closed lives on.
+    const leaseTabId = lease.tabId
+    const closedByRecord =
+      currentTabIds.length === 0 &&
+      candidates.some((candidate) =>
+        hasClosedTerminalTabRecord(candidate?.closedTerminalTabTombstonesByTabId, leaseTabId)
+      )
+    return (
+      closedByRecord ||
+      [lease.tabId, ...currentTabIds]
+        .filter((tabId) => isValidTerminalTabId(tabId))
+        .some(tombstoneMatches)
+    )
   }
 
   private async suppressRetiredReattachedPty(

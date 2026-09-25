@@ -206,7 +206,6 @@ describe('session writes deferred by a direct-SSH apply', () => {
 
       expect(persist, 'the close made during the apply never reached disk').toHaveBeenCalledTimes(1)
       const patch = persist.mock.calls[0][0].patch
-      expect(patch.closedTerminalTabTombstonesByTabId?.['tab-b']?.worktreeId).toBe(WORKTREE_B)
       expect(patch.tabsByWorktree?.[WORKTREE_B]).toEqual([])
       expect(patch.tabsByWorktree?.[WORKTREE_A]).toHaveLength(1)
     } finally {
@@ -242,9 +241,7 @@ describe('session writes deferred by a direct-SSH apply', () => {
       vi.advanceTimersByTime(5_200)
 
       expect(persist, 'a clock step back stranded the deferred write').toHaveBeenCalledTimes(1)
-      expect(
-        persist.mock.calls[0][0].patch.closedTerminalTabTombstonesByTabId?.['tab-b']
-      ).toBeDefined()
+      expect(persist.mock.calls[0][0].patch.tabsByWorktree?.[WORKTREE_B]).toEqual([])
     } finally {
       cleanup()
     }

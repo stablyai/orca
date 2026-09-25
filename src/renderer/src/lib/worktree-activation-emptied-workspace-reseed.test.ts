@@ -24,9 +24,12 @@ afterEach(() => {
 })
 
 /** The state a workspace lands in once its last terminal is closed: the row survives as an
- *  explicit empty list rather than disappearing. */
+ *  explicit empty list rather than disappearing, beside the close's record. */
 function seedClosedLastTerminal(worktreeId: string): void {
-  useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
+  useAppStore.setState({
+    tabsByWorktree: { [worktreeId]: [] },
+    closedTerminalTabTombstonesByTabId: { closed: { closedAt: Date.now(), worktreeId } }
+  })
   const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktreeId)
   expect(renderableTabCount).toBe(0)
 }

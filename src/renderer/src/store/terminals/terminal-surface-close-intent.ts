@@ -4,6 +4,7 @@ export function commitTerminalSurfaceClose(args: {
   worktreeId: string
   tabId: string
   leafId?: string
+  reason?: 'user' | 'cleanup'
 }): void {
   // Why optional: an older preload can linger through an in-place renderer reload.
   void globalThis.window?.api?.session?.closeTerminalSurface?.(args)?.catch((error: unknown) => {

@@ -62,7 +62,8 @@ describe('closeTab close intent', () => {
     expect(mockApi.pty.kill).toHaveBeenCalledWith(SSH_PTY)
     expect(closeTerminalSurface).toHaveBeenCalledWith({
       worktreeId: SSH_WORKTREE,
-      tabId: 'ssh-tab'
+      tabId: 'ssh-tab',
+      reason: 'user'
     })
   })
 

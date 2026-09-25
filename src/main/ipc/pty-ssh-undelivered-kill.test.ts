@@ -327,8 +327,8 @@ describe('undelivered SSH stops', () => {
     }
   })
 
-  // No incarnation means no fence, and an unfenced order can only be discarded or guessed at.
-  it('records nothing when the PTY incarnation was never learned', async () => {
+  // A legacy id with no incarnation has no fence, and an unfenced order can only be guessed at.
+  it('records nothing for a legacy id whose PTY incarnation was never learned', async () => {
     const store = createKillStore()
     registerSshPtyProvider(
       'ssh-1',
@@ -346,6 +346,25 @@ describe('undelivered SSH stops', () => {
     } finally {
       unregisterSshPtyProvider('ssh-1')
       deletePtyOwnership('ssh:ssh-1@@pty-8')
+    }
+  })
+
+  // A `pty2:` id is epoch-scoped, so it names one process even when the incarnation was never
+  // learned: an offline close across a relaunch still owes the kill.
+  it('records the stop for an epoch-scoped id whose incarnation was never learned', () => {
+    const store = createKillStore()
+    const ptyId = 'ssh:ssh-1@@pty2:epoch-a:4'
+    setPtyOwnership(ptyId, 'ssh-1')
+    const { kill } = install(store)
+
+    try {
+      expect(kill(ptyId)).toBe(false)
+      expect(store.recordSshRemotePtyKillIntent).toHaveBeenCalledWith('ssh-1', 'pty2:epoch-a:4', {
+        requestedAt: expect.any(Number),
+        attempts: 0
+      })
+    } finally {
+      deletePtyOwnership(ptyId)
     }
   })
 })

@@ -24,6 +24,7 @@ export type WorkspaceSessionApi = {
       worktreeId: string
       tabId: string
       leafId?: string
+      reason?: 'user' | 'cleanup'
     }) => Promise<void>
     flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null

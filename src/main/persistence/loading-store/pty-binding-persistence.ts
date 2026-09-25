@@ -85,7 +85,11 @@ export class PtyBindingPersistenceOperations {
       savePending: runtime.writeTimer !== null || runtime.pendingWrite !== null,
       generationGap: runtime.writeGeneration - runtime.lastDurableWriteGeneration
     })
-    if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey)) {
+    const sessions = this[ptyBindingPersistenceOperationsContext].sessions
+    const partitions = sessions
+      .getWorkspaceSessionHostIds()
+      .map((hostId) => sessions.getWorkspaceSession(hostId))
+    if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
       span.finish('refused')
       return false
     }

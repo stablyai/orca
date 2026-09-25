@@ -32,14 +32,19 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   // Why: a renderer save cannot shrink membership main owns, so each close commits it explicitly.
   ipcMain.handle(
     'session:close-terminal-surface',
-    (_event, args: { worktreeId: string; tabId: string; leafId?: string }) => {
+    (
+      _event,
+      args: { worktreeId: string; tabId: string; leafId?: string; reason?: 'user' | 'cleanup' }
+    ) => {
       if (typeof args?.worktreeId !== 'string' || typeof args.tabId !== 'string') {
         throw new Error('invalid_terminal_surface')
       }
       runtime.closeTerminalSurfaceFromRenderer({
         worktreeId: args.worktreeId,
         tabId: args.tabId,
-        ...(typeof args.leafId === 'string' ? { leafId: args.leafId } : {})
+        ...(typeof args.leafId === 'string' ? { leafId: args.leafId } : {}),
+        // Why only these two: main alone closes a tab for its process exit.
+        ...(args.reason === 'cleanup' ? { reason: 'cleanup' } : {})
       })
     }
   )

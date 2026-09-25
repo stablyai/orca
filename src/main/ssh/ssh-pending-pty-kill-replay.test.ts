@@ -134,6 +134,28 @@ describe('replayPendingSshPtyKills', () => {
     expect(terminated).toEqual(['pty-1'])
   })
 
+  // An offline close across a relaunch never learned the incarnation; the epoch-scoped id is the fence.
+  it('replays an epoch-scoped stop that carries no incarnation', async () => {
+    const relayPtyId = 'pty2:epoch-a:4'
+    const { store, cleared, terminated } = createStoreStub([
+      { ptyId: relayPtyId, intent: { requestedAt: NOW, attempts: 0 } }
+    ])
+    const { provider, shutdown } = createProviderStub([{ relayPtyId, incarnationId: 'inc-live' }])
+    await replayPendingSshPtyKills({
+      targetId: TARGET,
+      store,
+      provider,
+      shouldContinue: () => true,
+      now: () => NOW
+    })
+    expect(shutdown).toHaveBeenCalledWith(`ssh:ssh-1@@${relayPtyId}`, {
+      immediate: true,
+      expectedIncarnationId: undefined
+    })
+    expect(cleared).toEqual([relayPtyId])
+    expect(terminated).toEqual([relayPtyId])
+  })
+
   // #16970: a redeployed relay renumbers from pty-1, so this id now names someone else's shell.
   it('refuses to kill a recycled relay id and expires the lease that named it', async () => {
     const { store, cleared, terminated, expired, recycled } = createStoreStub([

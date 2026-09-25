@@ -10,6 +10,7 @@ import type { Tab } from '../../shared/tab-types'
 import { closeTerminalSurfaceInWorkspaceSession } from './terminal-surface-close'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   // Why: headless serve backs browser panes with offscreen WebContents that live
@@ -83,20 +84,28 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   protected closeTerminalSurface(
     worktreeId: string,
     tabId: string,
-    options: { leafId?: string; allowMissing?: boolean; force?: boolean } = {}
+    options: {
+      leafId?: string
+      allowMissing?: boolean
+      force?: boolean
+      reason?: RuntimeSessionTabCloseReason
+    } = {}
   ): string[] {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
       throw new Error('workspace_session_unavailable')
     }
-    const result = closeTerminalSurfaceInWorkspaceSession(session, worktreeId, tabId, options)
+    const result = closeTerminalSurfaceInWorkspaceSession(session, worktreeId, tabId, {
+      ...options,
+      reason: options.reason ?? 'user'
+    })
     if (result.pinned) {
       throw new Error('terminal_tab_pinned')
     }
-    if (!result.closed) {
-      if (!options.allowMissing) {
-        throw new Error('tab_not_found')
-      }
+    if (!result.closed && !options.allowMissing) {
+      throw new Error('tab_not_found')
+    }
+    if (result.session === session) {
       return []
     }
     this.setWorkspaceSessionForWorktree(worktreeId, result.session)
@@ -115,11 +124,13 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     worktreeId: string
     tabId: string
     leafId?: string
+    reason?: 'user' | 'cleanup'
   }): void {
     this.closeTerminalSurface(args.worktreeId, args.tabId, {
       leafId: args.leafId,
       allowMissing: true,
-      force: true
+      force: true,
+      reason: args.reason
     })
   }
 

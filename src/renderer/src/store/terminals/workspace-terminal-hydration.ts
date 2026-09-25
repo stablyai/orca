@@ -191,11 +191,10 @@ export function createWorkspaceTerminalHydrationActions(
             ...session.defaultTerminalTabsAppliedByWorktreeId,
             ...s.defaultTerminalTabsAppliedByWorktreeId
           },
-          // Why replace and not union: both callers hand over a map they derived from this store
-          // synchronously (the pull merge) or from disk before the store had one (startup), so there
-          // is no local tombstone to lose — and a union would resurrect the ones the merge just
-          // retired on the host's acknowledgement, which is the whole bound on this map.
-          closedTerminalTabTombstonesByTabId: session.closedTerminalTabTombstonesByTabId ?? {},
+          // Why keep the store's when absent: only main's session carries close records, and the
+          // pull merge's session does not, so re-hydrating from it must not clear the mirror.
+          closedTerminalTabTombstonesByTabId:
+            session.closedTerminalTabTombstonesByTabId ?? s.closedTerminalTabTombstonesByTabId,
           automaticAgentResumeClaimsByTabId: {},
           sleepingAgentSessionsByPaneKey,
           pendingReconnectWorktreeIds,
