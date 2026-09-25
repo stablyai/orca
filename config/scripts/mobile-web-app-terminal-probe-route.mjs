@@ -76,6 +76,8 @@ export default function TerminalProbeRoute() {
       selectAll: () => handleRef.current?.doSelectAll(),
       measure: () => handleRef.current?.measureFitDimensions(),
       awaitReady: () => handleRef.current?.awaitReady(),
+      // The handle itself, for a caller that has to keep it past the unmount that drops the ref.
+      handle: () => handleRef.current,
       setMounted: (next) => setMounted(next)
     }
     const onBeforeInput = (event) => {
