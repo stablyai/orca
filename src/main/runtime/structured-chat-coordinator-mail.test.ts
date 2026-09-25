@@ -351,9 +351,21 @@ afterEach(async () => {
 // Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
 const WAIT = { timeout: 10_000 }
 
-// The text the PTY lane types into a terminal coordinator, byte for byte.
 const POINTER =
-  /^You have 1 orchestration message\. Run `orca orchestration check --run run_\w+`\.$/
+  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
+
+/** The text the PTY lane types into a local terminal for this mailbox, byte for byte. */
+function ptyPointer(mailboxHandle: string): string {
+  return formatMessagePointer(1, mailboxHandle, runtime.getLocalOrchestrationCliCommand()).trim()
+}
+
+/** The text of a turn the fake provider received. */
+function turnText(turn: { text: string }): string {
+  const input: unknown = JSON.parse(turn.text)
+  return Array.isArray(input)
+    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
+    : ''
+}
 
 describe('a worker result reaches the structured chat that coordinates it', () => {
   it('lands as a turn in the coordinator journal, and a flagless check returns the worker_done', async () => {
@@ -364,8 +376,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     // No user action: the result itself sends the chat a turn through the host's send.
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    expect(chat.turns[0]!.text).toMatch(POINTER)
-    expect(chat.turns[0]!.text).toContain(runId)
+    expect(turnText(chat.turns[0]!)).toBe(ptyPointer(`run:${runId}`))
     await settleTurn(COORDINATOR, 0)
     expect(userTexts(COORDINATOR)).toEqual([expect.stringMatching(POINTER)])
 
@@ -416,7 +427,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
     await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
     // The PTY lane's text: `check` itself replays the held batch and names its ack.
-    expect(chat.turns[1]!.text).toBe(formatMessagePointer(1, `run:${runId}`).trim())
+    expect(turnText(chat.turns[1]!)).toBe(ptyPointer(`run:${runId}`))
     await settleTurn(COORDINATOR, 1)
 
     // Exactly once per new message: a retry and the idle edge point nothing further.
@@ -645,7 +656,7 @@ describe('any live session is addressable by its id', () => {
 
     await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
     // Direct mail is not in a Run, so the pointer names no `--run`.
-    expect(peer.turns[0]!.text).toBe(formatMessagePointer(1, `session:${PEER_CHAT}`).trim())
+    expect(turnText(peer.turns[0]!)).toBe(ptyPointer(`session:${PEER_CHAT}`))
     await settleTurn(PEER_CHAT, 0)
     const checked = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
     expect(checked).toMatchObject({ count: 1, messages: [{ subject: 'ping' }] })
