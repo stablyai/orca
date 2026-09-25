@@ -43,6 +43,7 @@ export type BunRuntime = {
 
 export type BunPtyProcess = pty.IPty & {
   destroy(): void
+  processNameIsSpawnFile?: true
   jobRootProcessIsWrapper?: true
   shellProcessId?: number
   waitForSpawn?(): Promise<void>

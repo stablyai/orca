@@ -81,6 +81,7 @@ run(runtimePath, [
           ? [
               'src/main/daemon/pty-subprocess/bun-pty-process.integration.test.ts',
               'src/main/daemon/pty-subprocess/windows-bun-pty-gate.integration.test.ts',
+              'src/main/providers/local-pty-bun-artifact.integration.test.ts',
               'config/scripts/zip-extractor-command.test.mjs'
             ]
           : [])

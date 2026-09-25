@@ -12,9 +12,14 @@ import {
   buildLocalPtySpawnEnvironment,
   enforceLocalPtySpawnEnvironmentOverrides
 } from './local-pty-spawn-environment'
-import { runCancelableLocalPtySpawn, reattachLocalPty } from './local-pty-spawn-state'
-import { spawnShellWithFallback } from './local-pty-utils'
-import { updateHistoryEnvForFallback, type HistoryInjectionResult } from '../terminal-history'
+import {
+  runCancelableLocalPtySpawn,
+  reattachLocalPty,
+  reserveLocalPtySpawn
+} from './local-pty-spawn-state'
+import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
+import { destroyPtyProcess } from './local-pty-termination'
+import { updateHistoryEnvForFallback } from '../terminal-history'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 
 export async function spawnLocalPty(
@@ -36,7 +41,7 @@ export async function spawnLocalPty(
     throw new SessionNotFoundError(args.sessionId ?? '')
   }
   const id = allocatePtyId(reattachId ?? undefined)
-  return runCancelableLocalPtySpawn(id, async (throwIfCanceled) => {
+  return runCancelableLocalPtySpawn(id, async (throwIfCanceled, cancellation) => {
     const incarnationId = randomUUID()
     let plan = createLocalPtyLaunchPlan(args, getOptions)
     if (plan instanceof DeferredLocalPtyLaunchPlan) {
@@ -61,66 +66,83 @@ export async function spawnLocalPty(
       env: finalEnv
     })
 
-    const [pty] = await Promise.all([import('node-pty'), prepareMacosTccLoginShell()])
-    throwIfCanceled()
-    if (args.signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
-    // Why: another same-id request can win while this one awaits preflight; attach before launching a redundant shell.
-    const concurrentWinner = reattachId ? reattachLocalPty(id, args.cols, args.rows) : null
-    if (concurrentWinner) {
-      return concurrentWinner
-    }
-    const spawnResult = spawnShellWithFallback({
-      shellPath: plan.shellPath,
-      shellArgs: plan.shellArgs,
-      cols: args.cols,
-      rows: args.rows,
-      cwd: plan.effectiveCwd,
-      env: finalEnv,
-      termName: finalEnv.TERM,
-      ptySpawn: pty.spawn,
-      getShellReadyConfig: plan.getFallbackShellReadyConfig,
-      launchEnvKeys: plan.primaryLaunchEnvKeys,
-      // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
-      onBeforeFallbackSpawn: historyResult?.historyDir
-        ? (env, fallbackShell) =>
-            updateHistoryEnvForFallback(env, fallbackShell, historyResult as HistoryInjectionResult)
-        : undefined,
-      windowsFallbackAttempts: plan.windowsFallbackAttempts
-    })
-    args.onPtySpawnCommitted?.()
-    plan.shellPath = spawnResult.shellPath
-    // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.
-    if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
-      plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
-    }
-    if (args.command && plan.getFallbackShellReadyConfig) {
-      plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
-    }
+    const fallbackHistory = historyResult?.historyDir ? historyResult : undefined
+    const [spawn] = await Promise.all([loadLocalPtyRuntimeSpawn(), prepareMacosTccLoginShell()])
+    return reserveLocalPtySpawn(id, async () => {
+      const checkCanceled = (): void => {
+        throwIfCanceled()
+        if (args.signal?.aborted) {
+          throw new Error('client_disconnected')
+        }
+      }
+      checkCanceled()
+      // Why: another same-id request can win while this one awaits preflight; attach before launching a redundant shell.
+      const concurrentWinner = reattachId ? reattachLocalPty(id, args.cols, args.rows) : null
+      if (concurrentWinner) {
+        return concurrentWinner
+      }
+      const pendingSpawn = spawn({
+        shellPath: plan.shellPath,
+        shellArgs: plan.shellArgs,
+        cols: args.cols,
+        rows: args.rows,
+        cwd: plan.effectiveCwd,
+        env: finalEnv,
+        termName: finalEnv.TERM,
+        signal: args.signal ? AbortSignal.any([args.signal, cancellation]) : cancellation,
+        getShellReadyConfig: plan.getFallbackShellReadyConfig,
+        launchEnvKeys: plan.primaryLaunchEnvKeys,
+        // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
+        onBeforeFallbackSpawn: fallbackHistory
+          ? (env, fallbackShell) => updateHistoryEnvForFallback(env, fallbackShell, fallbackHistory)
+          : undefined,
+        windowsFallbackAttempts: plan.windowsFallbackAttempts
+      })
+      const spawnResult = pendingSpawn instanceof Promise ? await pendingSpawn : pendingSpawn
+      try {
+        checkCanceled()
+      } catch (error) {
+        try {
+          spawnResult.process.kill('SIGKILL')
+        } finally {
+          destroyPtyProcess(spawnResult.process)
+        }
+        throw error
+      }
+      args.onPtySpawnCommitted?.()
+      plan.shellPath = spawnResult.shellPath
+      // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.
+      if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
+        plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
+      }
+      if (args.command && plan.getFallbackShellReadyConfig) {
+        plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
+      }
 
-    if (process.platform !== 'win32') {
-      finalEnv.SHELL = plan.shellPath
-    }
+      if (process.platform !== 'win32') {
+        finalEnv.SHELL = plan.shellPath
+      }
 
-    const proc = spawnResult.process
-    const spawnedShellIsWsl =
-      process.platform === 'win32' && pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
-    const spawnedWslDistro = spawnedShellIsWsl
-      ? (plan.launchWslDistro ?? undefined)
-      : process.platform === 'win32'
-        ? null
-        : undefined
-    return activateLocalPtySession({
-      id,
-      incarnationId,
-      spawn: args,
-      getOptions,
-      plan,
-      env: finalEnv,
-      proc,
-      reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
-      spawnedWslDistro
+      const proc = spawnResult.process
+      const spawnedShellIsWsl =
+        process.platform === 'win32' &&
+        pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
+      const spawnedWslDistro = spawnedShellIsWsl
+        ? (plan.launchWslDistro ?? undefined)
+        : process.platform === 'win32'
+          ? null
+          : undefined
+      return activateLocalPtySession({
+        id,
+        incarnationId,
+        spawn: args,
+        getOptions,
+        plan,
+        env: finalEnv,
+        proc,
+        reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
+        spawnedWslDistro
+      })
     })
   })
 }

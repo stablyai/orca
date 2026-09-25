@@ -53,6 +53,10 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+vi.mock('../daemon/pty-subprocess/bun-pty-process-capabilities', () => ({
+  canUseBunPty: () => false
+}))
+
 vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
@@ -115,7 +119,13 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
-import { pendingLocalPtySpawns } from './local-pty-provider-state'
+import {
+  pendingLocalPtySpawns,
+  ptyDisposables,
+  ptyExitDisposables,
+  ptyPhysicalExits,
+  startupIngressByPty
+} from './local-pty-provider-state'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -163,6 +173,42 @@ describe('LocalPtyProvider', () => {
       const result = await provider.spawn({ cols: 80, rows: 24 })
       expect(result.id).toBeTruthy()
       expect(typeof result.id).toBe('string')
+    })
+
+    it('retires buffered output and synchronous Bun exit before replying to spawn', async () => {
+      const disposeData = vi.fn()
+      const disposeExit = vi.fn()
+      const onExit = vi.fn()
+      provider.configure({ onExit })
+      mockProc.onData.mockImplementation((listener: (data: string) => void) => {
+        listener('last output')
+        return { dispose: disposeData }
+      })
+      mockProc.onExit.mockImplementation((listener: (event: { exitCode: number }) => void) => {
+        listener({ exitCode: 17 })
+        return { dispose: disposeExit }
+      })
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'already-exited-bun-shell',
+        command: 'must-not-run'
+      })
+      expect(result.exitedBeforeSpawnReply).toBe(true)
+      expect(provider.getPtyProcess(result.id)).toBeUndefined()
+      for (const map of [
+        ptyDisposables,
+        ptyExitDisposables,
+        ptyPhysicalExits,
+        startupIngressByPty
+      ]) {
+        expect(map.has(result.id)).toBe(false)
+      }
+      expect(disposeData).toHaveBeenCalledOnce()
+      expect(disposeExit).toHaveBeenCalledOnce()
+      expect(onExit).toHaveBeenCalledOnce()
+      await Promise.resolve()
+      expect(mockProc.write).not.toHaveBeenCalled()
     })
 
     it('reattaches to an existing caller-supplied session id without spawning', async () => {

@@ -8,6 +8,7 @@ on:
       - 'src/main/worker-thread-entry-path.ts'
       - 'src/main/orcad/**'
       - 'src/main/daemon/pty-subprocess/**'
+      - 'src/main/providers/**'
       - 'src/shared/**'
       - 'config/**'
       - 'package.json'

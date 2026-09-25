@@ -89,6 +89,20 @@ describe('Windows Bun shell fallback after gated spawn', () => {
     expect(finished).toHaveBeenCalledOnce()
   })
 
+  it('destroys an unconfirmed gate on cancellation without starting a fallback shell', async () => {
+    const controller = new AbortController()
+    const proc = createProcess(() => new Promise(() => {}))
+    const spawnBunPty = vi.fn(() => proc)
+    const result = spawnNativeDaemonPty(
+      { ...args, signal: controller.signal },
+      { canUseBunPty: () => true, spawnBunPty }
+    )
+    controller.abort(new Error('spawn canceled'))
+    await expect(result).rejects.toThrow('spawn canceled')
+    expect(proc.destroy).toHaveBeenCalledOnce()
+    expect(spawnBunPty).toHaveBeenCalledOnce()
+  })
+
   it.each([0, 1])(
     'stops at an ambiguous attempt %s to avoid running its startup command twice',
     async (ambiguousIndex) => {

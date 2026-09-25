@@ -7,21 +7,34 @@ import {
   type PendingLocalPtySpawn
 } from './local-pty-provider-state'
 
+const spawnReservations = new Map<string, Promise<unknown>>()
+
+/** A Windows shell receipt can arrive after another request reaches the same native spawn. */
+export async function reserveLocalPtySpawn<T>(id: string, operation: () => Promise<T>): Promise<T> {
+  const previous = spawnReservations.get(id)
+  const pending = previous ? previous.catch(() => {}).then(operation) : operation()
+  spawnReservations.set(id, pending)
+  try {
+    return await pending
+  } finally {
+    if (spawnReservations.get(id) === pending) {
+      spawnReservations.delete(id)
+    }
+  }
+}
+
 /** Keep shutdown visible between awaits until the native process is registered. */
 export async function runCancelableLocalPtySpawn<T>(
   id: string,
-  operation: (throwIfCanceled: () => void) => Promise<T>
+  operation: (throwIfCanceled: () => void, signal: AbortSignal) => Promise<T>
 ): Promise<T> {
-  const pendingSpawn: PendingLocalPtySpawn = { canceled: false }
+  const cancellation = new AbortController()
+  const pendingSpawn: PendingLocalPtySpawn = { cancellation }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
   try {
-    return await operation(() => {
-      if (pendingSpawn.canceled) {
-        throw new Error(`PTY spawn canceled: ${id}`)
-      }
-    })
+    return await operation(() => cancellation.signal.throwIfAborted(), cancellation.signal)
   } finally {
     pending.delete(pendingSpawn)
     if (pending.size === 0) {
@@ -36,7 +49,7 @@ export function cancelPendingLocalPtySpawns(id: string): void {
     return
   }
   for (const pendingSpawn of pending) {
-    pendingSpawn.canceled = true
+    pendingSpawn.cancellation.abort(new Error(`PTY spawn canceled: ${id}`))
   }
 }
 

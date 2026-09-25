@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
@@ -36,6 +37,7 @@ export async function spawnNativeDaemonPty(
     cols: number
     rows: number
     windowsFallbackAttempts: WindowsShellSpawnAttempt[]
+    signal?: AbortSignal
     onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
   },
   runtime: NativePtyRuntime = { canUseBunPty, spawnBunPty }
@@ -46,6 +48,7 @@ export async function spawnNativeDaemonPty(
     shellArgs: string[],
     cwd: string
   ): Promise<pty.IPty> => {
+    args.signal?.throwIfAborted()
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     reportsChildExitStatus = hostReportsChildExitStatus(wrapped.file)
     if (runtime.canUseBunPty()) {
@@ -58,7 +61,10 @@ export async function spawnNativeDaemonPty(
         rows: args.rows
       })
       try {
-        await proc.waitForSpawn?.()
+        if (proc.waitForSpawn) {
+          await waitForPromiseWithSignal(proc.waitForSpawn(), args.signal)
+        }
+        args.signal?.throwIfAborted()
       } catch (error) {
         try {
           proc.destroy()
@@ -98,6 +104,7 @@ export async function spawnNativeDaemonPty(
       reportsChildExitStatus
     }
   } catch (primaryErr) {
+    args.signal?.throwIfAborted()
     if (process.platform !== 'win32' || primaryErr instanceof WindowsBunPtySpawnUnconfirmedError) {
       throw primaryErr
     }
@@ -116,6 +123,7 @@ export async function spawnNativeDaemonPty(
           reportsChildExitStatus
         }
       } catch (error) {
+        args.signal?.throwIfAborted()
         if (error instanceof WindowsBunPtySpawnUnconfirmedError) {
           throw error
         }

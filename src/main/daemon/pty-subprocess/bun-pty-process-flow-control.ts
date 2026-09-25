@@ -6,7 +6,7 @@ import {
   signalPosixPtyProcessGroups
 } from '../../pty/posix-pty-process-groups'
 
-const RESUME_RETRY_MS = 500
+const TRANSITION_RETRY_MS = 500
 
 type BunPtyProcessHandle = Readonly<{
   pid: number
@@ -35,7 +35,7 @@ export function createBunPtyProducerFlowControl(
   let pauseRequested = false
   let shuttingDown = false
   let pendingRead: AbortController | undefined
-  let resumeRetry: ReturnType<typeof setTimeout> | undefined
+  let transitionRetry: ReturnType<typeof setTimeout> | undefined
   let groupResumeRequired = false
   const signalRoot = (signal: 'SIGSTOP' | 'SIGCONT'): void => {
     // The runtime's named STOP/CONT signals are not portable across POSIX platforms.
@@ -87,27 +87,26 @@ export function createBunPtyProducerFlowControl(
     )
   }
 
-  const clearResumeRetry = (): void => {
-    clearTimeout(resumeRetry)
-    resumeRetry = undefined
+  const clearTransitionRetry = (): void => {
+    clearTimeout(transitionRetry)
+    transitionRetry = undefined
   }
 
-  const retryResume = (): void => {
+  const retryTransition = (): void => {
     if (
       shuttingDown ||
       options.isExited() ||
-      pauseRequested ||
-      state === 'running' ||
-      resumeRetry
+      state === (pauseRequested ? 'paused' : 'running') ||
+      transitionRetry
     ) {
       return
     }
-    // Callers send resume once; retain the obligation until fresh ownership can release every group.
-    resumeRetry = setTimeout(() => {
-      resumeRetry = undefined
+    // Callers send transitions once; retain the obligation until fresh ownership confirms every group.
+    transitionRetry = setTimeout(() => {
+      transitionRetry = undefined
       reconcile()
-    }, RESUME_RETRY_MS)
-    resumeRetry.unref?.()
+    }, TRANSITION_RETRY_MS)
+    transitionRetry.unref?.()
   }
 
   const reconcile = (): void => {
@@ -118,6 +117,15 @@ export function createBunPtyProducerFlowControl(
       pendingRead
     ) {
       return
+    }
+    if (pauseRequested && state === 'running') {
+      try {
+        signalRoot('SIGSTOP')
+        state = 'uncertain'
+      } catch {
+        retryTransition()
+        return
+      }
     }
     const controller = new AbortController()
     pendingRead = controller
@@ -145,9 +153,11 @@ export function createBunPtyProducerFlowControl(
         state = 'uncertain'
         if (nextPaused) {
           // Signal delivery is asynchronous; prove the shell stopped before suspending its jobs.
-          if (isPosixPtyRootStopped(table, options.processHandle.pid)) {
-            signalProcessGroup('SIGSTOP', table)
+          if (!isPosixPtyRootStopped(table, options.processHandle.pid)) {
+            retryTransition()
+            return
           }
+          signalProcessGroup('SIGSTOP', table, true)
         } else if (groupResumeRequired) {
           signalProcessGroup('SIGCONT', table, true)
         } else {
@@ -159,7 +169,7 @@ export function createBunPtyProducerFlowControl(
         }
       })
       .catch(() => {
-        retryResume()
+        retryTransition()
       })
   }
 
@@ -168,7 +178,7 @@ export function createBunPtyProducerFlowControl(
       if (shuttingDown || options.isExited()) {
         return
       }
-      clearResumeRetry()
+      clearTransitionRetry()
       if (options.platform === 'win32') {
         if (state !== 'paused' && options.windowsJob?.pause()) {
           state = 'paused'
@@ -176,18 +186,10 @@ export function createBunPtyProducerFlowControl(
         return
       }
       pauseRequested = true
-      if (state === 'running') {
-        try {
-          signalRoot('SIGSTOP')
-          state = 'uncertain'
-        } catch {
-          return
-        }
-      }
       reconcile()
     },
     resume() {
-      clearResumeRetry()
+      clearTransitionRetry()
       if (options.platform === 'win32') {
         if (!options.isExited() && options.windowsJob?.resume()) {
           state = 'running'
@@ -198,7 +200,7 @@ export function createBunPtyProducerFlowControl(
       reconcile()
     },
     resumeForShutdown() {
-      clearResumeRetry()
+      clearTransitionRetry()
       if (options.platform === 'win32') {
         if (!options.isExited()) {
           options.windowsJob?.resume()

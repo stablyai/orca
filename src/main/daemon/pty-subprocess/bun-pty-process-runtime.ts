@@ -221,12 +221,25 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
       }
     : {}
 
+  const terminate = (signal: string): void => {
+    producerFlowControl.resumeForShutdown()
+    const treeTerminated = windowsJob?.terminate() === 'terminated'
+    try {
+      processHandle.kill(signal)
+    } catch (error) {
+      if (!treeTerminated) {
+        throw error
+      }
+    }
+  }
+
   return {
     pid: processHandle.pid,
     get shellProcessId() {
       return windowsLaunch?.readShellProcessId()
     },
     handleFlowControl: false,
+    processNameIsSpawnFile: true,
     clear() {},
     process: args.file,
     get cols() {
@@ -281,30 +294,13 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
     ...producerFlowControl,
     ...windowsCapabilities,
     kill(signal = 'SIGTERM') {
-      if (exited) {
-        return
-      }
-      producerFlowControl.resumeForShutdown()
-      const treeTerminated = windowsJob?.terminate() === 'terminated'
-      try {
-        processHandle.kill(signal)
-      } catch (error) {
-        if (!treeTerminated) {
-          throw error
-        }
+      if (!exited) {
+        terminate(signal)
       }
     },
     destroy() {
       if (!exited) {
-        producerFlowControl.resumeForShutdown()
-        const treeTerminated = windowsJob?.terminate() === 'terminated'
-        try {
-          processHandle.kill(platform === 'win32' ? 'SIGTERM' : 'SIGHUP')
-        } catch (error) {
-          if (!treeTerminated) {
-            throw error
-          }
-        }
+        terminate(platform === 'win32' ? 'SIGTERM' : 'SIGHUP')
       }
       if (!processHandle.terminal.closed) {
         processHandle.terminal.close()
