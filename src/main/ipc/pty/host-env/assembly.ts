@@ -108,6 +108,7 @@ export function buildPtyHostEnv(
         }
       }
     } else {
+      delete baseEnv.ORCA_OPENCODE_AGENT
       restoreOrStripOverlayEnv(baseEnv, {
         primary: 'OPENCODE_CONFIG_DIR',
         overlay: 'ORCA_OPENCODE_CONFIG_DIR',

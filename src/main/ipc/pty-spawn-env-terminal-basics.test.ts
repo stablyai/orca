@@ -130,7 +130,7 @@ describe('registerPtyHandlers', () => {
 
       const env = buildPtyHostEnv(
         'pty-opencode-all-disabled',
-        {},
+        { ORCA_OPENCODE_AGENT: 'opencode' },
         {
           isPackaged: true,
           userDataPath: '/tmp/orca-user-data',
