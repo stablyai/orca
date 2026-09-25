@@ -24,6 +24,43 @@ import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 
+// Why 1s: it matches the provider visible-snapshot retry cadence, so a repainted screen is
+// picked up on the next attempt without adding a second, faster sweep to the wait path.
+const TUI_IDLE_VISIBLE_PROBE_RETRY_MS = 1_000
+
+/**
+ * Agents whose settled readiness is painted to the screen instead of written to scrollback.
+ */
+function usesAlternateScreenReadiness(agent: TuiAgent | null): boolean {
+  return agent === 'antigravity' || agent === 'codex'
+}
+
+/**
+ * Whether a `tui-idle` waiter may ask the provider for its visible screen.
+ *
+ * Why the AGY arm ignores a stale status: AGY can retain a stale working/blocked status after
+ * a trust dialog was dismissed, and its visible composer is authoritative, so probe whenever
+ * the pane is identified as AGY (or its banner is present), regardless of that stale status.
+ *
+ * Why Codex joins it: codex 0.157 turned on `tui.fullscreen_transcript`, so the session banner
+ * is painted into the alternate screen with cursor addressing instead of being written to
+ * scrollback as newline-separated lines. `buildTerminalWaitText` only ever reads the stream
+ * tail, so `findCodexReadyPromptIndex` cannot match such a pane even when the rendered screen
+ * already shows the settled prompt - a false-negative `tui-idle` that strands `worker-start`
+ * at `agent_readiness` (#22825).
+ */
+function shouldProbeVisibleScreen(
+  agent: TuiAgent | null,
+  waitText: string,
+  lastAgentStatus: AgentStatus | null
+): boolean {
+  const alternateScreen = usesAlternateScreenReadiness(agent)
+  return (
+    (alternateScreen || hasAntigravityTerminalHeader(waitText) || lastAgentStatus === null) &&
+    (waitText.length === 0 || alternateScreen || hasAntigravityTerminalHeader(waitText))
+  )
+}
+
 type RuntimeTerminalWaitDependencies = {
   defaultTimeoutMs: number
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
@@ -73,6 +110,49 @@ export class RuntimeTerminalWait {
     })
   }
 
+  /**
+   * Ask the provider for its visible screen, repeating for the panes whose readiness the
+   * stream tail can never carry.
+   *
+   * Why repeat instead of one bounded look: a launch registers the waiter while the TUI is
+   * still painting, so a single probe can read a blank screen and hand the wait back to the
+   * tail-only sweep, which cannot see an alternate-screen banner at all. Every other lane
+   * settles from the tail, so those panes keep today's single bounded look and its cost.
+   *
+   * Why the timer rides on the waiter: the registry's single `remove` path then retires it
+   * alongside the wait timeout and the idle poll, so no probe can outlive its waiter.
+   */
+  private startVisibleScreenProbe(
+    waiter: TerminalWaiter,
+    waiterTimeoutMs: number,
+    agent: TuiAgent | null
+  ): void {
+    const deadlineAt = Date.now() + Math.max(0, waiterTimeoutMs)
+    if (!usesAlternateScreenReadiness(agent)) {
+      this.deps.startVisibleReadProbe(waiter, waiterTimeoutMs, agent)
+      return
+    }
+    let timer: NodeJS.Timeout | null = null
+    const cancel = (): void => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      waiter.cancelVisibleProbe = null
+    }
+    const probe = (): void => {
+      this.deps.startVisibleReadProbe(waiter, Math.max(0, deadlineAt - Date.now()), agent)
+      const remainingMs = deadlineAt - Date.now()
+      // Why re-check: the probe can resolve synchronously, and `remove` has already retired
+      // this loop by then, so arming another timer would outlive the waiter.
+      if (remainingMs <= 0 || waiter.cancelVisibleProbe !== cancel) {
+        return
+      }
+      timer = setTimeout(probe, Math.min(TUI_IDLE_VISIBLE_PROBE_RETRY_MS, remainingMs))
+    }
+    waiter.cancelVisibleProbe = cancel
+    probe()
+  }
+
   async wait(
     handle: string,
     options?: {
@@ -113,6 +193,7 @@ export class RuntimeTerminalWait {
           reject,
           timeout: null,
           cancelIdlePoll: null,
+          cancelVisibleProbe: null,
           abortCleanup: null
         }
         if (!this.waiters.bindAbort(waiter, options?.signal)) {
@@ -149,19 +230,8 @@ export class RuntimeTerminalWait {
           } else {
             this.polls.startPty(waiter, live.pty)
             const paneAgent = this.deps.getPaneAgent(live.pty.ptyId)
-            if (
-              // AGY can retain a stale working/blocked status after a trust dialog was
-              // dismissed. Its visible composer is authoritative, so probe whenever the
-              // pane is identified as AGY (or its banner is present), regardless of that
-              // stale status.
-              (paneAgent === 'antigravity' ||
-                hasAntigravityTerminalHeader(livePtyWaitText) ||
-                live.pty.lastAgentStatus === null) &&
-              (livePtyWaitText.length === 0 ||
-                paneAgent === 'antigravity' ||
-                hasAntigravityTerminalHeader(livePtyWaitText))
-            ) {
-              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
+            if (shouldProbeVisibleScreen(paneAgent, livePtyWaitText, live.pty.lastAgentStatus)) {
+              this.startVisibleScreenProbe(waiter, effectiveTimeoutMs, paneAgent)
             }
           }
         }
@@ -205,6 +275,7 @@ export class RuntimeTerminalWait {
         reject,
         timeout: null,
         cancelIdlePoll: null,
+        cancelVisibleProbe: null,
         abortCleanup: null
       }
 
@@ -253,15 +324,8 @@ export class RuntimeTerminalWait {
             // preview/title until the waiter resolves or hits its timeout.
             this.polls.startLeaf(waiter, live.leaf)
             const paneAgent = this.deps.getPaneAgent(live.leaf.ptyId)
-            if (
-              (paneAgent === 'antigravity' ||
-                hasAntigravityTerminalHeader(liveLeafWaitText) ||
-                live.leaf.lastAgentStatus === null) &&
-              (liveLeafWaitText.length === 0 ||
-                paneAgent === 'antigravity' ||
-                hasAntigravityTerminalHeader(liveLeafWaitText))
-            ) {
-              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
+            if (shouldProbeVisibleScreen(paneAgent, liveLeafWaitText, live.leaf.lastAgentStatus)) {
+              this.startVisibleScreenProbe(waiter, effectiveTimeoutMs, paneAgent)
             }
           }
         }
