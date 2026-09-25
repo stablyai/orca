@@ -238,6 +238,40 @@ describe('external agent config isolation', () => {
     expect(isExternalAgentConfigIsolated()).toBe(true)
   })
 
+  it('keeps the release scope through mutation queues that were busy before the release', async () => {
+    configureAgentConfigIsolation(() => ({ isolateExternalAgentConfig: true }))
+    // Mirrors serializeMutation in the account service and the runtime-auth service.
+    const createQueue = () => {
+      let queue: Promise<unknown> = Promise.resolve()
+      return <T>(fn: () => Promise<T>): Promise<T> => {
+        const next = queue.then(fn)
+        queue = next.catch(() => {})
+        return next
+      }
+    }
+    const accountQueue = createQueue()
+    const authQueue = createQueue()
+    let unblock!: () => void
+    const busy = new Promise<void>((resolve) => (unblock = resolve))
+    void accountQueue(() => busy)
+    void authQueue(() => busy)
+    let seenInsideQueuedRestore: boolean | null = null
+    onBeforeAgentConfigIsolation(() =>
+      accountQueue(() =>
+        authQueue(async () => {
+          seenInsideQueuedRestore = isExternalAgentConfigIsolated()
+        })
+      )
+    )
+
+    const release = releaseExternalAgentStateBeforeIsolation()
+    unblock()
+    await release
+
+    expect(seenInsideQueuedRestore).toBe(false)
+    expect(isExternalAgentConfigIsolated()).toBe(true)
+  })
+
   it('detects only the off-to-on transition', () => {
     expect(isIsolationTurningOn({}, { isolateExternalAgentConfig: true })).toBe(true)
     expect(

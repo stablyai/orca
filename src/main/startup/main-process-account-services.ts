@@ -26,6 +26,7 @@ import {
   hasManagedClaudeSelection,
   normalizeClaudeRuntimeSelection
 } from '../claude-accounts/runtime-selection'
+import { releaseManagedClaudeSelections } from '../claude-accounts/claude-isolation-release'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
 import { setSystemCodexHomeHookSweepSuppressed } from '../codex/hook-service'
@@ -82,19 +83,16 @@ export function initializeMainProcessAccountServices(): void {
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   state.claudeAccounts = new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
   // Why every runtime: a managed login selected for host or any WSL distro must not outlive isolation.
-  onBeforeAgentConfigIsolation(async () => {
-    const selection = normalizeClaudeRuntimeSelection(store.getSettings())
-    if (selection.host) {
-      await state.claudeAccounts?.selectAccountForTarget(null, { runtime: 'host' })
-    }
-    for (const [wslDistro, accountId] of Object.entries(selection.wsl ?? {})) {
-      if (accountId) {
-        await state.claudeAccounts?.selectAccountForTarget(null, { runtime: 'wsl', wslDistro })
-      }
-    }
-  })
+  onBeforeAgentConfigIsolation(() =>
+    releaseManagedClaudeSelections({
+      getSettings: () => store.getSettings(),
+      deselect: (target) => state.claudeAccounts!.selectAccountForTarget(null, target),
+      hasMaterializedManagedLogin: () => state.claudeRuntimeAuth!.hasMaterializedManagedLogin()
+    })
+  )
   // Why at startup too: isolation can arrive via the profile file or another client, not only the toggle.
   if (isExternalAgentConfigIsolated() && hasManagedClaudeSelection(store.getSettings())) {
+    // Why only a warning: startup cannot be blocked; the next app start retries the release.
     void releaseExternalAgentStateBeforeIsolation().catch((error: unknown) =>
       console.warn('[agent-config-isolation] startup release failed:', error)
     )
