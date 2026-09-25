@@ -363,6 +363,60 @@ describe('a published child that dies while it proves its start', () => {
   )
 })
 
+describe("a view's start that dies while a sent message waits on it", () => {
+  const EXIT = 'claude stream-json exited (code 1)'
+  const TEXT = providerStartupFailureOutcome(EXIT)
+
+  it("is the message's own failed start: one error row, the message rejected, no second start (R2)", async () => {
+    adapterExtras = { awaitStarted: vi.fn(async () => TEXT) }
+    await restartHost()
+    acquire.mockImplementation(spawnStartingChild)
+    // Opening the tab: the view's hold starts a child that has not proven its start.
+    await host.hold(SESSION, 'surface-1')
+    const viewChild = currentChild()
+    const events = subscribe()
+    const params = sendParams('hello')
+
+    // Accepted first; the view's child's exit is settled before the loop's first step.
+    const sent = host.send(CALLER, params)
+    const exited = exit(viewChild, EXIT, true)
+    expect(await sent).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    await exited
+    const id = params.envelope.clientOperationId
+
+    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
+    await settleLoop()
+    expect(submission(id)?.reason).toBe(TEXT)
+    expect(statusRows()).toEqual([
+      {
+        itemId: `orca:${encodeURIComponent(`start-failure:${viewChild.acquisitionGeneration}`)}`,
+        text: TEXT,
+        tone: 'error'
+      }
+    ])
+    expect(rejectedIn(events, id)).toBe(true)
+    // The setup's child and the view's: nothing started again into the same failure.
+    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('leaves a message sent after that start failed to a fresh start (R2)', async () => {
+    await restartHost()
+    acquire.mockImplementationOnce(spawnStartingChild)
+    await host.hold(SESSION, 'surface-1')
+    await exit(currentChild(), EXIT, true)
+    expect(statusRows()).toHaveLength(1)
+
+    const id = await accept('after the failure')
+
+    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
+    expect(acquire).toHaveBeenCalledTimes(3)
+  })
+})
+
 describe('a child that ends before its message is handed over', () => {
   it('starts one child for the message, then rejects it and stops (R2)', async () => {
     // The child the loop starts exits between its start step and its handover step.

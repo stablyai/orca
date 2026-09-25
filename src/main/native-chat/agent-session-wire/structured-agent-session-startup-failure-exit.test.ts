@@ -21,6 +21,7 @@ function startedSession(): StructuredAgentSessionUnexpectedExitSession & {
   return {
     child: { generation: GENERATION, fence: 7, phase: 'ready' },
     journal: {
+      cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
       // Nothing ran: the start failed before any response or acknowledged prompt.
       snapshot: () => ({ items: [] }),
       appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),

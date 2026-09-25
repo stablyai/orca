@@ -129,8 +129,13 @@ export class StructuredAgentSessionDeliveryLoop {
       // A handle closes only with nothing queued, so one an earlier handle wrote is a leftover.
       (submission) => session.journal.wroteBeforeOpen(submission.acceptedSequence)
     )
-    if (!oldestQueuedSubmission(session)) {
+    const oldest = oldestQueuedSubmission(session)
+    if (!oldest) {
       return this.stop(sessionId)
+    }
+    const failedStart = startThatFailedWhileQueued(session, oldest)
+    if (failedStart) {
+      return this.fail(sessionId, failedStart)
     }
     const ready = await this.deps.ensureProviderChild(sessionId)
     if (!ready.ok) {
@@ -192,7 +197,7 @@ export class StructuredAgentSessionDeliveryLoop {
     return 'continue'
   }
 
-  private async fail(sessionId: string, failure: StartFailure): Promise<Step> {
+  private async fail(sessionId: string, failure: StartFailure): Promise<'stop'> {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
       await recordStructuredAgentSessionStartFailure(
@@ -208,6 +213,26 @@ export class StructuredAgentSessionDeliveryLoop {
     this.running.delete(sessionId)
     return 'stop'
   }
+}
+
+/** A start that died while this message waited on it — a view's, say — is the message's failed
+ *  start: settled with it, under its key, rather than started again into the same failure. */
+function startThatFailedWhileQueued(
+  session: StructuredAgentSessionHostSession,
+  oldest: NonNullable<ReturnType<typeof oldestQueuedSubmission>>
+): StartFailure | null {
+  const ended = session.lastEndedChild
+  if (
+    session.child ||
+    !ended?.duringStartup ||
+    ended.cause === 'user-stop' ||
+    oldest.acceptedSequence === undefined ||
+    ended.endedAt.epoch !== session.journal.cursor().epoch ||
+    ended.endedAt.sequence < oldest.acceptedSequence
+  ) {
+    return null
+  }
+  return { startKey: ended.generation, text: endedChildRejection(ended) }
 }
 
 const HOST_STOPPED_BEFORE_DELIVERY = 'Orca stopped the agent before this message was sent.'
