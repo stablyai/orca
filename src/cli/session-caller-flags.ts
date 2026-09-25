@@ -12,6 +12,7 @@ import type { CommandSpec, IdentityFlag } from './command-spec'
 import { RuntimeClientError } from './runtime/types'
 import { readInjectedAgentSessionId } from '../shared/agent-session-caller-env'
 import { isStructuredWorkerHandle } from '../shared/structured-worker-handle'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../shared/orca-session-address-prefix'
 
 export function refuseConflictingSessionCallerFlags(
   spec: CommandSpec | undefined,
@@ -33,7 +34,7 @@ export function refuseConflictingSessionCallerFlags(
         'consumer_fenced',
         `This command runs as agent session ${sessionId}, so --${flagName} ${declared} would act as a ` +
           `different caller. Drop --${flagName}: this session's orchestration commands already act as ` +
-          `session:${sessionId}. No request was sent.`
+          `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}. No request was sent.`
       )
     }
   }
@@ -43,11 +44,13 @@ const IDENTITY_FLAGS: readonly IdentityFlag[] = ['from', 'terminal']
 
 /**
  * The session's own spellings, plus the handle a structured worker session was minted. Plain
- * strings: this runs at the CLI entry for every command, before the actor codec's module graph.
+ * strings: this runs at the CLI entry for every command, before the address codec's module graph.
  */
 function namesInjectedSession(value: string, sessionId: string, env: NodeJS.ProcessEnv): boolean {
   return (
-    value === sessionId || value === `session:${sessionId}` || value === injectedSessionAddress(env)
+    value === sessionId ||
+    value === `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}` ||
+    value === injectedSessionAddress(env)
   )
 }
 
@@ -61,5 +64,7 @@ export function injectedSessionAddress(env: NodeJS.ProcessEnv = process.env): st
     return undefined
   }
   const ownHandle = env.ORCA_TERMINAL_HANDLE
-  return isStructuredWorkerHandle(ownHandle) ? ownHandle : `session:${sessionId}`
+  return isStructuredWorkerHandle(ownHandle)
+    ? ownHandle
+    : `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}`
 }

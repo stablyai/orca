@@ -85,7 +85,7 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
   })
 
-  it("refuses an agent session's caller flag naming another actor before any request", async () => {
+  it("refuses an agent session's caller flag naming another caller before any request", async () => {
     // One chokepoint for every verb: the spec says which flag names the caller.
     process.env.ORCA_AGENT_SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
