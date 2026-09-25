@@ -279,8 +279,8 @@ describe('restart reconciliation', () => {
   it.each([null, 'recovering'] as const)(
     'releases an ownerless reservation at stage %s, with evidence only when a scan proved nothing spawned',
     (handoffStage) => {
-      // A child commits its identity at spawn; one spawned in the moment before lost its stdio
-      // with the runtime that crashed, and a token scan is the only proof there can be.
+      // A child spawned before its identity was recorded lost its stdio with the runtime that
+      // crashed, and a token scan is the only proof there can be.
       const reserved = lease({ ownerProcess: null, claimStatus: 'reserved', handoffStage })
       expect(
         adjudicateAgentSessionRestart({ lease: reserved, probe: INDETERMINATE, observedAt: 9_000 })

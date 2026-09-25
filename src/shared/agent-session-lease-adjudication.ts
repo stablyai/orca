@@ -191,10 +191,11 @@ export function adjudicateAgentSessionRestart(args: {
       // treating it as an unproven reservation is what re-latches every released record on restart.
       return { disposition: 'free', reason: 'lease has no owner and no reservation' }
     }
-    // Why: a child commits its identity at spawn, and one spawned in the moment before lost its
-    // stdio with the runtime that crashed, so nothing can drive it. A token scan that proves no
-    // child is the only evidence there can be; without it the lease is released anyway, and a
-    // child still carrying the token is an orphan the reaper stops wherever it can see one.
+    // Why: a child spawned before its identity was recorded lost its stdio with the runtime that
+    // crashed, so nothing can drive it. A token scan that proves no child is the only evidence there
+    // can be; without it the lease is released anyway. A live child still carrying the token is
+    // not signalled here, and the orphan reaper, which runs once at store open, may have seen this
+    // lease still claiming it.
     return {
       disposition: 'evicted',
       nextFence: nextAgentSessionFence(lease),
