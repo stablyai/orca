@@ -15,7 +15,7 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
-import type { StructuredSessionCliInvocation } from './cli-command'
+import type { OrchestrationCliCommand } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
@@ -66,8 +66,6 @@ export type StructuredMailboxPointerHost = {
   }) => Promise<StructuredPointerSendOutcome>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
-  /** How this session's shell invokes this app's CLI; see `structuredSessionCliInvocation`. */
-  cliInvocation: (sessionId: string) => StructuredSessionCliInvocation
   /**
    * Holds the session for one attempt, resuming its provider child if the host evicted it; the
    * returned release hands it back to the host's release clock. Null when it cannot be resumed.
@@ -85,6 +83,8 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
    * agents mail each other outside a dispatch, and no other lane can serve it.
    */
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+  /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
+  getCliCommand: () => OrchestrationCliCommand
   host: StructuredMailboxPointerHost
   onRetain?: (input: {
     mailboxHandle: string
@@ -165,8 +165,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
     // Eligibility is "not yet pointed" (`delivered_at`), never "has the consumer acked": a chat that
     // reads a batch and ends its turn without acking must still be pointed at the NEXT result. The
-    // batch it holds is excluded, and the pointer names the `--ack` that releases it, since `check`
-    // replays an unacknowledged batch instead of returning newer mail.
+    // batch it holds is excluded; its own `check` replays that batch and names its ack.
     const outstanding = db.getOutstandingMailboxDelivery?.(mailboxHandle)
     const unread = selectOrchestrationPointerBatch({
       db,
@@ -179,7 +178,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
     this.inFlight.add(mailboxHandle)
     try {
-      await this.attempt(db, mailboxHandle, target, unread, reservedTypes, outstanding?.id)
+      await this.attempt(db, mailboxHandle, target, unread, reservedTypes)
     } finally {
       this.inFlight.delete(mailboxHandle)
     }
@@ -190,12 +189,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     unread: readonly { id: string; type: string; sequence: number }[],
-    reservedTypes: ReadonlySet<string> | undefined,
-    ackDeliveryId: string | undefined
+    reservedTypes: ReadonlySet<string> | undefined
   ): Promise<void> {
     const release = await this.deps.host.wake?.(target.sessionId)
     try {
-      await this.attemptAwake(db, mailboxHandle, target, unread, reservedTypes, ackDeliveryId)
+      await this.attemptAwake(db, mailboxHandle, target, unread, reservedTypes)
     } finally {
       release?.()
     }
@@ -206,8 +204,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     mailboxHandle: string,
     target: StructuredPointerTarget,
     unread: readonly { id: string; type: string; sequence: number }[],
-    reservedTypes: ReadonlySet<string> | undefined,
-    ackDeliveryId: string | undefined
+    reservedTypes: ReadonlySet<string> | undefined
   ): Promise<void> {
     const sessionId = target.sessionId
     const session = this.deps.host.readGateFacts(sessionId)
@@ -227,12 +224,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       blocks: [
         {
           type: 'text',
-          text: formatMessagePointer(
-            unread.length,
-            mailboxHandle,
-            this.deps.host.cliInvocation(sessionId),
-            ackDeliveryId
-          ).trim()
+          text: formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
         }
       ]
     }

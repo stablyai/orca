@@ -20,6 +20,7 @@ import { attachFingerprintFields } from '../native-chat/agent-session-wire/struc
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
+import { formatMessagePointer } from './orchestration/formatter'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
 import type { RpcRequest } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -347,12 +348,12 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-// The session's own CLI by its env var: a bare `orca` can resolve elsewhere in a login shell.
 // Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
 const WAIT = { timeout: 10_000 }
 
+// The text the PTY lane types into a terminal coordinator, byte for byte.
 const POINTER =
-  /You have 1 orchestration message\. Run `\\?"\$ORCA_CLI_COMMAND\\?" orchestration check --run run_/
+  /^You have 1 orchestration message\. Run `orca orchestration check --run run_\w+`\.$/
 
 describe('a worker result reaches the structured chat that coordinates it', () => {
   it('lands as a turn in the coordinator journal, and a flagless check returns the worker_done', async () => {
@@ -414,8 +415,8 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     )
     await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
     await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-    expect(chat.turns[1]!.text).toContain('1 new orchestration message')
-    expect(chat.turns[1]!.text).toContain(`--ack ${heldDelivery}`)
+    // The PTY lane's text: `check` itself replays the held batch and names its ack.
+    expect(chat.turns[1]!.text).toBe(formatMessagePointer(1, `run:${runId}`).trim())
     await settleTurn(COORDINATOR, 1)
 
     // Exactly once per new message: a retry and the idle edge point nothing further.
@@ -644,8 +645,7 @@ describe('any live session is addressable by its id', () => {
 
     await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
     // Direct mail is not in a Run, so the pointer names no `--run`.
-    expect(peer.turns[0]!.text).toContain('orchestration check`.')
-    expect(peer.turns[0]!.text).toContain('$ORCA_CLI_COMMAND')
+    expect(peer.turns[0]!.text).toBe(formatMessagePointer(1, `session:${PEER_CHAT}`).trim())
     await settleTurn(PEER_CHAT, 0)
     const checked = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
     expect(checked).toMatchObject({ count: 1, messages: [{ subject: 'ping' }] })

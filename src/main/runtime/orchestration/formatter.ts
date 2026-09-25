@@ -1,6 +1,6 @@
 import type { MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
-import type { OrchestrationCliCommand, StructuredSessionCliInvocation } from './cli-command'
+import type { OrchestrationCliCommand } from './cli-command'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -112,14 +112,11 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
 export function formatMessagePointer(
   count: number,
   mailboxHandle?: string,
-  cliCommand: OrchestrationCliCommand | StructuredSessionCliInvocation = 'orca',
-  /** The unacknowledged batch the reader holds; `check` replays it until acked. */
-  ackDeliveryId?: string
+  cliCommand: OrchestrationCliCommand = 'orca'
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
-  const ackFlag = ackDeliveryId ? ` --ack ${ackDeliveryId}` : ''
-  return `\nYou have ${count} ${ackDeliveryId ? 'new ' : ''}orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}${ackFlag}\`.\n`
+  return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
 }

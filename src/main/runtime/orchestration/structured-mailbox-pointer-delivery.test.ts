@@ -5,6 +5,7 @@ import {
   type StructuredMailboxPointerHost,
   type StructuredPointerSettlement
 } from './structured-mailbox-pointer-delivery'
+import { formatMessagePointer } from './formatter'
 import { structuredSessionGateFacts } from './structured-session-pointer-delivery'
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 
@@ -139,10 +140,10 @@ function harness(options: {
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: (mailboxHandle) =>
       mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
+    getCliCommand: () => 'orca-dev',
     host: {
       readGateFacts: () => (journal === null ? null : structuredSessionGateFacts(journal)),
       currentFence: () => 4,
-      cliInvocation: () => '"$ORCA_CLI_COMMAND"',
       send,
       ...('wakeTo' in options ? { wake } : {})
     }
@@ -297,10 +298,9 @@ describe('structured mailbox pointer delivery', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('points newer mail while the reader holds an unacknowledged batch, naming its ack', async () => {
+  it('points newer mail while the reader holds an unacknowledged batch, in the PTY pointer text', async () => {
     // The strand this pins: a chat reads a result, ends its turn without acking, and the gate on
-    // "an unacknowledged batch exists" silenced every later result. `check` replays that batch
-    // until acked, so the pointer must name the ack to reach the new mail.
+    // "an unacknowledged batch exists" silenced every later result. The text stays the PTY lane's.
     const { delivery, send, markAsDelivered } = harness({
       journal: idleJournal(),
       outstandingOwnDelivery: true,
@@ -310,7 +310,7 @@ describe('structured mailbox pointer delivery', () => {
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
-      text: expect.stringMatching(/You have 1 new orchestration message\. .*--ack delivery_held`/)
+      text: formatMessagePointer(1, 'dispatch:d1', 'orca-dev').trim()
     })
     expect(markAsDelivered).toHaveBeenCalledWith(['m2'])
   })
@@ -485,10 +485,10 @@ describe('forgetting one settled worker', () => {
           ? { sessionId, dispatchId: mailboxHandle.slice('dispatch:'.length) }
           : null
       },
+      getCliCommand: () => 'orca',
       host: {
         readGateFacts: () => structuredSessionGateFacts(journal),
         currentFence: () => 4,
-        cliInvocation: () => '"$ORCA_CLI_COMMAND"',
         send
       }
     })

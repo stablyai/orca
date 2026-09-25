@@ -221,6 +221,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
       getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
       resolveStructuredTarget: (mailboxHandle) =>
         this.resolveStructuredMailboxTarget(mailboxHandle),
+      getCliCommand: () => this.getLocalOrchestrationCliCommand(),
       host: createStructuredMailboxPointerHost()
     })
 
