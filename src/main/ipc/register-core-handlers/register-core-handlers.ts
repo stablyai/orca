@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { registerAiVaultProjectSuggestionHandler } from '../ai-vault-project-suggestions'
 import { registerAppHandlers } from '../app'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
@@ -222,6 +223,7 @@ export function registerCoreHandlers(
     callRuntimeSearch: (environmentId, method, params) =>
       callRuntimeSessionSearch(app.getPath('userData'), environmentId, method, params)
   })
+  registerAiVaultProjectSuggestionHandler(store)
   registerAiVaultHandlers({
     ensureStructuredSessionOwnership: () => runtime.ensureStructuredAgentSessionHost(),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,

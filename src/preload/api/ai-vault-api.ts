@@ -1,4 +1,8 @@
 import type {
+  AiVaultProjectSuggestion,
+  AiVaultSuggestProjectsArgs
+} from '../../shared/ai-vault-project-suggestions'
+import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
@@ -45,6 +49,8 @@ export type AiVaultApi = {
   /** Deletes and rebuilds this desktop's local search index. */
   clearSearchIndex: () => Promise<void>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+  /** Git repos found in local session folders that are not Orca projects yet. */
+  suggestProjects: (args: AiVaultSuggestProjectsArgs) => Promise<AiVaultProjectSuggestion[]>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (

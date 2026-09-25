@@ -1,3 +1,7 @@
+import type {
+  AiVaultProjectSuggestion,
+  AiVaultSuggestProjectsArgs
+} from '../../shared/ai-vault-project-suggestions'
 import { createSessionSearchClient } from '../../shared/ai-vault-search-client'
 import type { AiVaultSearchRequest, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
 import {
@@ -49,6 +53,8 @@ export const aiVaultApi = {
     ipcRenderer.invoke('aiVault:setSearchEnabled', executionHostId, enabled),
   clearSearchIndex: (): Promise<void> => ipcRenderer.invoke('aiVault:clearSearchIndex'),
   listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
+  suggestProjects: (args: AiVaultSuggestProjectsArgs): Promise<AiVaultProjectSuggestion[]> =>
+    ipcRenderer.invoke('aiVault:suggestProjects', args),
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
     ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
   cancelListSessions: (args: { requestToken: string }): Promise<void> =>

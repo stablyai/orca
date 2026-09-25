@@ -55,6 +55,7 @@ import { useAiVaultSearchFocusRequest } from './use-ai-vault-search-focus-reques
 import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
+import { AiVaultProjectSuggestions } from './AiVaultProjectSuggestions'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
@@ -330,6 +331,7 @@ export default function AiVaultPanel(): React.JSX.Element {
       ) : null}
 
       {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
+      {!searching && <AiVaultProjectSuggestions sessions={history} />}
       <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
         {searching
           ? filteredSessions.length > 0 && (

@@ -30,6 +30,7 @@ const {
   registerRuntimeEnvironmentHandlersMock,
   registerEphemeralVmHandlersMock,
   registerAiVaultHandlersMock,
+  registerAiVaultProjectSuggestionHandlerMock,
   registerAiVaultSearchHandlersMock,
   registerOrcaProfileHandlersMock,
   registerCodexAccountHandlersMock,
@@ -97,6 +98,7 @@ const {
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
   registerEphemeralVmHandlersMock: vi.fn(),
   registerAiVaultHandlersMock: vi.fn(),
+  registerAiVaultProjectSuggestionHandlerMock: vi.fn(),
   registerAiVaultSearchHandlersMock: vi.fn(),
   registerOrcaProfileHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
@@ -312,6 +314,10 @@ vi.mock('../ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
 
+vi.mock('../ai-vault-project-suggestions', () => ({
+  registerAiVaultProjectSuggestionHandler: registerAiVaultProjectSuggestionHandlerMock
+}))
+
 vi.mock('../ai-vault-search', () => ({
   registerAiVaultSearchHandlers: registerAiVaultSearchHandlersMock
 }))
@@ -429,6 +435,7 @@ describe('registerCoreHandlers', () => {
     registerRuntimeEnvironmentHandlersMock.mockReset()
     registerEphemeralVmHandlersMock.mockReset()
     registerAiVaultHandlersMock.mockReset()
+    registerAiVaultProjectSuggestionHandlerMock.mockReset()
     registerOrcaProfileHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
@@ -637,6 +644,7 @@ describe('registerCoreHandlers', () => {
       'aiVault.prepareSessionResume',
       prepareArgs
     )
+    expect(registerAiVaultProjectSuggestionHandlerMock).toHaveBeenCalledWith(store)
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {
