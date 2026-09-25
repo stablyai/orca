@@ -824,4 +824,70 @@ describe('connectPanePty', () => {
     expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalled()
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
   })
+
+  it('drops the row when the agent exits on a cancel its live subagent holds open', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return { id: 'tab-pty' }
+    })
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    vi.setSystemTime(1_100)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const turn = {
+      paneKey,
+      prompt: 'long task',
+      agentType: 'codex' as const,
+      terminalTitle: 'Codex',
+      stateHistory: [],
+      state: 'working' as const,
+      stateStartedAt: 900,
+      subagents: [{ id: 'agent-1', state: 'working' as const, startedAt: 950 }]
+    }
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          ...turn,
+          updatedAt: 1_000,
+          mainAgent: { state: 'working', stateStartedAt: 900 }
+        }
+      }
+    }
+    // What main publishes for the admitted cancel: the live subagent keeps the row working.
+    vi.mocked(window.api.agentStatus.inferInterrupt).mockImplementation(async () => {
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        ...turn,
+        updatedAt: 1_200,
+        mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1_200 }
+      }
+      return true
+    })
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    vi.advanceTimersByTime(1_000)
+    await flushAsyncTicks()
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x03')
+
+    // The CLI exits (a second Ctrl+C) before the settle window flushes the cancel.
+    capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+    await flushAsyncTicks()
+
+    expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalled()
+    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+  })
 })
