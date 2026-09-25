@@ -55,9 +55,12 @@ test('macOS copy falls through only for an unselected Kitty pane', async ({
   try {
     for (const policy of ['orca-first', 'terminal-first'] as const) {
       await orcaPage.evaluate((terminalShortcutPolicy) => {
-        window.__store?.setState((state) => ({
-          settings: { ...state.settings, terminalShortcutPolicy }
-        }))
+        window.__store!.setState((state) => {
+          if (!state.settings) {
+            throw new Error('Terminal settings are not loaded')
+          }
+          return { settings: { ...state.settings, terminalShortcutPolicy } }
+        })
       }, policy)
       for (const flags of [0, 1, 3, 31]) {
         await sendToTerminal(orcaPage, ptyId, '\x01')
