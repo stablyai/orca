@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
 import { isAgentSessionId } from '../agent-session-record'
 import { normalizeExecutionHostId } from '../execution-host'
+import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session-question-answer'
 import {
   AGENT_SESSION_ID_MAX_LENGTH,
   AGENT_SESSION_HISTORY_DIRECTIONS,
@@ -15,6 +16,10 @@ export const MAX_ID_LENGTH = AGENT_SESSION_ID_MAX_LENGTH
 export const MAX_RESPONSE_OPTION_ID_LENGTH = 1024
 
 export const MAX_PROMPT_BYTES = 256 * 1024
+
+/** Matches the journal's bounds on one grouped prompt. */
+const MAX_QUESTION_ANSWER_QUESTIONS = 4
+const MAX_QUESTION_ANSWER_OPTIONS = 64
 
 export const MAX_BLOCKS = 64
 
@@ -96,7 +101,7 @@ export const AttachParams = z
     provider: z.enum(['codex', 'claude']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
-    runtimeKind: z.enum(['native', 'tui']),
+    runtimeKind: z.literal('native'),
     providerHandle: ProviderHandle
   })
   .strict()
@@ -208,6 +213,50 @@ export const RespondParams = z
   })
   .strict()
 
+const QuestionAnswer = z
+  .object({
+    // Codex question ids are model-written and untrimmed; the host matches them exactly.
+    questionId: z
+      .string()
+      .min(1, 'Invalid question id')
+      .max(MAX_RESPONSE_OPTION_ID_LENGTH, 'Invalid question id'),
+    optionIds: z
+      .array(Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH))
+      .max(MAX_QUESTION_ANSWER_OPTIONS),
+    // Hashed verbatim by both peers, so no trim or transform here.
+    other: z
+      .string()
+      .max(AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES)
+      .refine(
+        (value) => Buffer.byteLength(value, 'utf8') <= AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES,
+        'Answer is too large'
+      )
+      .optional()
+  })
+  .strict()
+
+export const RespondToQuestionParams = z
+  .object({
+    envelope: MutationEnvelope,
+    itemId: Identifier('Invalid item id'),
+    expectedRevision: z.number().int().positive(),
+    /** An answer packed into one id, from clients that predate `answers`. */
+    optionId: Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH).optional(),
+    answers: z.array(QuestionAnswer).min(1).max(MAX_QUESTION_ANSWER_QUESTIONS).optional()
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if ((value.optionId === undefined) === (value.answers === undefined)) {
+      ctx.addIssue({ code: 'custom', message: 'Send exactly one of an option id or answers' })
+    }
+    if (
+      value.answers !== undefined &&
+      Buffer.byteLength(JSON.stringify(value.answers), 'utf8') > MAX_PROMPT_BYTES
+    ) {
+      ctx.addIssue({ code: 'custom', message: 'Answer is too large' })
+    }
+  })
+
 export const SetOptionParams = z
   .object({
     envelope: MutationEnvelope,
@@ -216,16 +265,16 @@ export const SetOptionParams = z
   })
   .strict()
 
-export const HandoffParams = z
-  .object({
-    envelope: MutationEnvelope,
-    direction: z.enum(['to-tui', 'to-native']),
-    mode: z.enum(['now', 'after-turn', 'stop-turn']),
-    action: z.enum(['start', 'cancel-queued', 'retry', 'recover']).optional()
-  })
-  .strict()
-
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+
+/** `sessionId` scopes the catalog to that session's pinned account; without a
+ *  session record the host keys it by the account a new launch would pin.
+ *  `worktree` names where a new chat runs, whose own config may replace the default. */
+export const ModelCatalogParams = z.strictObject({
+  agent: z.enum(['claude', 'codex']),
+  sessionId: SessionId.optional(),
+  worktree: Identifier('Invalid worktree selector').optional()
+})
 
 export const ConversationCommandParams = z
   .object({

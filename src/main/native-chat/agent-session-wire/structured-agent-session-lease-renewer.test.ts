@@ -26,7 +26,6 @@ async function liveStore(): Promise<AgentSessionRecordStore> {
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: root },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-renewal',
     claimKeyId: 'key-1',
@@ -144,7 +143,6 @@ describe('structured agent-session lease renewal', () => {
       }
       return records[0]!
     })
-    const onRenewed = vi.fn()
     const onError = vi.fn()
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store: {
@@ -157,16 +155,13 @@ describe('structured agent-session lease renewal', () => {
         matchedOn: ['spawn-token' as const]
       }),
       now: () => NOW + 10_000,
-      onRenewed,
       onError
     })
 
     await renewer.renewNow()
 
     expect(renewLeases).toHaveBeenCalledOnce()
-    expect(onRenewed).toHaveBeenCalledOnce()
     expect(renewLease).toHaveBeenCalledTimes(2)
-    expect(onRenewed).toHaveBeenCalledWith(records[0])
     expect(onError).toHaveBeenCalledWith({
       sessionId: 'session-b',
       error: expect.objectContaining({ message: 'agent_session_checkpoint_stale' })
@@ -206,21 +201,16 @@ describe('structured agent-session lease renewal', () => {
       outcome: 'identity-matched' as const,
       matchedOn: ['process-start-time' as const]
     }))
-    const onRenewed = vi.fn()
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store,
       probe,
-      now: () => NOW + 10_000,
-      onRenewed
+      now: () => NOW + 10_000
     })
 
     await renewer.renewNow()
 
     expect(probe).toHaveBeenCalledOnce()
     expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW + 10_000)
-    expect(onRenewed).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'session-renewal' })
-    )
   })
 
   it('stops extending the lease when child proof is no longer sufficient', async () => {
@@ -242,8 +232,8 @@ describe('structured agent-session lease renewal', () => {
     })
   })
 
-  it('never extends the lease of a native record parked in recovery', async () => {
-    // The host cannot vouch for a native child it holds no transport to; renewing while
+  it('never extends the lease of a record parked in recovery', async () => {
+    // The host cannot vouch for a child it holds no transport to; renewing while
     // recovering keeps an orphan pid's lease alive and reads as a healthy owner.
     const store = await liveStore()
     await store.transitionHandoff('session-renewal', (record) => ({
@@ -264,31 +254,5 @@ describe('structured agent-session lease renewal', () => {
 
     expect(probe).not.toHaveBeenCalled()
     expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW)
-  })
-
-  it('routes a proven dead TUI owner into handoff recovery', async () => {
-    const store = await liveStore()
-    await store.transitionHandoff('session-renewal', (record) => ({
-      ...record,
-      lease: { ...record.lease, runtimeKind: 'tui' }
-    }))
-    const onDeadTuiOwner = vi.fn(async () => undefined)
-    const onError = vi.fn()
-    const renewer = new StructuredAgentSessionLeaseRenewer({
-      store,
-      probe: async () => ({ outcome: 'pid-absent' }),
-      now: () => NOW + 10_000,
-      onDeadTuiOwner,
-      onError
-    })
-
-    await renewer.renewNow()
-
-    expect(onDeadTuiOwner).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'session-renewal' }),
-      { outcome: 'pid-absent' }
-    )
-    expect(store.getRecord('session-renewal')?.lease.lastRenewedAt).toBe(NOW)
-    expect(onError).not.toHaveBeenCalled()
   })
 })

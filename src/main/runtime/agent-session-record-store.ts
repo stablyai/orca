@@ -90,15 +90,19 @@ export class AgentSessionRecordStore {
     // Why: every persisted lease is unreconciled until this host adjudicates it, so a restart
     // grants no writer on the strength of what the previous process wrote.
     const diskRevision = agentSessionStoreRevision(loaded.state)
-    // After the revision, so the file still hashes to what was read. The filled ids reach disk
-    // with this store's first transaction rather than a write here: a rewrite at open would read
-    // as an external change to any other holder of the file mid-restart.
+    // After the revision, so the file still hashes to what was read. The filled ids, like the
+    // normalized legacy leases, reach disk with this store's first transaction rather than a write
+    // here: a rewrite at open would read as an external change to any other holder of the file
+    // mid-restart.
     const backfilled = backfillAgentSessionSurfaceTabIds(loaded.state)
     markAgentSessionStoreLeasesUnreconciled(loaded.state)
     const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
       filePath,
       args.hostId,
-      { ...loaded, needsRewrite: loaded.needsRewrite || backfilled > 0 },
+      {
+        ...loaded,
+        needsRewrite: loaded.needsRewrite || backfilled > 0 || loaded.legacyHandoffLeasesNormalized
+      },
       diskRevision
     )
     if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {

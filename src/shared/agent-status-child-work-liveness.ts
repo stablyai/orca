@@ -31,7 +31,7 @@ export function isAgentChildWorkKind(kind: AgentChildWorkKind): boolean {
  *  dies when the session closes (Claude also clears it on provider `ended`), so a producer that
  *  ever reported a failure IN PLACE (as `blocked`) rather than settling it would pin `working`
  *  until then. */
-function isLiveChildWork(child: AgentChildWorkLivenessCandidate): boolean {
+export function isLiveChildWork(child: AgentChildWorkLivenessCandidate): boolean {
   return child.state !== 'done' && child.state !== 'idle'
 }
 

@@ -1,5 +1,5 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
-import { mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
+import { isAgentStatusHeldOpenByChildWork } from '../../agent-lead-status-fold'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
 import {
@@ -74,24 +74,23 @@ export function normalizeClaudeEvent(
     })
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
-  // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
+  // Why: only a turn boundary may declare a verdict or carry a prior cancellation forward; any
+  // other event starts a fresh turn and drops it. The verdict is a fact about the main agent's turn and
+  // nothing else: a cancel never touches the shell, cron or subagent the turn left running.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
-  const interrupted =
-    isTurnBoundary &&
-    ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
-      mainAgentTurnInterrupted(previousLead))
-      ? true
-      : undefined
   // Why: absent means unknown — a plain Stop never becomes `success`, so a cancel can never read as a
   // success. Current Claude sends NO hook on a cancel and no `is_interrupt` on Stop, so the
   // cancellation normally arrives through Orca's own inferred interrupt
   // (`markClaudeLeadTurnInterrupted`) and is carried forward here; `is_interrupt` on a turn
   // boundary is kept as the secondary source for builds that do send it.
-  const outcome = interrupted
-    ? ('cancellation' as const)
-    : isTurnBoundary && eventName === 'StopFailure'
-      ? ('failure' as const)
-      : undefined
+  const outcome = !isTurnBoundary
+    ? undefined
+    : (eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
+        previousLead?.outcome === 'cancellation'
+      ? ('cancellation' as const)
+      : eventName === 'StopFailure'
+        ? ('failure' as const)
+        : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
   const sessionCrons = hookPayload['session_crons']
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
@@ -130,15 +129,10 @@ export function normalizeClaudeEvent(
     return null
   }
   if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(
-      state,
-      paneKey,
-      backgroundTasks.hasRunningNonAgentTask,
-      interrupted === true
-    )
+    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks.hasRunningNonAgentTask)
   }
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
-    if (hasActiveSessionCron && interrupted !== true) {
+    if (hasActiveSessionCron) {
       state.claudeActiveSessionCronPaneKeys.add(paneKey)
     } else {
       state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -206,9 +200,7 @@ export function normalizeClaudeEvent(
     )
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       ...resolveClaudePaneStatus(state, paneKey, restored),
-      updateToolSnapshot: true,
-      interrupted: mainAgentTurnInterrupted(restored),
-      turnCompletedAt: restored.turnCompletedAt
+      updateToolSnapshot: true
     })
   }
 
@@ -252,11 +244,6 @@ export function normalizeClaudeEvent(
       : undefined
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
 
-  if (interrupted && eventAgentId === undefined) {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-  }
-
   if (isManualCompactCompletion) {
     // Why: a manual /compact only ever completes at an idle prompt, so a child that exists ONLY as
     // a disk snapshot has nothing live behind it and must not keep the pane spinning — that
@@ -273,20 +260,22 @@ export function normalizeClaudeEvent(
     }
   }
 
-  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
-    state: reportedStateName,
-    outcome
-  })
+  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, { state: reportedStateName })
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
   const effectiveState = resolvedStatus.stateName
-  // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
+  // Why: the main agent already ended — the pane stays `working` only because background inventory is
+  // still registered. `stateStartedAt` is pinned for that whole run, so this end time is the
+  // per-turn identity and the later all-clear's pair key. A cancelled turn is not a completion:
+  // the row still reads what the shell says, but it earns no completion stamp to announce.
   const turnCompletedAt =
     eventAgentId === undefined &&
     isTurnBoundary &&
-    reportedStateName === 'done' &&
-    resolvedStatus.stateName === 'working' &&
-    interrupted !== true
+    outcome !== 'cancellation' &&
+    isAgentStatusHeldOpenByChildWork({
+      state: resolvedStatus.stateName,
+      mainAgent: { state: reportedStateName }
+    })
       ? Date.now()
       : undefined
 
@@ -325,11 +314,9 @@ export function normalizeClaudeEvent(
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolvedStatus,
     updateToolSnapshot: true,
-    interrupted,
     // Why: a finished compact is a session-shaped boundary, not a completed turn. Without this the
     // clearing `done` would fire completion notifications, unread counts and automation-run
     // completion evidence for work nobody did.
-    sessionBoundary: isManualCompactCompletion ? true : undefined,
-    turnCompletedAt
+    sessionBoundary: isManualCompactCompletion ? true : undefined
   })
 }

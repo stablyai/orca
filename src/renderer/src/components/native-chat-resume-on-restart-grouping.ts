@@ -3,6 +3,7 @@ import type { AgentSessionWorkspaceKind } from '../../../shared/agent-session-re
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { projectGroupIdFromRepoId } from '../../../shared/folder-workspace-worktree'
 import type { RepoIcon } from '../../../shared/repo-icon'
+import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
 
 /**
  * The offered chats, arranged the way the sidebar arranges workspaces: project/repo, then workspace,
@@ -23,10 +24,12 @@ export type ResumeCandidate = {
   executionHostId?: ExecutionHostId
   workspaceKind?: AgentSessionWorkspaceKind
   model?: string
+  /** What the chat was doing, snapshotted by the host as it stopped; an older host omits it. */
+  activity?: AgentSessionRestartActivity
 }
 
 /** An offer that was acted on and did not end with the agent carrying on. The host keeps it until
- *  the user opens the chat and sends, retries successfully, dismisses it, or it expires. */
+ *  the user sends in the chat, retries successfully, dismisses it, or closes the chat. */
 export type ResumeFailure = ResumeCandidate & {
   failedAt: number
   outcome: 'refused' | 'unconfirmed'

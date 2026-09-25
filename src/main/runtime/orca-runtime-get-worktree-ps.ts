@@ -1,6 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
-import { OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner } from './orca-runtime-structured-agent-session-recover-tui-owner'
+import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from './orca-runtime-start-tui-idle-visible-read-probe'
 import { DEFAULT_WORKTREE_PS_LIMIT } from './orca-runtime-postlude'
 import type { RuntimeWorktreePsResult } from '../../shared/runtime-types'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
@@ -23,12 +23,9 @@ import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults
 import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { claudeStructuredPermissionModeForSettings } from '../claude/claude-structured-permission-mode'
 import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-structured-permission-policy'
-import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
-import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 
-export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner {
+export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true
@@ -164,6 +161,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         codexStructuredPermissionPolicyForSettings(this.requireStore().getSettings()),
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
+      resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
       // Structured chat has no agent CLI hooks, so this projection is what the first-work
       // workspace rename listens to instead of `agentStatus:set`.
       onSessionStatusChanged: (summary, options) => {
@@ -173,59 +171,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
           firstWorkRenameDeps(this.requireStore(), this)
         )
       },
-      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
-      handoffTransport: this.createStructuredAgentSessionHandoffTransport()
+      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {})
     })
-  }
-
-  protected createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport {
-    const machineName = this.machineName
-    return {
-      // Why a getter: "Agent is open in terminal on X" must name this host the way paired devices
-      // see it, including a Settings rename after the transport was built.
-      get hostLabel() {
-        return machineName.read()
-      },
-      launchTui: this.createStructuredAgentSessionLaunchTuiCallback(),
-      waitForTuiExit: async (owner) => {
-        await this.waitForStructuredTuiOwnerExit(owner)
-        return owner.transcriptPath ? { transcriptPath: owner.transcriptPath } : {}
-      },
-      waitForTuiIdleOrExit: async (owner, signal) => {
-        return this.waitForStructuredTuiIdleOrExit(owner, signal)
-      },
-      reproveTuiOwner: this.createStructuredAgentSessionReproveTuiOwnerCallback(),
-      recoverTuiOwner: this.createStructuredAgentSessionRecoverTuiOwnerCallback(),
-      probeRecoveredOwner: async (record) => {
-        const identity = record.lease.ownerProcess
-        if (!identity) {
-          return 'dead'
-        }
-        const proof = await probeAgentSessionProcessIdentity({ identity })
-        if (proof.outcome === 'identity-matched' && proof.matchedOn.length > 0) {
-          return 'live'
-        }
-        if (proof.outcome === 'pid-absent' || proof.outcome === 'identity-mismatch') {
-          return 'dead'
-        }
-        return 'unknown'
-      },
-      stopRecoveredOwner: (record) => this.stopStructuredSessionProcess(record),
-      tuiStatus: (owner) => this.structuredTuiStatus(owner),
-      closeTuiOwner: (owner) => this.closeStructuredTuiOwner(owner),
-      revealNativeSession: async ({ workspaceId, sessionId, agent = 'codex', adoptedTerminal }) => {
-        if (adoptedTerminal || (agent !== 'codex' && agent !== 'claude')) {
-          return
-        }
-        await this.publishStructuredAgentSessionTab({
-          workspaceId,
-          sessionId,
-          agent,
-          activate: false
-        })
-        this.notifier?.focusEditorTab?.(structuredAgentSessionTabId(sessionId), workspaceId)
-      },
-      stopFailedTuiLaunch: async (owner) => void (await this.closeStructuredTuiOwner(owner))
-    }
   }
 }

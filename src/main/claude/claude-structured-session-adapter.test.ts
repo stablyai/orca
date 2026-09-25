@@ -3,12 +3,12 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError
+  AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionPromptAnswerRejectedError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { CLAUDE_SPAWN_TOKEN_ENV } from './claude-structured-owner-identity'
-import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
 import type {
   ClaudeStructuredSessionAdapter,
   ClaudeStructuredSessionEvent
@@ -688,20 +688,33 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     )
   })
 
-  it('does not report a second release as successful while retained exit evidence is unproven', async () => {
-    const claude = fakeClaude({ unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' } })
+  it('starts the chat again after a crash whose root exited but whose descendants went unverified', async () => {
+    const claude = fakeClaude()
     const adapter = await acquired(claude)
+    const first = claude.connections[0]
+    first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    first.close = vi.fn<FakeConnection['close']>().mockResolvedValue(false)
+    first.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
+
+    // Before the exit publishes, the start settles it itself rather than refusing on it.
+    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
+
+    expect(claude.connections).toHaveLength(2)
+  })
+
+  it('publishes a crash whose root exited but whose descendants went unverified', async () => {
+    const claude = fakeClaude({ unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' } })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = await acquired(claude, {}, events)
     const connection = claude.connections[0]
     connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
-    connection.close = vi.fn().mockResolvedValue(false) as unknown as FakeConnection['close']
+    await adapter.drainObservedExits()
 
-    await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).rejects.toBeInstanceOf(
-      AgentSessionAcquisitionRootExitObservedError
+    // The owner releases the lease on a root exit, so the host must hear of it now, as of a proven one.
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: 'ended', cause: 'unexpected-exit' })
     )
-    await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).rejects.toBeInstanceOf(
-      AgentSessionAcquisitionRootExitObservedError
-    )
-    expect(connection.close).toHaveBeenCalledTimes(2)
+    await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(true)
   })
 
   it('keeps shutdown pending until a retained unexpected-exit proof settles', async () => {
@@ -767,7 +780,7 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
       sessionId: 'session-1',
       itemId: 'journal-approval',
       kind: 'approval',
-      optionId: 'allowForSession',
+      response: { kind: 'option', optionId: 'allowForSession' },
       fence: 7,
       commit: async () => undefined
     })
@@ -780,7 +793,7 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
     })
   })
 
-  it('collects every AskUserQuestion card before settling the one callback', async () => {
+  it('settles the one AskUserQuestion callback from structured answers, including a long typed answer', async () => {
     const claude = fakeClaude()
     const adapter = await acquired(claude)
     const answered = invokeCanUseTool(
@@ -797,31 +810,65 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
         }
       }
     )
-    adapter.bindPromptItemId('session-1', 'journal-q1', 'question-1', 'Library?')
-    adapter.bindPromptItemId('session-1', 'journal-q2', 'question-1', 'Ship now?')
+    adapter.bindPromptItemId('session-1', 'journal-question', 'question-1')
+    const typed = 'Wait for the capture to finish first. '.repeat(60)
 
     await adapter.answerPrompt({
       sessionId: 'session-1',
-      itemId: 'journal-q1',
+      itemId: 'journal-question',
       kind: 'question',
-      optionId: encodeClaudeQuestionOptionId('Library?', 'Luxon'),
-      fence: 7,
-      commit: async () => undefined
-    })
-    await tick()
-    expect(answered.settled()).toBe(false)
-    await adapter.answerPrompt({
-      sessionId: 'session-1',
-      itemId: 'journal-q2',
-      kind: 'question',
-      optionId: encodeClaudeQuestionOptionId('Ship now?', 'Yes'),
+      response: {
+        kind: 'answers',
+        answers: [
+          { questionId: 'q1', optionIds: ['q1:choice-1'] },
+          { questionId: 'q2', optionIds: [], other: typed }
+        ]
+      },
       fence: 7,
       commit: async () => undefined
     })
     await expect(answered.promise).resolves.toMatchObject({
       behavior: 'allow',
-      updatedInput: { answers: { 'Library?': 'Luxon', 'Ship now?': 'Yes' } },
+      updatedInput: { answers: { 'Library?': 'Luxon', 'Ship now?': typed.trim() } },
       toolUseID: 'tool-question'
+    })
+  })
+
+  it('refuses answers Claude cannot take before the journal commits them', async () => {
+    const claude = fakeClaude()
+    const adapter = await acquired(claude)
+    const answered = invokeCanUseTool(
+      claude.connections[0],
+      'AskUserQuestion',
+      'question-1',
+      'tool-question',
+      { input: { questions: [{ question: 'Library?', options: [{ label: 'Luxon' }] }] } }
+    )
+    adapter.bindPromptItemId('session-1', 'journal-question', 'question-1')
+    const commit = vi.fn(async () => undefined)
+
+    await expect(
+      adapter.answerPrompt({
+        sessionId: 'session-1',
+        itemId: 'journal-question',
+        kind: 'question',
+        response: { kind: 'option', optionId: 'allow' },
+        fence: 7,
+        commit
+      })
+    ).rejects.toBeInstanceOf(AgentSessionPromptAnswerRejectedError)
+    expect(commit).not.toHaveBeenCalled()
+
+    await adapter.answerPrompt({
+      sessionId: 'session-1',
+      itemId: 'journal-question',
+      kind: 'question',
+      response: { kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }] },
+      fence: 7,
+      commit
+    })
+    await expect(answered.promise).resolves.toMatchObject({
+      updatedInput: { answers: { 'Library?': 'Luxon' } }
     })
   })
 
@@ -846,7 +893,7 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
         sessionId: 'session-1',
         itemId: 'journal-9',
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 7,
         commit: async () => undefined
       })

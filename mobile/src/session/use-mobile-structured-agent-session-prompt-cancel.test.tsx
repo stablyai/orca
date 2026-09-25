@@ -132,8 +132,7 @@ describe('mobile structured prompt cancellation', () => {
       submissions: [],
       retainedItemLimit: 1024,
       hasOlder: false,
-      status: 'ready',
-      handoff: null
+      status: 'ready'
     }
     mocks.sendRequest.mockResolvedValue({
       ok: true,

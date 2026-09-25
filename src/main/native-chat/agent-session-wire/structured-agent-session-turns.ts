@@ -45,7 +45,6 @@ export type AgentSessionTurnContext = {
   publish: () => void
   /** Drains provider lifecycle already accepted by the execution host. */
   flushStreamedEvents: () => Promise<void>
-  hasPendingStreamedEvents?: () => boolean
   /** Re-derives authorization after submission persistence, immediately before provider dispatch. */
   beforeDispatch?: () => void
   /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
@@ -77,24 +76,7 @@ async function dispatchSafely(
       clientMessageId,
       body,
       fence: ctx.fence,
-      ...(ctx.beforeDispatch
-        ? {
-            beforeDispatch: async () => {
-              const ready = await withTimeout(
-                ctx.flushStreamedEvents().then(() => true),
-                AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS,
-                false
-              )
-              // A drained barrier may be followed by newer accepted events.
-              if (!ready || ctx.hasPendingStreamedEvents?.()) {
-                throw new AgentSessionPreDispatchError(
-                  'agent_session_admission_evidence_unavailable'
-                )
-              }
-              ctx.beforeDispatch?.()
-            }
-          }
-        : {}),
+      ...(ctx.beforeDispatch ? { beforeDispatch: async () => ctx.beforeDispatch?.() } : {}),
       ...(requestedAt === undefined ? {} : { requestedAt })
     })
   } catch (error) {

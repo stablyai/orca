@@ -74,6 +74,8 @@ export const ptyStreamAndSerializationApi = {
       incarnationId?: string
       /** Set only when the owning relay disowned this id; never a claim that the process died. */
       ptySourceDisowned?: true
+      /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
+      replacedByRestart?: true
     }) => void
   ): (() => void) => {
     const listener = (
@@ -84,6 +86,7 @@ export const ptyStreamAndSerializationApi = {
         preserveRendererBinding?: boolean
         incarnationId?: string
         ptySourceDisowned?: true
+        replacedByRestart?: true
       }
     ) => callback(data)
     ipcRenderer.on('pty:exit', listener)

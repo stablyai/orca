@@ -53,16 +53,14 @@ function published(payload: ParsedAgentStatusPayload | null | undefined): Publis
   }
 }
 
-/** The main agent's own state and verdict, restated as the fold's inputs. */
+/** The main agent's own state, restated as the fold's input. The verdict is not one: a cancel is
+ *  a fact about the main agent, and the work it left running reads as it would after any end of
+ *  turn. */
 function refold(
   mainAgent: Published['mainAgent'],
   childWorkLiveness: AgentChildWorkLiveness
 ): Published {
-  const resolution = foldAgentLeadStatus({
-    leadState: mainAgent.state,
-    interrupted: mainAgent.outcome === 'cancellation',
-    childWorkLiveness
-  })
+  const resolution = foldAgentLeadStatus({ leadState: mainAgent.state, childWorkLiveness })
   return {
     state: resolution.stateName,
     ...(resolution.workingMode ? { workingMode: resolution.workingMode } : {}),
@@ -273,19 +271,22 @@ const STORIES: Story[] = [
     }
   },
   {
-    // KNOWN DIVERGENCE, pinned on purpose. The hook lane hides a still-running shell after an
-    // interrupted turn; the structured lane never feeds the verdict into the fold and keeps
-    // showing the shell. The cancel policy (PR C) flips the hook-lane rows to monitoring and
-    // must update this story, not delete it. The Claude row here is the primary path: Orca's
-    // inferred cancel, carried by the main agent record into the next Stop, which lists the shell.
-    name: 'interrupted with a watch loop (known divergence: CLI done / structured monitoring)',
+    // A cancel never hides live work: the shell the cancelled turn left running reads monitoring
+    // in every lane, and the cancellation survives only as the main agent's verdict. The Claude
+    // row is the primary path: Orca's inferred cancel, carried by the main agent record into the
+    // next Stop, which lists the shell.
+    name: 'interrupted with a watch loop',
     claude: {
       events: [
         { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
         ORCA_INFERRED_INTERRUPT,
         { hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] }
       ],
-      expect: { state: 'done', mainAgent: { state: 'done', outcome: 'cancellation' } }
+      expect: {
+        state: 'working',
+        workingMode: 'monitoring',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      }
     },
     structured: {
       status: 'idle',
@@ -302,7 +303,11 @@ const STORIES: Story[] = [
         { hookEventName: 'user_prompt_submit', prompt: 'go' },
         { hookEventName: 'stop_cancelled', backgroundTasks: [RUNNING_SHELL] }
       ],
-      expect: { state: 'done', mainAgent: { state: 'done', outcome: 'cancellation' } }
+      expect: {
+        state: 'working',
+        workingMode: 'monitoring',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      }
     }
   },
   {
@@ -327,14 +332,54 @@ const STORIES: Story[] = [
     }
   },
   {
-    // Secondary source: a build that does send `is_interrupt` on its Stop. Same known divergence.
+    // Secondary source: a build that does send `is_interrupt` on its Stop. Same result.
     name: 'interrupted by a Stop that carries is_interrupt, with a watch loop (older builds)',
     claude: {
       events: [
         { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
         { hook_event_name: 'Stop', is_interrupt: true, background_tasks: [RUNNING_SHELL] }
       ],
-      expect: { state: 'done', mainAgent: { state: 'done', outcome: 'cancellation' } }
+      expect: {
+        state: 'working',
+        workingMode: 'monitoring',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      }
+    }
+  },
+  {
+    // The cancel itself, before any Stop: the row Orca synthesizes must fold the same way.
+    name: 'interrupted while a watch loop is already registered',
+    claude: {
+      events: [
+        { hook_event_name: 'UserPromptSubmit', prompt: 'start it' },
+        { hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] },
+        { hook_event_name: 'UserPromptSubmit', prompt: 'now this' },
+        ORCA_INFERRED_INTERRUPT
+      ],
+      expect: {
+        state: 'working',
+        workingMode: 'monitoring',
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      }
+    }
+  },
+  {
+    name: 'interrupted with a live subagent',
+    claude: {
+      events: [
+        { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
+        { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
+        { hook_event_name: 'Stop', background_tasks: [RUNNING_AGENT] },
+        { hook_event_name: 'UserPromptSubmit', prompt: 'and this' },
+        ORCA_INFERRED_INTERRUPT
+      ],
+      expect: { state: 'working', mainAgent: { state: 'done', outcome: 'cancellation' } }
+    },
+    structured: {
+      status: 'idle',
+      turnOutcome: 'cancellation',
+      backgroundTasks: [AGENT_TASK],
+      expect: { state: 'working', mainAgent: { state: 'done', outcome: 'cancellation' } }
     }
   }
 ]
@@ -369,9 +414,11 @@ describe('mainAgent status parity across lanes', () => {
       if (payload === ORCA_INFERRED_INTERRUPT) {
         if (source === 'codex') {
           markCodexLeadTurnInterrupted(state, PANE_KEY)
-        } else {
-          markClaudeLeadTurnInterrupted(state, PANE_KEY)
+          continue
         }
+        // What the server publishes for the cancel, shaped like the row the lane would build.
+        const folded = markClaudeLeadTurnInterrupted(state, PANE_KEY)
+        last = { ...(last ?? { prompt: '' }), ...folded, interrupted: folded.state === 'done' }
         continue
       }
       const event = normalizeHookPayload(
@@ -418,12 +465,7 @@ describe('mainAgent status parity across lanes', () => {
         turnOutcome: lane.turnOutcome
       })
       expect(row).toEqual(lane.expect)
-      // This lane never feeds the verdict into the fold: refold with the verdict masked.
-      const masked = { state: row.mainAgent.state }
-      expect(refold(masked, agentChildWorkLiveness(lane.backgroundTasks))).toEqual({
-        ...row,
-        mainAgent: masked
-      })
+      expect(refold(row.mainAgent, agentChildWorkLiveness(lane.backgroundTasks))).toEqual(row)
     })
   })
 
@@ -432,8 +474,9 @@ describe('mainAgent status parity across lanes', () => {
       const payload = drive('grok', lane.events)
       const row = published(payload)
       expect(row).toEqual(lane.expect)
-      // Grok's child evidence lives only on its final plain `stop`: a listed subagent is agent
-      // work, a shell or an active stop hook is watch work, and nothing else ever holds the pane.
+      // Grok's child evidence lives only on its final turn end: a listed subagent is agent work, a
+      // shell or an active stop hook is watch work, whatever verdict ended the turn, and nothing
+      // else ever holds the pane.
       const last = lane.events.at(-1) ?? {}
       const tasks: unknown[] = Array.isArray(last.backgroundTasks) ? last.backgroundTasks : []
       const hasType = (type: string) =>
@@ -442,7 +485,9 @@ describe('mainAgent status parity across lanes', () => {
             typeof task === 'object' && task !== null && 'type' in task && task.type === type
         )
       const liveness: AgentChildWorkLiveness =
-        last.hookEventName !== 'stop'
+        last.hookEventName !== 'stop' &&
+        last.hookEventName !== 'stop_failure' &&
+        last.hookEventName !== 'stop_cancelled'
           ? null
           : hasType('subagent')
             ? 'working'

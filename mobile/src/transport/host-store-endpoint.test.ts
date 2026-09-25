@@ -44,50 +44,61 @@ describe('updateHostNameAndEndpoint', () => {
     }
   ]
 
-  it('commits name and endpoint together in a single write', async () => {
+  // Legacy typed names parse as phone overrides, so the untouched row keeps its override too.
+  const legacyOverride = (host: (typeof stored)[number]) => ({ ...host, personalName: host.name })
+
+  function writtenHosts(): unknown {
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    const [key, value] = vi.mocked(AsyncStorage.setItem).mock.calls[0]!
+    expect(key).toBe('orca:hosts')
+    return JSON.parse(value)
+  }
+
+  it('commits the phone name and endpoint together in a single write', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(stored))
 
     await updateHostNameAndEndpoint('host-1', {
-      name: 'Home Desk',
+      personalName: 'Home Desk',
       endpoint: 'ws://192.168.1.10:6768'
     })
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:hosts',
-      JSON.stringify([
-        { ...stored[0], name: 'Home Desk', endpoint: 'ws://192.168.1.10:6768' },
-        stored[1]
-      ])
-    )
+    expect(writtenHosts()).toEqual([
+      {
+        ...stored[0],
+        name: 'Home Desk',
+        personalName: 'Home Desk',
+        endpoint: 'ws://192.168.1.10:6768'
+      },
+      legacyOverride(stored[1]!)
+    ])
   })
 
   it('updates only the provided field', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(stored))
 
-    await updateHostNameAndEndpoint('host-1', { name: 'Home Desk' })
+    await updateHostNameAndEndpoint('host-1', { personalName: 'Home Desk' })
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:hosts',
-      JSON.stringify([{ ...stored[0], name: 'Home Desk' }, stored[1]])
-    )
+    expect(writtenHosts()).toEqual([
+      { ...stored[0], name: 'Home Desk', personalName: 'Home Desk' },
+      legacyOverride(stored[1]!)
+    ])
   })
 
-  it('rewrites only the endpoint when name is omitted', async () => {
+  it('rewrites only the endpoint when the name is omitted', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(stored))
 
     await updateHostNameAndEndpoint('host-1', { endpoint: 'ws://192.168.1.10:6768' })
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:hosts',
-      JSON.stringify([{ ...stored[0], endpoint: 'ws://192.168.1.10:6768' }, stored[1]])
-    )
+    expect(writtenHosts()).toEqual([
+      { ...legacyOverride(stored[0]!), endpoint: 'ws://192.168.1.10:6768' },
+      legacyOverride(stored[1]!)
+    ])
   })
 
   it('throws and writes nothing when the host is missing', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('[]')
 
-    await expect(updateHostNameAndEndpoint('missing', { name: 'Renamed' })).rejects.toThrow(
+    await expect(updateHostNameAndEndpoint('missing', { personalName: 'Renamed' })).rejects.toThrow(
       'Host not found'
     )
     expect(AsyncStorage.setItem).not.toHaveBeenCalled()

@@ -42,12 +42,11 @@ export type AgentSessionLeaseRefusalCode =
 
 export type AgentSessionAcquisitionDecision =
   | { decision: 'granted'; nextFence: number }
-  /** The same handoff operation re-entering its own reservation; no new fence, no new spawn. */
+  /** The same acquisition operation re-entering its own reservation; no new fence, no new spawn. */
   | { decision: 'retry-reservation'; fence: number }
   | { decision: 'refused'; code: AgentSessionLeaseRefusalCode }
 
 export type AgentSessionRestartAdjudication =
-  | { disposition: 'readopt' }
   /** A journal settlement latch survives restart without changing its handoff stage. */
   | { disposition: 'settlement-pending' }
   /** Nothing is outstanding — no owner, no reservation. Clear any latched stage; the fence stays. */
@@ -62,12 +61,6 @@ export function agentSessionRestartEvictionSettlementId(
 ): string {
   return `restart-eviction:${lease.sessionId}:${eviction.nextFence}`
 }
-
-/** Stages that can legally admit a new owner at all; the rest have an owner or no evidence. */
-const STAGES_ADMITTING_NEW_OWNER: ReadonlySet<AgentSessionHandoffStage> = new Set([
-  'old-owner-stopped',
-  'new-owner-proving'
-])
 
 export function isProvenDeadProbe(probe: AgentSessionOwnerProbe): boolean {
   return (
@@ -152,13 +145,6 @@ export function evaluateAgentSessionAcquisition(args: {
     // Why: no stage expires into an owner; recovery is resolved by proof or by the user.
     return { decision: 'refused', code: 'agent_session_ownership_unknown' }
   }
-  if (lease.handoffStage === 'preparing') {
-    // Why: the old owner is quiesced but alive and still authoritative.
-    return { decision: 'refused', code: 'agent_session_conflict' }
-  }
-  if (lease.handoffStage !== null && !STAGES_ADMITTING_NEW_OWNER.has(lease.handoffStage)) {
-    return { decision: 'refused', code: 'agent_session_conflict' }
-  }
   if (lease.handoffStage !== null && lease.handoffOperationId !== null) {
     if (handoffOperationId !== lease.handoffOperationId) {
       // Why: the retry key is operation id + fence + stage; a different id is a different intent.
@@ -166,7 +152,6 @@ export function evaluateAgentSessionAcquisition(args: {
     }
     if (
       lease.ownerProcess === null &&
-      STAGES_ADMITTING_NEW_OWNER.has(lease.handoffStage) &&
       lease.claimStatus === 'reserved' &&
       lease.reservedSpawnToken !== null
     ) {
@@ -246,17 +231,13 @@ export function adjudicateAgentSessionRestart(args: {
     }
   }
   if (isProvenAliveProbe(probe)) {
-    if (lease.runtimeKind === 'native') {
-      // Why: the surviving child's stdio died with the previous runtime, so readoption
-      // would renew a lease no host can drive. Recovery stops it and respawns at fence + 1.
-      return {
-        disposition: 'recovering',
-        stage: 'recovering',
-        reason: 'native owner outlived the runtime that held its transport'
-      }
+    // Why: the surviving child's stdio died with the previous runtime, so readoption would renew
+    // a lease no host can drive. Recovery stops the child and respawns at fence + 1.
+    return {
+      disposition: 'recovering',
+      stage: 'recovering',
+      reason: 'owner outlived the runtime that held its transport'
     }
-    // Why: re-adoption is not a new generation, so the fence does not move.
-    return { disposition: 'readopt' }
   }
   const evidence = deathEvidenceFor(probe, observedAt)
   if (evidence) {

@@ -1,8 +1,4 @@
 import { Platform } from 'react-native'
-import type {
-  DeviceCredentialInstalled,
-  MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
@@ -34,6 +30,9 @@ import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-direc
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { createPairingRelayLogger } from './pairing-relay-log'
 import { redactSocketEndpoint } from './socket-event-debug'
+import { assertCommittedInstall, relayHost } from './pairing-relay-host'
+import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
+import type { HostStatusReply } from './host-status-reply-schema'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -51,6 +50,7 @@ type Dependencies = {
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
+  recordDescriptorFromStatus: typeof recordHostDescriptorFromStatus
   now: () => number
   platform: string
 }
@@ -65,6 +65,7 @@ const defaultDependencies: Dependencies = {
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
+  recordDescriptorFromStatus: recordHostDescriptorFromStatus,
   now: Date.now,
   platform: Platform.OS
 }
@@ -206,6 +207,7 @@ async function runPairing(
 
   if (!journal) {
     await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
   }
 
@@ -231,6 +233,7 @@ async function runPairing(
     log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
     await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
+    recordWinnerDescriptor(dependencies, hostId, winner.status)
     return { hostId }
   }
   const installed = relayCredentialProvision.interpret(provision)
@@ -246,7 +249,29 @@ async function runPairing(
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
   await dependencies.saveHost(relayHost(journal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
+  recordWinnerDescriptor(dependencies, hostId, winner.status)
   return { hostId }
+}
+
+/**
+ * Why after the save: the saved row starts as its existing name (or "Host N") and the descriptor
+ * writer adopt-renames it to the desktop's machine name in the same serialized store chain, so a
+ * load issued after pairing returns the desktop-reported name. A recording failure is swallowed —
+ * descriptor upkeep must never fail a pairing that already saved.
+ */
+function recordWinnerDescriptor(
+  dependencies: Dependencies,
+  hostId: string,
+  status: HostStatusReply | null
+): void {
+  if (!status) {
+    return
+  }
+  try {
+    dependencies.recordDescriptorFromStatus(hostId, status)
+  } catch {
+    // Best-effort bookkeeping; the host is already saved.
+  }
 }
 
 function baseHost(
@@ -262,43 +287,6 @@ function baseHost(
     deviceToken: offer.deviceToken,
     publicKeyB64: offer.publicKeyB64,
     lastConnected
-  }
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
-}
-
-function assertCommittedInstall(
-  status:
-    | { state: 'not-found' }
-    | { state: 'committed'; result: DeviceCredentialInstalled }
-    | undefined,
-  installed: DeviceCredentialInstalled
-): void {
-  if (
-    !status ||
-    status.state !== 'committed' ||
-    JSON.stringify(status.result) !== JSON.stringify(installed)
-  ) {
-    throw new Error('relay credential install was not authoritatively reconciled')
   }
 }
 

@@ -82,11 +82,10 @@ export function codexOutcomeRestatedByStop(
 export function resolveCodexPaneStatus(
   state: HookListenerState,
   paneKey: string,
-  record: Pick<CodexLeadTurnState, 'state' | 'outcome'>
+  record: Pick<CodexLeadTurnState, 'state'>
 ): AgentLeadStatusResolution {
   return foldAgentLeadStatus({
     leadState: record.state,
-    interrupted: mainAgentTurnInterrupted(record),
     childWorkLiveness: codexRosterChildWorkLiveness(state.codexSubagentRosterByPaneKey.get(paneKey))
   })
 }
@@ -232,6 +231,8 @@ export function reconcileRemoteCodexState(
     prompt,
     state: resolution.stateName,
     workingMode: resolution.workingMode,
+    interrupted:
+      resolution.stateName === 'done' && mainAgentTurnInterrupted(lead) ? true : undefined,
     model: lead.model ?? payload.model,
     subagents: codexRosterToSnapshots(roster),
     // Why: main's cache outlives a relay restart, so it is the main agent fact for a relayed row too.

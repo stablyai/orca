@@ -15,7 +15,6 @@ export type WriteRefusalReason =
   | 'endpoint_disconnected'
   | 'endpoint_awaiting_recovery'
   | 'encode_failed'
-  | 'write_gate_denied'
   | 'provider_unavailable'
   | 'provider_refused_write'
   | 'provider_cannot_settle'

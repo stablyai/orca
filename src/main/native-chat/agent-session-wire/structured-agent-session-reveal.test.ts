@@ -40,7 +40,6 @@ function harness(
   options: { supports?: (record: AgentSessionRecord) => boolean } = {}
 ) {
   const live = new Map<string, unknown>()
-  const restoreHandoff = vi.fn(async () => undefined)
   const serializedIds: string[] = []
   const serialize = <T>(sessionId: string, task: () => Promise<T>): Promise<T> => {
     serializedIds.push(sessionId)
@@ -58,10 +57,9 @@ function harness(
     serialize,
     hasSession: (sessionId) => live.has(sessionId),
     onReadable: (sessionId, restored) => live.set(sessionId, restored),
-    retrySettlement: async () => true,
-    restoreHandoff
+    retrySettlement: async () => true
   })
-  return { restorer, live, restoreHandoff, serializedIds }
+  return { restorer, live, serializedIds }
 }
 
 const readable = { journal: {}, params: {}, fence: 1 } as never

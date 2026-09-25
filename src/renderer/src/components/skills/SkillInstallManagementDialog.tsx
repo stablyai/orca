@@ -17,6 +17,7 @@ import {
 } from './skill-managed-install-groups'
 import { translate } from '@/i18n/i18n'
 import { SkillInstallManagementDialogContent } from './SkillInstallManagementDialogContent'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function SkillInstallManagementDialog({
   open,
@@ -158,7 +159,7 @@ export function SkillInstallManagementDialog({
     setBusy(true)
     setError(null)
     setNotice(null)
-    const operationId = crypto.randomUUID()
+    const operationId = createBrowserUuid()
     installProgress.begin(operationId)
     try {
       const version = details?.versions.find((candidate) => candidate.versionId === versionId)

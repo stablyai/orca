@@ -6,17 +6,6 @@
 // resumable session, so deleting the matching guard turns that test red.
 
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  AGENT_SESSION_RESUME_MARKER_TTL_MS,
-  type AgentSessionResumeMarker
-} from '../../../shared/agent-session-resume-marker'
-import { projectStructuredAgentSessionStatus } from '../../../shared/structured-agent-session-projection'
-import { newestStructuredAgentSessionTurn } from '../../../shared/structured-agent-session-live-turn'
 import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
 import {
   resumeStructuredAgentSessionsFromRestart,
@@ -24,7 +13,7 @@ import {
   STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY,
   STRUCTURED_AGENT_SESSION_RESUME_IN_PROGRESS
 } from './structured-agent-session-restart-resume-runner'
-import { structuredAgentSessionsWorkingAtTeardown } from './structured-agent-session-working-at-teardown'
+import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 import {
   CLAUDE_ROOT,
   claudeRecord,
@@ -35,41 +24,34 @@ import {
   NOW,
   pendingApproval,
   record,
+  resumableSet,
   SESSION,
   submission,
   turnItem
 } from './structured-agent-session-restart-resume-test-harness'
 
-function resumableSet(input: {
-  markers: AgentSessionResumeMarker[]
-  items?: AgentJournalRenderItem[]
-  submissions?: AgentJournalSubmission[]
-  chain?: AgentSessionRecord['providerHandleChain']
-  now?: number
-}) {
-  const items = input.items ?? [turnItem('turn-1', 'interrupted')]
-  const submissions = input.submissions ?? []
-  return structuredAgentSessionResumableSet({
-    markers: input.markers,
-    getRecord: () => record(input.chain === undefined ? {} : { chain: input.chain }),
-    supportsRecord: () => true,
-    waitingOnUser: () => projectStructuredAgentSessionStatus(items) === 'attention',
-    journalTurn: () => newestStructuredAgentSessionTurn(items),
-    journalSubmission: (_sessionId, clientMessageId) =>
-      submissions.find((entry) => entry.clientMessageId === clientMessageId) ?? null,
-    latestPrompt: () => 'fix the auth bug',
-    latestUserItemId: () => null,
-    now: input.now ?? NOW
+type StopInput = Parameters<typeof structuredAgentSessionWorkingAtStop>[0]
+
+/** The snapshot each session's stop would take, over every session in the map. */
+function markersAtTeardown(
+  input: Omit<StopInput, 'sessionId' | 'session'> & {
+    sessions: ReadonlyMap<string, NonNullable<StopInput['session']>>
+  }
+) {
+  return [...input.sessions].flatMap(([sessionId, session]) => {
+    const recorded = structuredAgentSessionWorkingAtStop({ ...input, sessionId, session })
+    return recorded ? [recorded] : []
   })
 }
 
 describe('deriving what was working at teardown', () => {
   it('marks a session this host was running a turn for', () => {
-    const markers = structuredAgentSessionsWorkingAtTeardown({
+    const markers = markersAtTeardown({
       sessions: new Map([
         [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
       ]),
       getRecord: () => record(),
+      backgroundTasks: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -83,17 +65,19 @@ describe('deriving what was working at teardown', () => {
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         providerHandleRoot: HANDLE_ROOT,
-        latestUserItemId: null
+        latestUserItemId: null,
+        activity: { state: 'working', prompts: [], tasks: [] }
       }
     ])
   })
 
   it('carries the update trigger so the surface can say the restart was not the user choice', () => {
-    const [recorded] = structuredAgentSessionsWorkingAtTeardown({
+    const [recorded] = markersAtTeardown({
       sessions: new Map([
         [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
       ]),
       getRecord: () => record(),
+      backgroundTasks: () => undefined,
       trigger: 'update',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -104,9 +88,10 @@ describe('deriving what was working at teardown', () => {
 
   it('marks nothing for an idle session', () => {
     expect(
-      structuredAgentSessionsWorkingAtTeardown({
+      markersAtTeardown({
         sessions: new Map([[SESSION, { journal: journal([]), hasProviderChild: true }]]),
         getRecord: () => record(),
+        backgroundTasks: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -116,11 +101,12 @@ describe('deriving what was working at teardown', () => {
 
   it('marks nothing for a turn that completed before the quit', () => {
     expect(
-      structuredAgentSessionsWorkingAtTeardown({
+      markersAtTeardown({
         sessions: new Map([
           [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
         ]),
         getRecord: () => record(),
+        backgroundTasks: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -132,11 +118,12 @@ describe('deriving what was working at teardown', () => {
   // crash left behind, and it is the live `hasProviderChild` — not that row — that decides.
   it('marks nothing for a stale running row this host was not executing', () => {
     expect(
-      structuredAgentSessionsWorkingAtTeardown({
+      markersAtTeardown({
         sessions: new Map([
           [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: false }]
         ]),
         getRecord: () => record(),
+        backgroundTasks: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -144,21 +131,112 @@ describe('deriving what was working at teardown', () => {
     ).toEqual([])
   })
 
-  // The product calls this state `attention`, not `working`. A chat blocked on the user is not
-  // interrupted work, and handing it a provider child resumes nothing it was actually doing.
-  it('marks nothing for a turn that is waiting on the user', () => {
+  // The sidebar shows a chat blocked on the user as needing attention, and teardown cancels the
+  // prompt, so the chat is owed a resume that says which prompt it lost. The state and the prompt
+  // come from ONE journal read, so a `blocked` marker always names what it was blocked on.
+  it('marks a turn that is waiting on the user, with the prompt beside the state', () => {
+    const [recorded] = markersAtTeardown({
+      sessions: new Map([
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-1', 'running'), pendingApproval()]),
+            hasProviderChild: true
+          }
+        ]
+      ]),
+      getRecord: () => record(),
+      backgroundTasks: () => undefined,
+      trigger: 'quit',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(recorded?.work).toEqual({ kind: 'turn', id: 'turn-1' })
+    expect(recorded?.activity).toEqual({
+      state: 'blocked',
+      prompts: [{ kind: 'approval', label: 'Run the command?' }],
+      tasks: []
+    })
+  })
+
+  // What the user hit: the lead had finished, its subagents had not, and the sidebar said working.
+  // The lead's OWN state stays `done` — its children are the work, carried in `tasks`.
+  it('marks a settled lead whose subagent was still running, anchored on its last turn', () => {
+    const markers = markersAtTeardown({
+      sessions: new Map([
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+      ]),
+      getRecord: () => record(),
+      backgroundTasks: () => [
+        { id: 'task-a', kind: 'agent', description: 'Review loop 4', state: 'working' }
+      ],
+      trigger: 'update',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(markers.map((entry) => entry.work)).toEqual([{ kind: 'turn', id: 'turn-1' }])
+    expect(markers[0]?.activity).toEqual({
+      state: 'done',
+      prompts: [],
+      tasks: [{ kind: 'agent', label: 'Review loop 4' }]
+    })
+  })
+
+  // Settled roster rows are history; only what the fold counts live is described.
+  it('records only the live rows of the roster, bounded', () => {
+    const [recorded] = markersAtTeardown({
+      sessions: new Map([
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+      ]),
+      getRecord: () => record(),
+      backgroundTasks: () => [
+        { id: 'gone', kind: 'agent', description: 'Finished agent', state: 'done' },
+        ...Array.from({ length: 20 }, (_, index) => ({
+          id: `live-${index}`,
+          kind: 'command' as const,
+          description: `Shell ${index}${'x'.repeat(300)}`,
+          state: 'working' as const
+        }))
+      ],
+      trigger: 'quit',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(recorded?.activity?.tasks).toHaveLength(16)
+    expect(recorded?.activity?.tasks.every((task) => task.kind === 'command')).toBe(true)
+    expect(recorded?.activity?.tasks.every((task) => task.label.length <= 200)).toBe(true)
+  })
+
+  it('marks a settled lead whose only live work is a monitor', () => {
+    const markers = markersAtTeardown({
+      sessions: new Map([
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+      ]),
+      getRecord: () => record(),
+      backgroundTasks: () => [{ id: 'task-m', kind: 'monitor', name: 'ci-watch' }],
+      trigger: 'quit',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(markers).toHaveLength(1)
+  })
+
+  // A settled task is history, not work the sidebar showed as running.
+  it('marks nothing for a settled lead whose tasks have all finished', () => {
     expect(
-      structuredAgentSessionsWorkingAtTeardown({
+      markersAtTeardown({
         sessions: new Map([
-          [
-            SESSION,
-            {
-              journal: journal([turnItem('turn-1', 'running'), pendingApproval()]),
-              hasProviderChild: true
-            }
-          ]
+          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
         ]),
         getRecord: () => record(),
+        backgroundTasks: () => [
+          { id: 'task-a', kind: 'agent', state: 'done' },
+          { id: 'task-b', kind: 'command', state: 'idle' }
+        ],
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -168,11 +246,12 @@ describe('deriving what was working at teardown', () => {
 
   // Root, not key: a key would embed Claude's leaf, which the close path advances moments later.
   it('records the identity root so an advancing Claude leaf cannot invalidate the marker', () => {
-    const [recorded] = structuredAgentSessionsWorkingAtTeardown({
+    const [recorded] = markersAtTeardown({
       sessions: new Map([
         [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
       ]),
       getRecord: () => claudeRecord(null),
+      backgroundTasks: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -183,11 +262,12 @@ describe('deriving what was working at teardown', () => {
 
   it('marks nothing for a session that never proved a provider cursor', () => {
     expect(
-      structuredAgentSessionsWorkingAtTeardown({
+      markersAtTeardown({
         sessions: new Map([
           [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
         ]),
         getRecord: () => record({ chain: [] }),
+        backgroundTasks: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -199,7 +279,7 @@ describe('deriving what was working at teardown', () => {
   // message back, which is seconds on a real journal. A turn-id-only marker drops exactly those
   // sessions — the ones that were working hardest — so the send carries its own identity.
   it('records the submission identity for a send the provider has not echoed yet', () => {
-    const [recorded] = structuredAgentSessionsWorkingAtTeardown({
+    const [recorded] = markersAtTeardown({
       sessions: new Map([
         [
           SESSION,
@@ -210,6 +290,32 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => claudeRecord(null),
+      backgroundTasks: () => undefined,
+      trigger: 'quit',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(recorded?.work).toEqual({ kind: 'submission', id: 'msg-1' })
+  })
+
+  // The send the user made just before quitting, after an earlier exchange had finished: the
+  // sidebar shows it working, so it is offered, whatever the finished turn before it says.
+  it('marks a send the provider had not opened a turn for, after an earlier completed turn', () => {
+    const [recorded] = markersAtTeardown({
+      sessions: new Map([
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-0', 'completed')], false, [
+              submission('msg-1', 'pending')
+            ]),
+            hasProviderChild: true
+          }
+        ]
+      ]),
+      getRecord: () => claudeRecord(null),
+      backgroundTasks: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -221,7 +327,7 @@ describe('deriving what was working at teardown', () => {
   // Once a turn exists it is the better identity: it is what eviction rewrites, so it is what the
   // journal can be asked about at launch.
   it('prefers the running turn over the send that opened it', () => {
-    const [recorded] = structuredAgentSessionsWorkingAtTeardown({
+    const [recorded] = markersAtTeardown({
       sessions: new Map([
         [
           SESSION,
@@ -234,6 +340,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      backgroundTasks: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -245,7 +352,7 @@ describe('deriving what was working at teardown', () => {
 
 describe('the resumable set', () => {
   it('offers a genuinely working session exactly once', () => {
-    const candidates = resumableSet({ markers: [marker()] })
+    const { candidates } = resumableSet({ markers: [marker()] })
 
     expect(candidates).toHaveLength(1)
     expect(candidates[0]).toMatchObject({
@@ -258,30 +365,19 @@ describe('the resumable set', () => {
 
   // No marker means no teardown ever observed this session working, whatever its journal says.
   it('offers nothing for a stale running row with no marker', () => {
-    expect(resumableSet({ markers: [], items: [turnItem('turn-1', 'running')] })).toEqual([])
-  })
-
-  it('refuses when the marker and the journal name different turns', () => {
     expect(
-      resumableSet({
-        markers: [marker({ work: { kind: 'turn', id: 'turn-9' } })],
-        items: [turnItem('turn-1', 'interrupted')]
-      })
+      resumableSet({ markers: [], items: [turnItem('turn-1', 'running')] }).candidates
     ).toEqual([])
   })
 
-  it('refuses when the journal cannot answer for any turn', () => {
-    expect(resumableSet({ markers: [marker()], items: [] })).toEqual([])
-  })
-
   it('refuses when the session has no resume cursor', () => {
-    expect(resumableSet({ markers: [marker()], chain: [] })).toEqual([])
+    expect(resumableSet({ markers: [marker()], chain: [] }).candidates).toEqual([])
   })
 
   // A cursor that moved since teardown is a different conversation than the one we marked.
   it('refuses when the resume cursor drifted after the marker was written', () => {
     expect(
-      resumableSet({ markers: [marker({ providerHandleRoot: 'codex:"other-thread"' })] })
+      resumableSet({ markers: [marker({ providerHandleRoot: 'codex:"other-thread"' })] }).candidates
     ).toEqual([])
   })
 
@@ -289,213 +385,103 @@ describe('the resumable set', () => {
   // leaf, so a key comparison goes stale ~1.4s after the marker is written and Claude is refused
   // forever. A resume that advances the leaf is continuity, not a fork.
   it('still offers a Claude session whose leaf advanced after the marker was written', () => {
-    const candidates = structuredAgentSessionResumableSet({
+    const { candidates } = structuredAgentSessionResumableSet({
       markers: [marker({ providerHandleRoot: CLAUDE_ROOT })],
       getRecord: () => claudeRecord('5aed93d6-advanced-leaf'),
       supportsRecord: () => true,
-      waitingOnUser: () => false,
-      journalTurn: () => ({ turnId: 'turn-1', state: 'interrupted' }),
-      journalSubmission: () => null,
       latestPrompt: () => '',
-      latestUserItemId: () => null,
-      now: NOW
+      latestUserItemId: () => null
     })
 
     expect(candidates).toHaveLength(1)
   })
 
-  it('refuses a Claude session that forked to a different identity root', () => {
-    expect(
-      structuredAgentSessionResumableSet({
-        markers: [marker({ providerHandleRoot: CLAUDE_ROOT })],
-        getRecord: () => claudeRecord(null, 'prov-session-2'),
-        supportsRecord: () => true,
-        waitingOnUser: () => false,
-        journalTurn: () => ({ turnId: 'turn-1', state: 'interrupted' }),
-        journalSubmission: () => null,
-        latestPrompt: () => '',
-        latestUserItemId: () => null,
-        now: NOW
-      })
-    ).toEqual([])
+  // A fork can never become the marked conversation again, so the record is deleted, not kept
+  // unseen forever.
+  it('withdraws and reports for deletion a Claude session that forked to a different root', () => {
+    const forked = marker({ providerHandleRoot: CLAUDE_ROOT })
+    const set = structuredAgentSessionResumableSet({
+      markers: [forked],
+      getRecord: () => claudeRecord(null, 'prov-session-2'),
+      supportsRecord: () => true,
+      latestPrompt: () => '',
+      latestUserItemId: () => null
+    })
+
+    expect(set.candidates).toEqual([])
+    expect(set.superseded).toEqual([forked])
   })
 
-  // Eviction rewrites `running` -> `interrupted` and never -> `completed`, so the state is what
-  // separates work that was cut off from work that finished.
-  it('refuses a turn that completed before the quit', () => {
-    expect(resumableSet({ markers: [marker()], items: [turnItem('turn-1', 'completed')] })).toEqual(
-      []
+  // An offer has no expiry: it ends only by the user's own actions, however old it is.
+  it('still offers a months-old marker', () => {
+    const monthsAgo = NOW - 90 * 24 * 60 * 60 * 1000
+    expect(resumableSet({ markers: [marker({ recordedAt: monthsAgo })] }).candidates).toHaveLength(
+      1
     )
   })
 
-  it('refuses a turn still marked running, which nothing ever settled', () => {
-    expect(resumableSet({ markers: [marker()], items: [turnItem('turn-1', 'running')] })).toEqual(
-      []
-    )
+  // The user moving on is what withdraws an offer — and it is reported for DELETION, not merely
+  // filtered, so the record does not have to be re-filtered on every read forever.
+  it('withdraws and reports for deletion once the user has sent a newer message', () => {
+    const withdrawn = marker()
+    const set = resumableSet({ markers: [withdrawn], latestUserItemId: 'user-newer' })
+
+    expect(set.candidates).toEqual([])
+    expect(set.superseded).toEqual([withdrawn])
   })
 
-  it('offers a turn whose end the host could not verify', () => {
-    expect(
-      resumableSet({ markers: [marker()], items: [turnItem('turn-1', 'unverifiable')] })
-    ).toHaveLength(1)
+  // Structural refusals are NOT endings: a record this host cannot see right now must not delete
+  // a durable offer the user still owns.
+  it('does not report a structurally refused marker for deletion', () => {
+    expect(resumableSet({ markers: [marker()], chain: [] }).superseded).toEqual([])
   })
 
-  it('refuses a marker that has outlived its expiry', () => {
-    expect(
-      resumableSet({ markers: [marker()], now: NOW + AGENT_SESSION_RESUME_MARKER_TTL_MS + 1 })
-    ).toEqual([])
+  // Teardown already judged the chat working; what the journal says after the restart — a turn
+  // the provider closed or opened on its own, a prompt it asks — does not re-judge it.
+  it.each([
+    ['its turn completed', [turnItem('turn-1', 'completed')]],
+    [
+      'a provider turn is running',
+      [turnItem('turn-1', 'interrupted'), turnItem('wake', 'running')]
+    ],
+    ['the provider asks the user', [turnItem('turn-1', 'interrupted'), pendingApproval()]],
+    ['the journal holds no turn', []]
+  ])('still offers the marked chat when %s', (_label, items) => {
+    expect(resumableSet({ markers: [marker()], items }).candidates).toHaveLength(1)
   })
 
-  // With no turn, an unanswered submission remains evidence of interrupted work.
-  it.each(['pending', 'unknown'] as const)(
-    'offers a send left %s, which nothing ever answered',
-    (dispatchState) => {
-      const candidates = resumableSet({
-        markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-        items: [],
-        submissions: [submission('msg-1', dispatchState)]
-      })
-
-      expect(candidates).toHaveLength(1)
-      expect(candidates[0]?.work).toEqual({ kind: 'submission', id: 'msg-1' })
-    }
-  )
-
-  // A rejected send never ran at all, so there is no interrupted work to hand back.
-  it('refuses a send the provider rejected', () => {
-    expect(
-      resumableSet({
-        markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-        items: [],
-        submissions: [submission('msg-1', 'rejected')]
-      })
-    ).toEqual([])
-  })
-
-  // THE REGRESSION, replaying the sequence measured inside one teardown: the send is journaled,
-  // its dispatch settles to `accepted`, and the turn it opened is then cut off as `interrupted`.
-  // The window in which work is submission-shaped is exactly the window in which the dispatch is
-  // about to be accepted, so freezing judgement at the marker's shape refuses the very sessions
-  // this was built for. An accepted send must be FOLLOWED FORWARD to the turn it became.
-  it('offers a send that was accepted and whose turn was then interrupted', () => {
-    const candidates = resumableSet({
+  it('offers a send that never became a turn', () => {
+    const { candidates } = resumableSet({
       markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-      items: [turnItem('turn-1', 'interrupted', 'provider-item-1')],
-      submissions: [submission('msg-1', 'accepted', 'provider-item-1')]
+      items: []
     })
 
     expect(candidates).toHaveLength(1)
     expect(candidates[0]?.work).toEqual({ kind: 'submission', id: 'msg-1' })
   })
 
-  it('offers a send whose turn the host could not verify', () => {
-    expect(
-      resumableSet({
-        markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-        items: [turnItem('turn-1', 'unverifiable', 'provider-item-1')],
-        submissions: [submission('msg-1', 'accepted', 'provider-item-1')]
-      })
-    ).toHaveLength(1)
-  })
-
-  // Following forward must not become a way to resume finished work: the turn's own state still
-  // decides, exactly as it does for a turn-shaped marker.
-  it('refuses a send whose turn ran to completion', () => {
-    expect(
-      resumableSet({
-        markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-        items: [turnItem('turn-1', 'completed', 'provider-item-1')],
-        submissions: [submission('msg-1', 'accepted', 'provider-item-1')]
-      })
-    ).toEqual([])
-  })
-
-  // QA's case: the LAST chat prompted before quitting. The provider accepted the send, but died
-  // before writing a turn row for it, so there is nothing to link forward TO. An accepted send that
-  // never became a turn cannot be finished work — finishing writes a turn row.
-  it('offers an accepted send the provider never opened a turn for', () => {
-    expect(
-      resumableSet({
-        markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-        items: [],
-        submissions: [submission('msg-1', 'accepted', 'provider-item-1')]
-      })
-    ).toHaveLength(1)
-  })
-
-  // The same chat when the session's newest turn belongs to an EARLIER exchange that was itself cut
-  // off. Safe under both readings: if that row is really this send's under a key we did not match,
-  // it was interrupted; if it is the earlier exchange's, this send opened no turn at all.
-  it.each([
-    ['the turn names a different user item', 'provider-item-other', 'provider-item-1'],
-    ['the turn records no user item at all', undefined, 'provider-item-1'],
-    ['the submission has no provider key', 'provider-item-1', null]
-  ])(
-    'offers an accepted send beside an interrupted turn when %s',
-    (_label, userItemId, providerItemId) => {
-      expect(
-        resumableSet({
-          markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-          items: [turnItem('turn-1', 'interrupted', userItemId)],
-          submissions: [submission('msg-1', 'accepted', providerItemId)]
-        })
-      ).toHaveLength(1)
+  // The description IS the marker's stop-time snapshot; the journal cannot change it after the
+  // restart, whatever rows a reattached provider writes.
+  it('carries the marker snapshot as the offer activity, untouched by the journal', () => {
+    const activity = {
+      state: 'done' as const,
+      prompts: [],
+      tasks: [{ kind: 'agent' as const, label: 'Review loop 4' }]
     }
-  )
+    const { candidates } = resumableSet({
+      markers: [marker({ activity })],
+      items: [turnItem('turn-1', 'completed'), turnItem('wake', 'running')]
+    })
 
-  // THE SAFETY EDGE. An unmatched `completed` row might be this very send's finished turn under a
-  // key we failed to recognise, and resuming finished work is the one outcome never worth risking.
-  // The two readings disagree here, so the ambiguity resolves to no.
-  it.each([
-    ['the turn names a different user item', 'provider-item-other', 'provider-item-1'],
-    ['the turn records no user item at all', undefined, 'provider-item-1'],
-    ['the submission has no provider key', 'provider-item-1', null]
-  ])(
-    'refuses an accepted send beside a completed turn when %s',
-    (_label, userItemId, providerItemId) => {
-      expect(
-        resumableSet({
-          markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-          items: [turnItem('turn-1', 'completed', userItemId)],
-          submissions: [submission('msg-1', 'accepted', providerItemId)]
-        })
-      ).toEqual([])
-    }
-  )
-
-  it.each(['pending', 'unknown'] as const)(
-    'refuses a %s dispatch whose turn completed after the teardown witness',
-    (dispatchState) => {
-      expect(
-        resumableSet({
-          markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-          items: [turnItem('turn-1', 'completed', 'provider-item-1')],
-          submissions: [submission('msg-1', dispatchState)]
-        })
-      ).toEqual([])
-    }
-  )
-
-  it('refuses a submission marker the journal has no record of', () => {
-    expect(
-      resumableSet({
-        markers: [marker({ work: { kind: 'submission', id: 'msg-1' } })],
-        items: [],
-        submissions: [submission('msg-other', 'pending')]
-      })
-    ).toEqual([])
+    expect(candidates[0]?.activity).toEqual(activity)
   })
 
-  // The two identities must not be interchangeable: a turn marker may never be satisfied by a
-  // submission that happens to share its id, or the journal stops being an independent witness.
-  it('refuses a turn marker whose id only matches a submission', () => {
-    expect(
-      resumableSet({
-        markers: [marker({ work: { kind: 'turn', id: 'msg-1' } })],
-        items: [],
-        submissions: [submission('msg-1', 'pending')]
-      })
-    ).toEqual([])
+  // A marker from a build that recorded no snapshot has no activity to name.
+  it('offers a marker with no snapshot, with no activity to name', () => {
+    const [candidate] = resumableSet({ markers: [marker()] }).candidates
+
+    expect(candidate).toBeDefined()
+    expect(candidate).not.toHaveProperty('activity')
   })
 })
 

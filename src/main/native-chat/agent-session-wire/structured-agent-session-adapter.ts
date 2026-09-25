@@ -31,6 +31,7 @@ import type {
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
@@ -49,6 +50,14 @@ export class AgentSessionPromptUnavailableError extends Error {
   constructor(itemId: string) {
     super(`The provider is no longer waiting on ${itemId}.`)
     this.name = 'AgentSessionPromptUnavailableError'
+  }
+}
+
+/** The provider cannot take this answer. Thrown before the journal commit, so nothing is recorded. */
+export class AgentSessionPromptAnswerRejectedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AgentSessionPromptAnswerRejectedError'
   }
 }
 
@@ -263,19 +272,22 @@ export type StructuredAgentSessionAdapter = {
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
-  /** Claims the live callback, commits the journal CAS while that claim is held, then answers it.
-   *  A prompt cancel claims the same callback, so only one operation can commit. */
+  /** Claims the live callback, builds the provider reply, commits the journal CAS while that claim is
+   *  held, then answers it. A reply that cannot be built throws `AgentSessionPromptAnswerRejectedError`
+   *  before the commit. A prompt cancel claims the same callback, so only one operation can commit. */
   answerPrompt(input: {
     sessionId: string
     itemId: string
     kind: 'approval' | 'question'
-    optionId: string
+    response: AgentSessionPromptResponse
     fence: number
     commit: () => Promise<void>
   }): Promise<void>
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
+  /** Resolves once a live session can take an option write, or after a bound; never rejects. */
+  awaitOptionWritable?(sessionId: string): Promise<void>
   readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
   /** Option keys skipped after a provider rejected their persisted restore value. */
   readOptionRestoreFailures?(sessionId: string): readonly string[]
@@ -292,7 +304,8 @@ export type StructuredAgentSessionAdapter = {
     accountHome: AgentSessionAccountHome
   }): Promise<ProviderHistoryWindow | null>
   /** Gracefully stops the structured owner after its event stream is drained. */
-  /** Returns true only after the provider child exit is proven. */
+  /** Returns true only after the provider child exit is proven. A root-exit or processless verdict
+   *  is thrown only once the session is finalized; read it through `stopAgentSessionProviderRoot`. */
   closeSession?(sessionId: string): Promise<boolean>
   /** Stops a provider after a sink failure; the resulting exit is recovered as unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
@@ -337,4 +350,21 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
     isAgentSessionPreSpawnError(cause) ||
     (cause instanceof Error && isAgentSessionWireRefusalCode(cause.message))
   return classified ? cause : new AgentSessionAcquisitionExitProvenError(cause)
+}
+
+/** Whether a stop left the provider root gone. The lease follows the root, so a first-hand root
+ *  exit or a processless child ends the session even with descendants unverified; any other
+ *  failure, including known-live descendants, still throws. */
+export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return (await stop()) === true
+  } catch (error) {
+    if (
+      error instanceof AgentSessionAcquisitionRootExitObservedError ||
+      isAgentSessionPreSpawnError(error)
+    ) {
+      return true
+    }
+    throw error
+  }
 }

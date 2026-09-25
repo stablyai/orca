@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { AGENT_SESSION_RESUME_MARKER_TTL_MS } from '../../shared/agent-session-resume-marker'
 import * as durable from '../durable-file-write'
 import {
   marker,
@@ -221,10 +220,35 @@ describe('durable restart offers', () => {
     await capsule.record([marker()], NOW)
     await fileFailure()
 
-    await capsule.forgetFailures([{ sessionId: SESSION, failedAt: NOW - 1 }], NOW)
+    await capsule.forgetSuperseded(
+      [{ sessionId: SESSION, recordedAt: NOW, failedAt: NOW - 1 }],
+      NOW
+    )
     expect(await capsule.listFailed(NOW)).toHaveLength(1)
-    await capsule.forgetFailures([{ sessionId: SESSION, failedAt: NOW }], NOW)
+    await capsule.forgetSuperseded([{ sessionId: SESSION, recordedAt: NOW, failedAt: NOW }], NOW)
     expect(await capsule.listFailed(NOW)).toEqual([])
+  })
+
+  // The user's own send ends a pending offer the same way it ends a failure record — the record
+  // is deleted, witness-keyed so a marker a newer teardown wrote meanwhile survives.
+  it('forgets a superseded pending offer only for the witness that was read', async () => {
+    await capsule.record([marker()], NOW)
+
+    await capsule.forgetSuperseded([{ sessionId: SESSION, recordedAt: NOW - 1 }], NOW)
+    expect(await capsule.list(NOW)).toHaveLength(1)
+    await capsule.forgetSuperseded([{ sessionId: SESSION, recordedAt: NOW }], NOW)
+    expect(await capsule.list(NOW)).toEqual([])
+  })
+
+  // A reserved row belongs to its action, which settles it itself.
+  it('does not forget an in-progress reservation as superseded', async () => {
+    await capsule.record([marker()], NOW)
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+
+    await capsule.forgetSuperseded([{ sessionId: SESSION, recordedAt: NOW }], NOW)
+
+    await capsule.rollbackResume('operation-a', NOW)
+    expect(await capsule.list(NOW)).toEqual([marker()])
   })
 
   it('forgets named records of any state and reports how many went', async () => {
@@ -246,11 +270,11 @@ describe('durable restart offers', () => {
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' }), marker()])
   })
 
-  it('expires a recorded failure with its marker', async () => {
+  // A failure record has no expiry either; it ends only with the user's own actions.
+  it('keeps a months-old failure on record', async () => {
     await capsule.record([marker()], NOW)
     await fileFailure()
-    expect(await capsule.listFailed(NOW + AGENT_SESSION_RESUME_MARKER_TTL_MS)).toHaveLength(1)
-    expect(await capsule.listFailed(NOW + AGENT_SESSION_RESUME_MARKER_TTL_MS + 1)).toEqual([])
+    expect(await capsule.listFailed(NOW + 90 * 24 * 60 * 60 * 1000)).toHaveLength(1)
   })
 
   // An older build parses entries with a two-state enum and throws on anything else, which would
@@ -523,11 +547,12 @@ describe('durable restart offers', () => {
     expect(await capsule.list(NOW)).toEqual([marker()])
   })
 
-  it.each([NOW - AGENT_SESSION_RESUME_MARKER_TTL_MS - 1, NOW + 1])(
-    'does not list an expired or future marker (%s)',
+  // No TTL: an offer ends only by the user's own actions, however long the app was closed.
+  it.each([NOW - 90 * 24 * 60 * 60 * 1000, NOW + 1])(
+    'still lists a months-old or clock-skewed marker (%s)',
     async (recordedAt) => {
       await capsule.record([marker({ recordedAt })], recordedAt)
-      expect(await capsule.list(NOW)).toEqual([])
+      expect(await capsule.list(NOW)).toHaveLength(1)
     }
   )
 
@@ -536,7 +561,7 @@ describe('durable restart offers', () => {
     const recent = `${filePath}.0.2.recent.tmp`
     const unrelated = join(directory, 'conversation.tmp')
     await Promise.all([abandoned, recent, unrelated].map((path) => writeFile(path, 'debris')))
-    const old = new Date(Date.now() - AGENT_SESSION_RESUME_MARKER_TTL_MS - 1000)
+    const old = new Date(Date.now() - 25 * 60 * 60 * 1000)
     await utimes(abandoned, old, old)
 
     await capsule.record([marker()], NOW)

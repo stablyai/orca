@@ -593,7 +593,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3210,6 +3211,14 @@
             "e2fcf07c0d": "Orca n'a pas pu enregistrer cette session de terminal car le stockage local est plein ou inaccessible en écriture. Ouvrez l'analyseur d'espace disque pour trouver du stockage de espace de travail à nettoyer.",
             "678c780a2c": "Espace disque indisponible"
           },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
+          },
           "osc52": {
             "clipboard": {
               "blocked": {
@@ -3941,7 +3950,7 @@
             },
             "usage": {
               "noSubscription": {
-                "label": "Pas d'abonnement"
+                "label": "Aucun abonnement"
               }
             }
           },
@@ -4034,16 +4043,16 @@
             "ariaLabelOne": "1 chat disponible pour reprendre",
             "ariaLabel": "Les discussions {{value0}} sont disponibles pour reprendre",
             "tooltip": "Ouvrir les discussions interrompues disponibles pour reprendre",
-            "failedLabelOne": "1 chat n'a pas pu reprendre",
-            "failedLabel": "Les discussions {{value0}} n'ont pas pu reprendre",
-            "failedAriaOne": "1 chat n'a pas pu reprendre. Cliquez pour plus de détails.",
-            "failedAria": "Les discussions {{value0}} n'ont pas pu reprendre. Cliquez pour plus de détails.",
-            "failedTooltip": "Les discussions Orca n'ont pas pu reprendre après le redémarrage. Cliquez pour plus de détails.",
-            "checkLabelOne": "1 chat pour vérifier",
-            "checkLabel": "Chats {{value0}} à vérifier",
+            "failedLabelOne": "1 chat n'a pas pu reprendre",
+            "failedLabel": "{{value0}} chats n'ont pas pu reprendre",
+            "failedAriaOne": "1 chat n'a pas pu reprendre. Cliquez pour plus de détails.",
+            "failedAria": "{{value0}} chats n'ont pas pu reprendre. Cliquez pour plus de détails.",
+            "failedTooltip": "Chats qu'Orca n'a pas pu reprendre après le redémarrage. Cliquez pour plus de détails.",
+            "checkLabelOne": "1 chat à vérifier",
+            "checkLabel": "{{value0}} chats à vérifier",
             "checkAriaOne": "1 chat à vérifier après la reprise. Cliquez pour plus de détails.",
-            "checkAria": "Discussions {{value0}} à vérifier après la reprise. Cliquez pour plus de détails.",
-            "checkTooltip": "Les discussions Orca n’ont pas pu reprendre, ou n’ont pas pu confirmer, après le redémarrage. Cliquez pour plus de détails."
+            "checkAria": "{{value0}} chats à vérifier après la reprise. Cliquez pour plus de détails.",
+            "checkTooltip": "Chats qu'Orca n'a pas pu reprendre, ou dont il n'a pas pu confirmer la reprise, après le redémarrage. Cliquez pour plus de détails."
           }
         }
       },
@@ -6231,7 +6240,6 @@
           "parkTerminal": "Parquer le terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "Joignez jusqu'à {count} captures d'écran",
           "attachImages": "Joindre",
           "removeImage": "Supprimer {{fileName}}"
         },
@@ -6355,15 +6363,15 @@
         },
         "LocalGitToolchainScanBanner": {
           "xcodeLicenseTitle": "Acceptez la licence Xcode pour utiliser Git",
-          "xcodeLicenseBody": "macOS bloque Git jusqu'à ce que vous l'acceptiez. Exécutez-le dans Terminal, puis revenez à Orca. Il vérifiera à nouveau automatiquement.",
-          "developerToolsTitle": "Installez les outils de ligne de commande d'Apple",
-          "developerToolsBody": "Git a besoin des outils de développement d'Apple. Exécutez-le dans Terminal, puis revenez à Orca. Il vérifiera à nouveau automatiquement.",
-          "affectedOne": "L'analyse Worktree a été interrompue pendant {{value0}}",
-          "affectedMany": "L'analyse Worktree a été interrompue pour les projets {{value0}}",
-          "copyCommand": "Commande Copier",
+          "xcodeLicenseBody": "macOS bloque Git jusqu'à ce que vous l'acceptiez. Exécutez ceci dans le terminal, puis revenez à Orca. Il vérifiera à nouveau automatiquement.",
+          "developerToolsTitle": "Installez les outils en ligne de commande d'Apple",
+          "developerToolsBody": "Git a besoin des outils de développement d'Apple. Exécutez ceci dans le terminal, puis revenez à Orca. Il vérifiera à nouveau automatiquement.",
+          "affectedOne": "Analyse des worktrees en pause pour {{value0}}",
+          "affectedMany": "Analyse des worktrees en pause pour {{value0}} projets",
+          "copyCommand": "Copier la commande",
           "copied": "Commande copiée",
-          "retry": "Réessayez maintenant",
-          "restored": "Git fonctionne à nouveau. Arbres de travail rafraîchis."
+          "retry": "Réessayer maintenant",
+          "restored": "Git fonctionne à nouveau. Worktrees actualisés."
         }
       },
       "shared": {
@@ -6613,11 +6621,11 @@
           "apiKeyInstructions": "Copiez la clé API depuis votre console MiniMax → Clés API. Une clé API enregistrée est prioritaire sur le cookie ; utilisez la touche Oublier pour revenir au cookie.",
           "opencodeGo": {
             "apiKey": {
-              "title": "Clé API OpenCode Go",
-              "description": "Remplacement facultatif. Orca utilise sinon la clé OpenCode enregistrée lors de l'exécution de /connect, puis OPENCODE_API_KEY.",
-              "label": "Clé API OpenCode Go",
+              "title": "Clé API OpenCode Go",
+              "description": "Optionnel. Sinon, Orca utilise la clé qu'OpenCode a enregistrée quand vous avez exécuté /connect, puis OPENCODE_API_KEY.",
+              "label": "Clé API OpenCode Go",
               "placeholder": "Laissez vide pour utiliser la clé enregistrée par /connect ou OPENCODE_API_KEY",
-              "help": "Utilisé pour l'utilisation d'OpenCode Go dans la barre d'état. Le cookie de session ci-dessous n'est nécessaire que pour les comptes de console hérités (OpenCode Black)."
+              "help": "Utilisé pour l'utilisation d'OpenCode Go dans la barre d'état. Le cookie de session ci-dessous n'est nécessaire que pour les anciens comptes console (OpenCode Black)."
             }
           }
         },
@@ -15003,30 +15011,30 @@
           "3e4cbf15ea": "Brut",
           "1833dbbc43": "Markdown",
           "7005960d73": "Code",
-          "8dbe39a152": "Plus d'actions cellulaires",
+          "8dbe39a152": "Plus d'actions de cellule",
           "fa8fd99cf1": "Type de cellule",
-          "kernelStarting": "Départ…",
+          "kernelStarting": "Démarrage…",
           "kernelInstalling": "Installation d'ipykernel…",
-          "kernelDead": "Le noyau est mort",
-          "selectKernel": "Sélectionnez le noyau",
+          "kernelDead": "Le kernel est mort",
+          "selectKernel": "Sélectionner le kernel",
           "notPython": "Ce fichier n'est pas un interpréteur Python.",
           "interrupt": "Interrompre",
-          "restart": "Redémarrer le noyau",
-          "runAll": "Exécutez tout",
+          "restart": "Redémarrer le kernel",
+          "runAll": "Tout exécuter",
           "clearAll": "Effacer toutes les sorties",
-          "notResponding": "Ne répond pas. Redémarrer le noyau",
-          "findingPython": "Trouver des environnements Python…",
+          "notResponding": "Ne répond pas. Redémarrez le kernel",
+          "findingPython": "Recherche d'environnements Python…",
           "recommended": "Recommandé",
-          "pythonOnPath": "Python sur CHEMIN",
-          "browsePython": "Recherchez Python…",
-          "missingIpykernelTitle": "Installer ipykernel ?",
-          "missingIpykernel": "L'exécution de cellules avec '{{env}}' nécessite le package ipykernel.",
-          "copyCommand": "Commande Copier",
+          "pythonOnPath": "Python sur le PATH",
+          "browsePython": "Parcourir pour Python…",
+          "missingIpykernelTitle": "Installer ipykernel ?",
+          "missingIpykernel": "L'exécution de cellules avec « {{env}} » requiert le paquet ipykernel.",
+          "copyCommand": "Copier la commande",
           "install": "Installer",
-          "kernelStartFailed": "Le noyau n'a pas pu démarrer.",
-          "noPython": "Python n'a pas été trouvé sur cet ordinateur. Installez-le depuis [python.org](https://www.python.org/downloads/), puis exécutez à nouveau la cellule.",
-          "kernelDied": "Le noyau est mort.",
-          "localOnly": "Les cellules du bloc-notes ne peuvent s'exécuter que pour les fichiers de cet ordinateur.",
+          "kernelStartFailed": "Le kernel n'a pas pu démarrer.",
+          "noPython": "Python est introuvable sur cet ordinateur. Installez-le depuis [python.org](https://www.python.org/downloads/), puis réexécutez la cellule.",
+          "kernelDied": "Le kernel est mort.",
+          "localOnly": "Les cellules du notebook ne peuvent s'exécuter que pour des fichiers sur cet ordinateur.",
           "pythonOnly": "Seuls les notebooks Python peuvent s'exécuter dans Orca."
         },
         "MarkdownPreview": {
@@ -17132,8 +17140,8 @@
       },
       "NativeChatResumeOnRestartModal": {
         "title": "Reprendre les discussions interrompues ?",
-        "body": "Ces discussions étaient à mi-parcours lorsque Orca a fermé ses portes. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier sa dernière action avant de continuer. Votre propre invite n'est pas renvoyée.",
-        "updateBody": "Ces discussions étaient à mi-parcours lorsqu'Orca a installé une mise à jour. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier sa dernière action avant de continuer. Votre propre invite n'est pas renvoyée.",
+        "body": "Ces discussions étaient en cours lorsqu'Orca s'est fermé. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier ce qu'il faisait avant de continuer. Votre propre invite n'est pas renvoyée.",
+        "updateBody": "Ces discussions étaient en cours lorsqu'Orca a installé une mise à jour. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier ce qu'il faisait avant de continuer. Votre propre invite n'est pas renvoyée.",
         "resuming": "Reprise…",
         "untitled": "Discussion sans titre",
         "listLabel": "Des discussions qui reprendraient",
@@ -17149,14 +17157,22 @@
         "continueUnconfirmed_other": "La livraison continue n'est pas confirmée pour les discussions {{value0}}. Ouvrez-les pour vérifier avant d'envoyer un autre message.",
         "dismissAll": "Tout rejeter",
         "dismissUnconfirmed": "Le rejet de l'offre de CV n'a pas été confirmé – il se peut qu'elle soit toujours dans la barre d'état.",
-        "notContinuedOne": "1 chat n'a pas pu être repris",
-        "notContinuedMany": "Les discussions {{value0}} n'ont pas pu reprendre",
-        "notConfirmedOne": "Impossible de confirmer qu'une discussion a repris",
-        "notConfirmedMany": "Impossible de confirmer que les discussions {{value0}} ont repris",
-        "notConfirmedOtherOne": "Impossible de confirmer qu'une autre discussion a repris",
-        "notConfirmedOtherMany": "Impossible de confirmer que {{value0}}, les autres discussions ont repris",
-        "show": "Montrer",
-        "dismiss": "Rejeter"
+        "notContinuedOne": "1 chat n'a pas pu reprendre",
+        "notContinuedMany": "{{value0}} chats n'ont pas pu reprendre",
+        "notConfirmedOne": "Impossible de confirmer qu'1 chat a repris",
+        "notConfirmedMany": "Impossible de confirmer que {{value0}} chats ont repris",
+        "notConfirmedOtherOne": "Impossible de confirmer qu'1 autre chat a repris",
+        "notConfirmedOtherMany": "Impossible de confirmer que {{value0}} autres chats ont repris",
+        "show": "Afficher",
+        "dismiss": "Ignorer",
+        "activityUnnamed": "sans nom",
+        "activityApproval": "En attente de votre approbation : {{value0}}",
+        "activityQuestion": "En attente de votre réponse : {{value0}}",
+        "activityMidReply": "Réponse en cours",
+        "activitySubagentOne": "Sous-agent en cours : {{value0}}",
+        "activitySubagentMany": "{{value0}} sous-agents en cours",
+        "activityMonitorOne": "Surveillance : {{value0}}",
+        "activityMonitorMany": "Surveillance de {{value0}} tâches en arrière-plan"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "Filtrage des statuts des équipes {{value0}} sur {{value1}} : les problèmes des équipes restantes ne sont pas inclus.",
@@ -17222,22 +17238,22 @@
       "NativeChatResumeOutcomeRow": {
         "openChat": "Ouvrir le chat",
         "retry": "Réessayer",
-        "dismiss": "Rejeter",
-        "unconfirmed": "Impossible de confirmer que la discussion a repris",
-        "failed": "Impossible de reprendre",
-        "statusFor": "{{value0}} : {{value1}}",
+        "dismiss": "Ignorer",
+        "unconfirmed": "Impossible de confirmer que le chat a repris",
+        "failed": "Reprise impossible",
+        "statusFor": "{{value0}} : {{value1}}",
         "dismissChat": "Ignorer \"{{value0}}\" dans {{value1}}",
-        "toResume": "Pour reprendre :"
+        "toResume": "À reprendre :"
       },
       "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca n'a pas pu confirmer que le message « continuer » a été transmis. Ouvrez le chat et vérifiez avant d'en envoyer un autre.",
-        "superseded": "Ouvrez le chat et répondez. De nouveaux travaux sont arrivés juste après le redémarrage, donc Orca n'a pas envoyé son message « continuer ».",
-        "conflict": "Une autre fenêtre ou terminal Orca possède toujours cette session. Fermez-le, puis réessayez.",
-        "ownershipUnknown": "Orca travaille toujours à déterminer quel processus est propriétaire de cette session. Attendez un instant, puis réessayez.",
-        "notAttached": "Le chat ne s'est pas reconnecté. Réessayez ou ouvrez-le pour commencer un nouveau tour.",
-        "dispatchRejected": "L'agent a refusé le message « continuer ». Ouvrez le chat et envoyez-en un vous-même.",
-        "unsupported": "Ce chat ne peut pas être repris par Orca. Ouvrez-le pour voir où il s'est arrêté.",
-        "fallback": "Orca n'a pas pu reprendre cette conversation. Ouvrez-le pour continuer manuellement."
+        "unconfirmed": "Orca n'a pas pu confirmer que le message “continue” a été livré. Ouvrez le chat et vérifiez avant d'en envoyer un autre.",
+        "superseded": "Ouvrez le chat et répondez. Du nouveau travail est arrivé juste après le redémarrage, donc Orca n'a pas envoyé son message “continue”.",
+        "conflict": "Une autre fenêtre Orca ou un autre terminal détient toujours cette session. Fermez l’autre fenêtre Orca ou le terminal concerné, puis réessayez.",
+        "ownershipUnknown": "Orca détermine encore quel processus détient cette session. Patientez un instant, puis réessayez.",
+        "notAttached": "Le chat ne s'est pas reconnecté. Réessayez ou ouvrez-le pour démarrer un nouveau tour.",
+        "dispatchRejected": "L'agent a refusé le message “continue”. Ouvrez le chat et envoyez-en un vous-même.",
+        "unsupported": "Orca ne peut pas reprendre ce chat. Ouvrez-le pour voir où il s'est arrêté.",
+        "fallback": "Orca n'a pas pu reprendre ce chat. Ouvrez-le pour continuer manuellement."
       }
     },
     "i18n": {
@@ -17592,38 +17608,6 @@
         "questionCount": "{{value0}} questions"
       },
       "structuredSessionLaunchFailed": "Impossible d'ouvrir le chat {{value0}}",
-      "handoff": {
-        "stage": {
-          "finishingChat": "Fin de la session de discussion…",
-          "finishingTerminal": "Terminal d'agent de finition…",
-          "openingTerminal": "Ouverture du terminal des agents…",
-          "resumingChat": "Reprise de la session de discussion…",
-          "verifyingTerminal": "Terminal de l'agent de vérification…",
-          "verifyingChat": "Vérification de la session de discussion…",
-          "recovering": "Récupération de la session de l'agent…",
-          "manualRecovery": "La session de l'agent doit être récupérée"
-        },
-        "switchingOwner": "Changer de propriétaire de session…",
-        "mode": {
-          "switching": "Commutation",
-          "terminal": "Terminal",
-          "chat": "Chat"
-        },
-        "switchingAfterTurn": "Changer après ce tour",
-        "returningAfterTurn": "Revenir après ce tour",
-        "cancel": "Annuler",
-        "switchAfterTurn": "Changer après ce tour",
-        "stopTurnAndSwitch": "Arrêtez de tourner et de changer",
-        "openAgentTui": "TUI à agent ouvert",
-        "returnAfterTurn": "Revenir après ce tour",
-        "returnToChat": "Revenir au chat",
-        "agentOpenOnHost": "L'agent est ouvert dans le terminal le {{value0}}.",
-        "agentOpen": "L'agent est ouvert dans le terminal.",
-        "exitTerminal": "Quittez le terminal de l'agent pour continuer le chat.",
-        "retryProof": "Réessayez la preuve",
-        "retry": "Réessayer",
-        "details": "Détails"
-      },
       "structuredSessionLaunchFailedDescription": "Orca n'a pas pu ouvrir une discussion structurée {{value0}}. Consultez les journaux pour plus de détails.",
       "subagents": {
         "state": {
@@ -17671,9 +17655,14 @@
         "attachmentsUnsupported": "Supprimez les pièces jointes avant de définir un objectif."
       },
       "fileLinks": {
-        "notFound": "Fichier introuvable : {{value0}}",
-        "unverifiable": "Impossible de vérifier {{value0}} : {{value1}}",
+        "notFound": "Fichier introuvable : {{value0}}",
+        "unverifiable": "Impossible de vérifier {{value0}} : {{value1}}",
         "unresolved": "Impossible de résoudre {{value0}} dans cet espace de travail"
+      },
+      "contextUsage": {
+        "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
+        "title": "Contexte",
+        "estimated": "Estimation basée sur la dernière réponse."
       }
     },
     "tab": {
@@ -17955,8 +17944,8 @@
       "sent": "Contexte de session envoyé à {{agent}} dans une nouvelle session.",
       "deliveryFailed": "La nouvelle session {{agent}} a démarré, mais son contexte n'a pas pu être envoyé.",
       "launchFailed": "Impossible de démarrer une nouvelle session {{agent}}.",
-      "deliveryUnconfirmed": "Orca n'a pas pu confirmer que {{agent}} a reçu le contexte de session. Vérifiez la nouvelle session et collez-la vous-même si son entrée est vide.",
-      "copyPrompt": "Copier l'invite"
+      "deliveryUnconfirmed": "Orca n'a pas pu confirmer que {{agent}} a reçu le contexte de la session. Vérifiez la nouvelle session et collez-le vous-même si sa saisie est vide.",
+      "copyPrompt": "Copier le prompt"
     },
     "status": {
       "bar": {

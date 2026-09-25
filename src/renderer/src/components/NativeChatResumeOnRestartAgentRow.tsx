@@ -9,6 +9,7 @@ import {
   type ResumeFailureAction
 } from './native-chat-resume-failure-guidance'
 import { ResumeFailureGuidanceLine, ResumeFailureStatus } from './NativeChatResumeFailureDetails'
+import { resumeActivityLabel } from './native-chat-resume-activity-label'
 
 /**
  * One offered chat, laid out like the sidebar's compact agent row: provider glyph, the chat's name,
@@ -23,6 +24,9 @@ import { ResumeFailureGuidanceLine, ResumeFailureStatus } from './NativeChatResu
  * No state dot, deliberately. Every `AgentDotState` would mislead: `idle` and `unverifiable` both
  * presuppose a live pane, `interrupted` renders red like an error, `done` green, `working` a
  * spinner. A missing dot beats a dot that says these agents are running.
+ *
+ * Under the name, what the chat was doing when Orca went away — mid-reply, waiting on the user,
+ * subagents or monitoring — so rows the sidebar showed as working for different reasons differ.
  *
  * A chat an earlier resume could not carry on is the same row — selectable where a retry can run,
  * so Resume retries it — plus a status icon, a dismiss control, and a line saying what to do.
@@ -53,6 +57,7 @@ export function ResumeCandidateRow({
     candidate.latestPrompt.trim() ||
     translate('auto.components.NativeChatResumeOnRestartModal.untitled', 'Untitled chat')
   const model = candidate.model?.trim() ?? ''
+  const activity = resumeActivityLabel(candidate.activity)
   const row = (
     <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-accent/50">
       {/* Identifies the agent AND its workspace: the accessible name has to distinguish rows that
@@ -72,7 +77,17 @@ export function ResumeCandidateRow({
       <span role="img" aria-label={agentLabel} className="inline-flex shrink-0">
         <AgentIcon agent={agentTypeToIconAgent(candidate.agent)} size={14} />
       </span>
-      <span className="min-w-0 flex-1 truncate text-xs font-medium">{title}</span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-xs font-medium">{title}</span>
+        {activity && (
+          <span
+            className="truncate text-[11px] text-muted-foreground"
+            title={activity.detail || undefined}
+          >
+            {activity.summary}
+          </span>
+        )}
+      </span>
       {model && (
         <span
           className="min-w-0 max-w-24 shrink-0 truncate font-mono text-[10px] text-muted-foreground"
