@@ -51,11 +51,50 @@ describe('agentDotState', () => {
     expect(
       agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
     ).toBe('working')
-    // 'done' never decays; interrupted still wins.
+    // 'done' never decays, so a stale cancelled turn still reads interrupted.
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
-    expect(agentDotState(row({ state: 'working', updatedAt: 0, interrupted: true }), stale)).toBe(
+    expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
       'interrupted'
     )
+  })
+
+  const failedMain = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 0 }
+
+  it('shows a failed main-agent turn as failed, done or held open by child work', () => {
+    expect(agentDotState(row({ state: 'done', mainAgent: failedMain }), 0)).toBe('failed')
+    expect(agentDotState(row({ state: 'working', mainAgent: failedMain }), 0)).toBe('failed')
+    expect(
+      agentDotState(row({ state: 'working', workingMode: 'monitoring', mainAgent: failedMain }), 0)
+    ).toBe('failed')
+    expect(agentDisplayLabel(row({ state: 'done', prompt: '', mainAgent: failedMain }), 0)).toBe(
+      'Failed'
+    )
+  })
+
+  it('keeps a failed turn failed past the staleness window', () => {
+    const stale = AGENT_STATUS_STALE_AFTER_MS + 1
+    expect(
+      agentDotState(row({ state: 'working', updatedAt: 0, mainAgent: failedMain }), stale)
+    ).toBe('failed')
+  })
+
+  it('lets a child waiting on the user outrank a failed main-agent turn', () => {
+    expect(agentDotState(row({ state: 'waiting', mainAgent: failedMain }), 0)).toBe('waiting')
+  })
+
+  it('reads the main agent record over the row when both are present', () => {
+    const cancelled = {
+      state: 'done' as const,
+      outcome: 'cancellation' as const,
+      stateStartedAt: 0
+    }
+    expect(agentDotState(row({ state: 'done', mainAgent: cancelled }), 0)).toBe('interrupted')
+    expect(
+      agentDotState(
+        row({ state: 'done', interrupted: true, mainAgent: { state: 'done', stateStartedAt: 0 } }),
+        0
+      )
+    ).toBe('done')
   })
 })
 

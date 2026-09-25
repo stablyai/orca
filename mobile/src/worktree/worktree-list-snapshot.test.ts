@@ -167,6 +167,19 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects a main-agent-only change while the combined row stays working', () => {
+    const mainWorking = { state: 'working' as const, stateStartedAt: 100 }
+    const mainFailed = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 150 }
+    const first = [worktree({ agents: [agent({ mainAgent: mainWorking })] })]
+    const failed = [worktree({ agents: [agent({ mainAgent: mainFailed })] })]
+    const same = [worktree({ agents: [agent({ mainAgent: { ...mainWorking } })] })]
+    const absent = [worktree({ agents: [agent()] })]
+
+    expect(areWorktreeListsEqual(first, failed)).toBe(false)
+    expect(areWorktreeListsEqual(first, absent)).toBe(false)
+    expect(areWorktreeListsEqual(first, same)).toBe(true)
+  })
+
   it('detects workspace monitoring mode changes within working', () => {
     const first = [worktree({ status: 'working' })]
     const second = [worktree({ status: 'working', workingMode: 'monitoring' })]

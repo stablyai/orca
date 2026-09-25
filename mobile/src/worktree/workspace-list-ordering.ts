@@ -1,4 +1,6 @@
-import type { Worktree } from './workspace-list-types'
+import { resolveAgentWorktreeDisplayStatus } from '../../../src/shared/agent-status-display-state'
+import { agentDotState } from './agent-row-display'
+import type { Worktree, WorktreeDisplayStatus } from './workspace-list-types'
 import type { MobileSortMode } from './workspace-view-settings'
 
 export const CREATE_GRACE_MS = 5 * 60 * 1000
@@ -42,12 +44,19 @@ function compareByRecent(a: Worktree, b: Worktree, now: number): number {
   )
 }
 
-const AGENT_ATTENTION_STATUS_ORDER = { permission: 0, working: 1, done: 2, active: 3, inactive: 4 }
+const AGENT_ATTENTION_STATUS_ORDER: Record<WorktreeDisplayStatus, number> = {
+  permission: 0,
+  failed: 1,
+  working: 2,
+  done: 3,
+  active: 4,
+  inactive: 5
+}
 
 function compareByAgentAttention(a: Worktree, b: Worktree, now: number): number {
   return (
-    AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(a)] -
-      AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(b)] || compareByRecent(a, b, now)
+    AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(a, now)] -
+      AGENT_ATTENTION_STATUS_ORDER[getWorktreeStatus(b, now)] || compareByRecent(a, b, now)
   )
 }
 
@@ -100,9 +109,23 @@ export function sortWorktrees(
   })
 }
 
-export function getWorktreeStatus(
-  w: Worktree
-): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
+/** The row dot: the host's lifecycle rollup, outranked by what the agent rows display. */
+export function getWorktreeStatus(w: Worktree, now = Date.now()): WorktreeDisplayStatus {
+  let hasHumanWait = false
+  let hasFailed = false
+  for (const row of w.agents ?? []) {
+    const state = agentDotState(row, now)
+    hasHumanWait ||= state === 'waiting' || state === 'blocked'
+    hasFailed ||= state === 'failed'
+  }
+  return resolveAgentWorktreeDisplayStatus({
+    base: getWorktreeLifecycleStatus(w),
+    hasHumanWait,
+    hasFailed
+  })
+}
+
+function getWorktreeLifecycleStatus(w: Worktree): NonNullable<Worktree['status']> {
   // Why: desktop's sidebar activity is the parity source. Runtime status may
   // still report retained/background PTYs as active after desktop hides them.
   if (w.hasHostSidebarActivity === false) {

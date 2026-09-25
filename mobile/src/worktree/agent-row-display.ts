@@ -1,46 +1,32 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { isAgentStatusState } from '../../../src/shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-freshness'
+import {
+  resolveAgentPaneDisplayState,
+  type AgentStatusDisplayState
+} from '../../../src/shared/agent-status-display-state'
 
-// Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
-// 30 min). Defined locally rather than imported because a runtime-value import
-// from a root .ts breaks mobile's vitest transform (no tsconfig in the
-// mobile-only checkout); root type-only imports stay fine.
-export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
+export { AGENT_STATUS_STALE_AFTER_MS }
 
-// Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
-// status state; 'blocked'/'waiting' read as attention states, 'done' as
-// complete, everything else idle.
-export type AgentDotState =
-  | 'working'
-  | 'monitoring'
-  | 'blocked'
-  | 'waiting'
-  | 'done'
-  | 'idle'
-  | 'interrupted'
+// Mirrors the desktop AgentStateDot vocabulary. Mobile has no 'unverifiable' reader verdict.
+export type AgentDotState = Exclude<AgentStatusDisplayState, 'unverifiable'>
 
-export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'workingMode' | 'interrupted' | 'updatedAt'>,
-  now: number
-): AgentDotState {
-  if (row.interrupted) {
-    return 'interrupted'
+type AgentDotRow = Pick<
+  RuntimeWorktreeAgentRow,
+  'state' | 'workingMode' | 'interrupted' | 'mainAgent' | 'updatedAt'
+>
+
+export function agentDotState(row: AgentDotRow, now: number): AgentDotState {
+  // Why: rows arrive unparsed, so a state arm from a newer host degrades to idle.
+  if (!isAgentStatusState(row.state)) {
+    return 'idle'
   }
-  switch (row.state) {
-    case 'blocked':
-    case 'waiting':
-      // Why: an agent that exits without a final report would otherwise read as
-      // active forever. Decay a stale active state to idle, matching desktop's
-      // renderer-side staleness decay (worktree-agent-rows.ts).
-      return now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS ? 'idle' : row.state
-    case 'working':
-      if (now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
-        return 'idle'
-      }
-      return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
-    case 'done':
-      return 'done'
-  }
-  return 'idle'
+  // Why: an agent that exits without a final report would otherwise read as
+  // active forever. Decay stale live evidence to idle, matching desktop's
+  // renderer-side staleness decay (worktree-agent-rows.ts).
+  const stale = row.state !== 'done' && now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  const state = resolveAgentPaneDisplayState(row, stale ? 'idle' : undefined)
+  return state === 'unverifiable' ? 'idle' : state
 }
 
 // Mirrors desktop agentStateLabel.
@@ -54,6 +40,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Blocked'
     case 'waiting':
       return 'Waiting for input'
+    case 'failed':
+      return 'Failed'
     case 'interrupted':
       return 'Interrupted'
     case 'done':
