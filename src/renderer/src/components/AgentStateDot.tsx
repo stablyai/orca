@@ -1,5 +1,5 @@
 import React from 'react'
-import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
+import { Activity, CircleCheck, CircleDashed, CircleX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
@@ -25,8 +25,8 @@ export type AgentDotState =
   | 'blocked'
   | 'waiting'
   | 'interrupted'
-  // Why: AI Vault subagent rows report a transcript-derived failure, which is
-  // an outcome (like 'done'), not a live attention state like 'blocked'.
+  // Why: a turn that ended in the provider's error (and AI Vault's transcript-derived subagent
+  // failure) is an outcome like 'done', not a live attention state like 'blocked'.
   | 'failed'
   | 'done'
   | 'idle'
@@ -123,6 +123,16 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
       </span>
     )
+  } else if (state === 'failed') {
+    // Why: a failed turn is an outcome like 'done', so it gets a glyph of the same family.
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleX className={cn('text-destructive', icon)} aria-hidden="true" />
+      </span>
+    )
   } else if (state === 'unverifiable') {
     // Why: a dashed ring reads as "incomplete information" rather than a state claim,
     // and amber carries warning weight without borrowing 'done' green or 'working' yellow.
@@ -153,9 +163,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           className={cn(
             'block rounded-full',
             inner,
-            state === 'blocked' || state === 'interrupted' || state === 'failed'
-              ? 'bg-red-500'
-              : 'bg-neutral-500/40'
+            state === 'blocked' || state === 'interrupted' ? 'bg-red-500' : 'bg-neutral-500/40'
           )}
         />
       </span>

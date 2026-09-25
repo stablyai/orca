@@ -152,6 +152,28 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('done')
   })
 
+  it('reports a failed main-agent turn as failed, held open, stale or settled', () => {
+    const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: NOW }
+    for (const failed of [
+      entry(FIRST_LEAF_ID, 'working', { mainAgent }),
+      entry(FIRST_LEAF_ID, 'done', { mainAgent }),
+      entry(FIRST_LEAF_ID, 'working', {
+        mainAgent,
+        updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+      }),
+      entry(FIRST_LEAF_ID, 'working', { mainAgent, restoredUnconfirmed: true })
+    ]) {
+      resetTerminalTabActivityFlagsCacheForTest()
+      expect(
+        resolveTerminalTabActivityStatus({
+          tab: TAB,
+          agentStatusByPaneKey: { [failed.paneKey]: failed },
+          ptyIdsByTabId: LIVE_PTY
+        })
+      ).toBe('failed')
+    }
+  })
+
   it('reports an interrupted done as interrupted, matching the worktree card', () => {
     const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
     expect(
@@ -381,6 +403,8 @@ describe('resolveTerminalTabAttentionBadge', () => {
     expect(resolveTerminalTabAttentionBadge({ status: 'monitoring', hasUnread: true })).toBe(
       'monitoring'
     )
+    // A failed turn still needs the user once read, so the bell never hides it.
+    expect(resolveTerminalTabAttentionBadge({ status: 'failed', hasUnread: true })).toBe('failed')
     expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: true })).toBe('unread')
     expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: false })).toBe('done')
     expect(resolveTerminalTabAttentionBadge({ status: 'interrupted', hasUnread: false })).toBe(

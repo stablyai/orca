@@ -11,6 +11,10 @@ import {
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
+import {
+  agentMainTurnEnding,
+  resolveAgentPaneDisplayState
+} from '../../../../shared/agent-status-display-state'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
@@ -18,6 +22,8 @@ export type WorktreeAgentActivitySummary = {
   hasLiveMonitoring: boolean
   /** Fresh interrupted completion, kept separate from clean done outcomes. */
   hasInterrupted: boolean
+  /** Any row, live, stale, restored or retained, whose main agent's turn ended in failure. */
+  hasFailed: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -32,6 +38,7 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasLiveWorking: false,
   hasLiveMonitoring: false,
   hasInterrupted: false,
+  hasFailed: false,
   hasLiveDone: false,
   hasRetainedDone: false,
   agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID,
@@ -119,11 +126,18 @@ function getWorktreeAgentActivitySummaries(
       continue
     }
     const summary = summaryForWorktree(worktreeId)
+    const isFresh =
+      !entry.restoredUnconfirmed &&
+      isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    // Why: a failure is a settled fact about a finished turn, so staleness never hides it.
+    if (resolveAgentPaneDisplayState(entry, isFresh ? undefined : 'idle') === 'failed') {
+      summary.hasFailed = true
+    }
     if (entry.restoredUnconfirmed) {
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
       continue
     }
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isFresh) {
       // Why: staleness ends this row's authority but not the pane's identity — see
       // `stalePaneIdsByTabId`. Dropping both let Orca's self-authored permission title outlive
       // the row it came from and pin the card to a question nobody was asking.
@@ -147,7 +161,11 @@ function getWorktreeAgentActivitySummaries(
 
   for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     const summary = summaryForWorktree(retained.worktreeId)
-    summary.hasRetainedDone = true
+    if (resolveAgentPaneDisplayState(retained.entry) === 'failed') {
+      summary.hasFailed = true
+    } else {
+      summary.hasRetainedDone = true
+    }
     const paneIdentity = parseAgentStatusPaneIdentity(retained.entry?.paneKey)
     if (paneIdentity) {
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
@@ -191,6 +209,7 @@ function summariesEqual(
     previous.hasLiveWorking === next.hasLiveWorking &&
     previous.hasLiveMonitoring === next.hasLiveMonitoring &&
     previous.hasInterrupted === next.hasInterrupted &&
+    previous.hasFailed === next.hasFailed &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
     agentStatusPaneIdsByTabIdEqual(
@@ -229,11 +248,11 @@ function agentStatusPaneIdsByTabIdEqual(
 
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted'>
+  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'mainAgent'>
 ): void {
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
-  } else if (entry.interrupted === true) {
+  } else if (entry.state === 'done' && agentMainTurnEnding(entry) === 'cancellation') {
     // Interrupted is encoded as done, so it must be checked first.
     summary.hasInterrupted = true
   } else if (entry.state === 'working') {

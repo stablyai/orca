@@ -8,6 +8,10 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import {
+  agentMainTurnEnding,
+  resolveAgentPaneDisplayState
+} from '../../../../shared/agent-status-display-state'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
@@ -25,6 +29,8 @@ type TerminalTabActivityFlags = {
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
   hasInterrupted: boolean
+  /** Any pane, fresh or not, whose main agent's turn ended in failure. */
+  hasFailed: boolean
   hasLiveDone: boolean
   paneIds: Set<string>
   /** Panes whose row went stale; suppress generated permission labels only. */
@@ -67,6 +73,13 @@ function getTerminalTabActivityFlags(
     if (!identity) {
       continue
     }
+    const isFresh =
+      !entry.restoredUnconfirmed &&
+      isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    // Why: a failure is a settled fact about a finished turn, so staleness never hides it.
+    if (resolveAgentPaneDisplayState(entry, isFresh ? undefined : 'idle') === 'failed') {
+      getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).hasFailed = true
+    }
     if (entry.restoredUnconfirmed) {
       const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
       flags.paneIds.add(identity.paneId)
@@ -74,7 +87,7 @@ function getTerminalTabActivityFlags(
     }
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isFresh) {
       // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
       getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
         identity.paneId
@@ -92,7 +105,7 @@ function getTerminalTabActivityFlags(
       } else {
         flags.hasLiveWorking = true
       }
-    } else if (entry.interrupted === true) {
+    } else if (entry.state === 'done' && agentMainTurnEnding(entry) === 'cancellation') {
       // Interrupted is encoded as done, so it must be checked first.
       flags.hasInterrupted = true
     } else if (entry.state === 'done') {
@@ -115,6 +128,7 @@ function getOrCreateTerminalTabActivityFlags(
       hasLiveWorking: false,
       hasLiveMonitoring: false,
       hasInterrupted: false,
+      hasFailed: false,
       hasLiveDone: false,
       paneIds: new Set(),
       stalePaneIds: new Set()
@@ -179,16 +193,12 @@ export function resolveTerminalTabActivityStatus({
     hasLiveWorking: flags?.hasLiveWorking ?? false,
     hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,
     hasInterrupted: flags?.hasInterrupted ?? false,
+    hasFailed: flags?.hasFailed ?? false,
     hasLiveDone: flags?.hasLiveDone ?? false,
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
     hasRetainedDone: false
   })
-}
-
-/** True while the tab shows a live in-turn signal (spinner or needs-input). */
-export function isTerminalTabActivityLive(status: TerminalTabActivityStatus): boolean {
-  return status === 'working' || status === 'monitoring' || status === 'permission'
 }
 
 /**
@@ -199,13 +209,14 @@ export type TerminalTabAttentionBadge =
   | 'working'
   | 'monitoring'
   | 'permission'
+  | 'failed'
   | 'interrupted'
   | 'unread'
   | 'done'
 
 /**
  * Single priority ladder shared by the tab strip and Cmd+J recent rows:
- * in-turn (working / permission) → unread bell → freshly done check.
+ * in-turn (working / permission) → failed → unread bell → freshly done check.
  */
 export function resolveTerminalTabAttentionBadge({
   status,
@@ -223,6 +234,10 @@ export function resolveTerminalTabAttentionBadge({
   if (status === 'monitoring') {
     return 'monitoring'
   }
+  // Why: a failed turn needs the user even once read, so the bell never hides it.
+  if (status === 'failed') {
+    return 'failed'
+  }
   if (hasUnread) {
     return 'unread'
   }
@@ -238,11 +253,12 @@ export function resolveTerminalTabAttentionBadge({
 /** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
 export function terminalTabActivityToAgentDotState(
   status: TerminalTabActivityStatus
-): 'working' | 'monitoring' | 'permission' | 'interrupted' | 'done' | null {
+): 'working' | 'monitoring' | 'permission' | 'failed' | 'interrupted' | 'done' | null {
   switch (status) {
     case 'working':
     case 'monitoring':
     case 'permission':
+    case 'failed':
     case 'interrupted':
     case 'done':
       return status

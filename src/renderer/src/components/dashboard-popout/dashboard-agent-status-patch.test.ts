@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
+import {
+  dashboardCardDisplayState,
+  type DashboardCard,
+  type DashboardSnapshot
+} from '../../../../shared/dashboard-snapshot'
 import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
 
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
@@ -137,5 +141,40 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
     )
 
     expect(result).toEqual({ matched: false, snapshot: original })
+  })
+
+  it('moves a failed turn to Needs You and keeps it there once seen', () => {
+    const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 250 }
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot([card({ unseen: false })]),
+      event({ state: 'working', interactivePrompt: undefined, mainAgent, stateStartedAt: 100 })
+    )
+    expect(result.snapshot.cards[0]).toMatchObject({
+      bucket: 'attention',
+      dotState: 'working',
+      turnEnding: 'failure',
+      unseen: false
+    })
+    expect(dashboardCardDisplayState(result.snapshot.cards[0]!)).toBe('failed')
+
+    // The next turn starts: the ending is dropped rather than carried over.
+    const next = patchDashboardSnapshotFromAgentStatus(
+      result.snapshot,
+      event({
+        state: 'working',
+        receivedAt: 400,
+        stateStartedAt: 350,
+        interactivePrompt: undefined,
+        mainAgent: { state: 'working', stateStartedAt: 350 }
+      })
+    )
+    expect(next.snapshot.cards[0]).not.toHaveProperty('turnEnding')
+    expect(next.snapshot.cards[0]?.bucket).toBe('working')
+  })
+
+  it("lets a child's question outrank the failure", () => {
+    expect(
+      dashboardCardDisplayState({ dotState: 'waiting', unseen: false, turnEnding: 'failure' })
+    ).toBe('waiting')
   })
 })

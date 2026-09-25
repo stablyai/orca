@@ -27,7 +27,9 @@ function historyEntrySnapshot(
     toolName: undefined,
     toolInput: undefined,
     lastAssistantMessage: undefined,
-    interrupted: history.interrupted
+    interrupted: history.interrupted,
+    // Why: the main agent record describes the latest turn only; a past row keeps its own facts.
+    mainAgent: undefined
   }
 }
 

@@ -19,6 +19,7 @@ import {
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
+import { isAgentStatusTurnEnding } from '../../shared/agent-status-display-state'
 export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
@@ -259,6 +260,7 @@ function isDashboardCard(value: unknown): boolean {
     DASHBOARD_DOT_STATES.has(card.dotState) &&
     (card.workingMode === undefined ||
       (card.dotState === 'working' && card.workingMode === 'monitoring')) &&
+    (card.turnEnding === undefined || isAgentStatusTurnEnding(card.turnEnding)) &&
     isBoundedString(card.task, AGENT_STATUS_MAX_FIELD_LENGTH, true) &&
     isOptionalBoundedString(card.lastUserMessage, AGENT_STATUS_MAX_FIELD_LENGTH) &&
     isOptionalBoundedString(card.lastAgentMessage, AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH) &&

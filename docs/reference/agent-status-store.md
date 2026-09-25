@@ -190,9 +190,13 @@ pane key two writers. Removing that filter is the first step of PR 2.
 
 ### The main agent fact
 
-Claude, Codex and Grok hook rows and structured-session rows publish the combined
+Claude, Codex, Grok and OpenCode hook rows and structured-session rows publish the combined
 `state` and, beside it, the main agent's own state as `payload.mainAgent`. Other agents'
-rows and terminal-title-only rows carry none, and readers fall back to `state`:
+rows and terminal-title-only rows carry none, and readers fall back to `state`. OpenCode's
+plugin sends the root session's own state (`root_state`) and the name of the error that ended
+its turn (`root_turn_error_name`) beside its pane fold; `MessageAbortedError` is a
+`cancellation`, any other name a `failure`, and a plugin that predates the fields publishes no
+`mainAgent`:
 
 ```ts
 mainAgent?: { state: AgentStatusState; outcome?: AgentJournalTurnOutcome; stateStartedAt: number }
@@ -308,7 +312,30 @@ off the row (`mainAgent.outcome: 'cancellation'`), never stored beside it, and
 dies on a new turn (a main agent prompt submission, a changed or explicit
 prompt, a session start) or the provider's own settled `mainAgent`. Child and
 replayed events under the hold keep the cancelled main agent and are re-folded
-with their own child evidence.
+with their own child evidence. A settled `mainAgent` whose outcome is `failure` does not release the hold:
+the user's stop is that turn's verdict, and a provider error landing after it
+(the aborted request failing on its way out) ends the same turn, so the row
+keeps the cancellation. Relayed Claude, Grok and OpenCode need this rule,
+because their listeners never learn of the cancel Orca inferred; a local Claude
+listener already carries the cancellation into its `StopFailure`, so there the
+two paths agree.
+
+### Displaying the facts
+
+Every surface that shows an agent (sidebar rows and cards, tabs, Cmd+J, smart
+sort, the dashboards, the Activity page, the pet, phones and the CLI) derives
+what to show from the separated facts through one module,
+`src/shared/agent-status-display-state.ts`: the main agent's own record, the
+child work beyond it (the residual of the published row over `mainAgent`,
+never stored), and each subagent's own row. The order is: a live human wait
+(the main agent's or a child's) > failed > working/monitoring > interrupted >
+done > unverifiable/idle. A failed turn is a settled fact about a finished
+turn, so staleness never hides it and being seen never mutes it. Lifecycle
+readers (notifications firing, automation completion, the awake service,
+retention) keep reading the combined `state`. A row without `mainAgent` is its
+own main agent, so it displays exactly as before. The host's `worktree ps`
+status enum is unchanged on the wire; new phones and the CLI apply the same
+precedence to the rows they receive.
 
 ## PR 1b: the runtime's retained row store is deleted
 

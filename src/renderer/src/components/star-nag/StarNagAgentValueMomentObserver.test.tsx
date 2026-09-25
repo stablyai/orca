@@ -177,6 +177,24 @@ describe('StarNagAgentValueMomentObserver', () => {
     expect(showAgentValueMoment).not.toHaveBeenCalled()
   })
 
+  it('never treats a turn that ended in the provider error as a value moment', async () => {
+    ;({ root, container } = renderObserver())
+
+    setAgentEntries({ pane: entry({ state: 'working' }) })
+    setAgentEntries({
+      pane: entry({
+        state: 'done',
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 2 }
+      })
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(2400)
+    })
+
+    expect(agentValueMoment).not.toHaveBeenCalled()
+    expect(showAgentValueMoment).not.toHaveBeenCalled()
+  })
+
   it('waits for other live agents and recent typing to quiet', async () => {
     ;({ root, container } = renderObserver())
 

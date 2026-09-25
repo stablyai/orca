@@ -15621,7 +15621,9 @@
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "interrupted",
-          "1ec01cef03": "Interrupted by user"
+          "1ec01cef03": "Interrupted by user",
+          "failedAriaLabel": "The turn ended in an error",
+          "failed": "failed"
         }
       },
       "crash": {
@@ -18242,7 +18244,8 @@
       "needsInput": "needs input",
       "working": "working",
       "stopped": "stopped",
-      "finished": "finished"
+      "finished": "finished",
+      "failed": "failed"
     }
   },
   "sessionSearch": {

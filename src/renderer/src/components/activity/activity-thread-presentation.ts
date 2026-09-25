@@ -11,6 +11,7 @@ import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { agentMainTurnEnding } from '../../../../shared/agent-status-display-state'
 import { isHistoricalActivityState } from './activity-event-state'
 import type {
   ActivityEvent,
@@ -68,7 +69,12 @@ export function agentTitle(event: ActivityEvent): string {
     return 'Agent working'
   }
   if (event.state === 'done') {
-    return event.entry.interrupted ? 'Agent interrupted' : 'Agent finished'
+    const ending = agentMainTurnEnding(event.entry)
+    return ending === 'failure'
+      ? 'Agent failed'
+      : ending === 'cancellation'
+        ? 'Agent interrupted'
+        : 'Agent finished'
   }
   return event.state === 'waiting' ? 'Agent waiting for input' : 'Agent needs input'
 }
@@ -91,7 +97,12 @@ export function agentMeta(event: ActivityEvent): string {
     return `${agent} ${event.state}`
   }
   if (event.state === 'done') {
-    return event.entry.interrupted ? `${agent} interrupted` : `${agent} completed`
+    const ending = agentMainTurnEnding(event.entry)
+    return ending === 'failure'
+      ? `${agent} failed`
+      : ending === 'cancellation'
+        ? `${agent} interrupted`
+        : `${agent} completed`
   }
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
@@ -120,12 +131,17 @@ export function statusPreviewForEntry(
 export type ActivityThreadStatusId = AgentDotState
 
 /** Single classifier behind grouping, labels, and clear-completed; the only place the
- *  interrupted predicate is spelled. */
+ *  turn-ending predicate is spelled. A failure outranks everything but a human wait. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
-  const paneEntry = paneActivityEntry(thread)
   const state = threadCurrentState(thread) ?? 'done'
-  const interrupted = paneEntry ? paneEntry.interrupted : thread.latestEvent?.entry.interrupted
-  if (!thread.currentAgentState && state === 'done' && interrupted) {
+  const entry = thread.currentAgentState
+    ? thread.currentAgentEntry
+    : (paneActivityEntry(thread) ?? thread.latestEvent?.entry)
+  const ending = entry ? agentMainTurnEnding(entry) : undefined
+  if (ending === 'failure' && state !== 'waiting' && state !== 'blocked') {
+    return 'failed'
+  }
+  if (!thread.currentAgentState && state === 'done' && ending === 'cancellation') {
     return 'interrupted'
   }
   return state

@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { resolveAgentPaneDisplayState } from '../../../../shared/agent-status-display-state'
 
 export type PetAnimationName =
   | 'idle'
@@ -47,15 +48,15 @@ function agentStateAnimation(
   let hasDone = false
 
   for (const entry of entries) {
-    if (!isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
-      continue
-    }
-    if (entry.state === 'blocked' || entry.state === 'waiting') {
+    const isFresh = isExplicitAgentStatusFresh(entry, now, staleAfterMs)
+    const display = resolveAgentPaneDisplayState(entry, isFresh ? undefined : 'idle')
+    // Why: a failed turn needs the user just like a question, so it borrows the attention sprite.
+    if (display === 'blocked' || display === 'waiting' || display === 'failed') {
       return 'waiting'
     }
-    if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
+    if (display === 'working') {
       hasWorking = true
-    } else if (entry.state === 'done') {
+    } else if (display === 'done' || display === 'interrupted') {
       hasDone = true
     }
   }

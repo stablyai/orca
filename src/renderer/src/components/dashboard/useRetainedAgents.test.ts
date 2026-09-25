@@ -134,6 +134,22 @@ describe('collectRetainedAgentsOnDisappear', () => {
     expect(result.toRetain).toEqual([])
   })
 
+  it('retains a failed done row whole, so the exited pane keeps showing Failed', () => {
+    const failed = makeAgentRow({ paneKey: 'tab-1:1', state: 'done' })
+    failed.entry.mainAgent = { state: 'done', outcome: 'failure', stateStartedAt: 100 }
+    const result = collectRetainedAgentsOnDisappear({
+      previousAgents: new Map([['tab-1:1', { row: failed, worktreeId: 'wt-1' }]]),
+      currentAgents: new Map(),
+      retainedAgentsByPaneKey: {},
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {},
+      recentlyRetiredAgentStatusPaneKeys: {}
+    })
+
+    expect(result.toRetain).toHaveLength(1)
+    expect(result.toRetain[0]?.entry.mainAgent).toEqual(failed.entry.mainAgent)
+  })
+
   it('refreshes the retained snapshot when a reused paneKey starts a newer run', () => {
     // Why: a reused paneKey (same tab+pane, fresh agent start after a prior
     // retained run) produces a newer startedAt. Without the freshness check

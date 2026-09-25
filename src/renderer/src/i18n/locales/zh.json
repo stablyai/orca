@@ -15458,7 +15458,9 @@
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "被打断",
-          "1ec01cef03": "被用户中断"
+          "1ec01cef03": "被用户中断",
+          "failedAriaLabel": "本轮以错误结束",
+          "failed": "失败"
         }
       },
       "crash": {
@@ -18164,7 +18166,8 @@
       "needsInput": "需要输入",
       "working": "处理中",
       "stopped": "已停止",
-      "finished": "已完成"
+      "finished": "已完成",
+      "failed": "已失败"
     }
   },
   "sidebar": {

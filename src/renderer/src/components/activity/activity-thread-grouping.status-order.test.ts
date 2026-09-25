@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { buildActivityThreadGroups, getActivityThreadGroup } from './activity-thread-grouping'
-import { threadAgentState } from './activity-thread-presentation'
+import { agentTitle, threadAgentState } from './activity-thread-presentation'
+import { isClearableActivityThread } from './activity-clear-completed'
 import type { AgentPaneThread } from './activity-thread-types'
 import {
   makeRepo,
@@ -14,7 +15,12 @@ import {
 } from './ActivityPrototypePage-test-fixtures'
 import { buildActivityEvents } from './activity-event-builder'
 
-type StatusFixture = { paneKey: string; state: AgentStatusEntry['state']; at: number }
+type StatusFixture = {
+  paneKey: string
+  state: AgentStatusEntry['state']
+  at: number
+  mainAgent?: AgentStatusEntry['mainAgent']
+}
 
 function makeStatusThreads(fixtures: StatusFixture[]): AgentPaneThread[] {
   const repo = makeRepo()
@@ -31,7 +37,8 @@ function makeStatusThreads(fixtures: StatusFixture[]): AgentPaneThread[] {
         paneKey: fixture.paneKey,
         terminalTitle: 'Claude',
         stateHistory: [],
-        agentType: 'claude'
+        agentType: 'claude',
+        ...(fixture.mainAgent ? { mainAgent: fixture.mainAgent } : {})
       } satisfies AgentStatusEntry
     ])
   )
@@ -125,5 +132,27 @@ describe('status group order', () => {
       expect(groups[0].threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_2, PANE_KEY])
       expect(getActivityThreadGroup(threads[0], groupBy).state).toBeUndefined()
     }
+  })
+
+  it('groups a failed turn after the human waits and above working, with its own glyph', () => {
+    const failed = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 1_000 }
+    const threads = makeStatusThreads([
+      { paneKey: PANE_KEY, state: 'working', at: 5_000 },
+      { paneKey: PANE_KEY_2, state: 'done', at: 1_000, mainAgent: failed },
+      { paneKey: PANE_KEY_3, state: 'waiting', at: 2_000 }
+    ])
+    const groups = buildActivityThreadGroups(threads, 'status')
+    expect(groups.map((group) => group.key)).toEqual(['waiting', 'failed', 'working'])
+    const failedThread = threads.find((thread) => thread.paneKey === PANE_KEY_2)
+    expect(failedThread && threadAgentState(failedThread)).toBe('failed')
+  })
+
+  it('lets Clear completed clear a failed turn and names it as failed', () => {
+    const failed = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 1_000 }
+    const [thread] = makeStatusThreads([
+      { paneKey: PANE_KEY, state: 'done', at: 1_000, mainAgent: failed }
+    ])
+    expect(thread && isClearableActivityThread(thread)).toBe(true)
+    expect(thread?.latestEvent && agentTitle(thread.latestEvent)).toBe('Agent failed')
   })
 })

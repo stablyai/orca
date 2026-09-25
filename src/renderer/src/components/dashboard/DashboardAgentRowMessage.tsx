@@ -5,16 +5,17 @@ import {
   preloadCommentMarkdown
 } from '@/components/sidebar/comment-markdown-lazy'
 import { translate } from '@/i18n/i18n'
+import type { AgentStatusTurnEnding } from '../../../../shared/agent-status-display-state'
 
 type DashboardAgentRowMessageProps = {
   expanded: boolean
-  isInterrupted: boolean
+  turnEnding: AgentStatusTurnEnding | undefined
   lastAssistantMessage: string
 }
 
 export function DashboardAgentRowMessage({
   expanded,
-  isInterrupted,
+  turnEnding,
   lastAssistantMessage
 }: DashboardAgentRowMessageProps): React.JSX.Element | null {
   // These rows are the sidebar's only boot-visible markdown, so warm the chunk as
@@ -22,7 +23,7 @@ export function DashboardAgentRowMessage({
   useEffect(preloadCommentMarkdown, [])
   // Why: message slot is always reserved in collapsed view so the row height
   // stays fixed as assistant text arrives or clears.
-  if (!isInterrupted && !lastAssistantMessage) {
+  if (!turnEnding && !lastAssistantMessage) {
     return expanded ? null : (
       <div className="mt-0.5 pl-5 text-[10px] leading-snug text-muted-foreground/70"> </div>
     )
@@ -30,7 +31,7 @@ export function DashboardAgentRowMessage({
 
   return (
     <div className="mt-0.5 flex min-w-0 items-start gap-1.5 pl-5">
-      {isInterrupted ? (
+      {turnEnding === 'cancellation' ? (
         <span
           className="shrink-0 text-[10px] leading-snug text-muted-foreground/80"
           aria-label={translate(
@@ -42,6 +43,16 @@ export function DashboardAgentRowMessage({
             'auto.components.dashboard.DashboardAgentRowMessage.0a01046763',
             'interrupted'
           )}
+        </span>
+      ) : turnEnding === 'failure' ? (
+        <span
+          className="shrink-0 text-[10px] leading-snug text-destructive"
+          aria-label={translate(
+            'auto.components.dashboard.DashboardAgentRowMessage.failedAriaLabel',
+            'The turn ended in an error'
+          )}
+        >
+          {translate('auto.components.dashboard.DashboardAgentRowMessage.failed', 'failed')}
         </span>
       ) : null}
       {lastAssistantMessage ? (

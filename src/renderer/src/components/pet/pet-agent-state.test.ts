@@ -42,6 +42,15 @@ describe('selectPetAnimationName', () => {
     expect(select([entry('working', { updatedAt: NOW - STALE_AFTER_MS - 1 })])).toBe('idle')
   })
 
+  it('shows a failed main-agent turn with the attention sprite, even past the stale window', () => {
+    const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: NOW }
+    expect(select([entry('done', { mainAgent })])).toBe('waiting')
+    expect(select([entry('working', { mainAgent, updatedAt: NOW - STALE_AFTER_MS - 1 })])).toBe(
+      'waiting'
+    )
+    expect(select([entry('done', { interrupted: true })])).toBe('review')
+  })
+
   it('maps live work to running', () => {
     expect(select([entry('working')])).toBe('running')
   })

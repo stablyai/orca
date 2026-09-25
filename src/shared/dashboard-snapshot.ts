@@ -1,4 +1,5 @@
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
+import type { AgentStatusTurnEnding } from './agent-status-display-state'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
@@ -35,12 +36,19 @@ export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
 
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
-export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring'
+export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring' | 'failed'
 
-/** Completed agents stay green until acknowledged, then settle into gray idle. */
+/** Completed agents stay green until acknowledged, then settle into gray idle. A failed turn
+ *  outranks everything but a human wait and is never muted by being seen. */
 export function dashboardCardDisplayState(
-  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen'>
+  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen' | 'turnEnding'>
 ): DashboardCardDisplayState {
+  if (card.dotState === 'blocked' || card.dotState === 'waiting') {
+    return card.dotState
+  }
+  if (card.turnEnding === 'failure') {
+    return 'failed'
+  }
   if (card.dotState === 'working' && card.workingMode === 'monitoring') {
     return 'monitoring'
   }
@@ -90,6 +98,9 @@ export type DashboardCard = {
   dotState: DashboardCardDotState
   /** Additive discriminator; older pop-outs render this as ordinary working. */
   workingMode?: AgentWorkingMode
+  /** How the main agent's latest turn ended when it did not end cleanly. Additive: older pop-outs
+   *  keep rendering `dotState`. */
+  turnEnding?: AgentStatusTurnEnding
   /** One-line task/prompt text shown on the card. */
   task: string
   /** The most recent message the user sent this agent (its current prompt). */

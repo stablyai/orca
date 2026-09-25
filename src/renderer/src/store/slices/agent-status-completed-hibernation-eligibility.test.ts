@@ -6,6 +6,7 @@ import {
   collectSleepingAgentSessionRecordsForWorktree
 } from './agent-status'
 import { createTestStore, makeTab } from './store-test-helpers'
+import { resolveAgentPaneDisplayState } from '../../../../shared/agent-status-display-state'
 
 const PANE = 'tab-1:leaf-1'
 
@@ -75,5 +76,27 @@ describe('completed-agent hibernation reads only a clean turn ending', () => {
     })
     expect(record).not.toHaveProperty('mainAgent')
     expect(record).not.toHaveProperty('outcome')
+  })
+
+  it('shows the resumed session as Done after a manual sleep and wake, never the old failure', () => {
+    const store = storeWithSettledPane(failed)
+    expect(resolveAgentPaneDisplayState(store.getState().agentStatusByPaneKey[PANE]!)).toBe(
+      'failed'
+    )
+    // Waking starts a fresh provider process whose first report is an idle session boundary.
+    store.getState().setAgentStatus(
+      PANE,
+      {
+        state: 'done',
+        prompt: '',
+        agentType: 'claude',
+        sessionBoundary: true,
+        mainAgent: { state: 'done', stateStartedAt: 20 }
+      },
+      'Claude',
+      { updatedAt: 20, stateStartedAt: 20 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' }
+    )
+    expect(resolveAgentPaneDisplayState(store.getState().agentStatusByPaneKey[PANE]!)).toBe('done')
   })
 })
