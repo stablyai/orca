@@ -18,11 +18,28 @@ const CELL = { width: 7.5, height: 15 }
 /** A scope with a laid-out 55x40 grid, hosted however the case says. */
 function scopeWithGrid(host: TerminalDocumentHost = {}): TerminalDocumentScope {
   const scope = createTerminalDocumentScope(host)
-  scope.term = Object.assign(terminalDocumentDouble().terminal, {
+  const terminal = terminalDocumentDouble().terminal
+  // Cells scale with the font as xterm's do, so a text-scale change moves the fit.
+  const cell = () => {
+    const k = terminal.options.fontSize / 13
+    return { width: CELL.width * k, height: CELL.height * k }
+  }
+  const grid = Object.assign(terminal, {
     cols: 55,
     rows: 40,
-    _core: { _renderService: { dimensions: { css: { cell: CELL } } } }
+    _core: {
+      _renderService: {
+        get dimensions() {
+          return { css: { cell: cell() } }
+        }
+      }
+    }
   })
+  grid.resize = (cols: number, rows: number) => {
+    grid.cols = cols
+    grid.rows = rows
+  }
+  scope.term = grid
   return scope
 }
 
@@ -54,11 +71,13 @@ function startedWithGrid(host: TerminalDocumentHost): TerminalDocumentScope {
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
 /** Frame by frame until the document has done what the case waits on; init chains a few. */
-async function framesUntil(done: () => boolean) {
+async function framesUntil(done: () => boolean, { required = true } = {}) {
   for (let frame = 0; frame < 30 && !done(); frame++) {
     await nextFrame()
   }
-  expect(done()).toBe(true)
+  if (required) {
+    expect(done()).toBe(true)
+  }
 }
 
 const FIT_390 = 390 / (7.5 * 55)
@@ -176,5 +195,54 @@ describe("the document's frame on the page", () => {
     changes.forEach((onChange) => onChange())
     await framesUntil(() => scope.currentScale === 300 / (7.5 * 55))
     expect(view()).toEqual({ panX: 0, panY: 0, userScale: 1, currentScale: 300 / (7.5 * 55) })
+  })
+
+  it('refits on show when a fit was asked for while hidden, even at the same box', async () => {
+    let box = { left: 0, top: 0, width: 390, height: 600 }
+    const changes: (() => void)[] = []
+    const scope = startedWithGrid({
+      viewportRect: () => box,
+      observeViewport: (onChange) => {
+        changes.push(onChange)
+        return () => {}
+      }
+    })
+    const show = (width: number, height: number) => {
+      box = { left: 0, top: 0, width, height }
+      changes.forEach((onChange) => onChange())
+    }
+    await framesUntil(() => scope.currentScale === FIT_390)
+    show(0, 0)
+    handleMsg(scope, { type: 'resize', cols: 80, rows: 40 })
+    await nextFrame()
+    show(390, 600)
+    await framesUntil(() => scope.currentScale !== FIT_390, { required: false })
+    expect(scope.currentScale).toBe(390 / (7.5 * 80))
+  })
+
+  it('refits on show after a text-scale change while hidden', async () => {
+    let box = { left: 0, top: 0, width: 390, height: 600 }
+    const changes: (() => void)[] = []
+    const scope = startedWithGrid({
+      viewportRect: () => box,
+      observeViewport: (onChange) => {
+        changes.push(onChange)
+        return () => {}
+      }
+    })
+    const show = (width: number, height: number) => {
+      box = { left: 0, top: 0, width, height }
+      changes.forEach((onChange) => onChange())
+    }
+    await framesUntil(() => scope.currentScale === FIT_390)
+    show(0, 0)
+    handleMsg(scope, { type: 'set-font-scale', fontScale: 0.8 })
+    await nextFrame()
+    await nextFrame()
+    show(390, 600)
+    // The smaller font's cells: 55 columns at fontPxForScale(0.8) = 10 px, 7.5 x 10/13 each.
+    const fitted = 390 / (7.5 * (10 / 13) * 55)
+    await framesUntil(() => scope.currentScale !== FIT_390, { required: false })
+    expect(scope.currentScale).toBe(Math.min(1, fitted) >= 0.95 ? 1 : fitted)
   })
 })

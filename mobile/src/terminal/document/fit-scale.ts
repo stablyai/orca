@@ -80,6 +80,8 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
   if (!scope.term || !scope.term.element) {
     return
   }
+  // Why: a fit asked for while hidden is dropped until a box arrives, and that box may be the old one.
+  scope.fittedBox = null
   const token = ++scope.fitRetryToken
   let attempts = 0
   let lastScrollWidth = -1
