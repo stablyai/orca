@@ -10,6 +10,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
+import type { AgentStatusPtyInventorySettlementPort } from './runtime-agent-status-inventory-settlement'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -83,6 +84,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
       reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+      /** The store's half of the PTY-inventory settlement: the rows a host-scoped inventory may
+       *  adjudicate, and the fenced retire for the ones it proved have no process left. */
+      agentStatusPtyInventorySettlement?: AgentStatusPtyInventorySettlementPort
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
       // a closure defers the lookup past that ordering instead of inverting ownership.
@@ -233,6 +237,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
+    this.agentStatusPtyInventorySettlementFn = deps?.agentStatusPtyInventorySettlement ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable

@@ -104,25 +104,27 @@ describe('startup ordering', () => {
     expect(foundationSource.split('initializeBrowserClientHostId(')).toHaveLength(2)
   })
 
-  it('requires daemon authority before restored-subagent liveness runs', () => {
+  it('requires daemon authority before any targeted PTY liveness probe answers', () => {
+    // This used to be an ordering constraint on a one-shot startup sweep. That sweep is gone and
+    // the probe now runs from the host PTY inventory instead, on every pass — so the barrier has
+    // to live in the probe route itself, where it covers every caller rather than one.
     const source = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-pty-startup.ts'),
+      join(process.cwd(), 'src/main/ipc/pty/runtime/operations.ts'),
       'utf8'
     )
-    const sweepStart = source.indexOf(
-      'export async function reapRestoredSubagentsWithoutLiveAgent()'
-    )
-    const sweepEnd = source.indexOf(
-      'export function startTerminalRuntimeStartupServices()',
-      sweepStart
-    )
-    const sweep = source.slice(sweepStart, sweepEnd)
+    const probeStart = source.indexOf('export async function probePtyLivenessFromRuntimeController')
+    const probeEnd = source.indexOf('export async function attachPtyFromRuntimeController', probeStart)
+    const probe = source.slice(probeStart, probeEnd)
 
-    expect(sweepStart).toBeGreaterThanOrEqual(0)
-    expect(sweepEnd).toBeGreaterThan(sweepStart)
-    expect(sweep).toContain('const provider = getDaemonProvider()')
-    expect(sweep).toContain('if (!provider) {')
-    expect(sweep).toContain('provider.probePtyLiveness(ptyId)')
+    expect(probeStart).toBeGreaterThanOrEqual(0)
+    expect(probeEnd).toBeGreaterThan(probeStart)
+    // Without the await, the pre-swap fallback provider answers "absent" for every daemon-owned
+    // id, and a cold start would retire every restored pane's row at once.
+    const barrierIndex = probe.indexOf('await startupPromise')
+    const providerIndex = probe.indexOf('const provider = getProviderForPty(ptyId)')
+    expect(probe).toContain('deps.getLocalPtyProviderStartupPromise(connectionId)')
+    expect(barrierIndex).toBeGreaterThanOrEqual(0)
+    expect(providerIndex).toBeGreaterThan(barrierIndex)
   })
 
   it('bounds WSL reconciliation before serve RPC while leaving desktop startup independent', () => {

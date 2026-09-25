@@ -1,12 +1,7 @@
 import { app } from 'electron'
 import { classifyError } from '../telemetry/classify-error'
 import { track } from '../telemetry/client'
-import { getPtyIdForPaneKey } from '../ipc/pty'
-import {
-  getDaemonProvider,
-  initDaemonPtyProvider,
-  listLiveDaemonPtyIds
-} from '../daemon/daemon-init'
+import { initDaemonPtyProvider, listLiveDaemonPtyIds } from '../daemon/daemon-init'
 import {
   getCodexPaneAccount,
   hasAnyRecordedLegacyWslCodexPane,
@@ -19,12 +14,6 @@ import { reconcileRetainedCodexHookHomes } from '../codex/retained-codex-hook-st
 import { codexHookService } from '../codex/hook-service'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
-import {
-  indexPersistedPaneKeyPtyIds,
-  isLocalExecutionHost,
-  resolveAgentWorkspaceExecutionHostId,
-  sweepRestoredSubagentsWithoutLiveAgent
-} from '../agent-hooks/restored-subagent-liveness-sweep'
 import { startFirstWindowStartupServices } from './first-window-startup-services'
 import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
@@ -78,45 +67,6 @@ export function handleCodexHomePtySpawned(args: {
 
 export function handlePtyExit(id: string, exitSequence: number): void {
   state.codexSessionMigration?.finishLaunch(id, exitSequence)
-}
-
-/** A PTY that dies while Orca is down never runs the teardown that clears pane
- *  state, so hydrate can rebuild a Claude subagent roster that no later hook can
- *  retire — pinning the pane 'working' and locking its agent out of hibernation
- *  for good. Once provider and hook hydration settle, targeted PTY liveness can
- *  retire only rows whose local owner is proven gone. */
-export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
-  const store = state.store
-  if (!store) {
-    return
-  }
-  const provider = getDaemonProvider()
-  if (!provider) {
-    return
-  }
-  const persistedPtyIdByPaneKey = indexPersistedPaneKeyPtyIds(
-    store.getWorkspaceSession().terminalLayoutsByTabId ?? {}
-  )
-  await sweepRestoredSubagentsWithoutLiveAgent({
-    probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
-    isLocalExecutionHost: (worktreeId) =>
-      isLocalExecutionHost(
-        resolveAgentWorkspaceExecutionHostId(worktreeId, {
-          getRepo: (repoId) => store.getRepo(repoId),
-          getWorktreeMeta: (resolvedWorktreeId) => store.getWorktreeMeta(resolvedWorktreeId),
-          getFolderWorkspace: (folderWorkspaceId) => store.getFolderWorkspace(folderWorkspaceId),
-          getProjectGroups: () => store.getProjectGroups()
-        })
-      ),
-    getBoundPtyIdForPaneKey: getPtyIdForPaneKey,
-    getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey),
-    reap: (isLocalHost, isLocalPaneAgentLive, isLocalPaneLivenessEvidenceCurrent) =>
-      agentHookServer.reapRestoredClaudeSubagentsWithoutLiveAgent(
-        isLocalHost,
-        isLocalPaneAgentLive,
-        isLocalPaneLivenessEvidenceCurrent
-      )
-  })
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
@@ -199,9 +149,6 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
   )
   void startupServices.localPtyReady.then(() => {
     logStartupMilestone('local-pty-startup-ready')
-    void reapRestoredSubagentsWithoutLiveAgent().catch((error) =>
-      console.warn('[agent-hooks] restored-subagent liveness probe failed:', error)
-    )
   })
   return startupServices
 }

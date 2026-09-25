@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from './orca-runtime-refresh-pty-worktree-records-from-controller'
+import { OrcaRuntimeWithSettleAgentStatusFromInventory } from './orca-runtime-settle-agent-status-from-inventory'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
@@ -29,9 +29,8 @@ import {
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../shared/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
-import { retireOrchestrationAuthorityAbsentFromInventory } from './runtime-restored-orchestration-authority-sweep'
 
-export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController {
+export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithSettleAgentStatusFromInventory {
   protected async refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null,
@@ -298,12 +297,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
         }
       }
     }
-    // Why: runs after the hasPty rescue so a still-addressable pane keeps its receipt.
-    retireOrchestrationAuthorityAbsentFromInventory(this.restoredOrchestrationAuthorityByPtyId, {
-      queriedHostIds,
-      allLivePtyIds,
-      connectionId
-    })
+    this.retireObligationsAbsentFromInventory({ connectionId, queriedHostIds, allLivePtyIds })
     this.pruneDisconnectedPtyRecords()
     return {
       livePtyIds: targetWorktreeId ? selectedLivePtyIds : allLivePtyIds,

@@ -28,6 +28,10 @@ export function makeAgentStatusStoreWiring(): {
     reconcileAgentStatusForEndedProcess: (
       paneKeys: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[0]
     ) => void
+    agentStatusPtyInventorySettlement: {
+      listCandidates: () => ReturnType<AgentHookServer['listPtyInventorySettlementCandidates']>
+      settle: (settled: Parameters<AgentHookServer['settlePtyInventoryAbsence']>[0]) => number
+    }
   }
   /** Call once the runtime exists; returns the republish teardown. */
   attach: (runtime: WiredRuntime) => () => void
@@ -44,6 +48,10 @@ export function makeAgentStatusStoreWiring(): {
         statusStore.getStatusSnapshotForPane(paneKey),
       reconcileAgentStatusForEndedProcess: (paneKeys) => {
         statusStore.reconcileEndedProcessForPaneKeys(paneKeys)
+      },
+      agentStatusPtyInventorySettlement: {
+        listCandidates: () => statusStore.listPtyInventorySettlementCandidates(),
+        settle: (settled) => statusStore.settlePtyInventoryAbsence(settled)
       }
     },
     attach: (runtime) => installHookStatusSessionTabsRepublish(statusStore, () => runtime)
