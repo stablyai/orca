@@ -250,6 +250,44 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
 
+  it('bumps aggregate epochs when only the main agent record changes under a working row', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'p1',
+        agentType: 'claude',
+        mainAgent: { state: 'working', stateStartedAt: 1_000 }
+      },
+      'claude',
+      { updatedAt: 1_000, stateStartedAt: 1_000 }
+    )
+    const firstEpoch = store.getState().agentStatusEpoch
+    const firstSortEpoch = store.getState().sortEpoch
+
+    // The main agent's turn failed while a subagent keeps the combined row working.
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'p1',
+        agentType: 'claude',
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 2_000 }
+      },
+      'claude',
+      { updatedAt: 2_000, stateStartedAt: 1_000 }
+    )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].mainAgent).toMatchObject({
+      state: 'done',
+      outcome: 'failure'
+    })
+    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
   it('bumps aggregate epochs when a same-state entry gains worktree attribution', () => {
     vi.useFakeTimers()
     const store = createTestStore()
