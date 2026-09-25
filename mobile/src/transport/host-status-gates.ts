@@ -76,6 +76,8 @@ export function useHostStatusGates(args: {
   // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
   const [unverified, setUnverified] = useState(false)
 
+  // The one retry timer is re-armed from inside the read; the returned cleanup clears it.
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
     if (connState !== 'connected' || !client) {
       setUnverified(true)

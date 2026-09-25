@@ -72,8 +72,13 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     // helper. The finding predates this list; it surfaced when the effect body changed. This map
     // keys on file, not line, so the entry covers both effects in it; nothing else in the file
     // arms a timer, so widening it further is the only alternative, not a narrower option.
+    // host-status-gates re-arms one retry timer from inside its read, and its cleanup clears that
+    // handle; the rule reports even the minimal self-rescheduling `let t; t = setTimeout(...)` shape.
     'react-doctor(effect-needs-cleanup)',
-    new Set(['mobile/src/session/use-mobile-session-startup.ts'])
+    new Set([
+      'mobile/src/session/use-mobile-session-startup.ts',
+      'mobile/src/transport/host-status-gates.ts'
+    ])
   ]
 ])
 
