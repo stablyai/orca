@@ -6,6 +6,7 @@
 // do.
 
 import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import {
   evictStructuredAgentSession,
@@ -176,7 +177,8 @@ export async function evictOwnedStructuredAgentSessions(
  *  resume and a send's ensure-owner step are the same serialized attach with a different asker. */
 export function createStructuredAgentSessionHolds(
   attachContext: () => StructuredAgentSessionAttachContext,
-  close: (sessionId: string) => Promise<void>
+  close: (sessionId: string) => Promise<void>,
+  readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
 ): StructuredAgentSessionHolds {
   const context = attachContext()
   return new StructuredAgentSessionHolds({
@@ -199,16 +201,15 @@ export function createStructuredAgentSessionHolds(
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
     // A send pending while the child is still starting is held for that start; evicting would
     // refuse it. Any other pending send may wait on an echo that never comes, so eviction retires it.
-    // Subagents, commands and monitors outlive the lead's turn inside the child, so the live roster
-    // the sidebar shows as working is owed too; stopping the child would end them silently.
+    // Subagents, commands and monitors outlive the lead's turn inside the child, so the live child
+    // records the sidebar shows as working are owed too; stopping the child would end them silently.
     hasOwedWork: (sessionId) => {
       const session = context.sessions.get(sessionId)
       return session
         ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null ||
             (session.providerChildPhase === 'starting' &&
               session.journal.pendingSubmissions().length > 0) ||
-            agentChildWorkLiveness(context.deps.adapter.backgroundTaskState?.(sessionId)?.tasks) !==
-              null
+            agentChildWorkLiveness(readChildWork(sessionId)) !== null
         : false
     },
     onError: (error) => context.deps.onEventSinkError?.(error),

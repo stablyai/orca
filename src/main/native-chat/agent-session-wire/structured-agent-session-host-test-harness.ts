@@ -7,6 +7,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type {
@@ -165,6 +166,12 @@ export function replaceHostTestState(next: {
 }): void {
   store = next.store
   host = next.host
+}
+
+/** Serves `records` as the session's child records through the status sink, as the host's store
+ *  does. Call before `attach`: only the attach's publish carries the address a row lands under. */
+export function serveHostTestChildWork(records: () => AgentChildWorkView[]): void {
+  host.deps.statusSink = { publish: () => {}, forget: () => {}, readChildWork: records }
 }
 
 /** The live per-test state. Read it in a `beforeEach` so a suite's test bodies

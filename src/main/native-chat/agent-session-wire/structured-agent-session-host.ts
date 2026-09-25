@@ -96,7 +96,8 @@ export class StructuredAgentSessionHost {
     })
     this.holds = createStructuredAgentSessionHolds(
       () => this.attachContext(),
-      (sessionId) => this.close(sessionId)
+      (sessionId) => this.close(sessionId),
+      this.clientDelivery.readChildWork
     )
     this.restore = createStructuredAgentSessionHostRestore(deps, this.sessions, () => this.now(), {
       reconcile: this.reconcileLeases,
@@ -128,7 +129,8 @@ export class StructuredAgentSessionHost {
     })
     this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
-      publish: this.subscribers.publish.bind(this.subscribers)
+      publish: this.subscribers.publish.bind(this.subscribers),
+      readChildWork: this.clientDelivery.readChildWork
     })
     this.runtimeState.startLeaseRenewal()
   }
