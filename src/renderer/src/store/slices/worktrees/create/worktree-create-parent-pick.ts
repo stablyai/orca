@@ -1,5 +1,6 @@
 import type { AppState } from '../../../types'
 import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
@@ -9,6 +10,10 @@ import {
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
 import { getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import {
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId
+} from '../../../../../../shared/execution-host'
 
 export type WorktreeCreateParentPick = {
   /** Workspace the create attaches to. Undefined once a stale pick is dropped. */
@@ -21,6 +26,20 @@ export type WorktreeCreateParentPick = {
   staleBeforeCreate: boolean
 }
 
+/** Why: the composer keeps its pick across a repo switch, and a parent on another host must not be sent. */
+function isOnCreateHost(
+  state: AppState,
+  picked: Pick<Worktree, 'hostId' | 'repoId'>,
+  repoId: string
+): boolean {
+  const createRepo = state.repos.find((repo) => repo.id === repoId)
+  if (!createRepo) {
+    return picked.repoId === repoId
+  }
+  const pickedRepo = state.repos.find((repo) => repo.id === picked.repoId)
+  return getWorktreeExecutionHostId(picked, pickedRepo) === getRepoExecutionHostId(createRepo)
+}
+
 /** Resolves the composer pick against the current store, falling back to the active folder scope. */
 export function resolveWorktreeCreateParent(
   state: AppState,
@@ -30,7 +49,8 @@ export function resolveWorktreeCreateParent(
   const picked = requestedParentWorktreeId
     ? getIndexedWorktreeById(state.worktreesByRepo, requestedParentWorktreeId)
     : undefined
-  const usable = picked && !picked.isArchived && picked.repoId === repoId ? picked.id : undefined
+  const usable =
+    picked && !picked.isArchived && isOnCreateHost(state, picked, repoId) ? picked.id : undefined
   const pickedDisplayName = picked ? resolveWorktreeDisplayName(picked).trim() : null
   if (usable) {
     return {

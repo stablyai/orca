@@ -8,6 +8,20 @@ import StatusIndicator from './StatusIndicator'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
+/** Names a candidate's repo — parents may come from any repo on the same host. */
+export function WorktreeParentRepoBadge({
+  repo
+}: {
+  repo: Pick<Repo, 'badgeColor' | 'displayName'>
+}): React.JSX.Element {
+  return (
+    <span className="inline-flex min-w-0 max-w-[8rem] shrink-0 items-center gap-1 rounded border border-border bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
+      <RepoBadgeMark color={repo.badgeColor} />
+      <span className="truncate lowercase">{repo.displayName}</span>
+    </span>
+  )
+}
+
 // Why: presentational and memoized — the picker resolves every row's status
 // from one batched store read so the rows themselves hold no subscriptions.
 export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerRow({
@@ -37,12 +51,7 @@ export const WorktreeParentPickerRow = React.memo(function WorktreeParentPickerR
           ) : null}
         </div>
         <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
-          {repo ? (
-            <span className="inline-flex min-w-0 max-w-[8rem] shrink-0 items-center gap-1 rounded border border-border bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
-              <RepoBadgeMark color={repo.badgeColor} />
-              <span className="truncate lowercase">{repo.displayName}</span>
-            </span>
-          ) : null}
+          {repo ? <WorktreeParentRepoBadge repo={repo} /> : null}
           {repo?.connectionId ? <Server className="size-3 shrink-0" /> : null}
           <GitBranch className="size-3 shrink-0" />
           <span className="truncate">{branch}</span>

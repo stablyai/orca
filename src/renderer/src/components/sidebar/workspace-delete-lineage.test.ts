@@ -106,19 +106,25 @@ describe('getWorkspaceDeleteLineage', () => {
     expect(lineage.deleteAllTargets).toEqual([parent])
   })
 
-  it('rejects cross-repo, cross-host, and cross-project descendants', () => {
+  it('keeps same-host cross-repo and cross-project descendants, rejecting unproven hosts', () => {
     const parent: Worktree = {
       ...makeWorktree('parent', '/workspaces/parent'),
       hostId: LOCAL_EXECUTION_HOST_ID,
       projectId: 'project-1'
     }
     const children: Worktree[] = [
-      { ...makeWorktree('repo-child', '/workspaces/repo-child'), repoId: 'repo-2' },
+      {
+        ...makeWorktree('repo-child', '/workspaces/repo-child'),
+        repoId: 'repo-2',
+        hostId: LOCAL_EXECUTION_HOST_ID
+      },
       {
         ...makeWorktree('host-child', '/workspaces/host-child'),
         hostId: toSshExecutionHostId('other')
       },
-      { ...makeWorktree('project-child', '/workspaces/project-child'), projectId: 'project-2' }
+      { ...makeWorktree('project-child', '/workspaces/project-child'), projectId: 'project-2' },
+      // Another repo with no known host could be on another machine, so it is not a descendant.
+      { ...makeWorktree('unhosted-repo-child', '/workspaces/unhosted'), repoId: 'repo-3' }
     ]
     const lineageById = Object.fromEntries(
       children.map((child) => [child.id, makeLineage(child, parent)])
@@ -126,8 +132,12 @@ describe('getWorkspaceDeleteLineage', () => {
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, ...children], lineageById)
 
-    expect(lineage.descendants).toEqual([])
-    expect(lineage.deleteAllTargets).toEqual([parent])
+    // Each target keeps its own repoId, so its removal is routed to its own repo (#8886).
+    expect(lineage.descendants.map((child) => [child.id, child.repoId])).toEqual([
+      [children[0].id, 'repo-2'],
+      [children[2].id, children[2].repoId]
+    ])
+    expect(lineage.deleteAllTargets).toEqual([children[0], children[2], parent])
   })
 
   it('does not traverse cyclic projected lineage', () => {

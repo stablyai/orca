@@ -235,37 +235,51 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
   })
 
   it.each([
-    ['repository', { repoId: 'repo-2' }, {}],
-    ['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }],
-    ['known project', { projectId: 'project-b' }, { projectId: 'project-a' }]
-  ])('excludes nested PRs across a %s boundary', (_boundary, childOverrides, parentOverrides) => {
-    const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
-    const nested = makeWorktree({
-      id: 'nested',
-      instanceId: 'nested',
-      linkedPR: 4,
-      ...childOverrides
-    })
-    const nestedRepo = { ...repo, id: nested.repoId }
+    [
+      'repository',
+      { repoId: 'repo-2', hostId: 'local' as const },
+      { hostId: 'local' as const },
+      false
+    ],
+    ['repository with an unknown host', { repoId: 'repo-2' }, { hostId: 'local' as const }, true],
+    ['known host', { hostId: 'ssh:remote' as const }, { hostId: 'local' as const }, true],
+    ['known project', { projectId: 'project-b' }, { projectId: 'project-a' }, false]
+  ])(
+    'handles nested PRs across a %s boundary',
+    (_boundary, childOverrides, parentOverrides, excluded) => {
+      const parent = makeWorktree({ id: 'parent', instanceId: 'parent', ...parentOverrides })
+      const nested = makeWorktree({
+        id: 'nested',
+        instanceId: 'nested',
+        linkedPR: 4,
+        ...childOverrides
+      })
+      const nestedRepo = { ...repo, id: nested.repoId }
 
-    const display = getFolderWorkspaceCardPrDisplay({
-      folderWorkspaceId: 'folder-1',
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-      worktreeMap: new Map([
-        [parent.id, parent],
-        [nested.id, nested]
-      ]),
-      repoMap: new Map([
-        [repo.id, repo],
-        [nestedRepo.id, nestedRepo]
-      ]),
-      hostedReviewCache: null,
-      prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
-    })
+      const display = getFolderWorkspaceCardPrDisplay({
+        folderWorkspaceId: 'folder-1',
+        workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+        worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
+        worktreeMap: new Map([
+          [parent.id, parent],
+          [nested.id, nested]
+        ]),
+        repoMap: new Map([
+          [repo.id, repo],
+          [nestedRepo.id, nestedRepo]
+        ]),
+        hostedReviewCache: null,
+        prCache: { [`${nested.repoId}::nested`]: makePrEntry(4, 'success') }
+      })
 
-    expect(display).toBeNull()
-  })
+      // Why: only the host bounds lineage; repos and projects on one host nest (#8886).
+      if (excluded) {
+        expect(display).toBeNull()
+      } else {
+        expect(display).not.toBeNull()
+      }
+    }
+  )
 
   it('excludes nested PRs from cyclic projected lineage', () => {
     const parent = makeWorktree({ id: 'parent', instanceId: 'parent' })

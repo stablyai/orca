@@ -14,7 +14,7 @@ type ParentCandidateArgs = {
   cyclicLineageIds?: ReadonlySet<string>
 }
 
-function getWorktreeOwnerHostId(
+export function getWorktreeOwnerHostId(
   worktree: Worktree,
   repoMap: Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
 ): string | null {
@@ -58,13 +58,11 @@ export function isEligibleWorktreeParent({
   candidateParent: Worktree
   childHostId?: string | null
 }): boolean {
+  // Why not the shared boundary: it treats an unknown host as a wildcard, but here each side's
+  // owning repo resolves the host, so an unresolved one is ineligible rather than matching.
   return (
-    candidateParent.repoId === child.repoId &&
     childHostId !== null &&
     getWorktreeOwnerHostId(candidateParent, repoMap) === childHostId &&
-    (child.projectId === undefined ||
-      candidateParent.projectId === undefined ||
-      child.projectId === candidateParent.projectId) &&
     !candidateParent.isArchived &&
     canAssignWorktreeParent({
       child,

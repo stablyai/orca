@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import type { WorktreeLineage } from './worktree/lineage-types'
 import type { Worktree } from './worktree/types'
-import type { WorktreeLineageBoundary } from './resolved-worktree-lineage'
 import {
   projectResolvedWorktreeLineage,
   sharesWorktreeLineageBoundary
@@ -46,37 +45,23 @@ function lineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage {
 }
 
 describe('sharesWorktreeLineageBoundary', () => {
-  const boundary = (overrides: Partial<WorktreeLineageBoundary> = {}): WorktreeLineageBoundary => ({
-    repoId: 'repo',
-    hostId: 'local',
-    projectId: 'github:stablyai/orca',
-    ...overrides
-  })
-
-  it('accepts an identical repo, host, and project', () => {
-    expect(sharesWorktreeLineageBoundary(boundary(), boundary())).toBe(true)
-  })
-
-  it('rejects a differing repo even when host and project agree', () => {
-    expect(sharesWorktreeLineageBoundary(boundary(), boundary({ repoId: 'other-repo' }))).toBe(
-      false
-    )
-  })
-
   it.each([
-    ['child host', boundary({ hostId: undefined }), boundary()],
-    ['parent host', boundary(), boundary({ hostId: undefined })],
-    ['child project', boundary({ projectId: undefined }), boundary()],
-    ['parent project', boundary(), boundary({ projectId: undefined })]
-  ])('treats an undefined %s as compatible', (_label, child, parent) => {
-    expect(sharesWorktreeLineageBoundary(child, parent)).toBe(true)
-  })
-
-  it.each([
-    ['host', boundary({ hostId: 'ssh:remote' })],
-    ['project', boundary({ projectId: 'github:other/project' })]
-  ])('rejects a defined %s mismatch', (_label, parent) => {
-    expect(sharesWorktreeLineageBoundary(boundary(), parent)).toBe(false)
+    ['same repo, same known host', 'repo', 'local', 'repo', 'local', true],
+    ['same repo, different known hosts', 'repo', 'local', 'repo', 'ssh:remote', false],
+    ['same repo, unknown child host', 'repo', undefined, 'repo', 'local', true],
+    ['same repo, unknown parent host', 'repo', 'local', 'repo', undefined, true],
+    ['other repo, same known host (#8886)', 'repo', 'local', 'other', 'local', true],
+    ['other repo, different known hosts', 'repo', 'local', 'other', 'ssh:remote', false],
+    ['other repo, unknown child host', 'repo', undefined, 'other', 'local', false],
+    ['other repo, unknown parent host', 'repo', 'local', 'other', undefined, false],
+    ['other repo, both hosts unknown', 'repo', undefined, 'other', undefined, false]
+  ] as const)('%s', (_label, childRepo, childHost, parentRepo, parentHost, expected) => {
+    expect(
+      sharesWorktreeLineageBoundary(
+        { repoId: childRepo, hostId: childHost },
+        { repoId: parentRepo, hostId: parentHost }
+      )
+    ).toBe(expected)
   })
 })
 
@@ -106,13 +91,9 @@ describe('projectResolvedWorktreeLineage', () => {
     ])
   })
 
-  it.each([
-    ['repo', { repoId: 'other-repo' }, {}],
-    ['known host', { hostId: 'local' as const }, { hostId: 'ssh:remote' as const }],
-    ['known project', { projectId: 'github:stablyai/orca' }, { projectId: 'github:other/project' }]
-  ])('rejects a %s boundary mismatch', (_label, childOverrides, parentOverrides) => {
-    const boundedChild = worktree('child', 'child-instance', childOverrides)
-    const boundedParent = worktree('parent', 'parent-instance', parentOverrides)
+  it('rejects a known host boundary mismatch', () => {
+    const boundedChild = worktree('child', 'child-instance', { hostId: 'local' })
+    const boundedParent = worktree('parent', 'parent-instance', { hostId: 'ssh:remote' })
 
     const projected = projectResolvedWorktreeLineage([boundedChild, boundedParent], {
       child: lineage()
@@ -121,6 +102,45 @@ describe('projectResolvedWorktreeLineage', () => {
     expect(projected).toMatchObject([
       { id: 'child', parentWorktreeId: null, lineage: null },
       { id: 'parent', childWorktreeIds: [] }
+    ])
+  })
+
+  it('rejects a cross-repo edge when either host is unknown', () => {
+    const unhostedChild = worktree('child', 'child-instance', { repoId: 'repo-a' })
+    const hostedParent = worktree('parent', 'parent-instance', {
+      repoId: 'repo-b',
+      hostId: 'local'
+    })
+
+    const projected = projectResolvedWorktreeLineage([unhostedChild, hostedParent], {
+      child: lineage()
+    })
+
+    expect(projected).toMatchObject([
+      { id: 'child', parentWorktreeId: null, lineage: null },
+      { id: 'parent', childWorktreeIds: [] }
+    ])
+  })
+
+  it('keeps an edge across repos and projects on the same host (#8886)', () => {
+    const crossRepoChild = worktree('child', 'child-instance', {
+      repoId: 'repo-a',
+      hostId: 'local',
+      projectId: 'github:stablyai/orca'
+    })
+    const crossRepoParent = worktree('parent', 'parent-instance', {
+      repoId: 'repo-b',
+      hostId: 'local',
+      projectId: 'github:other/project'
+    })
+
+    const projected = projectResolvedWorktreeLineage([crossRepoChild, crossRepoParent], {
+      child: lineage()
+    })
+
+    expect(projected).toMatchObject([
+      { id: 'child', parentWorktreeId: 'parent', lineage: lineage() },
+      { id: 'parent', childWorktreeIds: ['child'] }
     ])
   })
 

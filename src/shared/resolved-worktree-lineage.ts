@@ -9,19 +9,19 @@ export type WorktreeWithResolvedLineage<T extends Worktree = Worktree> = T & {
 
 /** The fields a lineage edge is scoped by. Split out so create-time callers — which have a
  *  projected child, not a real Worktree — can check the same rule the projection enforces. */
-export type WorktreeLineageBoundary = Pick<Worktree, 'repoId' | 'hostId' | 'projectId'>
+export type WorktreeLineageBoundary = Pick<Worktree, 'repoId' | 'hostId'>
 
+/** Why host-scoped: worktree ids are bare `<repoId>::<path>` (STA-4343), so a cross-host edge could
+ *  route an action at the wrong machine. An unknown host is only safe within one repo, which lives
+ *  on one host; across repos (#8886) both hosts must be known. */
 export function sharesWorktreeLineageBoundary(
   child: WorktreeLineageBoundary,
   parent: WorktreeLineageBoundary
 ): boolean {
-  return (
-    child.repoId === parent.repoId &&
-    (child.hostId === undefined || parent.hostId === undefined || child.hostId === parent.hostId) &&
-    (child.projectId === undefined ||
-      parent.projectId === undefined ||
-      child.projectId === parent.projectId)
-  )
+  if (child.hostId === undefined || parent.hostId === undefined) {
+    return child.repoId === parent.repoId
+  }
+  return child.hostId === parent.hostId
 }
 
 export function sharesResolvedWorktreeLineageBoundary(child: Worktree, parent: Worktree): boolean {
