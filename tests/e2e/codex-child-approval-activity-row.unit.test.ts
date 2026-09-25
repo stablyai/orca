@@ -2,9 +2,9 @@
 
 // A Codex parent settles, its subagent asks for approval, and the user answers. Every hop is the
 // real one: provider translator, deferred sink, durable journal and host status feed, then the
-// renderer's status bridge, agent-status store and Activity pipeline. The answer returns the
-// session to its own turn's end, so the row must read done, list the ask before the done, and
-// leave nothing unread that the user had already read.
+// renderer's status bridge, agent-status store and Activity pipeline. The ask is the subagent's
+// own wait, carried by its child record, so the session's own status never leaves its turn's end:
+// the row reads done throughout, and nothing the user had already read comes back unread.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -201,7 +201,7 @@ async function openHost() {
 }
 
 describe("a Codex subagent's answered approval on the settled parent's Activity row", () => {
-  it('reads done, lists the ask before the done, and leaves the answer read', async () => {
+  it('stays done on the parent, and leaves the answer read', async () => {
     const host = await openHost()
     render(createElement(StructuredAgentSessionStatusBridge))
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -255,9 +255,9 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
       promptKey: 'child-approval'
     })
     await host.drain()
+    // The journal stamps the child's prompt with its thread, so it is not the session's own ask.
     const asked = deliver()
-    expect(asked).toMatchObject({ status: 'attention' })
-    expect(asked.statusStartedAt).toBeGreaterThan(settled.statusStartedAt ?? Infinity)
+    expect(asked).toMatchObject({ status: 'idle', statusStartedAt: settled.statusStartedAt })
     // The user reads the ask, then answers it.
     store().setState({ acknowledgedAgentsByPaneKey: { [paneKey()]: host.tick() } })
     const [approval] = host.prompts
@@ -267,7 +267,6 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     const answered = deliver()
     // The host rule under test elsewhere: the answer never re-dates the session's done.
     expect(answered).toMatchObject({ status: 'idle', statusStartedAt: settled.statusStartedAt })
-    expect(answered.updatedAt).toBeGreaterThan(asked.updatedAt)
 
     const activity = renderHook(() =>
       useAgentPaneThreads({
@@ -285,8 +284,8 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     }
     expect(activityThreadStatusId(row)).toBe('done')
     expect(activityThreadRowCopy(row).needsAttention).toBe(false)
-    expect(row.events.map((event) => event.state)).toEqual(['done', 'blocked', 'done'])
-    expect(row.events.map((event) => event.unread)).toEqual([false, false, false])
+    expect(row.events.map((event) => event.state)).toEqual(['done'])
+    expect(row.events.map((event) => event.unread)).toEqual([false])
     expect(countActivityUnread(store().getState())).toBe(0)
     host.translator.dispose()
     host.close()

@@ -60,24 +60,19 @@ function newestTurnItem(items: readonly AgentJournalRenderItem[]): AgentJournalR
   return null
 }
 
-/** The session's own ask when it has one; a subagent's only when that alone holds the session. */
+/** The session's own oldest ask: `attention` is the session's own, so a subagent's never dates it. */
 function oldestPendingPromptAt(items: readonly AgentJournalRenderItem[]): number | undefined {
   let own: number | undefined
-  let subagent: number | undefined
   for (const item of items) {
     if (
-      (item.body.kind !== 'approval' && item.body.kind !== 'question') ||
-      item.body.resolution.state !== 'pending'
+      (item.body.kind === 'approval' || item.body.kind === 'question') &&
+      item.body.resolution.state === 'pending' &&
+      isRootAgentJournalItem(item)
     ) {
-      continue
-    }
-    if (isRootAgentJournalItem(item)) {
       own = Math.min(own ?? item.observedAt, item.observedAt)
-    } else {
-      subagent = Math.min(subagent ?? item.observedAt, item.observedAt)
     }
   }
-  return own ?? subagent
+  return own
 }
 
 /** The main agent's own status, dated by the host when it published a clock. */
