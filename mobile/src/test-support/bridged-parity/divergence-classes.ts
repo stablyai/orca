@@ -186,7 +186,7 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   // now arrives differs before the ordinal that also moved does. Nothing stopped replaying
   // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
   // hide one.
-  'result-absent-settlement': 341,
+  'result-absent-settlement': 340,
   // Four left here and two left `write-ordinal` for the class below, which is the `cancel` a
   // refused stream frame now posts: the run stops at a renamed occurrence before it reaches the
   // checkpoint or the ordinal that used to be what differed first.
