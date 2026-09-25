@@ -22,7 +22,8 @@ export type NativeChatQuestionCardProps = {
  * Native renderer for an agent's AskUserQuestion prompt: a numbered pick-list
  * (mobile/Claude-Code parity) with a header + close, a hover-highlighted row per
  * option, and an optional free-text row for a custom answer. Single-select
- * commits on click; multi-select toggles and confirms via the trailing action.
+ * holds one answer (an option or the typed text, whichever was chosen last);
+ * multi-select toggles options, adds any typed text, and confirms via the trailing action.
  * Multi-question prompts step through tabs across the top. Neutral shadcn tokens.
  */
 export function NativeChatQuestionCard({
@@ -44,29 +45,51 @@ export function NativeChatQuestionCard({
   const q = prompt.questions[index]!
   const questionAllowsOther = Array.isArray(allowOther) ? (allowOther[index] ?? false) : allowOther
 
+  // A single-select question holds one answer: typing replaces a picked option, and
+  // picking an option keeps the typed text in the field but no longer sends it.
+  const typedAnswerChosen = (qi: number, sel = selections, oth = otherText): boolean =>
+    (oth[qi] ?? '').trim().length > 0 &&
+    (prompt.questions[qi]?.multiSelect === true || (sel[qi] ?? []).length === 0)
+
+  const chooseTypedAnswer = (qi: number): void => {
+    if (prompt.questions[qi]?.multiSelect) {
+      return
+    }
+    setSelections((prev) =>
+      (prev[qi] ?? []).length > 0 ? prev.map((s, i) => (i === qi ? [] : s)) : prev
+    )
+  }
+
   const setOther = (qi: number, value: string): void => {
     setOtherText((prev) => {
       const next = [...prev]
       next[qi] = value
       return next
     })
+    if (value.trim().length > 0) {
+      chooseTypedAnswer(qi)
+    }
   }
 
-  // The resolved answer for a question: picked labels plus any typed free-text.
+  // The resolved answer for a question: picked labels plus the typed answer when chosen.
   const answerFor = (qi: number, sel = selections, oth = otherText): string => {
     const question = prompt.questions[qi]
     const picked = (sel[qi] ?? [])
       .map((optionIndex) => question?.options[optionIndex]?.label ?? '')
       .filter((label) => label.length > 0)
-    const other = (oth[qi] ?? '').trim()
+    const other = typedAnswerChosen(qi, sel, oth) ? (oth[qi] ?? '').trim() : ''
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
   const currentAnswered = answerFor(index).length > 0
+  const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
     const resolved: AskAnswerSelection[] = prompt.questions.map((_, i) => {
-      return { indices: [...(sel[i] ?? [])], other: (oth[i] ?? '').trim() }
+      return {
+        indices: [...(sel[i] ?? [])],
+        other: typedAnswerChosen(i, sel, oth) ? (oth[i] ?? '').trim() : ''
+      }
     })
     const anyAnswered = resolved.some((s) => s.indices.length > 0 || (s.other ?? '').length > 0)
     if (anyAnswered) {
@@ -192,8 +215,19 @@ export function NativeChatQuestionCard({
             <div className="flex items-center gap-3 px-3.5 py-2.5">
               {questionAllowsOther ? (
                 <>
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    <Pencil className="size-3.5" />
+                  <span
+                    className={cn(
+                      'flex size-6 shrink-0 items-center justify-center rounded-md',
+                      currentTypedAnswerChosen
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {currentTypedAnswerChosen ? (
+                      <Check className="size-3.5" strokeWidth={3} />
+                    ) : (
+                      <Pencil className="size-3.5" />
+                    )}
                   </span>
                   {/* No `/` or `@` picker here — that autocomplete belongs to the composer,
                       which this card replaces. What you type is delivered verbatim as the
@@ -205,6 +239,11 @@ export function NativeChatQuestionCard({
                     disabled={isSubmitting}
                     value={otherText[index]}
                     onChange={(e) => setOther(index, e.target.value)}
+                    onFocus={() => {
+                      if ((otherText[index] ?? '').trim().length > 0) {
+                        chooseTypedAnswer(index)
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
@@ -215,7 +254,12 @@ export function NativeChatQuestionCard({
                       'components.native-chat.question.otherPlaceholder',
                       'Type your answer'
                     )}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50"
+                    className={cn(
+                      'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50',
+                      currentTypedAnswerChosen || !otherText[index]
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
+                    )}
                   />
                 </>
               ) : (

@@ -272,11 +272,7 @@ export function NativeChatStructuredSession(
                 const optionId = question.options[optionIndex]?.id
                 return optionId ? [optionId] : []
               })
-              return {
-                questionId: question.id,
-                optionIds: question.multiSelect || !other ? optionIds : [],
-                ...(other ? { other } : {})
-              }
+              return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
             })
             if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other)) {
               void controller.respond(prompt, { kind: 'answers', answers: chosen })

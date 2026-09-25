@@ -69,6 +69,21 @@ function clickAction(text: string): void {
   click(button, text)
 }
 
+function typeAnswer(value: string): void {
+  const input = container.querySelector('input')!
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+function optionPressed(label: string): string | null | undefined {
+  return [...container.querySelectorAll('button[aria-pressed]')]
+    .find((b) => b.textContent?.includes(label))
+    ?.getAttribute('aria-pressed')
+}
+
 const tabsOrSpaces: AskPrompt = {
   questions: [
     {
@@ -221,5 +236,66 @@ describe('NativeChatQuestionCard', () => {
       { indices: [0, 1], other: '' },
       { indices: [], other: 'SSH host' }
     ])
+  })
+
+  it('replaces a picked option with a typed answer on a single-select question', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    clickOption('Spaces')
+    typeAnswer('two spaces')
+    expect(optionPressed('Spaces')).toBe('false')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'two spaces' }])
+  })
+
+  it('keeps typed text in the field but sends a later-picked option', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    expect(container.querySelector('input')!.value).toBe('two spaces')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
+  })
+
+  it('chooses the kept typed text again when its field is focused', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    act(() =>
+      container.querySelector('input')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    )
+    expect(optionPressed('Tabs')).toBe('false')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'two spaces' }])
+  })
+
+  it('sends picked options and typed text together on a multi-select question', () => {
+    const onAnswer = vi.fn()
+    render(
+      {
+        questions: [
+          {
+            question: 'Which targets?',
+            multiSelect: true,
+            options: [{ label: 'Web' }, { label: 'Mobile' }]
+          }
+        ]
+      },
+      onAnswer
+    )
+
+    clickOption('Mobile')
+    typeAnswer('Desktop')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'Desktop' }])
   })
 })
