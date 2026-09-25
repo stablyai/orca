@@ -361,13 +361,6 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
       expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
     })
-    it('keeps the session id a terminal view is spawned with', async () => {
-      const env = await spawnAndGetEnv(
-        { ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666' },
-        { ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd' }
-      )
-      expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
-    })
     it('keeps an explicitly requested Claude child-session stamp on a local spawn', async () => {
       const env = await spawnAndGetEnv(
         { CLAUDE_CODE_CHILD_SESSION: '1' },

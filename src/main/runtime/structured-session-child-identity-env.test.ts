@@ -5,10 +5,7 @@ import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-p
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
 
-import {
-  structuredSessionChildIdentityEnv,
-  withStructuredSessionTerminalViewEnv
-} from './structured-session-child-identity-env'
+import { structuredSessionChildIdentityEnv } from './structured-session-child-identity-env'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -161,19 +158,6 @@ describe('structuredSessionChildIdentityEnv', () => {
     expect(env.PATH).toBe('/usr/bin')
     expect(env.ORCA_USER_DATA_PATH).toBe(USER_DATA)
     expect(console.warn).toHaveBeenCalledOnce()
-  })
-
-  it("gives the terminal view the same id, and leaves any other terminal's env as given", () => {
-    expect(withStructuredSessionTerminalViewEnv({ CLAUDE_CONFIG_DIR: '/c' }, SESSION_ID)).toEqual({
-      CLAUDE_CONFIG_DIR: '/c',
-      ORCA_AGENT_SESSION_ID: SESSION_ID
-    })
-    expect(withStructuredSessionTerminalViewEnv(undefined, SESSION_ID)).toEqual({
-      ORCA_AGENT_SESSION_ID: SESSION_ID
-    })
-    const plain = { CLAUDE_CONFIG_DIR: '/c' }
-    expect(withStructuredSessionTerminalViewEnv(plain, undefined)).toBe(plain)
-    expect(withStructuredSessionTerminalViewEnv(undefined, undefined)).toBeUndefined()
   })
 
   it('never puts a pane key in the child environment', () => {

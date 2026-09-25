@@ -413,7 +413,7 @@ describe('registerPtyHandlers', () => {
           ])
         )
       })
-      it("strips an inherited agent session id and keeps a terminal view's own", async () => {
+      it('strips an inherited agent session id', async () => {
         // Why: a daemon forked by an Orca launched inside a structured session inherits its id,
         // and every daemon pane would present that session as its orchestration caller.
         const inherited = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
@@ -423,14 +423,6 @@ describe('registerPtyHandlers', () => {
         expect(inherited.envToDelete).toEqual(
           expect.arrayContaining(['ORCA_AGENT_SESSION_ID', 'ORCA_STRUCTURED_SESSION'])
         )
-        const own = await daemonSpawnAndGetOptions(
-          { ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666' },
-          undefined,
-          undefined,
-          { ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd' }
-        )
-        expect(own.envToDelete ?? []).not.toContain('ORCA_AGENT_SESSION_ID')
-        expect(own.env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
       })
       it('preserves an explicitly requested Claude child-session stamp', async () => {
         // Why: only inherited values are poison; a caller deliberately spawning a
@@ -462,7 +454,7 @@ describe('registerPtyHandlers', () => {
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca (the GNOME screen reader) in Orca terminals (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
-          // The same absolute spelling a structured session gets, so a terminal view keeps it too.
+          // The same absolute spelling a structured session gets.
           expect(env.ORCA_CLI_COMMAND).toBe(join(shimDir, 'orca'))
         } finally {
           Object.defineProperty(process, 'platform', {

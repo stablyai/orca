@@ -16,26 +16,6 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
   })
 
-  it("carries a terminal view's session id into the guest untranslated, beside the WSL stamp", () => {
-    // Crossing is what makes the claim refusable: without it the pane handle would silently become
-    // the caller inside WSL, and the host could not tell the session was asking at all.
-    const env: Record<string, string> = {
-      ORCA_TERMINAL_HANDLE: 'term_wsl',
-      ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666'
-    }
-    stampWslOrchestrationCompatibilityHost(env, 'local', 'Ubuntu')
-
-    addOrcaWslInteropEnv(env)
-
-    expect(env.WSLENV?.split(':')).toEqual(
-      expect.arrayContaining([
-        'ORCA_AGENT_SESSION_ID/u',
-        'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
-        'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u'
-      ])
-    )
-  })
-
   // Why this is published at all: the wrapper tree is content-addressed, so the
   // in-guest login script cannot rebuild its path from ORCA_USER_DATA_PATH -- it
   // cannot derive the hash segment. Without this the guest finds no wrapper and
