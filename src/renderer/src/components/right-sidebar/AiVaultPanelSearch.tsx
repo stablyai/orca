@@ -69,10 +69,10 @@ export function AiVaultPanelSearch({
     setSaveError(false)
     try {
       const store = useAppStore.getState()
-      store.markFeatureTipsSeen(['agent-session-search'])
       await store.updateSettingsOrThrow({
         aiVaultSearch: { ...resolveAiVaultSearchSettings(store.settings), enabled: true }
       })
+      store.markFeatureTipsSeen(['agent-session-search'])
       onRetry()
     } catch {
       setSaveError(true)
