@@ -6,7 +6,9 @@ import type { RelayDispatcher } from './dispatcher'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
+import { isCmderAvailable } from '../main/cmder'
 import { isGitBashAvailable } from '../main/git-bash'
+import type { RemoteWindowsTerminalCapabilities } from '../main/ipc/preflight-remote-windows-terminal-capabilities'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 import { runProcess } from '../shared/child-process/run-process'
 
@@ -112,13 +114,7 @@ export class PreflightHandler {
     }
   }
 
-  private async detectWindowsTerminalCapabilities(): Promise<{
-    wslAvailable: boolean
-    wslDistros: string[]
-    pwshAvailable: boolean
-    gitBashAvailable: boolean
-    hostPlatform: NodeJS.Platform | null
-  }> {
+  private async detectWindowsTerminalCapabilities(): Promise<RemoteWindowsTerminalCapabilities> {
     const [wslAvailable, pwshAvailable, gitBashAvailable] = await Promise.all([
       isWslAvailableAsync().catch(() => false),
       isPwshAvailableAsync().catch(() => false),
@@ -130,6 +126,7 @@ export class PreflightHandler {
       wslDistros,
       pwshAvailable,
       gitBashAvailable,
+      cmderAvailable: isCmderAvailable(),
       hostPlatform: process.platform
     }
   }

@@ -176,6 +176,8 @@ export type GlobalSettings = {
   terminalDefaultShell?: string
   /** Optional argv passed to the configured Unix shell for ordinary interactive panes. */
   terminalDefaultShellArgs?: string[]
+  /** Windows-only Cmder folder override (holds vendor\init.bat); not in the UI, empty auto-detects via CMDER_ROOT. */
+  terminalWindowsCmderPath?: string
   /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
   /** Account/auth location; auto follows the global Windows runtime while host/wsl pin it. */

@@ -10,12 +10,14 @@ const {
   isPwshAvailableAsyncMock,
   isWslAvailableAsyncMock,
   listWslDistrosAsyncMock,
-  isGitBashAvailableMock
+  isGitBashAvailableMock,
+  isCmderAvailableMock
 } = vi.hoisted(() => ({
   isPwshAvailableAsyncMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   listWslDistrosAsyncMock: vi.fn(),
-  isGitBashAvailableMock: vi.fn()
+  isGitBashAvailableMock: vi.fn(),
+  isCmderAvailableMock: vi.fn()
 }))
 
 vi.mock('child_process', () => {
@@ -31,6 +33,7 @@ vi.mock('../main/wsl', () => ({
   listWslDistrosAsync: listWslDistrosAsyncMock
 }))
 vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
+vi.mock('../main/cmder', () => ({ isCmderAvailable: isCmderAvailableMock }))
 vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import {
@@ -72,6 +75,7 @@ beforeEach(() => {
   isWslAvailableAsyncMock.mockReset()
   listWslDistrosAsyncMock.mockReset()
   isGitBashAvailableMock.mockReset()
+  isCmderAvailableMock.mockReset()
 })
 
 describe('buildCommandLookupSpec', () => {
@@ -367,6 +371,7 @@ describe('PreflightHandler', () => {
     listWslDistrosAsyncMock.mockResolvedValue(['Ubuntu'])
     isPwshAvailableAsyncMock.mockResolvedValue(true)
     isGitBashAvailableMock.mockReturnValue(true)
+    isCmderAvailableMock.mockReturnValue(true)
 
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
     const dispatcher = {
@@ -387,6 +392,7 @@ describe('PreflightHandler', () => {
         wslDistros: ['Ubuntu'],
         pwshAvailable: true,
         gitBashAvailable: true,
+        cmderAvailable: true,
         hostPlatform: 'win32'
       })
     } finally {

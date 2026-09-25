@@ -1,5 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
+import { ORCA_CMDER_INIT_ENV, ORCA_CMDER_INIT_QUOTE_ENV } from '../cmder'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
   buildWslExecArgs,
@@ -20,6 +21,9 @@ const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
 export const ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV = 'ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE'
+// Why: node-pty backslash-escapes literal argv quotes, which cmd.exe does not understand, so the
+// quote around a spaced Cmder path is expanded from an env var inside cmd.exe instead.
+const CMD_CMDER_INIT = `call %${ORCA_CMDER_INIT_QUOTE_ENV}%%${ORCA_CMDER_INIT_ENV}%%${ORCA_CMDER_INIT_QUOTE_ENV}%`
 const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %${ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV}%%ORCA_CODEX_LAUNCH_PREFLIGHT%%${ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV}% agent hooks prepare-codex > nul 2>&1`
 // Why: Git for Windows' bash inherits the ConPTY console's OEM code page
 // (CP437), so a TUI that writes UTF-8 bytes straight to the console — agents
@@ -166,7 +170,8 @@ export function normalizeWindowsTerminalCwd(cwd: string): string {
 
 /** Build the argv + effective cwd for a Windows shell launch.
  *
- *  - cmd.exe: `/K chcp 65001 > nul` so multi-byte CJK output renders correctly.
+ *  - cmd.exe: `/K chcp 65001 > nul` so multi-byte CJK output renders correctly;
+ *    `cmderInit` also calls Cmder's init.bat (path supplied via ORCA_CMDER_INIT).
  *  - powershell.exe / pwsh.exe: dot-source $PROFILE and force UTF-8 I/O so
  *    oh-my-posh / starship / PSReadLine keep working. `-NoExit` alone would
  *    skip the profile.
@@ -179,7 +184,8 @@ export function resolveWindowsShellLaunchArgs(
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
   startupCommand?: string,
-  codexLaunchPreflightCommand?: string
+  codexLaunchPreflightCommand?: string,
+  cmderInit?: boolean
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeWindowsTerminalCwd(cwd)
@@ -188,6 +194,7 @@ export function resolveWindowsShellLaunchArgs(
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
     const startupCommands = [
       CMD_UTF8_SETUP_COMMAND,
+      ...(cmderInit ? [CMD_CMDER_INIT] : []),
       ...(codexLaunchPreflightCommand ? [CMD_CODEX_LAUNCH_PREFLIGHT] : []),
       ...(shellArgStartupCommand ? [shellArgStartupCommand] : [])
     ]

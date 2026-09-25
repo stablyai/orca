@@ -1,5 +1,8 @@
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import {
+  WINDOWS_CMDER_SHELL,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../../shared/windows-terminal-shell'
 import { translate } from '@/i18n/i18n'
 import type { getProjectRuntimeShellMenuMode } from './use-tab-bar-runtime-model'
 
@@ -14,6 +17,7 @@ export function buildWindowsShellMenuEntries({
   projectRuntimeShellMenuMode,
   defaultWindowsShell,
   gitBashAvailable,
+  cmderAvailable = false,
   wslAvailable
 }: {
   showWindowsShellMenu: boolean
@@ -21,6 +25,7 @@ export function buildWindowsShellMenuEntries({
   projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
   defaultWindowsShell: string
   gitBashAvailable: boolean
+  cmderAvailable?: boolean
   wslAvailable: boolean
 }): WindowsShellMenuEntry[] | undefined {
   if (!showWindowsShellMenu || !hasShellLauncher) {
@@ -44,6 +49,12 @@ export function buildWindowsShellMenuEntries({
       allShells.push({
         label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
         shell: WINDOWS_GIT_BASH_SHELL
+      })
+    }
+    if (cmderAvailable) {
+      allShells.push({
+        label: translate('auto.components.tab.bar.TabBar.cmder', 'Cmder'),
+        shell: WINDOWS_CMDER_SHELL
       })
     }
   }

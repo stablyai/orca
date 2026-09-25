@@ -631,6 +631,87 @@ describe('LocalPtyProvider', () => {
       )
     })
 
+    it('launches Cmder as cmd.exe that calls init.bat before the Codex preflight', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      const originalCmderRoot = process.env.CMDER_ROOT
+      const existsFallback = existsSyncMock.getMockImplementation()
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      process.env.CMDER_ROOT = 'C:\\tools\\cmder'
+      existsSyncMock.mockImplementation((path: string) =>
+        path === 'C:\\tools\\cmder\\vendor\\init.bat' ? true : (existsFallback?.(path) ?? false)
+      )
+      provider.configure({
+        getWindowsShell: () => 'cmder',
+        buildSpawnEnv: (_id, env) => ({
+          ...env,
+          ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+        })
+      })
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\Users\\jin\\repo' })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+        if (originalCmderRoot === undefined) {
+          delete process.env.CMDER_ROOT
+        } else {
+          process.env.CMDER_ROOT = originalCmderRoot
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'cmd.exe',
+        [
+          '/K',
+          'chcp 65001 > nul & call %ORCA_CMDER_INIT_QUOTE%%ORCA_CMDER_INIT%%ORCA_CMDER_INIT_QUOTE% & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+        ],
+        expect.objectContaining({
+          cwd: 'C:\\Users\\jin\\repo',
+          env: expect.objectContaining({
+            CMDER_ROOT: 'C:\\tools\\cmder',
+            ORCA_CMDER_INIT: 'C:\\tools\\cmder\\vendor\\init.bat',
+            ORCA_CMDER_INIT_QUOTE: '"'
+          })
+        })
+      )
+    })
+
+    it('resolves Cmder from the spawn-carried ORCA_CMDER_ROOT on the in-process fallback', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      const existsFallback = existsSyncMock.getMockImplementation()
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      existsSyncMock.mockImplementation((path: string) =>
+        path === 'D:\\apps\\cmder\\vendor\\init.bat' ? true : (existsFallback?.(path) ?? false)
+      )
+      provider.configure({ getWindowsShell: () => 'cmder' })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo',
+          env: { ORCA_CMDER_ROOT: 'D:\\apps\\cmder' }
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'cmd.exe',
+        expect.any(Array),
+        expect.objectContaining({
+          env: expect.objectContaining({
+            CMDER_ROOT: 'D:\\apps\\cmder',
+            ORCA_CMDER_INIT: 'D:\\apps\\cmder\\vendor\\init.bat'
+          })
+        })
+      )
+    })
+
     it('runs the Codex preflight once in the cmd.exe startup chain', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })

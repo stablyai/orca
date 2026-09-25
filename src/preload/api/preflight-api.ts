@@ -56,6 +56,7 @@ export type PreflightApi = {
     wslDistros: string[]
     pwshAvailable: boolean
     gitBashAvailable: boolean
+    cmderAvailable?: boolean
     hostPlatform: NodeJS.Platform | null
   }>
 }

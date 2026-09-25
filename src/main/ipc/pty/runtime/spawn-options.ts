@@ -29,6 +29,7 @@ import {
   paneSpawnReservationsByOwnerKey
 } from '../pane/spawn-reservation'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { applyConfiguredCmderRootEnv } from '../../../cmder'
 
 /** Headless spawns need the same host-side environment isolation as desktop spawns. */
 export async function buildRuntimePtySpawnOptions(
@@ -153,6 +154,12 @@ export async function buildRuntimePtySpawnOptions(
       settings: ctx.deps.getSettings?.()
     })
     ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
+    if (process.platform === 'win32') {
+      applyConfiguredCmderRootEnv(
+        ctx.spawnOptions,
+        ctx.deps.getSettings?.()?.terminalWindowsCmderPath
+      )
+    }
     ctx.spawnOptions.terminalWindowsPowerShellImplementation = ctx.deps.getSettings
       ? (ctx.deps.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
       : undefined

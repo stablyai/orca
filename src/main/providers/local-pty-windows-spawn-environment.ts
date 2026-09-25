@@ -5,6 +5,7 @@ import { addWslEnvKeys } from '../wsl-env'
 import { parseWslPath } from '../wsl'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
+import { applyCmderSpawnEnvironment } from '../cmder'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
@@ -65,6 +66,9 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     delete env.ORCA_CODEX_HOME
   }
 
+  if (plan.cmderRoot) {
+    applyCmderSpawnEnvironment(env, plan.cmderRoot)
+  }
   const shellBasename = pathWin32.basename(plan.shellPath).toLowerCase()
   const codexLaunchPreflightCommand = env.ORCA_CODEX_LAUNCH_PREFLIGHT
   if (
@@ -81,7 +85,8 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       plan.defaultCwd,
       plan.launchWslContext,
       spawn.command,
-      codexLaunchPreflightCommand
+      codexLaunchPreflightCommand,
+      plan.cmderRoot !== null
     )
     plan.shellArgs = resolved.shellArgs
     plan.effectiveCwd = resolved.effectiveCwd

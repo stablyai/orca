@@ -113,7 +113,11 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     macosTccPrompts: createMacosTccPromptsApi(),
     codexConfigSync: {
       status: () =>
-        Promise.resolve({ state: 'synced', reason: null, systemConfigPath: '' } as const)
+        Promise.resolve({
+          state: 'synced',
+          reason: null,
+          systemConfigPath: ''
+        } as const)
     },
     developerPermissions: createDeveloperPermissionsApi(),
     computerUsePermissions: createComputerUsePermissionsApi(),
@@ -131,6 +135,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     gitBash: {
       isAvailable: () => callRuntimeResult<boolean>('host.gitBash.isAvailable').catch(() => false)
+    },
+    cmder: {
+      // Why: an older host lacks this method; the catch reads that as "no Cmder".
+      isAvailable: () => callRuntimeResult<boolean>('host.cmder.isAvailable').catch(() => false)
     },
     ...createWebAgentStatusApi(),
     ...createWebMobileApi(),

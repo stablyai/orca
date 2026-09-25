@@ -9,7 +9,7 @@ import { orcaProfilesApi } from './api/orca-profiles-bridge'
 import { platformApi } from './api/platform-bridge'
 import { wslApi } from './api/wsl-bridge'
 import { pwshApi } from './api/pwsh-bridge'
-import { gitBashApi } from './api/git-bash-bridge'
+import { cmderApi, gitBashApi } from './api/git-bash-bridge'
 import { pluginsApi } from './api/plugins-bridge'
 import { reposApi } from './api/repos-bridge'
 import { projectsApi } from './api/projects-bridge'
@@ -105,6 +105,7 @@ const api = {
   wsl: wslApi,
   pwsh: pwshApi,
   gitBash: gitBashApi,
+  cmder: cmderApi,
   plugins: pluginsApi,
   repos: reposApi,
   projects: projectsApi,
