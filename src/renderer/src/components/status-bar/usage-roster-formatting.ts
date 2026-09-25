@@ -19,6 +19,28 @@ export function formatPlanLabel(planType: string | null | undefined): string | n
     .join(' ')
 }
 
+// Compact just-now / Xm ago / Xh ago. Shared so tooltip and roster 60s/60m
+// thresholds cannot drift.
+export function formatRelativeTime(updatedAt: number, now: number): string {
+  const diff = Math.max(0, now - updatedAt)
+  if (diff < 60_000) {
+    return 'just now'
+  }
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) {
+    return `${mins}m ago`
+  }
+  const hours = Math.floor(mins / 60)
+  return `${hours}h ago`
+}
+
+export function formatUsageUpdatedLabel(updatedAt: number, now: number): string | null {
+  if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return null
+  }
+  return `Updated ${formatRelativeTime(updatedAt, now)}`
+}
+
 // Mirrors barColor's 60/80 thresholds so the number matches its bar; neutral
 // inherits the foreground color (STYLEGUIDE: color reserved for state).
 export function usageTextColorClass(usedPercent: number): string {

@@ -72,10 +72,13 @@ export function StatusBarSurface({
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
     iconOnly,
+    inactiveCodexAccounts,
     isEmptyUsageState,
     isRefreshing,
+    onFetchInactiveCodexAccounts,
     petEnabled,
     rosterProviders,
+    codexAccountLabels,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
@@ -171,6 +174,9 @@ export function StatusBarSurface({
                   canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
                   onManageAccounts={handleManageAccounts}
                   onUsageDetails={handleUsageDetails}
+                  inactiveCodexAccounts={inactiveCodexAccounts}
+                  codexAccountLabels={codexAccountLabels}
+                  onFetchInactiveCodexAccounts={onFetchInactiveCodexAccounts}
                   renderRow={(p, rowNode) => {
                     // Every provider drills into its detail panel (parity with the
                     // per-provider dropdowns on main); Claude/Codex additionally get

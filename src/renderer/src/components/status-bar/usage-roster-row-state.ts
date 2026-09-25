@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { InactiveAccountUsage, ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { clampUsedPercent } from '../../../../shared/usage-percentage-display'
 import { getProviderUsageStatusLabel } from './usage-error-copy'
 
 export type UsageRosterRowState = {
@@ -74,4 +75,89 @@ export function getUsageRosterRowState(
       'No usage data'
     )
   }
+}
+
+export type UsageRosterEntry = {
+  key: string
+  limits: ProviderRateLimits
+  interactive: boolean
+  accountId: string | null
+  title: string | null
+  updatedAt: number | null
+}
+
+function windowUsedPercent(window: { usedPercent: number } | null | undefined): number {
+  return window ? clampUsedPercent(window.usedPercent) : 0
+}
+
+function providerMaxUsedPercent(limits: ProviderRateLimits): number {
+  const bucketMax =
+    limits.buckets && limits.buckets.length > 0
+      ? Math.max(...limits.buckets.map((bucket) => clampUsedPercent(bucket.usedPercent)))
+      : 0
+  return Math.max(
+    windowUsedPercent(limits.session),
+    windowUsedPercent(limits.weekly),
+    windowUsedPercent(limits.fableWeekly),
+    windowUsedPercent(limits.monthly),
+    bucketMax
+  )
+}
+
+function inactiveCodexLimits(account: InactiveAccountUsage): ProviderRateLimits {
+  if (account.rateLimits) {
+    return account.rateLimits
+  }
+  return {
+    provider: 'codex',
+    session: null,
+    weekly: null,
+    updatedAt: account.updatedAt,
+    error: null,
+    status: account.isFetching ? 'fetching' : 'ok'
+  }
+}
+
+function toInactiveCodexEntry(
+  account: InactiveAccountUsage,
+  title: string | null
+): UsageRosterEntry {
+  const limits = inactiveCodexLimits(account)
+  return {
+    key: `codex:${account.accountId}`,
+    limits,
+    interactive: false,
+    accountId: account.accountId,
+    title,
+    updatedAt: account.updatedAt || limits.updatedAt || null
+  }
+}
+
+export function buildUsageRosterEntries(
+  providers: readonly ProviderRateLimits[],
+  inactiveCodexAccounts: readonly InactiveAccountUsage[] = [],
+  accountLabels: Readonly<Record<string, string>> = {}
+): UsageRosterEntry[] {
+  const sortedProviders = [...providers].sort(
+    (a, b) => providerMaxUsedPercent(b) - providerMaxUsedPercent(a)
+  )
+  const inactiveEntries = [...inactiveCodexAccounts]
+    .map((account) => toInactiveCodexEntry(account, accountLabels[account.accountId] ?? null))
+    .sort((a, b) => providerMaxUsedPercent(b.limits) - providerMaxUsedPercent(a.limits))
+
+  const entries: UsageRosterEntry[] = []
+  for (const limits of sortedProviders) {
+    entries.push({
+      key: limits.provider,
+      limits,
+      interactive: true,
+      accountId: null,
+      title: null,
+      updatedAt: null
+    })
+    if (limits.provider === 'codex') {
+      entries.push(...inactiveEntries)
+    }
+  }
+  return entries
 }

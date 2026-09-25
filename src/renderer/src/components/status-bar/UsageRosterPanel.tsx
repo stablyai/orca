@@ -1,11 +1,14 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/SettingsFormControls'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  InactiveAccountUsage,
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../shared/rate-limit-types'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
@@ -13,12 +16,23 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { barColor, formatResetCountdown, getWindowSections, ProviderIcon } from './tooltip'
 import { getProviderDisplayName } from './usage-error-copy'
-import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
-import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
+import {
+  formatPlanLabel,
+  formatUsageUpdatedLabel,
+  usageTextColorClass
+} from './usage-roster-formatting'
+import {
+  buildUsageRosterEntries,
+  getUsageRosterRowState,
+  type UsageRosterRowState
+} from './usage-roster-row-state'
+import { useUsageRosterNow } from './use-usage-roster-now'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 
 type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
+
+const EMPTY_INACTIVE_CODEX_ACCOUNTS: readonly InactiveAccountUsage[] = []
 
 // Windows/buckets that actually carry data — absent limits arrive as null, but a
 // partial/rehydrated provider can also carry an undefined window; both must be
@@ -27,12 +41,6 @@ function usedSections(p: ProviderRateLimits): UsageSection[] {
   return getWindowSections(p).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )
-}
-
-function providerMaxUsed(sections: UsageSection[]): number {
-  return sections.length > 0
-    ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
-    : 0
 }
 
 // Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
@@ -116,7 +124,9 @@ export function UsageRow({
   state,
   showSignInAction,
   now,
-  mode = 'verbose'
+  mode = 'verbose',
+  title,
+  lastUpdatedAt
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
@@ -124,16 +134,24 @@ export function UsageRow({
   showSignInAction: boolean
   now: number
   mode?: StatusBarUsageMode
+  title?: string | null
+  lastUpdatedAt?: number | null
 }): React.JSX.Element {
   const sections = usedSections(p)
   const hasUsage = sections.length > 0
-  const name = getProviderDisplayName(p.provider)
+  const name = title ?? getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
+  const updated = lastUpdatedAt != null ? formatUsageUpdatedLabel(lastUpdatedAt, now) : null
+  const meta = [updated, reset].filter(Boolean).join(' · ')
   const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
 
   return (
-    <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
+    <div
+      data-usage-mode={mode}
+      data-usage-provider={p.provider}
+      className="flex min-w-0 flex-1 flex-col gap-1"
+    >
       <div className="flex items-center gap-2.5">
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
           <ProviderIcon provider={p.provider} />
@@ -162,8 +180,8 @@ export function UsageRow({
               showBar={false}
             />
           </span>
-        ) : reset ? (
-          <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
+        ) : meta ? (
+          <span className="shrink-0 text-[11px] text-muted-foreground">{meta}</span>
         ) : null}
       </div>
       {hasUsage && mode === 'verbose' ? (
@@ -184,8 +202,8 @@ export function UsageRow({
 
 /**
  * Consolidated "Usage" popover — one row per agent (icon · name · reset ·
- * per-window bars), opened from the status-bar roster pill. Deep per-agent
- * actions route to Settings via the callbacks.
+ * per-window bars), plus read-only extra rows for inactive managed Codex
+ * accounts. Deep per-agent actions route to Settings via the callbacks.
  */
 export function UsageRosterPanel({
   providers,
@@ -199,7 +217,10 @@ export function UsageRosterPanel({
   canSignIn,
   onManageAccounts,
   onUsageDetails,
-  renderRow
+  renderRow,
+  inactiveCodexAccounts = EMPTY_INACTIVE_CODEX_ACCOUNTS,
+  codexAccountLabels,
+  onFetchInactiveCodexAccounts
 }: {
   providers: ProviderRateLimits[]
   display: UsagePercentageDisplay
@@ -216,16 +237,22 @@ export function UsageRosterPanel({
   // Claude/Codex account-switch drill-in submenu); return null to use the
   // default clickable row.
   renderRow?: (p: ProviderRateLimits, row: React.ReactNode) => React.ReactNode
+  inactiveCodexAccounts?: readonly InactiveAccountUsage[]
+  codexAccountLabels?: Readonly<Record<string, string>>
+  onFetchInactiveCodexAccounts?: () => void
 }): React.JSX.Element {
-  // Why: one boundary-scheduled clock keeps every open row current without per-provider timers.
-  const now = useResetCountdownClock(
-    providers.flatMap((provider) =>
-      usedSections(provider).map((section) => section.window.resetsAt)
-    )
-  )
-  // Worst-first so the agent nearest a limit sits on top.
-  const sorted = [...providers].sort(
-    (a, b) => providerMaxUsed(usedSections(b)) - providerMaxUsed(usedSections(a))
+  useEffect(() => {
+    onFetchInactiveCodexAccounts?.()
+  }, [onFetchInactiveCodexAccounts])
+
+  const entries = buildUsageRosterEntries(providers, inactiveCodexAccounts, codexAccountLabels)
+  // Why: reset labels use the boundary-scheduled clock; Updated labels also need
+  // a 60s tick because that scheduler is idle when every resetsAt is null.
+  const now = useUsageRosterNow(
+    entries.flatMap((entry) =>
+      usedSections(entry.limits).map((section) => section.window.resetsAt)
+    ),
+    entries.map((entry) => entry.updatedAt)
   )
 
   return (
@@ -242,6 +269,7 @@ export function UsageRosterPanel({
             onSelect={(event) => {
               event.preventDefault()
               onRefresh()
+              onFetchInactiveCodexAccounts?.()
             }}
             aria-label={translate(
               'auto.components.status.bar.StatusBar.3325d996cb',
@@ -286,9 +314,11 @@ export function UsageRosterPanel({
         />
       </div>
       <div className="border-t border-border/70" />
-      {sorted.map((p) => {
+      {entries.map((entry) => {
+        const p = entry.limits
         const state = getUsageRosterRowState(p, usedSections(p).length > 0)
-        const showSignInAction = state.kind === 'sign-in' && canSignIn(p.provider)
+        const showSignInAction =
+          entry.interactive && state.kind === 'sign-in' && canSignIn(p.provider)
         const rowNode = (
           <UsageRow
             p={p}
@@ -297,12 +327,25 @@ export function UsageRosterPanel({
             showSignInAction={showSignInAction}
             now={now}
             mode={statusBarUsageMode}
+            title={entry.title}
+            lastUpdatedAt={entry.updatedAt}
           />
         )
+        if (!entry.interactive) {
+          return (
+            <div
+              key={entry.key}
+              data-inactive-codex-account={entry.accountId}
+              className="w-full rounded-none px-3.5 py-2.5"
+            >
+              {rowNode}
+            </div>
+          )
+        }
         if (showSignInAction) {
           return (
             <DropdownMenuItem
-              key={p.provider}
+              key={entry.key}
               onSelect={() => onSignIn(p.provider)}
               className="w-full cursor-pointer rounded-none px-3.5 py-2.5"
             >
@@ -312,11 +355,11 @@ export function UsageRosterPanel({
         }
         const custom = renderRow?.(p, rowNode)
         if (custom) {
-          return <React.Fragment key={p.provider}>{custom}</React.Fragment>
+          return <React.Fragment key={entry.key}>{custom}</React.Fragment>
         }
         return (
           <DropdownMenuItem
-            key={p.provider}
+            key={entry.key}
             onSelect={() => onOpenProvider(p.provider)}
             className="w-full cursor-pointer rounded-none px-3.5 py-2.5"
           >

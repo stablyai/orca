@@ -27,12 +27,14 @@ import {
   clampUsedPercent,
   formatResetCreditExpiry,
   formatResetCountdown,
+  formatTimeAgo,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
   getWindowSections,
   ProviderIcon,
   ProviderPanel
 } from './tooltip'
+import { formatRelativeTime } from './usage-roster-formatting'
 
 function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
   return {
@@ -59,6 +61,15 @@ const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('formatTimeAgo', () => {
+  it('delegates to the shared relative-time helper', () => {
+    const now = 1_000_000_000
+    expect(formatTimeAgo(now - 30_000, now)).toBe(formatRelativeTime(now - 30_000, now))
+    expect(formatTimeAgo(now - 5 * 60_000, now)).toBe('5m ago')
+    expect(formatTimeAgo(now - 3 * 3_600_000, now)).toBe('3h ago')
+  })
 })
 
 describe('formatResetCountdown', () => {

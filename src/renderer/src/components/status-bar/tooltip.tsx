@@ -17,6 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatRelativeTime } from './usage-roster-formatting'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
@@ -32,17 +33,8 @@ export {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-export function formatTimeAgo(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) {
-    return 'just now'
-  }
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) {
-    return `${mins}m ago`
-  }
-  const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
+export function formatTimeAgo(ts: number, now = Date.now()): string {
+  return formatRelativeTime(ts, now)
 }
 
 // Re-export so existing tooltip consumers/tests keep their import path; the

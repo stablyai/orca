@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getCodexAccountDisplayLabel } from '@/lib/codex-account-display-label'
 import { useAppStore } from '../../store'
 import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
@@ -80,6 +81,14 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }, [])
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
+  const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
+  const fetchInactiveCodexIfLocal = useCallback(() => {
+    // Why: remote-owned accounts have no local cache for the inactive Codex probe.
+    if (settings?.activeRuntimeEnvironmentId?.trim()) {
+      return
+    }
+    void fetchInactiveCodexAccountUsage()
+  }, [fetchInactiveCodexAccountUsage, settings?.activeRuntimeEnvironmentId])
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) {
       return
@@ -88,12 +97,21 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
       await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
+      fetchInactiveCodexIfLocal()
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
+  }, [fetchInactiveCodexIfLocal, isRefreshing, refreshDetectedAgents, refreshRateLimits])
+  const codexAccountLabels = useMemo(() => {
+    const accounts = settings?.codexManagedAccounts ?? []
+    const labels: Record<string, string> = {}
+    for (const account of accounts) {
+      labels[account.id] = getCodexAccountDisplayLabel(account, accounts)
+    }
+    return labels
+  }, [settings?.codexManagedAccounts])
 
   if (!statusBarVisible) {
     return null
@@ -247,10 +265,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     handleUsageMenuOpenChange,
     hasVisibleUsageMeters,
     iconOnly,
+    inactiveCodexAccounts: rateLimits.inactiveCodexAccounts,
     isEmptyUsageState,
     isRefreshing,
     menuOpen,
     menuPoint,
+    onFetchInactiveCodexAccounts: fetchInactiveCodexIfLocal,
     petEnabled,
     recordFeatureInteraction,
     rosterProviders,
@@ -268,7 +288,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,
-    usagePercentageDisplay
+    usagePercentageDisplay,
+    codexAccountLabels
   }
 }
 
