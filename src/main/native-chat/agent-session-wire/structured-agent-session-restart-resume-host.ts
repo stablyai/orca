@@ -10,6 +10,7 @@ import type {
   AgentSessionResumeTrigger
 } from '../../../shared/agent-session-resume-marker'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
@@ -59,6 +60,8 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   onNoteFailed: (sessionId: string, error: unknown) => void
+  /** The session's child records, the host's one read of them. */
+  readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   now: () => number
 }
 
@@ -109,7 +112,7 @@ export function createStructuredAgentSessionRestartResume(
   const witnesses = createStructuredAgentSessionRestartWitnesses({
     sessions,
     getRecord: deps.store.getRecord,
-    backgroundTasks: (sessionId) => deps.adapter.backgroundTaskState?.(sessionId)?.tasks,
+    childWork: surfaces.readChildWork,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
     teardownId: randomUUID(),
     now: surfaces.now,

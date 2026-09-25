@@ -203,6 +203,12 @@ function viewName(view: AgentChildWorkView): string {
   )
 }
 
+/** The strip offers this child its own stop: it is live, stoppable, and addressable by the id a
+ *  targeted stop names. The host's command admission asks the same question of the same views. */
+export function agentChildWorkViewOffersStop(view: AgentChildWorkView): boolean {
+  return view.membership !== 'settled' && view.stoppable && view.providerId !== undefined
+}
+
 function rowFromView(
   view: AgentChildWorkView,
   views: readonly AgentChildWorkView[],
@@ -242,7 +248,7 @@ function rowFromView(
     recencyAt: view.observedAt + context.hostClockOffsetMs,
     ...(view.settledAt !== undefined ? { settledAt: view.settledAt } : {}),
     ...(view.totalTokens !== undefined ? { totalTokens: view.totalTokens } : {}),
-    canStop: !settled && view.stoppable && view.providerId !== undefined,
+    canStop: agentChildWorkViewOffersStop(view),
     settled,
     owned: (ownedByOwner.get(view.id) ?? [])
       .filter((owned) => !nextPath.has(owned.id))

@@ -61,7 +61,8 @@ export class StructuredAgentSessionHost {
     this.sessions,
     () => this.now(),
     () => this.deps,
-    (sessionId) => this.holds.renew(sessionId)
+    (sessionId) => this.holds.renew(sessionId),
+    (sessionId) => this.backgroundTasks.publish(sessionId)
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -82,7 +83,7 @@ export class StructuredAgentSessionHost {
       this.sessions,
       this.subscribers,
       (sessionId) => this.requireSession(sessionId),
-      this.clientDelivery.publishStatus
+      this.clientDelivery.readChildWork
     )
     this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, (sessionId, error) =>
       this.eventRecovery.recoverAfterSinkFailure(sessionId, error)
@@ -95,7 +96,8 @@ export class StructuredAgentSessionHost {
     })
     this.holds = createStructuredAgentSessionHolds(
       () => this.attachContext(),
-      (sessionId) => this.close(sessionId)
+      (sessionId) => this.close(sessionId),
+      this.clientDelivery.readChildWork
     )
     this.restore = createStructuredAgentSessionHostRestore(deps, this.sessions, () => this.now(), {
       reconcile: this.reconcileLeases,
@@ -127,7 +129,8 @@ export class StructuredAgentSessionHost {
     })
     this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
-      publish: this.subscribers.publish.bind(this.subscribers)
+      publish: this.subscribers.publish.bind(this.subscribers),
+      readChildWork: this.clientDelivery.readChildWork
     })
     this.runtimeState.startLeaseRenewal()
   }
@@ -237,6 +240,7 @@ export class StructuredAgentSessionHost {
       sessions: this.sessions,
       publish: (sessionId, journal) => this.subscribers.publish(sessionId, journal),
       flushStreamedEvents: this.flushStreamedEvents,
+      readChildWork: this.clientDelivery.readChildWork,
       requireSession: (sessionId) => this.requireSession(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       holds: this.holds,
@@ -297,8 +301,6 @@ export class StructuredAgentSessionHost {
     input: Parameters<typeof releaseStructuredAgentSessionUnansweredDispatches>[1]
   ) => releaseStructuredAgentSessionUnansweredDispatches(this.mutationContext(), input)
 
-  publishBackgroundTaskState: StructuredAgentSessionBackgroundTaskChannel['publish'] = (...args) =>
-    this.backgroundTasks.publish(...args)
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
 

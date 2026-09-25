@@ -1,7 +1,15 @@
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import { attach, hostTestState } from './structured-agent-session-host-test-harness'
-import { pendingApproval } from './structured-agent-session-restart-resume-test-harness'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import {
+  attach,
+  hostTestState,
+  serveHostTestChildWork
+} from './structured-agent-session-host-test-harness'
+import {
+  childRecord,
+  pendingApproval
+} from './structured-agent-session-restart-resume-test-harness'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -113,8 +121,10 @@ it.each(['approval', 'question', 'completed'] as const)(
   }
 )
 
-// The roster is read off the live adapter at teardown: eviction clears it moments later.
+// The child records are read at teardown: eviction settles them moments later.
 it('marks a settled chat whose subagent was still running', async () => {
+  let children: AgentChildWorkView[] = []
+  serveHostTestChildWork(() => children)
   await attach()
   const { host, root, acquire } = hostTestState()
   const events = acquire.mock.calls[0]?.[0].events
@@ -126,15 +136,12 @@ it('marks a settled chat whose subagent was still running', async () => {
     { kind: 'turn', turnId: 'settled', state: 'completed' }
   )
   await host.flushStreamedEvents(SESSION)
-  host.deps.adapter.backgroundTaskState = () => ({
-    state: 'monitoring',
-    tasks: [{ id: 'task-a', kind: 'agent', description: 'Review loop 4', state: 'working' }]
-  })
+  children = [childRecord({ id: 'task-a', kind: 'agent', description: 'Review loop 4' })]
   await host.flushAllStreamedEvents()
   const [offered] = await new AgentSessionRecoveryCapsule(root).list(NOW)
   expect(offered?.work).toEqual({ kind: 'turn', id: 'settled' })
-  // The description is captured BEFORE the stop, off the roster the sidebar was still showing;
-  // eviction clears that roster and settles the rows moments later.
+  // The description is captured BEFORE the stop, off the records the sidebar was still showing;
+  // eviction settles them moments later.
   expect(offered?.activity).toEqual({
     state: 'done',
     prompts: [],

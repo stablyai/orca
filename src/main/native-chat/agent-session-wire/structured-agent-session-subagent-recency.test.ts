@@ -9,10 +9,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentSessionBackgroundTask,
-  AgentSessionStatusEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
@@ -59,17 +56,18 @@ async function openSession() {
     now: tick,
     journalDir: join(root, SESSION)
   })
-  // The roster the provider adapter reports, and the host's status row the feed writes into.
-  const roster: { tasks: AgentSessionBackgroundTask[] } = { tasks: [] }
+  // The host's status row and child records, which the feed writes into and reads back.
   const server = new AgentHookServer()
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: new Map([[SESSION, indexedStatusFeedSession({ journal, hasProviderChild: true })]]),
     getRecord: () => null,
     now: () => 1,
-    readBackgroundTasks: () => ({ state: 'monitoring', tasks: roster.tasks }),
     statusSink: () => ({
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
-      forget: (subject) => server.dropStructuredStatus(subject)
+      forget: (subject) => server.dropStructuredStatus(subject),
+      publishChildWork: (subject, evidence, provider) =>
+        server.ingestStructuredChildWork(subject, evidence, provider),
+      readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
     })
   })
   const events: AgentSessionStatusEvent[] = []
@@ -100,7 +98,7 @@ async function openSession() {
   }
   return {
     journal,
-    roster,
+    feed,
     server,
     projected,
     tick,
@@ -270,7 +268,21 @@ describe("a subagent's work and the recency of the session that spawned it", () 
         }
       })
     )
-    session.roster.tasks = [{ id: 'task-1', kind: 'agent', state: 'working' }]
+    // The spawn's frame lands in the journal before its child's record, as the host orders them.
+    await session.drain()
+    session.feed.publishChildWork(SESSION, [
+      {
+        type: 'live',
+        observedAt: session.tick(),
+        child: {
+          handle: { idKind: 'task_id', id: 'task-1', runId: 'toolu_1' },
+          kind: 'agent',
+          residency: 'background',
+          state: 'working',
+          stoppable: true
+        }
+      }
+    ])
     handle(claudeResult('result-1'))
     await session.drain()
     const settled = session.latestStatus()

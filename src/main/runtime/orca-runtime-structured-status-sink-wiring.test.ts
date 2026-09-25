@@ -69,6 +69,10 @@ describe('every host that constructs a runtime wires the agent-status store', ()
       // A sink without it leaves the host holding no child records for that entry point.
       expect(construction).toContain('publishChildWork: (subject, evidence, provider) =>')
       expect(construction).toContain('ingestStructuredChildWork(subject, evidence, provider)')
+      // Without it the summary and the chat strip read no child records on that entry point.
+      expect(construction).toContain(
+        'readChildWork: (subject) => agentHookServer.getStructuredChildWorkViews(subject)'
+      )
     }
   )
 })

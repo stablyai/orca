@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
@@ -39,9 +40,11 @@ let adapter: ClaudeStructuredSessionAdapter
 let claude: ReturnType<typeof fakeClaude>
 let landInit: () => void
 let lifecycle: Promise<void>[]
+const server = new AgentHookServer()
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-owed-work-release-'))
+  _internals.resetCachesForTests()
   resetHostTestOperationIds()
   claude = fakeClaude()
   lifecycle = []
@@ -67,6 +70,8 @@ beforeEach(async () => {
     },
     // As the runtime wires it: a held prompt's outcome reaches the journal out of band.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
+    onChildWorkEvidence: (sessionId, evidence) =>
+      host.publishChildWorkEvidence(sessionId, evidence),
     // Initialize answers only when the test says so.
     openConnection: async (launch, handlers) => {
       const connection = await claude.openConnection(launch, handlers)
@@ -88,7 +93,15 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     releaseGraceMs: GRACE_MS,
-    now: () => NOW
+    now: () => NOW,
+    // The host's status row and child records, as the runtime wires them.
+    statusSink: {
+      publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
+      forget: (subject) => server.dropStructuredStatus(subject),
+      publishChildWork: (subject, evidence, provider) =>
+        server.ingestStructuredChildWork(subject, evidence, provider),
+      readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
+    }
   })
 })
 
@@ -244,8 +257,9 @@ describe('a chat left while its settled lead still has background work running',
     })
     frame({ type: 'result', subtype: 'success', uuid: 'result-1', is_error: false, result: 'ok' })
     await host.flushStreamedEvents(SESSION)
-    expect(adapter.backgroundTaskState(SESSION)?.tasks).toEqual([
-      expect.objectContaining({ id: 'task-1' })
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok ? page.page.backgroundTasks?.children : null).toEqual([
+      expect.objectContaining({ providerId: 'task-1', membership: 'live' })
     ])
   }
 

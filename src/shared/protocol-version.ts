@@ -218,6 +218,12 @@ export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
 // stop capability above, which a client can advertise while predating this.
 export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
+// Why: the strip's roster now carries the host's child records, and keeps a finished child listed
+// until the parent's next turn. A reader that predates it reads any roster as live work (it
+// animates the monitoring indicator and blocks conversation commands), so it never receives one
+// whose rows are all settled.
+export const AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY =
+  'agent-session.background-task-child-views.v1' as const
 // Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
@@ -379,6 +385,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,

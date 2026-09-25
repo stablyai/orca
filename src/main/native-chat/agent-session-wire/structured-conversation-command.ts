@@ -88,7 +88,7 @@ export function runStructuredConversationCommand(
           const blocked =
             prior?.phase === 'prepared' && command === 'clear'
               ? null
-              : conversationCommandBlocked(ctx, record)
+              : conversationCommandBlocked(ctx, record, context.readChildWork(sessionId))
           if (blocked) {
             return {
               ok: false,

@@ -15,6 +15,7 @@ import {
 } from './structured-agent-session-restart-resume-runner'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
 import {
+  childRecord,
   CLAUDE_ROOT,
   claudeRecord,
   HANDLE_ROOT,
@@ -51,7 +52,7 @@ describe('deriving what was working at teardown', () => {
         [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -77,7 +78,7 @@ describe('deriving what was working at teardown', () => {
         [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'update',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -91,7 +92,7 @@ describe('deriving what was working at teardown', () => {
       markersAtTeardown({
         sessions: new Map([[SESSION, { journal: journal([]), hasProviderChild: true }]]),
         getRecord: () => record(),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -106,7 +107,7 @@ describe('deriving what was working at teardown', () => {
           [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
         ]),
         getRecord: () => record(),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -123,7 +124,7 @@ describe('deriving what was working at teardown', () => {
           [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: false }]
         ]),
         getRecord: () => record(),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -146,7 +147,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -168,9 +169,7 @@ describe('deriving what was working at teardown', () => {
         [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => [
-        { id: 'task-a', kind: 'agent', description: 'Review loop 4', state: 'working' }
-      ],
+      childWork: () => [childRecord({ id: 'task-a', kind: 'agent', description: 'Review loop 4' })],
       trigger: 'update',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -191,14 +190,15 @@ describe('deriving what was working at teardown', () => {
         [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => [
-        { id: 'gone', kind: 'agent', description: 'Finished agent', state: 'done' },
-        ...Array.from({ length: 20 }, (_, index) => ({
-          id: `live-${index}`,
-          kind: 'command' as const,
-          description: `Shell ${index}${'x'.repeat(300)}`,
-          state: 'working' as const
-        }))
+      childWork: () => [
+        childRecord({ id: 'gone', kind: 'agent', description: 'Finished agent', state: 'done' }),
+        ...Array.from({ length: 20 }, (_, index) =>
+          childRecord({
+            id: `live-${index}`,
+            kind: 'command',
+            description: `Shell ${index}${'x'.repeat(300)}`
+          })
+        )
       ],
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -216,7 +216,9 @@ describe('deriving what was working at teardown', () => {
         [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => [{ id: 'task-m', kind: 'monitor', name: 'ci-watch' }],
+      childWork: () => [
+        childRecord({ id: 'task-m', kind: 'monitor', name: 'ci-watch', state: 'monitoring' })
+      ],
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -233,9 +235,9 @@ describe('deriving what was working at teardown', () => {
           [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
         ]),
         getRecord: () => record(),
-        backgroundTasks: () => [
-          { id: 'task-a', kind: 'agent', state: 'done' },
-          { id: 'task-b', kind: 'command', state: 'idle' }
+        childWork: () => [
+          childRecord({ id: 'task-a', kind: 'agent', state: 'done' }),
+          childRecord({ id: 'task-b', kind: 'command', state: 'idle' })
         ],
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -251,7 +253,7 @@ describe('deriving what was working at teardown', () => {
         [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
       ]),
       getRecord: () => claudeRecord(null),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -267,7 +269,7 @@ describe('deriving what was working at teardown', () => {
           [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
         ]),
         getRecord: () => record({ chain: [] }),
-        backgroundTasks: () => undefined,
+        childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
         now: NOW
@@ -290,7 +292,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => claudeRecord(null),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -315,7 +317,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => claudeRecord(null),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW
@@ -340,7 +342,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
-      backgroundTasks: () => undefined,
+      childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW

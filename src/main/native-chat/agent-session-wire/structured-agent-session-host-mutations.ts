@@ -22,6 +22,7 @@ import type {
   AgentSessionThreadGoalResult
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
 import {
   admitAndRunAgentSessionMutation,
@@ -49,6 +50,8 @@ export type StructuredAgentSessionMutationContext = {
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
   flushStreamedEvents: (sessionId: string) => Promise<void>
+  /** The session's child records, as the strip reads them; what command admission decides on. */
+  readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined
   requireSession: (sessionId: string) => StructuredAgentSessionHostSession
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   /** A send that finds the owner gone brings it back through here, inside its own serialize. */

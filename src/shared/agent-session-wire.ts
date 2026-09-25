@@ -4,6 +4,7 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
 
 export * from './agent-session-wire-refusals'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
@@ -203,8 +204,12 @@ export type AgentSessionStatusSummary = {
   turnOutcome?: AgentJournalTurnOutcome
   /** Live provider-owned background tasks, so session lists can render
    *  subagent children without holding a journal reader open. Optional for
-   *  mixed-version hosts. */
+   *  mixed-version hosts. Derived from `children` on hosts that publish it. */
   backgroundTasks?: AgentSessionBackgroundTask[]
+  /** The host's child records for this session, live and recently settled, as views. Absent from
+   *  older hosts; decode with `decodeAgentChildWorkViews`. Usage is omitted, and an evidence clock
+   *  that only ticked does not republish: per-tick freshness rides the background-task channel. */
+  children?: AgentChildWorkView[]
   providerSession?: AgentProviderSessionMetadata
   updatedAt: number
   /** When the session's own agent entered `status`, dated by its own lifecycle edges and never by

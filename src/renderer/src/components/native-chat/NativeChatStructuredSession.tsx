@@ -272,6 +272,7 @@ export function NativeChatStructuredSession(
         sessionId={props.sessionId}
         agentLabel={structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')}
         startupPhase={startupPhase}
+        paneKey={paneKey}
         error={controller.error}
         composerError={composerError}
         isVisible={props.isVisible}

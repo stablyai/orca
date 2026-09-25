@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-freshness'
 import {
   structuredAgentSessionPaneKey,
@@ -38,6 +39,30 @@ const SUBJECT = makeStructuredAgentStatusSubject(
 const TAB = structuredAgentSessionTabId(SESSION)
 const STRUCTURED_PANE = structuredAgentSessionPaneKey(TAB, SESSION)
 const OBSERVED_AT = 1_757_030_400_000
+
+/** A child the provider reports live, as the structured producers hand it to the host. */
+function liveChild(id: string, kind: 'agent' | 'command'): AgentChildWorkEvidence {
+  return {
+    type: 'live',
+    observedAt: OBSERVED_AT,
+    child: {
+      handle: { idKind: 'task_id', id },
+      kind,
+      residency: 'background',
+      state: 'working',
+      stoppable: true
+    }
+  }
+}
+
+function endedChild(id: string): AgentChildWorkEvidence {
+  return {
+    type: 'ended',
+    observedAt: OBSERVED_AT + 1,
+    handle: { idKind: 'task_id', id },
+    outcome: 'succeeded'
+  }
+}
 
 function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
   return {
@@ -103,7 +128,34 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     expect(server.getStatusSnapshot()[0]?.state).toBe('done')
   })
 
-  it('folds live background tasks into an idle session the way the hook lane folds a roster', () => {
+  it("folds the host's live child records into an idle session the way the hook lane folds a roster", () => {
+    const server = new AgentHookServer()
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    server.ingestStructuredChildWork(SUBJECT, [liveChild('child-1', 'agent')], 'codex')
+    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 1 }), SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('workingMode')
+
+    server.ingestStructuredChildWork(
+      SUBJECT,
+      [endedChild('child-1'), liveChild('shell-1', 'command')],
+      'codex'
+    )
+    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 2 }), SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring'
+    })
+
+    server.ingestStructuredChildWork(SUBJECT, [endedChild('shell-1')], 'codex')
+    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 3 }), SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('workingMode')
+  })
+
+  // The summary's task list is derived from these records for older clients; the row reads the
+  // records themselves, so a list that disagrees with them cannot hold the parent open.
+  it("reads child liveness from the host's records, never from the summary's task list", () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(
       summary({
@@ -112,45 +164,16 @@ describe('AgentHookServer ingestStructuredStatus', () => {
       }),
       SUBJECT
     )
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('workingMode')
-
-    server.ingestStructuredStatus(
-      summary({
-        status: 'idle',
-        updatedAt: OBSERVED_AT + 1,
-        backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
-      }),
-      SUBJECT
-    )
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      workingMode: 'monitoring'
-    })
-
-    server.ingestStructuredStatus(
-      summary({
-        status: 'idle',
-        updatedAt: OBSERVED_AT + 2,
-        backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'done' }]
-      }),
-      SUBJECT
-    )
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('workingMode')
   })
 
   // The timer beside the row belongs to the state it labels: monitoring that becomes a real turn
   // must not report the watch loop's age as how long the agent has been working.
   it('restarts the state clock when monitoring becomes a real turn', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(
-      summary({
-        status: 'idle',
-        backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
-      }),
-      SUBJECT
-    )
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    server.ingestStructuredChildWork(SUBJECT, [liveChild('shell-1', 'command')], 'codex')
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
     expect(server.getStatusSnapshot()[0]).toMatchObject({
       state: 'working',
       workingMode: 'monitoring',
@@ -158,11 +181,7 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     })
 
     server.ingestStructuredStatus(
-      summary({
-        status: 'working',
-        updatedAt: OBSERVED_AT + 2_700_000,
-        backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
-      }),
+      summary({ status: 'working', updatedAt: OBSERVED_AT + 2_700_000 }),
       SUBJECT
     )
     expect(server.getStatusSnapshot()[0]).toMatchObject({
@@ -178,14 +197,9 @@ describe('AgentHookServer ingestStructuredStatus', () => {
   it('dates a task edge by when the host saw it, not by the journal clock', () => {
     const server = new AgentHookServer()
     const before = Date.now()
-    server.ingestStructuredStatus(
-      summary({
-        status: 'idle',
-        updatedAt: OBSERVED_AT,
-        backgroundTasks: [{ id: 'shell-1', kind: 'command', state: 'working' }]
-      }),
-      SUBJECT
-    )
+    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT }), SUBJECT)
+    server.ingestStructuredChildWork(SUBJECT, [liveChild('shell-1', 'command')], 'codex')
+    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT }), SUBJECT)
     const row = server.getStatusSnapshot()[0]
     expect(row).toMatchObject({ state: 'working', workingMode: 'monitoring' })
     expect(row?.evidenceObservedAt).toBeGreaterThanOrEqual(before)
@@ -382,10 +396,9 @@ describe('structured rows and last-status.json', () => {
 describe('the main agent fact on a structured row', () => {
   it('publishes the main agent beside the folded state, on the journal clock with continuity', () => {
     const server = new AgentHookServer()
-    server.ingestStructuredStatus(
-      summary({ status: 'idle', backgroundTasks: [{ id: 'c', kind: 'agent', state: 'working' }] }),
-      SUBJECT
-    )
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    server.ingestStructuredChildWork(SUBJECT, [liveChild('c', 'agent')], 'codex')
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
     expect(server.getStatusSnapshot()[0]).toMatchObject({
       state: 'working',
       mainAgent: { state: 'done', stateStartedAt: OBSERVED_AT }
@@ -393,6 +406,7 @@ describe('the main agent fact on a structured row', () => {
     expect(server.getStatusSnapshot()[0]?.mainAgent).not.toHaveProperty('outcome')
 
     // The main agent is still done while its child drains: the main agent's clock does not move.
+    server.ingestStructuredChildWork(SUBJECT, [endedChild('c')], 'codex')
     server.ingestStructuredStatus(
       summary({ status: 'idle', updatedAt: OBSERVED_AT + 5, turnOutcome: 'failure' }),
       SUBJECT
