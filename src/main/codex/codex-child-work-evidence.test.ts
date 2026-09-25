@@ -447,7 +447,7 @@ describe('Codex child-work evidence', () => {
     expect(tracker.drainChildWorkEvidence(1)).toEqual([])
   })
 
-  it('drops every record when the provider session ends', () => {
+  it('settles every live record with no reported outcome when the provider session ends', () => {
     const { send, tracker, records, store } = runningChild()
     send(
       item(
@@ -468,6 +468,9 @@ describe('Codex child-work evidence', () => {
       provider: 'codex',
       evidence
     })
-    expect(records()).toEqual([])
+    expect(records()).toEqual([
+      expect.objectContaining({ kind: 'agent', membership: 'settled', outcome: 'unknown' }),
+      expect.objectContaining({ kind: 'command', membership: 'settled', outcome: 'unknown' })
+    ])
   })
 })

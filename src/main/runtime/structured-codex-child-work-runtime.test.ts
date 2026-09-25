@@ -121,7 +121,7 @@ describe('structured Codex child work through the production runtime', () => {
         'codex'
       ]
     ])
-    // The provider dies: its children go with it, reported under the same address.
+    // The provider dies: its session's end is reported under the same address.
     connections[0]?.onExit?.(new Error('scripted provider exit'))
     expect(childWork.at(-1)).toEqual([
       subject,

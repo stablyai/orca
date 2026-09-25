@@ -333,8 +333,22 @@ describe('Codex structured child-work producer', () => {
       expect({ index, liveness: recorded }).toEqual({ index, liveness: expected })
       step.check?.()
     }
+    const settled = records()
     await adapter.closeSession('session-1')
-    expect(records()).toEqual([])
+    // Every child had already ended; closing the session changes none of what they said.
+    expect(records()).toEqual(settled)
+    expect(
+      records().map(({ description, membership, outcome }) => ({
+        description,
+        membership,
+        outcome
+      }))
+    ).toEqual([
+      { description: 'review', membership: 'settled', outcome: 'cancelled' },
+      { description: 'npm run dev', membership: 'settled', outcome: 'succeeded' },
+      { description: 'test', membership: 'settled', outcome: 'failed' },
+      { description: 'lint', membership: 'settled', outcome: 'failed' }
+    ])
     expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
   })
 
@@ -367,13 +381,22 @@ describe('Codex structured child-work producer', () => {
     }
   })
 
-  it('drops the records when the provider exits unexpectedly', async () => {
+  it('settles a live child with no reported outcome when the provider exits unexpectedly', async () => {
     const { codex, send, records } = await producer()
     send(turn('turn/started', THREAD_ID, 'p1'))
     send(spawned(REVIEWER, 'review', 'p1'))
     send(turn('turn/started', REVIEWER, 'r1'))
-    expect(records()).toHaveLength(1)
+    expect(records()).toEqual([
+      expect.objectContaining({ description: 'review', membership: 'live', state: 'working' })
+    ])
     codex.connections[0]!.handlers.onExit?.(new Error('provider exited'))
-    expect(records()).toEqual([])
+    expect(records()).toEqual([
+      expect.objectContaining({
+        description: 'review',
+        membership: 'settled',
+        state: 'done',
+        outcome: 'unknown'
+      })
+    ])
   })
 })

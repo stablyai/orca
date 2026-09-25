@@ -120,7 +120,7 @@ export class CodexChildWorkEvidence {
     this.queueChild(threadId)
   }
 
-  /** The provider session is gone, and every child with it. */
+  /** The provider session is gone: no child it still ran can report its own ending. */
   clear(): void {
     this.facts.clear()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
