@@ -144,7 +144,10 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
-      if (replacementHandle?.startsWith('term_')) {
+      if (
+        replacementHandle?.startsWith('term_') &&
+        this.handleByPtyId.get(ptyId) !== replacementHandle
+      ) {
         this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
