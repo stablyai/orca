@@ -3,11 +3,10 @@ import { fixture } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
-import type { PtySpawnIpcDeps } from '../../ipc/pty/ipc/spawn-types'
 import type { PtySpawnResult } from '../../providers/types'
 import { commitRuntimePtySpawn } from '../../ipc/pty/runtime/spawn-commit'
 import { createRuntimePtySpawnState } from '../../ipc/pty/runtime/spawn-state'
-import type { PtyRuntimeControllerDeps } from '../../ipc/pty/runtime/controller-deps'
+import { createPtySpawnCommitDependencies } from './pty-spawn-commit-dependencies-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -37,10 +36,6 @@ const restores: Pick<PtySpawnResult, 'snapshot' | 'coldRestore' | 'replay'>[] = 
   { replay: 'restored history\r\n' }
 ]
 
-function unexpectedPreflight(): never {
-  throw new Error('Spawn commit must not rerun preflight')
-}
-
 describe.each(['ipc', 'runtime'])('%s restored scrollback', (controller) => {
   it.each(restores)(
     'keeps restored history before output during the binding save: %j',
@@ -48,25 +43,7 @@ describe.each(['ipc', 'runtime'])('%s restored scrollback', (controller) => {
       const { store, authority } = await fixture()
       const runtime = new OrcaRuntimeService(store)
       runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
-      const deps: PtySpawnIpcDeps = {
-        runtime,
-        store,
-        sendPtySpawnedToRenderer: vi.fn(),
-        getLocalPtyStartupPromise: unexpectedPreflight,
-        adoptStablePane: unexpectedPreflight,
-        assertFolderWorkspacePtyPathUsable: unexpectedPreflight,
-        resolvePtySpawnStartupCwd: unexpectedPreflight,
-        localStartupCwdDirectoryExists: unexpectedPreflight,
-        prepareCodexResumeHome: unexpectedPreflight,
-        noCodexResumeLaunch: unexpectedPreflight,
-        resolveCodexResumeLaunch: unexpectedPreflight,
-        reconcileSharedRuntimeResumeHome: unexpectedPreflight,
-        stripSequencedStartupResumeArgv: unexpectedPreflight,
-        transitionSpawnHiddenRendererPtyDeliveryState: unexpectedPreflight,
-        trustedTerminalHandleEnv: new Set(),
-        syncPtyBackgroundedDelivery: unexpectedPreflight,
-        stopReplacedPty: unexpectedPreflight
-      }
+      const deps = createPtySpawnCommitDependencies(runtime, store)
       let commit: () => Promise<unknown>
       const result = { id: binding.ptyId, incarnationId: binding.incarnationId, ...restore }
       if (controller === 'ipc') {
@@ -76,22 +53,7 @@ describe.each(['ipc', 'runtime'])('%s restored scrollback', (controller) => {
         ctx.validatedLeafId = binding.leafId
         commit = () => commitPtyIpcSpawn(ctx)
       } else {
-        const runtimeDeps: PtyRuntimeControllerDeps = {
-          ...deps,
-          getLocalPtyProviderStartupPromise: unexpectedPreflight,
-          requestSerializedBuffer: unexpectedPreflight,
-          shutdownProviderAndDetectExit: unexpectedPreflight,
-          rememberSyntheticKillExit: unexpectedPreflight,
-          rememberRetiredRejectedPty: unexpectedPreflight,
-          sendPtyExitToRenderer: unexpectedPreflight,
-          finishPtyShutdown: unexpectedPreflight,
-          retiredRejectedPtyIds: new Map(),
-          reversibleStopOwnersByPtyId: new Map(),
-          get mainWindow() {
-            return unexpectedPreflight()
-          }
-        }
-        const ctx = createRuntimePtySpawnState(runtimeDeps, { ...binding, cols: 80, rows: 24 })
+        const ctx = createRuntimePtySpawnState(deps, { ...binding, cols: 80, rows: 24 })
         ctx.result = result
         ctx.metadataLeafId = binding.leafId
         ctx.hostSessionBinding = { store, ...binding }
