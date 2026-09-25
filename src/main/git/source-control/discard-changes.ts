@@ -41,7 +41,10 @@ export async function discardChanges(
 
     if (tracked) {
       await gitExecFileAsync(
-        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath, options)],
+        // Why: no `--source`, so the working tree is rebuilt from the index.
+        // `--source=HEAD` would also erase the staged half of a partially staged
+        // file, and delete a newly added file (`AM`) from disk outright.
+        ['restore', '--worktree', '--', literalPathspec(filePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
@@ -125,7 +128,8 @@ export async function bulkDiscardChanges(
       (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
       async () => {
         const commands = bulkPathspecCommands(
-          ['restore', '--worktree', '--source=HEAD', '--'],
+          // Why: index-sourced restore, matching discardChanges above.
+          ['restore', '--worktree', '--'],
           trackedPaths,
           worktreePath,
           options
