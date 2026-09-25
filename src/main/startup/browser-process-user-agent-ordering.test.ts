@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
       events.push('is-ready')
       return false
     }),
+    whenReady: vi.fn(() => Promise.resolve()),
     setName: vi.fn((name: string) => {
       events.push(`set-name:${name}`)
     })
@@ -201,6 +202,7 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
 describe('browser process user-agent startup ordering', () => {
   it('explains admission refusal before a desktop launch exits', async () => {
     const { runMainProcessPreflight } = await import('./main-process-preflight')
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     mocks.backgroundLaunch.mockReturnValueOnce(false)
     mocks.admission.mockImplementationOnce(() => {
       throw new Error('Stop Orca and orcad before retrying profile recovery')
@@ -217,6 +219,7 @@ describe('browser process user-agent startup ordering', () => {
       expect(mocks.app.isReady).not.toHaveBeenCalled()
     } finally {
       error.mockRestore()
+      platform.mockRestore()
       mocks.showErrorBox.mockClear()
       mocks.events.length = 0
     }
@@ -312,4 +315,148 @@ it('exits and releases admission after pending profile move recovery fails', asy
   expect(mocks.recoverMoves).toHaveBeenCalledWith('/canonical-user-data', 'active-profile')
   expect(release).toHaveBeenCalledOnce()
   expect(mocks.app.exit).toHaveBeenCalledWith(1)
+})
+
+it('defers a Linux desktop startup failure until Electron is ready', async () => {
+  const { runMainProcessPreflight } = await import('./main-process-preflight')
+  const { resetBrowserProcessUserAgentForTests } =
+    await import('../browser/browser-process-user-agent')
+  resetBrowserProcessUserAgentForTests()
+  const release = vi.fn()
+  let resolveReady: (() => void) | undefined
+  const ready = new Promise<void>((resolve) => {
+    resolveReady = resolve
+  })
+  mocks.admission.mockReturnValueOnce({ release })
+  mocks.afterIdentity.mockImplementationOnce(() => {
+    throw new Error('Linux pre-ready failure')
+  })
+  mocks.app.whenReady.mockReturnValueOnce(ready)
+  mocks.app.exit.mockClear()
+  mocks.showErrorBox.mockClear()
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+  mocks.backgroundLaunch.mockReturnValueOnce(false)
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    expect(
+      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+    ).toBe(false)
+    expect(release).toHaveBeenCalledOnce()
+    expect(mocks.app.whenReady).toHaveBeenCalledOnce()
+    expect(mocks.showErrorBox).not.toHaveBeenCalled()
+    expect(mocks.app.exit).not.toHaveBeenCalled()
+
+    resolveReady?.()
+    await ready
+    await Promise.resolve()
+    expect(mocks.showErrorBox).toHaveBeenCalledWith(
+      'Orca could not start',
+      expect.stringContaining('Linux pre-ready failure')
+    )
+    expect(mocks.app.exit).toHaveBeenCalledWith(1)
+  } finally {
+    error.mockRestore()
+    platform.mockRestore()
+    mocks.app.whenReady.mockClear()
+  }
+})
+
+it('exits after a Linux desktop readiness rejection without showing a dialog', async () => {
+  const { runMainProcessPreflight } = await import('./main-process-preflight')
+  const { resetBrowserProcessUserAgentForTests } =
+    await import('../browser/browser-process-user-agent')
+  resetBrowserProcessUserAgentForTests()
+  const release = vi.fn()
+  let rejectReady!: (error: Error) => void
+  const ready = new Promise<void>((_resolve, reject) => {
+    rejectReady = reject
+  })
+  mocks.admission.mockReturnValueOnce({ release })
+  mocks.afterIdentity.mockImplementationOnce(() => {
+    throw new Error('Linux pre-ready failure')
+  })
+  mocks.app.whenReady.mockReturnValueOnce(ready)
+  mocks.app.exit.mockClear()
+  mocks.showErrorBox.mockClear()
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+  mocks.backgroundLaunch.mockReturnValueOnce(false)
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    expect(
+      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+    ).toBe(false)
+    expect(release).toHaveBeenCalledOnce()
+    rejectReady(new Error('Electron readiness failed'))
+    await ready.catch(() => undefined)
+    await Promise.resolve()
+    expect(mocks.showErrorBox).not.toHaveBeenCalled()
+    expect(mocks.app.exit).toHaveBeenCalledWith(1)
+  } finally {
+    error.mockRestore()
+    platform.mockRestore()
+    mocks.app.whenReady.mockClear()
+  }
+})
+
+it('keeps Linux background startup failures console-only and immediate', async () => {
+  const { runMainProcessPreflight } = await import('./main-process-preflight')
+  const { resetBrowserProcessUserAgentForTests } =
+    await import('../browser/browser-process-user-agent')
+  resetBrowserProcessUserAgentForTests()
+  const release = vi.fn()
+  mocks.admission.mockReturnValueOnce({ release })
+  mocks.afterIdentity.mockImplementationOnce(() => {
+    throw new Error('Linux background failure')
+  })
+  mocks.app.whenReady.mockClear()
+  mocks.app.exit.mockClear()
+  mocks.showErrorBox.mockClear()
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+  mocks.backgroundLaunch.mockReturnValueOnce(true)
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    expect(
+      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+    ).toBe(false)
+    expect(release).toHaveBeenCalledOnce()
+    expect(mocks.app.whenReady).not.toHaveBeenCalled()
+    expect(mocks.showErrorBox).not.toHaveBeenCalled()
+    expect(mocks.app.exit).toHaveBeenCalledWith(1)
+  } finally {
+    error.mockRestore()
+    platform.mockRestore()
+  }
+})
+
+it('keeps Linux serve startup failures console-only and immediate', async () => {
+  const { runMainProcessPreflight } = await import('./main-process-preflight')
+  const { resetBrowserProcessUserAgentForTests } =
+    await import('../browser/browser-process-user-agent')
+  resetBrowserProcessUserAgentForTests()
+  const release = vi.fn()
+  const originalArgv = process.argv
+  process.argv = originalArgv.includes('--serve') ? [...originalArgv] : [...originalArgv, '--serve']
+  mocks.admission.mockReturnValueOnce({ release })
+  mocks.afterIdentity.mockImplementationOnce(() => {
+    throw new Error('Linux serve failure')
+  })
+  mocks.app.whenReady.mockClear()
+  mocks.app.exit.mockClear()
+  mocks.showErrorBox.mockClear()
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+  mocks.backgroundLaunch.mockReturnValueOnce(false)
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    expect(
+      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+    ).toBe(false)
+    expect(release).toHaveBeenCalledOnce()
+    expect(mocks.app.whenReady).not.toHaveBeenCalled()
+    expect(mocks.showErrorBox).not.toHaveBeenCalled()
+    expect(mocks.app.exit).toHaveBeenCalledWith(1)
+  } finally {
+    error.mockRestore()
+    platform.mockRestore()
+    process.argv = originalArgv
+  }
 })
