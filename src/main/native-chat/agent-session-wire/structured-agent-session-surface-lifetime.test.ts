@@ -18,7 +18,10 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import {
+  AgentSessionAcquisitionRootExitObservedError,
+  type StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
@@ -131,6 +134,36 @@ function failNextDrain(): void {
 }
 
 /** The submissions as they stood when the session was forgotten; its journal is gone after that. */
+async function failJournalSinkUntilReleased(): Promise<void> {
+  const session = (
+    host as unknown as {
+      sessions: Map<string, { journal: { appendItem: (...args: never[]) => Promise<unknown> } }>
+    }
+  ).sessions.get(SESSION)
+  expect(session).toBeDefined()
+  vi.spyOn(session!.journal, 'appendItem').mockRejectedValueOnce(new Error('disk unavailable'))
+  sink?.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'lost write' }] }
+  )
+  await vi.waitFor(() => {
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      deathEvidence: { kind: 'exit-observed' }
+    })
+  })
+}
+
+/** Replaces the failed cached sink so suite cleanup can drain the host. */
+function replaceFailedSink(): void {
+  ;(
+    host as unknown as {
+      runtimeState: { eventSinkFor: (sessionId: string) => unknown }
+    }
+  ).runtimeState.eventSinkFor(SESSION)
+}
+
 function captureSettledSubmissions(): { value: AgentJournalSubmission[] } {
   const captured: { value: AgentJournalSubmission[] } = { value: [] }
   const journal = host['sessions'].get(SESSION)!.journal
@@ -494,26 +527,9 @@ describe('an unexpected provider exit', () => {
 
   it('turns a journal sink failure into observed-exit settlement and lease release', async () => {
     await attach()
-    const session = (
-      host as unknown as {
-        sessions: Map<string, { journal: { appendItem: (...args: never[]) => Promise<unknown> } }>
-      }
-    ).sessions.get(SESSION)
-    expect(session).toBeDefined()
-    vi.spyOn(session!.journal, 'appendItem').mockRejectedValueOnce(new Error('disk unavailable'))
 
-    sink?.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
-      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'lost write' }] }
-    )
+    await failJournalSinkUntilReleased()
 
-    await vi.waitFor(() => {
-      expect(closeSession).toHaveBeenCalledWith(SESSION)
-      expect(store.getRecord(SESSION)?.lease).toMatchObject({
-        claimStatus: 'released',
-        deathEvidence: { kind: 'exit-observed' }
-      })
-    })
     expect(dispatch).not.toHaveBeenCalled()
     const history = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(
@@ -522,13 +538,19 @@ describe('an unexpected provider exit', () => {
           (item) => item.body.kind === 'status' && item.body.text.includes('journal sink failure')
         )
     ).toBe(false)
+    replaceFailedSink()
+  })
 
-    // Replace the failed cached sink so suite cleanup can drain the host.
-    ;(
-      host as unknown as {
-        runtimeState: { eventSinkFor: (sessionId: string) => unknown }
-      }
-    ).runtimeState.eventSinkFor(SESSION)
+  it('settles a journal sink failure whose stop saw the provider root exit', async () => {
+    await attach()
+    // The lease follows the root, so its seen exit settles like a proven one.
+    closeSession.mockRejectedValueOnce(
+      new AgentSessionAcquisitionRootExitObservedError(new Error('provider close unproven'))
+    )
+
+    await failJournalSinkUntilReleased()
+
+    replaceFailedSink()
   })
 
   it('releases the exact generation, reacquires outside the queue, and dispatches a new message', async () => {

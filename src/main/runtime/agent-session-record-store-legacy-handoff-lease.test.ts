@@ -44,6 +44,8 @@ async function persistLiveOwner(): Promise<void> {
     },
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude-work' },
+    // Without one the next open backfills it, and that rewrite would mask the lease's own.
+    surfaceTabId: 'tab-alpha',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',

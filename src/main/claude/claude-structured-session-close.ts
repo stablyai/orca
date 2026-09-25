@@ -102,16 +102,19 @@ async function finalizeClaudePublishedSession(
   }
   const connectionClosed = await session.connection.close()
   session.unbindReadingControl?.()
+  let rootExitVerdict: Error | undefined
   if (connectionClosed !== true) {
     const cleanupError = claudeAcquisitionCleanupError(
       session.connection,
       new Error('provider close unproven')
     )
-    // Why: the owner can release proven root-exit/processless sessions; genuinely unknown exits retry.
-    if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
-      throw cleanupError
+    // Only a genuinely unknown exit stays indexed for a retry. A proven root exit or processless
+    // close is final — the owner releases the lease on it — so the session finalizes like a proven
+    // close and still reports the verdict; kept indexed, it refused every later start of the chat.
+    if (cleanupError instanceof AgentSessionAcquisitionExitUnprovenError) {
+      return false
     }
-    return false
+    rootExitVerdict = cleanupError
   }
   if (session.backgroundTasks.clear()) {
     input.onBackgroundTasksChanged?.(input.sessionId, null)
@@ -185,6 +188,9 @@ async function finalizeClaudePublishedSession(
   }
   if (callbackThrew) {
     throw callbackError
+  }
+  if (rootExitVerdict) {
+    throw rootExitVerdict
   }
   return true
 }
