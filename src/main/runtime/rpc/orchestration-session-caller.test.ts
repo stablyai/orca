@@ -139,15 +139,19 @@ describe('orchestration session callers at the dispatch entry', () => {
       const response = await h.dispatch(
         orchestrationRequest(method, MINIMAL_PARAMS[method] ?? {}, {
           sessionId: SESSION_X,
-          evidence: { terminalHandle: 'term_tui', paneKey: 'tab_tui:1:2', launchToken: 'secret' }
+          evidence: {
+            terminalHandle: 'term_other',
+            paneKey: 'tab_other:1:2',
+            launchToken: 'secret'
+          }
         })
       )
 
       // Whatever the method answers, it answered as the session: no host-boundary or session refusal,
-      // and the terminal evidence a terminal view inherits never attested anyone.
+      // and terminal evidence on the same request never attested anyone.
       if (!response.ok) {
         expect(Object.values(CODES)).not.toContain(response.error.code)
-        expect(response.error.message).not.toContain('term_tui')
+        expect(response.error.message).not.toContain('term_other')
       }
       for (const [evidence] of spy.mock.calls) {
         expect(evidence?.terminalHandle).toBeUndefined()
@@ -271,12 +275,14 @@ describe('orchestration session callers at the dispatch entry', () => {
       await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /is not running right now/)
     })
 
-    it('a lease mid-handoff between chat and terminal view', async () => {
+    it('a lease mid owner change', async () => {
       h.records.set(
         SESSION_X,
-        sessionRecord(SESSION_X, { lease: { handoffStage: 'preparing', handoffOperationId: 'op' } })
+        sessionRecord(SESSION_X, {
+          lease: { handoffStage: 'new-owner-proving', handoffOperationId: 'op' }
+        })
       )
-      await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /switching between chat/)
+      await expectRefusedWithNoEffects(SESSION_X, CODES.notLive, /is changing owners/)
     })
 
     it('a lease the host has not reconciled since restart', async () => {

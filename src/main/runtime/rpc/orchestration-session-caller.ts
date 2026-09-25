@@ -9,7 +9,7 @@
  * - Same host only. A paired client, an SSH environment or a WSL shell is another host, where
  *   "same machine, same user" does not hold, so a session claim from one is refused.
  * - The Orca id, never the provider's: that one rotates on `/clear`.
- * - A live lease under either owner (native chat or terminal view), so a handoff keeps the identity.
+ * - A live lease: released, mid owner change or unreconciled sessions cannot act.
  * - The session wins over any declared caller: a declared handle must name this same session, and
  *   a structured worker's session id maps to the handle and pane it was minted.
  * - A request with no session id that declares a `session:` caller gets the party it names: a
@@ -137,7 +137,7 @@ export async function resolveOrchestrationSessionCaller(
     request: {
       ...request,
       params: bindDeclaredCaller(request.method, request.params, caller, db),
-      // Why: the session wins, so terminal evidence inherited from a terminal view never attests.
+      // Why: the session wins, so any terminal evidence on the same request never attests.
       orchestrationCompatibilityEvidence: { agentSessionId: sessionId }
     },
     caller
@@ -209,7 +209,7 @@ function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): voi
       ? // Why not "ended": a released lease is evicted and wakeable; only a running process may act.
         'is not running right now. A new message or user turn revives it; retry then.'
       : lease.handoffStage !== null
-        ? 'is switching between chat and terminal view. Retry when the switch finishes.'
+        ? 'is changing owners on this host. Retry when that finishes.'
         : 'has no live owner on this host right now. Retry once it is running.'
   throw new OrchestrationError(
     CODES.notLive,

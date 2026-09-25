@@ -14,7 +14,6 @@ import {
   resultOf,
   SESSION_X,
   SESSION_Y,
-  sessionRecord,
   WORKER_HANDLE,
   WORKER_PANE,
   WORKSPACE_X,
@@ -265,41 +264,6 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
         code: 'consumer_fenced',
         message: 'This mailbox consumer was replaced while waiting.'
       }
-    })
-  })
-
-  it('keeps the same Orca session id across a native to terminal-view to native handoff', async () => {
-    const runId = await runCreate(SESSION_X)
-    // The terminal view is a PTY: its CLI also carries that terminal's own evidence.
-    const tuiEvidence = {
-      terminalHandle: 'term_tui',
-      paneKey: 'tab_tui:99999999-9999-4999-8999-999999999999',
-      launchToken: 'tui-token'
-    }
-    h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { runtimeKind: 'tui' } }))
-    await as(undefined, 'orchestration.send', {
-      from: WORKER_HANDLE,
-      to: ADDRESS_X,
-      subject: 'tui'
-    })
-
-    const inTui = resultOf(
-      await h.dispatch(
-        orchestrationRequest(
-          'orchestration.check',
-          {},
-          {
-            sessionId: SESSION_X,
-            evidence: tuiEvidence
-          }
-        )
-      )
-    )
-    expect(inTui).toMatchObject({ runId, messages: [{ subject: 'tui' }] })
-
-    h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { runtimeKind: 'native' } }))
-    expect(await as(SESSION_X, 'orchestration.runCurrent', {})).toMatchObject({
-      run: { id: runId }
     })
   })
 
