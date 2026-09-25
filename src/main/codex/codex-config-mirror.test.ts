@@ -29,6 +29,7 @@ import {
   syncSystemConfigIntoLegacySharedCodexHome,
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
+import { MANAGED_CODEX_HOME_PLACEHOLDER } from './codex-managed-home-mcp-binding'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -73,6 +74,75 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
+  it('regenerates account-specific MCP helper bindings where the consumer is verified', () => {
+    const firstHome = join(userDataDir, 'codex-accounts', 'first', 'home')
+    const secondHome = join(userDataDir, 'codex-accounts', 'second', 'home')
+    mkdirSync(firstHome, { recursive: true })
+    mkdirSync(secondHome, { recursive: true })
+    writeFileSync(
+      getSystemConfigPath(),
+      [
+        '[mcp_servers.time]',
+        'url = "https://time.invalid/mcp"',
+        `http_headers_helper = "headers --home ${MANAGED_CODEX_HOME_PLACEHOLDER}"`,
+        '',
+        '[mcp_servers.other]',
+        'command = "keep-me"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    for (const home of [firstHome, secondHome, firstHome]) {
+      syncSystemConfigIntoManagedCodexHome(
+        { runtimeHomePath: home, systemHomePath: getSystemCodexHomePath() },
+        home
+      )
+    }
+
+    const first = readFileSync(join(firstHome, 'config.toml'), 'utf-8')
+    const second = readFileSync(join(secondHome, 'config.toml'), 'utf-8')
+    if (process.platform === 'win32') {
+      // Native cmd.exe quoting is intentionally fail-closed until its execution boundary is verified.
+      expect(first).toContain(MANAGED_CODEX_HOME_PLACEHOLDER)
+      expect(second).toContain(MANAGED_CODEX_HOME_PLACEHOLDER)
+    } else {
+      expect(first).toContain(`--home '${firstHome}'`)
+      expect(second).toContain(`--home '${secondHome}'`)
+    }
+    expect(first).toContain('[mcp_servers.other]\ncommand = "keep-me"')
+    expect(readFileSync(getSystemConfigPath(), 'utf-8')).toContain(MANAGED_CODEX_HOME_PLACEHOLDER)
+  })
+
+  it('keeps native Windows helper placeholders unresolved under the fail-closed contract', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const managedHome = join(userDataDir, 'codex-accounts', 'windows', 'home')
+      mkdirSync(managedHome, { recursive: true })
+      const source = [
+        '[mcp_servers.time]',
+        'url = "https://time.invalid/mcp"',
+        `http_headers_helper = "headers --home ${MANAGED_CODEX_HOME_PLACEHOLDER}"`,
+        ''
+      ].join('\n')
+      writeFileSync(getSystemConfigPath(), source, 'utf-8')
+
+      syncSystemConfigIntoManagedCodexHome(
+        { runtimeHomePath: managedHome, systemHomePath: getSystemCodexHomePath() },
+        managedHome
+      )
+
+      expect(readFileSync(join(managedHome, 'config.toml'), 'utf-8')).toContain(
+        MANAGED_CODEX_HOME_PLACEHOLDER
+      )
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
   it('seeds a missing runtime config without copying system hook trust', () => {
     writeFileSync(
       getSystemConfigPath(),

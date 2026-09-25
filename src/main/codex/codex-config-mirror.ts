@@ -18,6 +18,7 @@ import {
 import { readCodexSettingsBaseline } from './config-settings-baseline'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
+import { bindManagedCodexHomeInMcpHelpers } from './codex-managed-home-mcp-binding'
 import {
   deduplicateProjectTomlSections,
   getProjectTrustLevel,
@@ -34,7 +35,8 @@ export function syncSystemConfigIntoManagedCodexHome(
   homes: CodexSettingsPromotionHomes = {
     runtimeHomePath: getOrcaManagedCodexHomePath(),
     systemHomePath: getSystemCodexHomePath()
-  }
+  },
+  managedMcpAccountHome?: string
 ): void {
   // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
   // user made inside Orca-launched Codex (/model, /approvals) must be written
@@ -57,7 +59,11 @@ export function syncSystemConfigIntoManagedCodexHome(
   }
   let mirrorResult: CodexConfigMirrorResult
   try {
-    mirrorResult = syncSystemConfigIntoManagedCodexHomeUnsafe(homes, promotionPlan)
+    mirrorResult = syncSystemConfigIntoManagedCodexHomeUnsafe(
+      homes,
+      promotionPlan,
+      managedMcpAccountHome
+    )
   } catch (error) {
     // Why: an unreadable source throws out of the mirror, so reporting only on
     // the success path would leave that stall latch-less — logging the generic
@@ -158,7 +164,8 @@ type CodexConfigMirrorResult =
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
   { runtimeHomePath, systemHomePath, systemConfigDir }: CodexSettingsPromotionHomes,
-  promotionPlan: CodexSettingsPromotionPlan
+  promotionPlan: CodexSettingsPromotionPlan,
+  managedMcpAccountHome?: string
 ): CodexConfigMirrorResult {
   const systemConfigPath = join(systemHomePath, 'config.toml')
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
@@ -175,7 +182,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     return { status: 'refused-indeterminate', error: runtimeConfigObservation.error }
   }
   const runtimeConfigExists = runtimeConfigObservation.kind === 'present'
-  const rawSystemConfig =
+  let rawSystemConfig =
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
   // Why: a missing or blank source is not an authoritative empty config. Merging
   // it would erase every ordinary setting from an existing managed runtime, and
@@ -184,6 +191,10 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
       : { status: 'mirrored', preservedConflictKeys: new Set() }
+  }
+
+  if (managedMcpAccountHome) {
+    rawSystemConfig = bindManagedCodexHomeInMcpHelpers(rawSystemConfig, managedMcpAccountHome)
   }
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)

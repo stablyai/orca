@@ -37,7 +37,7 @@ import {
   getRuntimeHooksWithSystemUserHooks,
   moveMirroredRuntimeUserTrustAfterManagedStatusHook
 } from './codex-hook-user-mirroring'
-import { getSystemCodexHomePath } from './codex-home-paths'
+import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 
 export async function installCodexHooksExclusively(
   runtimeHomePath: string,
@@ -135,10 +135,13 @@ export async function installCodexHooksExclusively(
   // Why: surface trust-write failures — otherwise getStatus reports green for a hook Codex won't fire.
   try {
     const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath,
-      systemHomePath: getSystemCodexHomePath()
-    })
+    syncSystemConfigIntoManagedCodexHome(
+      {
+        runtimeHomePath,
+        systemHomePath: getSystemCodexHomePath()
+      },
+      runtimeHomePath === getOrcaManagedCodexHomePath() ? undefined : runtimeHomePath
+    )
     // Why: Codex is the only authority on its trust-hash algorithm, so the
     // managed entries are granted through codex app-server RPCs (verified by
     // re-list) whenever the installed CLI supports them; the granted entries

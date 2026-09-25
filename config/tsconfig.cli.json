@@ -40,6 +40,7 @@
     "../src/main/codex/codex-app-server-record-reader.ts",
     "../src/main/codex/codex-app-server-session.ts",
     "../src/main/codex/codex-config-mirror.ts",
+    "../src/main/codex/codex-managed-home-mcp-binding.ts",
     "../src/main/codex/codex-config-path-reference-rewrite.ts",
     "../src/main/codex/codex-config-settings-preservation.ts",
     "../src/main/codex/codex-config-settings-removal.ts",

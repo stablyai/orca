@@ -113,10 +113,13 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
     syncSystemCodexResourcesIntoManagedHome(perAccountHome)
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: perAccountHome,
-      systemHomePath: getSystemCodexHomePath()
-    })
+    syncSystemConfigIntoManagedCodexHome(
+      {
+        runtimeHomePath: perAccountHome,
+        systemHomePath: getSystemCodexHomePath()
+      },
+      perAccountHome
+    )
     this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
     return perAccountHome
   }

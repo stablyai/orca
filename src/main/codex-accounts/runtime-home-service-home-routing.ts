@@ -256,11 +256,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       systemHomePath,
       managedHomePath: runtimeHomePath
     })
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath,
-      systemHomePath,
-      systemConfigDir: toLinuxPath(systemHomePath)
-    })
+    syncSystemConfigIntoManagedCodexHome(
+      {
+        runtimeHomePath,
+        systemHomePath,
+        systemConfigDir: toLinuxPath(systemHomePath)
+      },
+      runtimeHomePath
+    )
   }
 
   // Why: `null` is a real value here — it means "use the system-default lane".

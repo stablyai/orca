@@ -18,7 +18,7 @@ import {
   applyMirroredRuntimeUserHookTrustStates,
   getRuntimeHooksWithSystemUserHooks
 } from './codex-hook-user-mirroring'
-import { getSystemCodexHomePath } from './codex-home-paths'
+import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
   promoteCodexRuntimeHookApprovalsToSystem,
   snapshotCodexRuntimeHookTrustProvenance
@@ -62,10 +62,13 @@ export async function refreshCodexRuntimeUserHooksExclusively(
   try {
     const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
     const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath,
-      systemHomePath: getSystemCodexHomePath()
-    })
+    syncSystemConfigIntoManagedCodexHome(
+      {
+        runtimeHomePath,
+        systemHomePath: getSystemCodexHomePath()
+      },
+      runtimeHomePath === getOrcaManagedCodexHomePath() ? undefined : runtimeHomePath
+    )
     // Why: this path is used when Orca status hooks are disabled. The
     // runtime CODEX_HOME should keep user hooks, but not Orca-managed trust.
     // Write current mirrored user trust first so stale cleanup compares

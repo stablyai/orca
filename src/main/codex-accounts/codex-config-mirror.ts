@@ -111,11 +111,14 @@ export class CodexConfigMirror {
     const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
     // granted there while refreshing ordinary settings from the lane's source.
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: trustedManagedHomePath,
-      systemHomePath: canonicalConfig.sourceHomePath,
-      systemConfigDir: canonicalConfig.sourceConfigDir
-    })
+    syncSystemConfigIntoManagedCodexHome(
+      {
+        runtimeHomePath: trustedManagedHomePath,
+        systemHomePath: canonicalConfig.sourceHomePath,
+        systemConfigDir: canonicalConfig.sourceConfigDir
+      },
+      trustedManagedHomePath
+    )
   }
 
   private readHostConfig(): CanonicalCodexConfig | null {

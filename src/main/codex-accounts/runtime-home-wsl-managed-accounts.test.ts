@@ -591,12 +591,22 @@ describe('CodexRuntimeHomeService', () => {
     try {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
+      const { syncSystemConfigIntoManagedCodexHome } = await import('../codex/codex-config-mirror')
+      vi.mocked(syncSystemConfigIntoManagedCodexHome).mockClear()
 
       expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
         '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\alice\\orca\\codex-accounts\\drive-account\\home'
       )
       await Promise.all(drainTasks)
 
+      expect(syncSystemConfigIntoManagedCodexHome).toHaveBeenCalledWith(
+        {
+          runtimeHomePath: expect.any(String),
+          systemHomePath: expect.any(String),
+          systemConfigDir: '/mnt/c/Users/alice/.codex'
+        },
+        '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\alice\\orca\\codex-accounts\\drive-account\\home'
+      )
       expect(drainGuestHome).toBe('/mnt/c/Users/alice')
       expect(drainDestination).toEqual({ authContents: managedAuth, linuxHomePath })
       expect(startWslCodexSessionBridgeInBackground).toHaveBeenCalledWith({
@@ -675,11 +685,14 @@ describe('CodexRuntimeHomeService', () => {
     try {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
+      const { syncSystemConfigIntoManagedCodexHome } = await import('../codex/codex-config-mirror')
+      vi.mocked(syncSystemConfigIntoManagedCodexHome).mockClear()
 
       expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
         '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\alice\\.codex'
       )
       await Promise.all(drainTasks)
+      expect(syncSystemConfigIntoManagedCodexHome).not.toHaveBeenCalled()
       expect(drainDestination).toEqual({
         authContents: systemAuth,
         linuxHomePath: '/mnt/c/Users/alice/.codex'
