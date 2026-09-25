@@ -84,4 +84,22 @@ describe('worktree agent source admission', () => {
     })
     expect(providerSessionOnly.size).toBe(0)
   })
+
+  it('carries the main agent verdict so phones and the CLI can show a failed turn', () => {
+    const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: now }
+    const failed = collectRuntimeWorktreeAgentSources({
+      ...connected,
+      hookSnapshots: [{ ...hookRow, state: 'done' as const, mainAgent }]
+    })
+    expect(failed.get(paneKey)?.mainAgent).toEqual(mainAgent)
+    expect(collectRuntimeWorktreeAgentSources(connected).get(paneKey)).not.toHaveProperty(
+      'mainAgent'
+    )
+    // A held-open failure restored after a restart stays skipped until a live event confirms it.
+    const restoredHeldOpen = collectRuntimeWorktreeAgentSources({
+      ...connected,
+      hookSnapshots: [{ ...hookRow, mainAgent, restoredUnconfirmed: true as const }]
+    })
+    expect(restoredHeldOpen.size).toBe(0)
+  })
 })
