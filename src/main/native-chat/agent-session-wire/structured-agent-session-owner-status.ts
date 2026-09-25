@@ -13,7 +13,7 @@ export function structuredAgentSessionOwnerStatus(
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
-  // The refusal reveal gives: this host cannot run the chat, so it vouches for nothing.
+  // Same refusal as reveal: a host that cannot run this chat vouches for no owner.
   if (!adapterSupportsRecord(deps.adapter, record)) {
     throw new Error('structured_agent_session_unsupported')
   }
