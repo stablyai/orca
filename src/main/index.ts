@@ -1,3 +1,4 @@
+import '../shared/compatibility-polyfills'
 import { app, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'

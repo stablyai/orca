@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import '../shared/compatibility-polyfills'
 import {
   findCommandSpec,
   isCommandGroup,

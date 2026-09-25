@@ -4,6 +4,12 @@ import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 
 const windowsTestWorkerOptions = process.platform === 'win32' ? { maxWorkers: 4 } : {}
 
+const majorNodeVersion = Number.parseInt(process.versions.node?.split('.')[0] || '0', 10)
+const execArgv = ['--expose-gc']
+if (majorNodeVersion >= 22) {
+  execArgv.push('--no-experimental-webstorage')
+}
+
 export default defineConfig({
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true'
@@ -21,9 +27,10 @@ export default defineConfig({
       : {}),
     // Why: Node 26's undefined Web Storage globals prevent Vitest from installing happy-dom's.
     // Why --expose-gc: retention tests need a deterministic collection point to measure what a queue really holds.
-    execArgv: ['--no-experimental-webstorage', '--expose-gc'],
+    execArgv,
     // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
     setupFiles: [
+      resolve('src/shared/compatibility-polyfills.ts'),
       resolve('config/scripts/happy-dom-offscreen-canvas.ts'),
       resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
       resolve('config/scripts/vitest-host-ports-setup.ts')

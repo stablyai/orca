@@ -35,7 +35,17 @@ afterEach(async () => {
   )
 })
 
-describe('SyncDatabase statement cache', () => {
+const hasSqlite = (() => {
+  try {
+    return (
+      typeof process.getBuiltinModule === 'function' && !!process.getBuiltinModule('node:sqlite')
+    )
+  } catch {
+    return false
+  }
+})()
+
+describe.skipIf(!hasSqlite)('SyncDatabase statement cache', () => {
   it('reuses the same statement object for identical SQL', async () => {
     const db = await createDatabase()
     const sql = 'SELECT label FROM items WHERE id = ?'
@@ -168,7 +178,7 @@ describe('SyncDatabase statement cache', () => {
 // Why (#15036): the OpenCode readers opened read-only with no busy timeout, so a
 // contended DB failed in ~1 ms and emptied the whole panel. These pin that the
 // wrapper really forwards `timeout` into sqlite3_busy_timeout.
-describe('SyncDatabase read-only opens under contention', () => {
+describe.skipIf(!hasSqlite)('SyncDatabase read-only opens under contention', () => {
   // The lock holder must live on another thread: sqlite3_busy_timeout sleeps
   // synchronously, so a same-thread timer could never fire to release it.
   const WRITER_SOURCE = `
