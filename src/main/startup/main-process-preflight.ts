@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, powerMonitor, session } from 'electron'
+import { app, ipcMain, powerMonitor, session } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -93,9 +93,8 @@ import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
 import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-mode-store'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
-import { formatProfileStateStartupFailure } from '../persistence/profile-state/profile-state-startup-failure'
 import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
+import { handleMainProcessPreflightFailure } from './main-process-preflight-failure'
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: () => void
@@ -108,24 +107,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     return initializeMainProcessPreflight(options)
   } catch (error) {
     console.error('[startup] Preflight failed:', error)
-    if (!state.isServeMode && !isBackgroundLaunch()) {
-      try {
-        // showErrorBox also works before Electron is ready.
-        dialog.showErrorBox(
-          'Orca could not start',
-          formatProfileStateStartupFailure(error) ??
-            (error instanceof Error ? error.message : String(error))
-        )
-      } catch (dialogError) {
-        console.warn('[startup] Could not show startup failure:', dialogError)
-      }
-    }
-    try {
-      state.profileStateAdmission?.release()
-      state.profileStateAdmission = undefined
-    } finally {
-      app.exit(1)
-    }
+    handleMainProcessPreflightFailure(error)
     return false
   }
 }
