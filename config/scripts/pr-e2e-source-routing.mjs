@@ -100,6 +100,7 @@ export const PR_E2E_SOURCE_ROUTES = [
       'tests/e2e/terminal-cjk-ime-committed-text.spec.ts',
       'tests/e2e/terminal-hangul-wrap-boundary-bytes.spec.ts',
       'tests/e2e/terminal-ime-exact-byte.spec.ts',
+      'tests/e2e/terminal-ime-preedit-tail-paint.spec.ts',
       'tests/e2e/terminal-korean-composing-chord-order.spec.ts',
       'tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts',
       'tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts',

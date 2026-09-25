@@ -37,6 +37,26 @@ and native shaping at DPR 1, 1.25, and 2 with WebGL on/off.
 These checks use Chromium composition through CDP; they do not replace native OS
 IME evidence.
 
+## Preedit tail attributes (#17631)
+
+The rendered row tail keeps the styling the grid gave its cells. It is read cell by cell and
+emitted as runs that carry colour, dim, bold, italic, inverse, and the underline's own style and
+colour; a run that needs nothing stays a bare text node and inherits the overlay's colour, so the
+default row renders exactly as it did. The walk advances by `getWidth()`, so a wide character's
+continuation cell is never emitted as a run of its own. Minimum contrast is deliberately not
+applied: the renderer adjusts a cell against its own background, and the overlay does not share it.
+
+The tail's identity key covers styling as well as text, so a repaint that only recolours the row
+still refreshes it.
+
+`terminal-ime-xterm-preedit-tail-attributes.test.ts` covers dim, palette and truecolour, run
+splitting, bold/italic, wide-cell run boundaries, inverse with and without an explicit pair,
+underline style and colour, the non-breaking-space swap under a line, and recolour refresh.
+`terminal-ime-preedit-tail-paint.spec.ts` is the rendered arm: a coloured prompt beside arbitrary
+dim output, asserted on the colours the browser resolves. That row is deliberately **not** a stock
+composer placeholder — the mask in `terminal.css` hides the whole tail for one it recognises, so a
+recognised row proves nothing about painting.
+
 ## Bounded-state and ownership contracts
 
 Every transient collection and ownership tracker must have an explicit lifetime and bound:
