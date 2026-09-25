@@ -18,7 +18,11 @@ function readCapture(name: string): { data: string; size: { cols: number; rows: 
   return { data: readFileSync(`${base}.txt`, 'utf8'), size: { cols: meta.cols, rows: meta.rows } }
 }
 
-async function waitOnReplay(name: string, readSize: number | null) {
+async function waitOnReplay(
+  name: string,
+  readSize: number | null,
+  options: { after?: string; timeoutMs?: number } = {}
+) {
   const { data, size } = readCapture(name)
   const { runtime, handle } = await createTranscriptPane({
     paneTitle: 'Claude Code',
@@ -35,7 +39,14 @@ async function waitOnReplay(name: string, readSize: number | null) {
     const read = decoder.decode(bytes.subarray(offset, offset + step), { stream: true })
     runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, read, Date.now())
   }
-  return runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5000 })
+  if (options.after) {
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, options.after, Date.now())
+  }
+  // Why a wide budget: a blocked verdict lands on the first ~2 s poll tick; the slack absorbs load.
+  return runtime.waitForTerminal(handle, {
+    condition: 'tui-idle',
+    timeoutMs: options.timeoutMs ?? 15_000
+  })
 }
 
 describe("Claude's workspace trust dialog, from captured transcripts", () => {
@@ -65,5 +76,27 @@ describe("Claude's workspace trust dialog, from captured transcripts", () => {
     const wait = await waitOnReplay('claude-dialog-trust-workspace-answered', 1024)
     expect(wait).toMatchObject({ satisfied: true })
     expect(wait).not.toHaveProperty('blockedReason')
+  })
+
+  it('does not report a working Claude blocked for quoting the dialog in its own output', async () => {
+    // Synthetic turn painted over the answered capture: a working title, then a diff of this
+    // dialog's wording just above the status line, where the rendered screen shows it.
+    const quotedDiff = [
+      '⏺ Update(src/main/runtime/claude-trust-dialog-transcript.test.ts)',
+      '  ⎿  Added 3 lines',
+      "      12 +    '❯ No, exit',",
+      "      13 +    '  Yes, I trust this folder',",
+      "      14 +    'Enter to confirm · Esc to cancel'",
+      '✻ Working… (esc to interrupt)'
+    ]
+      .map((line, index) => `\x1b[${27 + index};1H\x1b[2K${line}`)
+      .join('')
+    // Why a timeout proves it: three poll ticks pass, and a working agent has nothing else to settle on.
+    await expect(
+      waitOnReplay('claude-dialog-trust-workspace-answered', 1024, {
+        after: `\x1b]0;⠂ Claude Code\x07${quotedDiff}`,
+        timeoutMs: 6_500
+      })
+    ).rejects.toThrow('timeout')
   })
 })

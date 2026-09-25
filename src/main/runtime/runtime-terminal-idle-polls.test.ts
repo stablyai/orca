@@ -244,6 +244,23 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
     expect(polls.activeTimerCount).toBe(0)
   })
 
+  it('does not read the screen of an agent whose title says it is working', async () => {
+    const resolved: RuntimeTerminalWait[] = []
+    const reads: string[] = []
+    const polls = createPolls((ptyId) => {
+      reads.push(ptyId)
+      return Promise.resolve(TRUST_SCREEN)
+    }, resolved)
+    polls.startPty(makeWaiter('pty'), makePty('pty-1', { lastAgentStatus: 'working' }))
+    polls.startLeaf(makeWaiter('leaf'), makeLeaf('tab-1', { lastAgentStatus: 'working' }))
+
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
+
+    expect(reads).toEqual([])
+    expect(resolved).toEqual([])
+    expect(polls.activeTimerCount).toBe(1)
+  })
+
   it('does not resolve a waiter that was cancelled while its screen read was pending', async () => {
     const resolved: RuntimeTerminalWait[] = []
     const finishRead = new Map<string, (screen: string) => void>()

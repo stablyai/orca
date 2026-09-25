@@ -158,7 +158,9 @@ export class RuntimeTerminalIdlePolls {
         this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
         return
       }
-      const screenCheck = leaf.ptyId ? this.readScreenBlockedReason(entry, leaf.ptyId) : null
+      const screenCheck = leaf.ptyId
+        ? this.readScreenBlockedReason(entry, leaf.ptyId, leaf.lastAgentStatus)
+        : null
       if (screenCheck) {
         const screenBlockedReason = await screenCheck
         if (!this.entries.has(entry)) {
@@ -246,7 +248,7 @@ export class RuntimeTerminalIdlePolls {
         this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
         return
       }
-      const screenCheck = this.readScreenBlockedReason(entry, pty.ptyId)
+      const screenCheck = this.readScreenBlockedReason(entry, pty.ptyId, pty.lastAgentStatus)
       if (screenCheck) {
         const screenBlockedReason = await screenCheck
         if (!this.entries.has(entry)) {
@@ -295,9 +297,15 @@ export class RuntimeTerminalIdlePolls {
    *  workspace trust) loses those rows from the line tail; the rendered screen still has them. */
   private readScreenBlockedReason(
     entry: IdlePollEntry,
-    ptyId: string
+    ptyId: string,
+    agentStatus: AgentStatus | null
   ): Promise<RuntimeTerminalWaitBlockedReason | null> | null {
-    const screenRead = entry.screenReadInFlight ? null : this.deps.readVisibleScreen(ptyId)
+    // Why not while working: a working agent's screen can quote dialog wording (a diff of this
+    // detector), and the dialogs only the screen shows are start-up ones, painted before any title.
+    if (entry.screenReadInFlight || agentStatus === 'working') {
+      return null
+    }
+    const screenRead = this.deps.readVisibleScreen(ptyId)
     if (!screenRead) {
       return null
     }
