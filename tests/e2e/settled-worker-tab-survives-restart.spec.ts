@@ -72,6 +72,8 @@ async function findSecondaryWorktree(
 }
 
 async function backgroundMountTab(page: Page, worktreeId: string, tabId: string): Promise<void> {
+  // The synthetic event bypasses the production queue, so its Terminal listener must be mounted.
+  await waitForActiveTerminalManager(page)
   await page.evaluate(
     ({ tabId, worktreeId }) => {
       window.dispatchEvent(
