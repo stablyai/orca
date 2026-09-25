@@ -119,7 +119,7 @@ describe('terminal.subscribe teardown ownership', () => {
     expect(registry.peekCleanup(SUBSCRIPTION_ID)).toBeUndefined()
   })
 
-  it('disposes an already-exited PTY observer before binding socket abort', async () => {
+  it('disposes an already-exited PTY observer and the request-abort listener', async () => {
     const registry = createSubscriptionRegistryDouble()
     const unsubscribeExit = vi.fn()
     const runtime = stubRuntime(registry, [], {
@@ -131,12 +131,14 @@ describe('terminal.subscribe teardown ownership', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
     const conn = new AbortController()
     const addAbort = vi.spyOn(conn.signal, 'addEventListener')
+    const removeAbort = vi.spyOn(conn.signal, 'removeEventListener')
     const options = streamOptions('conn-a', conn.signal)
 
     await dispatcher.dispatchStreaming(makeRequest(binaryParams), vi.fn(), options)
 
     expect(unsubscribeExit).toHaveBeenCalledOnce()
-    expect(addAbort).not.toHaveBeenCalled()
+    expect(addAbort).toHaveBeenCalledOnce()
+    expect(removeAbort).toHaveBeenCalledWith('abort', addAbort.mock.calls[0]![1])
   })
 
   // Why: the synchronous release runs cleanup before setup, so anything registered after it never gets torn down.

@@ -13,8 +13,11 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
+  const registry = createSubscriptionRegistryDouble()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
+    registerOwnedSubscriptionCleanup: registry.registerOwnedSubscriptionCleanup,
     subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: subscribe streams register as remote view subscribers for Phase-5
     // query-authority suppression (terminal-query-authority.md).
@@ -76,7 +79,8 @@ describe('terminal subscribe buffering', () => {
 
       expect(await outcomePromise).toBe('settled')
       expect(runtime.readTerminal).not.toHaveBeenCalled()
-      expect(messages).toEqual([])
+      // The pending stream was registered, so its release ends it like any other.
+      expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['end'])
     } finally {
       vi.useRealTimers()
     }

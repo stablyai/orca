@@ -1,9 +1,5 @@
 import { InvalidArgumentError } from '../../core'
-import type {
-  DriverState,
-  OrcaRuntimeService,
-  SubscriptionRegistration
-} from '../../../orca-runtime'
+import type { DriverState, OrcaRuntimeService } from '../../../orca-runtime'
 import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
@@ -50,45 +46,6 @@ export function resolveMobileFloorClientId(
 }
 
 export type TerminalStreamInputOutcome = 'delivered' | 'rejected' | 'failed'
-
-export function watchSubscriptionLifetime(
-  runtime: OrcaRuntimeService,
-  ptyId: string,
-  signal: AbortSignal | undefined,
-  registration: SubscriptionRegistration
-): () => void {
-  let unsubscribeExit: (() => void) | null = null
-  let removeAbort: (() => void) | null = null
-  let stopped = false
-  const stop = (): void => {
-    stopped = true
-    unsubscribeExit?.()
-    removeAbort?.()
-  }
-  const release = (): void => {
-    registration.releaseIfCurrent()
-    stop()
-  }
-  unsubscribeExit = runtime.subscribeToPtyExit(ptyId, release)
-  if (stopped) {
-    unsubscribeExit()
-    return stop
-  }
-  if (!signal) {
-    return stop
-  }
-  if (signal.aborted) {
-    release()
-    return stop
-  }
-  const onAbort = (): void => release()
-  removeAbort = () => signal.removeEventListener('abort', onAbort)
-  signal.addEventListener('abort', onAbort, { once: true })
-  if (stopped) {
-    removeAbort()
-  }
-  return stop
-}
 
 export function isTerminalStreamInputRejection(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
