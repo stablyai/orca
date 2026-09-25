@@ -151,7 +151,7 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
+  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|one you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
 
 // Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.
 const CURSOR_APPROVAL_CHOICE_MARKERS = [
@@ -243,6 +243,9 @@ function findBlockedSignalInLiveWindow(
   }
   const trustIndex = Math.max(
     normalized.lastIndexOf('do you trust'),
+    // Why: Claude's dialog parks the cursor above its options, and the host tail drops the lines
+    // below it ("trust this folder"); its opening question is what survives.
+    normalized.lastIndexOf('one you trust'),
     normalized.lastIndexOf('trust this'),
     normalized.lastIndexOf('trusted workspace')
   )

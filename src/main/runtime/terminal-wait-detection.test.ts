@@ -582,3 +582,29 @@ describe('isMuseReadyPromptPreview', () => {
     expect(isMuseReadyPromptPreview(waitText)).toBe(false)
   })
 })
+
+describe("detectTerminalWaitBlockedReason: Claude's trust dialog as the host tail keeps it", () => {
+  // The tail drops the option lines below Claude's parked cursor; this is what survives.
+  const CLAUDE_TRUST_TAIL = [
+    'Accessing workspace:',
+    '/repo/app',
+    'Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source',
+    "project, or work from your team). If not, take a moment to review what's in this folder first.",
+    "Claude Code'll be able to read, edit, and execute files here.",
+    'Security guide',
+    '❯ No, exit'
+  ].join('\n')
+
+  it('reports the live dialog as a workspace-trust prompt', () => {
+    expect(detectTerminalWaitBlockedReason(CLAUDE_TRUST_TAIL)).toBe('agent-trust-workspace')
+  })
+
+  it('stops reporting it once later output has scrolled the answered dialog away', () => {
+    const later = Array.from({ length: 40 }, (_, index) => `working on step ${index}`).join('\n')
+    expect(detectTerminalWaitBlockedReason(`${CLAUDE_TRUST_TAIL}\n${later}`)).toBeNull()
+  })
+
+  it('ignores the phrase in prose that names no workspace', () => {
+    expect(detectTerminalWaitBlockedReason('Pick a reviewer, ideally one you trust.')).toBeNull()
+  })
+})
