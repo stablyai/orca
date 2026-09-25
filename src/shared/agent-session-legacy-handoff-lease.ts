@@ -78,6 +78,12 @@ export function normalizeLegacyHandoffLease(lease: PersistedAgentSessionLease): 
   }
 }
 
+/** A `conflicted` claim is a terminal agent an older build recorded, and only its exit frees the chat. */
+export function terminalOwnerRefusalMessage(lease: AgentSessionLease): string {
+  const process = lease.ownerProcess ? ` (process ${lease.ownerProcess.pid})` : ''
+  return `This chat is still open in a terminal agent${process}. Quit that agent to continue the chat here.`
+}
+
 /** The in-memory record, plus whether decode changed anything the store must write back. */
 export function normalizeLegacyHandoffRecord(record: PersistedAgentSessionRecord): {
   record: AgentSessionRecord

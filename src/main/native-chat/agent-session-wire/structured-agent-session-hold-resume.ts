@@ -13,6 +13,7 @@ import type {
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
+import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legacy-handoff-lease'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import {
   attachStructuredAgentSessionUnderSerialize,
@@ -68,7 +69,7 @@ export async function resumeHeldStructuredAgentSession(input: {
           'This host has not yet adjudicated the session lease.'
         )
       : record.lease.claimStatus === 'conflicted'
-        ? refuse('agent_session_conflict', 'Another process claims this session.')
+        ? refuse('agent_session_conflict', terminalOwnerRefusalMessage(record.lease))
         : refuse(
             'agent_session_ownership_unknown',
             'The session lease is not one this host may resume.'

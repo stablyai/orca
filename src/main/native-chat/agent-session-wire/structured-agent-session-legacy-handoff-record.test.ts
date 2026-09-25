@@ -216,18 +216,17 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'conflicted',
       handoffStage: 'recovering'
     })
+    // Sending and opening the chat both say what frees it: quitting that terminal agent.
+    const quitTerminal =
+      'This chat is still open in a terminal agent (process 4242). Quit that agent to continue the chat here.'
     expect(await send('while the terminal still runs')).toMatchObject({
       ok: false,
-      refusal: { code: 'agent_session_conflict' }
+      refusal: { code: 'agent_session_conflict', message: quitTerminal }
     })
-    // Opening the chat names the process to quit.
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
     expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
       ok: false,
-      refusal: {
-        code: 'agent_session_conflict',
-        message: expect.stringContaining('process 4242 on local has exited')
-      }
+      refusal: { code: 'agent_session_conflict', message: quitTerminal }
     })
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(acquire).not.toHaveBeenCalled()
