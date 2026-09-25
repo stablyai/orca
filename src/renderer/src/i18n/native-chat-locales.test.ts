@@ -7,8 +7,9 @@ import zh from './locales/zh.json'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
 
 const localizedCatalogs = { es, ja, ko, zh }
-const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
-const englishSearch = en.auto.components.settings.experimental.search.nativeChat
+const englishSetting = en.auto.components.settings.ChatPane
+const englishNav = en.auto.hooks.useSettingsNavigationMetadata
+const englishResumeModal = en.auto.components.NativeChatResumeOnRestartModal
 const englishComposer = en.components['native-chat'].composer
 const localizedEffortValues = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
 
@@ -31,17 +32,22 @@ describe('native chat locale copy', () => {
   it.each(Object.entries(localizedCatalogs))(
     '%s keeps provider-neutral copy localized',
     (_code, catalog) => {
-      const setting = catalog.auto.components.settings.ExperimentalPane.nativeChat
-      const search = catalog.auto.components.settings.experimental.search.nativeChat
+      const setting = catalog.auto.components.settings.ChatPane
+      const search = catalog.auto.components.settings.chat.search
+      const nav = catalog.auto.hooks.useSettingsNavigationMetadata
+      const resumeModal = catalog.auto.components.NativeChatResumeOnRestartModal
       for (const [localized, english] of [
         [setting.description, englishSetting.description],
         [setting.copy, englishSetting.copy],
         [setting.defaultCopy, englishSetting.defaultCopy],
-        [search.description, englishSearch.description]
+        [nav.chatDescription, englishNav.chatDescription],
+        [resumeModal.dontAskAgainSettingsHint, englishResumeModal.dontAskAgainSettingsHint]
       ]) {
         expect(localized.trim()).not.toBe('')
         expect(localized).not.toBe(english)
       }
+      // The pane is named after the product surface, which stays untranslated.
+      expect(nav.chatTitle).toBe('Chat UI')
       expect(search.grok).toBe('grok')
       const composer = catalog.components['native-chat'].composer
       for (const key of [

@@ -857,7 +857,9 @@
         "linearDescription": "Cómo funciona Linear en Orca, lista de configuración, habilidad del agente y ejemplos de prompts.",
         "pluginsTitle": "Plugins",
         "pluginsDescription": "Instala y administra plugins experimentales de Orca.",
-        "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas."
+        "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas.",
+        "chatTitle": "Chat UI",
+        "chatDescription": "Vista de chat para sesiones de agentes compatibles."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -6018,6 +6020,26 @@
           "16381e040a": "Micrófono",
           "dac08ec03e": "Trabajando..."
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "Vista de chat para sesiones de agentes compatibles.",
+          "copy": "Añade una vista de chat a las sesiones de agentes compatibles. Cambia entre el chat y el terminal desde el panel del agente.",
+          "toggleLabel": "Alternar Chat UI",
+          "defaultTitle": "Vista predeterminada",
+          "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de agentes compatibles.",
+          "defaultViewLabel": "Vista predeterminada de Chat UI",
+          "defaultViewTerminal": "Chat en terminal",
+          "defaultViewNative": "Chat UI",
+          "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
+          "shellEnvNamePlaceholder": "Nombre de la variable",
+          "shellEnvNameAdd": "Agregar",
+          "shellEnvNameRemove": "Quitar {{value0}}",
+          "shellEnvNamesEmpty": "Aún no se han agregado variables.",
+          "shellEnvNamesAlwaysPassed": "PATH, la configuración regional y SSH_AUTH_SOCK se pasan siempre. Se aplica la próxima vez que un chat se inicie o se reanude.",
+          "shellEnvTitle": "Usar el entorno de tu shell",
+          "shellEnvCopy": "Los chats de Codex y Claude empiezan con todas las variables que exporta tu shell de inicio de sesión, igual que un terminal. Desactívalo para elegir cuáles reciben.",
+          "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell"
+        },
         "ExperimentalPane": {
           "9762364929": "Usa APFS clone-copy en macOS cuando sea posible; si no, crea symlinks de las carpetas o archivos configurados en los worktrees creados.",
           "24416f42cd": "Rutas compartidas en worktrees",
@@ -6045,26 +6067,6 @@
             "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjetas y la presentación de estado.",
             "title": "Nuevo estilo de tarjeta",
             "toggleLabel": "Alternar nuevo estilo de tarjeta"
-          },
-          "nativeChat": {
-            "title": "Chat UI",
-            "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
-            "copy": "Añade una vista de Chat UI a la que puedes cambiar desde paneles de terminal de agentes compatibles. Es experimental mientras ajustamos la fidelidad de las transcripciones, la transmisión y la paridad con el terminal.",
-            "toggleLabel": "Alternar Chat UI",
-            "defaultTitle": "Vista predeterminada",
-            "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de agentes compatibles.",
-            "defaultViewLabel": "Vista predeterminada de Chat UI",
-            "defaultViewTerminal": "Chat en terminal",
-            "defaultViewNative": "Chat UI",
-            "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
-            "shellEnvNamePlaceholder": "Nombre de la variable",
-            "shellEnvNameAdd": "Agregar",
-            "shellEnvNameRemove": "Quitar {{value0}}",
-            "shellEnvNamesEmpty": "Aún no se han agregado variables.",
-            "shellEnvNamesAlwaysPassed": "PATH, la configuración regional y SSH_AUTH_SOCK se pasan siempre. Se aplica la próxima vez que un chat se inicie o se reanude.",
-            "shellEnvTitle": "Usar el entorno de tu shell",
-            "shellEnvCopy": "Los chats de Codex y Claude empiezan con todas las variables que exporta tu shell de inicio de sesión, igual que un terminal. Desactívalo para elegir cuáles reciben.",
-            "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell"
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -7171,7 +7173,9 @@
           "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
           "linearTitle": "Linear",
           "linearDescription": "Cómo funciona Linear en Orca, lista de configuración, habilidad del agente y ejemplos de prompts.",
-          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas."
+          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas.",
+          "chatTitle": "Chat UI",
+          "chatDescription": "Vista de chat para sesiones de agentes compatibles."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -8268,6 +8272,12 @@
             }
           }
         },
+        "chat": {
+          "search": {
+            "grok": "grok",
+            "variables": "variables"
+          }
+        },
         "experimental": {
           "search": {
             "44c7f209d5": "node_modules",
@@ -8329,11 +8339,6 @@
               "title": "Nuevo estilo de tarjeta",
               "worktree": "worktree",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
-              "grok": "grok"
             },
             "agentDashboard": {
               "title": "Panel de agentes",
@@ -14745,7 +14750,8 @@
         "notConfirmedOtherOne": "No se pudo confirmar que 1 otro chat se reanudó",
         "notConfirmedOtherMany": "No se pudo confirmar que {{value0}} otros chats se reanudaron",
         "show": "Mostrar",
-        "dismiss": "Descartar"
+        "dismiss": "Descartar",
+        "dontAskAgainSettingsHint": "Puedes desactivarlo en Ajustes → Chat UI."
       },
       "NativeChatResumeOutcomeRow": {
         "openChat": "Abrir chat",

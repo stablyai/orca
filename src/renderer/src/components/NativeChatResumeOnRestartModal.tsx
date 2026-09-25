@@ -238,8 +238,8 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             {/* Where to undo it; what it does is the body copy's job. */}
             <span className="block text-xs text-muted-foreground">
               {translate(
-                'auto.components.NativeChatResumeOnRestartModal.dontAskAgainHint',
-                'You can turn this off in Settings → Experimental → Chat UI.'
+                'auto.components.NativeChatResumeOnRestartModal.dontAskAgainSettingsHint',
+                'You can turn this off in Settings → Chat UI.'
               )}
             </span>
           </span>

@@ -226,7 +226,7 @@ export type GlobalSettings = {
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
-  /** Experimental native chat surface for Claude/Codex sessions; off by default. */
+  /** Chat UI on/off (Settings → Chat UI); off by default. The `experimental` prefix is historical. */
   experimentalNativeChat?: boolean
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */

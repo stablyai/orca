@@ -1035,7 +1035,9 @@
         "automationsDescription": "Agent の作業をスケジュールし、自動化をサイドバーに表示するかどうかを選択します。",
         "shareSkillsTitle": "スキルを共有する",
         "shareSkillsDescription": "非公開リンクを使用してスキルを共有してください。持っている人なら誰でもインストールできます。",
-        "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。"
+        "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。",
+        "chatTitle": "Chat UI",
+        "chatDescription": "対応 Agent のセッション用のチャットビューです。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -7013,6 +7015,30 @@
           "connectionTestRunning": "テスト中…",
           "connectionTestAction": "テスト接続"
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "対応 Agent のセッション用のチャットビューです。",
+          "copy": "対応 Agent のセッションにチャットビューを追加します。Agent ペインからチャットとターミナルを切り替えられます。",
+          "toggleLabel": "Chat UI の切り替え",
+          "defaultTitle": "デフォルトのビュー",
+          "defaultCopy": "対応 Agent の新規ターミナルタブを開く方法を選択します。",
+          "defaultViewLabel": "デフォルトの Chat UI ビュー",
+          "defaultViewTerminal": "ターミナルチャット",
+          "defaultViewNative": "Chat UI",
+          "structuredScopeLocalOnly": "今のところローカルセッションのみ。WSL およびリモート実行ホスト (SSH を含む) は引き続きターミナルチャットを使用します。",
+          "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
+          "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
+          "resumeToggleLabel": "再起動後の自動再開の切り替え",
+          "shellEnvNamesLabel": "シェルから渡す変数",
+          "shellEnvNamePlaceholder": "変数名",
+          "shellEnvNameAdd": "追加",
+          "shellEnvNameRemove": "{{value0}} を削除",
+          "shellEnvNamesEmpty": "まだ変数は追加されていません。",
+          "shellEnvNamesAlwaysPassed": "PATH、ロケール、SSH_AUTH_SOCK は常に渡されます。次にチャットを開始または再開したときに適用されます。",
+          "shellEnvTitle": "シェル環境を使用する",
+          "shellEnvCopy": "Codex と Claude のチャットは、ターミナルと同じく、ログインシェルがエクスポートするすべての変数を引き継いで開始します。オフにすると、渡す変数を選択できます。",
+          "shellEnvToggleLabel": "シェル環境の使用の切り替え"
+        },
         "ExperimentalPane": {
           "9762364929": "可能な場合は macOS で APFS clone-copy を使用し、それ以外の場合は設定済みのフォルダーまたはファイルを作成済みワークツリーへシンボリックリンクします。",
           "24416f42cd": "ワークツリーの共有パス",
@@ -7040,30 +7066,6 @@
             "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
             "title": "新規カードスタイル",
             "toggleLabel": "新規カードスタイルを切り替え"
-          },
-          "nativeChat": {
-            "title": "Chat UI",
-            "description": "対応 Agent のターミナルセッション用デスクトップチャット画面をプレビューします。",
-            "copy": "対応 Agent のターミナルペインから切り替えられる Chat UI ビューを追加します。トランスクリプトの忠実度、ストリーミング、ターミナルとの同等性を調整しているため、試験運用中です。",
-            "toggleLabel": "Chat UI の切り替え",
-            "defaultTitle": "デフォルトのビュー",
-            "defaultCopy": "対応 Agent の新規ターミナルタブを開く方法を選択します。",
-            "defaultViewLabel": "デフォルトの Chat UI ビュー",
-            "defaultViewTerminal": "ターミナルチャット",
-            "defaultViewNative": "Chat UI",
-            "shellEnvNamesLabel": "シェルから渡す変数",
-            "shellEnvNamePlaceholder": "変数名",
-            "shellEnvNameAdd": "追加",
-            "shellEnvNameRemove": "{{value0}} を削除",
-            "shellEnvNamesEmpty": "まだ変数は追加されていません。",
-            "shellEnvNamesAlwaysPassed": "PATH、ロケール、SSH_AUTH_SOCK は常に渡されます。次にチャットを開始または再開したときに適用されます。",
-            "shellEnvTitle": "シェル環境を使用する",
-            "shellEnvCopy": "Codex と Claude のチャットは、ターミナルと同じく、ログインシェルがエクスポートするすべての変数を引き継いで開始します。オフにすると、渡す変数を選択できます。",
-            "shellEnvToggleLabel": "シェル環境の使用の切り替え",
-            "structuredScopeLocalOnly": "今のところローカルセッションのみ。WSL およびリモート実行ホスト (SSH を含む) は引き続きターミナルチャットを使用します。",
-            "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
-            "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
-            "resumeToggleLabel": "再起動後の自動再開の切り替え"
           },
           "agentDashboard": {
             "title": "Agent ダッシュボード",
@@ -8243,7 +8245,9 @@
           "devDescription": "UI の状態を確認するための開発者専用ツール。",
           "linearTitle": "Linear",
           "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
-          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
+          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
+          "chatTitle": "Chat UI",
+          "chatDescription": "対応 Agent のセッション用のチャットビューです。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -9416,6 +9420,20 @@
             }
           }
         },
+        "chat": {
+          "search": {
+            "native": "ネイティブ",
+            "chat": "チャット",
+            "claude": "claude",
+            "codex": "codex",
+            "openclaude": "オープンクロード",
+            "grok": "grok",
+            "omp": "ああ",
+            "terminal": "ターミナル",
+            "agent": "Agent",
+            "variables": "変数"
+          }
+        },
         "experimental": {
           "search": {
             "44c7f209d5": "ノードモジュール",
@@ -9477,19 +9495,6 @@
               "title": "新規カードスタイル",
               "worktree": "ワークツリー",
               "worktrees": "ワークツリー"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "description": "対応 Agent のターミナルセッション用デスクトップチャット画面をプレビューします。",
-              "grok": "grok",
-              "native": "ネイティブ",
-              "chat": "チャット",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "オープンクロード",
-              "omp": "ああ",
-              "terminal": "ターミナル",
-              "agent": "Agent"
             },
             "agentDashboard": {
               "title": "Agent ダッシュボード",
@@ -17029,7 +17034,7 @@
         "untitled": "無題のチャット",
         "listLabel": "再開されるチャット",
         "dontAskAgain": "二度と質問しないでください (自動的に再開します)",
-        "dontAskAgainHint": "これは、「設定」→「実験的機能」→「チャット UI」でオフにできます。",
+        "dontAskAgainSettingsHint": "これは「設定」→「Chat UI」でオフにできます。",
         "continuedOne": "1 つのチャットを再開し、続行を依頼しました",
         "continuedMany": "{{value0}} チャットを再開し、続行するよう依頼しました",
         "selectAgent": "{{value0}} チャット「{{value1}}」を {{value2}} で再開します",

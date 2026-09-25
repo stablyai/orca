@@ -64,6 +64,12 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Keep computer awake** — **On** (stay awake continuously), **Agent** (stay awake while an agent is working), or **Off**. The same control lives on the desktop status bar as **Caffeinate** (coffee icon). Hidden on paired web clients.
 - **Skill freshness** — the Agents pane and skill cards still show full status. Sidebar navigation only badges skills that need action (**Update available**, **Needs attention** / review); healthy, loading, and optional not-installed rows stay quiet. Use **Update** in the dialog to refresh global skills in the background (no terminal). Progress appears on the status bar; closing the dialog does not cancel the run. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
 
+## Chat UI
+
+- **Chat UI** — optional chat view on supported agent sessions; off by default. See [Chat UI](/docs/agents/native-chat).
+- **Default view** — open new supported agent tabs in **Terminal chat** or **Chat UI**.
+- **Resume working chats automatically after a restart** and **Use your shell environment** — shown while Chat UI is on; they apply to every chat open in Chat UI, whatever the default view. Hidden on paired web clients.
+
 ## Browser
 
 - Profiles (see [Browser-use profiles](/docs/browser/profiles)).
@@ -166,6 +172,5 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Compact worktree cards — hide redundant second lines in the sidebar while the layout is still experimental.
 - [Agent hibernation](/docs/agents/hibernation) — pause idle background agents and auto-resume them on reopen.
 - **Agent Dashboard** — kanban of Needs You / Working / Done agents (optional Idle), with search and project/workspace/PR filters; open in-window or as a pop-out. **Show idle agents** lives on the dashboard board settings control, not here. See [Agents & sessions](/docs/model/agents-sessions#agent-dashboard).
-- **Chat UI** — optional chat surface on supported agent terminals. See [Chat UI](/docs/agents/native-chat).
 - **Cloud VM** — show setup controls and workspace **Run on** targets for repo-owned, on-demand environments (cloud sandboxes, VMs, or local Docker). Setup guide and recipe install live under this experimental toggle. See [Ways to run Orca](/docs/ways-to-run#4-cloud-vms-per-workspace-environments).
 - Features not yet stable — behavior may change.

@@ -1152,7 +1152,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "chatTitle": "Chat UI",
+        "chatDescription": "Chat view for supported agent sessions."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -1961,7 +1963,7 @@
         "untitled": "Untitled chat",
         "listLabel": "Chats that would be resumed",
         "dontAskAgain": "Don't ask again (resume automatically)",
-        "dontAskAgainHint": "You can turn this off in Settings → Experimental → Chat UI.",
+        "dontAskAgainSettingsHint": "You can turn this off in Settings → Chat UI.",
         "continuedOne": "Resumed 1 chat and asked it to continue",
         "continuedMany": "Resumed {{value0}} chats and asked them to continue",
         "selectAgent": "Resume {{value0}} chat \"{{value1}}\" in {{value2}}",
@@ -7188,6 +7190,30 @@
           "connectionTestRunning": "Testing...",
           "connectionTestAction": "Test Connection"
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "Chat view for supported agent sessions.",
+          "copy": "Adds a chat view to supported agent sessions. Switch between chat and terminal from the agent pane.",
+          "toggleLabel": "Toggle Chat UI",
+          "defaultTitle": "Default view",
+          "defaultCopy": "Choose how new supported agent terminal tabs open.",
+          "defaultViewLabel": "Default Chat UI view",
+          "defaultViewTerminal": "Terminal chat",
+          "defaultViewNative": "Chat UI",
+          "structuredScopeLocalOnly": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat.",
+          "resumeTitle": "Resume working chats automatically after a restart",
+          "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
+          "resumeToggleLabel": "Toggle automatic resume after a restart",
+          "shellEnvNamesLabel": "Variables to pass from your shell",
+          "shellEnvNamePlaceholder": "Variable name",
+          "shellEnvNameAdd": "Add",
+          "shellEnvNameRemove": "Remove {{value0}}",
+          "shellEnvNamesEmpty": "No variables added yet.",
+          "shellEnvNamesAlwaysPassed": "PATH, locale, and SSH_AUTH_SOCK are always passed. Applies the next time a chat starts or resumes.",
+          "shellEnvTitle": "Use your shell environment",
+          "shellEnvCopy": "Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.",
+          "shellEnvToggleLabel": "Toggle using your shell environment"
+        },
         "ExperimentalPane": {
           "9762364929": "Uses APFS clone-copy on macOS when possible, otherwise symlinks configured folders or files into created worktrees.",
           "24416f42cd": "Shared paths on worktrees",
@@ -7216,30 +7242,6 @@
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
-          "nativeChat": {
-            "title": "Chat UI",
-            "description": "Preview the desktop chat surface for supported agent terminal sessions.",
-            "copy": "Enables the experimental Chat UI for newly created supported local sessions. Existing terminal sessions keep the terminal chat path while we tune transcript fidelity, streaming, and parity.",
-            "toggleLabel": "Toggle Chat UI",
-            "defaultTitle": "Default view",
-            "defaultCopy": "Choose how new supported agent terminal tabs open.",
-            "defaultViewLabel": "Default Chat UI view",
-            "defaultViewTerminal": "Terminal chat",
-            "defaultViewNative": "Chat UI",
-            "structuredScopeLocalOnly": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat.",
-            "resumeTitle": "Resume working chats automatically after a restart",
-            "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
-            "resumeToggleLabel": "Toggle automatic resume after a restart",
-            "shellEnvNamesLabel": "Variables to pass from your shell",
-            "shellEnvNamePlaceholder": "Variable name",
-            "shellEnvNameAdd": "Add",
-            "shellEnvNameRemove": "Remove {{value0}}",
-            "shellEnvNamesEmpty": "No variables added yet.",
-            "shellEnvNamesAlwaysPassed": "PATH, locale, and SSH_AUTH_SOCK are always passed. Applies the next time a chat starts or resumes.",
-            "shellEnvTitle": "Use your shell environment",
-            "shellEnvCopy": "Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.",
-            "shellEnvToggleLabel": "Toggle using your shell environment"
-          },
           "agentDashboard": {
             "title": "Agent Dashboard",
             "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
@@ -8424,7 +8426,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "chatTitle": "Chat UI",
+          "chatDescription": "Chat view for supported agent sessions."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -9601,6 +9605,20 @@
             }
           }
         },
+        "chat": {
+          "search": {
+            "native": "native",
+            "chat": "chat",
+            "claude": "claude",
+            "codex": "codex",
+            "openclaude": "openclaude",
+            "grok": "grok",
+            "omp": "omp",
+            "terminal": "terminal",
+            "agent": "agent",
+            "variables": "variables"
+          }
+        },
         "experimental": {
           "search": {
             "44c7f209d5": "node_modules",
@@ -9663,19 +9681,6 @@
             "051203d37c": "pet",
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
             "87d99e634b": "Pet",
-            "nativeChat": {
-              "title": "Chat UI",
-              "description": "Preview the desktop chat surface for supported agent terminal sessions.",
-              "grok": "grok",
-              "native": "native",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "agent"
-            },
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",

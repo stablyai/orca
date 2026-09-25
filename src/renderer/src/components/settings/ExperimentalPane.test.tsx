@@ -18,57 +18,6 @@ vi.mock('./EphemeralVmsPane', () => ({
   EphemeralVmsPane: () => <div data-testid="ephemeral-vms-pane">Cloud VM pane</div>
 }))
 
-vi.mock('../ui/select', async () => {
-  const React = await import('react')
-
-  const SelectContext = React.createContext<{
-    onValueChange?: (value: string) => void
-  }>({})
-
-  return {
-    Select: ({
-      value,
-      onValueChange,
-      children
-    }: {
-      value: string
-      onValueChange: (value: string) => void
-      children: React.ReactNode
-    }) => {
-      const contextValue = React.useMemo(() => ({ onValueChange }), [onValueChange])
-      return (
-        <SelectContext.Provider value={contextValue}>
-          <div data-slot="native-chat-default-view-select" data-value={value}>
-            {children}
-          </div>
-        </SelectContext.Provider>
-      )
-    },
-    SelectTrigger: ({ children, ...props }: React.ComponentProps<'button'> & { size?: string }) => (
-      <button type="button" data-slot="select-trigger" {...props}>
-        {children}
-      </button>
-    ),
-    SelectValue: () => null,
-    SelectContent: ({ children }: { children: React.ReactNode }) => (
-      <div data-slot="select-content">{children}</div>
-    ),
-    SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
-      const { onValueChange } = React.useContext(SelectContext)
-      return (
-        <button
-          type="button"
-          data-slot="select-item"
-          data-value={value}
-          onClick={() => onValueChange?.(value)}
-        >
-          {children}
-        </button>
-      )
-    }
-  }
-})
-
 afterEach(() => {
   document.body.innerHTML = ''
 })
@@ -222,155 +171,21 @@ describe('ExperimentalPane', () => {
     expect(markup).toContain('aria-checked="true"')
   })
 
-  it('offers no structured opt-in and notes its scope only under the Chat UI default view', async () => {
-    const updateSettings = vi.fn()
-    const scopeNote =
-      'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat.'
-    const disabledMarkup = renderToStaticMarkup(
-      <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+  it('does not render Chat UI after graduation to its own pane', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane
+        settings={{
+          ...getDefaultSettings('/tmp'),
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true
+        }}
+        updateSettings={vi.fn()}
+      />
     )
-    expect(disabledMarkup).toContain('Chat UI')
-    expect(disabledMarkup).not.toContain('Default view')
-    expect(disabledMarkup).not.toContain(scopeNote)
 
-    const terminalDefault = {
-      ...getDefaultSettings('/tmp'),
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: false
-    }
-    const terminalRender = await renderExperimentalPane({
-      updateSettings,
-      settings: terminalDefault
-    })
-    expect(terminalRender.container.textContent).toContain('Default view')
-    expect(
-      terminalRender.container.querySelector('[data-slot="native-chat-default-view-select"]')
-    ).not.toBeNull()
-    expect(terminalRender.container.textContent).not.toContain(scopeNote)
-    terminalRender.root.unmount()
-
-    const { root, container } = await renderExperimentalPane({
-      updateSettings,
-      settings: { ...terminalDefault, openAgentTabsInChatByDefault: true }
-    })
-    expect(container.textContent).toContain(scopeNote)
-    expect(container.textContent).not.toContain('Use updated structured native chat')
-    expect(
-      container.querySelector(
-        '#experimental-native-chat button[role="switch"][aria-label="Toggle updated structured native chat"]'
-      )
-    ).toBeNull()
-    root.unmount()
-  })
-
-  it('shows Chat UI default-mode as a child setting only when Chat UI is enabled', async () => {
-    const updateSettings = vi.fn()
-    const disabledSettings = getDefaultSettings('/tmp')
-    const disabledMarkup = renderToStaticMarkup(
-      <ExperimentalPane settings={disabledSettings} updateSettings={vi.fn()} />
-    )
-    expect(disabledMarkup).toContain('Chat UI')
-    expect(disabledMarkup).not.toContain('Default view')
-
-    const settings = {
-      ...getDefaultSettings('/tmp'),
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: false
-    }
-    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
-
-    expect(container.textContent).toContain('Default view')
-    expect(container.textContent).toContain('Terminal chat')
-    expect(container.textContent).toContain('Chat UI')
-    expect(
-      container
-        .querySelector('[data-slot="native-chat-default-view-select"]')
-        ?.getAttribute('data-value')
-    ).toBe('terminal-chat')
-
-    const nativeChatOption = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
-    ).find((button) => button.getAttribute('data-value') === 'native-chat')
-    if (!nativeChatOption) {
-      throw new Error('Chat UI default-view option was not rendered')
-    }
-
-    await act(async () => {
-      nativeChatOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ openAgentTabsInChatByDefault: true })
-
-    root.unmount()
-
-    const nativeSettings = {
-      ...settings,
-      openAgentTabsInChatByDefault: true
-    }
-    const secondRender = await renderExperimentalPane({
-      updateSettings,
-      settings: nativeSettings
-    })
-
-    expect(
-      secondRender.container
-        .querySelector('[data-slot="native-chat-default-view-select"]')
-        ?.getAttribute('data-value')
-    ).toBe('native-chat')
-
-    const terminalChatOption = Array.from(
-      secondRender.container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
-    ).find((button) => button.getAttribute('data-value') === 'terminal-chat')
-    if (!terminalChatOption) {
-      throw new Error('Terminal chat default-view option was not rendered')
-    }
-
-    await act(async () => {
-      terminalChatOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ openAgentTabsInChatByDefault: false })
-
-    secondRender.root.unmount()
-  })
-
-  // The controls are nested, but each still writes only its own key.
-  it('never writes one Chat UI child setting while changing the other', async () => {
-    const updateSettings = vi.fn()
-    const settings = {
-      ...getDefaultSettings('/tmp'),
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
-    }
-    const { root, container } = await renderExperimentalPane({ updateSettings, settings })
-
-    const resumeSwitch = container.querySelector<HTMLButtonElement>(
-      '#experimental-native-chat button[role="switch"][aria-label="Toggle automatic resume after a restart"]'
-    )
-    if (!resumeSwitch) {
-      throw new Error('Resume-after-restart switch was not rendered')
-    }
-
-    await act(async () => {
-      resumeSwitch.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ nativeChatResumeWorkOnRestart: true })
-
-    const terminalChatOption = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('[data-slot="select-item"]')
-    ).find((button) => button.getAttribute('data-value') === 'terminal-chat')
-    if (!terminalChatOption) {
-      throw new Error('Terminal chat default-view option was not rendered')
-    }
-
-    await act(async () => {
-      terminalChatOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(updateSettings).toHaveBeenCalledWith({ openAgentTabsInChatByDefault: false })
-    expect(updateSettings).toHaveBeenCalledTimes(2)
-    root.unmount()
+    expect(markup).not.toContain('Chat UI')
+    expect(markup).not.toContain('Default view')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).not.toContain('Chat UI')
   })
 
   it('renders the agent sleep idle duration as configurable minutes', async () => {
