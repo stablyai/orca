@@ -67,8 +67,8 @@ export type AttachFlowInput = {
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** The host's open conversation, which the attach adopts rather than opening a second one. */
-  openConversation?: (sessionId: string) => Promise<AgentSessionJournal>
+  /** The conversation's own open journal, which the attach adopts: it never opens one itself. */
+  openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
   /** A failure after acquisition released the session's acquisition; `cause` is that failure and
    *  `rootGone` whether the release saw the provider root go. */
   onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => void
@@ -212,16 +212,10 @@ export async function performAttach(
       params,
       journalRoot: input.journalRoot,
       adapter: input.adapter,
-      ...(input.openConversation ? { openConversation: input.openConversation } : {}),
+      openConversation: input.openConversation,
       providerHistoryWindow
     })
-    await importAdoptedTranscript(
-      params,
-      attached,
-      record,
-      preparedTranscript.items,
-      input.openConversation === undefined
-    )
+    await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
     await input.onAttached(attached, acquisitionGeneration, acquiredOwner, providerChildPhase)
     await store.recordOperationOutcome({
       callerKey: input.callerKey,

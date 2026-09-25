@@ -13,6 +13,7 @@ import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import {
   attachJournal,
   journalIdentityFor,
@@ -85,6 +86,7 @@ async function attach(adapter: StructuredAgentSessionAdapter) {
     record: RECORD,
     params: PARAMS,
     journalRoot: root,
+    openConversation: openTestAttachConversation(root),
     adapter
   })
   journals.track(attached.journal)
@@ -170,6 +172,7 @@ describe('attachJournal restart reconciliation', () => {
       record: RECORD,
       params: PARAMS,
       journalRoot: root,
+
       adapter,
       openConversation: async () => journal
     })

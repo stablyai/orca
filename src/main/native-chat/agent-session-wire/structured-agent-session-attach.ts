@@ -39,7 +39,6 @@ import { agentSessionProviderHandleChainHead } from '../../../shared/agent-sessi
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
 
@@ -184,16 +183,14 @@ export async function attachJournal(input: {
   journalRoot: string
   adapter: StructuredAgentSessionAdapter
   /** The host's open conversation; omitted, the journal is opened for this caller alone. */
-  openConversation?: (sessionId: string) => Promise<AgentSessionJournal>
+  openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
   /** Provider history sampled before a new child is acquired. `null` means the
    *  adapter had no usable history; omit to read lazily for direct callers. */
   providerHistoryWindow?: ProviderHistoryWindow | null
 }): Promise<AttachedJournal> {
   const identity = journalIdentityFor(input.record, input.params)
   const fence = input.record.lease.runtimeFence
-  const journal = input.openConversation
-    ? await input.openConversation(input.record.sessionId)
-    : await openJournalForCaller(input)
+  const journal = await input.openConversation(input.record)
   const settled = await reconcileAgainstProviderHistory({
     adapter: input.adapter,
     identity,
@@ -216,15 +213,6 @@ export async function attachJournal(input: {
       )
       .map((entry) => entry.clientMessageId)
   }
-}
-
-async function openJournalForCaller(input: {
-  record: AgentSessionRecord
-  journalRoot: string
-  adapter: StructuredAgentSessionAdapter
-}): Promise<AgentSessionJournal> {
-  const opened = await openStructuredAgentSessionConversationJournal(input, input.record)
-  return opened.session.journal
 }
 
 /** Reading provider history is best effort: a provider that reports none, or a

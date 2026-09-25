@@ -11,6 +11,7 @@ import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
@@ -122,6 +123,7 @@ async function attach(
     store,
     adapter: sessionAdapter,
     journalRoot: root!,
+    openConversation: openTestAttachConversation(root!),
     authority: {
       spawnToken: 'spawn-a',
       claimKeyId: 'key-1',
@@ -211,7 +213,7 @@ describe('adopting a provider conversation on create', () => {
     }
   )
 
-  it('still releases acquisition and closes the provisional journal on an import write failure', async () => {
+  it('still releases acquisition on an import write failure, and leaves the conversation open', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-write-failure-'))
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeCodexRollout(transcriptPath, 'valid source')
@@ -223,7 +225,8 @@ describe('adopting a provider conversation on create', () => {
     await expect(attach(transcriptPath, sessionAdapter)).rejects.toThrow('disk write failed')
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
     expect(sessionAdapter.releaseAcquisition).toHaveBeenCalledTimes(1)
-    expect(close).toHaveBeenCalledTimes(1)
+    // The journal is the conversation's, not the attach's: a failed import closes nothing.
+    expect(close).not.toHaveBeenCalled()
   })
 
   it('leaves the conversation writable when the import fails after acquiring', async () => {

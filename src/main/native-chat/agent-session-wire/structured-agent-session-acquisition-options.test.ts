@@ -15,6 +15,7 @@ import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 
@@ -154,6 +155,7 @@ describe('structured session acquisition options', () => {
       store: initialStore,
       adapter: withHistory('created'),
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -194,6 +196,7 @@ describe('structured session acquisition options', () => {
       store,
       adapter: withHistory('resumed'),
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-b',
         claimKeyId: 'key-1',
@@ -228,6 +231,7 @@ describe('structured session acquisition options', () => {
       store,
       adapter: sessionAdapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -260,6 +264,7 @@ describe('structured session acquisition options', () => {
         store,
         adapter: sessionAdapter,
         journalRoot: root!,
+        openConversation: openTestAttachConversation(root!),
         authority: {
           spawnToken,
           claimKeyId: 'key-1',
@@ -291,6 +296,7 @@ describe('structured session acquisition options', () => {
       store,
       adapter: adapter({ origin: 'created' }),
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -330,6 +336,7 @@ describe('structured session acquisition options', () => {
         }
       }),
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-b',
         claimKeyId: 'key-1',
@@ -369,6 +376,7 @@ describe('structured session acquisition options', () => {
       store,
       adapter: sessionAdapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -408,6 +416,7 @@ describe('structured session acquisition options', () => {
         store,
         adapter: failingAdapter,
         journalRoot: root,
+        openConversation: openTestAttachConversation(root!),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -499,6 +508,7 @@ describe('structured session acquisition options', () => {
           store: target,
           adapter: failingAdapter,
           journalRoot: root!,
+          openConversation: openTestAttachConversation(root!, failingAdapter),
           authority: {
             spawnToken: operationId === CREATE_OPERATION ? 'spawn-a' : 'spawn-b',
             claimKeyId: 'key-1',
@@ -585,6 +595,7 @@ describe('the tab id a create records', () => {
       store,
       adapter: adapter({ origin: 'created' }),
       journalRoot: root!,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',

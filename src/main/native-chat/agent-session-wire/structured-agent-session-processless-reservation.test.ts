@@ -12,6 +12,7 @@ import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
+import { openTestAttachConversation } from './structured-agent-session-attach-test-conversation'
 import { performAttach } from './structured-agent-session-attach-flow'
 
 const NOW = 1_800_000_000_000
@@ -86,6 +87,7 @@ describe('processless structured session reservation', () => {
         store,
         adapter,
         journalRoot: root,
+        openConversation: openTestAttachConversation(root!),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -133,6 +135,7 @@ describe('processless structured session reservation', () => {
       store,
       adapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',
@@ -172,6 +175,7 @@ describe('processless structured session reservation', () => {
       store,
       adapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-drift',
         claimKeyId: 'key-1',
@@ -226,6 +230,7 @@ describe('processless structured session reservation', () => {
         store,
         adapter,
         journalRoot: root,
+        openConversation: openTestAttachConversation(root!),
         authority: {
           spawnToken: 'spawn-a',
           claimKeyId: 'key-1',
@@ -297,6 +302,7 @@ describe('processless structured session reservation', () => {
       store,
       adapter,
       journalRoot: root,
+      openConversation: openTestAttachConversation(root!),
       authority: {
         spawnToken: 'spawn-a',
         claimKeyId: 'key-1',

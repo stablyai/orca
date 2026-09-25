@@ -173,8 +173,8 @@ async function runAttach(
       params,
       now: () => context.now(),
       recordPhase,
-      openConversation: async (id) => {
-        const conversation = await context.openConversation(id)
+      openConversation: async (record) => {
+        const conversation = await context.openConversation(record.sessionId)
         if (!conversation) {
           throw new Error('agent_session_identity_required')
         }
