@@ -83,8 +83,7 @@ export function useEditorPanelFileLoadRetry({
   const hostConnection = useWorktreeHostConnection(activeFile?.worktreeId ?? null)
   const hostTargetId = hostConnection.targetId
   const hostConnecting = hostConnection.phase === 'connecting'
-  const connectedHostEpoch =
-    hostConnection.phase === 'connected' ? `${hostConnection.connectionGeneration ?? ''}` : null
+  const connectedHostEpoch = hostConnection.connectedEpoch
   const seenHostRef = useRef({ targetId: hostTargetId, connectedEpoch: connectedHostEpoch })
 
   useEffect(() => {

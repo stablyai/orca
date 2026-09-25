@@ -161,4 +161,23 @@ describe('selectTerminalPaneHostState', () => {
       sshReconnectTargetRemoved: false
     })
   })
+
+  // Shares the workspace host signal with the other panes: a target startup restoration has
+  // not dialed yet reads as connecting, then follows the published status once it connects.
+  it('follows the shared host signal from connecting to connected', () => {
+    const repos = [{ id: 'repo-ssh', connectionId: 'ssh-a' }]
+    const worktreesByRepo = { 'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' }] }
+    const undialed = makeState({ repos, worktreesByRepo, terminalStartupRestorationReady: false })
+    const connected = makeState({
+      repos,
+      worktreesByRepo,
+      terminalStartupRestorationReady: false,
+      sshConnectionStates: new Map([
+        ['ssh-a', { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+
+    expect(selectTerminalPaneHostState(undialed, 'wt-ssh').sshReconnectStatus).toBe('connecting')
+    expect(selectTerminalPaneHostState(connected, 'wt-ssh').sshReconnectStatus).toBe('connected')
+  })
 })

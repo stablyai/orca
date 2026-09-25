@@ -57,7 +57,13 @@ describe('selectWorktreeHostConnectionPhase', () => {
       worktreesByRepo: { 'repo-local': [{ id: 'wt-local', repoId: 'repo-local' }] }
     })
 
-    const local = { phase: 'local', targetId: null, connectionGeneration: null }
+    const local = {
+      phase: 'local',
+      targetId: null,
+      environmentId: null,
+      status: null,
+      connectedEpoch: null
+    }
     expect(selectWorktreeHostConnectionPhase(state, 'wt-local')).toEqual(local)
     expect(selectWorktreeHostConnectionPhase(state, null)).toEqual(local)
   })
@@ -77,19 +83,21 @@ describe('selectWorktreeHostConnectionPhase', () => {
         makeSshState(null, { terminalStartupRestorationReady: false }),
         'wt-ssh'
       )
-    ).toEqual({ phase: 'connecting', targetId: 'ssh-a', connectionGeneration: null })
-    expect(selectWorktreeHostConnectionPhase(makeSshState(null), 'wt-ssh')).toEqual({
+    ).toMatchObject({ phase: 'connecting', targetId: 'ssh-a', status: 'connecting' })
+    expect(selectWorktreeHostConnectionPhase(makeSshState(null), 'wt-ssh')).toMatchObject({
       phase: 'unavailable',
       targetId: 'ssh-a',
-      connectionGeneration: null
+      status: 'disconnected'
     })
   })
 
-  it('maps published statuses and carries the connection generation', () => {
+  it('maps published statuses; only a connected host names its connection', () => {
     expect(selectWorktreeHostConnectionPhase(makeSshState('connecting'), 'wt-ssh')).toEqual({
       phase: 'connecting',
       targetId: 'ssh-a',
-      connectionGeneration: 7
+      environmentId: null,
+      status: 'connecting',
+      connectedEpoch: null
     })
     expect(selectWorktreeHostConnectionPhase(makeSshState('reconnecting'), 'wt-ssh').phase).toBe(
       'connecting'
@@ -100,7 +108,9 @@ describe('selectWorktreeHostConnectionPhase', () => {
     expect(selectWorktreeHostConnectionPhase(makeSshState('connected'), 'wt-ssh')).toEqual({
       phase: 'connected',
       targetId: 'ssh-a',
-      connectionGeneration: 7
+      environmentId: null,
+      status: 'connected',
+      connectedEpoch: 'ssh-a:7'
     })
   })
 
@@ -165,7 +175,53 @@ describe('selectWorktreeHostConnectionPhase', () => {
     expect(selectWorktreeHostConnectionPhase(state, 'wt-runtime')).toEqual({
       phase: 'connected',
       targetId: 'ssh-nested',
-      connectionGeneration: 3
+      environmentId: 'env-a',
+      status: 'connected',
+      connectedEpoch: 'ssh-nested:3'
+    })
+  })
+
+  it('names a new connection on every reconnect', () => {
+    const connected = makeSshState('connected')
+    const reconnected = makeSshState('connected', {
+      sshConnectionStates: new Map([
+        [
+          'ssh-a',
+          {
+            targetId: 'ssh-a',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 8
+          }
+        ]
+      ])
+    })
+
+    expect(selectWorktreeHostConnectionPhase(reconnected, 'wt-ssh').connectedEpoch).not.toBe(
+      selectWorktreeHostConnectionPhase(connected, 'wt-ssh').connectedEpoch
+    )
+  })
+
+  it('reports a nested target whose runtime is unreachable as unverifiable, not down', () => {
+    const state = makeState({
+      repos: [{ id: 'repo-runtime', connectionId: 'ssh-nested', executionHostId: 'runtime:env-a' }],
+      worktreesByRepo: {
+        'repo-runtime': [
+          {
+            id: 'wt-runtime',
+            repoId: 'repo-runtime',
+            hostId: 'runtime:env-a',
+            runtimeOwnerEnvironmentId: 'env-a'
+          }
+        ]
+      }
+    })
+
+    expect(selectWorktreeHostConnectionPhase(state, 'wt-runtime')).toMatchObject({
+      phase: 'unverifiable',
+      targetId: 'ssh-nested',
+      status: null
     })
   })
 })

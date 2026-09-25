@@ -72,8 +72,7 @@ export function useSshWorkspaceBrowserRoute(
   // would unmount it. Only a route still waiting on, or failed by, its host follows the host.
   const routeReady = state.kind === 'ready' && state.targetId === targetId
   const awaitingHost = routeHost?.phase === 'connecting' && !routeReady
-  const connectedHostEpoch =
-    routeHost?.phase === 'connected' ? `connected:${routeHost.connectionGeneration ?? ''}` : null
+  const connectedHostEpoch = routeHost?.connectedEpoch ?? null
   const [seenConnectedHostEpoch, setSeenConnectedHostEpoch] = useState(connectedHostEpoch)
   if (connectedHostEpoch !== seenConnectedHostEpoch) {
     setSeenConnectedHostEpoch(connectedHostEpoch)

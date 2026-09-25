@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import type { WorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
+import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import {
   WORKTREE_OWNER_NOT_READY_ERROR,
   WORKTREE_OWNER_UNREACHABLE_ERROR,
@@ -15,7 +16,9 @@ const mocks = vi.hoisted(() => {
   const hostConnection: WorktreeHostConnection = {
     phase: 'connecting',
     targetId: 'ssh-a',
-    connectionGeneration: null
+    environmentId: null,
+    status: 'connecting',
+    connectedEpoch: null
   }
   return { hostConnection, readRuntimeFileContent: vi.fn() }
 })
@@ -46,11 +49,25 @@ import {
 const SSH_PROVIDER_UNAVAILABLE =
   'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 
+const STATUS_BY_PHASE: Record<WorktreeHostConnection['phase'], SshConnectionStatus | null> = {
+  local: null,
+  connecting: 'connecting',
+  connected: 'connected',
+  unavailable: 'disconnected',
+  unverifiable: null
+}
+
 function setHost(
   phase: WorktreeHostConnection['phase'],
   connectionGeneration: number | null = null
 ): void {
-  mocks.hostConnection = { phase, targetId: 'ssh-a', connectionGeneration }
+  mocks.hostConnection = {
+    phase,
+    targetId: 'ssh-a',
+    environmentId: null,
+    status: STATUS_BY_PHASE[phase],
+    connectedEpoch: phase === 'connected' ? `ssh-a:${connectionGeneration}` : null
+  }
 }
 
 const file: OpenFile = {

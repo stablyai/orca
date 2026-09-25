@@ -4,7 +4,9 @@ import type { WorktreeHostConnection } from '@/lib/worktree-host-connection-phas
 const LOCAL_HOST_CONNECTION: WorktreeHostConnection = {
   phase: 'local',
   targetId: null,
-  connectionGeneration: null
+  environmentId: null,
+  status: null,
+  connectedEpoch: null
 }
 
 export function selectWorktreeHostConnectionPhase(): WorktreeHostConnection {

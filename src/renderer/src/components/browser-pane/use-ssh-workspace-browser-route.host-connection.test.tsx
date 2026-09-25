@@ -2,12 +2,15 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
+import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
 const mocks = vi.hoisted(() => {
   const hostConnection: WorktreeHostConnection = {
     phase: 'connecting',
     targetId: 'target-a',
-    connectionGeneration: null
+    environmentId: null,
+    status: 'connecting',
+    connectedEpoch: null
   }
   return { hostConnection, prepare: vi.fn() }
 })
@@ -29,11 +32,25 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
+const STATUS_BY_PHASE: Record<WorktreeHostConnection['phase'], SshConnectionStatus | null> = {
+  local: null,
+  connecting: 'connecting',
+  connected: 'connected',
+  unavailable: 'disconnected',
+  unverifiable: null
+}
+
 function setHost(
   phase: WorktreeHostConnection['phase'],
   connectionGeneration: number | null = null
 ): void {
-  mocks.hostConnection = { phase, targetId: 'target-a', connectionGeneration }
+  mocks.hostConnection = {
+    phase,
+    targetId: 'target-a',
+    environmentId: null,
+    status: STATUS_BY_PHASE[phase],
+    connectedEpoch: phase === 'connected' ? `target-a:${connectionGeneration}` : null
+  }
 }
 
 describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
