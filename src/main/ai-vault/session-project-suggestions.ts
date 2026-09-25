@@ -37,14 +37,15 @@ function canonicalDir(path: string): string | null {
   }
 }
 
-type EligibilityRoots = { home: string; excluded: string[] }
+type EligibilityRoots = { home: string; excluded: string[]; homeExcluded: string[] }
 
 function eligibilityRoots(input: SessionProjectSuggestionInput): EligibilityRoots {
   const home = canonicalDir(input.homeDir) ?? input.homeDir
-  const excluded = [...input.tempDirs, join(home, '.cache'), join(home, '.config')].map(
+  const homeExcluded = [join(home, '.cache'), join(home, '.config')].map(
     (dir) => canonicalDir(dir) ?? dir
   )
-  return { home, excluded }
+  const excluded = [...input.tempDirs.map((dir) => canonicalDir(dir) ?? dir), ...homeExcluded]
+  return { home, excluded, homeExcluded }
 }
 
 // Why: session cwds include benchmark worktrees, scratch dirs and tool caches; only folders a
@@ -54,7 +55,10 @@ function eligibleDir(path: string, roots: EligibilityRoots): string | null {
   if (!dir || dir === roots.home || dir === dirname(roots.home) || dir === dirname(dir)) {
     return null
   }
-  return roots.excluded.some((root) => isInside(dir, root)) ? null : dir
+  // Why home wins over temp: a folder under home is the user's own even when home itself sits
+  // under a temp dir (sandboxes, CI); only ~/.cache and ~/.config stay excluded there.
+  const excluded = isInside(dir, roots.home) ? roots.homeExcluded : roots.excluded
+  return excluded.some((root) => isInside(dir, root)) ? null : dir
 }
 
 // Why the common dir: a linked worktree reports itself as toplevel, so worktree sessions would

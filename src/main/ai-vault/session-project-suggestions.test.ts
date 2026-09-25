@@ -170,6 +170,15 @@ describe('suggestProjectsFromSessions', () => {
     expect(suggestions.map((s) => s.path)).toEqual([repo])
   })
 
+  it('keeps repos under home even when home itself is inside a temp dir', async () => {
+    const suggestions = await suggestProjectsFromSessions(
+      { ...baseInput(), tempDirs: [root], sources: [{ cwd: repo, agent: 'claude' }] },
+      resolveGitRoot
+    )
+
+    expect(suggestions.map((s) => s.path)).toEqual([repo])
+  })
+
   it('treats a resolver failure as not a repo', async () => {
     const suggestions = await suggestProjectsFromSessions(
       { ...baseInput(), sources: [{ cwd: repo, agent: 'claude' }] },
