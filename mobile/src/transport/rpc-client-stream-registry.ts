@@ -69,7 +69,7 @@ export class RpcClientStreamRegistry {
       if (this.send(id, stream)) {
         stream.sent = true
       } else {
-        this.finishWithError(id, stream, 'Connection interrupted')
+        this.finish(id, stream, { type: 'error', message: 'Connection interrupted' })
       }
     } else {
       console.log('[net] subscribe queued — waiting for connected', {
@@ -132,12 +132,13 @@ export class RpcClientStreamRegistry {
     if (!stream) {
       return false
     }
-    this.finishWithError(
-      response.id,
-      stream,
-      response.ok ? 'Streaming request ended before it was ready.' : response.error.message,
-      response.ok ? undefined : response.error
-    )
+    this.finish(response.id, stream, {
+      type: 'error',
+      message: response.ok
+        ? 'Streaming request ended before it was ready.'
+        : response.error.message,
+      error: response.ok ? undefined : response.error
+    })
     return true
   }
 
@@ -309,22 +310,12 @@ export class RpcClientStreamRegistry {
     stream.onBinaryFrame?.(frame)
   }
 
-  /** Removed before the listener runs, so its synchronous dispose finds nothing to unsubscribe
-   *  (a slot-named unsubscribe would retire a newer same-slot stream) and replay cannot resend it. */
+  /** Removed first, so neither the listener's dispose nor a replay can name a host-ended stream. */
   private finish(id: string, stream: StreamRequest, result: unknown): void {
     const notify = !stream.cancelled
     this.remove(id)
     if (notify) {
       stream.listener(result)
     }
-  }
-
-  private finishWithError(
-    id: string,
-    stream: StreamRequest,
-    message: string,
-    error?: unknown
-  ): void {
-    this.finish(id, stream, { type: 'error', message, error })
   }
 }

@@ -239,9 +239,7 @@ export class MobileRelayRpcStreams {
     this.remove(id)
   }
 
-  /** Skip the unsubscribe when a live sibling sent later shares the host cleanup slot (terminal
-   *  `terminal:client`, nativeChat's token): the host's same-slot register already evicted this
-   *  stream, so the unsubscribe would retire the sibling. An earlier sibling is the evicted one. */
+  /** Skip when a same-slot sibling sent later has already evicted this stream on the host. */
   private sendUnsubscribe(unsubscribe: StreamUnsubscribe, sendOrder: number): void {
     if (this.hasNewerSlotOwner(unsubscribe, sendOrder)) {
       return
@@ -288,8 +286,7 @@ export class MobileRelayRpcStreams {
     this.finish(id, stream, { type: 'error', message, error })
   }
 
-  /** Removed before the listener runs, so its synchronous dispose finds nothing to unsubscribe:
-   *  the host already ended this stream, and a slot-named unsubscribe would retire a newer one. */
+  /** Removed first, so the listener's dispose cannot name a host-ended stream. */
   private finish(id: string, stream: StreamRecord, result: unknown): void {
     this.remove(id)
     stream.listener(result)
