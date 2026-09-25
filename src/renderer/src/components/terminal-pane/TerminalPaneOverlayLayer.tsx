@@ -32,6 +32,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   shouldMeasureHiddenWorktree = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
   backgroundMountTabIds = null,
+  backgroundMountColdRestorePaneKeys = null,
   activationDeferredMountTabIds = null
 }: {
   worktreeId: string
@@ -44,6 +45,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
   /** Targeted mounts connect only these terminal tabs. */
   backgroundMountTabIds?: ReadonlySet<string> | null
+  /** Mail-scoped cold restore leaves, keyed by terminal tab. */
+  backgroundMountColdRestorePaneKeys?: ReadonlyMap<string, ReadonlySet<string>> | null
   /** Cold-activation deferred tabs receive immediate parked watcher coverage. */
   activationDeferredMountTabIds?: ReadonlySet<string> | null
 }): React.JSX.Element | null {
@@ -160,6 +163,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
               isVisible={isVisible}
               isActive={isActive}
               activityTerminalPortal={activityTerminalPortal}
+              coldRestorePaneKeys={
+                backgroundMountColdRestorePaneKeys?.get(terminalTab.id) ?? undefined
+              }
               onFocusOwningGroup={focusOwningGroup}
               consumeSuppressedPtyExit={consumeSuppressedPtyExit}
               leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}

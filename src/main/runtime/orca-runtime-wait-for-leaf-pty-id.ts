@@ -1,6 +1,19 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals } from './orca-runtime-restore-live-paired-renderer-session-owned-mobile-terminals'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import {
+  isDurableSleepingCapture,
+  mayBackgroundWakeSleepingAgentSession,
+  type SleepingAgentSessionRecord
+} from '../../shared/agent-session-resume'
+import {
+  isInboundMessageTabMount,
+  type TerminalTabMountIntent
+} from '../../shared/terminal-tab-mount-intent'
+import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { findSleepingAgentSessionRecord } from './sleeping-pane-record-lookup'
+import { resolveSleepingPaneWakeTarget } from './orchestration/sleeping-pane-wake-target'
+import { SleepingPaneWakeScheduler } from './orchestration/sleeping-pane-wake-scheduler'
 
 export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals {
   // Why: mobile may subscribe before the PTY spawns; wait for it so subscribe proceeds with phone-fit instead of a bare scrollback+end.
@@ -67,26 +80,135 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
   }
 
   // Why: never-mounted tabs have no PTY or snapshot; synthetic handles need the ptyId to mount the exact owning tab.
-  requestRendererTerminalTabMount(handle: string): boolean {
+  requestRendererTerminalTabMount(handle: string, intent?: TerminalTabMountIntent): boolean {
     const record = this.handles.get(handle)
     if (!record?.worktreeId) {
       return false
     }
     const tabId = record.tabId.startsWith('pty:') ? undefined : record.tabId
-    const ptyId = record.ptyId ?? undefined
-    if (!tabId && !ptyId) {
+    return this.requestRendererTerminalTabMountForPane({
+      worktreeId: record.worktreeId,
+      tabId,
+      ptyId: record.ptyId ?? undefined,
+      // Why: synthetic pty-form handles carry no real pane identity, and
+      // makePaneKey rejects their ids outright.
+      paneKey:
+        tabId && isTerminalLeafId(record.leafId) ? makePaneKey(tabId, record.leafId) : undefined,
+      intent
+    })
+  }
+
+  // Why: a slept pane has no handle record left, so mail-driven wakes address the
+  // tab the sleeping record names instead of a handle that no longer resolves.
+  requestRendererTerminalTabMountForPane(args: {
+    worktreeId: string
+    tabId?: string
+    ptyId?: string
+    paneKey?: string
+    intent?: TerminalTabMountIntent
+  }): boolean {
+    if (!args.worktreeId || (!args.tabId && !args.ptyId)) {
+      return false
+    }
+    // Why: webContents.send can accept the event while a renderer reload has no
+    // graph/listener to consume it; report failure so graph-ready redrives mail wakes.
+    if (isInboundMessageTabMount(args.intent) && this.graphStatus !== 'ready') {
+      return false
+    }
+    // Why: opening a tab is the documented wake gesture for a pane the user slept
+    // (#11598), so only an inbound message may be refused for one.
+    if (
+      isInboundMessageTabMount(args.intent) &&
+      args.paneKey &&
+      !this.mayBackgroundWakeSleepingPane(args.paneKey)
+    ) {
       return false
     }
     try {
       this.getAuthoritativeWindow().webContents.send('terminal:requestTabMount', {
-        worktreeId: record.worktreeId,
-        ...(tabId ? { tabId } : {}),
-        ...(ptyId ? { ptyId } : {})
+        worktreeId: args.worktreeId,
+        ...(args.tabId ? { tabId: args.tabId } : {}),
+        ...(args.ptyId ? { ptyId: args.ptyId } : {}),
+        ...(args.paneKey ? { paneKey: args.paneKey } : {}),
+        ...(args.intent ? { intent: args.intent } : {})
       })
       return true
     } catch {
       // No authoritative window (shutdown/headless): subscribe keeps its empty-snapshot fallback.
       return false
+    }
+  }
+
+  findSleepingAgentRecordForPane(paneKey: string): SleepingAgentSessionRecord | undefined {
+    return findSleepingAgentSessionRecord(this.workspaceSessions.listSessions(), paneKey)
+  }
+
+  /**
+   * The pane behind a handle whose process is gone but whose resume record can
+   * bring it back, plus whether inbound mail may wake it on its own. Lets a
+   * sender tell "asleep, will read this later" from "gone, nothing to talk to".
+   */
+  getResumableSleptRecipientPane(handle: string): { paneKey: string; autoWakes: boolean } | null {
+    if (this.getLiveTerminalPaneKey(handle)) {
+      return null
+    }
+    const paneKey = this.getTerminalPaneKey(handle)
+    const record = paneKey ? this.findSleepingAgentRecordForPane(paneKey) : undefined
+    if (!paneKey || !record || !isDurableSleepingCapture(record)) {
+      return null
+    }
+    return { paneKey, autoWakes: mayBackgroundWakeSleepingAgentSession(record) }
+  }
+
+  protected mayBackgroundWakeSleepingPane(paneKey: string): boolean {
+    const record = this.findSleepingAgentRecordForPane(paneKey)
+    return Boolean(record && mayBackgroundWakeSleepingAgentSession(record))
+  }
+
+  protected readonly sleepingPaneWakes = new SleepingPaneWakeScheduler({
+    wake: (request) =>
+      !this.mayBackgroundWakeSleepingPane(request.paneKey) ||
+      this.requestRendererTerminalTabMountForPane({ ...request, intent: 'inbound-message' })
+  })
+
+  protected retrySleepingPaneWakesWhenGraphReady(windowId: number): void {
+    if (windowId === this.authoritativeWindowId && this.graphStatus === 'ready') {
+      this.sleepingPaneWakes.retryPending()
+    }
+  }
+
+  /**
+   * Mail landed for a mailbox whose pane has no process. The message arriving IS
+   * the evidence the pane is owed something, so every type wakes — no allowlist.
+   */
+  requestSleepingRecipientWake(mailboxHandle: string): void {
+    const db = this._orchestrationDb
+    if (!db) {
+      return
+    }
+    // Why the mail check: delivery also runs from sweeps that visit empty
+    // mailboxes — pty retirement redrives and restored-mailbox repoints fire
+    // right when hibernation kills the pane. Without proof someone is owed
+    // mail, the kill itself would schedule the wake that undoes it (observed
+    // live: pane slept and self-woke two seconds later). Unread is the
+    // evidence; delivered-but-unread still counts because a pointer staged to
+    // a dying pane is exactly the mail a wake must rescue. An answerless query
+    // wakes anyway: "could not look" must not read as "mailbox empty".
+    const unreadTypes = db.getUnreadDirectMessageTypes?.(mailboxHandle)
+    if (unreadTypes !== undefined && unreadTypes.length === 0) {
+      return
+    }
+    const resolution = resolveSleepingPaneWakeTarget(mailboxHandle, {
+      getRunCoordinatorPaneKey: (runId) => db.getRun?.(runId)?.coordinator_pane_key ?? undefined,
+      getDispatchAssigneePaneKey: (dispatchId) =>
+        db.getDispatchContextById?.(dispatchId)?.assignee_pane_key ??
+        db.getRemoteDispatchAttachment?.(dispatchId)?.pane_key ??
+        undefined,
+      getPaneKeyForHandle: (handle) => this.getTerminalPaneKey(handle),
+      getSleepingRecord: (paneKey) => this.findSleepingAgentRecordForPane(paneKey)
+    })
+    if (resolution.ok) {
+      this.sleepingPaneWakes.request(resolution.request)
     }
   }
 

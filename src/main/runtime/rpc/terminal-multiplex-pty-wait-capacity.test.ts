@@ -124,7 +124,10 @@ describe('terminal multiplex RPC', () => {
     )
     sendDesktopMultiplexSubscribe(harness.handlers)
     await vi.waitFor(() => expect(runtime.waitForLeafPtyId).toHaveBeenCalled())
-    expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
+    expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith(
+      'terminal-1',
+      'client-subscribe'
+    )
     expect(
       harness.binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
@@ -594,7 +597,10 @@ describe('terminal multiplex RPC', () => {
     await dispatchPromise
     // Widened gate: a desktop client must mount + await its late PTY, not skip
     // straight to the bare scrollback path the way it did under the mobile-only gate.
-    expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
+    expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith(
+      'terminal-1',
+      'client-subscribe'
+    )
     expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith('terminal-1', 10_000, undefined)
     expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['subscribed', 'end'])
   })

@@ -29,6 +29,7 @@ export type SendRecipientWarning = {
     | 'recipient_unreachable'
     | 'recipient_ambiguous'
     | 'recipient_run_mismatch'
+    | 'recipient_asleep'
   recipient: string
   message: string
 }
@@ -56,11 +57,19 @@ export function resolveBareOrchestrationRecipient(params: {
   legacyAdoptedMailboxOwner?: LegacyAdoptedMailboxOwner | null
 }): BareRecipientResolution {
   const { runtime, db, handle } = params
-  const paneKey = runtime.getLiveTerminalPaneKey(handle) ?? undefined
+  const livePaneKey = runtime.getLiveTerminalPaneKey(handle) ?? undefined
+  // Why: a slept pane's process is gone but its mailbox is not. Resolving through
+  // its resume record turns `terminal_not_found` — the same answer a handle that
+  // was never real gets — into an accepted, queued send.
+  const sleptPane = livePaneKey ? null : (runtime.getResumableSleptRecipientPane?.(handle) ?? null)
+  const asleep = sleptPane ? asleepWarning(handle, sleptPane.autoWakes) : undefined
+  const paneKey = livePaneKey ?? sleptPane?.paneKey
   const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
   if (boundRun) {
     const mismatch = runMismatch(handle, boundRun.id, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }
+    return (
+      mismatch ?? withWarning({ ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }, asleep)
+    )
   }
 
   const dispatches = db.getActiveDispatchMailboxOwners(handle, paneKey)
@@ -73,7 +82,10 @@ export function resolveBareOrchestrationRecipient(params: {
   }
   if (dispatch) {
     const mismatch = runMismatch(handle, dispatch.run_id, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
+    return (
+      mismatch ??
+      withWarning({ ok: true, to: `dispatch:${dispatch.id}`, runId: dispatch.run_id }, asleep)
+    )
   }
 
   const ownerRunIds = db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner)
@@ -86,19 +98,32 @@ export function resolveBareOrchestrationRecipient(params: {
   }
   if (selectedRunId) {
     const mismatch = runMismatch(handle, selectedRunId, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `run:${selectedRunId}`, runId: selectedRunId }
+    return (
+      mismatch ??
+      withWarning({ ok: true, to: `run:${selectedRunId}`, runId: selectedRunId }, asleep)
+    )
   }
 
-  if (paneKey) {
+  if (livePaneKey) {
     return {
       ok: true,
       to: handle,
       runId: params.senderRunId,
-      warning: {
+      warning: asleep ?? {
         code: 'legacy_terminal_recipient',
         recipient: handle,
         message: `${handle} is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>.`
       }
+    }
+  }
+
+  if (sleptPane) {
+    const message = `${handle} is asleep but has no durable Run/Dispatch mailbox. Use a canonical run:<id> or dispatch:<id> address.`
+    return {
+      ok: false,
+      code: 'terminal_not_found',
+      message,
+      warning: { code: 'recipient_unreachable', recipient: handle, message }
     }
   }
 
@@ -109,6 +134,23 @@ export function resolveBareOrchestrationRecipient(params: {
     message,
     warning: { code: 'recipient_unreachable', recipient: handle, message }
   }
+}
+
+function asleepWarning(handle: string, autoWakes: boolean): SendRecipientWarning {
+  return {
+    code: 'recipient_asleep',
+    recipient: handle,
+    message: autoWakes
+      ? `${handle} is asleep. The message is queued and the pane will be woken to read it.`
+      : `${handle} was slept deliberately and is never woken automatically. The message is queued and will be read when that tab is next opened.`
+  }
+}
+
+function withWarning(
+  resolution: Extract<BareRecipientResolution, { ok: true }>,
+  warning: SendRecipientWarning | undefined
+): BareRecipientResolution {
+  return warning ? { ...resolution, warning } : resolution
 }
 
 function selectDispatch(

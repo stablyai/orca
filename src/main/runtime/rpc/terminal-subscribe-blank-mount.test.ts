@@ -115,7 +115,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
     )
 
     await vi.waitFor(() =>
-      expect(requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
+      expect(requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1', 'client-subscribe')
     )
     expect(callOrder).toEqual(['subscribe-data', 'request-mount'])
 

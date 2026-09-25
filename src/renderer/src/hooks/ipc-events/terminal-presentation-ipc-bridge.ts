@@ -1,6 +1,7 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
-import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { resolveMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { wakeMountedSleptPaneInPlace } from '@/lib/wake-sleeping-agents-in-background'
 import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
 import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
@@ -247,25 +248,31 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
 
   // Why: background-mount a mobile-subscribed tab's PTY without navigating the desktop (STA-1840).
   unsubs.push(
-    window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
+    window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId, paneKey, intent }) => {
       if (!worktreeId) {
         return
       }
       // Why: synthetic pty handles need persisted-tab resolution; a miss must not mount every saved tab in a hidden worktree.
-      const mount = planMobileTerminalTabMount(
+      const resolution = resolveMobileTerminalTabMount(
         useAppStore.getState(),
         {
           worktreeId,
           ...(tabId ? { tabId } : {}),
-          ...(ptyId ? { ptyId } : {})
+          ...(ptyId ? { ptyId } : {}),
+          ...(paneKey ? { paneKey } : {}),
+          ...(intent ? { intent } : {})
         },
         {
           isTabMounted: (tabId, targetWorktreeId) =>
             hasRegisteredRuntimeTerminalTab(tabId, targetWorktreeId)
         }
       )
-      if (mount) {
-        requestBackgroundTerminalWorktreeMount(mount)
+      if (resolution?.kind === 'mount') {
+        requestBackgroundTerminalWorktreeMount(resolution.detail)
+      } else if (resolution?.kind === 'already-mounted') {
+        // Why: a slept pane whose tab is still mounted cannot be woken by a
+        // mount — its pane holds an armed in-place cold-restore instead.
+        wakeMountedSleptPaneInPlace(worktreeId, resolution.tabId, paneKey)
       }
     })
   )

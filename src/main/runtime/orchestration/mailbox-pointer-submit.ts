@@ -8,9 +8,14 @@ import {
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
+import {
+  isStatuslessIdleProofCurrent,
+  isStatuslessIdleProofProcessCurrent
+} from './mailbox-statusless-idle-proof'
 import type {
   OrchestrationMailboxDeliveryFlight,
-  OrchestrationMailboxPointerState
+  OrchestrationMailboxPointerState,
+  OrchestrationStatuslessIdleProof
 } from './mailbox-pointer-state'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 
@@ -22,8 +27,10 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
     leaf: OrchestrationMailboxLeaf,
     ptyId: string
   ) => OrchestrationMailboxPointerSubmitTarget | null
+  getTerminalProcessIncarnation: (terminalHandle: string) => string | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  requestSleepingRecipientWake?: (mailboxHandle: string) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -45,6 +52,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
     expectedTarget: OrchestrationMailboxPointerSubmitTarget
+    statuslessIdleProof?: OrchestrationStatuslessIdleProof
   }
 ): void {
   let clearAndRedrive = false
@@ -64,7 +72,10 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
     .isLeafPtyProvenAbsent(input.ptyId)
     .then(async (absent) => {
       if (absent) {
+        // The pane died between staging and submitting; the staged mail is put
+        // back undelivered below, so ask for a wake or it waits for a tab open.
         clearAndRedrive = true
+        deps.requestSleepingRecipientWake?.(input.mailboxHandle)
         return
       }
       if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
@@ -82,13 +93,19 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
         deps.mailboxOwner.resolve(exactTarget.leaf, undefined, {
           terminalHandle: exactTarget.terminalHandle
         }) === input.mailboxHandle
-      const queueSafe =
-        exactTarget?.leaf.lastAgentStatusObservedLive === true &&
-        (exactTarget.leaf.lastAgentStatus === 'idle' ||
-          exactTarget.leaf.lastAgentStatus === 'working')
       if (!exactTarget?.leaf.writable || !sameMailbox) {
         clearAndRedrive = true
       } else if (
+        input.statuslessIdleProof &&
+        !isStatuslessIdleProofProcessCurrent(
+          exactTarget.leaf,
+          input.statuslessIdleProof,
+          deps.getTerminalProcessIncarnation
+        )
+      ) {
+        clearAndRedrive = true
+      } else if (
+        !input.statuslessIdleProof &&
         exactTarget.leaf.lastAgentStatusObservedLive &&
         exactTarget.leaf.lastAgentStatus === null
       ) {
@@ -96,7 +113,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true
-      } else if (!queueSafe) {
+      } else if (!canSubmitPointer(deps, exactTarget.leaf, input.statuslessIdleProof)) {
         releaseWithoutRedrive = true
       } else {
         if (
@@ -125,6 +142,10 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
           // nor rolling it back to a state that would send a second Enter is provable here.
           if (enterSettlement.outcome === 'refused') {
             releaseWithoutRedrive = true
+            // Refused is a positive "no byte left" verdict, so the recipient can
+            // be treated as gone; unverifiable must not wake (loss of contact is
+            // never evidence of process death — ssh-execution-boundary.md).
+            deps.requestSleepingRecipientWake?.(input.mailboxHandle)
           }
         }
       }
@@ -171,4 +192,19 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
         deps.redrive(input.mailboxHandle, clearAndRedrive)
       }
     })
+}
+
+function canSubmitPointer<TWaiter extends OrchestrationMessageWaiter>(
+  deps: PointerSubmitDependencies<TWaiter>,
+  leaf: OrchestrationMailboxLeaf,
+  proof: OrchestrationStatuslessIdleProof | undefined
+): boolean {
+  if (!proof) {
+    // Once staged, working is queue-safe; idle-only strands Orca-owned text in the composer.
+    return (
+      leaf.lastAgentStatusObservedLive === true &&
+      (leaf.lastAgentStatus === 'idle' || leaf.lastAgentStatus === 'working')
+    )
+  }
+  return isStatuslessIdleProofCurrent(leaf, proof, deps.getTerminalProcessIncarnation)
 }

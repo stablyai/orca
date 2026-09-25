@@ -15,6 +15,7 @@ import {
   resolveTerminalPaneSplitSourceId
 } from './terminal-pane-split-request-routing'
 import type { PtyConnectionDeps } from './pty-connection-types'
+import { transferExistingPtyAgentPaneAuthority } from './terminal-split-existing-pty-authority'
 
 export function installTerminalPaneMountEvents(args: {
   manager: PaneManager
@@ -69,6 +70,15 @@ export function installTerminalPaneMountEvents(args: {
           direction: detail.direction,
           telemetrySuppressed
         })
+        if (createdPane && detail.ptyId) {
+          transferExistingPtyAgentPaneAuthority({
+            state: useAppStore.getState(),
+            worktreeId: deps.worktreeId,
+            tabId: deps.tabId,
+            leafId: createdPane.leafId,
+            ptyId: detail.ptyId
+          })
+        }
       }
     }
   )

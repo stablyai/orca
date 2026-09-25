@@ -27,6 +27,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   isForceParked,
   activityTerminalPortals,
   backgroundMountTabIds,
+  backgroundMountColdRestorePaneKeys,
   activationDeferredMountTabIds
 }: {
   worktreeId: string
@@ -39,6 +40,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   isForceParked: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
   backgroundMountTabIds: ReadonlySet<string> | null
+  backgroundMountColdRestorePaneKeys: ReadonlyMap<string, ReadonlySet<string>> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
@@ -75,6 +77,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
+        backgroundMountColdRestorePaneKeys={backgroundMountColdRestorePaneKeys}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
       />
       <RetainedBrowserPaneOverlayLayer

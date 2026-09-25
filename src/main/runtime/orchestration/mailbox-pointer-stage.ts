@@ -9,12 +9,15 @@ import {
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
+import { isStatuslessIdleProofCurrent } from './mailbox-statusless-idle-proof'
 import type {
   OrchestrationMailboxDeliveryFlight,
-  OrchestrationMailboxPointerState
+  OrchestrationMailboxPointerState,
+  OrchestrationStatuslessIdleProof
 } from './mailbox-pointer-state'
 import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
+import { submitStatuslessCodexMailboxPointer } from './mailbox-statusless-codex-submit'
 import { isSettledWrite, type WriteSettlement } from '../../../shared/pty-write-settlement'
 
 type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
@@ -26,6 +29,9 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   newestSequence: number
   enterDelayMs: number
   leafKey: string
+  statuslessIdleProof?: OrchestrationStatuslessIdleProof
+  deferRedriveUntilPtyOutput?: (ptyId: string, mailboxHandle: string, sequence: number) => boolean
+  clearDeferredOutputRedrive?: (ptyId: string, mailboxHandle: string, sequence: number) => void
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -35,6 +41,50 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
 ): void {
   const ptyId = args.leaf.ptyId
   if (!ptyId) {
+    return
+  }
+  if (
+    args.statuslessIdleProof &&
+    !isStatuslessIdleProofCurrent(
+      args.leaf,
+      args.statuslessIdleProof,
+      args.deps.getTerminalProcessIncarnation
+    )
+  ) {
+    return
+  }
+  if (
+    args.statuslessIdleProof &&
+    args.deps.submitStatuslessCodexPointer &&
+    args.deferRedriveUntilPtyOutput &&
+    args.clearDeferredOutputRedrive
+  ) {
+    // A proven statusless Codex pane submits through the guarded agent-prompt
+    // path, which verifies its own delivery instead of the pointer reservation.
+    submitStatuslessCodexMailboxPointer(
+      {
+        mailboxOwner: args.deps.mailboxOwner,
+        state: args.state,
+        getDb: args.deps.getDb,
+        getLeaf: args.deps.getLeaf,
+        getLeafKey: args.deps.getLeafKey,
+        getMessageWaiters: args.deps.getMessageWaiters,
+        getTerminalProcessIncarnation: args.deps.getTerminalProcessIncarnation,
+        getCliCommand: args.deps.getCliCommand,
+        submitStatuslessCodexPointer: args.deps.submitStatuslessCodexPointer,
+        deferRedriveUntilPtyOutput: args.deferRedriveUntilPtyOutput,
+        clearDeferredOutputRedrive: args.clearDeferredOutputRedrive,
+        settle: args.settle,
+        redrive: args.redrive
+      },
+      {
+        leaf: args.leaf,
+        mailboxHandle: args.mailboxHandle,
+        unread: args.messages,
+        newestSequence: args.newestSequence,
+        statuslessIdleProof: args.statuslessIdleProof
+      }
+    )
     return
   }
   const expectedTarget = args.deps.resolveSubmitTarget(args.leaf, ptyId)
@@ -164,8 +214,12 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           state: args.state,
           getDb: args.deps.getDb,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
+          getTerminalProcessIncarnation: args.deps.getTerminalProcessIncarnation,
           getMessageWaiters: args.deps.getMessageWaiters,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
+          ...(args.deps.requestSleepingRecipientWake
+            ? { requestSleepingRecipientWake: args.deps.requestSleepingRecipientWake }
+            : {}),
           writePty: args.deps.writePty,
           settle: args.settle,
           redrive: args.redrive
@@ -177,7 +231,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           newestSequence: args.newestSequence,
           ptyId,
           flight,
-          expectedTarget
+          expectedTarget,
+          ...(args.statuslessIdleProof ? { statuslessIdleProof: args.statuslessIdleProof } : {})
         }
       )
     flight.submitEnter = submitEnter

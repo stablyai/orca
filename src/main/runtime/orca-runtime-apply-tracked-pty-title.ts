@@ -149,6 +149,16 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         this.checkDeliverySettledAndArmRecheck(leaf)
       ) {
         this.deliverPendingMessagesForLeaf(leaf)
+      } else if (
+        prevStatus === 'working' &&
+        agentStatus === null &&
+        (pty?.launchAgent === 'codex' || pty?.foregroundAgent === 'codex')
+      ) {
+        // Codex clears its spinner to a plain cwd title at the ready composer.
+        const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+        if (handle) {
+          this.deliverPendingMessagesForHandle(handle)
+        }
       }
     }
     return ptyRecordChanged

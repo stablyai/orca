@@ -3,6 +3,14 @@ import {
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { mergeBackgroundMountColdRestorePaneScopes } from './background-terminal-cold-restore-scope'
+
+export {
+  applyBackgroundMountColdRestorePaneRestriction,
+  getBackgroundMountColdRestorePaneKeys,
+  pruneBackgroundMountColdRestorePaneRestrictions,
+  type BackgroundMountColdRestorePaneRestrictions
+} from './background-terminal-cold-restore-scope'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()
 const requestListeners = new Set<() => void>()
@@ -13,7 +21,10 @@ function mergePendingMount(detail: BackgroundMountTerminalWorktreeDetail): void 
   if (!existing) {
     pendingMounts.set(detail.worktreeId, {
       worktreeId: detail.worktreeId,
-      ...(detail.tabIds !== undefined ? { tabIds: [...new Set(detail.tabIds)] } : {})
+      ...(detail.tabIds !== undefined ? { tabIds: [...new Set(detail.tabIds)] } : {}),
+      ...(detail.coldRestorePaneKeysByTabId
+        ? { coldRestorePaneKeysByTabId: detail.coldRestorePaneKeysByTabId }
+        : {})
     })
     return
   }
@@ -21,9 +32,16 @@ function mergePendingMount(detail: BackgroundMountTerminalWorktreeDetail): void 
     pendingMounts.set(detail.worktreeId, { worktreeId: detail.worktreeId })
     return
   }
+  const tabIds = [...new Set([...existing.tabIds, ...detail.tabIds])]
+  const coldRestorePaneKeysByTabId = mergeBackgroundMountColdRestorePaneScopes(
+    existing,
+    detail,
+    tabIds
+  )
   pendingMounts.set(detail.worktreeId, {
     worktreeId: detail.worktreeId,
-    tabIds: [...new Set([...existing.tabIds, ...detail.tabIds])]
+    tabIds,
+    ...(coldRestorePaneKeysByTabId ? { coldRestorePaneKeysByTabId } : {})
   })
 }
 

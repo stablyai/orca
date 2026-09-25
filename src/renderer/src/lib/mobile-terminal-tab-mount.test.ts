@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import { planMobileTerminalTabMount } from './mobile-terminal-tab-mount'
+import { resolveMobileTerminalTabMount } from './mobile-terminal-tab-mount'
 import type { TerminalTabPtyOwnershipState } from './terminal-tab-for-pty-id'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function state(tabCount = 1): TerminalTabPtyOwnershipState {
   return {
@@ -16,24 +18,23 @@ function state(tabCount = 1): TerminalTabPtyOwnershipState {
   }
 }
 
-describe('planMobileTerminalTabMount', () => {
+describe('resolveMobileTerminalTabMount', () => {
   it('keeps real-tab requests targeted to exactly one tab', () => {
-    expect(planMobileTerminalTabMount(state(), { worktreeId: 'wt', tabId: 'tab-0' })).toEqual({
-      worktreeId: 'wt',
-      tabIds: ['tab-0']
+    expect(resolveMobileTerminalTabMount(state(), { worktreeId: 'wt', tabId: 'tab-0' })).toEqual({
+      kind: 'mount',
+      detail: { worktreeId: 'wt', tabIds: ['tab-0'] }
     })
   })
 
   it('resolves synthetic handles to exactly one owning tab at workspace scale', () => {
-    expect(planMobileTerminalTabMount(state(200), { worktreeId: 'wt', ptyId: 'wt@@173' })).toEqual({
-      worktreeId: 'wt',
-      tabIds: ['tab-173']
-    })
+    expect(
+      resolveMobileTerminalTabMount(state(200), { worktreeId: 'wt', ptyId: 'wt@@173' })
+    ).toEqual({ kind: 'mount', detail: { worktreeId: 'wt', tabIds: ['tab-173'] } })
   })
 
   it('does not mount the whole worktree when a stale pty id has no owner', () => {
     expect(
-      planMobileTerminalTabMount(state(200), { worktreeId: 'wt', ptyId: 'wt@@missing' })
+      resolveMobileTerminalTabMount(state(200), { worktreeId: 'wt', ptyId: 'wt@@missing' })
     ).toBeNull()
   })
 
@@ -46,7 +47,7 @@ describe('planMobileTerminalTabMount', () => {
       ptyIdsByLeafId: { leaf: 'wt@@173' }
     }
 
-    expect(planMobileTerminalTabMount(s, { worktreeId: 'wt', ptyId: 'wt@@173' })).toBeNull()
+    expect(resolveMobileTerminalTabMount(s, { worktreeId: 'wt', ptyId: 'wt@@173' })).toBeNull()
   })
 
   it('mounts the tab whose pane is mounted when a stale layout row also claims the pty', () => {
@@ -59,9 +60,9 @@ describe('planMobileTerminalTabMount', () => {
       ptyIdsByLeafId: { leaf: 'wt@@173' }
     }
 
-    expect(planMobileTerminalTabMount(s, { worktreeId: 'wt', ptyId: 'wt@@173' })).toEqual({
-      worktreeId: 'wt',
-      tabIds: ['tab-173']
+    expect(resolveMobileTerminalTabMount(s, { worktreeId: 'wt', ptyId: 'wt@@173' })).toEqual({
+      kind: 'mount',
+      detail: { worktreeId: 'wt', tabIds: ['tab-173'] }
     })
   })
 
@@ -69,7 +70,7 @@ describe('planMobileTerminalTabMount', () => {
     const isTabMounted = vi.fn()
 
     expect(
-      planMobileTerminalTabMount(
+      resolveMobileTerminalTabMount(
         state(200),
         { worktreeId: 'wt', tabId: 'tab-missing' },
         { isTabMounted }
@@ -82,12 +83,12 @@ describe('planMobileTerminalTabMount', () => {
     const isTabMounted = vi.fn().mockReturnValue(true)
 
     expect(
-      planMobileTerminalTabMount(
+      resolveMobileTerminalTabMount(
         state(200),
         { worktreeId: 'wt', ptyId: 'wt@@173' },
         { isTabMounted }
       )
-    ).toBeNull()
+    ).toEqual({ kind: 'already-mounted', tabId: 'tab-173' })
     expect(isTabMounted).toHaveBeenCalledTimes(1)
     expect(isTabMounted).toHaveBeenCalledWith('tab-173', 'wt')
   })
@@ -96,8 +97,83 @@ describe('planMobileTerminalTabMount', () => {
     const isTabMounted = vi.fn(() => false)
 
     expect(
-      planMobileTerminalTabMount(state(), { worktreeId: 'wt', tabId: 'tab-0' }, { isTabMounted })
-    ).toEqual({ worktreeId: 'wt', tabIds: ['tab-0'] })
+      resolveMobileTerminalTabMount(state(), { worktreeId: 'wt', tabId: 'tab-0' }, { isTabMounted })
+    ).toEqual({ kind: 'mount', detail: { worktreeId: 'wt', tabIds: ['tab-0'] } })
     expect(isTabMounted).toHaveBeenCalledWith('tab-0', 'wt')
+  })
+
+  // Why the distinction matters: a slept pane whose tab is still mounted cannot
+  // be woken by a mount — the caller must fire the in-place wake instead, so
+  // "already mounted" must be distinguishable from "tab does not resolve".
+  it('reports an already-mounted tab instead of collapsing it into null', () => {
+    expect(
+      resolveMobileTerminalTabMount(
+        state(),
+        { worktreeId: 'wt', tabId: 'tab-0' },
+        { isTabMounted: () => true }
+      )
+    ).toEqual({ kind: 'already-mounted', tabId: 'tab-0' })
+  })
+
+  it('scopes an inbound-message mount to its addressed split leaf', () => {
+    expect(
+      resolveMobileTerminalTabMount(
+        state(),
+        {
+          worktreeId: 'wt',
+          tabId: 'tab-0',
+          paneKey: `tab-0:${LEAF_ID}`,
+          intent: 'inbound-message'
+        },
+        { isTabMounted: () => false }
+      )
+    ).toEqual({
+      kind: 'mount',
+      detail: {
+        worktreeId: 'wt',
+        tabIds: ['tab-0'],
+        coldRestorePaneKeysByTabId: { 'tab-0': [`tab-0:${LEAF_ID}`] }
+      }
+    })
+  })
+
+  it('keeps client-subscribe mounts unscoped even when they carry pane identity', () => {
+    expect(
+      resolveMobileTerminalTabMount(
+        state(),
+        {
+          worktreeId: 'wt',
+          tabId: 'tab-0',
+          paneKey: `tab-0:${LEAF_ID}`,
+          intent: 'client-subscribe'
+        },
+        { isTabMounted: () => false }
+      )
+    ).toEqual({ kind: 'mount', detail: { worktreeId: 'wt', tabIds: ['tab-0'] } })
+  })
+
+  it('does not widen malformed inbound pane identity into an unscoped mount', () => {
+    expect(
+      resolveMobileTerminalTabMount(
+        state(),
+        {
+          worktreeId: 'wt',
+          tabId: 'tab-0',
+          paneKey: 'tab-0:not-a-stable-leaf',
+          intent: 'inbound-message'
+        },
+        { isTabMounted: () => false }
+      )
+    ).toBeNull()
+  })
+
+  it('returns null when the tab does not resolve at all', () => {
+    expect(
+      resolveMobileTerminalTabMount(
+        state(),
+        { worktreeId: 'wt', tabId: 'tab-missing' },
+        { isTabMounted: () => true }
+      )
+    ).toBeNull()
   })
 })

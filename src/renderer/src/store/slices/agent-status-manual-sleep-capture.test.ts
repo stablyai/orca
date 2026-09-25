@@ -141,6 +141,29 @@ describe('manual sleep agent session capture', () => {
     expect(records['tab-1:working'].restoreOnTabOpenOnly).toBeUndefined()
   })
 
+  it('marks a retained auto-hibernation record for tab-open-only restore on manual sleep', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    const retainedState: Partial<AppState> = {
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:done': makeSleepingRecord({
+          paneKey: 'tab-1:done',
+          state: 'done',
+          origin: 'worktree-sleep'
+        })
+      }
+    }
+    store.setState(retainedState)
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:done'].restoreOnTabOpenOnly).toBe(
+      true
+    )
+  })
+
   it('preserves retained completed sessions as intentional sleep records', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

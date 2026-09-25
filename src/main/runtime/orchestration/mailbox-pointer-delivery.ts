@@ -6,8 +6,17 @@ import {
 } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 import {
+  OrchestrationMailboxPointerHandleDelivery,
+  type OrchestrationMailboxPointerDeliveryOptions
+} from './mailbox-pointer-handle-delivery'
+import { pointerEnterDelayMs } from './mailbox-pointer-enter-delay'
+import { OrchestrationMailboxStatuslessCodexProofCoordinator } from './mailbox-statusless-codex-proof-coordinator'
+import { OrchestrationMailboxStatuslessCodexRedrive } from './mailbox-statusless-codex-redrive'
+import { isStatuslessIdleProofCurrent } from './mailbox-statusless-idle-proof'
+import {
   OrchestrationMailboxPointerState,
-  type OrchestrationMailboxDeliveryFlight
+  type OrchestrationMailboxDeliveryFlight,
+  type OrchestrationStatuslessIdleProof
 } from './mailbox-pointer-state'
 import {
   MAILBOX_POINTER_RESERVED,
@@ -18,46 +27,32 @@ import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
 export type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 
-const DEFAULT_POINTER_ENTER_DELAY_MS = 500
-
-function pointerEnterDelayMs(): number {
-  const configured = Number(process.env.ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS)
-  return Number.isFinite(configured) && configured >= 1 && configured <= 60_000
-    ? configured
-    : DEFAULT_POINTER_ENTER_DELAY_MS
-}
-
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
   private readonly state = new OrchestrationMailboxPointerState()
   private readonly coldParkedPtys = new Set<string>()
-  constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
+  private readonly statuslessCodexProofs: OrchestrationMailboxStatuslessCodexProofCoordinator
+  private readonly statuslessCodexRedrives: OrchestrationMailboxStatuslessCodexRedrive
+  private readonly handleDelivery: OrchestrationMailboxPointerHandleDelivery<TWaiter>
+
+  constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {
+    this.statuslessCodexProofs = new OrchestrationMailboxStatuslessCodexProofCoordinator(deps)
+    this.statuslessCodexRedrives = new OrchestrationMailboxStatuslessCodexRedrive((mailboxHandle) =>
+      this.redrive(mailboxHandle, true)
+    )
+    this.handleDelivery = new OrchestrationMailboxPointerHandleDelivery(
+      deps,
+      this.statuslessCodexProofs,
+      (leaf, options) => this.deliver(leaf, options)
+    )
+  }
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
-    const terminalHandle = this.deps.deliveryTarget.resolveTerminalHandle(handle)
-    if (!terminalHandle) {
-      return
-    }
-    try {
-      const leaf = this.deps.getLiveLeafForHandle(terminalHandle)
-      if (leaf.lastAgentStatus !== 'idle' || !leaf.lastAgentStatusObservedLive) {
-        return
-      }
-      const mailboxHandle = this.deps.mailboxOwner.resolve(leaf, handle)
-      if (mailboxHandle) {
-        this.deliver(leaf, { mailboxHandle, reservedTypes })
-      }
-    } catch {
-      // Persisted mail remains available to explicit check or a later idle edge.
-    }
+    this.handleDelivery.deliverForHandle(handle, reservedTypes)
   }
 
   deliver(
     leaf: OrchestrationMailboxLeaf,
-    options: {
-      mailboxHandle: string
-      reservedTypes?: ReadonlySet<string>
-      skipAbsenceProbe?: boolean
-    }
+    options: OrchestrationMailboxPointerDeliveryOptions
   ): void {
     const db = this.deps.getDb()
     const mailboxHandle = options.mailboxHandle
@@ -65,6 +60,16 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
+      return
+    }
+    if (
+      options.statuslessIdleProof &&
+      !isStatuslessIdleProofCurrent(
+        leaf,
+        options.statuslessIdleProof,
+        this.deps.getTerminalProcessIncarnation
+      )
+    ) {
       return
     }
     if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
@@ -83,12 +88,24 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (leaf.ptyId) {
       const deferredEnter = this.state.takeDeferredEnter(leaf.ptyId)
       if (deferredEnter) {
-        this.state.parkDelivery(leaf.ptyId, mailboxHandle, leaf, options.reservedTypes)
+        this.state.parkDelivery(
+          leaf.ptyId,
+          mailboxHandle,
+          leaf,
+          options.reservedTypes,
+          options.statuslessIdleProof
+        )
         deferredEnter()
         return
       }
       if (this.state.hasFlight(leaf.ptyId)) {
-        this.state.parkDelivery(leaf.ptyId, mailboxHandle, leaf, options.reservedTypes)
+        this.state.parkDelivery(
+          leaf.ptyId,
+          mailboxHandle,
+          leaf,
+          options.reservedTypes,
+          options.statuslessIdleProof
+        )
         return
       }
     }
@@ -136,7 +153,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         mailboxHandle,
         newestSequence,
         leaf.ptyId,
-        this.leafKey(leaf)
+        this.deps.getLeafKey(leaf.tabId, leaf.leafId)
       )
     ) {
       return
@@ -147,7 +164,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         mailboxHandle,
         options.skipAbsenceProbe,
         (probedLeaf, ptyId, probedMailbox) =>
-          this.redeliverAfterProbe(probedLeaf, ptyId, probedMailbox)
+          this.redeliverAfterProbe(probedLeaf, ptyId, probedMailbox, options.statuslessIdleProof)
       )
     ) {
       return
@@ -161,6 +178,15 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       newestSequence,
       enterDelayMs: pointerEnterDelayMs(),
       leafKey: this.leafKey(leaf),
+      ...(options.statuslessIdleProof ? { statuslessIdleProof: options.statuslessIdleProof } : {}),
+      ...(this.deps.submitStatuslessCodexPointer
+        ? {
+            deferRedriveUntilPtyOutput: (ptyId: string, redriveMailbox: string, sequence: number) =>
+              this.statuslessCodexRedrives.schedule(ptyId, redriveMailbox, sequence),
+            clearDeferredOutputRedrive: (ptyId: string, redriveMailbox: string, sequence: number) =>
+              this.statuslessCodexRedrives.clear(ptyId, redriveMailbox, sequence)
+          }
+        : {}),
       settle: (ptyId, flight) => this.settle(ptyId, flight),
       redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
     })
@@ -172,6 +198,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   retirePty(ptyId: string): void {
     this.coldParkedPtys.delete(ptyId)
+    this.statuslessCodexProofs.retirePty(ptyId)
+    this.statuslessCodexRedrives.retirePty(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
     if (flight?.enterTimer != null) {
       clearTimeout(flight.enterTimer)
@@ -194,6 +222,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     for (const mailboxHandle of releasedMailboxes) {
       this.redrive(mailboxHandle, true)
     }
+  }
+
+  redriveAfterPtyOutput(ptyId: string): void {
+    this.statuslessCodexRedrives.handlePtyOutput(ptyId)
   }
 
   observeAgentWorking(ptyId: string): void {
@@ -230,15 +262,25 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   private redeliverAfterProbe(
     leaf: OrchestrationMailboxLeaf,
     ptyId: string,
-    mailboxHandle: string
+    mailboxHandle: string,
+    statuslessIdleProof?: OrchestrationStatuslessIdleProof
   ): void {
     const currentLeaf = this.deps.getLeaf(this.leafKey(leaf))
     if (
       currentLeaf?.ptyId === ptyId &&
-      currentLeaf.lastAgentStatus === 'idle' &&
-      currentLeaf.lastAgentStatusObservedLive
+      ((currentLeaf.lastAgentStatus === 'idle' && currentLeaf.lastAgentStatusObservedLive) ||
+        (statuslessIdleProof &&
+          isStatuslessIdleProofCurrent(
+            currentLeaf,
+            statuslessIdleProof,
+            this.deps.getTerminalProcessIncarnation
+          )))
     ) {
-      this.deliver(currentLeaf, { mailboxHandle, skipAbsenceProbe: true })
+      this.deliver(currentLeaf, {
+        mailboxHandle,
+        skipAbsenceProbe: true,
+        ...(statuslessIdleProof ? { statuslessIdleProof } : {})
+      })
     }
   }
 
@@ -256,7 +298,13 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         this.parkRedelivery(mailboxHandle, delivery.reservedTypes)
         this.redrive(mailboxHandle)
       } else {
-        this.deliver(currentLeaf, { mailboxHandle, reservedTypes: delivery.reservedTypes })
+        this.deliver(currentLeaf, {
+          mailboxHandle,
+          reservedTypes: delivery.reservedTypes,
+          ...(delivery.statuslessIdleProof
+            ? { statuslessIdleProof: delivery.statuslessIdleProof }
+            : {})
+        })
       }
     }
   }

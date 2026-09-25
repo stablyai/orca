@@ -13,6 +13,7 @@ export function TerminalSplitWorkspaceSurfaces({
     activeView,
     activityTerminalPortals,
     anyMountedWorktreeHasLayout,
+    backgroundMountColdRestorePaneKeysRef,
     backgroundMountTabIdsByWorktreeRef,
     effectiveActiveLayout,
     effectiveParkedTerminalWorktreeIds,
@@ -68,6 +69,9 @@ export function TerminalSplitWorkspaceSurfaces({
               activityTerminalPortals={activityTerminalPortals}
               backgroundMountTabIds={
                 backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+              }
+              backgroundMountColdRestorePaneKeys={
+                backgroundMountColdRestorePaneKeysRef.current.get(workspace.id) ?? null
               }
               activationDeferredMountTabIds={
                 activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null

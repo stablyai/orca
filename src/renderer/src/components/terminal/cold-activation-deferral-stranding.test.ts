@@ -46,6 +46,11 @@ const initialState = useAppStore.getInitialState()
 const originalRequestIdle = globalThis.requestIdleCallback
 const originalCancelIdle = globalThis.cancelIdleCallback
 
+function parkingFoundationFixture<T>(value: unknown): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness supplies every TerminalParkingFoundation member reached by cold activation and deferred admission.
+  return value as T
+}
+
 function terminalTab(id: string, ptyId: string): TerminalTab {
   return {
     id,
@@ -80,12 +85,15 @@ type HarnessProps = { worktreeId: string | null; gateOpen: boolean }
 /** Mirrors use-terminal-controller.ts:30-32: cold activation during render, then admission. */
 function useStrandingHarness(props: HarnessProps) {
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
+  const backgroundMountColdRestorePaneKeysRef = useRef(
+    new Map<string, ReadonlyMap<string, ReadonlySet<string>>>()
+  )
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   const activationDeferralPlanRevisionRef = useRef(0)
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
-  const foundation = {
+  const foundation = parkingFoundationFixture<TerminalParkingFoundation>({
     activationDeferralPlanRevisionRef,
     activationDeferredMountTabIdsByWorktreeRef,
     activeGroupIdByWorktree: {},
@@ -94,6 +102,7 @@ function useStrandingHarness(props: HarnessProps) {
     activeWorktreeDeferralHostId: 'local',
     activityTerminalPortals: [],
     backgroundMountRevision,
+    backgroundMountColdRestorePaneKeysRef,
     backgroundMountTabIdsByWorktreeRef,
     groupsByWorktree: {},
     hydrationSucceeded: props.gateOpen,
@@ -111,7 +120,7 @@ function useStrandingHarness(props: HarnessProps) {
     workspaceSessionReady: props.gateOpen,
     workspaceSurfaceIds: SURFACE_IDS,
     workspaceSurfaceIdSet: new Set(SURFACE_IDS)
-  } as unknown as TerminalParkingFoundation
+  })
   const coldActivation = Object.assign(foundation, applyTerminalColdActivation(foundation))
   useActivationDeferredTabAdmission(coldActivation)
   return { activationDeferredMountTabIdsByWorktreeRef, backgroundMountTabIdsByWorktreeRef }

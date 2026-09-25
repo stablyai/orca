@@ -21,6 +21,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn(() => null) }
 }))
 
+async function flushScheduledReconciliation(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve))
+}
+
 describe('orchestration mailbox filtered waiters', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -58,6 +62,7 @@ describe('orchestration mailbox filtered waiters', () => {
     expect(next.messages).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: question.id })])
     )
+    await flushScheduledReconciliation()
     db.close()
   })
 
@@ -99,6 +104,7 @@ describe('orchestration mailbox filtered waiters', () => {
     expect(next.messages).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: question.id })])
     )
+    await flushScheduledReconciliation()
     db.close()
   })
 
@@ -133,6 +139,7 @@ describe('orchestration mailbox filtered waiters', () => {
       types: 'question'
     })
     expect(next.messages).toEqual([expect.objectContaining({ id: question.id })])
+    await flushScheduledReconciliation()
     db.close()
   })
 })

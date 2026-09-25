@@ -3,6 +3,7 @@ import type { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-targ
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
+import type { SubmitStatuslessCodexPointer } from './mailbox-statusless-codex-submit'
 import type { OrchestrationCliCommand } from './cli-command'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 
@@ -28,11 +29,17 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getTabTitle: (tabId: string) => string | null | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   getTerminalHandleForLeafKey: (leafKey: string) => string | undefined
+  getTerminalProcessIncarnation: (terminalHandle: string) => string | null
   resolveSubmitTarget: (
     leaf: OrchestrationMailboxLeaf,
     ptyId: string
   ) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  proveStatuslessCodexIdle?: (terminalHandle: string, ptyId: string) => Promise<string | null>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
+  /** Ask for an auto-slept recipient to be woken. Optional so hosts that predate
+   *  the wake path keep today's silent give-up. */
+  requestSleepingRecipientWake?: (mailboxHandle: string) => void
+  submitStatuslessCodexPointer?: SubmitStatuslessCodexPointer
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
 }

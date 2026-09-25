@@ -1,7 +1,10 @@
 import { createPortal } from 'react-dom'
 import TerminalPane from './terminal-pane/TerminalPane'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
-import { shouldMountBackgroundWorktreeTab } from './terminal/background-terminal-worktree-mount'
+import {
+  getBackgroundMountColdRestorePaneKeys,
+  shouldMountBackgroundWorktreeTab
+} from './terminal/background-terminal-worktree-mount'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalLegacyTerminalPanes({
@@ -14,6 +17,7 @@ export function TerminalLegacyTerminalPanes({
     activeTabType,
     activeView,
     activityTerminalPortals,
+    backgroundMountColdRestorePaneKeysRef,
     backgroundMountTabIdsByWorktreeRef,
     effectiveParkedTerminalWorktreeIds,
     evictionExemptTerminalTabIds,
@@ -91,6 +95,11 @@ export function TerminalLegacyTerminalPanes({
                       isVisible={isActiveTerminalTab || isActivityPortalTab}
                       isWorktreeActive={isVisible || isActivityPortalTab}
                       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
+                      coldRestorePaneKeys={getBackgroundMountColdRestorePaneKeys(
+                        backgroundMountColdRestorePaneKeysRef.current,
+                        workspace.id,
+                        tab.id
+                      )}
                       onPtyExit={(ptyId, exitCode) => handlePtyExit(tab.id, ptyId, exitCode)}
                       onCloseTab={() => handleCloseTab(tab.id)}
                     />

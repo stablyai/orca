@@ -14,6 +14,11 @@ import type { TerminalParkingFoundation } from './use-terminal-parking-foundatio
 
 const initialState = useAppStore.getInitialState()
 
+function terminalParkingFixture<T>(value: unknown): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these fixtures populate every TerminalParkingFoundation field read by the isolated cold-activation and parking-pass functions.
+  return value as T
+}
+
 /** An id-only surface array that reports how often a caller re-derived its ids. */
 function countingSurfaces(ids: string[]): { surfaces: WorkspaceSurface[]; mapCalls: () => number } {
   let mapCalls = 0
@@ -77,7 +82,7 @@ describe('workspace surface ids', () => {
   it('does not rebuild a surface-id array or set on a cold-activation render', () => {
     const ids = Array.from({ length: 423 }, (_, index) => `repo::/worktree-${index}`)
     const { surfaces, mapCalls } = countingSurfaces(ids)
-    const controller = {
+    const controller = terminalParkingFixture<TerminalParkingFoundation>({
       activationDeferralPlanRevisionRef: { current: 0 },
       activationDeferredMountTabIdsByWorktreeRef: { current: new Map() },
       activeGroupIdByWorktree: {},
@@ -86,6 +91,7 @@ describe('workspace surface ids', () => {
       activeWorktreeDeferralHostId: null,
       activityTerminalPortals: [],
       backgroundMountTabIdsByWorktreeRef: { current: new Map() },
+      backgroundMountColdRestorePaneKeysRef: { current: new Map() },
       groupsByWorktree: {},
       hydrationSucceeded: false,
       lastActivationWorktreeIdRef: { current: null },
@@ -102,7 +108,7 @@ describe('workspace surface ids', () => {
       workspaceSurfaces: surfaces,
       workspaceSurfaceIds: ids,
       workspaceSurfaceIdSet: new Set(ids)
-    } as unknown as TerminalParkingFoundation
+    })
 
     applyTerminalColdActivation(controller)
     applyTerminalColdActivation(controller)

@@ -88,6 +88,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+    const priorLaunchAgent = pty.launchAgent
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
       this._orchestrationDb?.retainReplacedWorkerTerminalResources({
@@ -144,6 +145,20 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+    }
+    if (
+      this._orchestrationDb &&
+      priorLaunchAgent !== 'codex' &&
+      pty.launchAgent === 'codex' &&
+      binding &&
+      paneKey
+    ) {
+      const leafKey = this.getLeafKey(binding.tabId, binding.leafId)
+      const leaf = this.leaves.get(leafKey)
+      if (leaf?.ptyId === ptyId && leaf.writable && leaf.lastAgentStatus === null) {
+        // Why: graph publication can precede provider-owned reattach identity, so registration must redrive that ordering.
+        this.deliverPendingMessagesForHandle(this.issueHandle(leaf))
+      }
     }
   }
 

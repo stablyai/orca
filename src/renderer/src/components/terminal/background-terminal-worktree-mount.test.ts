@@ -9,12 +9,15 @@ import {
 import {
   COLD_ACTIVATION_TAB_DEFER_THRESHOLD,
   addBackgroundMountedTerminalWorktree,
+  applyBackgroundMountColdRestorePaneRestriction,
   applyBackgroundMountTabRestriction,
   canDeferColdActivationTabsForHost,
   canMountTerminalWorkspaceForStartup,
   collectDeferredMountTabIds,
   hasRequestedBackgroundTerminalWorktreeMount,
+  getBackgroundMountColdRestorePaneKeys,
   planColdActivationTabDeferral,
+  pruneBackgroundMountColdRestorePaneRestrictions,
   pruneClosedBackgroundMountTabs,
   requestBackgroundTerminalWorktreeMount,
   revealActivationDeferredTabs,
@@ -79,6 +82,77 @@ describe('background terminal mount request registry', () => {
     requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-1', tabIds: ['tab-1'] })
     requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-1' })
     expect(takeAllPendingBackgroundTerminalWorktreeMounts()).toEqual([{ worktreeId: 'wt-1' }])
+  })
+
+  it('unions mail pane scopes without narrowing an unscoped request for the same tab', () => {
+    takeAllPendingBackgroundTerminalWorktreeMounts()
+    requestBackgroundTerminalWorktreeMount({
+      worktreeId: 'wt-1',
+      tabIds: ['tab-1'],
+      coldRestorePaneKeysByTabId: { 'tab-1': ['tab-1:leaf-1'] }
+    })
+    requestBackgroundTerminalWorktreeMount({
+      worktreeId: 'wt-1',
+      tabIds: ['tab-1', 'tab-2'],
+      coldRestorePaneKeysByTabId: {
+        'tab-1': ['tab-1:leaf-2'],
+        'tab-2': ['tab-2:leaf-1']
+      }
+    })
+    expect(takeAllPendingBackgroundTerminalWorktreeMounts()).toEqual([
+      {
+        worktreeId: 'wt-1',
+        tabIds: ['tab-1', 'tab-2'],
+        coldRestorePaneKeysByTabId: {
+          'tab-1': ['tab-1:leaf-1', 'tab-1:leaf-2'],
+          'tab-2': ['tab-2:leaf-1']
+        }
+      }
+    ])
+
+    requestBackgroundTerminalWorktreeMount({
+      worktreeId: 'wt-1',
+      tabIds: ['tab-1'],
+      coldRestorePaneKeysByTabId: { 'tab-1': ['tab-1:leaf-1'] }
+    })
+    requestBackgroundTerminalWorktreeMount({ worktreeId: 'wt-1', tabIds: ['tab-1'] })
+    expect(takeAllPendingBackgroundTerminalWorktreeMounts()).toEqual([
+      { worktreeId: 'wt-1', tabIds: ['tab-1'] }
+    ])
+  })
+})
+
+describe('background mount cold-restore pane restriction', () => {
+  it('keeps split-tab mail wakes pane-scoped and lets an unscoped mount lift the gate', () => {
+    const restrictions = new Map<string, ReadonlyMap<string, ReadonlySet<string>>>()
+    applyBackgroundMountColdRestorePaneRestriction(restrictions, {
+      worktreeId: 'wt-1',
+      tabIds: ['tab-1'],
+      coldRestorePaneKeysByTabId: { 'tab-1': ['tab-1:leaf-1'] }
+    })
+    expect(getBackgroundMountColdRestorePaneKeys(restrictions, 'wt-1', 'tab-1')).toEqual(
+      new Set(['tab-1:leaf-1'])
+    )
+
+    applyBackgroundMountColdRestorePaneRestriction(restrictions, {
+      worktreeId: 'wt-1',
+      tabIds: ['tab-1']
+    })
+    expect(getBackgroundMountColdRestorePaneKeys(restrictions, 'wt-1', 'tab-1')).toBeUndefined()
+  })
+
+  it('preserves the per-worktree map identity when every restricted tab remains live', () => {
+    const byTabId = new Map([
+      ['tab-1', new Set(['tab-1:leaf-1'])],
+      ['tab-2', new Set(['tab-2:leaf-1'])]
+    ])
+    const restrictions = new Map([['wt-1', byTabId]])
+
+    pruneBackgroundMountColdRestorePaneRestrictions(restrictions, {
+      'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
+    })
+
+    expect(restrictions.get('wt-1')).toBe(byTabId)
   })
 })
 

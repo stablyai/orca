@@ -3,23 +3,15 @@
 import { OrcaRuntimeWithAttachWindow } from './orca-runtime-attach-window'
 import type {
   RuntimeRendererSyncWindowGraph,
-  RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
-
-/** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
-function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
-  const seen = new Set<string>()
-  for (const tab of tabs) {
-    if (seen.has(tab.tabId)) {
-      throw new Error('duplicate_runtime_tab_id')
-    }
-    seen.add(tab.tabId)
-  }
-}
+import {
+  assertUniqueRuntimeGraphTabIds,
+  indexIncomingRuntimePtyOwners
+} from './runtime-graph-sync-input'
 
 export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow {
   shouldRelayTerminalBrowserOpens(): boolean {
@@ -98,6 +90,12 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // Why: renderer reloads can briefly republish the same leaf with no ptyId;
     // keep live CLI handles usable while the UI graph rebuilds.
     const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
+    const incomingPtyOwnerByPtyId = indexIncomingRuntimePtyOwners({
+      leaves: lifecycleLeaves,
+      existingLeaves: this.leaves,
+      preserveLivePtysDuringReload,
+      getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId)
+    })
     for (const leaf of lifecycleLeaves) {
       if (leaf.ptyId) {
         if (leaf.parked) {
@@ -165,8 +163,28 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
         // Why: mobile can subscribe while the pane is waiting for its first PTY.
         // Keep that handle usable after the recovery mount binds it.
         const adoptedFirstPty =
-          existing.ptyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
+          existing.ptyId === null &&
+          this.adoptFirstPtyForLeafHandle(
+            leafKey,
+            ptyId,
+            ptyGeneration,
+            ptyId ? (incomingPtyOwnerByPtyId.get(ptyId) ?? null) : null
+          )
         if (!adoptedFirstPty) {
+          this.invalidateLeafHandle(leafKey)
+        }
+      } else if (!existing && ptyId) {
+        // Why: a slept pane's handle is minted from its resume record with no leaf
+        // behind it. Adopt the PTY the wake produced so the handle a sender
+        // addressed keeps resolving instead of being orphaned by a remint.
+        if (
+          !this.adoptFirstPtyForLeafHandle(
+            leafKey,
+            ptyId,
+            ptyGeneration,
+            incomingPtyOwnerByPtyId.get(ptyId) ?? null
+          )
+        ) {
           this.invalidateLeafHandle(leafKey)
         }
       }
@@ -291,20 +309,34 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
-      const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+      const previousLeaf = previousLeaves.get(leafKey)
+      const becameWritable =
+        leaf.writable &&
+        (!graphWasReady || previousLeaf?.ptyId !== leaf.ptyId || !previousLeaf.writable)
       if (
         this._orchestrationDb &&
         leaf.lastAgentStatus === 'idle' &&
         leaf.lastAgentStatusObservedLive &&
         this.checkDeliverySettledAndArmRecheck(leaf) &&
         leaf.writable &&
-        (!graphWasReady ||
-          previousLeaf?.ptyId !== leaf.ptyId ||
-          !previousLeaf.writable ||
-          previousLeaf.lastAgentStatus !== 'idle' ||
-          !previousLeaf.lastAgentStatusObservedLive)
+        (becameWritable ||
+          previousLeaf?.lastAgentStatus !== 'idle' ||
+          !previousLeaf?.lastAgentStatusObservedLive)
       ) {
         this.deliverPendingMessagesForLeaf(leaf)
+      } else if (
+        this._orchestrationDb &&
+        becameWritable &&
+        leaf.ptyId &&
+        this.ptysById.get(leaf.ptyId)?.launchAgent === 'codex' &&
+        leaf.lastAgentStatus === null
+      ) {
+        // Why: Codex reattach has no status edge, so the writable transition starts its bounded idle proof.
+        const handle = this.handleByLeafKey.get(leafKey)
+        if (handle) {
+          this.deliverPendingMessagesForHandle(handle)
+        }
       }
     }
 

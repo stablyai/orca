@@ -6,12 +6,20 @@ import type {
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
+import type { ResumableSleptPane } from './resumable-slept-pane-listing'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { buildRuntimeTerminalVisualLayouts } from './runtime-terminal-visual-layout'
 import {
+  createIncrementalResolvedWorktreeLookup,
   includeTargetResolvedWorktree,
+  runtimeWorktreeLookupKey,
   type ResolvedWorktree
 } from './runtime-worktree-path-identity'
+import { parsePaneKey } from '../../shared/stable-pane-id'
+
+function stablePaneLeafKey(worktreeId: string, leafId: string): string {
+  return `${runtimeWorktreeLookupKey(worktreeId)}\0${leafId}`
+}
 
 type RuntimeTerminalListDependencies = {
   getGraphEpoch(): number | null
@@ -36,6 +44,12 @@ type RuntimeTerminalListDependencies = {
   buildPtySummary(
     pty: RuntimePtyWorktreeRecord,
     worktrees: Map<string, ResolvedWorktree>
+  ): RuntimeTerminalSummary
+  listResumableSleptPanes(targetWorktreeId: string | null): readonly ResumableSleptPane[]
+  buildSleptPaneSummary(
+    pane: ResumableSleptPane,
+    worktrees: Map<string, ResolvedWorktree>,
+    resolvedWorktree: ResolvedWorktree | undefined
   ): RuntimeTerminalSummary
   getSnapshots(): ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
   getTabTitle(tabId: string): string | null
@@ -115,6 +129,15 @@ export class RuntimeTerminalList {
     )
     const terminals: RuntimeTerminalSummary[] = []
     const leafPtyIds = new Set<string>()
+    // Why: a slept pane has no PTY, so a listing that demands proven-fresh
+    // liveness (the hibernation sweep) must not see one as a candidate.
+    const sleptPanes = opts.requireFreshPtyLiveness
+      ? []
+      : this.deps.listResumableSleptPanes(targetId)
+    const sleptPanesByLeaf = new Map(
+      sleptPanes.map((pane) => [stablePaneLeafKey(pane.worktreeId, pane.leafId), pane])
+    )
+    const listedLeaves = new Set<string>()
     if (graphEpoch !== null) {
       for (const leaf of this.deps.getLeaves()) {
         if (targetId && leaf.worktreeId !== targetId) {
@@ -123,13 +146,20 @@ export class RuntimeTerminalList {
         if (opts.requireFreshPtyLiveness && (!leaf.ptyId || !refreshedPtyIds?.has(leaf.ptyId))) {
           continue
         }
-        if (!leaf.ptyId && liveWorktreeIds.has(leaf.worktreeId)) {
+        const leafIdentity = stablePaneLeafKey(leaf.worktreeId, leaf.leafId)
+        const sleptPane = leaf.ptyId ? undefined : sleptPanesByLeaf.get(leafIdentity)
+        // Why: a PTY-less leaf in a worktree that still has live PTYs is normally
+        // a surface waiting to bind. A resume record makes it a slept pane, which
+        // must stay visible instead of reading as never having existed.
+        if (!leaf.ptyId && !sleptPane && liveWorktreeIds.has(leaf.worktreeId)) {
           continue
         }
         if (leaf.ptyId) {
           leafPtyIds.add(leaf.ptyId)
         }
-        terminals.push(this.deps.buildLeafSummary(leaf, worktreesById, provenLivePtyIds))
+        listedLeaves.add(leafIdentity)
+        const summary = this.deps.buildLeafSummary(leaf, worktreesById, provenLivePtyIds)
+        terminals.push(sleptPane ? { ...summary, resumable: true } : summary)
       }
     }
     for (const pty of ptys) {
@@ -142,7 +172,29 @@ export class RuntimeTerminalList {
       if (targetId && pty.worktreeId !== targetId) {
         continue
       }
+      if (pty.paneKey) {
+        const leafId = parsePaneKey(pty.paneKey)?.leafId
+        if (leafId) {
+          listedLeaves.add(stablePaneLeafKey(pty.worktreeId, leafId))
+        }
+      }
       terminals.push(this.deps.buildPtySummary(pty, worktreesById))
+    }
+    const findResolvedWorktree = createIncrementalResolvedWorktreeLookup([
+      ...worktreesById.values()
+    ])
+    for (const pane of sleptPanesByLeaf.values()) {
+      // Why: a slept pane's tab is unmounted, so its leaf left the renderer graph
+      // entirely. Synthesize the row from the resume record persistence still holds.
+      if (!listedLeaves.has(stablePaneLeafKey(pane.worktreeId, pane.leafId))) {
+        terminals.push(
+          this.deps.buildSleptPaneSummary(
+            pane,
+            worktreesById,
+            findResolvedWorktree(pane.worktreeId)
+          )
+        )
+      }
     }
     const requestedHandles = opts.handles ? new Set(opts.handles) : null
     const matching = requestedHandles

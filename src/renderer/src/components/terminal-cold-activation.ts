@@ -3,6 +3,7 @@ import {
   canDeferColdActivationTabsForHost,
   canMountTerminalWorkspaceForStartup,
   planColdActivationTabDeferral,
+  pruneBackgroundMountColdRestorePaneRestrictions,
   pruneClosedBackgroundMountTabs,
   revealActivationDeferredTabs
 } from './terminal/background-terminal-worktree-mount'
@@ -24,6 +25,7 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     activeWorktreeDeferralHostId,
     activityTerminalPortals,
     backgroundMountTabIdsByWorktreeRef,
+    backgroundMountColdRestorePaneKeysRef,
     groupsByWorktree,
     hydrationSucceeded,
     lastActivationWorktreeIdRef,
@@ -95,6 +97,8 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
           })
         : terminalProviderHasAuthoritativeSnapshot(ptyId)
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
+      // A real user activation restores the worktree's ordinary unscoped behavior.
+      backgroundMountColdRestorePaneKeysRef.current.delete(renderedActiveWorktreeId)
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
       const installedDeferralPlan = planColdActivationTabDeferral({
@@ -157,10 +161,15 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     tabsByWorktree,
     activationDeferredMountTabIdsByWorktreeRef.current
   )
+  pruneBackgroundMountColdRestorePaneRestrictions(
+    backgroundMountColdRestorePaneKeysRef.current,
+    tabsByWorktree
+  )
   for (const id of mountedWorktreeIdsRef.current) {
     if (!workspaceSurfaceIdSet.has(id)) {
       mountedWorktreeIdsRef.current.delete(id)
       backgroundMountTabIdsByWorktreeRef.current.delete(id)
+      backgroundMountColdRestorePaneKeysRef.current.delete(id)
       activationDeferredMountTabIdsByWorktreeRef.current.delete(id)
     }
   }

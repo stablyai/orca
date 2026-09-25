@@ -86,6 +86,16 @@ export class InMemoryOrchestrationMessages {
     ]
   }
 
+  getUnreadDirectMessageTypes(toHandle: string): MessageType[] {
+    return [
+      ...new Set(
+        this.messages
+          .filter((message) => message.to_handle === toHandle && message.read === 0)
+          .map((message) => message.type)
+      )
+    ].sort()
+  }
+
   getPendingMailboxPointerMessages(toHandle: string): MessageRow[] {
     return this.messages.filter(
       (message) =>
@@ -229,6 +239,10 @@ export class InMemoryOrchestrationMessages {
 
   listWorkerTerminalReleaseBacklog(): never[] {
     return []
+  }
+
+  retainReplacedWorkerTerminalResources(): number {
+    return 0
   }
 
   hasUndeliveredDirectMessageForRun(runId: string, directHandle: string): boolean {

@@ -54,6 +54,7 @@ describe('orchestration mailbox pointer submit', () => {
         state,
         getDb: () => db,
         resolveSubmitTarget: () => expectedTarget,
+        getTerminalProcessIncarnation: () => null,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
         writePty,
@@ -159,6 +160,7 @@ describe('orchestration mailbox pointer submit', () => {
             settleMailboxPointerEnter: vi.fn()
           }) as never,
         resolveSubmitTarget: () => target,
+        getTerminalProcessIncarnation: () => null,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
         writePty,
@@ -233,6 +235,7 @@ describe('orchestration mailbox pointer submit', () => {
             settleMailboxPointerEnter
           }) as never,
         resolveSubmitTarget: () => currentTarget,
+        getTerminalProcessIncarnation: () => null,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
         writePty,
@@ -363,6 +366,7 @@ describe('orchestration mailbox pointer submit', () => {
         state,
         getDb: () => ({ areUnreadMessages: () => true, releaseMailboxPointerEnter }) as never,
         resolveSubmitTarget: () => ({ ...expectedTarget, processIncarnation: 'inc-replaced' }),
+        getTerminalProcessIncarnation: () => null,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
         writePty,
@@ -424,6 +428,7 @@ describe('orchestration mailbox pointer submit', () => {
             }
           }) as never,
         resolveSubmitTarget: () => null,
+        getTerminalProcessIncarnation: () => null,
         getMessageWaiters: () => undefined,
         isLeafPtyProvenAbsent: async () => false,
         writePty: vi.fn(settledWriteStub()),

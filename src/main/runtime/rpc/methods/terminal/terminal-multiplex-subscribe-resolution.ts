@@ -59,7 +59,7 @@ export function resolveMultiplexSubscribePty(
   }
 
   // Why: a never-mounted tab has no graph leaf to await; mounting the exact tab attaches its PTY without activating the worktree.
-  runtime.requestRendererTerminalTabMount(request.terminal)
+  runtime.requestRendererTerminalTabMount(request.terminal, 'client-subscribe')
   const waitController = new AbortController()
   const pendingControllers = pendingPtyWaitControllers.get(request.streamId) ?? new Set()
   pendingControllers.add(waitController)

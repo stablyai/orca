@@ -12,6 +12,16 @@ import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+import type { RuntimeTerminalVisualLayout } from './runtime-terminal-visual-layout-contracts'
+
+export type {
+  RuntimeTerminalVisualGroupNode,
+  RuntimeTerminalVisualLayout,
+  RuntimeTerminalVisualLayoutNode,
+  RuntimeTerminalVisualPaneNode,
+  RuntimeTerminalVisualTab,
+  RuntimeTerminalVisualTerminalNode
+} from './runtime-terminal-visual-layout-contracts'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -34,54 +44,14 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
-}
-
-export type RuntimeTerminalVisualTerminalNode = {
-  type: 'terminal'
-  handle: string
-  tabId: string
-  leafId: string
-  title: string | null
-  connected: boolean
-  active: boolean
-}
-
-export type RuntimeTerminalVisualPaneNode =
-  | RuntimeTerminalVisualTerminalNode
-  | {
-      type: 'pane-split'
-      direction: Extract<TerminalPaneLayoutNode, { type: 'split' }>['direction']
-      first: RuntimeTerminalVisualPaneNode
-      second: RuntimeTerminalVisualPaneNode
-    }
-
-export type RuntimeTerminalVisualTab = {
-  tabId: string
-  title: string | null
-  activeLeafId: string | null
-  panes: RuntimeTerminalVisualPaneNode
-}
-
-export type RuntimeTerminalVisualGroupNode = {
-  type: 'group'
-  groupId: string | null
-  activeTabId: string | null
-  tabs: RuntimeTerminalVisualTab[]
-}
-
-export type RuntimeTerminalVisualLayoutNode =
-  | RuntimeTerminalVisualGroupNode
-  | {
-      type: 'split'
-      direction: Extract<TabGroupLayoutNode, { type: 'split' }>['direction']
-      first: RuntimeTerminalVisualLayoutNode
-      second: RuntimeTerminalVisualLayoutNode
-    }
-
-export type RuntimeTerminalVisualLayout = {
-  worktreeId: string
-  worktreePath: string
-  root: RuntimeTerminalVisualLayoutNode
+  /**
+   * The pane's process is gone but a sleeping-agent resume record can bring it
+   * back. Deliberately NOT part of the execution-host liveness vocabulary
+   * (`live`/`unverifiable`/`exited`, see docs/reference/ssh-execution-boundary.md):
+   * `connected: false` already states the process exited, and this says only that
+   * the pane is resumable. Absent from hosts that predate the field.
+   */
+  resumable?: boolean
 }
 
 /** The shared listing-scope shape, kept under its incumbent name for existing consumers. */

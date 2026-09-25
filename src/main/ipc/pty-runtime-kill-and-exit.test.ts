@@ -61,6 +61,11 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, installDaemonTestProvider, installObservableDaemonTestProvider } =
     setupPtyIpcSuite()
 
+  function runtimeControllerFixture<T>(value: unknown): T {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registerPtyHandlers installs this controller before each test reads it, and the fixture names only methods the test invokes.
+    return value as T
+  }
+
   it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
     const confirmForegroundProcess = vi.fn(async () => 'codex')
     registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
@@ -68,10 +73,12 @@ describe('registerPtyHandlers', () => {
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
-    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+    const controller = runtimeControllerFixture<{
       confirmForegroundProcess: (ptyId: string) => Promise<string | null>
-    }
+      supportsForegroundProcessConfirmation: (ptyId: string) => boolean
+    }>(runtime.setPtyController.mock.calls[0]?.[0])
 
+    expect(controller.supportsForegroundProcessConfirmation('remote-pty')).toBe(true)
     await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
     expect(confirmForegroundProcess).toHaveBeenCalledOnce()
     expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
@@ -153,10 +160,13 @@ describe('registerPtyHandlers', () => {
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
-    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+    const controller = runtimeControllerFixture<{
       confirmForegroundProcess: (ptyId: string) => Promise<string | null>
-    }
+      supportsForegroundProcessConfirmation: (ptyId: string) => boolean
+    }>(runtime.setPtyController.mock.calls[0]?.[0])
 
+    expect(controller.supportsForegroundProcessConfirmation('unsupported-pty')).toBe(false)
+    expect(controller.supportsForegroundProcessConfirmation('missing-pty')).toBe(false)
     await expect(controller.confirmForegroundProcess('unsupported-pty')).resolves.toBeNull()
     await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
     deletePtyOwnership('unsupported-pty')

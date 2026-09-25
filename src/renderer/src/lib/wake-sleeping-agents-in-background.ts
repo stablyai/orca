@@ -4,7 +4,10 @@ import {
 } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  mayBackgroundWakeSleepingAgentSession,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import {
@@ -81,6 +84,45 @@ function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | nu
 
 function dispatchBackgroundMount(worktreeId: string, tabIds: readonly string[] | undefined): void {
   requestBackgroundTerminalWorktreeMount({ worktreeId, ...(tabIds ? { tabIds } : {}) })
+}
+
+/**
+ * In-place wake for a slept pane whose tab is still mounted — the case a
+ * background mount cannot reach, because mounting an already-mounted tab is a
+ * no-op. The mounted pane holds an armed cold-restore (`hibernatedWakeTarget`)
+ * that normally only a reveal consumes; this fires the same wake event the
+ * mobile worktree-open path uses, scoped to one tab so an inbound message
+ * cannot respawn the whole worktree. Gated on the same fail-closed predicate
+ * main's wake request uses, so a pane the user slept is never woken by mail.
+ */
+export function wakeMountedSleptPaneInPlace(
+  worktreeId: string,
+  tabId: string,
+  paneKey?: string
+): boolean {
+  const state = useAppStore.getState()
+  const targetLeafId = paneKey ? parsePaneKey(paneKey)?.leafId : undefined
+  const eligible = Object.values(state.sleepingAgentSessionsByPaneKey).some((record) => {
+    if (record.worktreeId !== worktreeId || !mayBackgroundWakeSleepingAgentSession(record)) {
+      return false
+    }
+    if (!paneKey) {
+      return getSleepingRecordTabId(record) === tabId
+    }
+    return (
+      record.paneKey === paneKey ||
+      (targetLeafId !== undefined && parsePaneKey(record.paneKey)?.leafId === targetLeafId)
+    )
+  })
+  if (!eligible) {
+    return false
+  }
+  window.dispatchEvent(
+    new CustomEvent<WakeHibernatedAgentsWorktreeDetail>(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, {
+      detail: { worktreeId, tabId, ...(paneKey ? { paneKey } : {}), wokenClaimKeys: new Set() }
+    })
+  )
+  return true
 }
 
 function getCanonicalPassiveWakeRecords(
