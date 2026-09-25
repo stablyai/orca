@@ -407,4 +407,32 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(saveCommentsAndReviewState.mock.calls[0]?.[0]?.[1]?.id).toBe('comment-2')
     expect(setActionError).toHaveBeenLastCalledWith('Review notes sent')
   })
+
+  // The save rolls back to the screen it was created with, so a stale one would drop newer notes.
+  it('marks the notes sent through the save of the latest render, not the one from the tap', async () => {
+    let answerLaunch: (reply: RpcResponse) => void = () => {}
+    const { client } = launchClient(
+      'handed-to-terminal',
+      () =>
+        new Promise<RpcResponse>((resolve) => {
+          answerLaunch = resolve
+        })
+    )
+    await mount(client)
+    let first: Promise<void> | undefined
+    await act(async () => {
+      first = actions?.createTerminalAndSend([COMMENT])
+    })
+    const tapTimeSave = saveCommentsAndReviewState
+    saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+    })
+    await act(async () => {
+      answerLaunch(launchedReply('handed-to-terminal'))
+      await first
+    })
+    expect(tapTimeSave).not.toHaveBeenCalled()
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
+  })
 })

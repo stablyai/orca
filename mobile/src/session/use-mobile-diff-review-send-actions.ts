@@ -66,29 +66,26 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
   }, [saveCommentsAndReviewState, screenState])
 
   // Read when a send settles, not when it was tapped: an agent launch can take a minute, and notes
-  // written meanwhile must survive the whole-list save below.
-  const latestScreenStateRef = useRef(screenState)
+  // written meanwhile must survive the whole-list save below, and its rollback if that save fails.
+  const latestRef = useRef({ screenState, save: saveCommentsAndReviewState })
   useEffect(() => {
-    latestScreenStateRef.current = screenState
-  }, [screenState])
+    latestRef.current = { screenState, save: saveCommentsAndReviewState }
+  }, [saveCommentsAndReviewState, screenState])
   // One launch at a time: each tap is a new operation, so a second tap would start a second agent.
   const agentLaunchInFlightRef = useRef(false)
 
-  const markNotesSent = useCallback(
-    async (comments: readonly DiffComment[]) => {
-      const current = latestScreenStateRef.current
-      if (current.kind !== 'ready') {
-        return
-      }
-      const next = markMobileDiffCommentsSent(
-        current.comments,
-        new Set(comments.map((comment) => comment.id)),
-        Date.now()
-      )
-      await saveCommentsAndReviewState(next, current.reviewState)
-    },
-    [saveCommentsAndReviewState]
-  )
+  const markNotesSent = useCallback(async (comments: readonly DiffComment[]) => {
+    const { screenState: current, save } = latestRef.current
+    if (current.kind !== 'ready') {
+      return
+    }
+    const next = markMobileDiffCommentsSent(
+      current.comments,
+      new Set(comments.map((comment) => comment.id)),
+      Date.now()
+    )
+    await save(next, current.reviewState)
+  }, [])
 
   const sendPromptToTerminal = useCallback(
     async (terminal: string, comments: readonly DiffComment[]) => {
