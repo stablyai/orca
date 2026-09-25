@@ -4,6 +4,11 @@ import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 import { createOAuthUsageError } from './claude-oauth-usage-error'
 import { mapClaudeUsageWindow, type ClaudeUsageWindowInput } from './claude-usage-window'
 import { abortedClaudeRateLimitResult } from './claude-usage-result'
+import {
+  mapClaudeExtraUsage,
+  type ClaudeOAuthExtraUsage,
+  type ClaudeOAuthSpend
+} from './claude-usage-credits'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const API_TIMEOUT_MS = 10_000
@@ -22,6 +27,8 @@ type OAuthUsageResponse = {
   fable_weekly?: ClaudeUsageWindowInput
   fable_seven_day?: ClaudeUsageWindowInput
   seven_day_fable?: ClaudeUsageWindowInput
+  spend?: ClaudeOAuthSpend
+  extra_usage?: ClaudeOAuthExtraUsage
   limits?: OAuthUsageLimit[] | null
 }
 
@@ -90,6 +97,7 @@ export async function fetchClaudeOAuthUsage(
       session: mapClaudeUsageWindow(data.five_hour, 300),
       weekly: mapClaudeUsageWindow(data.seven_day, 10080),
       fableWeekly: mapFableWeeklyWindow(data),
+      extraUsage: mapClaudeExtraUsage(data),
       updatedAt: Date.now(),
       error: null,
       status: 'ok'
