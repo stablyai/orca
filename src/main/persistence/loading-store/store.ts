@@ -54,6 +54,11 @@ export class Store {
     this.domains = createStoreDomains(this.runtime)
     installStoreDomainContexts(this, this.domains)
     this.runtime.flushOrThrow = () => this.flushOrThrow()
+    // Why: the hook server still holds a previous Store's alias listener, which closes over that
+    // store's state and scheduler. Detach before any replay below — normalization registers aliases
+    // too — so hydration cannot write this store's rows into the dead one, rebuilding that store's
+    // whole persisted alias list once per entry.
+    agentHookServer.setPaneKeyAliasPersistenceListener(null)
     const loaded = this.domains.loader.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
