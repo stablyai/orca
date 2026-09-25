@@ -26,6 +26,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     hasPermission,
     hasLiveWorking,
     hasLiveMonitoring,
+    hasFailed,
     hasInterrupted,
     hasLiveDone,
     hasRetainedDone,
@@ -49,6 +50,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasPermission,
         hasLiveWorking,
         hasLiveMonitoring,
+        hasFailed,
         hasInterrupted,
         hasLiveDone,
         hasRetainedDone
@@ -64,6 +66,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasPermission,
       hasLiveWorking,
       hasLiveMonitoring,
+      hasFailed,
       hasInterrupted,
       hasLiveDone,
       hasRetainedDone

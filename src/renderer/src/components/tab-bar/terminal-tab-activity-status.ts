@@ -9,6 +9,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
@@ -24,6 +25,7 @@ type TerminalTabActivityFlags = {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
+  hasFailed: boolean
   hasInterrupted: boolean
   hasLiveDone: boolean
   paneIds: Set<string>
@@ -92,8 +94,10 @@ function getTerminalTabActivityFlags(
       } else {
         flags.hasLiveWorking = true
       }
-    } else if (entry.interrupted === true) {
-      // Interrupted is encoded as done, so it must be checked first.
+    } else if (agentMainAgentVerdict(entry) === 'failure') {
+      // A stop or a failure is encoded as done, so it must be checked first.
+      flags.hasFailed = true
+    } else if (agentMainAgentVerdict(entry) === 'cancellation') {
       flags.hasInterrupted = true
     } else if (entry.state === 'done') {
       flags.hasLiveDone = true
@@ -114,6 +118,7 @@ function getOrCreateTerminalTabActivityFlags(
       hasPermission: false,
       hasLiveWorking: false,
       hasLiveMonitoring: false,
+      hasFailed: false,
       hasInterrupted: false,
       hasLiveDone: false,
       paneIds: new Set(),
@@ -178,6 +183,7 @@ export function resolveTerminalTabActivityStatus({
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
     hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,
+    hasFailed: flags?.hasFailed ?? false,
     hasInterrupted: flags?.hasInterrupted ?? false,
     hasLiveDone: flags?.hasLiveDone ?? false,
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
@@ -199,6 +205,7 @@ export type TerminalTabAttentionBadge =
   | 'working'
   | 'monitoring'
   | 'permission'
+  | 'failed'
   | 'interrupted'
   | 'unread'
   | 'done'
@@ -229,8 +236,8 @@ export function resolveTerminalTabAttentionBadge({
   if (status === 'done') {
     return 'done'
   }
-  if (status === 'interrupted') {
-    return 'interrupted'
+  if (status === 'failed' || status === 'interrupted') {
+    return status
   }
   return null
 }
@@ -238,11 +245,12 @@ export function resolveTerminalTabAttentionBadge({
 /** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
 export function terminalTabActivityToAgentDotState(
   status: TerminalTabActivityStatus
-): 'working' | 'monitoring' | 'permission' | 'interrupted' | 'done' | null {
+): 'working' | 'monitoring' | 'permission' | 'failed' | 'interrupted' | 'done' | null {
   switch (status) {
     case 'working':
     case 'monitoring':
     case 'permission':
+    case 'failed':
     case 'interrupted':
     case 'done':
       return status

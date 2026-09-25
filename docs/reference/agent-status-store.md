@@ -105,8 +105,14 @@ ingests the summary into the hook server as a status row:
 | `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it                                        |
 | prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                          |
 
-Sessions with no persisted turn (`status === null`) produce no row, matching
-what the chat shows. When the host revokes live ownership the row is re-set
+Sessions with no request (`status === null`) produce no row. A request is a
+turn record, an assistant message, an accepted or unanswered send, or a send the
+agent or its start refused; a send that was withdrawn, or left undelivered by a
+restart or a close, fails nobody and makes nothing listable.
+`summary.turnOutcome` is the latest request's verdict: its turn's outcome, or
+`failure` for a send the agent or its start refused (a send that joined a running
+turn is answered by that turn). The row also publishes `interrupted` from
+`mainAgent.outcome`, exactly as the hook lanes do. When the host revokes live ownership the row is re-set
 without the flag; when the host closes or evicts the session the row is
 dropped. Both already exist as feed events (`revokeLive` and the roster
 filter in `liveSessionSummaries`); PR 1 turns them into store writes.
@@ -217,6 +223,14 @@ inferred interrupt (`markClaudeLeadTurnInterrupted`), because current Claude
 sends no hook at all on a cancel and no `is_interrupt` on Stop; that flag on a
 turn boundary remains a secondary source for builds that send it, and
 `StopFailure` maps to `failure`.
+
+Readers decode the verdict through one accessor, `agentMainAgentVerdict`, which
+reads `mainAgent.outcome`, then a top-level `outcome` (history entries and
+`worktree ps` rows), then the legacy `interrupted` flag as a cancellation, and
+answers only for a `done` row. A state-history entry copies the verdict as
+`outcome` beside `interrupted`, so a row's history agrees with the row. Policy
+that reads a clean finish (completion time, hibernation, sticky evidence)
+treats a failure like a cancellation.
 
 Admission is one function, `normalizeAgentStatusPayload`, on the relay wire,
 IPC and disk. A malformed `mainAgent` drops the field and keeps the row. Old hosts

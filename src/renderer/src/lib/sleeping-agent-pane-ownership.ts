@@ -1,5 +1,6 @@
 import type { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { agentTurnEndedUncleanly } from '../../../shared/agent-main-agent-verdict'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -18,12 +19,12 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
 }
 
 // Why quit is excluded: it is an explicit request to keep resumable work. A
-// live interrupted checkpoint is also active work; interrupted worktree-sleep
+// live stopped or failed checkpoint is also active work; such worktree-sleep
 // records retain their existing passive/cleanup semantics.
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
   return (
     record.origin !== 'quit' &&
-    !(record.origin === 'live' && record.interrupted === true) &&
+    !(record.origin === 'live' && agentTurnEndedUncleanly(record)) &&
     record.state === 'done'
   )
 }

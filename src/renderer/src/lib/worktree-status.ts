@@ -17,6 +17,7 @@ export type WorktreeStatus =
   | 'working'
   | 'monitoring'
   | 'permission'
+  | 'failed'
   | 'interrupted'
   | 'done'
   | 'inactive'
@@ -35,6 +36,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   working: 'Working',
   monitoring: 'Monitoring background tasks',
   permission: 'Needs permission',
+  failed: 'Failed',
   interrupted: 'Interrupted',
   done: 'Done',
   inactive: 'Inactive'
@@ -181,6 +183,7 @@ export function resolveWorktreeStatus(args: {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
+  hasFailed?: boolean
   hasInterrupted?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
@@ -211,7 +214,10 @@ export function resolveWorktreeStatus(args: {
   if (args.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
   }
-  // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
+  // Terminal outcomes follow live states, but an unclean outcome must not collapse into success.
+  if (args.hasFailed) {
+    return 'failed'
+  }
   if (args.hasInterrupted) {
     return 'interrupted'
   }

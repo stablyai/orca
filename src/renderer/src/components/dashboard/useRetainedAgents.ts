@@ -15,6 +15,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
 
 import {
   createWorktreeTabBucketProjection,
@@ -300,12 +301,11 @@ export function collectRetainedAgentsOnDisappear(args: {
       continue
     }
     // Why: only keep a sticky snapshot when the agent finished cleanly
-    // (state === 'done' and not interrupted). Explicit teardown paths mark
+    // (state === 'done', neither stopped nor failed). Explicit teardown paths mark
     // pane keys as suppression candidates, so a close/quit/crash cannot
     // resurrect a stale `done` row on the next sync.
     const lastState = prev.row.state
-    const wasInterrupted = prev.row.entry.interrupted === true
-    if (lastState !== 'done' || wasInterrupted) {
+    if (lastState !== 'done' || agentTurnEndedUncleanly(prev.row.entry)) {
       continue
     }
     toRetain.push({

@@ -11,7 +11,6 @@ import {
   type AgentJournalTurnOutcome
 } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
-import { readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
@@ -19,9 +18,12 @@ import {
 import { describeToolInput } from './native-chat-tool-summary'
 import {
   activeStructuredAgentSessionTurnId,
-  newestStructuredAgentSessionTurn,
   statusStructuredAgentSessionToolCall
 } from './structured-agent-session-live-turn'
+import {
+  hasStructuredAgentSessionRequest,
+  latestStructuredAgentSessionRequest
+} from './structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock
@@ -181,18 +183,6 @@ export function projectStructuredItemToNativeChat(
   return message
 }
 
-/** Deliberately NOT scoped by producer: this is an existence test ("is this
- *  session listable at all"), not an attribution one. A session whose only
- *  content came from a subagent still has content. */
-export function hasPersistedStructuredAgentSessionTurn(
-  items: readonly AgentJournalRenderItem[]
-): boolean {
-  return items.some(
-    (item) =>
-      item.body.kind === 'message' && (item.body.role === 'user' || item.body.role === 'assistant')
-  )
-}
-
 /**
  * A send the host has journaled that the provider has neither opened a turn for nor refused.
  *
@@ -307,7 +297,8 @@ export type StructuredAgentSessionStatusProjection = {
   toolName?: string
   toolInput?: string
   lastAssistantMessage?: string
-  /** The newest settled turn's provider verdict; present only while `status` is idle. */
+  /** The latest request's verdict: its turn's, or `failure` for a send the agent or its start
+   *  refused. Present only while `status` is idle. */
   turnOutcome?: AgentJournalTurnOutcome
   statusStartedAt?: number
 }
@@ -323,12 +314,7 @@ export function projectStructuredAgentSessionStatusSummary(
   submissions: readonly AgentJournalSubmission[] = [],
   currentFence?: number | null
 ): StructuredAgentSessionStatusProjection {
-  // A first send has no journalled message until the provider replays it, so the pending
-  // dispatch is also what makes a brand-new session listable at all.
-  if (
-    !hasPersistedStructuredAgentSessionTurn(items) &&
-    !hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
-  ) {
+  if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
     return { status: null, latestPrompt: '' }
   }
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
@@ -346,15 +332,15 @@ export function projectStructuredAgentSessionStatusSummary(
     latestStructuredAgentSessionAssistantMessage(items),
     AGENT_STATUS_MAX_FIELD_LENGTH
   )
-  // A verdict is a fact about a finished turn: only an idle session has one to report, and
-  // `readAgentJournalTurnOutcome` already answers null for anything it cannot place.
-  const turnOutcome =
-    status === 'idle' ? readAgentJournalTurnOutcome(newestStructuredAgentSessionTurn(items)) : null
+  // A verdict is a fact about a finished request: only an idle session has one to report.
+  const request = status === 'idle' ? latestStructuredAgentSessionRequest(items, submissions) : null
+  const turnOutcome = request?.outcome
   const statusStartedAt = structuredAgentSessionStatusStartedAt(
     status,
     items,
     submissions,
-    currentFence
+    currentFence,
+    request
   )
   return {
     status,

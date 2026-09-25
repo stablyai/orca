@@ -116,6 +116,9 @@ export function createAgentStatusProviderSessionActions(
           ...(preservesCompletedRecoveryRecord && existingRecord.interrupted !== undefined
             ? { interrupted: existingRecord.interrupted }
             : {}),
+          ...(preservesCompletedRecoveryRecord && existingRecord.outcome
+            ? { outcome: existingRecord.outcome }
+            : {}),
           origin: preservesQuitOrigin ? 'quit' : 'live'
         }
         removedLiveStatus = existingStatus !== undefined

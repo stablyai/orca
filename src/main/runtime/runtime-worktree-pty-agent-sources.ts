@@ -48,6 +48,9 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       toolName: entry.toolName ?? null,
       toolInput: entry.toolInput ?? null,
       interrupted: entry.interrupted ?? false,
+      ...(entry.state === 'done' && entry.mainAgent?.outcome
+        ? { outcome: entry.mainAgent.outcome }
+        : {}),
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,

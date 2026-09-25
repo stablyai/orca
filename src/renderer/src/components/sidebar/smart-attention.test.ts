@@ -102,6 +102,15 @@ describe('mostRecentAttentionInHistory', () => {
     ).toBe(NOW - 4_000)
   })
 
+  it('skips a done row whose history copy recorded a failure', () => {
+    expect(
+      mostRecentAttentionInHistory([
+        makeHistory('done', NOW - 4_000),
+        { ...makeHistory('done', NOW - 1_000), outcome: 'failure' }
+      ])
+    ).toBe(NOW - 4_000)
+  })
+
   it('returns null when only interrupted dones exist', () => {
     expect(mostRecentAttentionInHistory([makeHistory('done', NOW - 1_000, true)])).toBeNull()
   })
@@ -175,6 +184,17 @@ describe('resolveAttention', () => {
       paneKey: 't:1',
       state: 'done',
       interrupted: true,
+      stateStartedAt: NOW - 90_000,
+      updatedAt: NOW - 30_000
+    })
+    expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
+  })
+
+  it('treats a failed done as idle, like a cancellation', () => {
+    const entry = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 90_000 },
       stateStartedAt: NOW - 90_000,
       updatedAt: NOW - 30_000
     })

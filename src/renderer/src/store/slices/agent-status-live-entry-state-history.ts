@@ -36,7 +36,10 @@ export function resolveAgentStatusLiveEntryStateHistory(
         prompt: existing.prompt,
         startedAt: existing.stateStartedAt,
         observedAt: existing.stateObservedAt,
-        interrupted: existing.interrupted
+        interrupted: existing.interrupted,
+        ...(existing.state === 'done' && existing.mainAgent?.outcome
+          ? { outcome: existing.mainAgent.outcome }
+          : {})
       }
     ]
     if (history.length > AGENT_STATE_HISTORY_MAX) {

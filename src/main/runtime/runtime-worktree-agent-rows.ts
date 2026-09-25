@@ -60,6 +60,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       toolName: source.toolName,
       toolInput: source.toolInput,
       interrupted: source.interrupted,
+      ...(source.outcome ? { outcome: source.outcome } : {}),
       stateStartedAt: source.stateStartedAt,
       updatedAt: source.updatedAt,
       ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})

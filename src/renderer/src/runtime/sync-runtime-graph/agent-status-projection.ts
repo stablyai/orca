@@ -20,7 +20,8 @@ function serializeAgentStatusEntry(
       state: history.state,
       prompt: history.prompt,
       startedAt: history.startedAt,
-      interrupted: history.interrupted ?? null
+      interrupted: history.interrupted ?? null,
+      outcome: history.outcome ?? null
     })),
     toolName: entry.toolName ?? null,
     toolInput: entry.toolInput ?? null,
@@ -28,7 +29,9 @@ function serializeAgentStatusEntry(
     interactivePrompt: entry.interactivePrompt ?? null,
     lastAssistantMessage: entry.lastAssistantMessage ?? null,
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-    interrupted: entry.interrupted ?? null
+    interrupted: entry.interrupted ?? null,
+    // A failure changes the verdict and leaves `interrupted` as it was.
+    outcome: entry.mainAgent?.outcome ?? null
   })
 }
 

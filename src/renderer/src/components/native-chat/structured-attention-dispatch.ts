@@ -13,9 +13,8 @@
  * adapter, and the same delivery tail — so suppression, acknowledgement, addressing, the success
  * sound and the blocked-permission fallback all have exactly one implementation.
  *
- * EVERY SETTLED TURN NOTIFIES, matching the CLI lane: success says "finished", and failure and
- * cancellation say "stopped" through the shipped `agentInterrupted` flag rather than a second
- * vocabulary. A turn with no outcome is UNKNOWN — the host sends no event for one, and nothing
+ * EVERY SETTLED TURN NOTIFIES, matching the CLI lane: the outcome picks the wording — "finished",
+ * "failed" or "stopped" — exactly as the hook lane's verdict does. A turn with no outcome is UNKNOWN — the host sends no event for one, and nothing
  * here may turn that absence into success.
  *
  * Unread and delivery come out of ONE `resolveAgentAttention` decision. "Do not alert me about
@@ -107,10 +106,9 @@ export function dispatchStructuredTurnCompletionAttention(
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           // 'done' is what the host told us, not an inference from the row — the row's own state
           // can still read 'working' when the completion outruns the status re-projection, and
-          // main words a 'working' notification as "working". The outcome picks the wording from
-          // there: interrupted covers failure and cancellation alike.
+          // main words a 'working' notification as "working". The outcome picks the wording from there.
           agentState: 'done',
-          agentInterrupted: completion.outcome !== 'success',
+          agentTurnOutcome: completion.outcome,
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage
             ? { agentLastAssistantMessage: row.lastAssistantMessage }

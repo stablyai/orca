@@ -102,4 +102,32 @@ describe('worktree card agent summary', () => {
 
     expect(summarizeAgents([done, interrupted], 'Agents')).toBe('Agents: 1 interrupted, 1 done')
   })
+
+  it('lists a failed turn as failed, not done, ahead of an interrupted one', () => {
+    const done = monitoringAgent()
+    done.state = 'done'
+    done.entry.state = 'done'
+    done.entry.workingMode = undefined
+    const failed = {
+      ...done,
+      paneKey: 'tab-1:leaf-3',
+      entry: {
+        ...done.entry,
+        paneKey: 'tab-1:leaf-3',
+        mainAgent: { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 1 }
+      }
+    }
+    const interrupted = {
+      ...done,
+      paneKey: 'tab-1:leaf-2',
+      entry: { ...done.entry, paneKey: 'tab-1:leaf-2', interrupted: true }
+    }
+
+    expect(getAgentDotState(failed)).toBe('failed')
+    expect(getCompactAgentSecondary(failed, 0)).toBe('Failed')
+    expect(getCompactAgentSecondary(interrupted, 0)).toBe('Interrupted by user')
+    expect(summarizeAgents([done, interrupted, failed], 'Agents')).toBe(
+      'Agents: 1 failed, 1 interrupted, 1 done'
+    )
+  })
 })

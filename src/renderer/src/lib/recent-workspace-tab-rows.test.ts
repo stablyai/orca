@@ -166,6 +166,14 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     )
   })
 
+  it('surfaces a failed outcome as failed', () => {
+    const failed = entry('failed', 'done', NOW - 1_000, {
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1_000 }
+    })
+
+    expect(resolveRecentWorkspaceTabStatus(row('failed'), sources([failed]), NOW)).toBe('failed')
+  })
+
   it('does not let a cleanly finished sibling mask an interruption', () => {
     const interrupted = entry('mixed', 'done', NOW - 1_000, {
       paneKey: `mixed:${LEAF_ID}`,

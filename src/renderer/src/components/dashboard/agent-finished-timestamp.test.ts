@@ -51,6 +51,26 @@ describe('lastEnteredDoneAt shares the Smart Sort completion clock', () => {
     expect(lastEnteredDoneAt(row(entry))).toBe(2_000)
     expect(agentEntryCompletionAt(entry)).toBeNull()
   })
+
+  it('shows when a failed turn ended, though a failure is never a completion', () => {
+    const entry = doneEntry({
+      stateStartedAt: 2_000,
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 2_000 }
+    })
+    expect(lastEnteredDoneAt(row(entry))).toBe(2_000)
+    expect(agentEntryCompletionAt(entry)).toBeNull()
+  })
+
+  it('reads the verdict history carries when a boundary displaced the completion', () => {
+    const history = { state: 'done' as const, prompt: '', startedAt: 1_500 }
+    const boundary = (outcome?: 'failure') =>
+      doneEntry({
+        sessionBoundary: true,
+        stateHistory: [{ ...history, ...(outcome ? { outcome } : {}) }]
+      })
+    expect(agentEntryCompletionAt(boundary())).toBe(1_500)
+    expect(agentEntryCompletionAt(boundary('failure'))).toBeNull()
+  })
 })
 
 describe('lastEnteredDoneAt subagent rows', () => {

@@ -1,6 +1,10 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AgentWorkingMode } from '../../../shared/agent-status-types'
 import type { AgentRowState } from './agent-row-decay-state'
+import {
+  agentMainAgentVerdict,
+  type AgentMainAgentVerdictSource
+} from '../../../shared/agent-main-agent-verdict'
 
 /**
  * Map an agent row's state onto the shared state-indicator vocabulary. One copy so the
@@ -21,4 +25,13 @@ export function agentRowDotState(
       return state
   }
   return 'idle'
+}
+
+/** The mark a done row's verdict earns: a stopped turn and a failed one each keep their own, and
+ *  both outrank the plain done dot. Null when the row is not done or finished cleanly. */
+export function agentVerdictDotState(
+  row: AgentMainAgentVerdictSource
+): Extract<AgentDotState, 'interrupted' | 'failed'> | null {
+  const verdict = agentMainAgentVerdict(row)
+  return verdict === 'failure' ? 'failed' : verdict === 'cancellation' ? 'interrupted' : null
 }
