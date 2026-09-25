@@ -40,6 +40,16 @@ describe('buildPreviewAppearanceOptions', () => {
     expect(buildPreviewAppearanceOptions(SETTINGS, false).macOptionIsMeta).toBe(false)
   })
 
+  it('lets a drag select text over a mouse-reporting TUI only when the setting is on', () => {
+    expect(buildPreviewAppearanceOptions(SETTINGS, false).mouseEventsRequireAlt).toBe(false)
+    expect(
+      buildPreviewAppearanceOptions(
+        { ...SETTINGS, terminalSelectionOverMouseReporting: true },
+        false
+      ).mouseEventsRequireAlt
+    ).toBe(true)
+  })
+
   it('falls back to pane defaults with no settings hydrated', () => {
     const options = buildPreviewAppearanceOptions(null, false)
     expect(options.fontSize).toBe(14)

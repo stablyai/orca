@@ -17,7 +17,6 @@ export {
 } from './pane-terminal-tui-wheel-reports'
 export type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
 
-const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
@@ -105,11 +104,14 @@ function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number |
 
 export function shouldMultiplyTerminalMouseWheel(
   event: WheelEvent,
-  terminalElement: HTMLElement | null | undefined
+  terminal: Pick<TerminalWheelTarget, 'modes'>
 ): boolean {
+  // Why the mode, not xterm's `enable-mouse-events` class: with
+  // `mouseEventsRequireAlt` xterm keeps selection on and drops the class, yet
+  // still forwards wheel reports to the app, so those still need multiplying.
   if (
     isReplayedWheelEvent(event) ||
-    !terminalElement?.classList.contains(XTERM_MOUSE_REPORTING_CLASS) ||
+    terminal.modes.mouseTrackingMode === 'none' ||
     event.deltaY === 0 ||
     event.shiftKey
   ) {
@@ -189,10 +191,7 @@ export function attachTerminalMouseWheelMultiplier(
 ): void {
   const replayState = createTerminalTuiMouseWheelReplayState()
   terminal.attachCustomWheelEventHandler((event) => {
-    if (
-      terminal.modes.mouseTrackingMode === 'none' ||
-      !shouldMultiplyTerminalMouseWheel(event, terminal.element)
-    ) {
+    if (!shouldMultiplyTerminalMouseWheel(event, terminal)) {
       return true
     }
 

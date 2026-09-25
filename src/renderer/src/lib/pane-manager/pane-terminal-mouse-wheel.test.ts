@@ -56,12 +56,8 @@ class TestWheelEvent extends Event {
   }
 }
 
-function terminalElement(mouseReporting = true): HTMLElement {
-  return {
-    classList: {
-      contains: (className: string) => mouseReporting && className === 'enable-mouse-events'
-    }
-  } as HTMLElement
+function trackingTerminal(mouseReporting = true): { modes: { mouseTrackingMode: 'none' | 'any' } } {
+  return { modes: { mouseTrackingMode: mouseReporting ? 'any' : 'none' } }
 }
 
 function wheelEvent(
@@ -322,11 +318,11 @@ describe('terminal mouse wheel multiplier', () => {
   })
 
   it('multiplies discrete wheel events when mouse reporting is active', () => {
-    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), terminalElement())).toBe(true)
+    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), trackingTerminal())).toBe(true)
   })
 
   it('leaves normal terminal scrollback alone', () => {
-    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), terminalElement(false))).toBe(false)
+    expect(shouldMultiplyTerminalMouseWheel(wheelEvent(), trackingTerminal(false))).toBe(false)
   })
 
   it('handles trackpad-like TUI pixel scrolling while mouse reporting is active', () => {
@@ -336,7 +332,7 @@ describe('terminal mouse wheel multiplier', () => {
           deltaY: 12,
           deltaMode: DOM_DELTA_PIXEL
         }),
-        terminalElement()
+        trackingTerminal()
       )
     ).toBe(true)
   })
@@ -349,7 +345,7 @@ describe('terminal mouse wheel multiplier', () => {
           deltaMode: DOM_DELTA_PIXEL,
           wheelDeltaY: -120
         }),
-        terminalElement()
+        trackingTerminal()
       )
     ).toBe(true)
   })
@@ -361,7 +357,7 @@ describe('terminal mouse wheel multiplier', () => {
           deltaY: 1,
           deltaMode: DOM_DELTA_LINE
         }),
-        terminalElement()
+        trackingTerminal()
       )
     ).toBe(true)
   })
@@ -372,7 +368,7 @@ describe('terminal mouse wheel multiplier', () => {
         wheelEvent({
           shiftKey: true
         }),
-        terminalElement()
+        trackingTerminal()
       )
     ).toBe(false)
   })
@@ -416,7 +412,9 @@ describe('terminal mouse wheel multiplier', () => {
     expect(dispatched).toHaveLength(1)
     expect(dispatched.map((entry) => entry.deltaMode)).toEqual([DOM_DELTA_LINE])
     expect(dispatched.map((entry) => entry.deltaY)).toEqual([1])
-    expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
+    expect(
+      shouldMultiplyTerminalMouseWheel(dispatched[0]!, { modes: { mouseTrackingMode: 'any' } })
+    ).toBe(false)
   })
 
   it('does not replay with a stale active mouse-reporting class', async () => {

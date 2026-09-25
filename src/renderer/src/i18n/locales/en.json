@@ -18075,12 +18075,21 @@
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
         "copySessionIdError": "Unable to copy session ID"
+      },
+      "MouseReportingCopyHint": {
+        "title": "Nothing selected to copy",
+        "description": "This app is capturing the mouse, so dragging did not select text in the terminal. Hold Option while dragging, or turn on \u201cSelect Text in Mouse-Aware Apps\u201d.",
+        "descriptionNonMac": "This app is capturing the mouse, so dragging did not select text in the terminal. Hold Alt while dragging, or turn on \u201cSelect Text in Mouse-Aware Apps\u201d.",
+        "openSetting": "Open Setting"
       }
     },
     "settings": {
       "TerminalInteraction": {
         "copyTrimsGutter": "Trim Gutter on Copy",
-        "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed."
+        "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
+        "selectionOverMouseReporting": "Select Text in Mouse-Aware Apps",
+        "selectionOverMouseReportingDescription": "Drag selects text even while a terminal app such as Codex, vim, or htop captures the mouse. Hold Option to send clicks and drags to the app instead.",
+        "selectionOverMouseReportingDescriptionNonMac": "Drag selects text even while a terminal app such as Codex, vim, or htop captures the mouse. Hold Alt to send clicks and drags to the app instead."
       },
       "terminal": {
         "clipboard": {
