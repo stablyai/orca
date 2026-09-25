@@ -13,6 +13,7 @@ export type BrowserHostLease = Readonly<{
   authorityEpoch: string
   browserHostClientId: string
   browserHostGeneration: number
+  clientKind?: 'mobile' | 'runtime'
   connectionId: string
   pairedDeviceId: string
   supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]

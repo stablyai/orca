@@ -107,8 +107,19 @@ export class BrowserHostLeaseRegistry {
     const pageInventory = snapshotBrowserHostPageInventory(input)
     assertBrowserHostReconnectNegotiation(input)
     const existing = this.leasesByClientId.get(input.browserHostClientId)
-    if (existing && existing.lease.pairedDeviceId !== input.pairedDeviceId) {
+    if (
+      existing &&
+      (existing.lease.pairedDeviceId !== input.pairedDeviceId ||
+        (existing.lease.clientKind ?? 'runtime') !== (input.clientKind ?? 'runtime'))
+    ) {
       throw new Error('browser_host_identity_conflict')
+    }
+    for (const page of input.clientKind === 'mobile' ? (pageInventory ?? []) : []) {
+      // Mobile inventory may only describe pages this runtime already placed for this lease.
+      if (!existing || page.browserHostGeneration !== existing.lease.browserHostGeneration) {
+        throw new Error('browser_host_page_inventory_authority_mismatch')
+      }
+      this.pagePlacements.requireClientPage(page)
     }
     assertBrowserHostLeaseAdmission(this.leasesByClientId.values(), input, existing)
     const restored = existing ? this.reconnects.restore(existing, input, pageInventory) : undefined

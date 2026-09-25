@@ -1,6 +1,9 @@
 export const BROWSER_HOST_WEBVIEW_CAPABILITY = 'webview'
 
-type BrowserHostCapabilityLease = Readonly<{ hostCapabilities: readonly string[] }>
+type BrowserHostCapabilityLease = Readonly<{
+  hostCapabilities: readonly string[]
+  clientKind?: 'mobile' | 'runtime'
+}>
 type BrowserHostLeaseStateView<T extends BrowserHostCapabilityLease> = Readonly<{ lease: T }>
 
 export function selectBrowserHostLease<T extends BrowserHostCapabilityLease>(
@@ -20,7 +23,10 @@ export function selectBrowserHostLease<T extends BrowserHostCapabilityLease>(
   }
   let selected: T | undefined
   for (const state of leasesByClientId.values()) {
-    if (!hasCapabilities(state.lease, requiredCapabilities)) {
+    if (
+      state.lease.clientKind === 'mobile' ||
+      !hasCapabilities(state.lease, requiredCapabilities)
+    ) {
       continue
     }
     if (selected) {

@@ -1,4 +1,5 @@
 import type { WebSocket } from 'ws'
+import { BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type {
   PairingGetEndpointsParams,
   PairingProvisionRelayParams
@@ -73,7 +74,26 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
-    if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
+    const mobileBrowserLeaseMethod =
+      request.method === 'browser.clientHost.attach' ||
+      request.method === 'browser.clientHost.commandResult' ||
+      request.method === 'browser.clientHost.pageMetadata'
+    const mobileBrowserLeaseAdmitted =
+      mobileBrowserLeaseMethod &&
+      ws !== undefined &&
+      authenticatedSocket?.ws === ws &&
+      authenticatedSocket?.device.deviceId === device.deviceId &&
+      authenticatedSocket?.device.deviceToken === token &&
+      authenticatedSocket?.device.scope === device.scope &&
+      authenticatedSocket?.connectionId === this.mobileSocketWiring?.getConnectionId(ws) &&
+      authenticatedSocket?.clientCapabilities.includes(
+        BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY
+      )
+    if (
+      device.scope === 'mobile' &&
+      !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method) &&
+      !mobileBrowserLeaseAdmitted
+    ) {
       reply(
         JSON.stringify(
           this.buildError(

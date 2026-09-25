@@ -11,6 +11,7 @@ import type { BrowserHostLeaseState } from './browser-host-lease-records'
 
 export type BrowserHostLeaseAttachInput = {
   browserHostClientId: string
+  clientKind?: 'mobile' | 'runtime'
   connectionId: string
   pairedDeviceId: string
   supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
@@ -79,6 +80,7 @@ export function createBrowserHostLeaseState(options: {
       authorityEpoch: options.authorityEpoch,
       browserHostClientId: input.browserHostClientId,
       browserHostGeneration: options.generation,
+      clientKind: input.clientKind ?? 'runtime',
       connectionId: input.connectionId,
       pairedDeviceId: input.pairedDeviceId,
       hostCapabilities: Object.freeze([...input.hostCapabilities]),
