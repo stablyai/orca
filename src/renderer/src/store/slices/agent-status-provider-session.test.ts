@@ -455,6 +455,61 @@ describe('recordAgentProviderSession', () => {
     })
   })
 
+  it('keeps a completed recovery record failed on a same-session update', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = makePiCompatibleProviderSession('pi')
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'done',
+        prompt: 'finish the task',
+        agentType: 'pi',
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 30 }
+      },
+      'Pi',
+      { updatedAt: 30, stateStartedAt: 30 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      { providerSession }
+    )
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      state: 'done',
+      outcome: 'failure'
+    })
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'pi',
+        providerSession,
+        { updatedAt: 40 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' }
+      )
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      providerSession,
+      state: 'done',
+      outcome: 'failure',
+      origin: 'live'
+    })
+  })
+
   it('does not downgrade a quit recovery record on a same-session update', () => {
     const store = createTestStore()
     store.setState({
