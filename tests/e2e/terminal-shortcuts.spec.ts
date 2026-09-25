@@ -581,25 +581,8 @@ test.describe('Terminal Shortcuts', () => {
     expect(writes).not.toContain('\x1b[99;5u')
     expect(writes).not.toContain('\x1b[99')
 
-    await expect
-      .poll(async () => await getKittyKeyboardFlags(orcaPage), {
-        timeout: 5_000,
-        message: 'Ctrl+C did not clear stale Kitty keyboard flags'
-      })
-      .toBe(0)
-
-    await clearPtyWriteLog(electronApp)
-    await focusActiveTerminalInput(orcaPage)
-    await orcaPage.keyboard.type('x')
-    await expect
-      .poll(async () => (await getPtyWrites(electronApp)).some((write) => write === 'x'), {
-        timeout: 5_000,
-        message: 'Post-interrupt keyboard input stayed in Kitty CSI-u mode'
-      })
-      .toBe(true)
-    const postInterruptWrites = (await getPtyWrites(electronApp)).join('')
-    expect(postInterruptWrites).not.toContain('\x1b[')
-    await orcaPage.keyboard.press('Backspace')
+    expect(await getKittyKeyboardFlags(orcaPage)).toBe(31)
+    await enableKittyKeyboardReporting(orcaPage, 0)
   })
 
   test('@headful Codex-like background output stays visible without disabling WebGL in auto mode', async ({

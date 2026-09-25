@@ -22,11 +22,22 @@ test('macOS copy falls through only for an unselected Kitty pane', async ({
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   const ptyId = await waitForActivePanePtyId(orcaPage)
+  const readKeyboardFlags = () =>
+    orcaPage.evaluate(() => {
+      const state = window.__store!.getState()
+      const pane = window.__paneManagers!.get(state.activeTabId!)!.getActivePane()!
+      type KeyboardCore = { coreService?: { kittyKeyboard?: { flags?: number } } }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm exposes its runtime core; only optional keyboard flags are inspected.
+      const terminal = pane.terminal as { _core?: KeyboardCore; core?: KeyboardCore }
+      return (terminal._core ?? terminal.core)?.coreService?.kittyKeyboard?.flags
+    })
   const receiver = String.raw`
     process.stdin.setRawMode(true);
     let mode = -1;
     process.stdin.on("data", data => {
-      if (data.length === 1 && data[0] === 1) {
+      if (data.length === 1 && data[0] === 4) {
+        process.kill(process.pid, "SIGINT");
+      } else if (data.length === 1 && data[0] === 1) {
         mode++;
         const flags = [0, 1, 3, 31][mode % 4];
         process.stdout.write("\x1b[=" + flags + "u\r\nCOPY_MODE_" + mode + "\r\n");
@@ -57,16 +68,28 @@ test('macOS copy falls through only for an unselected Kitty pane', async ({
         })
         await focusActiveTerminalInput(orcaPage)
         await clearTerminalPtyWriteLog(electronApp)
-        await expect
-          .poll(() =>
-            orcaPage.evaluate(() => {
-              const state = window.__store!.getState()
-              const pane = window.__paneManagers!.get(state.activeTabId!)!.getActivePane()!
-              const core = Reflect.get(pane.terminal, '_core') ?? Reflect.get(pane.terminal, 'core')
-              return core?.coreService?.kittyKeyboard?.flags
-            })
-          )
-          .toBe(flags)
+        await expect.poll(readKeyboardFlags).toBe(flags)
+        // Ctrl+C may be handled by the running app without exiting.
+        await orcaPage
+          .locator('.xterm-helper-textarea')
+          .first()
+          .evaluate((textarea) => {
+            for (const type of ['keydown', 'keyup']) {
+              textarea.dispatchEvent(
+                new KeyboardEvent(type, {
+                  key: 'c',
+                  code: 'KeyC',
+                  ctrlKey: true,
+                  keyCode: 67,
+                  bubbles: true,
+                  cancelable: true
+                })
+              )
+            }
+          })
+        await expect.poll(() => readTerminalPtyWrites(electronApp)).toEqual(['\x03'])
+        await waitForTerminalOutput(orcaPage, 'Received: 03')
+        await clearTerminalPtyWriteLog(electronApp)
         await orcaPage.keyboard.press('Meta+c')
         const press = flags === 31 ? '\x1b[99;9;99u' : '\x1b[99;9u'
         const expected = flags === 0 ? [] : flags === 1 ? [press] : [press, '\x1b[99;9:3u']
@@ -113,6 +136,13 @@ test('macOS copy falls through only for an unselected Kitty pane', async ({
       await orcaPage.keyboard.up('c')
       expect(await readTerminalPtyWrites(electronApp)).toEqual([])
     }
+    // Leave keyboard reporting armed and die without running application cleanup.
+    await sendToTerminal(orcaPage, ptyId, '\x04')
+    await expect.poll(readKeyboardFlags).toBe(0)
+    await focusActiveTerminalInput(orcaPage)
+    await orcaPage.keyboard.type('echo "SHELL_""RECOVERED"')
+    await orcaPage.keyboard.press('Enter')
+    await waitForTerminalOutput(orcaPage, 'SHELL_RECOVERED')
     await expect(orcaPage.locator('.xterm-screen').first()).toBeVisible()
     await orcaPage.screenshot({ path: testInfo.outputPath('terminal-copy.png') })
   } finally {
