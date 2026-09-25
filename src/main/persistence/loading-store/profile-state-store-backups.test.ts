@@ -99,7 +99,7 @@ function readSnapshot(path: string) {
   }
 }
 
-describe('Store automatic SQLite recovery backupExecution', () => {
+describe('Store automatic SQLite recovery snapshots', () => {
   it.each([
     ['selective', 'sync'],
     ['selective', 'async'],
@@ -140,17 +140,15 @@ describe('Store automatic SQLite recovery backupExecution', () => {
 
   it('acknowledges a routine flush while the previous recovery backup is still running', async () => {
     const state = await fixture()
-    const realSnapshot = snapshots.writeProfileStateDatabaseSnapshotAsync
+    const realSnapshot = backupExecution.runProfileStateBackup
     const started = Promise.withResolvers<void>()
     const gate = Promise.withResolvers<void>()
     releases.push(gate.resolve)
-    vi.spyOn(snapshots, 'writeProfileStateDatabaseSnapshotAsync').mockImplementationOnce(
-      async (db, target) => {
-        started.resolve()
-        await gate.promise
-        await realSnapshot(db, target)
-      }
-    )
+    vi.spyOn(backupExecution, 'runProfileStateBackup').mockImplementationOnce(async (job) => {
+      started.resolve()
+      await gate.promise
+      await realSnapshot(job)
+    })
     state.store.updateSettings({ theme: 'dark' })
     state.store.flushOrThrow()
     await started.promise
