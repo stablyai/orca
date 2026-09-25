@@ -9,7 +9,11 @@ import {
   type WorkingTreeCarryResult
 } from '../../shared/working-tree-change-carry'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { SshGitNoninteractiveProvider } from './ssh-git-noninteractive-provider'
+
+// Why: a carry can write up to 2,000 files / 200MB, well past the mux's default ~30s timeout.
+const CARRY_WORKING_TREE_REQUEST_TIMEOUT_MS = 120_000
 
 export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
   async checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]> {
@@ -82,14 +86,27 @@ export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
     sourceWorktreePath: string,
     targetWorktreePath: string
   ): Promise<WorkingTreeCarryResult> {
-    return this.runWithGitReadInvalidation(async () =>
-      normalizeWorkingTreeCarryResult(
-        await this.mux.request('git.carryWorkingTreeChanges', {
-          sourceWorktreePath,
-          targetWorktreePath
-        })
-      )
-    )
+    return this.runWithGitReadInvalidation(async () => {
+      try {
+        return normalizeWorkingTreeCarryResult(
+          await this.mux.request(
+            'git.carryWorkingTreeChanges',
+            { sourceWorktreePath, targetWorktreePath },
+            { timeoutMs: CARRY_WORKING_TREE_REQUEST_TIMEOUT_MS }
+          )
+        )
+      } catch (error) {
+        // Why: a timed-out/lost-connection carry may have written some or all changes on the host (docs/reference/ssh-execution-boundary.md).
+        if (isSshRequestOutcomeUnverifiable(error)) {
+          return {
+            ok: false,
+            reason: 'partially_applied',
+            detail: error instanceof Error ? error.message : String(error)
+          }
+        }
+        throw error
+      }
+    })
   }
 
   async detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
