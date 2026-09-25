@@ -3,6 +3,7 @@ import {
   leaseCarriesLegacyHandoffValues,
   normalizeLegacyHandoffLease,
   normalizeLegacyHandoffRecord,
+  terminalOwnerRefusalMessage,
   type PersistedAgentSessionLease
 } from './agent-session-legacy-handoff-lease'
 import type { AgentSessionClaimStatus, AgentSessionHandoffStage } from './agent-session-record'
@@ -78,5 +79,26 @@ describe('normalizing a lease the removed terminal handoff wrote', () => {
       record: { ...record, lease: { ...record.lease, claimStatus: 'conflicted' } },
       normalized: true
     })
+  })
+})
+
+describe('the refusal for a chat a terminal agent holds', () => {
+  const owner = { hostId: 'local', pid: 4242, spawnToken: 'token' }
+
+  it('names the process only when its start time can tell it from a reused pid', () => {
+    const verifiable = agentSessionLeaseFixture({
+      claimStatus: 'conflicted',
+      ownerProcess: { ...owner, processStartTimeMs: 1_000 }
+    })
+    const reusable = agentSessionLeaseFixture({
+      claimStatus: 'conflicted',
+      ownerProcess: { ...owner, processStartTimeMs: null }
+    })
+    expect(terminalOwnerRefusalMessage(verifiable)).toBe(
+      'This chat is still open in a terminal agent (process 4242). Quit that agent to continue the chat here.'
+    )
+    expect(terminalOwnerRefusalMessage(reusable)).toBe(
+      'This chat is still open in a terminal agent. Quit that agent to continue the chat here.'
+    )
   })
 })
