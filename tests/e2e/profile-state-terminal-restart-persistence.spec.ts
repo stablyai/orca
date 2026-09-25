@@ -128,14 +128,18 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       expect(existsSync(databasePath)).toBe(true)
       expect(existsSync(legacyProfileState)).toBe(true)
 
+      await session.close(firstApp)
+      firstApp = null
+      expect(JSON.parse(readFileSync(legacyProfileState, 'utf8'))).toMatchObject({
+        automations: expect.arrayContaining([
+          expect.objectContaining({ id: automationLifecycle.automationId, name: automationName })
+        ])
+      })
       // Prove the next launch has only the SQLite authority available.
       rmSync(legacyProfileState, { force: true })
       rmSync(legacyRootState, { force: true })
       expect(existsSync(legacyProfileState)).toBe(false)
       expect(existsSync(legacyRootState)).toBe(false)
-
-      await session.close(firstApp)
-      firstApp = null
 
       const secondLaunch = await session.launch()
       secondApp = secondLaunch.app
@@ -275,15 +279,9 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       const targetJson = path.join(targetProfileDirectory, 'orca-data.json')
       expect(existsSync(targetDatabase)).toBe(true)
 
-      // Seed an independent target-profile document before removing its JSON mirror.
+      // Seed an independent target-profile document before switching back.
       await attachRepoAndOpenTerminal(secondLaunch.page, repoPath)
       await waitForSessionReady(secondLaunch.page)
-      rmSync(targetJson, { force: true })
-      rmSync(defaultJson, { force: true })
-      rmSync(rootJson, { force: true })
-      expect(existsSync(targetJson)).toBe(false)
-      expect(existsSync(defaultJson)).toBe(false)
-      expect(existsSync(rootJson)).toBe(false)
 
       await expect(
         secondLaunch.page.evaluate(
@@ -294,6 +292,11 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForElectronProcessExit(secondApp)
       secondApp = null
 
+      // Clean maintenance refreshes compatibility JSON before releasing the profile.
+      expect(existsSync(targetJson)).toBe(true)
+      for (const legacyPath of [targetJson, defaultJson, rootJson]) {
+        rmSync(legacyPath, { force: true })
+      }
       const thirdLaunch = await session.launch()
       thirdApp = thirdLaunch.app
       await waitForSessionReady(thirdLaunch.page)
@@ -446,6 +449,8 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForElectronProcessExit(secondApp)
       secondApp = null
 
+      // Switching away refreshes the target export; remove it before the SQL-only source launch.
+      rmSync(targetJson, { force: true })
       const sourceLaunch = await session.launch()
       thirdApp = sourceLaunch.app
       await waitForSessionReady(sourceLaunch.page)
