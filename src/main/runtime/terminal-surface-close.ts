@@ -11,7 +11,7 @@ import { advanceTerminalTopologyRevision } from './workspace-session-terminal-me
 /**
  * The membership half of every explicit terminal close: removes a tab, or one leaf of a split
  * tab, and advances the repo's topology revision so a stale renderer save cannot restore it.
- * Closing a tab's last leaf closes the tab.
+ * A leaf close never removes its tab: callers close the last pane with a tab close.
  */
 export function closeTerminalSurfaceInWorkspaceSession(
   session: WorkspaceSessionState,
@@ -20,8 +20,13 @@ export function closeTerminalSurfaceInWorkspaceSession(
   options: { leafId?: string; force?: boolean } = {}
 ): WorkspaceSessionTerminalTabCloseResult {
   const layout = session.terminalLayoutsByTabId[tabId]
-  if (options.leafId && layout && countTerminalLayoutLeaves(layout.root) > 1) {
-    if (!layoutContainsLeafId(layout.root, options.leafId)) {
+  if (options.leafId) {
+    // Why: the exit may already have retired this leaf, leaving only live siblings to lose.
+    if (
+      !layout ||
+      countTerminalLayoutLeaves(layout.root) <= 1 ||
+      !layoutContainsLeafId(layout.root, options.leafId)
+    ) {
       return { session, ptyIdsToKill: [], closed: false, pinned: false }
     }
     // The leaf's own binding is passed so the retirement's stale-binding fence always admits it.

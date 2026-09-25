@@ -18,6 +18,7 @@ import {
   createHarness,
   makeSession
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
+import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
 
 const splitLayout = {
@@ -34,6 +35,27 @@ const splitLayout = {
 
 function splitSession(): WorkspaceSessionState {
   return { ...makeSession(), terminalLayoutsByTabId: { [TAB_ID]: splitLayout } }
+}
+
+function splitSessionAfterExitRetired(): WorkspaceSessionState {
+  return retireTerminalSurfaceFromPersistence(splitSession(), {
+    worktreeId: WORKTREE_ID,
+    parentTabId: TAB_ID,
+    leafId: LEAF_ID,
+    ptyId: PTY_ID
+  })
+}
+
+function withPinnedTab(session: WorkspaceSessionState): WorkspaceSessionState {
+  return {
+    ...session,
+    tabsByWorktree: {
+      [WORKTREE_ID]: (session.tabsByWorktree[WORKTREE_ID] ?? []).map((tab) => ({
+        ...tab,
+        isPinned: true
+      }))
+    }
+  }
 }
 
 const directories: string[] = []
@@ -122,6 +144,25 @@ describe('renderer close intents', () => {
       undefined
     )
   })
+
+  // e.g. the exited-pane overlay's Close, after main's exit handling already retired that leaf.
+  it.each([
+    ['its exit already retired the pane', () => splitSessionAfterExitRetired()],
+    ['the tab is pinned', () => withPinnedTab(splitSessionAfterExitRetired())],
+    ['the tab has no saved layout', () => ({ ...makeSession(), terminalLayoutsByTabId: {} })]
+  ])('never widens a pane close into a tab close when %s', async (_case, session) => {
+    const { runtime, reload } = createPersistedRuntime(session())
+
+    runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      leafId: LEAF_ID
+    })
+
+    expect((await reload()).tabsByWorktree[WORKTREE_ID]).toEqual([
+      expect.objectContaining({ id: TAB_ID })
+    ])
+  })
 })
 
 describe('CLI close of one pane in a split tab', () => {
@@ -149,6 +190,48 @@ describe('CLI close of one pane in a split tab', () => {
     expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
     expect(harness.closeTerminalTab).not.toHaveBeenCalled()
   })
+
+  it('commits the pane removal when the handle names a live PTY', async () => {
+    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+    harness.syncSplitFixtureGraph()
+    // Graph without the leaf: the handle resolves through the PTY, as for a runtime-owned pane.
+    harness.syncFixtureTabWithoutLeaf()
+    harness.setVerifiedStopResult(true)
+    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (candidate) => candidate.ptyId === PTY_ID
+    )!
+
+    await expect(harness.runtime.closeTerminal(terminal.handle)).resolves.toMatchObject({
+      tabId: TAB_ID,
+      ptyKilled: true
+    })
+
+    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
+      type: 'leaf',
+      leafId: SIBLING_LEAF_ID
+    })
+    expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+  })
+
+  it('keeps the sibling when the stop delivers the exit before the pane commit', async () => {
+    const harness = createHarness()
+    harness.syncSplitFixtureGraph()
+    harness.setStopAndWaitAction((stoppingPtyId) => harness.runtime.onPtyExit(stoppingPtyId, 0))
+    harness.setVerifiedStopResult(true)
+    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (candidate) => candidate.ptyId === PTY_ID
+    )!
+
+    await harness.runtime.closeTerminal(terminal.handle)
+
+    const session = harness.getSession()
+    expect(session.tabsByWorktree[WORKTREE_ID]).toEqual([expect.objectContaining({ id: TAB_ID })])
+    expect(session.terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
+      type: 'leaf',
+      leafId: SIBLING_LEAF_ID
+    })
+  })
 })
 
 describe('mobile close of one pane in a split tab', () => {
@@ -167,5 +250,23 @@ describe('mobile close of one pane in a split tab', () => {
       root: { type: 'leaf', leafId: SIBLING_LEAF_ID }
     })
     expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+  })
+})
+
+describe('mobile close of a tab the desktop renderer lists', () => {
+  // Pins are renderer presentation that main's session can lag, so only the renderer can refuse.
+  it('still asks the renderer, whose pin guard can refuse it', async () => {
+    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+    harness.rejectTerminalTabClose(new Error('terminal_tab_pinned'))
+
+    await expect(
+      harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, { reason: 'user' })
+    ).rejects.toThrow('terminal_tab_pinned')
+
+    expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_ID)
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([
+      expect.objectContaining({ id: TAB_ID })
+    ])
   })
 })
