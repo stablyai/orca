@@ -37,6 +37,15 @@ export function syncSystemConfigIntoManagedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
+  if (!mirrorSystemConfigIntoManagedCodexHome(homes)) {
+    // Why: a stalled settings mirror must not also withhold the daemon guard,
+    // or Codex cannot start at all in a long home.
+    ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
+  }
+}
+
+/** Returns false when no mirror pass ran, so the caller still owes the daemon guard. */
+function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHomes): boolean {
   // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
   // user made inside Orca-launched Codex (/model, /approvals) must be written
   // back to ~/.codex first or this very pass silently reverts them.
@@ -54,7 +63,7 @@ export function syncSystemConfigIntoManagedCodexHome(
     if (stalledStatus.state === 'stalled') {
       reportCodexConfigSyncOutcome(homes.runtimeHomePath, stalledStatus)
     }
-    return
+    return false
   }
   let mirrorResult: CodexConfigMirrorResult
   try {
@@ -65,7 +74,7 @@ export function syncSystemConfigIntoManagedCodexHome(
     // failure on every launch and quota poll while the surfaced reason never
     // reaches the user.
     reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes), error)
-    return
+    return false
   }
   if (mirrorResult.status === 'refused-indeterminate') {
     // Why: no mirror ran, so this must behave exactly like the throwing path
@@ -76,7 +85,7 @@ export function syncSystemConfigIntoManagedCodexHome(
       getCodexConfigSyncStatus(homes),
       mirrorResult.error
     )
-    return
+    return false
   }
   // Why: report from the same pass that decided, so the surfaced status can
   // never disagree with what the mirror actually did.
@@ -90,7 +99,7 @@ export function syncSystemConfigIntoManagedCodexHome(
     if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
       snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
     }
-    return
+    return true
   }
   // Why: the baseline advances only after a successful mirror; recording an
   // unpromoted runtime change as Orca-written would strand it forever.
@@ -102,6 +111,28 @@ export function syncSystemConfigIntoManagedCodexHome(
     // so a later source config that lacks one is a removal, not an addition.
     mirroredRegistrations: true
   })
+  return true
+}
+
+function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
+  try {
+    const observation = observeAgentStateFile(join(runtimeHomePath, 'config.toml'))
+    if (observation.kind !== 'indeterminate') {
+      writeCodexDaemonSocketGuard(
+        runtimeHomePath,
+        observation.kind === 'present' ? observation.value : null
+      )
+    }
+  } catch (error) {
+    console.warn('[codex-config] Failed to apply the Codex daemon socket guard:', error)
+  }
+}
+
+function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
+  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
+  if (guarded !== (runtimeConfig ?? '')) {
+    writeFileAtomicallyIfUnchanged(join(runtimeHomePath, 'config.toml'), runtimeConfig, guarded)
+  }
 }
 
 /**
@@ -187,11 +218,10 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
   if (rawSystemConfig.trim() === '') {
     // Why: no mirror write happens here, but the daemon guard must still land.
-    const runtimeConfigBefore = runtimeConfigExists ? runtimeConfigObservation.value : null
-    const guarded = applyCodexDaemonSocketGuard(runtimeConfigBefore ?? '', runtimeHomePath)
-    if (guarded !== (runtimeConfigBefore ?? '')) {
-      writeFileAtomicallyIfUnchanged(runtimeConfigPath, runtimeConfigBefore, guarded)
-    }
+    writeCodexDaemonSocketGuard(
+      runtimeHomePath,
+      runtimeConfigExists ? runtimeConfigObservation.value : null
+    )
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
       : { status: 'mirrored', preservedConflictKeys: new Set() }

@@ -22,6 +22,7 @@ import {
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
 import { getCodexConfigSyncStatus } from './config-sync-stall'
+import { getCodexSettingsBaselinePath } from './config-settings-baseline'
 import { extractOrdinaryCodexSettings } from './config-toml-runtime-owned-sections'
 
 const UUID = '9dd962e2-449d-44c4-9733-0633f255064a'
@@ -180,6 +181,22 @@ describe('syncSystemConfigIntoManagedCodexHome daemon guard', () => {
     )
     // A guard-only runtime config withholds no settings, so it must not raise the missing-source warning.
     expect(getCodexConfigSyncStatus({ runtimeHomePath, systemHomePath }).state).toBe('synced')
+  })
+
+  it('still guards an existing home when a stalled settings write-back skips the mirror', () => {
+    writeFileSync(join(systemHomePath, 'config.toml'), 'model = "gpt-5"\n')
+    const runtimeHomePath = longHome()
+    writeFileSync(join(runtimeHomePath, 'config.toml'), 'model = "runtime"\n')
+    // An unreadable baseline makes promotion refuse, so no mirror pass runs.
+    mkdirSync(getCodexSettingsBaselinePath(runtimeHomePath))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+    warn.mockRestore()
+    expect(readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')).toBe(
+      `model = "runtime"\n\n[features]\n${OVERRIDE_LINE}\n`
+    )
+    expect(readFileSync(join(systemHomePath, 'config.toml'), 'utf-8')).toBe('model = "gpt-5"\n')
   })
 
   it('mirrors a later-created ~/.codex/config.toml into a guard-only home', () => {
