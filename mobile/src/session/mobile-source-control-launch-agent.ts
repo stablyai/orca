@@ -20,7 +20,7 @@ import { isMobileTuiAgent } from '../tasks/mobile-tui-agents'
 import type { MobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
 
 export type MobileSourceControlLaunchAgent =
-  /** `recipe`: the action's saved prompt template and agent arguments; null with no action. */
+  /** `recipe`: the action's saved recipe, for its prompt template; null with no action. */
   | { kind: 'agent'; agent: TuiAgent; recipe: SourceControlActionRecipe | null }
   | { kind: 'unavailable'; message: string }
 

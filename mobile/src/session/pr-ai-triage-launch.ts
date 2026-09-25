@@ -69,7 +69,8 @@ export async function launchAgentWithPrompt(args: {
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: resolved.agent,
-    ...(recipe?.agentArgs !== undefined ? { agentArgs: recipe.agentArgs } : {}),
+    // Why no saved agent arguments: whether they apply depends on the route and shell the host picks
+    // after this request, so the phone leaves them out and the agent's default arguments apply.
     prompt: { text, delivery: 'submit' },
     launchSource: args.launchSource
   })

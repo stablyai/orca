@@ -80,7 +80,6 @@ export function agentLaunchExistingParams(args: {
   agent: TuiAgent
   worktreeId: string
   operationId: string
-  agentArgs?: string
   prompt?: AgentLaunchPrompt
   launchSource?: string
 }): RpcSendParams<'agent.launchReplay'> {
@@ -88,7 +87,6 @@ export function agentLaunchExistingParams(args: {
     agent: args.agent,
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
-    ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {})
   }

@@ -166,7 +166,7 @@ describe('launchAgentWithPrompt', () => {
     })
   })
 
-  it("sends the action's saved agent arguments, as the desktop does", async () => {
+  it("never sends the action's saved agent arguments; the agent's defaults apply", async () => {
     const { client, sendRequest } = hostClient({
       settings: {
         defaultTuiAgent: 'claude',
@@ -175,7 +175,8 @@ describe('launchAgentWithPrompt', () => {
       launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
     })
     await run(client)
-    expect(launchParams(sendRequest)).toMatchObject({ agent: 'claude', agentArgs: '--model opus' })
+    expect(launchParams(sendRequest)).toMatchObject({ agent: 'claude' })
+    expect(launchParams(sendRequest)).not.toHaveProperty('agentArgs')
   })
 
   it('refuses rather than swaps when the saved agent is not on this host', async () => {
@@ -274,7 +275,7 @@ describe('promptedLaunchNotice', () => {
     })
   })
 
-  // A structured chat ignores any saved agent arguments, even '' from a template-only save, and says so.
+  // The host can attach a warning to a launch it still carried out.
   it('never reports the host warning on a launch that went ahead as an error', () => {
     expect(promptedLaunchNotice({ kind: 'sent', warning: 'arguments were ignored' })).toEqual({
       succeeded: true,
