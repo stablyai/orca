@@ -146,7 +146,7 @@ describe('when the session entered its status', () => {
     })
   })
 
-  it("dates attention by the session's own oldest ask, and by a subagent's only when that alone holds it", () => {
+  it("dates attention by the session's own oldest ask; a subagent's ask leaves its clock alone", () => {
     const running = item('turn', 2, {
       kind: 'turn',
       turnId: 't1',
@@ -156,9 +156,10 @@ describe('when the session entered its status', () => {
     const childAsk = pendingApproval('child-ask', 3, { ...childLinkage, observedAt: 400 })
     const ownAsk = pendingApproval('own-ask', 4, { observedAt: 600 })
     const laterOwnAsk = pendingApproval('later-own-ask', 5, { observedAt: 800 })
+    // The subagent's ask is its own child record's wait; the session's own agent is still working.
     expect(summaryOf([ask, running, childAsk])).toMatchObject({
-      status: 'attention',
-      statusStartedAt: 400
+      status: 'working',
+      statusStartedAt: 150
     })
     expect(summaryOf([ask, running, childAsk, ownAsk, laterOwnAsk])).toMatchObject({
       status: 'attention',

@@ -201,4 +201,68 @@ describe('Claude child-work decoder', () => {
     decoder.observe(backgroundAgent)
     expect(decoder.drain(600)).toEqual([expect.not.objectContaining({ restart: true })])
   })
+
+  it("carries a live task's error as what it last said, with no ending and no new state", () => {
+    const decoder = decoderWith(backgroundAgent)
+    // Shape from the SDK's declared `task_updated` patch; no capture has shown one on a live task.
+    decoder.observe(
+      system('task_updated', { task_id: 'agent-bg', patch: { error: 'Rate limited' } })
+    )
+    expect(decoder.drain(500)).toEqual([
+      expect.objectContaining({
+        type: 'live',
+        child: expect.objectContaining({ state: 'working', lastMessage: 'Rate limited' })
+      })
+    ])
+    decoder.observe(system('task_updated', { task_id: 'agent-unknown', patch: { error: 'x' } }))
+    expect(decoder.drain(600)).toEqual([])
+  })
+})
+
+describe('Claude children waiting on a permission request', () => {
+  const states = (edges: ReturnType<ClaudeChildWorkDecoder['drain']>) =>
+    edges.flatMap((edge) =>
+      edge.type === 'live' ? [`${edge.child.handle.id} ${edge.child.state}`] : [edge.type]
+    )
+
+  it('reports a live child that starts or stops waiting, and only then', () => {
+    const decoder = decoderWith(backgroundAgent)
+    decoder.observeWaiting(new Set(['agent-bg', 'agent-untracked']))
+    expect(states(decoder.drain(500))).toEqual(['agent-bg waiting'])
+    decoder.observeWaiting(new Set(['agent-bg', 'agent-untracked']))
+    expect(decoder.drain(600)).toEqual([])
+    decoder.observeWaiting(new Set())
+    expect(states(decoder.drain(700))).toEqual(['agent-bg working'])
+  })
+
+  it('reads every live report of a waiting child as waiting, a start included', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    // The request can name a child before its start is read.
+    decoder.observeWaiting(new Set(['agent-bg']))
+    decoder.observe(backgroundAgent)
+    decoder.observe(foregroundAgent)
+    decoder.observe(system('task_progress', { task_id: 'agent-bg', last_tool_name: 'Bash' }))
+    expect(states(decoder.drain(500))).toEqual([
+      'agent-bg waiting',
+      'agent-fg working',
+      'agent-bg waiting'
+    ])
+  })
+
+  it('settles a waiting child on its own ending, and forgets every wait with the session', () => {
+    const decoder = decoderWith(backgroundAgent)
+    decoder.observeWaiting(new Set(['agent-bg']))
+    decoder.observe(system('task_notification', { task_id: 'agent-bg', status: 'stopped' }))
+    expect(states(decoder.drain(500))).toEqual(['agent-bg waiting', 'ended'])
+    // Nothing is live to stop waiting.
+    decoder.observeWaiting(new Set())
+    expect(decoder.drain(600)).toEqual([])
+    decoder.observe(system('task_started', { ...backgroundAgent, tool_use_id: 'toolu_bg_2' }))
+    decoder.observeWaiting(new Set(['agent-bg']))
+    decoder.clear()
+    // The session's end frees every wait: nothing its drain carries reads waiting.
+    const edges = states(decoder.drain(700))
+    expect(edges.at(-1)).toBe('session-ended')
+    expect(edges).not.toContain('agent-bg waiting')
+  })
 })

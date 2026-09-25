@@ -1,5 +1,6 @@
 // Claude child work as the host records it: the outcome vocabulary, what a progress frame says,
-// the owner of each child through the journal's own linkage, and the tool a child has open.
+// the owner of each child through the journal's own linkage, which children a pending request
+// blocks, and the tool a child has open.
 // The task frames themselves are read by `claude-child-work-decoder`; everything here is drained
 // after the journal handled the frame, so the host never admits evidence ahead of its rows.
 
@@ -9,6 +10,7 @@ import type {
   AgentChildWorkLiveObservation
 } from '../../shared/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from './claude-background-task-frames'
+import { claudePromptAskingChild, type ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { deriveToolInputPreview } from '../../shared/agent-hook-listener/tool-input-preview'
 import {
@@ -109,20 +111,35 @@ export function claudeChildOperation(
   ]
 }
 
+/** The children blocked on a request the provider is still waiting on an answer to. */
+export function claudeWaitingChildIds(
+  prompts: Iterable<ClaudePendingPrompt>,
+  ownerOf: ((toolUseId: string) => string | null) | undefined
+): Set<string> {
+  const waiting = new Set<string>()
+  for (const prompt of prompts) {
+    const childId = claudePromptAskingChild(prompt, ownerOf)
+    if (childId !== null) {
+      waiting.add(childId)
+    }
+  }
+  return waiting
+}
+
 /** Everything one frame (or a close) said about the session's child work, owners named. */
 export function drainClaudeChildWork(
-  session: Pick<ClaudeSession, 'childWork' | 'translator'> | null | undefined,
+  session: Pick<ClaudeSession, 'childWork' | 'translator' | 'prompts'> | null | undefined,
   message: Record<string, unknown> | null,
   observedAt: number
 ): AgentChildWorkEvidence[] {
   if (!session) {
     return []
   }
+  const ownerOf = session.translator?.childToolOwner
+  // Re-derived from the pending requests on every drain, so no wait outlives its request.
+  session.childWork.observeWaiting(claudeWaitingChildIds(session.prompts.pending(), ownerOf))
   return [
-    ...withClaudeChildWorkOwners(
-      session.childWork.drain(observedAt),
-      session.translator?.childToolOwner
-    ),
+    ...withClaudeChildWorkOwners(session.childWork.drain(observedAt), ownerOf),
     ...(message ? claudeChildOperation(message, session.translator?.childActivity, observedAt) : [])
   ]
 }

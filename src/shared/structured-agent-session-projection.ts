@@ -28,15 +28,24 @@ import {
 } from './structured-agent-session-tool-call-block'
 
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
+import {
+  latestStructuredAgentSessionAssistantMessage,
+  latestStructuredAgentSessionPrompt
+} from './structured-agent-session-latest-messages'
 import { sha256 } from './sha256'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
-// Re-exported so the live-turn readers' existing consumers keep one import site.
+// Re-exported so the live-turn and latest-message readers' existing consumers keep one import site.
 export {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
 } from './structured-agent-session-live-turn'
+export {
+  latestStructuredAgentSessionAssistantMessage,
+  latestStructuredAgentSessionPrompt,
+  latestStructuredAgentSessionUserItem
+} from './structured-agent-session-latest-messages'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -220,16 +229,21 @@ export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
 
+/** `asking: 'anyone'` answers whether a human must answer; `'main-agent'` whether the session's own
+ *  agent is the one waiting, which is what its status means: a subagent's request is the subagent's
+ *  wait, carried by its own child record. */
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  currentFence?: number | null
+  currentFence?: number | null,
+  asking: 'anyone' | 'main-agent' = 'anyone'
 ): StructuredAgentSessionProjectedStatus {
   if (
     items.some(
       (item) =>
         (item.body.kind === 'approval' || item.body.kind === 'question') &&
-        item.body.resolution.state === 'pending'
+        item.body.resolution.state === 'pending' &&
+        (asking === 'anyone' || isRootAgentJournalItem(item))
     )
   ) {
     return 'attention'
@@ -238,63 +252,6 @@ export function projectStructuredAgentSessionStatus(
     hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
     ? 'working'
     : 'idle'
-}
-
-function messageProse(blocks: readonly NativeChatBlock[]): string {
-  return blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
-}
-
-/** The newest prompt the session's own user turn carries, as the sidebar quotes
- *  it. Scoped to root rows for the same reason the assistant line is: a provider
- *  that journals a subagent's own prompt would otherwise requote it as the
- *  session's. */
-export function latestStructuredAgentSessionPrompt(
-  items: readonly AgentJournalRenderItem[]
-): string {
-  const body = latestStructuredAgentSessionUserItem(items)?.body
-  return body?.kind === 'message' ? messageProse(body.blocks) : ''
-}
-
-export function latestStructuredAgentSessionUserItem(
-  items: readonly AgentJournalRenderItem[]
-): AgentJournalRenderItem | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]
-    if (
-      item?.body.kind === 'message' &&
-      item.body.role === 'user' &&
-      isRootAgentJournalItem(item)
-    ) {
-      return item
-    }
-  }
-  return null
-}
-
-/** The newest prose THE SESSION'S OWN AGENT wrote in the latest user turn — not a
- *  subagent's, whose rows share this journal and are usually the newer ones while
- *  a child runs. Tool-only assistant items are skipped; the user boundary clears
- *  prose from the preceding turn. */
-export function latestStructuredAgentSessionAssistantMessage(
-  items: readonly AgentJournalRenderItem[]
-): string {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]
-    const body = item?.body
-    if (!isRootAgentJournalItem(item)) {
-      continue
-    }
-    if (body?.kind === 'message' && body.role === 'user') {
-      return ''
-    }
-    if (body?.kind === 'message' && body.role === 'assistant') {
-      const prose = messageProse(body.blocks)
-      if (prose.trim()) {
-        return prose
-      }
-    }
-  }
-  return ''
 }
 
 /** The activity fields a sidebar row shows beside the prompt, named as the agent-status
@@ -331,7 +288,7 @@ export function projectStructuredAgentSessionStatusSummary(
   ) {
     return { status: null, latestPrompt: '' }
   }
-  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
+  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence, 'main-agent')
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
   const toolName = statusToolCall
     ? normalizeOptionalField(statusToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)

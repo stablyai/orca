@@ -35,8 +35,9 @@ export function isLiveChildWork(child: AgentChildWorkLivenessCandidate): boolean
   return child.state !== 'done' && child.state !== 'idle'
 }
 
-/** Only `waiting` asks for a human. A child's `blocked` means it failed (its sole producer maps a
- *  failed task to it), unlike the row's `blocked`; lost contact (`unverifiable`) asks for no one. */
+/** Only `waiting` asks for a human. A subagent asking for approval is `waiting` in every lane; no
+ *  producer writes a live `blocked` (a Claude task's live error stays text), so one counts as live
+ *  work, never as a request. Lost contact (`unverifiable`) asks for no one. */
 function isWaitingChildWork(child: AgentChildWorkLivenessCandidate): boolean {
   return child.state === 'waiting'
 }
