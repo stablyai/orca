@@ -1,4 +1,5 @@
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
@@ -31,6 +32,11 @@ import {
 } from './claude-turn-opening'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { ClaudeOpenTurn } from './claude-open-turn'
+import {
+  ClaudeContextFacts,
+  type ClaudeContextReportPart,
+  type ClaudeContextReportTarget
+} from './claude-context-facts'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
@@ -54,6 +60,24 @@ export type ClaudeJournalTranslator = {
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
   /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
   readonly pendingStreamedBlocks: number
+  /** Moves with the main conversation and each accepted send; a context report
+   *  asked for before it moved may no longer describe the context. */
+  readonly contextActivity: number
+  markContextActivity: () => void
+  /** Fires with the turn a fresh `/context` breakdown should be recorded on. */
+  subscribeContextUsageRequests: (
+    listener: (target: ClaudeContextReportTarget) => void
+  ) => () => void
+  /** Record a requested breakdown, or only its window, on the turn its request named. */
+  recordContextReport: (
+    target: ClaudeContextReportTarget,
+    report: AgentSessionContextReport,
+    part: ClaudeContextReportPart
+  ) => void
+  /** After a write that can change the model or its window; the ring waits for the new window. */
+  modelMayHaveChanged: () => void
+  /** After a model write the child applied; its name sizes estimates until a window is measured. */
+  modelWritten: (model: string) => void
   dispose: () => void
 }
 
@@ -82,8 +106,10 @@ export function createClaudeJournalTranslator(
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
-    settleChildren: (groupKey) => subagents.settleTurn(groupKey)
+    settleChildren: (groupKey) => subagents.settleTurn(groupKey),
+    onOpen: () => context.markActivity()
   })
+  const context = new ClaudeContextFacts(turn, deps.sink)
   const providerFallback = createClaudeProviderFrameFallback(
     deps.sink,
     deps.fallbackIdPrefix ?? 'acquisition'
@@ -192,6 +218,9 @@ export function createClaudeJournalTranslator(
         turn.suppressReopen()
         return
       }
+      if (event.type === 'message') {
+        context.observe(event.message, event.observedAt ?? Date.now())
+      }
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
         return
       }
@@ -221,7 +250,10 @@ export function createClaudeJournalTranslator(
           // The turn is over however it ended, so a foreground child still
           // reported as working will never be settled by an event.
           subagents.settleTurn(turn.groupKey)
-          turn.settle(claudeTurnEndForResult(event.message, event.observedAt ?? Date.now()))
+          context.settle(
+            event.message,
+            claudeTurnEndForResult(event.message, event.observedAt ?? Date.now())
+          )
           // The turn is over. A block still awaiting its final keeps the text the
           // flush above journaled, but its live state goes: an interrupted turn
           // would otherwise retain that text for the life of the session.
@@ -265,6 +297,7 @@ export function createClaudeJournalTranslator(
             corrections.stampFor(claudeFrameParentRef(event.message))
           )
         }
+        context.observeResponse(event.message, event.observedAt ?? Date.now())
         publishActivity(kind, event.message)
         // The CLI's own turn-over signal, and the only end a turn stopped by a
         // fault with no result frame ever gets. Reopen stays allowed: output
@@ -289,8 +322,17 @@ export function createClaudeJournalTranslator(
     get pendingStreamedBlocks() {
       return streamedText.pending
     },
+    get contextActivity() {
+      return context.activityRevision
+    },
+    markContextActivity: () => context.markActivity(),
+    subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),
+    recordContextReport: (target, report, part) => context.recordReport(target, report, part),
+    modelMayHaveChanged: () => context.modelMayHaveChanged(),
+    modelWritten: (model) => context.modelWritten(model),
     dispose: () => {
       streamedText.flush()
+      context.dispose()
       streamedText.dispose()
       tools.clear()
       prompts.clear()

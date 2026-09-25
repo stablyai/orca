@@ -4,6 +4,7 @@ import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import { createClaudeSessionStartupGate } from './claude-structured-session-startup-gate'
 
 export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
   return {
@@ -28,7 +29,8 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     restoreSkippedOptions: new Set(),
     capabilities: [],
     events: undefined,
-    translator: null
+    translator: null,
+    startup: { ...createClaudeSessionStartupGate(), state: 'proven' }
   }
 }
 

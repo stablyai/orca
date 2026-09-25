@@ -7,7 +7,6 @@ import {
   waitForAgentPromptDelay,
   waitForAgentPromptPromise
 } from './orca-runtime-core'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import {
   AGENT_PROMPT_SUBMIT,
   agentPromptSubmitJoinsPasteFrame,
@@ -35,7 +34,6 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP treats a large bracketed paste as a menu unless submit arrives in the same PTY write.
@@ -61,7 +59,6 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         permissionBaseline,
         this.getAgentPromptActivity(handle, ptyId)
       )
-      agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
@@ -97,7 +94,6 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     }
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     if (!submitWithPaste) {
       try {
         await options.beforeWrite?.(ptyId)
@@ -112,7 +108,6 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     }
     const baseline = preSubmitBaseline ?? this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     if (!submitWithPaste) {
       if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')

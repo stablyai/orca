@@ -167,10 +167,14 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // the page's provider hands out none. Nothing a phone renders or does changed.
 //
 // 530 -> 529: `'hardwareBackPress'` left with the Markdown actions' registration for `useBackClaim`.
+//
+// 529 -> 530, and the host-JSX hash: `key="terminal-frame"`, so the page's frame mounts with its
+// onLayout rather than reusing the loading View. Native measured 47 rows before and after: its
+// frame reported either way, and its window is its frame, so both measure paths agree there.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '9b76ff573df10cf370d53f82e4c5864379298fdc3b2c1f607c86bf80c20f2a78'
+  'd7eea5438ff7b4ee77c9bf652626adfdc3d2b49716ffb660df078f70bae0d88d'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
-const HEAD_HOST_JSX_SHA256 = 'ac7547dd0e25be2339111ac01ce5e1ec20f00b05bf59dde85664039308cf8593'
+const HEAD_HOST_JSX_SHA256 = 'ca4c8b46af86a05cb671de91c22111c9e4aaeefd4a04c7b8b09976ca01a31c9b'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
@@ -607,7 +611,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(529)
+    expect(strings).toHaveLength(530)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

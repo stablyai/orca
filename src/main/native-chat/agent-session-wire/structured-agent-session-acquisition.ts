@@ -3,7 +3,8 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
-  rethrowAfterAgentSessionAcquisitionCleanup
+  rethrowAfterAgentSessionAcquisitionCleanup,
+  type StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
 import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
@@ -15,7 +16,11 @@ import { withAgentSessionCreatePhase } from '../../observability/agent-session-i
 export async function acquireOwner(
   input: AttachFlowInput,
   record: AgentSessionRecord
-): Promise<{ record: AgentSessionRecord; acquisitionGeneration: string | null }> {
+): Promise<{
+  record: AgentSessionRecord
+  acquisitionGeneration: string | null
+  providerChildPhase: StructuredAgentSessionProviderChildPhase
+}> {
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
   if (!spawnToken) {
@@ -44,14 +49,20 @@ export async function acquireOwner(
       ...(input.eventSink ? { events: input.eventSink } : {}),
       ...(input.recordPhase ? { recordPhase: input.recordPhase } : {})
     })
-    const options = await withAgentSessionCreatePhase('restore_options', input.recordPhase, () =>
-      readNativeSessionOptions({
-        adapter: input.adapter,
-        sessionId: record.sessionId,
-        fence,
-        ...(record.options ? { priorOptions: record.options } : {})
-      })
-    )
+    const providerChildPhase = acquired.providerChildPhase ?? 'ready'
+    // A starting child has proven nothing: the record keeps the reservation's saved options as
+    // intent, never a catalog guess, and the `started` event persists what the child reports.
+    const options =
+      providerChildPhase === 'starting'
+        ? undefined
+        : await withAgentSessionCreatePhase('restore_options', input.recordPhase, () =>
+            readNativeSessionOptions({
+              adapter: input.adapter,
+              sessionId: record.sessionId,
+              fence,
+              ...(record.options ? { priorOptions: record.options } : {})
+            })
+          )
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
         sessionId: record.sessionId,
@@ -71,7 +82,8 @@ export async function acquireOwner(
     })
     return {
       record: proved,
-      acquisitionGeneration: acquired.acquisitionGeneration ?? null
+      acquisitionGeneration: acquired.acquisitionGeneration ?? null,
+      providerChildPhase
     }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {

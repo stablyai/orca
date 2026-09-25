@@ -23,7 +23,8 @@ export type ClaudeLeadTurnState = {
   >
 }
 
-/** The Codex root's own record; its combined `state` still comes from `codexRosterEffectiveState`. */
+/** The Codex root's own record, folded with its roster into the combined `state`. A child's wait
+ *  lives on the roster entry, never here, so this record is always the root's own truth. */
 export type CodexLeadTurnState = {
   state: 'working' | 'waiting' | 'done'
   /** The turn verdict the server inferred; Codex's own Stop hook carries none. */

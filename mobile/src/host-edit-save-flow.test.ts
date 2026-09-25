@@ -141,7 +141,7 @@ describe('edit host handleSave', () => {
     await pressSave(renderer)
 
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
-      name: 'Home Desk'
+      personalName: 'Home Desk'
     })
     expect(dependencies.forceReconnectHost).not.toHaveBeenCalled()
     expect(dependencies.back).toHaveBeenCalledTimes(1)
@@ -171,7 +171,7 @@ describe('edit host handleSave', () => {
 
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledTimes(1)
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
-      name: 'Home Desk',
+      personalName: 'Home Desk',
       endpoint: 'ws://192.168.1.20:6768'
     })
     expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')

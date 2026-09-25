@@ -258,7 +258,7 @@ export function acquireDirectSshDetectedWorktreeRefresh(
         executionHostId: request.executionHostId,
         directSshAuthority: request.authority
       }
-      const admitted = mergeFetchedWorktrees(
+      const outcome = mergeFetchedWorktrees(
         store.setState as Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
         {
           repoId: request.repoId,
@@ -269,9 +269,17 @@ export function acquireDirectSshDetectedWorktreeRefresh(
           refresh
         }
       )
-      mergedResult = admitted
-        ? providerResult
-        : (staleDetectedWorktreeProviderResult(refresh) ?? providerResult)
+      // Why 'superseded' is current: a newer catalog is already applied for this host. 'stale' would
+      // end a reconnect preparation, and nothing retries it while the connection holds.
+      switch (outcome) {
+        case 'applied':
+        case 'superseded':
+          mergedResult = providerResult
+          break
+        case 'not-current':
+          mergedResult = staleDetectedWorktreeProviderResult(refresh) ?? providerResult
+          break
+      }
       return mergedResult
     }
   }

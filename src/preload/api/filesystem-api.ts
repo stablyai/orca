@@ -18,6 +18,7 @@ import type {
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type {
+  CreateVenvResult,
   KernelFrameEvent,
   KernelStartResult,
   PythonEnvironment,
@@ -173,6 +174,11 @@ export type FilesystemApi = {
     describePython: (args: { path: string }) => Promise<PythonEnvironment | null>
     startKernel: (args: { filePath: string; python: string }) => Promise<KernelStartResult>
     installIpykernel: (args: { python: string }) => Promise<{ ok: boolean; detail: string }>
+    createVenv: (args: {
+      filePath: string
+      rootPath: string | null
+      python: string
+    }) => Promise<CreateVenvResult>
     execute: (args: { filePath: string; code: string }) => Promise<void>
     interrupt: (args: { filePath: string }) => Promise<void>
     shutdownKernel: (args: { filePath: string }) => Promise<void>

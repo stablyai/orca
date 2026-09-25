@@ -206,6 +206,16 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
+  // A failed older page belongs to one paging generation; a reconnect snapshot must start another.
+  it('starts a new older-history generation on each snapshot', async () => {
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
+    const before = latest?.olderHistoryGeneration ?? 0
+    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
+    expect(latest?.olderHistoryGeneration).toBeGreaterThan(before)
+  })
+
   it('discards a load-earlier resolve from the previous owner after a flip', async () => {
     // Fill the initial window so hasMore is true and load-earlier can fire.
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>

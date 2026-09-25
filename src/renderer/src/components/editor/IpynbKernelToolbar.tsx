@@ -5,19 +5,12 @@ import {
   FastForward,
   FolderOpen,
   Loader2,
+  Plus,
   RotateCcw,
   Square
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,10 +28,9 @@ import type {
   PythonEnvironments
 } from '../../../../shared/notebook-kernel-types'
 import { IpynbToolbarButton } from './IpynbCellToolbar'
+import { IpynbKernelSetupDialog } from './IpynbKernelSetupDialog'
 import {
-  cancelPendingStart,
-  installIpykernel,
-  ipykernelInstallCommand,
+  offerVirtualEnvironment,
   interruptKernel,
   restartKernel,
   selectEnvironment
@@ -51,12 +43,15 @@ function environmentLabel({ name, version }: PythonEnvironment): string {
   return `${name} (Python ${version})`
 }
 
-function kernelLabel({ environment, status }: KernelState): string {
+function kernelLabel({ environment, status, setup }: KernelState): string {
+  if (setup?.phase === 'installing') {
+    return translate('auto.components.editor.IpynbViewer.kernelInstalling', 'Installing ipykernel…')
+  }
+  if (setup?.phase === 'creating-venv') {
+    return translate('auto.components.editor.IpynbViewer.kernelCreatingVenv', 'Creating .venv…')
+  }
   if (status === 'starting') {
     return translate('auto.components.editor.IpynbViewer.kernelStarting', 'Starting…')
-  }
-  if (status === 'installing') {
-    return translate('auto.components.editor.IpynbViewer.kernelInstalling', 'Installing ipykernel…')
   }
   if (status === 'dead') {
     return translate('auto.components.editor.IpynbViewer.kernelDead', 'Kernel died')
@@ -110,7 +105,10 @@ export function IpynbKernelToolbar({
   const kernel = useNotebookKernelState(filePath)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [environments, setEnvironments] = useState<PythonEnvironments | null>(null)
-  const settling = kernel.status === 'starting' || kernel.status === 'installing'
+  const settling =
+    kernel.status === 'starting' || (kernel.setup !== null && kernel.setup.phase !== 'idle')
+  // A PATH interpreter, not the selected one: that may be the very .venv being (re)created.
+  const venvBase = environments?.path[0]
 
   useEffect(() => {
     if (!pickerOpen) {
@@ -222,81 +220,30 @@ export function IpynbKernelToolbar({
             <FolderOpen />
             {translate('auto.components.editor.IpynbViewer.browsePython', 'Browse for Python…')}
           </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!venvBase}
+            onSelect={() => {
+              if (venvBase) {
+                offerVirtualEnvironment(filePath, venvBase)
+              }
+            }}
+          >
+            <Plus />
+            {translate(
+              'auto.components.editor.IpynbViewer.createVenvItem',
+              'Create virtual environment…'
+            )}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <IpynbMissingKernelDialog
+      <IpynbKernelSetupDialog
         filePath={filePath}
-        kernel={kernel}
+        rootPath={rootPath}
+        setup={kernel.setup}
         // The picker stands in for the dialog; closing it without a pick brings the dialog back.
-        open={kernel.status === 'missing-ipykernel' && !pickerOpen}
+        open={!pickerOpen}
         onChooseAnother={() => setPickerOpen(true)}
       />
     </div>
-  )
-}
-
-function IpynbMissingKernelDialog({
-  filePath,
-  kernel,
-  open,
-  onChooseAnother
-}: {
-  filePath: string
-  kernel: KernelState
-  open: boolean
-  onChooseAnother: () => void
-}): React.JSX.Element {
-  const command = kernel.environment ? ipykernelInstallCommand(kernel.environment.path) : ''
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          cancelPendingStart(filePath)
-        }
-      }}
-    >
-      <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.editor.IpynbViewer.missingIpykernelTitle',
-              'Install ipykernel?'
-            )}
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            {translate(
-              'auto.components.editor.IpynbViewer.missingIpykernel',
-              "Running cells with '{{env}}' requires the ipykernel package.",
-              { env: kernel.environment?.name ?? '' }
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => cancelPendingStart(filePath)}
-          >
-            {translate('auto.components.editor.IpynbViewer.7f0d7077c6', 'Cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => void window.api.ui.writeClipboardText(command)}
-          >
-            {translate('auto.components.editor.IpynbViewer.copyCommand', 'Copy command')}
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onChooseAnother}>
-            {translate('auto.components.editor.IpynbViewer.chooseAnother', 'Choose Another')}
-          </Button>
-          <Button type="button" size="sm" autoFocus onClick={() => void installIpykernel(filePath)}>
-            {translate('auto.components.editor.IpynbViewer.install', 'Install')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }

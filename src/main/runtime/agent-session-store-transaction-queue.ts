@@ -7,7 +7,8 @@ import {
   loadAgentSessionStore,
   saveAgentSessionStore,
   type AgentSessionStoreState,
-  type LoadedAgentSessionStore
+  type LoadedAgentSessionStore,
+  backfillAgentSessionSurfaceTabIds
 } from './agent-session-record-store-file'
 import { withFileTransactionLock } from '../file-transaction-lock'
 
@@ -169,6 +170,11 @@ export class AgentSessionStoreTransactionQueue {
       throw new Error('agent_session_legacy_required')
     }
     markLoadedLeasesUnreconciled(loaded.state)
+    // Why: a reload replaces the state wholesale, so the ids filled at open would vanish from
+    // memory until the next open; refilling keeps every in-memory record carrying one. It does
+    // not force a save: a reload marks every lease unadjudicated, and this instance must not
+    // persist that verdict on the strength of a refill.
+    backfillAgentSessionSurfaceTabIds(loaded.state)
     this.state = loaded.state
     this.diskRevision = diskRevision
     this.needsRewrite = loaded.needsRewrite

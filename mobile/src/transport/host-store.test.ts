@@ -615,7 +615,7 @@ describe('host-store list mutations', () => {
       return storedHostsRaw
     })
 
-    const rename = updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Renamed Host' })
+    const rename = updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Renamed Host' })
     const remove = removeHost(HOST_TWO.id)
     // Both writers have started their RMW and are blocked on the shared read
     // gate; without a mutation queue the second would clobber the first.
@@ -626,19 +626,16 @@ describe('host-store list mutations', () => {
     await Promise.all([rename, remove])
 
     expect(JSON.parse(storedHostsRaw)).toEqual([
-      {
-        ...HOST_ONE,
-        name: 'Renamed Host'
-      }
+      { ...HOST_ONE, name: 'Renamed Host', personalName: 'Renamed Host' }
     ])
   })
 
   it('preserves a rename when lastConnected updates race it', async () => {
     const before = Date.now()
     await Promise.all([
-      updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Alpha' }),
+      updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Alpha' }),
       updateLastConnected(HOST_ONE.id),
-      updateHostNameAndEndpoint(HOST_TWO.id, { name: 'Beta' })
+      updateHostNameAndEndpoint(HOST_TWO.id, { personalName: 'Beta' })
     ])
 
     const stored = JSON.parse(storedHostsRaw) as Array<typeof HOST_ONE>
@@ -654,7 +651,7 @@ describe('host-store list mutations', () => {
 
   it('does not wipe the host list when storage is unreadable during mutation', async () => {
     storedHostsRaw = '{'
-    await expect(updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Nope' })).rejects.toThrow(
+    await expect(updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Nope' })).rejects.toThrow(
       /unreadable/
     )
     expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
@@ -699,7 +696,7 @@ describe('host-store list mutations', () => {
       expect(secureStoreMock.getItemAsync).toHaveBeenCalled()
     })
 
-    await updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Living Room Mac' })
+    await updateHostNameAndEndpoint(HOST_ONE.id, { personalName: 'Living Room Mac' })
     const afterRename = loadHosts()
     releaseKeychain()
 

@@ -2,71 +2,24 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type {
+  CreateVenvResult,
   KernelFrameEvent,
   KernelStartResult,
   PythonEnvironment
 } from '../../../../shared/notebook-kernel-types'
-import { applyKernelOutput, type NotebookOutput } from './ipynb-kernel-outputs'
+import { applyKernelOutput } from './ipynb-kernel-outputs'
+import { fenced, noticeOutput, startRun, stopRuns } from './ipynb-kernel-runs'
 import {
   getSession,
   runningCellKey,
   setEnvironment,
   store,
   updateSession,
-  type CellRun,
-  type NotebookKernelSession,
+  type KernelSetup,
   type QueuedCell
 } from './ipynb-kernel-store'
 
 const INTERRUPT_STALL_MS = 10_000
-/** Install's command as a shell line to copy; Install itself spawns without a shell. */
-export function ipykernelInstallCommand(
-  python: string,
-  windows = navigator.userAgent.includes('Windows')
-): string {
-  // Why single quotes: literal in POSIX shells and PowerShell; PowerShell runs a quoted path via `&`.
-  const program = windows
-    ? `& '${python.replaceAll("'", "''")}'`
-    : `'${python.replaceAll("'", "'\\''")}'`
-  return `${program} -m pip install -U ipykernel`
-}
-
-function startRun(): CellRun {
-  return {
-    outputs: [],
-    clearOnNextOutput: false,
-    executionCount: null,
-    startedAt: Date.now(),
-    finishedAt: null,
-    committed: false
-  }
-}
-
-/** Ends the executing run, if any, and drops every queued cell. */
-function stopRuns(session: NotebookKernelSession, extraOutputs: NotebookOutput[] = []) {
-  const key = runningCellKey(session)
-  const run = key === null ? null : session.runs[key]
-  return {
-    queue: [],
-    interruptStalled: false,
-    runs:
-      key === null || !run
-        ? session.runs
-        : {
-            ...session.runs,
-            [key]: { ...run, outputs: [...run.outputs, ...extraOutputs], finishedAt: Date.now() }
-          }
-  }
-}
-
-/** Orca's own notices (no Python, install failures) are written as markdown outputs of the cell. */
-function noticeOutput(markdown: string): NotebookOutput {
-  return { output_type: 'display_data', data: { 'text/markdown': markdown }, metadata: {} }
-}
-
-function fenced(text: string): string {
-  return text ? `\n\n\`\`\`\n${text}\n\`\`\`` : ''
-}
 
 /** Reports a failure in the first queued cell (a toast when nothing was queued) and drops the queue. */
 function failQueue(filePath: string, message: string, detail = ''): void {
@@ -77,6 +30,7 @@ function failQueue(filePath: string, message: string, detail = ''): void {
   updateSession(filePath, ({ runs }) => ({
     status: 'off',
     queue: [],
+    setup: null,
     runs: head
       ? {
           ...runs,
@@ -146,10 +100,17 @@ async function start(filePath: string, rootPath: string | null = null): Promise<
     return
   }
   if (result.status === 'ready') {
-    updateSession(filePath, () => ({ status: 'ready' }))
+    updateSession(filePath, () => ({ status: 'ready', setup: null }))
     pump(filePath)
   } else if (result.status === 'missing-ipykernel') {
-    updateSession(filePath, () => ({ status: 'missing-ipykernel' }))
+    // The kernel was started in this notebook's chosen environment, so it is set.
+    const base = store.getState().environments[filePath]
+    updateSession(filePath, () => ({
+      status: 'off',
+      setup: base
+        ? { base, offer: result.externallyManaged ? 'venv' : 'install', phase: 'idle', error: null }
+        : null
+    }))
   } else {
     failQueue(
       filePath,
@@ -179,12 +140,12 @@ export async function runCells(
     )
     return { queue: [...session.queue, ...fresh] }
   })
-  const { status } = getSession(filePath)
+  const { status, setup } = getSession(filePath)
   if (status === 'ready') {
     pump(filePath)
     return
   }
-  if (status !== 'off' && status !== 'dead') {
+  if (status === 'starting' || setup) {
     return
   }
   await start(filePath, rootPath)
@@ -198,8 +159,9 @@ export function restartKernel(filePath: string): void {
 /** Switching interpreters restarts a running kernel; otherwise queued cells wait for the new one. */
 export function selectEnvironment(filePath: string, environment: PythonEnvironment): void {
   setEnvironment(filePath, environment)
-  const { status } = getSession(filePath)
-  if (status === 'off' || status === 'missing-ipykernel') {
+  // A pick replaces an open setup prompt; the new env reopens it if it lacks ipykernel too.
+  updateSession(filePath, ({ setup }) => ({ setup: setup?.phase === 'idle' ? null : setup }))
+  if (getSession(filePath).status === 'off') {
     void start(filePath)
   } else {
     restartKernel(filePath)
@@ -216,40 +178,83 @@ export function interruptKernel(filePath: string): void {
   }, INTERRUPT_STALL_MS)
 }
 
+/** Moves the open setup to `phase`; returns the new setup, or null when there is none. */
+function enterSetupPhase(filePath: string, phase: KernelSetup['phase']): KernelSetup | null {
+  const current = getSession(filePath).setup
+  if (!current) {
+    return null
+  }
+  const setup: KernelSetup = { ...current, phase, error: null }
+  updateSession(filePath, () => ({ setup }))
+  return setup
+}
+
+/** Whether `setup` is still the one on screen; a closed tab or reopened session means no. */
+function isShowing(filePath: string, setup: KernelSetup): boolean {
+  return getSession(filePath).setup === setup
+}
+
+function failSetup(filePath: string, detail: string): void {
+  updateSession(filePath, ({ setup }) => ({
+    setup: setup && { ...setup, phase: 'idle', error: detail }
+  }))
+}
+
+function errorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export async function installIpykernel(filePath: string): Promise<void> {
-  const environment = store.getState().environments[filePath]
-  if (!environment) {
+  const setup = enterSetupPhase(filePath, 'installing')
+  if (!setup) {
     return
   }
-  updateSession(filePath, () => ({ status: 'installing' }))
-  const result = await window.api.notebook.installIpykernel({ python: environment.path })
-  if (!isOpen(filePath)) {
+  const result = await window.api.notebook
+    .installIpykernel({ python: setup.base.path })
+    .catch((error: unknown) => ({ ok: false, detail: errorDetail(error) }))
+  if (!isShowing(filePath, setup)) {
     return
   }
   if (result.ok) {
     await start(filePath)
-    return
+  } else {
+    failSetup(filePath, result.detail)
   }
-  failQueue(
-    filePath,
-    translate(
-      'auto.components.editor.IpynbViewer.installFailed',
-      'Installing ipykernel failed. Run `{{command}}` yourself, or create a virtual environment for this project with `{{venvCommand}}` and choose it as the kernel.',
-      {
-        command: ipykernelInstallCommand(environment.path),
-        // Windows installs the `py` launcher; `python3` there is often the Store stub.
-        venvCommand: `${navigator.userAgent.includes('Windows') ? 'py' : 'python3'} -m venv .venv`
-      }
-    ),
-    result.detail
-  )
 }
 
-/** Drops the cells waiting on ipykernel when the user backs out of installing it. */
-export function cancelPendingStart(filePath: string): void {
-  if (getSession(filePath).status === 'missing-ipykernel') {
-    updateSession(filePath, () => ({ status: 'off', queue: [] }))
+/** Creates the notebook's `.venv` from the setup's base with ipykernel, then switches to it. */
+export async function createVirtualEnvironment(
+  filePath: string,
+  rootPath: string | null
+): Promise<void> {
+  const setup = enterSetupPhase(filePath, 'creating-venv')
+  if (!setup) {
+    return
   }
+  const result: CreateVenvResult = await window.api.notebook
+    .createVenv({ filePath, rootPath, python: setup.base.path })
+    .catch((error: unknown) => ({ ok: false, detail: errorDetail(error) }))
+  if (!isShowing(filePath, setup)) {
+    return
+  }
+  if (result.ok) {
+    selectEnvironment(filePath, result.environment)
+  } else {
+    failSetup(filePath, result.detail)
+  }
+}
+
+/** Opens the setup dialog offering a new `.venv` built from `base`. */
+export function offerVirtualEnvironment(filePath: string, base: PythonEnvironment): void {
+  updateSession(filePath, () => ({ setup: { base, offer: 'venv', phase: 'idle', error: null } }))
+}
+
+/** Closes the setup dialog; cells waiting on a kernel that will not start are dropped. */
+export function cancelSetup(filePath: string): void {
+  updateSession(filePath, ({ status, queue }) => ({
+    setup: null,
+    queue: status === 'off' ? [] : queue
+  }))
 }
 
 export function markRunCommitted(filePath: string, key: string): void {

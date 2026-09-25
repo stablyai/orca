@@ -7,38 +7,23 @@ import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
-import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
 import {
   writeRefused,
   writeUnverifiable,
   type WriteSettlement
 } from '../../../../shared/pty-write-settlement'
 
+export function writePtyFromRuntimeController(ptyId: string, data: string): boolean
 export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string,
-  data: string
-): boolean
-export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
   ptyId: string,
   data: string,
   options: { waitForSettlement: true }
 ): WriteSettlement | Promise<WriteSettlement>
 export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
   ptyId: string,
   data: string,
   options?: { waitForSettlement: true }
 ): boolean | WriteSettlement | Promise<WriteSettlement> {
-  // Why: the backstop for every runtime write path — query replies, followups, deliveries —
-  // so a caller that forgets the typed gate still cannot reach a provider.
-  const admission = agentSessionPtyWriteGate.admit(ptyId)
-  if (!admission.admitted) {
-    reportAgentSessionWriteRefusal(deps.mainWindow, ptyId, admission.refusal)
-    return options?.waitForSettlement ? writeRefused('write_gate_denied') : false
-  }
   let provider: IPtyProvider
   try {
     provider = getProviderForPty(ptyId)
@@ -60,21 +45,6 @@ export function writePtyFromRuntimeController(
   }
   try {
     return provider.write(ptyId, data) !== false
-  } catch {
-    return false
-  }
-}
-
-export function writePtyAgentSessionProofFromRuntimeController(
-  ptyId: string,
-  data: string,
-  authority: { sessionId: string; spawnToken: string }
-): boolean {
-  if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
-    return false
-  }
-  try {
-    return getProviderForPty(ptyId).write(ptyId, data) !== false
   } catch {
     return false
   }

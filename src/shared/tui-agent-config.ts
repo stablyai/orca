@@ -14,6 +14,7 @@ export type DraftPasteReadySignal =
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
   | 'grok-composer-prompt'
+  | 'zcode-composer-prompt'
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
@@ -36,6 +37,8 @@ export type TuiAgentConfig = {
   draftPromptFlag?: string
   /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
   draftPromptEnvVar?: string
+  /** Claude Code follows pasted text only where the user's typed words ask, so dispatch briefs need a typed lead line. */
+  pasteNeedsTypedRequest?: boolean
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
   preflightTrust?: 'cursor' | 'copilot' | 'codex' | 'antigravity'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
@@ -72,6 +75,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill'
   },
@@ -89,7 +93,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
       win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
     },
     expectedProcess: 'claude',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    pasteNeedsTypedRequest: true
   },
   openclaude: {
     detectCmd: 'openclaude',
@@ -316,6 +321,19 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     launchCmd: 'muse --trust-workspace',
     // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
     promptInjectionMode: 'stdin-after-start'
+  },
+  zcode: {
+    detectCmd: 'zcode',
+    // Why: ZCode's entrypoint sets `process.title = 'zcode-cli'` (its `process-name.ts`
+    // exports CLI_COMMAND_NAME 'zcode' / CLI_PROCESS_NAME 'zcode-cli'), so the foreground
+    // name never equals the launch command and dispatch would refuse with no_agent_detected.
+    expectedProcess: 'zcode-cli',
+    // Why: ZCode reads `positionals[0]` as a subcommand name (apps/zcode-cli/packages/cli/src/run.ts),
+    // so an argv prompt exits with "Unknown command"; `-p` is headless-only and quits after the turn.
+    promptInjectionMode: 'stdin-after-start',
+    // Why: ZCode repaints an animated ASCII banner indefinitely, so the default quiet-render
+    // window never settles; its composer box corner is the real "input is live" signal.
+    draftPasteReadySignal: 'zcode-composer-prompt'
   },
   devin: {
     detectCmd: 'devin',

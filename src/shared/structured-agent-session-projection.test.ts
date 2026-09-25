@@ -155,7 +155,8 @@ describe('structured agent session status projection', () => {
     })
     expect(projectStructuredAgentSessionStatusSummary([first, second, running])).toEqual({
       status: 'working',
-      latestPrompt: 'second line'
+      latestPrompt: 'second line',
+      statusStartedAt: 3
     })
     expect(projectStructuredAgentSessionStatusSummary([first, second])).toEqual({
       status: 'idle',
@@ -176,11 +177,13 @@ describe('structured agent session status projection', () => {
     // The first send has no journalled message until the provider replays it.
     expect(projectStructuredAgentSessionStatusSummary([], pending)).toEqual({
       status: 'working',
-      latestPrompt: ''
+      latestPrompt: '',
+      statusStartedAt: 1
     })
     expect(projectStructuredAgentSessionStatusSummary([asked], pending)).toEqual({
       status: 'working',
-      latestPrompt: 'go'
+      latestPrompt: 'go',
+      statusStartedAt: 1
     })
   })
 
@@ -260,7 +263,8 @@ describe('structured agent session status projection', () => {
       latestPrompt: 'look at the sidebar',
       toolName: 'Read',
       toolInput: '/repo/src/WorktreeCard.tsx',
-      lastAssistantMessage: 'Reading the card first.'
+      lastAssistantMessage: 'Reading the card first.',
+      statusStartedAt: 2
     })
   })
 
@@ -327,7 +331,8 @@ describe('structured agent session status projection', () => {
 
     expect(projectStructuredAgentSessionStatusSummary([ask, abandoned, running])).toEqual({
       status: 'working',
-      latestPrompt: 'go'
+      latestPrompt: 'go',
+      statusStartedAt: 3
     })
   })
 

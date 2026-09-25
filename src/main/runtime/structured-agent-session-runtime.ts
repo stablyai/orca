@@ -31,7 +31,6 @@ import {
   type StructuredAgentSessionHostDeps
 } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
-import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   readClaudeManagedAccountGateSettings,
@@ -44,12 +43,16 @@ import {
   createStructuredAgentSessionOwnerProbe,
   createStructuredAgentSessionOwnerProbes
 } from './structured-agent-session-owner-probe'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import type { NativeChatShellEnvironmentPolicy } from '../../shared/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
-import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import { createStructuredAgentSessionLifecycleDelivery } from './structured-agent-session-lifecycle-delivery'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import {
+  modelCatalogHostDeps,
+  type RuntimeAgentAccountHomeResolver
+} from './structured-agent-model-catalog-wiring'
 
 /** Sibling of the journal tree rather than inside it: one file adjudicates every
  *  session's lease, while a journal is per session. */
@@ -101,8 +104,10 @@ export type StructuredAgentSessionRuntimeDeps = {
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
   /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
   statusSink?: StructuredAgentSessionHostDeps['statusSink']
-  handoffTransport?: StructuredAgentSessionHandoffTransport
   reapOrphanChildren?: typeof stopOrphanAgentSessionChildren
+  /** The account home a structured launch would pin right now, for catalog
+   *  reads with no session record. Absent disables the catalog surface. */
+  resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
 }
 
 let installing: Promise<InstalledRuntime> | null = null
@@ -155,7 +160,6 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
-  agentSessionPtyWriteGate.detachRecordLookup()
   const outstanding = [...pendingTeardown]
   pendingTeardown.clear()
   const installed = pending ? await pending.catch(() => null) : null
@@ -171,6 +175,7 @@ export async function stopStructuredAgentSessionRuntime(options?: {
       failures.push(error)
     }
   }
+  await agentModelCatalogStore.flushPersistence()
   if (failures.length === 1) {
     throw failures[0]
   }
@@ -186,13 +191,12 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
     throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
   }
-  const { resolveCodexEnvironment, resolveClaudeInheritedEnv } =
-    createStructuredAgentEnvironmentResolvers(deps)
+  const envResolvers = createStructuredAgentEnvironmentResolvers(deps)
+  const { resolveCodexEnvironment, resolveClaudeInheritedEnv } = envResolvers
   const store = await AgentSessionRecordStore.open({
     directory: join(deps.stateDirectory, RECORD_STORE_DIR_NAME),
     hostId: deps.hostId
   })
-  agentSessionPtyWriteGate.attachRecordLookup((sessionId) => store.getRecord(sessionId))
   // Why: only the durable store can identify a provider child lost before record publication.
   void (deps.reapOrphanChildren ?? stopOrphanAgentSessionChildren)({ store }).catch((error) => {
     try {
@@ -208,148 +212,110 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       )
     }
   })
-  try {
-    let host: StructuredAgentSessionHost | null = null
-    let recoveryChain = Promise.resolve()
-    const onDispatchSettledLate = (
-      settlement: Parameters<StructuredAgentSessionHost['settleLateDispatch']>[0]
-    ): void => {
-      void host?.settleLateDispatch(settlement).catch((error) =>
-        deps.onError?.({
-          scope: `structured-agent-session-late-settlement:${settlement.sessionId}`,
-          error
-        })
-      )
-    }
-    const codex = new CodexStructuredSessionAdapter({
-      resolveLaunch: createCodexStructuredLaunchResolver({
-        store,
-        resolveWorkspacePath: deps.resolveWorkspacePath,
-        resolveEnvironment: resolveCodexEnvironment,
-        ...(deps.resolveCodexPermissionPolicy
-          ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
-          : {}),
-        ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
-      }),
-      ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
-      ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
-      onBackgroundTasksChanged: (sessionId, state) =>
-        host?.publishBackgroundTaskState(sessionId, state),
-      onDispatchSettledLate,
-      onPrimaryThreadStoppedRunning: ({ sessionId }) => {
-        void host
-          ?.releaseUnansweredDispatches({
-            sessionId,
-            reason: DISPATCH_DOUBT_PROVIDER_IDLE
-          })
-          .catch((error) =>
-            deps.onError?.({
-              scope: `structured-agent-session-unanswered-dispatch:${sessionId}`,
-              error
-            })
-          )
-      },
-      onEvent: (event) => {
-        if (event.type !== 'ended' || !('cause' in event) || event.cause !== 'unexpected-exit') {
-          return
-        }
-        // Serialize recovery with teardown. Exit callbacks arrive from child
-        // process tasks, so a fire-and-forget callback can otherwise append
-        // after the host has flushed and its journal directory is removed.
-        recoveryChain = recoveryChain.then(async () => {
-          try {
-            await host?.handleAdapterEvent(event)
-          } catch (error) {
-            deps.onError?.({ scope: `structured-agent-session-exit:${event.sessionId}`, error })
-          }
-        })
-      }
-    })
-    const claude = createStructuredClaudeRuntimeAdapter({
+  let host: StructuredAgentSessionHost | null = null
+  const lifecycle = createStructuredAgentSessionLifecycleDelivery({
+    handle: (event) => host?.handleAdapterEvent(event),
+    ...(deps.onError ? { onError: deps.onError } : {}),
+    // Claude publishes an observed exit only after its close ladder and transcript write; Codex
+    // publishes inside its own exit callback and needs nothing.
+    drainObservedExits: () => claude.drainObservedExits()
+  })
+  const onDispatchSettledLate = (
+    settlement: Parameters<StructuredAgentSessionHost['settleLateDispatch']>[0]
+  ): void => {
+    void host?.settleLateDispatch(settlement).catch((error) =>
+      deps.onError?.({
+        scope: `structured-agent-session-late-settlement:${settlement.sessionId}`,
+        error
+      })
+    )
+  }
+  const codex = new CodexStructuredSessionAdapter({
+    resolveLaunch: createCodexStructuredLaunchResolver({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
-      ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
-      ...(deps.resolveClaudeLaunchEnv
-        ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv }
+      resolveEnvironment: resolveCodexEnvironment,
+      ...(deps.resolveCodexPermissionPolicy
+        ? { resolvePermissionPolicy: deps.resolveCodexPermissionPolicy }
         : {}),
-      resolveClaudeInheritedEnv,
-      resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
-      ...(deps.resolveClaudePermissionMode
-        ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }
-        : {}),
-      ...(deps.getClaudeManagedAccountGateSettings
-        ? {
-            readClaudeManagedAccountGate: () =>
-              readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
-          }
-        : {}),
-      onUnexpectedExit: (event) => {
-        recoveryChain = recoveryChain.then(async () => {
-          try {
-            await host?.handleAdapterEvent(event)
-          } catch (error) {
-            deps.onError?.({ scope: `structured-agent-session-exit:${event.sessionId}`, error })
-          }
+      ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
+    }),
+    ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    modelCatalog: agentModelCatalogStore,
+    onBackgroundTasksChanged: (sessionId, state) =>
+      host?.publishBackgroundTaskState(sessionId, state),
+    onDispatchSettledLate,
+    onPrimaryThreadStoppedRunning: ({ sessionId }) => {
+      void host
+        ?.releaseUnansweredDispatches({
+          sessionId,
+          reason: DISPATCH_DOUBT_PROVIDER_IDLE
         })
-      },
-      onBackgroundTasksChanged: (sessionId, state) =>
-        host?.publishBackgroundTaskState(sessionId, state),
-      onDispatchSettledLate,
-      ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
-      ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
-    })
-    const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
-      await Promise.all([codex.closeAll(), claude.closeAll()])
-    })
-    host = new StructuredAgentSessionHost({
-      store,
-      adapter,
-      recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
-      journalRoot: deps.stateDirectory,
-      claimKeyId: deps.claimKeyId,
-      probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
-      probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
-      ...(deps.resolveLaunchArgs
-        ? {
-            resolveLaunchArgs: async (provider: AgentSessionRecord['provider']) =>
-              await deps.resolveLaunchArgs!(provider)
-          }
-        : {}),
-      onEventSinkError: ({ sessionId, error }) =>
-        deps.onError?.({ scope: `structured-agent-session-journal:${sessionId}`, error }),
-      ...(deps.onSessionStatusChanged
-        ? { onSessionStatusChanged: deps.onSessionStatusChanged }
-        : {}),
-      ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
-      persistTuiProviderHandle: async ({ sessionId, link, now }) => {
-        await store.transitionHandoff(sessionId, (record) =>
-          recordAgentSessionProviderHandle({ record, fence: record.lease.runtimeFence, link, now })
+        .catch((error) =>
+          deps.onError?.({
+            scope: `structured-agent-session-unanswered-dispatch:${sessionId}`,
+            error
+          })
         )
-      },
-      ...(deps.handoffTransport ? { handoffTransport: deps.handoffTransport } : {})
-    })
-    setStructuredAgentSessionHost(host)
-    return {
-      host,
-      adapter,
-      waitForRecovery: async () => {
-        // A recovery may synchronously trigger another exit while it is
-        // reacquiring. Observe until the chain stops growing.
-        for (;;) {
-          // Claude reaches the chain only once its close ladder and transcript
-          // write publish the exit, so an observed death is not yet a chained
-          // one. Codex publishes inside its own exit callback and needs nothing.
-          await claude.drainObservedExits()
-          const observed = recoveryChain
-          await observed
-          if (observed === recoveryChain) {
-            return
-          }
-        }
+    },
+    onEvent: (event) => {
+      if (event.type === 'ended' && 'cause' in event && event.cause === 'unexpected-exit') {
+        lifecycle.deliver(event)
       }
     }
-  } catch (error) {
-    agentSessionPtyWriteGate.detachRecordLookup()
-    throw error
+  })
+  const claude = createStructuredClaudeRuntimeAdapter({
+    store,
+    resolveWorkspacePath: deps.resolveWorkspacePath,
+    ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
+    ...(deps.resolveClaudeLaunchEnv ? { resolveClaudeLaunchEnv: deps.resolveClaudeLaunchEnv } : {}),
+    resolveClaudeInheritedEnv,
+    resolveClaudeAuthPolicy: deps.resolveClaudeAuthPolicy,
+    ...(deps.resolveClaudePermissionMode
+      ? { resolveClaudePermissionMode: deps.resolveClaudePermissionMode }
+      : {}),
+    ...(deps.getClaudeManagedAccountGateSettings
+      ? {
+          readClaudeManagedAccountGate: () =>
+            readClaudeManagedAccountGateSettings(deps.getClaudeManagedAccountGateSettings!)
+        }
+      : {}),
+    onLifecycleEvent: (event) => lifecycle.deliver(event),
+    onBackgroundTasksChanged: (sessionId, state) =>
+      host?.publishBackgroundTaskState(sessionId, state),
+    onDispatchSettledLate,
+    ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    modelCatalog: agentModelCatalogStore
+  })
+  const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
+    await Promise.all([codex.closeAll(), claude.closeAll()])
+  })
+  host = new StructuredAgentSessionHost({
+    store,
+    adapter,
+    recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
+    journalRoot: deps.stateDirectory,
+    claimKeyId: deps.claimKeyId,
+    probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
+    probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
+    ...(deps.resolveLaunchArgs
+      ? {
+          resolveLaunchArgs: async (provider: AgentSessionRecord['provider']) =>
+            await deps.resolveLaunchArgs!(provider)
+        }
+      : {}),
+    onEventSinkError: ({ sessionId, error }) =>
+      deps.onError?.({ scope: `structured-agent-session-journal:${sessionId}`, error }),
+    ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
+    ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
+    ...(await modelCatalogHostDeps({ store, deps, envResolvers }))
+  })
+  setStructuredAgentSessionHost(host)
+  return {
+    host,
+    adapter,
+    waitForRecovery: lifecycle.drain
   }
 }

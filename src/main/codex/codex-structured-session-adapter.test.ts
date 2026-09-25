@@ -83,6 +83,42 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(acquisition.link.handle).toEqual({ provider: 'codex', threadId: 'thread-proven' })
   })
 
+  it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
+    const codex = fakeCodex({
+      'thread/resume': () => {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'codex app-server thread/resume failed: no rollout found for thread id thread-unsaved'
+        )
+      }
+    })
+    const adapter = adapterFor(codex, {
+      resumeThreadId: 'thread-unsaved',
+      supersedeIfUnsaved: true
+    })
+
+    const acquisition = await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 9,
+      spawnToken: 'spawn-9'
+    })
+
+    expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
+      'thread/resume',
+      'thread/start'
+    ])
+    expect(acquisition.link).toEqual({
+      linkId: `codex-9-${THREAD_ID}`,
+      handle: { provider: 'codex', threadId: THREAD_ID },
+      origin: 'created',
+      supersedesKey: 'codex:"thread-unsaved"',
+      mintedAtFence: 9,
+      observedAt: 1_700_000_000_500
+    })
+    expect(codex.connections[0].closeCount).toBe(0)
+  })
+
   it('refuses a resume that lands on a different thread and reaps the child', async () => {
     const codex = fakeCodex({ 'thread/resume': () => ({ thread: { id: 'thread-other' } }) })
     const adapter = adapterFor(codex, { resumeThreadId: 'thread-proven' })

@@ -17,13 +17,13 @@ import {
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
+  agentSessionLeaseOwnerVerdict,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   agentSessionExecutionLocationsEqual,
-  isAgentSessionLaunchArgs,
   isAgentSessionLaunchEnv,
   isAgentSessionOptions,
   type AgentSessionAccountHome,
@@ -32,6 +32,8 @@ import {
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
+import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args'
+import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import {
   agentSessionProviderHandleRoot,
   type AgentSessionHandleProvider,
@@ -54,10 +56,12 @@ export type AgentSessionReserveRequest = {
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
+  /** The tab id this conversation shows under. Pinned on first reservation; a later reservation of
+   *  an existing record keeps the record's own. Refused when another record already holds it. */
+  surfaceTabId?: string
   /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
    *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
-  runtimeKind: AgentSessionReservation['runtimeKind']
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */
@@ -149,7 +153,6 @@ export function applyAgentSessionReservation(
     throw new Error('agent_session_options_invalid')
   }
   const reservation: AgentSessionReservation = {
-    runtimeKind: request.runtimeKind,
     spawnToken:
       typeof request.spawnToken === 'function' ? request.spawnToken() : request.spawnToken,
     claimKeyId: request.claimKeyId,
@@ -170,6 +173,7 @@ export function applyAgentSessionReservation(
     if (request.expectedFence !== null) {
       throw new Error('agent_session_checkpoint_stale')
     }
+    assertSurfaceTabIdUnheld(state, request)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
   if (
@@ -181,7 +185,13 @@ export function applyAgentSessionReservation(
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw new Error('agent_session_conflict')
   }
-  if (request.expectedFence === null) {
+  // A create may take over only a record that never bound a conversation and whose last
+  // attempt is proven gone: that is the same as creating it fresh, under a fresh provider id.
+  const recreatable =
+    existing.providerHandleChain.length === 0 &&
+    !request.adoptedHandleLink &&
+    agentSessionLeaseOwnerVerdict(existing.lease) === 'exited'
+  if (request.expectedFence === null && !recreatable) {
     throw new Error('agent_session_conflict')
   }
   const pinned = {
@@ -191,7 +201,7 @@ export function applyAgentSessionReservation(
   }
   return reserveAgentSessionOwner({
     record: pinned,
-    expectedFence: request.expectedFence,
+    expectedFence: request.expectedFence ?? existing.lease.runtimeFence,
     probe: request.probe,
     reservation
   })
@@ -232,6 +242,25 @@ function assertAdoptedConversationUnowned(
   }
 }
 
+/** A tab id names one conversation. Two records under one id would give two chats one tab, one
+ *  read-state key and one notification id, so the second reservation is refused as a conflict. */
+function assertSurfaceTabIdUnheld(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest
+): void {
+  if (request.surfaceTabId === undefined) {
+    return
+  }
+  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
+    throw new Error('agent_session_operation_invalid')
+  }
+  for (const record of state.records.values()) {
+    if (record.sessionId !== request.sessionId && record.surfaceTabId === request.surfaceTabId) {
+      throw new Error('agent_session_conflict')
+    }
+  }
+}
+
 function createAgentSessionRecord(
   request: AgentSessionReserveRequest,
   reservation: AgentSessionReservation
@@ -247,11 +276,12 @@ function createAgentSessionRecord(
     accountHome: request.accountHome,
     ...(request.options ? { options: { ...request.options } } : {}),
     ...(request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
+    ...(request.surfaceTabId ? { surfaceTabId: request.surfaceTabId } : {}),
     createdAt: request.now,
     updatedAt: request.now,
     lease: {
       sessionId: request.sessionId,
-      runtimeKind: reservation.runtimeKind,
+      runtimeKind: 'native',
       // Why: fence 1 is the first reservation; 0 is reserved for "no owner has ever existed".
       runtimeFence: 1,
       handoffStage: 'new-owner-proving',

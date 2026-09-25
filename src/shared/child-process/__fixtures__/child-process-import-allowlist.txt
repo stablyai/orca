@@ -91,7 +91,6 @@ src/main/github/gh-utils.ts
 src/main/hooks.ts
 src/main/ipc/app.ts
 src/main/ipc/developer-permissions.ts
-src/main/ipc/filesystem-list-files-git-fallback.ts
 src/main/ipc/filesystem-list-files.ts
 src/main/ipc/filesystem-watcher-wsl.ts
 src/main/ipc/filesystem/filesystem-handler-context.ts

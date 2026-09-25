@@ -26,7 +26,8 @@ export class StructuredAgentSessionClientDelivery {
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
-    deps: () => StructuredAgentSessionHostDeps
+    deps: () => StructuredAgentSessionHostDeps,
+    private readonly onJournalActivity?: (sessionId: string) => void
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({ sessions, now, deps })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({ sessions, now })
@@ -78,6 +79,7 @@ export class StructuredAgentSessionClientDelivery {
     // Derived here rather than per-subscriber: this edge runs whether or not anyone is
     // subscribed, which is the whole reason a backgrounded chat can complete at all.
     this.turnCompletionFeed.observe(sessionId, journal)
+    this.onJournalActivity?.(sessionId)
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

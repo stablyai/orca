@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-session'
 
 export function rememberRunCoordinatorHandle(
   this: OrchestrationDb,
@@ -12,11 +13,17 @@ export function rememberRunCoordinatorHandle(
     .run(runId, terminalHandle)
 }
 
+const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')
+
+// Every address the coordinator has, its handle and its session address, as the migrate-v42 triggers.
 export function rememberCurrentRunCoordinatorHandles(this: OrchestrationDb): void {
   this.db.exec(`
     INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
     SELECT id, coordinator_handle FROM runs
-    WHERE legacy = 0 AND coordinator_handle IS NOT NULL
+    WHERE legacy = 0 AND coordinator_handle IS NOT NULL;
+    INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle)
+    SELECT id, ${CURRENT_COORDINATOR_SESSION_ADDRESS_SQL} FROM runs
+    WHERE legacy = 0 AND ${CURRENT_COORDINATOR_SESSION_ADDRESS_SQL} IS NOT NULL;
   `)
 }
 

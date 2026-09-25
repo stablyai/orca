@@ -14,6 +14,10 @@ import {
   isAgentStatusHeldOpenByChildWork
 } from '../../../shared/agent-lead-status-fold'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import {
+  structuredAgentSessionDatedMainAgent,
+  structuredAgentSessionRowStateStartedAt
+} from '../../../shared/structured-agent-session-status-started-at'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
@@ -49,7 +53,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     // by the journal: a restart's republish is not a new main agent state either.
     const mainAgent = continueMainAgentStatus(
       priorStatus?.mainAgent,
-      agentStatus.mainAgent,
+      structuredAgentSessionDatedMainAgent(agentStatus.mainAgent, summary),
       summary.updatedAt
     )
     const tabId = structuredAgentSessionTabId(parsed.sessionId)
@@ -88,9 +92,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       // Continuity is the whole published work identity: `state` alone no longer means "a turn is
       // running", so monitoring that becomes a real turn must restart the clock, not inherit it.
       stateStartedAt:
-        priorStatus?.state === state && priorStatus.workingMode === workingMode
+        structuredAgentSessionRowStateStartedAt({ state, mainAgent }, summary) ??
+        (priorStatus?.state === state && priorStatus.workingMode === workingMode
           ? priorStatus.stateStartedAt
-          : summary.updatedAt,
+          : summary.updatedAt),
       observation: {
         origin: 'structured',
         kind: 'transition',

@@ -1,5 +1,8 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import {
+  agentSessionProviderHandleKey,
+  type AgentSessionProviderHandleLink
+} from '../../shared/agent-session-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
 
@@ -46,19 +49,33 @@ export async function codexProcessIdentity(
   }
 }
 
-export function codexProviderHandleLink(input: {
+type CodexProviderHandleLinkInput = {
   threadId: string
-  resumed: boolean
-  origin?: 'adopted'
   fence: number
   linkId?: string
   observedAt: number
-}): AgentSessionProviderHandleLink {
+} & (
+  | { origin?: 'adopted'; resumed: boolean; supersedesThreadId?: never }
+  /** A new thread started in place of this unsaved one; only a creation can supersede. */
+  | { origin?: never; resumed: false; supersedesThreadId: string }
+)
+
+export function codexProviderHandleLink(
+  input: CodexProviderHandleLinkInput
+): AgentSessionProviderHandleLink {
   return {
     linkId: input.linkId ?? `codex-${input.fence}-${input.threadId}`.slice(0, 128),
     handle: { provider: 'codex', threadId: input.threadId },
     origin: input.origin ?? (input.resumed ? 'resumed' : 'created'),
     mintedAtFence: input.fence,
-    observedAt: input.observedAt
+    observedAt: input.observedAt,
+    ...(input.supersedesThreadId
+      ? {
+          supersedesKey: agentSessionProviderHandleKey({
+            provider: 'codex',
+            threadId: input.supersedesThreadId
+          })
+        }
+      : {})
   }
 }

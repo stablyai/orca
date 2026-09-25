@@ -6,7 +6,6 @@ import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status-identity'
-import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
@@ -17,7 +16,7 @@ import {
   withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
-import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
+import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
@@ -152,7 +151,21 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    // Why before the permission hold: that hold adopts the event's `mainAgent`, and a relay's
+    // restatement of a main agent the desktop cancelled must not replace the cancel.
+    const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
+    if (latch.hold) {
+      if (
+        attachedPayload.payload.agentType === 'codex' &&
+        attachedPayload.payload.state === 'working'
+      ) {
+        markCodexLeadTurnInterrupted(this.state, attachedPayload.paneKey)
+      }
+      this.commitStatusRowMutation(rowBefore, previous)
+      return previous
+    }
+    const effectivePayload = latch.event
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       const held = withHeldChildWaitMainAgent(previous, effectivePayload)
       // Why: a child's prompt leaves the main agent running, so the held row takes its `mainAgent` and
@@ -172,35 +185,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         this.emitEnrichedStatus(held)
       }
       return held
-    }
-    // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
-    if (
-      previous?.payload.state === 'done' &&
-      previous.payload.interrupted === true &&
-      effectivePayload.payload.state === 'done' &&
-      previous.payload.agentType === effectivePayload.payload.agentType &&
-      previous.payload.prompt === effectivePayload.payload.prompt &&
-      Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS
-    ) {
-      this.commitStatusRowMutation(rowBefore, previous)
-      return previous
-    }
-    if (
-      previous?.payload.state === 'done' &&
-      previous.payload.interrupted === true &&
-      effectivePayload.payload.state === 'working' &&
-      previous.payload.agentType === effectivePayload.payload.agentType &&
-      previous.payload.prompt === effectivePayload.payload.prompt &&
-      (effectivePayload.isReplay === true ||
-        isToolProgressWorkingAfterInterrupt(effectivePayload) ||
-        (effectivePayload.hasExplicitPrompt !== true &&
-          Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS))
-    ) {
-      if (effectivePayload.payload.agentType === 'codex') {
-        markCodexLeadTurnInterrupted(this.state, effectivePayload.paneKey)
-      }
-      this.commitStatusRowMutation(rowBefore, previous)
-      return previous
     }
     if (
       effectivePayload.payload.state !== 'done' ||

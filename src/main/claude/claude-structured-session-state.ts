@@ -3,6 +3,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionStartedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
@@ -13,11 +14,16 @@ import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structu
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
 import type {
+  AgentModelCatalogSessionAccess,
+  AgentModelCatalogStore
+} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type {
   AgentSessionBackgroundTaskState,
   AgentSessionFastModeState
 } from '../../shared/agent-session-wire'
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import type { ClaudeSessionStartupGate } from './claude-structured-session-startup-gate'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -52,6 +58,8 @@ export type ClaudeStructuredSessionEvent =
       fence: number
     }
   | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
+  /** Startup facts applied and saved options restored; held prompts are about to be written. */
+  | StructuredAgentSessionStartedEvent
   | {
       type: 'ended'
       sessionId: string
@@ -63,6 +71,8 @@ export type ClaudeStructuredSessionEvent =
       settlementRetryRequired?: boolean
       /** Host clock when the end was observed. */
       observedAt?: number
+      /** The child ended before proving startup, so reacquiring would repeat the same start. */
+      startupUnproven?: true
     }
 
 export type ClaudeLateDispatchOutcome =
@@ -89,7 +99,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
   mintAcquisitionGeneration?: () => string
   now?: () => number
   requestTimeoutMs?: number
-  initTimeoutMs?: number
   persistHandle?: (input: {
     sessionId: string
     providerSessionId: string
@@ -103,6 +112,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
     leafUuid: string
     fence: number
   }) => Promise<void>
+  /** Host model catalog; sessions write their listings through. */
+  modelCatalog?: AgentModelCatalogStore
 }
 
 export type ClaudeDispatchWaiter = {
@@ -141,6 +152,9 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
+  /** What `get_settings` says the next request will send, after Claude's own env and settings
+   *  precedence: the lowest-ranked answer, unconfirmed until a turn reports it. */
+  appliedOptions?: { model?: string; effort?: string }
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
   fastModePerSessionOptIn?: boolean
@@ -150,6 +164,8 @@ export type ClaudeSession = {
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   restoreSkippedOptions: Set<string>
+  /** Absent when the adapter runs without a host catalog store (tests). */
+  catalogAccess?: AgentModelCatalogSessionAccess
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker
@@ -173,6 +189,8 @@ export type ClaudeSession = {
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
   unbindReadingControl?: () => void
+  /** Published at spawn; init facts, option restore and queued prompts land when startup does. */
+  startup: ClaudeSessionStartupGate
 }
 
 export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {

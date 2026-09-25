@@ -17,9 +17,11 @@ import {
 } from '../../shared/agent-session-operation-ledger'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
-  isAgentSessionRecord,
+  isPersistedAgentSessionRecord,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
+import { normalizeLegacyHandoffRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import { agentSessionStoreBackupPath as backupPath } from './agent-session-record-store-write'
 export { saveAgentSessionStore } from './agent-session-record-store-write'
 import { parseVisibleSessionIds } from './agent-session-visible-tab-index'
@@ -54,6 +56,8 @@ export type LoadedAgentSessionStore = {
   recoveredFromBackup: boolean
   /** True when the normalized current-schema quarantine must be persisted. */
   needsRewrite: boolean
+  /** True when decode mapped a lease value only the removed terminal handoff wrote. */
+  legacyHandoffLeasesNormalized: boolean
 }
 
 export function agentSessionStorePath(directory: string): string {
@@ -73,6 +77,28 @@ function emptyState(hostId: string): AgentSessionStoreState {
   }
 }
 
+/**
+ * Gives every record written before the host owned a chat's tab id the string clients derived for
+ * it, so read state, notification ids and worker rows keyed by that id stay valid on upgrade.
+ *
+ * Runs once per open, after the disk revision is taken and before the load rewrite: it is not part
+ * of parsing, because a parsed state must hash to what is on disk or every transaction would read
+ * the file as externally changed. Returns how many records it filled.
+ */
+export function backfillAgentSessionSurfaceTabIds(state: AgentSessionStoreState): number {
+  let filled = 0
+  for (const [sessionId, record] of state.records) {
+    if (record.surfaceTabId === undefined) {
+      state.records.set(sessionId, {
+        ...record,
+        surfaceTabId: structuredAgentSessionTabId(sessionId)
+      })
+      filled += 1
+    }
+  }
+  return filled
+}
+
 export function agentSessionStoreRevision(state: AgentSessionStoreState): string {
   return createHash('sha256')
     .update(String(state.schemaVersion))
@@ -84,7 +110,10 @@ export function agentSessionStoreRevision(state: AgentSessionStoreState): string
 function parseState(
   raw: string,
   hostId: string
-): { state: AgentSessionStoreState; needsRewrite: boolean } | null {
+): Pick<
+  LoadedAgentSessionStore,
+  'state' | 'needsRewrite' | 'legacyHandoffLeasesNormalized'
+> | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -137,11 +166,17 @@ function parseState(
   state.schemaVersion = schemaVersion
   state.hostId = file.hostId
   let needsRewrite = false
+  let legacyHandoffLeasesNormalized = false
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
-      const record = isAgentSessionRecord(value) ? value : null
+      const decoded = isPersistedAgentSessionRecord(value)
+        ? normalizeLegacyHandoffRecord(value)
+        : null
+      const record = decoded?.record ?? null
       if (record?.sessionId === sessionId) {
         state.records.set(sessionId, record)
+        // Why: mapped while parsing, so every revision is taken over the same normalized state.
+        legacyHandoffLeasesNormalized ||= decoded?.normalized === true
       } else {
         const valueSchemaVersion =
           typeof value === 'object' &&
@@ -220,7 +255,7 @@ function parseState(
   }
   state.visibleSessionIdsIndexPresent = visibleSessionIds.present
   visibleSessionIds.ids.forEach((sessionId) => state.visibleSessionIds.add(sessionId))
-  return { state, needsRewrite }
+  return { state, needsRewrite, legacyHandoffLeasesNormalized }
 }
 
 /** A record the primary retained as unreadable may still have a valid copy in the previous
@@ -288,11 +323,10 @@ export async function loadAgentSessionStore(
       await salvageUnreadableRecordsFromBackup(parsed.state, backupPath(filePath), hostId)
     }
     return {
-      state: parsed.state,
+      ...parsed,
       storeFound: true,
       readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
-      recoveredFromBackup,
-      needsRewrite: parsed.needsRewrite
+      recoveredFromBackup
     }
   }
   if (unusableStoreFound) {
@@ -303,6 +337,7 @@ export async function loadAgentSessionStore(
     storeFound: false,
     readOnly: false,
     recoveredFromBackup: false,
-    needsRewrite: false
+    needsRewrite: false,
+    legacyHandoffLeasesNormalized: false
   }
 }

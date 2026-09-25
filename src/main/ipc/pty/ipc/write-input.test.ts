@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { listRegisteredPtys, registerPty, unregisterPty } from '../../../memory/pty-registry'
-import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
 import { ptyOwnership } from '../provider/ownership-state'
 import { createPtyWriteInput } from './write-input'
 
 const PTY_ID = 'pty-write-input-stamp'
+/** Registered like any other pane, but the mocked provider below serves only PTY_ID. */
+const UNBACKED_PTY_ID = 'pty-write-input-unbacked'
 
 const { provider } = vi.hoisted(() => ({ provider: { write: vi.fn() } }))
 
@@ -18,27 +19,35 @@ const mainWindow = {
   webContents: { isDestroyed: () => false, send: vi.fn() }
 }
 
-function writePtyInput(data: string) {
+function writePtyInput(data: string, ptyId: string = PTY_ID) {
   return createPtyWriteInput({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture is only read through isDestroyed(), webContents.isDestroyed() and webContents.send, all three of which it provides; Electron's BrowserWindow cannot be constructed outside a running app.
-    mainWindow: mainWindow as never,
-    clearHiddenRendererResizeOutput: vi.fn()
-  }).writePtyInput({ id: PTY_ID, data })
+    mainWindow: mainWindow as never
+  }).writePtyInput({ id: ptyId, data })
 }
 
-function stamp() {
-  return listRegisteredPtys().find((pty) => pty.ptyId === PTY_ID)?.lastInputAtMs
+/** Prompt activity the OpenCode session binder reads; absent until one arrives. */
+function promptActivityAt(ptyId: string): number | undefined {
+  return listRegisteredPtys().find((pty) => pty.ptyId === ptyId)?.lastInputAtMs
+}
+
+function register(ptyId: string): void {
+  registerPty({ ptyId, worktreeId: null, sessionId: null, paneKey: 'tab:leaf', pid: 1 })
 }
 
 beforeEach(() => {
   ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(UNBACKED_PTY_ID, null)
   provider.write.mockReset()
-  registerPty({ ptyId: PTY_ID, worktreeId: null, sessionId: null, paneKey: 'tab:leaf', pid: 1 })
+  register(PTY_ID)
+  register(UNBACKED_PTY_ID)
 })
 
 afterEach(() => {
   ptyOwnership.delete(PTY_ID)
+  ptyOwnership.delete(UNBACKED_PTY_ID)
   unregisterPty(PTY_ID)
+  unregisterPty(UNBACKED_PTY_ID)
   vi.restoreAllMocks()
 })
 
@@ -48,7 +57,7 @@ describe('writePtyInput registry stamp', () => {
 
     expect(writePtyInput('hello')).toBe(true)
 
-    const stamped = stamp()
+    const stamped = promptActivityAt(PTY_ID)
     expect(stamped).toBeTypeOf('number')
     expect(stamped).toBeGreaterThanOrEqual(before)
   })
@@ -58,25 +67,16 @@ describe('writePtyInput registry stamp', () => {
     // into winning a same-directory session tie.
     expect(writePtyInput('\x1b[3;1R')).toBe(true)
 
-    expect(stamp()).toBeUndefined()
+    expect(promptActivityAt(PTY_ID)).toBeUndefined()
     expect(provider.write).toHaveBeenCalled()
   })
 
-  it('leaves the pty unstamped when the write is refused', () => {
-    vi.spyOn(agentSessionPtyWriteGate, 'admit').mockReturnValue({
-      admitted: false,
-      refusal: {
-        code: 'agent_session_checkpoint_stale',
-        sessionId: 'session-1',
-        ownerRuntimeKind: null,
-        handoffStage: null,
-        ownerPid: null,
-        runtimeFence: null
-      }
-    })
+  it('leaves the pty unstamped when no provider can serve the write', () => {
+    // Reaches the provider lookup and gets nothing back, so no bytes are
+    // dispatched — the pane must not be credited with activity it never had.
+    expect(writePtyInput('hello', UNBACKED_PTY_ID)).toBe(false)
 
-    expect(writePtyInput('hello')).toBe(false)
-    expect(stamp()).toBeUndefined()
+    expect(promptActivityAt(UNBACKED_PTY_ID)).toBeUndefined()
     expect(provider.write).not.toHaveBeenCalled()
   })
 })

@@ -110,6 +110,9 @@ vi.mock('../runtime/worktree-teardown', async () =>
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
+// Why: every removal and listing reply now names the catalog it produced or scanned.
+const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
+
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
 
@@ -302,7 +305,8 @@ describe('registerWorktreeHandlers', () => {
       })
 
       expect(result).toEqual({
-        preservedBranch: { branchName: 'feature', head: 'feature' }
+        preservedBranch: { branchName: 'feature', head: 'feature' },
+        catalogVersion: anyCatalogVersion
       })
       if (ORIGINAL_PLATFORM === 'win32') {
         await expect(lstat(worktreePath)).rejects.toMatchObject({ code: 'ENOENT' })
@@ -338,7 +342,7 @@ describe('registerWorktreeHandlers', () => {
       force: true
     })
 
-    expect(result).toEqual({})
+    expect(result).toEqual({ catalogVersion: anyCatalogVersion })
     await expect(
       handlers['worktrees:forceDeletePreservedBranch'](null, {
         worktreeId: 'repo-1::/workspace/feature-wt',
@@ -424,7 +428,8 @@ describe('registerWorktreeHandlers', () => {
       })
 
       expect(result).toEqual({
-        preservedBranch: { branchName: 'feature', head: 'feature' }
+        preservedBranch: { branchName: 'feature', head: 'feature' },
+        catalogVersion: anyCatalogVersion
       })
       expect(runHookMock).not.toHaveBeenCalled()
       expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
@@ -447,7 +452,10 @@ describe('registerWorktreeHandlers', () => {
     listWorktreesMock.mockResolvedValueOnce(rows).mockResolvedValue([])
     try {
       const result = await handlers['worktrees:remove'](null, { worktreeId })
-      expect(result).toEqual({ preservedBranch: { branchName: 'feature', head: 'feature' } })
+      expect(result).toEqual({
+        preservedBranch: { branchName: 'feature', head: 'feature' },
+        catalogVersion: anyCatalogVersion
+      })
       expect(runHookMock).not.toHaveBeenCalled()
       expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
       expect(removeWorktreeMock).not.toHaveBeenCalled()

@@ -162,6 +162,7 @@ describe('confirmation never outlives the write it belongs to', () => {
   it('drops an earlier effort confirmation when the value changes', async () => {
     const calls: string[] = []
     let reported = 'low'
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
     const session = {
       options: new Map<string, string>([['model', 'sonnet']]),
       reportedOptions: {},
@@ -177,7 +178,8 @@ describe('confirmation never outlives the write it belongs to', () => {
           effective: { effortLevel: reported },
           sources: {}
         })
-      }
+      },
+      startup: { state: 'proven' }
     } as unknown as ClaudeSession
 
     await setClaudeStructuredOption(session, { key: 'effort', value: 'low' }, undefined)

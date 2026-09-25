@@ -4,6 +4,7 @@ import {
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import {
+  markCodexLeadTurnInterrupted,
   reconcileRemoteCodexState,
   seedCodexStateFromSnapshot
 } from './agent-hook-listener/providers/codex-state'
@@ -49,5 +50,36 @@ describe('the Codex root record seeded from a durable row', () => {
       undefined
     )
     expect(reconciled.mainAgent).toEqual({ state: 'done', stateStartedAt: expect.any(Number) })
+  })
+
+  it('carries the cancellation Orca inferred into a late relayed Stop', () => {
+    markCodexLeadTurnInterrupted(state, PANE_KEY)
+    const reconciled = reconcileRemoteCodexState(
+      state,
+      PANE_KEY,
+      'Stop',
+      undefined,
+      { state: 'done', prompt: 'ship', agentType: 'codex' },
+      undefined
+    )
+    expect(reconciled.mainAgent).toMatchObject({ state: 'done', outcome: 'cancellation' })
+  })
+
+  it('folds a relayed waiting child through the shared rule, keeping the root fact', () => {
+    // The relay's aggregate says `working`; main re-derives the row from the roster instead.
+    const reconciled = reconcileRemoteCodexState(
+      state,
+      PANE_KEY,
+      'PermissionRequest',
+      'child',
+      {
+        state: 'working',
+        prompt: 'ship',
+        agentType: 'codex',
+        subagents: [{ id: 'child', state: 'waiting', startedAt: 1 }]
+      },
+      undefined
+    )
+    expect(reconciled).toMatchObject({ state: 'waiting', mainAgent: { state: 'working' } })
   })
 })

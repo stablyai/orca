@@ -17,6 +17,8 @@ import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithRg } from './fs-handler-list-files'
 import { searchWithRg } from './fs-handler-utils'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
+import { buildRelayCommandEnv } from './relay-command-env'
+import { configureRelayBundledRipgrep } from './relay-bundled-ripgrep'
 import {
   ListFilesScanCoordinator,
   LIST_FILES_SUPERSEDED_MESSAGE
@@ -63,6 +65,9 @@ describe('relay quick open ignored file listing', () => {
   })
 
   afterEach(async () => {
+    // Why reset: the bundled path is module state, and leaking it changes which binary the next
+    // test's launch-failure classifier probes.
+    configureRelayBundledRipgrep(undefined)
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   })
 
@@ -637,12 +642,19 @@ describe('relay quick open ignored file listing', () => {
     await expect(unavailable).rejects.toBeInstanceOf(RipgrepUnavailableError)
   })
 
-  it('keeps missing-root launch errors on their prior non-fallback paths', async () => {
+  // Why this changed: both paths still refuse the git/readdir fallback, which is what "non-fallback"
+  // pinned -- a chain that walks the root cannot help when the root is gone. What changed is that
+  // search no longer reports an empty, successful-looking scan for a workspace that moved.
+  it('names the unreachable root on both missing-root launch paths', async () => {
     const missingRoot = await makeTempRoot()
     await rm(missingRoot, { recursive: true, force: true })
     const listFirst = createMockProcess()
     const listProbe = createMockProcess()
     Object.defineProperty(listFirst, 'pid', { value: undefined })
+    Object.defineProperties(listFirst, {
+      stdout: { value: undefined },
+      stderr: { value: undefined }
+    })
     Object.defineProperty(listProbe, 'pid', { value: 1 })
     let callIndex = 0
     spawnMock.mockImplementation(() => [listFirst, listProbe][callIndex++])
@@ -651,14 +663,26 @@ describe('relay quick open ignored file listing', () => {
     listFirst.emit('error', listError)
 
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
-    expect(spawnMock.mock.calls[1]).toEqual(['rg', ['--version'], { stdio: 'ignore' }])
+    // Why assert the relay env and not just its presence: the probe decides whether a launch
+    // failure was the binary or the root, so it has to resolve the same `rg` the failed spawn
+    // would have. Under process.env it could find a different one, or none.
+    expect(spawnMock.mock.calls[1]).toEqual([
+      'rg',
+      ['--version'],
+      // windowsHide: the probe must never flash a console window on Windows.
+      { env: buildRelayCommandEnv(), stdio: 'ignore', windowsHide: true }
+    ])
     listProbe.emit('close', 0, null)
-    await expect(listing).rejects.toBe(listError)
+    await expect(listing).rejects.toThrow(`Search root is not reachable: ${missingRoot}`)
 
     spawnMock.mockReset()
     const searchChild = createMockProcess()
     const searchProbe = createMockProcess()
     Object.defineProperty(searchChild, 'pid', { value: undefined })
+    Object.defineProperties(searchChild, {
+      stdout: { value: undefined },
+      stderr: { value: undefined }
+    })
     Object.defineProperty(searchProbe, 'pid', { value: 1 })
     spawnMock.mockReturnValueOnce(searchChild).mockReturnValueOnce(searchProbe)
     const search = searchWithRg(missingRoot, 'ok', { maxResults: 100 })
@@ -666,7 +690,32 @@ describe('relay quick open ignored file listing', () => {
 
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     searchProbe.emit('close', 0, null)
-    await expect(search).resolves.toMatchObject({ files: [], totalMatches: 0 })
+    await expect(search).rejects.toThrow(`Search root is not reachable: ${missingRoot}`)
+  })
+
+  // Why this is the case that matters: it is the NORMAL remote setup. Orca uploads a bundled rg
+  // precisely because the host has no `rg` of its own, so probing PATH alone would fail and report
+  // a moved workspace as a missing ripgrep -- telling the user to install what Orca already ships.
+  it('names the unreachable root when only the bundled rg exists, not PATH rg', async () => {
+    const missingRoot = await makeTempRoot()
+    await rm(missingRoot, { recursive: true, force: true })
+    const bundled = process.execPath
+    configureRelayBundledRipgrep(bundled)
+    const first = createMockProcess()
+    Object.defineProperty(first, 'pid', { value: undefined })
+    const probe = createMockProcess()
+    Object.defineProperty(probe, 'pid', { value: 1 })
+    let callIndex = 0
+    spawnMock.mockImplementation(() => [first, probe][callIndex++])
+    const listing = listFilesWithRg(missingRoot)
+    first.emit('error', Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' }))
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    // The probe must ask about the binary that actually failed, not a PATH rg this host lacks.
+    expect(spawnMock.mock.calls[1]?.[0]).toBe(bundled)
+    probe.emit('close', 0, null)
+
+    await expect(listing).rejects.toThrow(`Search root is not reachable: ${missingRoot}`)
   })
 
   it('keeps missing-rg precedence when the root also disappeared', async () => {

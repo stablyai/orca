@@ -3,15 +3,17 @@ import { commitConversationCommandRecord } from './agent-session-conversation-co
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
 
-import type {
-  AgentSessionOperationClaim,
-  AgentSessionOperationDecision,
-  AgentSessionOperationOutcome,
-  AgentSessionOperationRow
+import {
+  agentSessionOperationKey,
+  type AgentSessionOperationClaim,
+  type AgentSessionOperationDecision,
+  type AgentSessionOperationOutcome,
+  type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
   admitAgentSessionGlobalOperationInto,
   admitAgentSessionMutationOperation,
+  evaluateAgentSessionMutationOperation,
   admitAgentSessionOperationInto,
   claimAgentSessionOperationInto,
   settleAgentSessionOperationInto,
@@ -67,7 +69,8 @@ import {
 import {
   agentSessionStoreRevision,
   agentSessionStorePath,
-  type AgentSessionStoreState
+  type AgentSessionStoreState,
+  backfillAgentSessionSurfaceTabIds
 } from './agent-session-record-store-file'
 import { loadProtectedAgentSessionStore } from './agent-session-record-store-security'
 import {
@@ -87,11 +90,19 @@ export class AgentSessionRecordStore {
     // Why: every persisted lease is unreconciled until this host adjudicates it, so a restart
     // grants no writer on the strength of what the previous process wrote.
     const diskRevision = agentSessionStoreRevision(loaded.state)
+    // After the revision, so the file still hashes to what was read. The filled ids, like the
+    // normalized legacy leases, reach disk with this store's first transaction rather than a write
+    // here: a rewrite at open would read as an external change to any other holder of the file
+    // mid-restart.
+    const backfilled = backfillAgentSessionSurfaceTabIds(loaded.state)
     markAgentSessionStoreLeasesUnreconciled(loaded.state)
     const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
       filePath,
       args.hostId,
-      loaded,
+      {
+        ...loaded,
+        needsRewrite: loaded.needsRewrite || backfilled > 0 || loaded.legacyHandoffLeasesNormalized
+      },
       diskRevision
     )
     if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {
@@ -162,6 +173,9 @@ export class AgentSessionRecordStore {
   }
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
+
+  getOperationRow = (callerKey: string, operationId: string): AgentSessionOperationRow | null =>
+    this.state.operations.get(agentSessionOperationKey(callerKey, operationId)) ?? null
 
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
@@ -286,6 +300,10 @@ export class AgentSessionRecordStore {
 
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     this.transact(() => admitAgentSessionMutationOperation(this.state, args))
+
+  /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
+  evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+    evaluateAgentSessionMutationOperation(this.state, args)
 
   /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
    *  read `pending`, and only a conditional swap tells the one that may run from the one that must

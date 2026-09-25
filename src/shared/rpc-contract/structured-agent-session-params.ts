@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
 import { isAgentSessionId } from '../agent-session-record'
 import { normalizeExecutionHostId } from '../execution-host'
 import {
@@ -95,7 +96,7 @@ export const AttachParams = z
     provider: z.enum(['codex', 'claude']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
-    runtimeKind: z.enum(['native', 'tui']),
+    runtimeKind: z.literal('native'),
     providerHandle: ProviderHandle
   })
   .strict()
@@ -114,7 +115,16 @@ export const CreateIntentParams = z
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
     agent: z.enum(['claude', 'codex']),
-    resumeFrom: ResumeSource.optional()
+    resumeFrom: ResumeSource.optional(),
+    /**
+     * The tab id the client reserved for this chat, so it can place the tab before the reply. The
+     * host owns the id from here: it is persisted on the session record and is what the host's tab
+     * snapshot will publish, so it must be a host tab id, as `agent.launch` requires of `paneKey`.
+     *
+     * This object is strict, so an older host refuses a payload carrying it. A client sends it
+     * only after `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY` is advertised.
+     */
+    tabId: z.string().refine(isAgentSessionSurfaceTabId, 'Invalid chat tab ID').optional()
   })
   .strict()
 
@@ -206,16 +216,16 @@ export const SetOptionParams = z
   })
   .strict()
 
-export const HandoffParams = z
-  .object({
-    envelope: MutationEnvelope,
-    direction: z.enum(['to-tui', 'to-native']),
-    mode: z.enum(['now', 'after-turn', 'stop-turn']),
-    action: z.enum(['start', 'cancel-queued', 'retry', 'recover']).optional()
-  })
-  .strict()
-
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+
+/** `sessionId` scopes the catalog to that session's pinned account; without a
+ *  session record the host keys it by the account a new launch would pin.
+ *  `worktree` names where a new chat runs, whose own config may replace the default. */
+export const ModelCatalogParams = z.strictObject({
+  agent: z.enum(['claude', 'codex']),
+  sessionId: SessionId.optional(),
+  worktree: Identifier('Invalid worktree selector').optional()
+})
 
 export const ConversationCommandParams = z
   .object({

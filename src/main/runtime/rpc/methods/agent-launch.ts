@@ -83,7 +83,7 @@ async function agentLaunchTarget(
     return { kind: 'create-worktree', create: { ...params.target.create } }
   }
   const workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
-  return { kind: 'existing', worktree: workspace.id }
+  return { kind: 'existing', worktree: workspace.id, workspacePath: workspace.path }
 }
 
 async function agentLaunchIntent(

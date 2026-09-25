@@ -20,10 +20,11 @@ import {
   closeCodexPublishedSession,
   handleCodexSessionExit
 } from './codex-structured-session-close'
+import { restoredCodexSessionOptions } from './codex-structured-session-options'
 import {
-  readCodexStructuredSessionOptionCatalog,
-  restoredCodexSessionOptions
-} from './codex-structured-session-options'
+  codexAcquireCatalogAccess,
+  codexAcquireFastModeCatalog
+} from './codex-structured-acquire-catalog'
 import {
   reconcileCodexFastModeOption,
   reportedCodexThreadOptions
@@ -210,7 +211,9 @@ export async function acquireCodexStructuredSession(input: {
       process,
       link: codexProviderHandleLink({
         threadId: opened.threadId,
-        resumed: launch.resumeThreadId !== null,
+        ...(opened.supersededThreadId
+          ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
+          : { resumed: launch.resumeThreadId !== null }),
         fence: acquireInput.fence,
         linkId: deps.mintLinkId?.(),
         observedAt: deps.now?.() ?? Date.now()
@@ -222,18 +225,14 @@ export async function acquireCodexStructuredSession(input: {
     }
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
-    const fastModeCatalog =
-      options.get('fastMode') === 'true' || options.has('serviceTier')
-        ? await readCodexStructuredSessionOptionCatalog({
-            connection,
-            current: {
-              ...(opened.model ? { model: opened.model } : {}),
-              ...(opened.effort ? { effort: opened.effort } : {}),
-              fastMode: true
-            },
-            timeoutMs: deps.requestTimeoutMs
-          }).catch(() => null)
-        : null
+    const catalogAccess = codexAcquireCatalogAccess(deps, launch)
+    const fastModeCatalog = await codexAcquireFastModeCatalog({
+      connection,
+      catalogAccess,
+      opened,
+      restoreNeedsCatalog: options.get('fastMode') === 'true' || options.has('serviceTier'),
+      timeoutMs: deps.requestTimeoutMs
+    })
     acquisitions.assertCurrent(sessionId, attempt)
     if (connection.closed) {
       throw new Error(`codex app-server for session ${sessionId} exited while being acquired`)
@@ -250,6 +249,7 @@ export async function acquireCodexStructuredSession(input: {
       options,
       reportedOptions: reportedCodexThreadOptions(opened),
       fastModeTierByModel: fastModeCatalog?.fastModeTierByModel ?? new Map(),
+      ...(catalogAccess ? { catalogAccess } : {}),
       dispatchEchoes,
       translator,
       backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions),

@@ -110,14 +110,12 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
       ) {
         throw new Error('agent_session_checkpoint_stale')
       }
-      // A dead-TUI retry still needs its stopped-owner stage; recovery-only stages end here.
-      const preserveHandoff = latest.lease.handoffStage === 'old-owner-stopped'
       return {
         ...latest,
         lease: {
           ...latest.lease,
-          handoffStage: preserveHandoff ? latest.lease.handoffStage : null,
-          handoffOperationId: preserveHandoff ? latest.lease.handoffOperationId : null,
+          handoffStage: null,
+          handoffOperationId: null,
           settlementRetryRequired: undefined,
           settlementRetryId: undefined,
           lastRenewedAt: input.now()

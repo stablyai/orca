@@ -184,21 +184,6 @@ export function hostStub(): StructuredAgentSessionHost {
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
     changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 0 },
-      value: {
-        status: {
-          owner: 'native',
-          direction: null,
-          phase: 'idle',
-          stage: null,
-          operationId: null
-        }
-      }
-    })),
     supportsCreate: vi.fn(() => true),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({

@@ -97,6 +97,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   supportsThreadGoal = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.supportsThreadGoal?.(sessionId) ?? false
 
+  recordsContextUsage = (sessionId: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.recordsContextUsage?.(sessionId) ?? false
+
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
   ) => {
@@ -116,6 +119,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
+
+  awaitOptionWritable = (sessionId: string): Promise<void> =>
+    this.liveOwnerOrNull(sessionId)?.awaitOptionWritable?.(sessionId) ?? Promise.resolve()
 
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions

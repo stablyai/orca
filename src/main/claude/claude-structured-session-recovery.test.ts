@@ -64,7 +64,8 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         claudeConfigDir: '/accounts/claude',
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: null,
-        resumed: false
+        resumesTranscript: false,
+        continuesChain: false
       }),
       onEvent: (event) => {
         events.push(event)
@@ -302,7 +303,8 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
           claudeConfigDir: '/accounts/claude',
           providerSessionId: PROVIDER_SESSION_ID,
           resumeLeafUuid: null,
-          resumed: false
+          resumesTranscript: false,
+          continuesChain: false
         }
       }
       return {
@@ -312,7 +314,8 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         claudeConfigDir: '/accounts/claude',
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: durableLeafUuid,
-        resumed: true
+        resumesTranscript: true,
+        continuesChain: true
       }
     })
     const persistHandle = vi.fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>(
@@ -335,6 +338,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-9',
       events: journalSink
     })
+    await adapter.drainStartup('session-1')
     const first = claude.connections[0]
     const oldPrompt = invokeCanUseTool(first, 'Bash', 'permission-retained', 'tool-retained')
     const oldSession = (

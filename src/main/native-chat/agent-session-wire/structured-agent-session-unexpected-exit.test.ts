@@ -311,7 +311,8 @@ describe('provider-exit recovery tickets', () => {
         journal: {
           snapshot: () => ({ items }),
           appendLifecycleBatch,
-          markPendingSubmissionsUnknown: vi.fn(async () => [])
+          markPendingSubmissionsUnknown: vi.fn(async () => []),
+          rejectPendingSubmissions: vi.fn(async () => [])
         }
       }
 
@@ -368,6 +369,7 @@ describe('provider-exit recovery tickets', () => {
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
         markPendingSubmissionsUnknown,
+        rejectPendingSubmissions: vi.fn(async () => []),
         submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending' }]
       }
     }
@@ -413,6 +415,7 @@ describe('provider-exit recovery tickets', () => {
       acquisitionGeneration: GENERATION,
       journal: {
         markPendingSubmissionsUnknown: vi.fn(async () => []),
+        rejectPendingSubmissions: vi.fn(async () => []),
         snapshot: () => ({
           items: [lifecycleItem('turn-failing', 1, { state: 'running', startedAt: 1 })]
         }),
@@ -455,10 +458,10 @@ describe('provider-exit recovery tickets', () => {
     expect(isStructuredAgentSessionRecoveryTicketCurrent(recoveryContext({}), ticket)).toBe(true)
   })
 
-  it('is cancelled by a queued handoff before reattachment', () => {
+  it('is cancelled by a latched stage before reattachment', () => {
     expect(
       isStructuredAgentSessionRecoveryTicketCurrent(
-        recoveryContext({ handoffStage: 'preparing' }),
+        recoveryContext({ handoffStage: 'recovering' }),
         ticket
       )
     ).toBe(false)

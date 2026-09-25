@@ -1,4 +1,5 @@
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
+import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
@@ -24,6 +25,8 @@ export type NativeChatStructuredComposerTransport = {
   /** The `/` surface the running session reports. Absent keeps the curated
    *  per-agent catalog, which is what an older host leaves the client with. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** The session's context usage; null until the journal can state it. */
+  contextUsage?: StructuredAgentContextUsage | null
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }

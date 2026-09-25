@@ -20,11 +20,12 @@ const FILE = '/repo/nb.ipynb'
 
 afterEach(cleanup)
 
-describe('missing-ipykernel dialog', () => {
+describe('ipykernel setup dialog', () => {
   it('Cancel drops the waiting cells, as Esc does', () => {
-    setEnvironment(FILE, { path: '/repo/.venv/bin/python', name: '.venv', version: '3.12.1' })
+    const venv = { path: '/repo/.venv/bin/python', name: '.venv', version: '3.12.1' }
+    setEnvironment(FILE, venv)
     updateSession(FILE, () => ({
-      status: 'missing-ipykernel',
+      setup: { base: venv, offer: 'install', phase: 'idle', error: null },
       queue: [{ key: 'a', code: 'x' }]
     }))
     render(
@@ -39,7 +40,7 @@ describe('missing-ipykernel dialog', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(getSession(FILE)).toMatchObject({ status: 'off', queue: [] })
+    expect(getSession(FILE)).toMatchObject({ status: 'off', setup: null, queue: [] })
     expect(screen.queryByText('Install ipykernel?')).toBeNull()
   })
 })

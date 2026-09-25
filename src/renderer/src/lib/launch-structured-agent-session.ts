@@ -9,6 +9,7 @@ import {
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
+import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -26,6 +27,19 @@ export type StructuredAgentSessionLaunchIntent = {
   worktreeId: string
   agent: AgentSessionHandleProvider
   params: StructuredAgentSessionCreateParams
+  /** The saved selection create seeds, read when the intent is built. */
+  seedOptions?: Readonly<Record<string, string>>
+}
+
+function launchSeedOptions(
+  state: ReturnType<typeof useAppStore.getState>,
+  agent: AgentSessionHandleProvider
+): { seedOptions?: Readonly<Record<string, string>> } {
+  const seedOptions = resolveStructuredLaunchSeedOptions(
+    state.settings?.nativeChatSessionOptions,
+    agent
+  )
+  return seedOptions ? { seedOptions } : {}
 }
 
 class StructuredAgentSessionCreateError extends Error {
@@ -119,7 +133,8 @@ function buildStructuredAgentSessionLaunchIntent(
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
       randomUuid: () => crypto.randomUUID()
-    })
+    }),
+    ...launchSeedOptions(state, agent)
   }
 }
 
@@ -167,7 +182,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
-    }
+    },
+    ...launchSeedOptions(state, args.agent)
   }
 }
 
@@ -280,8 +296,9 @@ export async function launchStructuredAgentSession(
     throw error
   }
   if (!result.ok) {
-    const { code, message } = result.refusal
-    if (!isDefinitiveAgentSessionCreateRefusal(code)) {
+    const { code, message, ownerVerdict } = result.refusal
+    // A failed operation whose provider is proven gone is a failure a new operation may retry.
+    if (!isDefinitiveAgentSessionCreateRefusal(code) && ownerVerdict !== 'exited') {
       // Keep the focus intent: the session may exist, and recovery still has to adopt it.
       throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code)
     }

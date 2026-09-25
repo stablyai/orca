@@ -18,6 +18,10 @@ import {
 } from './agent-status-types'
 import type { AgentType, WellKnownAgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
+import {
+  ORCA_DISPATCH_PROMPT_LEAD_LINE,
+  ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
+} from './orca-dispatch-status-prompt'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -186,6 +190,32 @@ Fix dispatch fallback preview for normalized status prompts`
 
     expect(result!.prompt).toContain('=== TASK === Fix the actual dispatch fallback preview')
     expect(result!.prompt).not.toContain('marker parsing')
+  })
+
+  it('compacts a Claude hook prompt carrying the typed lead line and paste wrapper', () => {
+    const preamble = `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX}\nYour task ID is: task_lead\n\n=== TASK ===\nAdd greet()`
+    const normalize = (prompt: string): string =>
+      normalizeAgentStatusPayload({ state: 'working', prompt })!.prompt
+    const compact = `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX} Your task ID is: task_lead === TASK === Add greet()`
+
+    // Why: the shape Claude Code's UserPromptSubmit hook reports for a typed lead plus a paste.
+    expect(
+      normalize(
+        `${ORCA_DISPATCH_PROMPT_LEAD_LINE}\n\n<pasted_content id="aac2">\n${preamble}\n</pasted_content id="aac2">\n`
+      )
+    ).toBe(compact)
+    expect(normalize(`\n\n<pasted_content id="965a">\n${preamble}`)).toBe(compact)
+    expect(normalize(`<pasted_content ${'x'.repeat(80)}>${preamble}`)).not.toBe(compact)
+    expect(normalize(`<pasted_content ${'x'.repeat(30_000)}`)).not.toContain('TASK')
+    expect(normalize(`please review: ${preamble}`)).toBe(
+      `please review: ${preamble.replace(/\n+/g, ' ')}`
+    )
+    // Why: the closing paste tag must not become the task body of an empty spec.
+    expect(
+      normalize(
+        `<pasted_content id="1">\n${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX}\n=== TASK ===\n</pasted_content id="1">`
+      )
+    ).toBe(ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX)
   })
 
   it('keeps dispatch detection bounded for oversized whitespace prompts', () => {
