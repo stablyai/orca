@@ -126,12 +126,16 @@ function renderPane(overrides: Partial<PaneProps> = {}) {
     onSetUrl: vi.fn(),
     ...overrides
   }
-  render(
+  const element = (next: PaneProps) => (
     <TooltipProvider>
-      <ClientHostedBrowserPagePane {...props} />
+      <ClientHostedBrowserPagePane {...next} />
     </TooltipProvider>
   )
-  return { webview }
+  const view = render(element(props))
+  return {
+    webview,
+    update: (updates: Partial<PaneProps>) => view.rerender(element({ ...props, ...updates }))
+  }
 }
 
 function toolButton(name: string): HTMLButtonElement {
@@ -214,5 +218,41 @@ describe('client-hosted page annotations', () => {
     await waitFor(() =>
       expect(useAppStore.getState().browserAnnotationsByPageId['page-a']).toBeUndefined()
     )
+  })
+})
+
+describe('client-hosted grab lifecycle', () => {
+  const disarmed = () =>
+    expect(mocks.setGrabMode).toHaveBeenCalledWith({ browserPageId: 'page-a', enabled: false })
+
+  it('disarms an awaiting pick when the pane deactivates', async () => {
+    mocks.awaitGrabSelection.mockReturnValue(new Promise<BrowserGrabResult>(() => {}))
+    const pane = renderPane()
+    fireEvent.click(annotateButton())
+    await waitFor(() => expect(mocks.awaitGrabSelection).toHaveBeenCalled())
+
+    pane.update({ isActive: false })
+
+    await waitFor(disarmed)
+  })
+
+  // Why confirming: main settles only an awaiting pick on navigation, so this one would stay armed.
+  it('disarms a confirming pick when the guest starts a new load', async () => {
+    mocks.awaitGrabSelection.mockImplementation(async ({ opId }: { opId: string }) => ({
+      opId,
+      kind: 'selected',
+      payload
+    }))
+    const { webview } = renderPane()
+    fireEvent.click(annotateButton())
+    await screen.findByPlaceholderText('Describe what the agent should change here...')
+    expect(mocks.setGrabMode).not.toHaveBeenCalledWith({ browserPageId: 'page-a', enabled: false })
+
+    fireEvent(webview, new Event('did-start-loading'))
+
+    await waitFor(disarmed)
+    expect(
+      screen.queryByPlaceholderText('Describe what the agent should change here...')
+    ).toBeNull()
   })
 })

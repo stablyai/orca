@@ -61,6 +61,16 @@ export function useClientHostedBrowserGuestTools({
     markup.cancel
   ])
 
+  const grabActive = grab.state !== 'idle'
+  const cancelGrab = grab.cancel
+  useEffect(() => {
+    // Why: an armed or confirming grab keeps its window-level C/S listener, so it must not outlive
+    // an unusable pane.
+    if (disabled && grabActive) {
+      cancelGrab()
+    }
+  }, [cancelGrab, disabled, grabActive])
+
   useEffect(() => {
     const webview = webviewRef.current
     if (!webview) {
@@ -90,13 +100,23 @@ export function useClientHostedBrowserGuestTools({
     // Why: a load replaces the document, invalidating captured element rects — same as a local tab.
     clearBrowserPageAnnotations(browserPageId)
     setPendingAnnotationPayload(null)
-  }, [browserPageId, clearBrowserPageAnnotations, setPendingAnnotationPayload])
+    // Main settles an awaiting pick on navigation, but a confirming one would stay armed.
+    if (grabActive) {
+      cancelGrab()
+    }
+  }, [
+    browserPageId,
+    cancelGrab,
+    clearBrowserPageAnnotations,
+    grabActive,
+    setPendingAnnotationPayload
+  ])
 
   return {
     ...tools,
     markupTool: {
       active: markup.isActive,
-      disabled: disabled || grab.state !== 'idle',
+      disabled: disabled || grabActive,
       onToggle: () => (markup.isActive ? markup.cancel() : void markup.start()),
       canShowDiscoveryHint: isActive
     },
