@@ -1571,7 +1571,8 @@
           "7707c15abb": "Agent status hooks",
           "a68a642835": "Shows working, waiting, and done states in Orca. Turn off to remove Orca-managed hooks and stop reinstalling them.",
           "isolateExternalAgentConfigDescription": "Never write agent CLI config, trust files, or credentials outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off.",
-          "isolateExternalAgentConfigTitle": "Isolate external agent config"
+          "isolateExternalAgentConfigTitle": "Isolate external agent config",
+          "pausedByIsolationDescription": "Paused while external agent config is isolated. Turn off to remove hooks Orca installed earlier."
         },
         "agents": {
           "search": {

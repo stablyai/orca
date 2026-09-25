@@ -15,6 +15,7 @@ import {
 } from './agent-generated-tab-title-copy'
 import {
   getAgentStatusHooksDescription,
+  getAgentStatusHooksPausedDescription,
   getAgentStatusHooksTitle,
   getIsolateExternalAgentConfigDescription,
   getIsolateExternalAgentConfigTitle
@@ -293,7 +294,9 @@ export function AgentStatusHooksSetting({ settings, updateSettings }: AgentsPane
     <section className="space-y-3">
       <SettingsSwitchRow
         label={getAgentStatusHooksTitle()}
-        description={getAgentStatusHooksDescription()}
+        description={
+          isolated ? getAgentStatusHooksPausedDescription() : getAgentStatusHooksDescription()
+        }
         checked={enabled}
         onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
         ariaLabel={getAgentStatusHooksTitle()}

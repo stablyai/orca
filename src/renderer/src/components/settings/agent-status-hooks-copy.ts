@@ -40,6 +40,16 @@ export function getAgentStatusHooksSearchKeywords(): string[] {
   ])
 }
 
+const AGENT_STATUS_HOOKS_PAUSED_DESCRIPTION_KEY =
+  'auto.components.settings.agent-status-hooks-copy.pausedByIsolationDescription'
+
+export function getAgentStatusHooksPausedDescription(): string {
+  return translate(
+    AGENT_STATUS_HOOKS_PAUSED_DESCRIPTION_KEY,
+    'Paused while external agent config is isolated. Turn off to remove hooks Orca installed earlier.'
+  )
+}
+
 const ISOLATE_AGENT_CONFIG_TITLE_KEY =
   'auto.components.settings.agent-status-hooks-copy.isolateExternalAgentConfigTitle'
 const ISOLATE_AGENT_CONFIG_DESCRIPTION_KEY =
