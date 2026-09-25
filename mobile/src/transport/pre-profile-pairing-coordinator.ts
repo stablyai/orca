@@ -33,6 +33,10 @@ import { redactSocketEndpoint } from './socket-event-debug'
 import { assertCommittedInstall, relayHost } from './pairing-relay-host'
 import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
 import type { HostStatusReply } from './host-status-reply-schema'
+import {
+  recoverMobileRelayPairing,
+  type MobileRelayPairingRecoveryResult
+} from './mobile-relay-pairing-recovery'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -51,6 +55,7 @@ type Dependencies = {
   clearJournal: typeof clearMobileRelayPairingJournal
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   recordDescriptorFromStatus: typeof recordHostDescriptorFromStatus
+  recoverPairing: typeof recoverMobileRelayPairing
   now: () => number
   platform: string
 }
@@ -66,6 +71,7 @@ const defaultDependencies: Dependencies = {
   clearJournal: clearMobileRelayPairingJournal,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   recordDescriptorFromStatus: recordHostDescriptorFromStatus,
+  recoverPairing: recoverMobileRelayPairing,
   now: Date.now,
   platform: Platform.OS
 }
@@ -146,6 +152,12 @@ async function runPairing(
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
+    const recovery: MobileRelayPairingRecoveryResult = await dependencies.recoverPairing()
+    if (recovery === 'deferred') {
+      // Why: the journal guard must keep blocking a replacement device while
+      // the previous relay install is still ambiguous.
+      throw new Error('mobile relay pairing recovery pending')
+    }
     journal = createMobileRelayPairingJournal({
       offer: { ...offer, relay: offer.relay },
       hostId,

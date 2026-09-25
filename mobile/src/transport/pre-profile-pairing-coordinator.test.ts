@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import type { MobileRelayPairingRecoveryResult } from './mobile-relay-pairing-recovery'
 import { racePairingCandidates } from './pairing-candidate-race'
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry, HostProfile, PairingOffer, RpcResponse } from './types'
@@ -126,6 +127,7 @@ function dependencies(client: RpcClient, events: string[]) {
     recordDescriptorFromStatus: vi.fn(() => {
       events.push('record-descriptor')
     }),
+    recoverPairing: vi.fn(async (): Promise<MobileRelayPairingRecoveryResult> => 'none'),
     now: () => now,
     platform: 'ios'
   }
@@ -342,6 +344,43 @@ describe('pre-profile pairing coordinator', () => {
         ]
       })
     )
+  })
+
+  it('recovers an earlier relay journal before creating a replacement one', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ version: '1.0.0' }), failure('method_not_found')])
+    const deps = dependencies(client, events)
+    deps.recoverPairing.mockImplementation(async () => {
+      events.push('recover-pairing')
+      return 'recovered'
+    })
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+
+    expect(events.slice(0, 3)).toEqual(['recover-pairing', 'save-journal', 'connect'])
+    expect(deps.recoverPairing).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the recovery guard when the earlier relay install is still ambiguous', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ version: '1.0.0' })])
+    const deps = dependencies(client, events)
+    deps.recoverPairing.mockResolvedValue('deferred')
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).rejects.toThrow('mobile relay pairing recovery pending')
+    expect(deps.saveJournal).not.toHaveBeenCalled()
+    expect(deps.connectDirect).not.toHaveBeenCalled()
   })
 
   it('tolerates an old desktop method_not_found and commits a direct-only host', async () => {

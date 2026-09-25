@@ -111,6 +111,8 @@ export function pairingJournalMountAdapters(
               writeCredentialBundle: async (written: { current: { version: number } }) => {
                 effect('bundle-written', { version: written.current.version })
               },
+              // Why: default recoverPairing hits real recovery; the recorder's AsyncStorage trap then defers every pairing scenario.
+              recoverPairing: async () => 'none',
               platform: 'ios'
             }
           } as Parameters<typeof start>[0])
