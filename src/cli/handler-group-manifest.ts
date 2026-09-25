@@ -185,7 +185,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'diagnostics',
-    keys: ['diagnostics memory'],
+    keys: ['diagnostics memory', 'diagnostics disk', 'diagnostics clear-history-older-than'],
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
   },
   {

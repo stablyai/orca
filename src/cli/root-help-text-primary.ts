@@ -10,6 +10,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Diagnostics:',
   '  diagnostics memory        Collect a memory snapshot for Orca and managed terminals',
+  '  diagnostics disk          Show private Codex session and terminal-history disk use',
+  '  diagnostics clear-history-older-than  Delete private history older than a cutoff',
   '',
   'Agent Discovery:',
   '  agent-context             Print the machine-readable command schema for agents',

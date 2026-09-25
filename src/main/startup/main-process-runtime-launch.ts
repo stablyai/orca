@@ -35,6 +35,8 @@ import {
 import { CliInstaller } from '../cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
+import { scheduleServePrivateHistoryMaintenance } from '../session-retention/schedule-private-session-retention'
+import { getKnownWorktreeIdsForHistoryGc } from '../window/history-gc-worktree-ids'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
 import { mainProcessState as state } from './main-process-state'
@@ -209,6 +211,7 @@ async function launchServeMode(
   // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
   // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
   scheduleAllPendingHistoryTreeRemovals()
+  scheduleServePrivateHistoryMaintenance(async () => getKnownWorktreeIdsForHistoryGc(state.store!))
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
   await printServeReady(serveOptions)
 }

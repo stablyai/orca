@@ -20,6 +20,7 @@ import {
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { summarizeWorktreePtyStopVerdict } from './worktree-pty-stop-verdict'
 import { describeMobileSessionTabCloseRefusal } from './mobile-session-tab-close-refusal-message'
+import { dropSleptWorktreeTerminalHistory } from './slept-worktree-terminal-history'
 
 export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithResolveTerminalSplitSourceAuthority {
   private collectWorktreePtyIds(
@@ -248,7 +249,14 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
     const sleeping = this.sleepResolvedWorktreeTerminals(worktree)
     this.terminalSleepByWorktreeId.set(worktree.id, sleeping)
     try {
-      return await sleeping
+      const result = await sleeping
+      if (result.postStopVerified) {
+        dropSleptWorktreeTerminalHistory(
+          worktree.id,
+          this.getWorktreeHostFence(worktree).resolvedConnectionId ?? null
+        )
+      }
+      return result
     } finally {
       if (this.terminalSleepByWorktreeId.get(worktree.id) === sleeping) {
         this.terminalSleepByWorktreeId.delete(worktree.id)

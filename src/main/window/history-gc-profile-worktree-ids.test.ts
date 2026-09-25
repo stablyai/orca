@@ -8,7 +8,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
-import { getOtherProfileWorktreeIdsForHistoryGc } from './history-gc-profile-worktree-ids'
+import {
+  getOtherProfileWorktreeIdsForHistoryGc,
+  readAllProfileWorktreeIdsForRetention
+} from './history-gc-profile-worktree-ids'
 
 const roots: string[] = []
 
@@ -105,6 +108,19 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
 
   // A single-profile install must not pay for this, and no index at all is the
   // pre-profiles layout rather than an error.
+  it('includes the active profile when reading every profile for retention', () => {
+    const root = userDataWithProfiles('active', [
+      { id: 'active', state: { worktreeMeta: { 'repo::/active': {} } } },
+      { id: 'other', state: { worktreeMeta: { 'repo::/other': {} } } }
+    ])
+
+    const result = readAllProfileWorktreeIdsForRetention(root)
+
+    expect(result.unreadableProfiles).toBe(0)
+    expect(result.profilesRead).toBe(2)
+    expect(result.ids).toEqual(new Set(['repo::/active', 'repo::/other']))
+  })
+
   it('is empty and complete when there is no profile index', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-gc-profiles-'))
     roots.push(root)

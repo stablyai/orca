@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import { readProfileWorktreeIdsForRetention } from '../session-retention/profile-worktree-ids'
 import {
   getOrcaProfileDataFile,
   getProfileUserDataPath
@@ -47,6 +48,13 @@ export function getOtherProfileWorktreeIdsForHistoryGc(userDataPath = getProfile
     }
   }
   return { ids, unreadableProfiles }
+}
+
+/** Every profile's worktree ids, including the active one, for an offline retention pass. */
+export function readAllProfileWorktreeIdsForRetention(
+  userDataPath: string
+): ReturnType<typeof readProfileWorktreeIdsForRetention> {
+  return readProfileWorktreeIdsForRetention(userDataPath)
 }
 
 function readProfileWorktreeIds(dataFile: string): Set<string> | null {

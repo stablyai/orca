@@ -632,6 +632,8 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => processLists.shift() ?? []
     })
 
+    const { deleteWorktreeHistoryDir } = await import('../../terminal-history-deletion')
+    vi.mocked(deleteWorktreeHistoryDir).mockClear()
     await expect(runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).resolves.toEqual({
       stopped: 2,
       stoppedPtyIds: ['pty-1', 'pty-2'],
@@ -639,6 +641,7 @@ describe('OrcaRuntimeService', () => {
       postStopVerified: true
     })
     expect(stopped).toEqual(['pty-1', 'pty-2'])
+    expect(deleteWorktreeHistoryDir).toHaveBeenCalledWith(TEST_WORKTREE_ID)
   })
 
   it('uses provider-owned worktree identity when a PTY cwd has drifted', async () => {
@@ -800,9 +803,12 @@ describe('OrcaRuntimeService', () => {
       }
     })
 
+    const { deleteWorktreeHistoryDir } = await import('../../terminal-history-deletion')
+    vi.mocked(deleteWorktreeHistoryDir).mockClear()
     await expect(runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
       'terminal_liveness_unavailable'
     )
+    expect(deleteWorktreeHistoryDir).not.toHaveBeenCalled()
   })
 
   it('surfaces physical worktree PTY stop failure', async () => {
