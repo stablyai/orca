@@ -7060,7 +7060,7 @@
             "shellEnvTitle": "使用 shell 环境",
             "shellEnvCopy": "Codex 和 Claude 聊天启动时会带上登录 shell 导出的所有变量，与终端一致。关闭后可选择传递哪些变量。",
             "shellEnvToggleLabel": "切换使用 shell 环境",
-            "structuredScope": "目前仅限本地会话。 WSL 和远程执行主机（包括 SSH）继续使用终端聊天，Windows 会回退到它，除非 Orca 可以读取进程启动时间。",
+            "structuredScopeLocalOnly": "目前仅限本地会话。WSL 和远程执行主机（包括 SSH）继续使用终端聊天。",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
             "resumeToggleLabel": "重启后切换自动恢复"

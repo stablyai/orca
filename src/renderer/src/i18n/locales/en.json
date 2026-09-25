@@ -7226,7 +7226,7 @@
             "defaultViewLabel": "Default Chat UI view",
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Chat UI",
-            "structuredScope": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
+            "structuredScopeLocalOnly": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat.",
             "resumeTitle": "Resume working chats automatically after a restart",
             "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
             "resumeToggleLabel": "Toggle automatic resume after a restart",

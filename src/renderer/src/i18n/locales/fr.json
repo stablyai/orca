@@ -7178,7 +7178,7 @@
             "shellEnvTitle": "Utiliser l'environnement de votre shell",
             "shellEnvCopy": "Les chats Codex et Claude démarrent avec toutes les variables exportées par votre shell de connexion, comme un terminal. Désactivez pour choisir celles qu'ils reçoivent.",
             "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell",
-            "structuredScope": "Séances locales uniquement pour l'instant. WSL et les hôtes d'exécution à distance (y compris SSH) continuent d'utiliser le chat du terminal, et Windows y revient à moins qu'Orca ne puisse lire les heures de début des processus.",
+            "structuredScopeLocalOnly": "Sessions locales uniquement pour l'instant. WSL et les hôtes d'exécution à distance (y compris SSH) continuent d'utiliser le chat du terminal.",
             "resumeTitle": "Reprendre automatiquement les discussions de travail après un redémarrage",
             "resumeCopy": "Lorsqu'Orca quitte ou installe une mise à jour, les discussions en cours reprennent automatiquement à la réouverture d'Orca.",
             "resumeToggleLabel": "Activer la reprise automatique après un redémarrage"

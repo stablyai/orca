@@ -82,8 +82,8 @@ export function NativeChatExperimentalSetting({
               {structuredChatActive ? (
                 <p className="text-xs text-muted-foreground">
                   {translate(
-                    'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
-                    'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+                    'auto.components.settings.ExperimentalPane.nativeChat.structuredScopeLocalOnly',
+                    'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat.'
                   )}
                 </p>
               ) : null}

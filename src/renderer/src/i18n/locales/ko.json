@@ -7060,7 +7060,7 @@
             "shellEnvTitle": "셸 환경 사용",
             "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
             "shellEnvToggleLabel": "셸 환경 사용 전환",
-            "structuredScope": "현재는 로컬 세션만 가능합니다. WSL 및 원격 실행 호스트(SSH 포함)는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 이 채팅을 사용합니다.",
+            "structuredScopeLocalOnly": "현재는 로컬 세션만 가능합니다. WSL 및 원격 실행 호스트(SSH 포함)는 계속해서 터미널 채팅을 사용합니다.",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
             "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"

@@ -225,7 +225,7 @@ describe('ExperimentalPane', () => {
   it('offers no structured opt-in and notes its scope only under the Chat UI default view', async () => {
     const updateSettings = vi.fn()
     const scopeNote =
-      'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+      'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat.'
     const disabledMarkup = renderToStaticMarkup(
       <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
     )
