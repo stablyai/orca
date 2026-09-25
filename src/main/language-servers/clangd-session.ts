@@ -36,7 +36,7 @@ import type {
 export class ClangdPositionEncodingError extends Error {
   constructor(actual: string | undefined) {
     super(
-      `clangd did not confirm positionEncoding utf-16 (got ${actual ?? 'none'}); refusing the session — column math would corrupt on non-ASCII lines`
+      `clangd advertised positionEncoding '${actual ?? 'none'}' (not utf-16); refusing the session — column math would corrupt on non-ASCII lines`
     )
     this.name = 'ClangdPositionEncodingError'
   }
@@ -170,7 +170,10 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
     } | null
 
     const encoding = result?.capabilities?.positionEncoding
-    if (encoding !== 'utf-16') {
+    // LSP 3.17 default is utf-16 when the server omits positionEncoding; clangd 18
+    // (pre-negotiation) omits it yet answers in UTF-16 units (verified 18.1.3).
+    // Only an EXPLICIT non-utf-16 encoding would corrupt columns — refuse that.
+    if (encoding !== undefined && encoding !== 'utf-16') {
       throw new ClangdPositionEncodingError(encoding)
     }
     // Capture the server's semantic-token legend for by-name decoding (S5 / spike
@@ -201,13 +204,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
     return doc
   }
 
-  function positionParams(
-    filePath: string,
-    position: LanguageServerPosition
-  ): {
-    textDocument: { uri: string }
-    position: { line: number; character: number }
-  } {
+  function positionParams(filePath: string, position: LanguageServerPosition) {
     return {
       textDocument: { uri: documentFor(filePath).uri },
       position: { line: position.line, character: position.character }

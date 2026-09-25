@@ -17,7 +17,8 @@ import {
 // ---------------------------------------------------------------------------
 
 type FakeClangdOptions = {
-  positionEncoding?: string
+  // null = omit the field entirely (clangd <19 does not negotiate positionEncoding).
+  positionEncoding?: string | null
   /** When false, the initialize result omits references/declaration caps (S4 verification path). */
   advertiseReferencesDeclaration?: boolean
   /** The server's semanticTokensProvider legend advertised at initialize (S5). */
@@ -69,7 +70,9 @@ function fakeClangd(options: FakeClangdOptions = {}): FakeClangd {
           id,
           result: {
             capabilities: {
-              positionEncoding: options.positionEncoding ?? 'utf-16',
+              ...(options.positionEncoding === null
+                ? {}
+                : { positionEncoding: options.positionEncoding ?? 'utf-16' }),
               textDocumentSync: { change: 2, openClose: true, save: true },
               hoverProvider: true,
               definitionProvider: true,
@@ -244,6 +247,17 @@ describe('openClangdSession — handshake', () => {
   it('refuses the session when the server does not confirm utf-16', async () => {
     const fake = fakeClangd({ positionEncoding: 'utf-8' })
     await expect(openSessionWith(fake)).rejects.toBeInstanceOf(ClangdPositionEncodingError)
+  })
+
+  it('accepts the session when the server omits positionEncoding (LSP default utf-16, clangd <19)', async () => {
+    // Why: clangd 18 (and other pre-negotiation builds) do not advertise
+    // positionEncoding, yet answer in UTF-16 code units (the LSP 3.17 default).
+    // Verified live against Ubuntu clangd 18.1.3. Refusing these would reject a
+    // clangd the version gate accepts (>=16 ok) — the WSL second host's seam.
+    const fake = fakeClangd({ positionEncoding: null })
+    const session = await openSessionWith(fake)
+    expect(session.serverVersion).toBe('23.1.0')
+    await session.stop()
   })
 
   it('warns but does not refuse when the server omits references/declaration capability (S4 verification)', async () => {
