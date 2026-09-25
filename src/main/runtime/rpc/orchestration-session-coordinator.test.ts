@@ -499,7 +499,7 @@ describe('a structured worker that names itself by session id', () => {
     })
   })
 
-  it('keeps mail to its session address direct once assigned in a Run it coordinated before', async () => {
+  it('sends mail at either of its spellings to its Dispatch once assigned in a Run it coordinated before', async () => {
     const { run } = resultOf(
       await h.dispatch(
         orchestrationRequest(
@@ -517,7 +517,7 @@ describe('a structured worker that names itself by session id', () => {
       )
     )
     expect(h.db.getRunMailboxOwnerIdsForHandle(ADDRESS_Y)).toEqual([runId])
-    h.db.createDispatchContext({
+    const dispatch = h.db.createDispatchContext({
       taskId: h.db.createTask({ runId, spec: 'work' }).id,
       assigneeHandle: handle,
       assigneePaneKey: paneKey,
@@ -526,22 +526,30 @@ describe('a structured worker that names itself by session id', () => {
       maxDepth: Number.MAX_SAFE_INTEGER
     })
 
-    // Direct mail to the session address, as the mail layer writes it after recipient resolution.
-    const mail = h.db.insertMessage({
-      from: ADDRESS_X,
-      to: ADDRESS_Y,
-      subject: 'to the assigned worker',
-      body: '',
-      runId
+    // Both spellings name one party, so both land in the one mailbox it reads, not the Run's.
+    for (const to of [ADDRESS_Y, handle]) {
+      const { message } = resultOf(
+        await h.dispatch(
+          orchestrationRequest('orchestration.send', { to, subject: to }, { sessionId: SESSION_X })
+        )
+      )
+      expect(message).toMatchObject({ to_handle: `dispatch:${dispatch.id}` })
+    }
+    const read = resultOf(
+      await h.dispatch(
+        orchestrationRequest('orchestration.check', { peek: true }, { sessionId: workerSession })
+      )
+    )
+    expect(read).toMatchObject({
+      count: 2,
+      messages: expect.arrayContaining([
+        expect.objectContaining({ subject: handle }),
+        expect.objectContaining({ subject: ADDRESS_Y })
+      ])
     })
-
-    // The assignee owns mail to its session address, so the Run mailbox must not take it.
-    expect(mail.to_handle).toBe(ADDRESS_Y)
-    h.db.routeAllUnreadDirectMessagesToRunMailbox(runId, ADDRESS_Y)
-    expect(h.db.getMessageById(mail.id)?.to_handle).toBe(ADDRESS_Y)
   })
 
-  it('coordinates with its handle, pane and Orca session id, reachable at both addresses', async () => {
+  it('coordinates with its handle, pane and Orca session id, one mailbox at both spellings', async () => {
     const { run } = resultOf(
       await h.dispatch(
         orchestrationRequest(
@@ -561,7 +569,14 @@ describe('a structured worker that names itself by session id', () => {
       coordinator_orca_session_id: SESSION_Y
     })
     expect(h.db.getRunMailboxOwnerIdsForHandle(handle)).toEqual([runId])
-    expect(h.db.getRunMailboxOwnerIdsForHandle(ADDRESS_Y)).toEqual([runId])
+    for (const to of [handle, ADDRESS_Y]) {
+      const { message } = resultOf(
+        await h.dispatch(
+          orchestrationRequest('orchestration.send', { from: WORKER_HANDLE, to, subject: to })
+        )
+      )
+      expect(message).toMatchObject({ to_handle: `run:${runId}` })
+    }
   })
 
   it.each([

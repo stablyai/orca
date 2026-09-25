@@ -1,17 +1,12 @@
 import type { OrchestrationDb } from '../orchestration-db'
 import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-session'
-import { orcaSessionAddressSql } from '../orca-session-address-sql'
 
-/**
- * Mail to an address that is also an active Dispatch assignee in the same Run is that worker's
- * mail, not coordinator mail, whether the address is a terminal handle or a session address.
- */
+/** Mail to an active Dispatch assignee's address in the same Run is that worker's, not coordinator mail. */
 export function activeDispatchOwnsAddressSql(runIdSql: string, addressSql: string): string {
   return `EXISTS (
     SELECT 1 FROM dispatch_contexts
     WHERE dispatch_contexts.run_id = ${runIdSql}
-      AND (dispatch_contexts.assignee_handle = ${addressSql}
-        OR ${orcaSessionAddressSql('dispatch_contexts.assignee_orca_session_id')} = ${addressSql})
+      AND dispatch_contexts.assignee_handle = ${addressSql}
       AND dispatch_contexts.status IN ('pending', 'dispatched')
   )`
 }
