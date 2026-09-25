@@ -54,7 +54,7 @@ async function mutateOverlays(
   return mutation
 }
 
-export async function loadMobileRelayHostOverlayState(
+export async function loadMobileRelayHostRoutingState(
   existingHostIds: ReadonlySet<string>
 ): Promise<{ relays: Map<string, MobileRelayEndpoint>; orphanHostIds: string[] }> {
   await overlayMutation
@@ -95,11 +95,11 @@ export function saveMobileRelayHostRouting(
   })
 }
 
-export function removeMobileRelayHostOverlay(hostId: string): Promise<void> {
-  return removeMobileRelayHostOverlays([hostId])
+export function removeMobileRelayHostRouting(hostId: string): Promise<void> {
+  return removeMobileRelayHostRoutings([hostId])
 }
 
-export async function removeMobileRelayHostOverlays(hostIds: readonly string[]): Promise<void> {
+export async function removeMobileRelayHostRoutings(hostIds: readonly string[]): Promise<void> {
   const targets = new Set(hostIds)
   await mutateOverlays((overlays) => {
     const next = overlays.filter((overlay) => !targets.has(overlay.hostId))

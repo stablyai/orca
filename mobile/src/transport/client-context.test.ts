@@ -46,7 +46,8 @@ import {
   useDisconnectHostClient,
   useForceReconnect,
   useHostClient,
-  usePrimeHosts
+  usePrimeHosts,
+  useRefreshHostClient
 } from './client-context'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
@@ -416,53 +417,21 @@ describe('useHostClient', () => {
     }
   })
 
-  it('rebuilds a Relay-active client when the saved host address changed', async () => {
+  it('refreshes a Relay-active owned client onto the saved row after an endpoint edit', async () => {
     const relayClient = makeFakeClient('connected', 'relay')
     const replacement = makeFakeClient('connecting', 'tailscale')
     connectMock.mockReturnValueOnce(relayClient).mockReturnValueOnce(replacement)
     loadHostsMock.mockResolvedValue([HOST])
+    const edited = { ...HOST, endpoint: 'ws://100.101.102.103:6768' }
 
-    let forceReconnect: ReturnType<typeof useForceReconnect> = null
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      forceReconnect = useForceReconnect()
-      useHostClient(HOST.id)
-      return null
-    }
-
-    try {
-      await act(async () => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-        await Promise.resolve()
-      })
-
-      await act(async () => {
-        await forceReconnect?.(HOST.id, { savedAddressChanged: true })
-      })
-
-      // The live Relay session is bound to the pre-edit address, so it must come down.
-      expect(relayClient.closeMock).toHaveBeenCalled()
-      expect(relayClient.notifyForeground).not.toHaveBeenCalled()
-      expect(connectMock).toHaveBeenCalledTimes(2)
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
-  it('reopens from the saved host row when a stale profile is still primed', async () => {
-    const relayClient = makeFakeClient('connected', 'relay')
-    const replacement = makeFakeClient('connecting', 'tailscale')
-    connectMock.mockReturnValueOnce(relayClient).mockReturnValueOnce(replacement)
-    loadHostsMock.mockResolvedValue([HOST])
-    const edited = { ...HOST, name: 'Tailnet desk', endpoint: 'ws://100.101.102.103:6768' }
-
-    let forceReconnect: ReturnType<typeof useForceReconnect> = null
+    const states: ConnectionState[] = []
+    let refreshHostClient: ((hostId: string) => void) | null = null
     let primeHosts: ((hosts: (typeof HOST)[]) => void) | null = null
     let renderer: ReactTestRenderer | null = null
     function Probe(): null {
-      forceReconnect = useForceReconnect()
+      refreshHostClient = useRefreshHostClient()
       primeHosts = usePrimeHosts()
-      useHostClient(HOST.id)
+      states.push(useHostClient(HOST.id).state)
       return null
     }
 
@@ -471,16 +440,21 @@ describe('useHostClient', () => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
         await Promise.resolve()
       })
-      // The edit screen's post-save re-prime is best-effort: this is the state it leaves behind
-      // when loadHosts() throws — the cache still holds the address the user just replaced.
+      // A failed post-save re-prime leaves the pre-edit profile cached.
       act(() => primeHosts?.([HOST]))
       loadHostsMock.mockResolvedValue([edited])
+      states.length = 0
 
       await act(async () => {
-        await forceReconnect?.(HOST.id, { savedAddressChanged: true })
+        refreshHostClient?.(HOST.id)
+        await Promise.resolve()
       })
 
+      expect(relayClient.closeMock).toHaveBeenCalled()
+      expect(relayClient.notifyForeground).not.toHaveBeenCalled()
       expect(connectMock.mock.calls[1]?.[0]).toEqual(edited)
+      // The owner reads amber through the rebuild, never a grey flash.
+      expect(states).not.toContain('disconnected')
     } finally {
       act(() => renderer?.unmount())
     }

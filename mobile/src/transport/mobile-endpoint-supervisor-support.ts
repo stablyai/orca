@@ -3,8 +3,6 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { ReplacementAuthenticationTimeoutError } from './replacement-session-authentication'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { HostProfile } from './types'
-import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 
 // Why: a suspect session that survived a failed replacement dial must come down,
@@ -42,10 +40,10 @@ export class RelayDialAbortedError extends Error {
 // cell assignment, persist it durably, then dial once more.
 export async function dialRelayThroughDirectorFallback(args: {
   resumeToken: string
-  relay: () => HostProfile['relay']
+  relay: () => MobileRelayEndpoint
   dial: () => Promise<RelayDialResult>
   resolveRelay: (input: {
-    relay: NonNullable<HostProfile['relay']>
+    relay: MobileRelayEndpoint
     resumeToken: string
   }) => Promise<MobileRelayEndpoint>
   persistResolvedRelay: (resolved: MobileRelayEndpoint) => Promise<void>
@@ -55,8 +53,7 @@ export async function dialRelayThroughDirectorFallback(args: {
   if (
     first.ok ||
     first.error instanceof RelayDialAbortedError ||
-    !isDirectorResolutionFailure(first.error) ||
-    !relay
+    !isDirectorResolutionFailure(first.error)
   ) {
     return first
   }
@@ -79,34 +76,6 @@ export function isDirectorResolutionFailure(error: Error): boolean {
     !(error instanceof MobileE2EEAuthenticationError) &&
     (!(error instanceof RelayOuterError) || [4409, 4503, 1006].includes(error.code))
   )
-}
-
-/** The relay a supervisor dials; a learned move is persisted as routing, never as a profile. */
-export class SupervisedRelayRouting {
-  private relay: MobileRelayEndpoint | undefined
-  private readonly hostId: string
-
-  constructor(
-    host: Pick<HostProfile, 'id' | 'relay'>,
-    private readonly dependencies: Pick<MobileEndpointSupervisorDependencies, 'setRelayRouting'>,
-    private readonly isStopped: () => boolean
-  ) {
-    this.relay = host.relay
-    this.hostId = host.id
-  }
-
-  current(): MobileRelayEndpoint | undefined {
-    return this.relay
-  }
-
-  async adopt(relay: MobileRelayEndpoint): Promise<void> {
-    // Why: a stopped supervisor's host may be removed or re-paired; its successor owns routing.
-    if (this.isStopped()) {
-      return
-    }
-    await this.dependencies.setRelayRouting(this.hostId, relay)
-    this.relay = relay
-  }
 }
 
 export function encodeBase64Url(value: Uint8Array): string {

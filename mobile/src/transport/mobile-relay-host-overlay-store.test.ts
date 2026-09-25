@@ -10,8 +10,8 @@ const asyncStorage = vi.hoisted(() => ({
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
 import {
-  loadMobileRelayHostOverlayState,
-  removeMobileRelayHostOverlays,
+  loadMobileRelayHostRoutingState,
+  removeMobileRelayHostRoutings,
   resetMobileRelayHostOverlayStoreForTests,
   saveMobileRelayHostRouting
 } from './mobile-relay-host-overlay-store'
@@ -107,7 +107,7 @@ describe('mobile relay host overlay store', () => {
   it('round-trips relay routing in a namespace legacy builds do not rewrite', async () => {
     await expect(saveMobileRelayHostRouting('host-1', RELAY)).resolves.toBe(true)
 
-    await expect(loadMobileRelayHostOverlayState(new Set(['host-1']))).resolves.toEqual({
+    await expect(loadMobileRelayHostRoutingState(new Set(['host-1']))).resolves.toEqual({
       relays: new Map([['host-1', RELAY]]),
       orphanHostIds: []
     })
@@ -124,7 +124,7 @@ describe('mobile relay host overlay store', () => {
   it('ignores a direct address an older build stored and drops it on the next routing write', async () => {
     stored = JSON.stringify([LEGACY_OVERLAY])
 
-    await expect(loadMobileRelayHostOverlayState(new Set(['host-1']))).resolves.toEqual({
+    await expect(loadMobileRelayHostRoutingState(new Set(['host-1']))).resolves.toEqual({
       relays: new Map([['host-1', RELAY]]),
       orphanHostIds: []
     })
@@ -135,7 +135,7 @@ describe('mobile relay host overlay store', () => {
   it('never overlays or resurrects a host whose legacy base was removed', async () => {
     stored = JSON.stringify([LEGACY_OVERLAY])
 
-    await expect(loadMobileRelayHostOverlayState(new Set())).resolves.toEqual({
+    await expect(loadMobileRelayHostRoutingState(new Set())).resolves.toEqual({
       relays: new Map(),
       orphanHostIds: ['host-1']
     })
@@ -154,7 +154,7 @@ describe('mobile relay host overlay store', () => {
     const second = { ...RELAY_ONLY_OVERLAY, hostId: 'host-2' }
     stored = JSON.stringify([RELAY_ONLY_OVERLAY, second])
 
-    await expect(removeMobileRelayHostOverlays(['host-1', 'host-missing'])).resolves.toBeUndefined()
+    await expect(removeMobileRelayHostRoutings(['host-1', 'host-missing'])).resolves.toBeUndefined()
 
     expect(JSON.parse(stored!)).toEqual([second])
     expect(asyncStorage.getItem).toHaveBeenCalledOnce()
@@ -164,7 +164,7 @@ describe('mobile relay host overlay store', () => {
   it('skips the storage write when no requested overlay exists', async () => {
     stored = JSON.stringify([RELAY_ONLY_OVERLAY])
 
-    await expect(removeMobileRelayHostOverlays(['host-missing'])).resolves.toBeUndefined()
+    await expect(removeMobileRelayHostRoutings(['host-missing'])).resolves.toBeUndefined()
 
     expect(asyncStorage.getItem).toHaveBeenCalledOnce()
     expect(asyncStorage.setItem).not.toHaveBeenCalled()

@@ -32,7 +32,7 @@ import {
   type CloseEntryOptions
 } from './host-client-context-state'
 import type { ConnectionState, HostProfile } from './types'
-import type { ForceReconnectOptions, RpcClientContextValue } from './rpc-client-context-contract'
+import type { RpcClientContextValue } from './rpc-client-context-contract'
 
 export {
   useDisconnectHostClient,
@@ -245,19 +245,14 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   )
 
   const forceReconnect = useCallback(
-    async (hostId: string, options?: ForceReconnectOptions) => {
+    async (hostId: string) => {
       const entry = storeRef.current.get(hostId)
       const logical = entry?.client as Partial<StableLogicalRpcClient> | undefined
-      const addressChanged = options?.savedAddressChanged === true
-      if (entry && !addressChanged && shouldPreserveActiveRelay(entry, logical)) {
+      if (entry && shouldPreserveActiveRelay(entry, logical)) {
         // Keep a Relay-active host on its existing recovery state; rebuilding the
         // facade starts the unreachable direct endpoint before Relay can race it.
         entry.client.notifyForeground('app-resume')
         return
-      }
-      if (addressChanged) {
-        // Why: the live supervisor and the primed profile both hold the pre-edit endpoint.
-        primedHostsRef.current.delete(hostId)
       }
       // Why: ownership survives explicit close/re-pair while observers never become synthetic owners.
       const savedRefCount = acquisitionsRef.current.count(hostId)

@@ -1,5 +1,6 @@
 import * as ExpoCrypto from 'expo-crypto'
 import type { ConnectionLogSink, ForegroundNudgeReason, HostProfile } from './types'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect } from './rpc-client'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
@@ -34,11 +35,11 @@ export function startMobileEndpointLifecycle(
   let foreground = true
   let owner: EndpointOwner
 
-  const startSupervisor = async (host: HostProfile): Promise<void> => {
+  const startSupervisor = async (relay: MobileRelayEndpoint): Promise<void> => {
     if (stopped) {
       return
     }
-    const supervisor = createSupervisor(logical, host, onLog)
+    const supervisor = createSupervisor(logical, initialHost, relay, onLog)
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
@@ -46,7 +47,7 @@ export function startMobileEndpointLifecycle(
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, initialHost, onLog)
+    owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
     void owner.start()
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
@@ -56,7 +57,7 @@ export function startMobileEndpointLifecycle(
           host,
           dependencies: { randomBytes: ExpoCrypto.getRandomBytes }
         }),
-      onUpgraded: ({ relay }) => startSupervisor({ ...initialHost, relay })
+      onUpgraded: ({ relay }) => startSupervisor(relay)
     })
     void owner.start()
   }
@@ -84,9 +85,10 @@ export function startMobileEndpointLifecycle(
 function createSupervisor(
   logical: StableLogicalRpcClient,
   host: HostProfile,
+  relay: MobileRelayEndpoint,
   onLog: ConnectionLogSink
 ): MobileEndpointSupervisor {
-  return new MobileEndpointSupervisor(logical, host, {
+  return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () => connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPath: directPathForEndpoint(host.endpoint),
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>

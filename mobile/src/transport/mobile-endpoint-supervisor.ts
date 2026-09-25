@@ -5,7 +5,6 @@ import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import {
   liveRelayLeaseExpiry,
-  SupervisedRelayRouting,
   suspendRelayIfStillConnected
 } from './mobile-endpoint-supervisor-support'
 import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
@@ -20,7 +19,8 @@ import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { ForegroundNudgeReason, HostProfile } from './types'
+import type { ForegroundNudgeReason } from './types'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
 import {
   logRelayConnected,
@@ -36,7 +36,6 @@ const FAILURE_COOLDOWN_MS = 60_000
 
 export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
-  private readonly relayRouting: SupervisedRelayRouting
   private stopped = false
   private operationInFlight = false
   private pendingReplace = false
@@ -55,10 +54,10 @@ export class MobileEndpointSupervisor {
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
-    private readonly host: HostProfile,
+    private readonly hostId: string,
+    relay: MobileRelayEndpoint,
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
-    this.relayRouting = new SupervisedRelayRouting(host, dependencies, () => this.stopped)
     this.hysteresis = new MobileEndpointHysteresis(dependencies.now(), {
       directSuccessesRequired: 3,
       directObservationMs: DIRECT_OBSERVATION_MS,
@@ -95,9 +94,11 @@ export class MobileEndpointSupervisor {
       writeBundle: dependencies.writeBundle,
       isActive: () => this.isActive(),
       isForeground: () => this.backgroundGrace.isForeground(),
-      relay: () => this.relayRouting.current(),
+      isStopped: () => this.stopped,
+      hostId,
+      relay,
       resolveRelay: dependencies.resolveRelay,
-      persistResolvedRelay: (resolved) => this.relayRouting.adopt(resolved),
+      setRelayRouting: dependencies.setRelayRouting,
       bundle: () => this.bundle,
       adoptBundle: (bundle) => (this.bundle = bundle),
       recordMigration: () => {
@@ -147,8 +148,8 @@ export class MobileEndpointSupervisor {
   }
 
   async start(): Promise<void> {
-    this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
-    if (this.stopped || !this.relayRouting.current()) {
+    this.bundle = await this.dependencies.readBundle(this.hostId).catch(() => null)
+    if (this.stopped) {
       return
     }
     if (!this.bundle) {
@@ -210,7 +211,7 @@ export class MobileEndpointSupervisor {
   // shared cooldown and any session left stale-'connected' by a half-open socket
   // comes down; lease rotation clears it because armRetry owns its own retry.
   private async recoverRelay(forceReplacement = false, ownsRecovery = false): Promise<void> {
-    if (!this.isActive() || !this.relayRouting.current()) {
+    if (!this.isActive()) {
       return
     }
     if (this.operationInFlight) {
@@ -246,7 +247,7 @@ export class MobileEndpointSupervisor {
       const selection = await selectDialableRelayCredentials({
         bundle: this.bundle,
         controller: this.relayReconnect,
-        readBundle: () => this.dependencies.readBundle(this.host.id),
+        readBundle: () => this.dependencies.readBundle(this.hostId),
         onAdoptedFresherBundle: () => this.logRelay('adopted fresher durable credential bundle')
       })
       this.bundle = selection.bundle
@@ -324,7 +325,7 @@ export class MobileEndpointSupervisor {
       this.bundle = result.bundle
       // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
       credentialRefreshed = true
-      await this.relayRouting.adopt(result.relay)
+      await this.sessionEstablisher.adoptRelay(result.relay)
     } catch {
       // Why: pending material remains durable; the next authenticated direct
       // opportunity must reconcile it before creating another install key.

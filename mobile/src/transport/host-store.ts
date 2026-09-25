@@ -14,9 +14,9 @@ import {
   scheduleHostCredentialCleanup
 } from './host-credential-cleanup'
 import {
-  loadMobileRelayHostOverlayState,
-  removeMobileRelayHostOverlay,
-  removeMobileRelayHostOverlays,
+  loadMobileRelayHostRoutingState,
+  removeMobileRelayHostRouting,
+  removeMobileRelayHostRoutings,
   saveMobileRelayHostRouting
 } from './mobile-relay-host-overlay-store'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
@@ -64,7 +64,7 @@ async function doLoadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot>
   if (!storedHosts) {
     return { catalog: [], profiles: [] }
   }
-  const overlayState = await loadMobileRelayHostOverlayState(
+  const overlayState = await loadMobileRelayHostRoutingState(
     new Set(storedHosts.map(({ id }) => id))
   )
   const orphanWriteRevisions = new Map(
@@ -141,7 +141,7 @@ function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
   return enqueueHostListMutation(async () => {
     const hosts = await readStoredHostProfilesForMutation()
     if (!hosts.some(({ id }) => id === hostId)) {
-      await removeMobileRelayHostOverlay(hostId)
+      await removeMobileRelayHostRouting(hostId)
     }
   })
 }
@@ -152,18 +152,17 @@ export { updateHostDescriptor } from './host-descriptor-persistence'
 export class RelayRoutingHostRemovedError extends Error {}
 
 /**
- * Relay routing learned after pairing (director re-resolution, rotation, direct upgrade). Takes no
- * profile: a learner's snapshot predates any Edit Host, so the row and device token stay untouched.
+ * Relay routing learned after pairing (re-resolution, rotation, direct upgrade). Routing only; the
+ * row and token belong to pairing and Edit Host.
  */
 export async function setRelayRouting(hostId: string, relay: MobileRelayEndpoint): Promise<void> {
-  let wrote = false
-  await enqueueHostListMutation(async () => {
+  const wrote = await enqueueHostListMutation(async () => {
     const hosts = await readStoredHostProfilesForMutation()
     if (!hosts.some(({ id }) => id === hostId)) {
       // Why: an in-flight relay learner must not resurrect a host the user removed.
       throw new RelayRoutingHostRemovedError('mobile relay host was removed')
     }
-    wrote = await saveMobileRelayHostRouting(hostId, relay)
+    return saveMobileRelayHostRouting(hostId, relay)
   })
   if (wrote) {
     hostListLoads.dropSharedHostListLoad()
@@ -240,7 +239,7 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
   }
   if (overlayRemovalIds.length > 0) {
     // Why: reusing an id for direct-only re-pairing must not retain routing metadata from the previous transport state.
-    await removeMobileRelayHostOverlays(overlayRemovalIds)
+    await removeMobileRelayHostRoutings(overlayRemovalIds)
     hostListLoads.dropSharedHostListLoad()
   }
   for (const duplicateHostId of duplicateHostIds) {
@@ -272,7 +271,7 @@ export async function removeHost(hostId: string): Promise<void> {
   }
   tokenCache.delete(hostId)
   try {
-    await removeMobileRelayHostOverlay(hostId)
+    await removeMobileRelayHostRouting(hostId)
     hostListLoads.dropSharedHostListLoad()
   } catch {
     // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.

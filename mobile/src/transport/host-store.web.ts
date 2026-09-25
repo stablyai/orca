@@ -27,7 +27,7 @@ export const loadHostCatalog = (): Promise<HostCatalogEntry[]> =>
 
 /** Pairing happened natively before this document existed, and the page never re-does it. */
 export const savePairedHost = (_host: HostProfile): Promise<void> => Promise.resolve()
-/** Relay routing belongs to the native endpoint supervisor, which the page does not run. */
+/** Relay routing belongs to the native endpoint lifecycle, which the page does not run. */
 export const setRelayRouting = (_hostId: string, _relay: MobileRelayEndpoint): Promise<void> =>
   Promise.resolve()
 export const removeHost = (_hostId: string): Promise<void> => Promise.resolve()

@@ -218,14 +218,4 @@ describe('relay routing after a host edit', () => {
     expect(writesTo('orca:hosts')).toEqual([])
     await expect(loadHosts()).resolves.toEqual([])
   })
-
-  it('creates routing for a direct-only host being upgraded to relay', async () => {
-    storage.set(OVERLAY_KEY, '[]')
-    await updateHostNameAndEndpoint('host-1', { endpoint: NEW_ENDPOINT })
-
-    await setRelayRouting('host-1', relay)
-
-    const [host] = await loadHosts()
-    expect(host).toMatchObject({ endpoint: NEW_ENDPOINT, relay })
-  })
 })
