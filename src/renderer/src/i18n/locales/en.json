@@ -18354,8 +18354,8 @@
       "carryReason": {
         "too_large": "Too many new files to copy.",
         "base_mismatch": "The new branch does not start at the same commit.",
-        "target_dirty": "The new worktree already had changes.",
-        "partially_applied": "Some uncommitted changes may already be in the new worktree. Review its changes before continuing.",
+        "target_dirty": "The new workspace already had changes.",
+        "partially_applied": "Some uncommitted changes may already be in the new workspace. Review its changes before continuing.",
         "apply_failed": "The changes could not be applied."
       },
       "changesUncertain": "Created {{name}}, but it is unclear whether all your uncommitted changes were copied.",

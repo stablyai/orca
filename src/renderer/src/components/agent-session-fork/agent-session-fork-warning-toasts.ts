@@ -18,12 +18,12 @@ function carryReasonLabel(reason: WorkingTreeCarryFailureReason): string {
     case 'target_dirty':
       return translate(
         'components.agentSessionFork.carryReason.target_dirty',
-        'The new worktree already had changes.'
+        'The new workspace already had changes.'
       )
     case 'partially_applied':
       return translate(
         'components.agentSessionFork.carryReason.partially_applied',
-        'Some uncommitted changes may already be in the new worktree. Review its changes before continuing.'
+        'Some uncommitted changes may already be in the new workspace. Review its changes before continuing.'
       )
     case 'apply_failed':
       return translate(

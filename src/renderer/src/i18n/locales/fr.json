@@ -18292,8 +18292,8 @@
       "carryReason": {
         "too_large": "Trop de nouveaux fichiers à copier.",
         "base_mismatch": "La nouvelle branche ne part pas du même commit.",
-        "target_dirty": "Le nouveau worktree contenait déjà des modifications.",
-        "partially_applied": "Certaines modifications non validées sont peut-être déjà dans le nouveau worktree. Vérifiez ses modifications avant de continuer.",
+        "target_dirty": "Le nouvel espace de travail contenait déjà des modifications.",
+        "partially_applied": "Certaines modifications non validées sont peut-être déjà dans le nouvel espace de travail. Vérifiez ses modifications avant de continuer.",
         "apply_failed": "Les modifications n'ont pas pu être appliquées."
       },
       "changesUncertain": "{{name}} a été créé, mais il n'est pas certain que toutes vos modifications non validées aient été copiées.",

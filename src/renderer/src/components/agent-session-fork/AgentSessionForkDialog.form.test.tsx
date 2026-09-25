@@ -720,7 +720,7 @@ describe('AgentSessionForkDialog', () => {
       'Created fix-auth-fork, but it is unclear whether all your uncommitted changes were copied.',
       {
         description:
-          'Some uncommitted changes may already be in the new worktree. Review its changes before continuing.'
+          'Some uncommitted changes may already be in the new workspace. Review its changes before continuing.'
       }
     )
   })
