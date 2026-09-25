@@ -117,12 +117,7 @@ describe.skipIf(process.platform === 'win32')('orca status reports its caller ad
   it('asks the host as the session its environment names, and prints what the host resolved', async () => {
     process.env.ORCA_AGENT_SESSION_ID = SESSION
     process.env.ORCA_TERMINAL_HANDLE = 'term_tui'
-    const address = {
-      kind: 'session',
-      address: `session:${SESSION}`,
-      sessionId: SESSION,
-      live: true
-    }
+    const address = { address: `session:${SESSION}`, live: true }
     callerShowReply = { result: { caller: address } }
 
     expect(await statusCaller()).toEqual(address)
@@ -139,10 +134,10 @@ describe.skipIf(process.platform === 'win32')('orca status reports its caller ad
   it('asks the host about the terminal handle a PTY agent carries', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_mine'
     callerShowReply = {
-      result: { caller: { kind: 'terminal', address: 'term_mine', live: false } }
+      result: { caller: { address: 'term_mine', live: false } }
     }
 
-    expect(await statusCaller()).toEqual({ kind: 'terminal', address: 'term_mine', live: false })
+    expect(await statusCaller()).toEqual({ address: 'term_mine', live: false })
     expect(callerShowRequests()[0]?.orchestrationCompatibilityEvidence).toEqual({
       terminalHandle: 'term_mine'
     })
@@ -156,8 +151,6 @@ describe.skipIf(process.platform === 'win32')('orca status reports its caller ad
     }
 
     expect(await statusCaller()).toEqual({
-      kind: 'session',
-      sessionId: SESSION,
       live: false,
       refusal: { code: 'session_caller_not_live', message: `Agent session ${SESSION} has ended.` }
     })
@@ -181,10 +174,10 @@ describe.skipIf(process.platform === 'win32')('orca status reports its caller ad
   it('asks the host about a process that carries only a pane key', async () => {
     process.env.ORCA_PANE_KEY = 'tab_1:leaf_1'
     callerShowReply = {
-      result: { caller: { kind: 'terminal', address: 'term_reminted', live: true } }
+      result: { caller: { address: 'term_reminted', live: true } }
     }
 
-    expect(await statusCaller()).toEqual({ kind: 'terminal', address: 'term_reminted', live: true })
+    expect(await statusCaller()).toEqual({ address: 'term_reminted', live: true })
     expect(callerShowRequests()[0]?.orchestrationCompatibilityEvidence).toEqual({
       paneKey: 'tab_1:leaf_1'
     })

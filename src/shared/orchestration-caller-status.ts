@@ -1,28 +1,16 @@
 /**
  * The calling agent's own orchestration address, as the host resolved it from the identity injected
- * into the caller's environment: its Orca session id, else its terminal handle. Never from a flag.
- * `orca status --json` reports it as `caller`, so any agent can learn the address others reach it by.
+ * into the caller's environment. Never from a flag, and opaque: a chat and a terminal agent get the
+ * same shape. `orca status --json` reports it as `caller`.
  */
-export type OrchestrationCallerAddress =
-  | {
-      kind: 'session'
-      /** `session:<id>`: one spelling for every session, a structured worker included. */
-      address: string
-      sessionId: string
-      /** The host resolves a session only while its lease is live; otherwise it refuses. */
-      live: true
-    }
-  | {
-      kind: 'terminal'
-      address: string
-      /** False for a handle this process kept across a remint or a window reload. */
-      live: boolean
-    }
+export type OrchestrationCallerAddress = {
+  address: string
+  /** False for a handle this process kept across a remint or a window reload. */
+  live: boolean
+}
 
 /** The host refused the session this process names, so it cannot act as it right now. */
 export type OrchestrationCallerRefusal = {
-  kind: 'session'
-  sessionId: string
   live: false
   refusal: { code: string; message: string }
 }

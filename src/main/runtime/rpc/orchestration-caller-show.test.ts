@@ -48,7 +48,7 @@ describe('orchestration.callerShow: the caller learns its own address from the h
     )
 
     expect(resultOf(response)).toEqual({
-      caller: { kind: 'session', address: ADDRESS_X, sessionId: SESSION_X, live: true }
+      caller: { address: ADDRESS_X, live: true }
     })
   })
 
@@ -69,7 +69,7 @@ describe('orchestration.callerShow: the caller learns its own address from the h
     )
 
     expect(resultOf(response)).toEqual({
-      caller: { kind: 'session', address: `session:${SESSION_Y}`, sessionId: SESSION_Y, live: true }
+      caller: { address: `session:${SESSION_Y}`, live: true }
     })
   })
 
@@ -108,10 +108,10 @@ describe('orchestration.callerShow: the caller learns its own address from the h
     const stale = await h.dispatch(callerShow({ evidence: { terminalHandle: 'term_stale' } }))
 
     expect(resultOf(live)).toEqual({
-      caller: { kind: 'terminal', address: 'term_live', live: true }
+      caller: { address: 'term_live', live: true }
     })
     expect(resultOf(stale)).toEqual({
-      caller: { kind: 'terminal', address: 'term_stale', live: false }
+      caller: { address: 'term_stale', live: false }
     })
     expect(probe).toHaveBeenCalledTimes(2)
   })
@@ -137,13 +137,13 @@ describe('orchestration.callerShow: the caller learns its own address from the h
     )
 
     expect(resultOf(reminted)).toEqual({
-      caller: { kind: 'terminal', address: 'term_new', live: true }
+      caller: { address: 'term_new', live: true }
     })
     expect(resultOf(paneOnly)).toEqual({
-      caller: { kind: 'terminal', address: 'term_new', live: true }
+      caller: { address: 'term_new', live: true }
     })
     expect(resultOf(gone)).toEqual({
-      caller: { kind: 'terminal', address: 'term_old', live: false }
+      caller: { address: 'term_old', live: false }
     })
     expect(resolvePane).toHaveBeenCalledTimes(3)
   })
@@ -169,7 +169,7 @@ describe('orchestration.callerShow: the caller learns its own address from the h
       const acting = resultOf(await h.dispatch(callerShow({ sessionId })))
       // One derivation: the conversation's root, which the successor copies and acts as too.
       expect(shown.address).toBe(ADDRESS_X)
-      expect(acting.caller).toMatchObject({ kind: 'session', address: shown.address })
+      expect(acting.caller).toMatchObject({ address: shown.address })
     }
   })
 

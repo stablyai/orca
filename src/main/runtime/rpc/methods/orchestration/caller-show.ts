@@ -29,9 +29,7 @@ export const ORCHESTRATION_CALLER_METHODS = [
       if (orchestrationCaller) {
         return {
           caller: {
-            kind: 'session',
             address: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId),
-            sessionId: orchestrationCaller.sessionId,
             live: true
           }
         }
@@ -71,14 +69,14 @@ function resolveTerminalCaller(
   if (handle) {
     const identity = runtime.resolveTerminalIdentity(handle)
     if (identity.live) {
-      return { kind: 'terminal', address: identity.handle, live: true }
+      return { address: identity.handle, live: true }
     }
   }
   const reminted = evidence?.paneKey ? resolvePaneHandle(runtime, evidence.paneKey) : null
   if (reminted) {
-    return { kind: 'terminal', address: reminted, live: true }
+    return { address: reminted, live: true }
   }
-  return handle ? { kind: 'terminal', address: handle, live: false } : null
+  return handle ? { address: handle, live: false } : null
 }
 
 function resolvePaneHandle(runtime: OrcaRuntimeService, paneKey: string): string | null {

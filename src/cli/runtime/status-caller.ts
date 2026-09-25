@@ -33,12 +33,7 @@ export async function resolveCliStatusCaller(
     return response.result.caller
   } catch (error) {
     if (sessionId && error instanceof RuntimeClientError && SESSION_REFUSAL_CODES.has(error.code)) {
-      return {
-        kind: 'session',
-        sessionId,
-        live: false,
-        refusal: { code: error.code, message: error.message }
-      }
+      return { live: false, refusal: { code: error.code, message: error.message } }
     }
     return undefined
   }
