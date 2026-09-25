@@ -269,14 +269,36 @@ describe('NativeChatQuestionCard', () => {
     typeAnswer('two spaces')
     clickOption('Tabs')
     act(() => {
-      container
-        .querySelector('input')!
-        .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      container.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(optionPressed('Tabs')).toBe('false')
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'two spaces' }])
+  })
+
+  it('ignores a click on the answer field while the answer is sending', () => {
+    const renderCard = (isSubmitting: boolean): void => {
+      act(() => {
+        root.render(
+          <NativeChatQuestionCard
+            prompt={tabsOrSpaces}
+            onAnswer={vi.fn()}
+            onCancel={() => {}}
+            isSubmitting={isSubmitting}
+          />
+        )
+      })
+    }
+    renderCard(false)
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    renderCard(true)
+    act(() => {
+      container.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(optionPressed('Tabs')).toBe('true')
   })
 
   it('keeps the picked option when keyboard focus passes through the field', () => {
