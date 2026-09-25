@@ -92,13 +92,23 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
         await vi.waitFor(() => expect(readWindowsPtyJobProcessIds(proc)?.size).toBe(3), {
           timeout: 5_000
         })
-        await vi.waitFor(async () => expect(await confirm()).toBe(true), { timeout: 5_000 })
+        await vi.waitFor(async () => expect(await confirm(), 'initial prompt').toBe(true), {
+          timeout: 5_000
+        })
 
-        proc.write('sleep 60\r')
+        // Interrupt only after the child is ready, not during a transient shell fork.
+        proc.write(
+          "node -e \"console.log(['ORCA','FOREGROUND_READY'].join('_')); setInterval(() => {}, 1000)\"\r"
+        )
+        await vi.waitFor(() => expect(output).toContain('ORCA_FOREGROUND_READY'), {
+          timeout: 10_000
+        })
         await vi.waitFor(async () => expect(await confirm()).toBe(false), { timeout: 10_000 })
 
         proc.write('\x03')
-        await vi.waitFor(async () => expect(await confirm()).toBe(true), { timeout: 10_000 })
+        await vi.waitFor(async () => expect(await confirm(), 'prompt after interrupt').toBe(true), {
+          timeout: 10_000
+        })
 
         proc.write('sleep 60 &\r')
         await vi.waitFor(async () => expect(await confirm()).toBe(false), { timeout: 10_000 })
