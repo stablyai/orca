@@ -122,6 +122,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     return ws?.endpoint ?? null
   }
 
+  // Why: only a strictWsPort bind records one; the default path relocates instead of failing.
+  getWebSocketStartFailure(): unknown {
+    return this.webSocketStartFailure
+  }
+
   createPairingOffer(args: {
     address?: string | null
     name?: string

@@ -120,6 +120,26 @@ Orca creates a separate, revocable token for each paired client. The server list
 - Do not forward the Orca port directly to the public internet. Prefer Tailscale, WireGuard, a trusted LAN, SSH forwarding, or an authenticated tunnel.
 - Do not select `127.0.0.1` for another computer. That address only works on the server itself.
 
+### Pin the desktop listener to one address
+
+By default the desktop app listens on `127.0.0.1` until you share access, then on every interface (`0.0.0.0`) — including at later launches once a network client has connected. If port `6768` is taken it moves to a saved or OS-assigned port.
+
+If you front Orca with your own forwarder (for example Tailscale Serve raw TCP or an SSH local forward to a loopback port), pin the listener instead. Create `runtime-ws-bind.json` in Orca's data folder — the folder that holds `orca-data.json` (by default `~/Library/Application Support/orca` on macOS, `%APPDATA%\orca` on Windows, `~/.config/orca` on Linux) — then restart Orca:
+
+```json
+{ "host": "127.0.0.1", "port": 6768 }
+```
+
+While the file is present, the desktop app:
+
+- listens on exactly that host and port, on every launch — no saved or OS-assigned fallback port;
+- never widens to other interfaces: creating a network access link or mobile QR reports network exposure as unavailable, and a previously connected client does not widen the next launch;
+- logs `[runtime] WebSocket listener pinned to ws://127.0.0.1:6768 …`; the same endpoint is the `websocket` entry in `orca-runtime.json`. Neither contains a credential.
+
+`host` must be a literal IPv4 or IPv6 address (not a hostname, not `localhost`), and `port` an integer from 1 to 65535; other keys are rejected. If the file is invalid or unreadable, or the port is in use, the listener stays down for that session and Orca shows **Orca remote access unavailable** with the cause. It never falls back to another port or interface. Fix the file or free the port and restart Orca. Existing grants, paired devices, and the local `orca` CLI are unaffected. Delete the file to return to the default behavior.
+
+The file applies to the desktop app only; `orca serve` keeps its `--port` behavior.
+
 ## Alternative: `orca serve`
 
 Use `orca serve` when the host should run without the desktop window—for example, a headless Linux server or a service-managed VM. For a MacBook or desktop you can leave signed in, the in-app setup above is simpler.
