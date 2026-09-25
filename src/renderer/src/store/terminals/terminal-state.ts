@@ -2,6 +2,7 @@ import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-con
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalExitRecord } from '../../../../shared/terminal-surface-exit'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
@@ -37,6 +38,9 @@ export type TerminalState = {
   suppressedPtyExitIds: Record<string, true>
   pendingPtyShutdownIds: Record<string, number>
   pendingCodexPaneRestartIds: Record<string, true>
+  /** Mirror of main's exit records for leaves it kept after their process died. */
+  terminalExitRecordsByLeafId: Record<string, TerminalExitRecord>
+  pendingExitedTerminalRestartLeafIds: Record<string, true>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
   directSshPaneRetryByTabId: Record<string, DirectSshPaneRetryAttempt>
   directSshLivePtyBindingByTabId: Record<string, DirectSshLivePtyBinding>

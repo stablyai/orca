@@ -8,6 +8,7 @@ import type {
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { Tab } from '../../shared/tab-types'
 import { closeTerminalSurfaceInWorkspaceSession } from './terminal-surface-close'
+import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
@@ -100,6 +101,11 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       return []
     }
     this.setWorkspaceSessionForWorktree(worktreeId, result.session)
+    this.terminalExitRecords.clearLeaves(
+      options.leafId
+        ? [options.leafId]
+        : collectPersistedTerminalLeafIds(session.terminalLayoutsByTabId[tabId])
+    )
     try {
       this.store.flushOrThrow()
     } catch (error) {

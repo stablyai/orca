@@ -88,6 +88,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+    if (binding && paneKey) {
+      this.terminalExitRecords.releaseForBinding(binding.leafId, binding.incarnationId)
+    }
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
       this._orchestrationDb?.retainReplacedWorkerTerminalResources({

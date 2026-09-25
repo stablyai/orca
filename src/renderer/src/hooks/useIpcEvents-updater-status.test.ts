@@ -119,6 +119,9 @@ describe('useIpcEvents updater integration', () => {
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
           onFocusTerminal: () => () => {},
+          onRestartExitedTerminal: () => () => {},
+          onTerminalExitRecordsChanged: () => () => {},
+          listTerminalExitRecords: async () => [],
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
           onSessionTabCloseRequest: () => () => {},
@@ -335,6 +338,7 @@ describe('useIpcEvents updater integration', () => {
           // Why: exercise the positive branch — an intent queued before mount is
           // pulled once the renderer's onOpenSettings listener is attached.
           consumePendingOpenSettings: () => Promise.resolve(true),
+          listTerminalExitRecords: () => Promise.resolve([]),
           getZoomLevel: () => 0,
           set: vi.fn()
         })

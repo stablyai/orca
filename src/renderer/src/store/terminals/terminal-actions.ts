@@ -3,6 +3,7 @@ import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalExitRecord } from '../../../../shared/terminal-surface-exit'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
@@ -175,6 +176,9 @@ export type TerminalActions = {
   isPtyShutdownPending: (ptyId: string) => boolean
   queueCodexPaneRestarts: (ptyIds: string[]) => void
   consumePendingCodexPaneRestart: (ptyId: string) => boolean
+  replaceTerminalExitRecords: (records: TerminalExitRecord[]) => void
+  requestExitedTerminalRestart: (leafId: string) => void
+  consumeExitedTerminalRestart: (leafId: string) => boolean
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {

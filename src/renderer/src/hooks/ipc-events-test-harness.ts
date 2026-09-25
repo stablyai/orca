@@ -148,6 +148,7 @@ export async function loadIpcEventsHarness(
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
     api: new Proxy(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every value is a namespace stub, and the proxy's fallback covers any namespace not listed.
       {
         runtimeEnvironments: createApiNamespaceStub({
           getStatusSnapshots: () => Promise.resolve([])
@@ -155,6 +156,7 @@ export async function loadIpcEventsHarness(
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),
+          listTerminalExitRecords: () => Promise.resolve([]),
           consumePendingSkillShare: () => Promise.resolve(null),
           set: vi.fn(),
           replyTabCreate: vi.fn(),

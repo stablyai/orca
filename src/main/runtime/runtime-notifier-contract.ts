@@ -1,6 +1,7 @@
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
+import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type {
@@ -94,6 +95,9 @@ export type RuntimeNotifier = {
   ): void
   renameTerminal(tabId: string, title: string | null): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
+  /** Runs the desktop pane's own plain-shell restart for a leaf main kept after its exit. */
+  restartExitedTerminal?(tabId: string, worktreeId: string, leafId: string): void
+  terminalExitRecordsChanged?(records: TerminalExitRecord[]): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void

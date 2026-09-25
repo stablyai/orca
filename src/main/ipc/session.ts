@@ -44,6 +44,9 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   )
 
+  // Why: a reloaded renderer must still show kept leaves as exited instead of spawning into them.
+  ipcMain.handle('terminalExitRecords:list', () => runtime.terminalExitRecords.list())
+
   ipcMain.handle('session:flush', () => {
     // Why: durable lifecycle RPCs must propagate disk failures instead of
     // returning success through Store.flush(), which intentionally only logs.

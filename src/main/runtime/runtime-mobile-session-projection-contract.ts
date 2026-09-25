@@ -8,6 +8,7 @@ import type {
   RuntimeSyncedTab
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import type { TerminalSurfaceExit } from '../../shared/terminal-surface-exit'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
@@ -20,6 +21,7 @@ export type RuntimeMobileSessionProjectionHost = {
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
   getStatusSnapshot(): AgentStatusIpcPayload[]
   getLeafKey(tabId: string, leafId: string): string
+  getTerminalSurfaceExit(leafId: string): TerminalSurfaceExit | undefined
   findPty(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab,

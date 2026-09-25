@@ -173,43 +173,58 @@ export function createTerminalPaneCreatedHandler(
       () => useAppStore.getState().consumeTabStartupCommand(deps.tabId),
       () => useAppStore.getState().pendingStartupByTabId[deps.tabId] === startup
     )
-    const panePtyBinding = connectPanePty(pane, manager, {
-      ...ptyDeps,
-      ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
-      ...(effectiveSpawnHints?.cwdPromise
-        ? {
-            onDeferredCwdSpawnFailed: () => {
-              settlePaneCwdDeferredSpawn(
-                paneCwdRef.current,
-                pane.id,
-                effectiveSpawnHints.cwdPromise
-              )
-              if (handoffForInput) {
-                clearDeferredSplitPaneHandoff(handoffForInput)
-                deferredSplitHandoffs.delete(pane.id)
+    const exitRecord = useAppStore.getState().terminalExitRecordsByLeafId[pane.leafId]
+    if (exitRecord) {
+      // Why: main kept this leaf after its process died, so a remount shows that exit and waits
+      // for Restart instead of silently spawning a new process into it.
+      ptyDeps.onPaneProcessDied?.({
+        paneId: pane.id,
+        exitCode: exitRecord.exitCode,
+        reason: 'process-failed',
+        startup: null
+      })
+    }
+    const panePtyBinding = exitRecord
+      ? null
+      : connectPanePty(pane, manager, {
+          ...ptyDeps,
+          ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
+          ...(effectiveSpawnHints?.cwdPromise
+            ? {
+                onDeferredCwdSpawnFailed: () => {
+                  settlePaneCwdDeferredSpawn(
+                    paneCwdRef.current,
+                    pane.id,
+                    effectiveSpawnHints.cwdPromise
+                  )
+                  if (handoffForInput) {
+                    clearDeferredSplitPaneHandoff(handoffForInput)
+                    deferredSplitHandoffs.delete(pane.id)
+                  }
+                }
               }
-            }
-          }
-        : {}),
-      ...(handoffForInput
-        ? {
-            onPreconnectInput: (input: PtyPreconnectInputEntry) =>
-              appendDeferredSplitPaneInput(handoffForInput, input)
-          }
-        : {}),
-      ...(claimedDeferredSplitHandoff?.preconnectInput.length
-        ? { preconnectInput: claimedDeferredSplitHandoff.preconnectInput }
-        : {}),
-      ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
-      ...(effectiveSpawnHints?.cwdPromise ? { cwdPromise: effectiveSpawnHints.cwdPromise } : {}),
-      restoredPtyIdByLeafId: effectiveSpawnHints?.ptyId
-        ? {
-            ...ptyDeps.restoredPtyIdByLeafId,
-            [pane.leafId]: effectiveSpawnHints.ptyId
-          }
-        : ptyDeps.restoredPtyIdByLeafId,
-      restoredLeafId: pane.leafId
-    })
+            : {}),
+          ...(handoffForInput
+            ? {
+                onPreconnectInput: (input: PtyPreconnectInputEntry) =>
+                  appendDeferredSplitPaneInput(handoffForInput, input)
+              }
+            : {}),
+          ...(claimedDeferredSplitHandoff?.preconnectInput.length
+            ? { preconnectInput: claimedDeferredSplitHandoff.preconnectInput }
+            : {}),
+          ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
+          ...(effectiveSpawnHints?.cwdPromise
+            ? { cwdPromise: effectiveSpawnHints.cwdPromise }
+            : {}),
+          restoredPtyIdByLeafId: effectiveSpawnHints?.ptyId
+            ? {
+                ...ptyDeps.restoredPtyIdByLeafId,
+                [pane.leafId]: effectiveSpawnHints.ptyId
+              }
+            : ptyDeps.restoredPtyIdByLeafId,
+          restoredLeafId: pane.leafId
+        })
     ptyDeps.startup = null
     const nextInitialCwdState = clearQueuedInitialCwdAfterFirstPane(
       refs.queuedInitialCwdRef.current,
@@ -218,7 +233,9 @@ export function createTerminalPaneCreatedHandler(
     )
     refs.queuedInitialCwdRef.current = nextInitialCwdState.queuedInitialCwd
     ptyDeps.cwd = nextInitialCwdState.ptyCwd
-    deps.panePtyBindingsRef.current.set(pane.id, panePtyBinding)
+    if (panePtyBinding) {
+      deps.panePtyBindingsRef.current.set(pane.id, panePtyBinding)
+    }
     context.syncPaneCount()
     scheduleRuntimeGraphSync()
     context.queueResizeAll(true)

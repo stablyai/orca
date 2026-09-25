@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { randomUUID } from 'node:crypto'
+import { TerminalExitRecords } from './terminal-exit-records'
 import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
@@ -235,6 +236,11 @@ export class OrcaRuntimeWithRuntimeId {
   // Why: exact-stop is the current sleep transaction boundary; its exit must
   // leave the renderer's intentional sleeping surface available for wake.
   protected intentionalHandlelessPtyStops = new Map<string, string | null>()
+
+  readonly terminalExitRecords = new TerminalExitRecords((worktreeId) => {
+    this.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
+    this.notifier?.terminalExitRecordsChanged?.(this.terminalExitRecords.list())
+  })
 
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
   // doesn't fan out (and per-client JSON.stringify) a snapshot several times a

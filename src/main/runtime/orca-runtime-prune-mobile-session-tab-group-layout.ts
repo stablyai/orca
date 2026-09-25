@@ -94,6 +94,14 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
       getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
+      getTerminalSurfaceExit: (leafId) => {
+        const record = this.terminalExitRecords.get(leafId)
+        if (!record) {
+          return undefined
+        }
+        const { worktreeId: _worktreeId, leafId: _leafId, ...exit } = record
+        return exit
+      },
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
       getRetainedStatus: (paneKey, pty, tab, getRows) =>

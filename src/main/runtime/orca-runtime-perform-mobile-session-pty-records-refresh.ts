@@ -91,6 +91,47 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       : this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
   }
 
+  /** The one restart of a leaf main kept after its exit. Always a plain shell, never the tab's agent. */
+  async restartExitedTerminalSurface(
+    worktreeId: string,
+    tabId: string,
+    leafId: string,
+    opts: { activate?: boolean } = {}
+  ): Promise<void> {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot || !this.terminalExitRecords.get(leafId)) {
+      return
+    }
+    if (
+      !this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) &&
+      this.notifier?.restartExitedTerminal
+    ) {
+      // Why: the desktop pane still holds the dead leaf; a runtime spawn would bind a second process
+      // the mounted pane never attaches to.
+      this.notifier.restartExitedTerminal(tabId, worktreeId, leafId)
+      if (opts.activate) {
+        this.notifier.focusTerminal(tabId, worktreeId, leafId)
+      }
+      return
+    }
+    const tab = snapshot.tabs.find(
+      (candidate) =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === tabId &&
+        candidate.leafId === leafId
+    )
+    await this.createRuntimeOwnedMobileSessionTerminal(
+      worktreeId,
+      opts.activate === true,
+      undefined,
+      {
+        identity: { tabId, leafId },
+        cwd: tab?.type === 'terminal' ? tab.startupCwd : undefined,
+        targetGroupId: snapshot.tabGroups?.find((group) => group.tabOrder.includes(tabId))?.id
+      }
+    )
+  }
+
   async activateMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
@@ -131,6 +172,21 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     }
 
     if (tab.type === 'terminal') {
+      // Why ahead of both branches: materialize would spawn the tab's agent into a leaf main kept
+      // after its exit, and focus would open a pane with no process; neither is a restart.
+      if (this.terminalExitRecords.get(tab.leafId)) {
+        if (!isAutomaticTabActivation(opts.intent)) {
+          await this.restartExitedTerminalSurface(worktreeId, tab.parentTabId, tab.leafId, {
+            activate: targetsHost
+          })
+        }
+        return this.applyMobileSessionTabNavigation(
+          this.getMobileSessionTabsForWorktree(worktreeId),
+          tab.id,
+          navigation,
+          opts.clientNavigationId
+        )
+      }
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )

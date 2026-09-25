@@ -39,6 +39,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     paneKittyKeyboardModesRef,
     paneLastThemeModeRef,
     paneMode2031Ref,
+    paneProcessExitsByPaneId,
     panePtyBindingsRef,
     paneTransportsRef,
     pendingCodexPaneRestartIds,
@@ -248,6 +249,28 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     handleRestartCodexPane,
     panePtyLayoutBindings,
     pendingCodexPaneRestartIds
+  ])
+
+  const pendingExitedTerminalRestartLeafIds = useAppStore(
+    (s) => s.pendingExitedTerminalRestartLeafIds
+  )
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    // Why: a restart main routes here (from a phone or a paired client) is this pane's own Restart.
+    for (const pane of manager.getPanes()) {
+      const processExit = paneProcessExitsByPaneId[pane.id]
+      if (processExit && useAppStore.getState().consumeExitedTerminalRestart(pane.leafId)) {
+        handleRestartExitedPane(processExit)
+      }
+    }
+  }, [
+    handleRestartExitedPane,
+    managerRef,
+    paneProcessExitsByPaneId,
+    pendingExitedTerminalRestartLeafIds
   ])
 
   return { handleRestartExitedPane, handleCloseExitedPane }

@@ -217,6 +217,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
     onFocusTerminal: () => noopUnsubscribe,
+    // Why empty: the web client learns exits from the host's session-tabs projection.
+    onRestartExitedTerminal: () => noopUnsubscribe,
+    onTerminalExitRecordsChanged: () => noopUnsubscribe,
+    listTerminalExitRecords: async () => [],
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
     onSessionTabCloseRequest: () => noopUnsubscribe,

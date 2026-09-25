@@ -258,6 +258,7 @@ export function projectRuntimeMobileSessionTabs(
       : livePty
         ? host.issuePtyHandle(livePty)
         : null
+    const exited = terminalHandle ? undefined : host.getTerminalSurfaceExit(tab.leafId)
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(
@@ -306,7 +307,9 @@ export function projectRuntimeMobileSessionTabs(
       isActive: tab.isActive,
       ...(terminalHandle
         ? { status: 'ready' as const, terminal: terminalHandle }
-        : { status: 'pending-handle' as const, terminal: null })
+        : exited
+          ? { status: 'pending-handle' as const, terminal: null, exited }
+          : { status: 'pending-handle' as const, terminal: null })
     })
   }
   return finalizeRuntimeMobileSessionTabsResult({ snapshot, tabs }, host)
