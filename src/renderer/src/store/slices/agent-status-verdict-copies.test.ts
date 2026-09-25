@@ -109,7 +109,8 @@ describe('a failed done keeps its verdict in every copy', () => {
     expect(manualSleepCaptureEntry(failedDone(), 4_000).mainAgent).not.toHaveProperty('outcome')
   })
 
-  it('re-sorts and re-retains a done whose verdict changed under an unchanged flag', () => {
+  // The completion clock already moves for this change, so the store needs no verdict compare of its own.
+  it('re-retains a done whose verdict changed under an unchanged flag', () => {
     const clean = failedDone({
       mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2_000 }
     })
