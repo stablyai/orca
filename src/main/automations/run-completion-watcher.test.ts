@@ -168,6 +168,9 @@ describe('authority-owned automation run completion', () => {
   it('reconciles stranded runs on startup without claiming completion', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
+    store.updateAutomation(automation.id, { enabled: false })
+    const pendingManual = store.createAutomationRun(automation, 3_000, 'manual')
+    const pendingScheduled = store.createAutomationRun(automation, 4_000, 'scheduled')
     const dispatched = store.createAutomationRun(automation, 1_000, 'manual')
     store.updateAutomationRun({
       runId: dispatched.id,
@@ -199,6 +202,11 @@ describe('authority-owned automation run completion', () => {
     expect(readRun(store, automation.id, dispatching.id).status).toBe('dispatch_failed')
     expect(readRun(store, automation.id, dispatched.id).error).toContain('terminal')
     expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
+    expect(readRun(store, automation.id, pendingManual.id)).toMatchObject({
+      status: 'dispatch_failed',
+      error: 'Orca stopped before this manual run could launch.'
+    })
+    expect(readRun(store, automation.id, pendingScheduled.id).status).toBe('pending')
     service.stop()
     vi.useRealTimers()
   })
