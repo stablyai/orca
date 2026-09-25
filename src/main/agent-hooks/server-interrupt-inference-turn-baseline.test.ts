@@ -3,7 +3,7 @@
 // the main agent never answered with a hook of its own.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { PANE } from './server.test-fixtures'
+import { PANE, buildBody } from './server.test-fixtures'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -199,5 +199,71 @@ describe('inferInterrupt baselined on the main agent turn', () => {
       })
     )
     expect(server.inferInterrupt(malformed)).toBe(false)
+  })
+})
+
+describe('inferInterrupt baselined on the OpenCode root session turn', () => {
+  function ingestOpenCode(
+    server: AgentHookServer,
+    at: number,
+    hook: Record<string, unknown>
+  ): void {
+    vi.setSystemTime(at)
+    const normalized = _internals.normalizeHookPayload('opencode', buildBody(hook), 'production')
+    if (!normalized) {
+      throw new Error('the OpenCode hook did not normalize')
+    }
+    ingest(server, at, String(hook.hook_event_name), normalized.payload)
+  }
+
+  function startRootTurn(server: AgentHookServer): void {
+    ingestOpenCode(server, 1_000, {
+      hook_event_name: 'MessagePart',
+      role: 'user',
+      text: 'long task',
+      root_state: 'done'
+    })
+    ingestOpenCode(server, 1_050, { hook_event_name: 'SessionBusy', root_state: 'working' })
+  }
+
+  function inferOpenCodeCtrlC(server: AgentHookServer, baseline: ReturnType<typeof row>): boolean {
+    vi.setSystemTime(1_600)
+    return server.inferInterrupt({
+      paneKey: PANE,
+      baselineUpdatedAt: baseline.receivedAt,
+      baselineStateStartedAt: baseline.stateStartedAt,
+      baselinePrompt: baseline.prompt,
+      baselineAgentType: 'opencode',
+      ...(baseline.mainAgent?.state === 'working'
+        ? { baselineMainAgentStateStartedAt: baseline.mainAgent.stateStartedAt }
+        : {}),
+      intent: 'ctrl-c'
+    })
+  }
+
+  it('admits a cancel when child posts re-stamped the row during the root turn', () => {
+    const server = new AgentHookServer()
+    startRootTurn(server)
+    const baseline = row(server)
+    expect(baseline).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
+
+    // A child's question and its answer re-post the pane while the root keeps working.
+    ingestOpenCode(server, 1_200, { hook_event_name: 'AskUserQuestion', root_state: 'working' })
+    ingestOpenCode(server, 1_300, { hook_event_name: 'SessionBusy', root_state: 'working' })
+    expect(row(server).stateStartedAt).not.toBe(baseline.stateStartedAt)
+
+    expect(inferOpenCodeCtrlC(server, baseline)).toBe(true)
+    expect(row(server).mainAgent).toMatchObject({ state: 'done', outcome: 'cancellation' })
+  })
+
+  it('refuses a keypress at a finished root that a busy child holds open', () => {
+    const server = new AgentHookServer()
+    startRootTurn(server)
+    ingestOpenCode(server, 1_300, { hook_event_name: 'SessionBusy', root_state: 'done' })
+    const baseline = row(server)
+    expect(baseline).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+
+    expect(inferOpenCodeCtrlC(server, baseline)).toBe(false)
+    expect(row(server).mainAgent).not.toHaveProperty('outcome')
   })
 })

@@ -33,6 +33,8 @@ type RecordedPost = {
   sessionID?: string
   role?: string
   text?: string
+  root_state?: string
+  root_turn_error_name?: string
 }
 
 const ENV_KEYS = [
@@ -116,10 +118,20 @@ describe('OpenCode plugin background child completion', () => {
 
     expect(names()).not.toContain('SessionIdle')
 
+    // Why: the pane stays busy for the child, but the root's own ending is re-posted beside it.
+    expect(posts).toEqual([
+      { hook_event_name: 'SessionBusy', sessionID: 'root', root_state: 'working' },
+      { hook_event_name: 'SessionBusy', sessionID: 'root', root_state: 'done' }
+    ])
+
     await hooks.event({ event: status('idle', 'child') })
 
-    expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
-    expect(posts.at(-1)?.sessionID).toBe('root')
+    expect(names()).toEqual(['SessionBusy', 'SessionBusy', 'SessionIdle'])
+    expect(posts.at(-1)).toEqual({
+      hook_event_name: 'SessionIdle',
+      sessionID: 'root',
+      root_state: 'done'
+    })
   })
 
   it('does not publish a completion when only a background child finishes', async () => {
@@ -178,7 +190,7 @@ describe('OpenCode plugin background child completion', () => {
     expect(names()).not.toContain('SessionIdle')
 
     await hooks.event({ event: status('idle', 'child-b') })
-    expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
+    expect(names()).toEqual(['SessionBusy', 'SessionBusy', 'SessionIdle'])
     expect(posts.at(-1)?.sessionID).toBe('root')
   })
 
@@ -196,7 +208,85 @@ describe('OpenCode plugin background child completion', () => {
     resolvable = false
     await hooks.event({ event: status('idle', 'child') })
 
-    expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
+    expect(names()).toEqual(['SessionBusy', 'SessionBusy', 'SessionIdle'])
+  })
+
+  function sessionError(sessionID: string, name: unknown): PluginEvent {
+    return { type: 'session.error', properties: { sessionID, error: { name, data: {} } } }
+  }
+
+  it('reports a root error as the root ending while a background child keeps the pane busy', async () => {
+    const hooks = await createHooks(TASK_TREE)
+
+    await hooks.event({ event: status('busy', 'root') })
+    await hooks.event({ event: status('busy', 'child') })
+    await hooks.event({ event: sessionError('root', 'APIError') })
+    await hooks.event({ event: status('idle', 'root') })
+
+    expect(posts.at(-1)).toEqual({
+      hook_event_name: 'SessionBusy',
+      sessionID: 'root',
+      root_state: 'done',
+      root_turn_error_name: 'APIError'
+    })
+
+    await hooks.event({ event: status('idle', 'child') })
+    expect(posts.at(-1)).toEqual({
+      hook_event_name: 'SessionIdle',
+      sessionID: 'root',
+      root_state: 'done',
+      root_turn_error_name: 'APIError'
+    })
+    expect(names().filter((name) => name === 'SessionIdle')).toHaveLength(1)
+  })
+
+  it('ignores a child session error', async () => {
+    const hooks = await createHooks(TASK_TREE)
+
+    await hooks.event({ event: status('busy', 'root') })
+    await hooks.event({ event: status('busy', 'child') })
+    await hooks.event({ event: sessionError('child', 'APIError') })
+    await hooks.event({ event: status('idle', 'child') })
+    await hooks.event({ event: status('idle', 'root') })
+
+    expect(posts.some((post) => post.root_turn_error_name !== undefined)).toBe(false)
+    expect(posts.at(-1)).toEqual({
+      hook_event_name: 'SessionIdle',
+      sessionID: 'root',
+      root_state: 'done'
+    })
+  })
+
+  it('never names a recoverable root overflow on a child-triggered post', async () => {
+    const hooks = await createHooks(TASK_TREE)
+
+    await hooks.event({ event: status('busy', 'root') })
+    await hooks.event({ event: sessionError('root', 'ContextOverflowError') })
+    await hooks.event({
+      event: {
+        type: 'permission.asked',
+        properties: { id: 'perm-1', sessionID: 'child', permission: 'bash' }
+      }
+    })
+    await hooks.event({
+      event: {
+        type: 'permission.replied',
+        properties: { sessionID: 'child', requestID: 'perm-1', response: 'once' }
+      }
+    })
+
+    expect(names()).toEqual(['SessionBusy', 'PermissionRequest', 'SessionBusy'])
+    expect(posts.some((post) => post.root_turn_error_name !== undefined)).toBe(false)
+    expect(posts.every((post) => post.root_state === 'working')).toBe(true)
+
+    // Compaction continues the root turn, which retires the overflow.
+    await hooks.event({ event: status('busy', 'root') })
+    await hooks.event({ event: status('idle', 'root') })
+    expect(posts.at(-1)).toEqual({
+      hook_event_name: 'SessionIdle',
+      sessionID: 'root',
+      root_state: 'done'
+    })
   })
 
   it('drops a disposed factory background child instead of pinning the pane', async () => {

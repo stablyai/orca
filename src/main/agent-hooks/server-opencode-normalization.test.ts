@@ -171,3 +171,168 @@ describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (sour
     expect(done?.payload.lastAssistantMessage).toBe('hello back')
   })
 })
+
+describe('OpenCode main agent from the root session state', () => {
+  function normalize(
+    payload: Record<string, unknown>,
+    source: 'opencode' | 'opencode2' | 'mimo-code' = 'opencode'
+  ) {
+    return _internals.normalizeHookPayload(source, buildBody(payload), 'production')?.payload
+  }
+
+  it.each([
+    ['MessageOutputLengthError', 'failure'],
+    ['ContentFilterError', 'failure'],
+    ['ProviderAuthError', 'failure'],
+    ['APIError', 'failure'],
+    ['UnknownError', 'failure'],
+    ['StructuredOutputError', 'failure'],
+    ['ContextOverflowError', 'failure'],
+    ['SomeFutureError', 'failure'],
+    ['MessageAbortedError', 'cancellation'],
+    [undefined, undefined],
+    [42, undefined],
+    ['', undefined]
+  ])('an ended root turn named %s records %s', (name, outcome) => {
+    const payload = normalize({
+      hook_event_name: 'SessionIdle',
+      root_state: 'done',
+      ...(name === undefined ? {} : { root_turn_error_name: name })
+    })
+    expect(payload?.state).toBe('done')
+    expect(payload?.mainAgent?.state).toBe('done')
+    expect(payload?.mainAgent?.outcome).toBe(outcome)
+    expect(payload?.interrupted).toBe(outcome === 'cancellation' ? true : undefined)
+  })
+
+  it('keeps the pane working when the root failed under a busy child', () => {
+    const payload = normalize({
+      hook_event_name: 'SessionBusy',
+      root_state: 'done',
+      root_turn_error_name: 'APIError'
+    })
+    expect(payload?.state).toBe('working')
+    expect(payload?.mainAgent).toMatchObject({ state: 'done', outcome: 'failure' })
+  })
+
+  it('restates a cancellation under a busy child without marking the working row interrupted', () => {
+    const payload = normalize({
+      hook_event_name: 'SessionBusy',
+      root_state: 'done',
+      root_turn_error_name: 'MessageAbortedError'
+    })
+    expect(payload?.state).toBe('working')
+    expect(payload?.mainAgent).toMatchObject({ state: 'done', outcome: 'cancellation' })
+    expect(payload?.interrupted).toBeUndefined()
+  })
+
+  it('records no verdict on a root that is still working or waiting', () => {
+    const working = normalize({
+      hook_event_name: 'SessionBusy',
+      root_state: 'working',
+      root_turn_error_name: 'APIError'
+    })
+    expect(working?.mainAgent).toEqual({ state: 'working', stateStartedAt: expect.any(Number) })
+    const waiting = normalize({ hook_event_name: 'AskUserQuestion', root_state: 'waiting' })
+    expect(waiting?.state).toBe('waiting')
+    expect(waiting?.mainAgent?.state).toBe('waiting')
+  })
+
+  it('publishes no main agent without a valid root state', () => {
+    expect(normalize({ hook_event_name: 'SessionIdle' })?.mainAgent).toBeUndefined()
+    const invalid = normalize({
+      hook_event_name: 'SessionIdle',
+      root_state: 'idle',
+      root_turn_error_name: 'APIError'
+    })
+    expect(invalid?.mainAgent).toBeUndefined()
+    const stalePart = normalize({ hook_event_name: 'MessagePart', role: 'assistant', text: 'hi' })
+    expect(stalePart?.mainAgent).toBeUndefined()
+  })
+
+  it('honours the root state a MessagePart carries', () => {
+    const payload = normalize({
+      hook_event_name: 'MessagePart',
+      role: 'assistant',
+      text: 'streaming',
+      root_state: 'working'
+    })
+    expect(payload?.state).toBe('working')
+    expect(payload?.mainAgent?.state).toBe('working')
+    const prompt = normalize({
+      hook_event_name: 'MessagePart',
+      role: 'user',
+      text: 'next prompt',
+      root_state: 'done'
+    })
+    expect(prompt?.mainAgent).toEqual({ state: 'done', stateStartedAt: expect.any(Number) })
+  })
+
+  it('starts a SessionStart main agent done, without a verdict', () => {
+    const payload = normalize({
+      hook_event_name: 'SessionStart',
+      sessionID: 'fresh',
+      root_state: 'done',
+      root_turn_error_name: 'APIError'
+    })
+    expect(payload).toMatchObject({ state: 'done', sessionBoundary: true })
+    expect(payload?.mainAgent).toEqual({ state: 'done', stateStartedAt: expect.any(Number) })
+  })
+
+  it.each(['opencode2', 'mimo-code'] as const)('publishes no main agent for %s', (source) => {
+    const payload = normalize(
+      { hook_event_name: 'SessionIdle', root_state: 'done', root_turn_error_name: 'APIError' },
+      source
+    )
+    expect(payload?.state).toBe('done')
+    expect(payload?.mainAgent).toBeUndefined()
+    expect(payload?.interrupted).toBeUndefined()
+  })
+
+  describe('main agent clock', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    function normalizeAt(at: number, payload: Record<string, unknown>) {
+      vi.setSystemTime(at)
+      return normalize(payload)
+    }
+
+    it('keeps the root clock through child posts and restarts it at a session start', () => {
+      normalizeAt(1_000, { hook_event_name: 'SessionBusy', root_state: 'working' })
+      expect(
+        normalizeAt(2_000, {
+          hook_event_name: 'MessagePart',
+          role: 'assistant',
+          text: 'hi',
+          root_state: 'working'
+        })?.mainAgent
+      ).toEqual({ state: 'working', stateStartedAt: 1_000 })
+
+      normalizeAt(3_000, {
+        hook_event_name: 'SessionBusy',
+        root_state: 'done',
+        root_turn_error_name: 'APIError'
+      })
+      expect(
+        normalizeAt(4_000, {
+          hook_event_name: 'SessionIdle',
+          root_state: 'done',
+          root_turn_error_name: 'APIError'
+        })?.mainAgent
+      ).toEqual({ state: 'done', outcome: 'failure', stateStartedAt: 3_000 })
+
+      expect(
+        normalizeAt(5_000, {
+          hook_event_name: 'SessionStart',
+          sessionID: 'next',
+          root_state: 'done'
+        })?.mainAgent
+      ).toEqual({ state: 'done', stateStartedAt: 5_000 })
+    })
+  })
+})
