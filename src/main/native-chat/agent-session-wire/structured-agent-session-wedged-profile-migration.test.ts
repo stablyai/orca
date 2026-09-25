@@ -479,7 +479,7 @@ describe('already-wedged profiles become usable on load', () => {
     ]
   ] as const)(
     'releases %s an older build left, and the chat starts again',
-    async (_shape, lease) => {
+    async (_legacyRecord, lease) => {
       await seedStore(wedgedRecord({ handoffStage: 'manual-recovery', ...lease }))
       openHost({ probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no scan here' }) })
 
