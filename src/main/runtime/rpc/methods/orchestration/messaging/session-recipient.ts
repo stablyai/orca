@@ -21,9 +21,9 @@ import {
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
 import {
   lookupOrcaAgentSession,
-  structuredSessionMailReach,
-  type AgentSessionRecordReader
+  structuredSessionMailReach
 } from '../../../../orchestration/structured-session-mail-address'
+import type { AgentSessionRecordReader } from '../../../../orchestration/structured-session-lineage'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */

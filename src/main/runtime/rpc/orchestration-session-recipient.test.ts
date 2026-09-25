@@ -7,6 +7,7 @@ import {
 } from '../structured-worker-identity'
 import {
   ADDRESS_X,
+  ADDRESS_Y,
   createSessionCallerHarness,
   idOf,
   isRecord,
@@ -16,6 +17,7 @@ import {
   SESSION_X,
   SESSION_Y,
   sessionRecord,
+  WORKER_HANDLE,
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
@@ -215,5 +217,116 @@ describe('a live structured worker addressed by its session id', () => {
   it('lands in its own handle mailbox between Dispatches, which its flagless check reads', async () => {
     expect(await sendTo(SESSION_Y)).toMatchObject({ message: { to_handle: handle } })
     expect(await flaglessCheck()).toMatchObject({ messages: [{ subject: 'hello' }] })
+  })
+})
+
+describe('mail sent to a session address reaches the mailbox that session reads', () => {
+  let h: SessionCallerHarness
+
+  beforeEach(() => {
+    h = createSessionCallerHarness(hostRef)
+  })
+
+  afterEach(() => {
+    h.close()
+    vi.restoreAllMocks()
+  })
+
+  async function as(sessionId: string | undefined, method: string, params: Row): Promise<Row> {
+    return resultOf(await h.dispatch(orchestrationRequest(method, params, { sessionId })))
+  }
+
+  function sendFromTerminal(to: string): Promise<Row> {
+    return as(undefined, 'orchestration.send', { from: WORKER_HANDLE, to, subject: 'hello' })
+  }
+
+  it("files it under the chat's current Run, as a terminal coordinator's pane does", async () => {
+    await as(SESSION_X, 'orchestration.runCreate', { objective: 'first' })
+    const current = idOf(
+      (await as(SESSION_X, 'orchestration.runCreate', { objective: 'next' })).run
+    )
+
+    const { message } = await sendFromTerminal(ADDRESS_X)
+
+    expect(message).toMatchObject({ to_handle: `run:${current}`, run_id: current })
+    expect(await as(SESSION_X, 'orchestration.check', {})).toMatchObject({
+      runId: current,
+      messages: [{ subject: 'hello' }]
+    })
+  })
+
+  it('delivers it to a chat with no Run, which reads its direct mailbox', async () => {
+    const { message } = await sendFromTerminal(ADDRESS_X)
+
+    expect(message).toMatchObject({ to_handle: ADDRESS_X })
+    expect(await as(SESSION_X, 'orchestration.check', {})).toMatchObject({
+      messages: [{ subject: 'hello' }]
+    })
+  })
+
+  it('reaches a chat with no Run after a restart, once the send has started the session host', async () => {
+    // After an app restart the agent-session host starts lazily; routing reads the session record
+    // synchronously, so the send must start the host before it resolves the recipient.
+    const store = hostRef.current
+    hostRef.current = null
+    vi.mocked(h.runtime.ensureStructuredAgentSessionHost).mockImplementation(async () => {
+      hostRef.current = store
+    })
+
+    const { message } = await sendFromTerminal(ADDRESS_X)
+
+    expect(message).toMatchObject({ to_handle: ADDRESS_X })
+  })
+
+  it('refuses an Orca session this host does not run, or has no record of', async () => {
+    h.records.set(
+      SESSION_X,
+      sessionRecord(SESSION_X, { location: { executionHostId: 'ssh:devbox' } })
+    )
+    h.records.delete(SESSION_Y)
+
+    for (const [to, code] of [
+      [ADDRESS_X, 'session_caller_host_boundary'],
+      [ADDRESS_Y, 'session_caller_unknown']
+    ]) {
+      const response = await h.dispatch(
+        orchestrationRequest('orchestration.send', { from: WORKER_HANDLE, to, subject: 's' })
+      )
+      expect(response).toMatchObject({ ok: false, error: { code } })
+    }
+  })
+
+  it("routes a structured worker's session address to the Dispatch it is working", async () => {
+    const handle = mintStructuredWorkerHandle()
+    const paneKey = mintStructuredWorkerPaneKey(SESSION_Y)
+    structuredWorkerIdentities.register({
+      handle,
+      sessionId: SESSION_Y,
+      agent: 'claude',
+      paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
+      worktreeId: 'wt_1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    const runId = idOf((await as(SESSION_X, 'orchestration.runCreate', { objective: 'o' })).run)
+    const dispatch = h.db.createDispatchContext({
+      taskId: h.db.createTask({ runId, spec: 'work' }).id,
+      assigneeHandle: handle,
+      assigneePaneKey: paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
+      creator: { kind: 'session', orcaSessionId: SESSION_X },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+
+    const { message } = await as(SESSION_X, 'orchestration.send', {
+      to: ADDRESS_Y,
+      subject: 'to the worker'
+    })
+
+    expect(message).toMatchObject({ to_handle: `dispatch:${dispatch.id}`, run_id: runId })
+    expect(await as(SESSION_Y, 'orchestration.check', { peek: true })).toMatchObject({
+      dispatchId: dispatch.id,
+      messages: [{ subject: 'to the worker' }]
+    })
   })
 })

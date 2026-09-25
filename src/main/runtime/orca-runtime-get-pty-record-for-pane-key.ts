@@ -10,9 +10,7 @@ import type { StructuredPointerTarget } from './orchestration/structured-mailbox
 import { releaseRestoredStructuredPointerClaims } from './orchestration/structured-pointer-claim-restore'
 import {
   handleLessCoordinatorSessionId,
-  findConnectedPtyBoundToSession,
   structuredSessionAddressTarget,
-  structuredSessionMailDestination,
   structuredSessionMailTarget,
   structuredSessionIdleEdgeMailboxes
 } from './orchestration/structured-session-mail-target'
@@ -198,8 +196,8 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
 
   /**
    * Every structured session's status change reaches here. At its idle edge, retry what is parked
-   * on it and re-derive the mailboxes it owns, so mail it could not take earlier (evicted, closed,
-   * in its terminal view) is pointed again. Workers and chats alike: this is not per-dispatch.
+   * on it and re-derive the mailboxes it owns, so mail it could not take earlier (evicted, closed)
+   * is pointed again. Workers and chats alike: this is not per-dispatch.
    */
   onStructuredSessionStatusForMail(summary: {
     sessionId: string
@@ -212,16 +210,6 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     const openDb = () => this.getExistingOrchestrationDb()
     const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
     structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
-  }
-
-  /** The terminal of a session's terminal view, while a TUI owns it; the PTY lane types there. */
-  getTerminalViewHandleForSession(sessionId: string): string | null {
-    const destination = structuredSessionMailDestination(sessionId, this._orchestrationDb)
-    const pty =
-      destination?.view === 'terminal-view'
-        ? findConnectedPtyBoundToSession(this.ptysById.values(), destination.sessionId)
-        : undefined
-    return pty?.paneKey ? this.getTerminalHandleForPaneKey(pty.paneKey) : null
   }
 
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */

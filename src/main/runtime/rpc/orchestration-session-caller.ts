@@ -29,10 +29,8 @@ import {
   resolveOrcaSessionParty,
   resolveOrchestrationParty
 } from '../orchestration/orchestration-party'
-import {
-  lookupOrcaAgentSession,
-  type AgentSessionRecordReader
-} from '../orchestration/structured-session-mail-address'
+import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
+import { readAgentSessionRecordStore } from '../orchestration/structured-session-lineage'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'
 

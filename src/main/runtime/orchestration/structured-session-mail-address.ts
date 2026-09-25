@@ -3,10 +3,8 @@
  * told is its public address. Recipient routing and pointer delivery both read these rules off the
  * durable session record, so the two can never disagree about which sessions mail can reach.
  *
- * The address names a conversation, not one session of it. `/clear` continues a chat in a new
- * session, and the conversation keeps the address of its first session (its lineage root): a Run it
- * coordinates, mail sent to it, and what it sends all stay under that one spelling, and any session
- * of the lineage names it. Derived from the records every time; nothing is rewritten at a clear.
+ * The address names a conversation, not one session of it: any session of a `/clear` lineage names
+ * the lineage root's address (`canonicalOrcaSessionId`), and mail reaches the lineage's live session.
  *
  * A released lease does not end a session. The host evicts a chat nobody is looking at 15s after
  * its last turn and hands its lease back, and mail must wake it again (resume on demand). For mail,
@@ -14,77 +12,13 @@
  */
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  formatOrcaSessionAddress,
-  isOrcaSessionId,
-  type OrcaSessionId
-} from '../../../shared/orca-session-address'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  isRecordedStructuredWorkerSession,
-  resolveStructuredWorkerIdentityForSession
-} from '../structured-worker-authority'
+import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { OrchestrationDb } from './db'
-import type { OrchestrationCallerIdentity } from './orchestration-caller-identity'
-
-export type AgentSessionRecordReader = {
-  getRecord: (sessionId: string) => AgentSessionRecord | null
-  listRecords: () => AgentSessionRecord[]
-  /** Absent on a store that predates tab visibility; every session then counts as open. */
-  getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
-}
-
-export function readAgentSessionRecordStore(): AgentSessionRecordReader | null {
-  return getStructuredAgentSessionHost()?.deps.store ?? null
-}
-
-/** The session a committed `/clear` continued this one in, if any. */
-function clearedInto(record: AgentSessionRecord): string | null {
-  const command = record.conversationCommand
-  return command?.command === 'clear' && command.phase === 'committed'
-    ? (command.replacementSessionId ?? null)
-    : null
-}
-
-export type StructuredSessionLineage = {
-  /** The conversation's first session: its address for as long as the conversation lasts. */
-  rootSessionId: string
-  /** The session running the conversation now; null when the chain names a session with no record. */
-  live: AgentSessionRecord | null
-}
-
-/** Any session of a `/clear` lineage, resolved to the lineage's root and its live end. */
-export function structuredSessionLineage(
-  store: AgentSessionRecordReader,
-  sessionId: string
-): StructuredSessionLineage {
-  const clearedFrom = new Map<string, string>()
-  for (const record of store.listRecords()) {
-    const next = clearedInto(record)
-    if (next) {
-      clearedFrom.set(next, record.sessionId)
-    }
-  }
-  // A clear chain is acyclic by construction; the visited sets only bound a corrupt store.
-  let rootSessionId = sessionId
-  const earlier = new Set([sessionId])
-  let prior = clearedFrom.get(rootSessionId)
-  while (prior && !earlier.has(prior)) {
-    earlier.add(prior)
-    rootSessionId = prior
-    prior = clearedFrom.get(rootSessionId)
-  }
-  let live = store.getRecord(sessionId)
-  const later = new Set([sessionId])
-  let next = live ? clearedInto(live) : null
-  while (live && next && !later.has(next)) {
-    later.add(next)
-    live = store.getRecord(next)
-    next = live ? clearedInto(live) : null
-  }
-  return { rootSessionId, live }
-}
+import { OrchestrationError } from './orchestration-error'
+import { resolveOrcaSessionParty, type OrchestrationSessionParty } from './orchestration-party'
+import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
 
 export type OrcaAgentSessionLookup =
   | { kind: 'found'; record: AgentSessionRecord }
@@ -122,17 +56,14 @@ export function structuredSessionMailReach(
   record: AgentSessionRecord,
   db: OrchestrationDb | null | undefined
 ): StructuredSessionMailReach {
-  const live = structuredSessionLineage(store, record.sessionId).live
+  const live = lineageLiveSession(store, record.sessionId)
   if (!live) {
     return { kind: 'ended', reason: 'continuation-missing' }
   }
   if (!structuredWorkerHostScope(live.location)) {
     return { kind: 'other-host' }
   }
-  const identity = isOrcaSessionId(live.sessionId)
-    ? sessionOrchestrationIdentity(live.sessionId, db, store)
-    : null
-  if (db && identity && hasLostStructuredWorkerIdentity(identity, db)) {
+  if (isOrcaSessionId(live.sessionId) && !addressableSessionParty(live.sessionId, db)) {
     // Why: it can no longer act (the caller resolver refuses it), so mail to it could never be read.
     return { kind: 'ended', reason: 'worker-identity-lost' }
   }
@@ -145,58 +76,19 @@ export function structuredSessionMailReach(
 }
 
 /**
- * Which view carries a pointer to the session right now. A terminal view owns the session while a
- * TUI holds its lease, and its PTY takes the pointer; otherwise the host sends a session turn,
- * resuming an evicted session for it.
+ * The party a session resolves to, or null for a worker whose identity this host lost: the party
+ * resolver refuses it in every role, so it can never read mail and none is owed to it.
  */
-export function structuredSessionDeliveryView(
-  record: AgentSessionRecord
-): 'session-turn' | 'terminal-view' {
-  return record.lease.runtimeKind === 'tui' && record.lease.claimStatus !== 'released'
-    ? 'terminal-view'
-    : 'session-turn'
-}
-
-/**
- * Who a session is to orchestration: its conversation's Orca session id (the lineage root's), plus
- * the handle and pane a structured worker was minted. The caller resolver and mail delivery both take
- * it from here, so a session is matched the same way whether it is sending, checking, or being
- * delivered to. Without a record store there is no lineage to read, and the id stands for itself.
- */
-export function sessionOrchestrationIdentity(
+export function addressableSessionParty(
   sessionId: OrcaSessionId,
-  db: OrchestrationDb | null | undefined,
-  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-): OrchestrationCallerIdentity & { orcaSessionId: OrcaSessionId } {
-  const lineage = store ? structuredSessionLineage(store, sessionId) : null
-  const root = lineage?.rootSessionId ?? sessionId
-  // Record ids are minted as Orca session ids; one that is not cannot name the conversation.
-  const orcaSessionId = isOrcaSessionId(root) ? root : sessionId
-  // A worker identity is minted for one session, so it is looked up on the one running now.
-  const worker = resolveStructuredWorkerIdentityForSession(
-    lineage?.live?.sessionId ?? sessionId,
-    db
-  )
-  return {
-    orcaSessionId,
-    address: worker?.handle ?? formatOrcaSessionAddress(orcaSessionId),
-    terminalHandle: worker?.handle ?? null,
-    paneKey: worker?.paneKey ?? null
+  db: OrchestrationDb | null | undefined
+): OrchestrationSessionParty | null {
+  try {
+    return resolveOrcaSessionParty(sessionId, db)
+  } catch (error) {
+    if (error instanceof OrchestrationError && error.code === CODES.notLive) {
+      return null
+    }
+    throw error
   }
-}
-
-/**
- * A structured worker whose worker identity this host no longer has. It may not act handle-less (that
- * would split one worker into two identities), so mail to it could never be read either. Checked on
- * the conversation, whose root session is the one a Dispatch assigned.
- */
-export function hasLostStructuredWorkerIdentity(
-  identity: OrchestrationCallerIdentity,
-  db: OrchestrationDb
-): boolean {
-  return (
-    identity.terminalHandle === null &&
-    identity.orcaSessionId !== null &&
-    isRecordedStructuredWorkerSession(identity.orcaSessionId, db)
-  )
 }

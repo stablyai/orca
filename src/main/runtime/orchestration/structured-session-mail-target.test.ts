@@ -25,12 +25,15 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
   await import('../orca-runtime-get-pty-record-for-pane-key')
 const { OrchestrationDb } = await import('./db')
-const { agentSessionPtyWriteGate } = await import('../agent-session-pty-write-gate')
-const { sessionOrchestrationIdentity } = await import('./structured-session-mail-address')
+const { resolveOrcaSessionParty } = await import('./orchestration-party')
+const {
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey,
+  structuredWorkerProcessIncarnation
+} = await import('../structured-worker-identity')
 
 const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT)
-const TERMINAL_VIEW_PANE = 'tab_view:77777777-7777-4777-8777-777777777777'
 
 /** The real methods through the real prototype chain; a re-declared copy would pin nothing. */
 class MailTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
@@ -99,7 +102,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  agentSessionPtyWriteGate.detachRecordLookup()
   db.close()
 })
 
@@ -116,12 +118,6 @@ describe('a Run whose coordinator is a chat (an Orca session id, no handle)', ()
     installStore(chatRecord({ claimStatus: 'released', ownerProcess: null }))
     const runId = chatCoordinatedRun()
     expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
-  })
-
-  it('leaves the mailbox to the PTY lane while the chat is in its terminal view', () => {
-    installStore(chatRecord({ runtimeKind: 'tui' }))
-    const runId = chatCoordinatedRun()
-    expect(probe().target(`run:${runId}`)).toBeNull()
   })
 
   it('does not deliver to a chat that was closed, cleared into no known session, or runs on another host', () => {
@@ -182,25 +178,6 @@ describe('a session addressed directly', () => {
   it('claims nothing for a malformed session address', () => {
     installStore(chatRecord())
     expect(probe().target('session:term_abc')).toBeNull()
-  })
-})
-
-describe('a chat in its terminal view', () => {
-  it('is reached through the PTY bound to it', () => {
-    installStore(chatRecord({ runtimeKind: 'tui' }))
-    agentSessionPtyWriteGate.attachRecordLookup(() => null)
-    agentSessionPtyWriteGate.bindPty('pty-view', CHAT)
-    const runtime = probe({
-      ptysById: new Map([
-        ['pty-view', { ptyId: 'pty-view', connected: true, paneKey: TERMINAL_VIEW_PANE }]
-      ]),
-      getTerminalHandleForPaneKey: (paneKey: string) =>
-        paneKey === TERMINAL_VIEW_PANE ? 'term_view' : null
-    })
-    expect(runtime.getTerminalViewHandleForSession(CHAT)).toBe('term_view')
-    // Its native view does not answer at the same time.
-    installStore(chatRecord())
-    expect(runtime.getTerminalViewHandleForSession(CHAT)).toBeNull()
   })
 })
 
@@ -382,9 +359,22 @@ describe('a coordinator chat continued by /clear', () => {
       objective: 'o',
       coordinatorHandle: null,
       coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: sessionOrchestrationIdentity(sessionId, db).orcaSessionId
+      coordinatorOrcaSessionId: resolveOrcaSessionParty(sessionId, db).orcaSessionId
     }).id
   }
+
+  it('stores a Dispatch assignee by the lineage root of the session its incarnation names', () => {
+    installLineage(SUCCESSOR)
+    const dispatch = db.createDispatchContext({
+      taskId: db.createTask({ runId: chatCoordinatedRun(), spec: 'work' }).id,
+      assigneeHandle: mintStructuredWorkerHandle(),
+      assigneePaneKey: mintStructuredWorkerPaneKey(SUCCESSOR),
+      processIncarnation: structuredWorkerProcessIncarnation(SUCCESSOR),
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    expect(db.getDispatchContextById(dispatch.id)?.assignee_orca_session_id).toBe(CHAT)
+  })
 
   it("never unbinds the successor's own Run", () => {
     // The strand this pins: the successor's own run-create, then its idle edge rebinding the
@@ -397,7 +387,7 @@ describe('a coordinator chat continued by /clear', () => {
     expect(idleEdge(SUCCESSOR)).toContain(`run:${ownRun}`)
     idleEdge(SUCCESSOR)
 
-    const successor = sessionOrchestrationIdentity(SUCCESSOR, db)
+    const successor = resolveOrcaSessionParty(SUCCESSOR, db)
     expect(db.getRunRaw(ownRun)).toMatchObject({
       coordinator_orca_session_id: successor.orcaSessionId,
       consumer_generation: generation
@@ -418,9 +408,7 @@ describe('a coordinator chat continued by /clear', () => {
       consumer_generation: generation
     })
     for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
-      expect(db.getCurrentRunForCoordinator(sessionOrchestrationIdentity(member, db))?.id).toBe(
-        runId
-      )
+      expect(db.getCurrentRunForCoordinator(resolveOrcaSessionParty(member, db))?.id).toBe(runId)
     }
     expect(probe().target(`run:${runId}`)).toEqual({ sessionId: SUCCESSOR, dispatchId: null })
   })
@@ -434,7 +422,7 @@ describe('a coordinator chat continued by /clear', () => {
     installLineage(MIDDLE, SUCCESSOR)
     idleEdge(SUCCESSOR)
 
-    const successor = sessionOrchestrationIdentity(SUCCESSOR, db)
+    const successor = resolveOrcaSessionParty(SUCCESSOR, db)
     expect(db.getRunRaw(middleRun)).toMatchObject({
       coordinator_orca_session_id: successor.orcaSessionId,
       consumer_generation: generation
@@ -445,7 +433,7 @@ describe('a coordinator chat continued by /clear', () => {
   it('reaches the live session through any spelling of the conversation, and stores one', () => {
     installLineage(MIDDLE, SUCCESSOR)
     for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
-      expect(sessionOrchestrationIdentity(member, db)).toMatchObject({
+      expect(resolveOrcaSessionParty(member, db)).toMatchObject({
         orcaSessionId: CHAT,
         address: CHAT_ADDRESS
       })

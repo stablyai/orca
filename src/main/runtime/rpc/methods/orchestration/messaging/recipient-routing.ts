@@ -3,7 +3,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { DispatchContextRow, DispatchStatus } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
-import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-mail-address'
+import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
 import {
   readSessionRecipient,
   refuseUndeliverableSessionRecipient,

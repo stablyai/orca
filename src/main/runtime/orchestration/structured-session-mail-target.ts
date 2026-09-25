@@ -1,11 +1,8 @@
 /**
  * Where a mailbox owned by a structured session is delivered, for sessions that are not structured
  * workers: a chat that coordinates a Run (`run:<id>` with no coordinator handle) and a session
- * addressed directly at `session:<id>`.
- *
- * The session is resolved here, never a pane: its native view takes the pointer as a session turn
- * (the structured lane), its terminal view as bytes typed into the PTY that owns it (the PTY lane).
- * Exactly one view answers for a session at a time, so the two lanes never both claim a mailbox.
+ * addressed directly at `session:<id>`. The session is resolved here, never a pane, and takes the
+ * pointer as a session turn.
  */
 
 import {
@@ -14,31 +11,18 @@ import {
   parseOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../shared/orca-session-address'
-import { agentSessionPtyWriteGate } from '../agent-session-pty-write-gate'
 import type { OrchestrationDb } from './db'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
-  readAgentSessionRecordStore,
-  sessionOrchestrationIdentity,
-  structuredSessionDeliveryView,
-  structuredSessionMailReach,
-  type AgentSessionRecordReader
+  addressableSessionParty,
+  structuredSessionMailReach
 } from './structured-session-mail-address'
+import {
+  readAgentSessionRecordStore,
+  type AgentSessionRecordReader
+} from './structured-session-lineage'
 import type { RunRow } from './types'
-
-/** The live PTY the write gate binds to a session: its terminal view, when a TUI owns it. */
-export function findConnectedPtyBoundToSession<T extends { ptyId: string; connected: boolean }>(
-  ptys: Iterable<T>,
-  sessionId: string
-): T | undefined {
-  for (const pty of ptys) {
-    if (pty.connected && agentSessionPtyWriteGate.boundSessionId(pty.ptyId) === sessionId) {
-      return pty
-    }
-  }
-  return undefined
-}
 
 /**
  * The session a Run's coordinator binding names when that binding has no handle. A structured
@@ -62,29 +46,18 @@ export function handleLessCoordinatorSessionId(
 }
 
 /**
- * The session that takes a pointer for `sessionId`'s conversation now (its live session, whichever
- * session of the lineage was named) and through which view; null when mail cannot reach it here.
+ * The structured-lane target for `sessionId`'s conversation: its live session, whichever session of
+ * the lineage was named; null when mail cannot reach it here.
  */
-export function structuredSessionMailDestination(
+export function structuredSessionMailTarget(
   sessionId: string,
   db: OrchestrationDb | null | undefined,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-): { sessionId: string; view: 'session-turn' | 'terminal-view' } | null {
+): StructuredPointerTarget | null {
   const record = store?.getRecord(sessionId)
   const reach = store && record ? structuredSessionMailReach(store, record, db) : null
   return reach?.kind === 'reachable'
-    ? { sessionId: reach.session.sessionId, view: structuredSessionDeliveryView(reach.session) }
-    : null
-}
-
-/** The structured-lane target for a session whose native view takes the pointer. */
-export function structuredSessionMailTarget(
-  sessionId: string,
-  db: OrchestrationDb | null | undefined
-): StructuredPointerTarget | null {
-  const destination = structuredSessionMailDestination(sessionId, db)
-  return destination?.view === 'session-turn'
-    ? { sessionId: destination.sessionId, dispatchId: null }
+    ? { sessionId: reach.session.sessionId, dispatchId: null }
     : null
 }
 
@@ -106,16 +79,16 @@ export function structuredSessionAddressTarget(
 /**
  * Every mailbox a session reads for itself: the Runs it coordinates and its own direct mail.
  * Re-derived from the database on each idle edge rather than remembered, so mail that arrived
- * while the session could not take it (closed, evicted, in the other view) is found again.
+ * while the session could not take it (closed, evicted) is found again.
  */
 export function structuredSessionOwnedMailboxes(sessionId: string, db: OrchestrationDb): string[] {
-  if (!isOrcaSessionId(sessionId)) {
+  const party = isOrcaSessionId(sessionId) ? addressableSessionParty(sessionId, db) : null
+  if (!party) {
     return []
   }
-  const identity = sessionOrchestrationIdentity(sessionId, db)
-  const mailboxes = db.runsBoundToCoordinator(identity).map((run) => `run:${run.id}`)
-  if (db.getUnreadDirectMessageTypes(identity.address).length > 0) {
-    mailboxes.push(identity.address)
+  const mailboxes = db.runsBoundToCoordinator(party).map((run) => `run:${run.id}`)
+  if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
+    mailboxes.push(party.address)
   }
   return mailboxes
 }
