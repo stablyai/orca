@@ -186,6 +186,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
     const db = {
       getLegacyAdoptedRunMailboxOwner: () => null,
       getCurrentRunForPane: () => undefined,
+      getCurrentRunForCoordinator: () => undefined,
       getActiveDispatchMailboxOwners: () => [],
       getRunMailboxOwnerIdsForHandle: () => [],
       insertMessages: (rows: { to: string }[]) => {
