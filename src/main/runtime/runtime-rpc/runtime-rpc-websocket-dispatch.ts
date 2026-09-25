@@ -1,5 +1,8 @@
 import type { WebSocket } from 'ws'
-import { BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_MOBILE_TUNNEL_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import type {
   PairingGetEndpointsParams,
   PairingProvisionRelayParams
@@ -78,8 +81,12 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
       request.method === 'browser.clientHost.attach' ||
       request.method === 'browser.clientHost.commandResult' ||
       request.method === 'browser.clientHost.pageMetadata'
-    const mobileBrowserLeaseAdmitted =
-      mobileBrowserLeaseMethod &&
+    const mobileBrowserHostAdmitted =
+      (mobileBrowserLeaseMethod ||
+        (request.method === 'network.browserTunnel' &&
+          authenticatedSocket?.clientCapabilities.includes(
+            BROWSER_CLIENT_MOBILE_TUNNEL_RUNTIME_CAPABILITY
+          ))) &&
       ws !== undefined &&
       authenticatedSocket?.ws === ws &&
       authenticatedSocket?.device.deviceId === device.deviceId &&
@@ -92,7 +99,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
     if (
       device.scope === 'mobile' &&
       !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method) &&
-      !mobileBrowserLeaseAdmitted
+      !mobileBrowserHostAdmitted
     ) {
       reply(
         JSON.stringify(

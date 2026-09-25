@@ -87,7 +87,7 @@ export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
 export const BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY = 'browser.clientHost.v1' as const
-// Lease/commands/metadata only; mobile networking, files and placement remain disabled.
+// Lease/commands/metadata only; other mobile hosting paths negotiate separately.
 export const BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY =
   'browser.clientHost.mobileLease.v1' as const
 export const BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY =
@@ -97,6 +97,9 @@ export const BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY =
 // Why: without it a client-placed browser.upload would resolve remote paths on the desktop filesystem, so uploads fail closed instead.
 export const BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY =
   'browser.clientHost.fileChannel.v1' as const
+// Tunnel admission only; does not activate mobile hosting or default placement.
+export const BROWSER_CLIENT_MOBILE_TUNNEL_RUNTIME_CAPABILITY =
+  'browser.clientHost.mobileTunnel.v1' as const
 export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
 export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
   'network.browserTunnel.executionHosts.v1' as const
@@ -339,6 +342,7 @@ export const RUNTIME_CAPABILITIES = [
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_MOBILE_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,

@@ -358,6 +358,13 @@ describe('authenticated mobile browser lease over runtime RPC', () => {
       ok: false,
       error: { code: 'method_not_found' }
     })
+    await phone.call('runtime.clientCapabilities.update', {
+      clientCapabilities: [...capabilities, 'browser.clientHost.mobileTunnel.v1']
+    })
+    expect(await phone.call('network.browserTunnel', {})).toMatchObject({
+      ok: false,
+      error: { code: 'method_not_found' }
+    })
     const id = 'wrong-credential'
     sendEncryptedWsRequest(phone.session, {
       id,

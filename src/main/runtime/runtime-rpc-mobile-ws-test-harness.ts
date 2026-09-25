@@ -100,7 +100,10 @@ export function createEncryptedWsResponseReader(session: AuthenticatedMobileWs):
     return response ?? null
   }
 
-  const onMessage = (data: WebSocket.RawData): void => {
+  const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
+    if (isBinary) {
+      return
+    }
     const decrypted = decrypt(
       typeof data === 'string' ? data : data.toString('utf-8'),
       session.sharedKey

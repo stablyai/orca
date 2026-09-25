@@ -8,6 +8,8 @@ import { resolveBrowserNetworkExecutionRoute } from '../../../browser/browser-ne
 import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_MOBILE_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -39,7 +41,12 @@ export function createBrowserNetworkTunnelMethods(
         emit
       ) => {
         if (
-          clientKind !== 'runtime' ||
+          (clientKind !== 'runtime' &&
+            !(
+              clientKind === 'mobile' &&
+              clientCapabilities?.includes(BROWSER_CLIENT_MOBILE_LEASE_RUNTIME_CAPABILITY) &&
+              clientCapabilities.includes(BROWSER_CLIENT_MOBILE_TUNNEL_RUNTIME_CAPABILITY)
+            )) ||
           !connectionId ||
           !pairedDeviceId ||
           !sendBinary ||
@@ -53,8 +60,10 @@ export function createBrowserNetworkTunnelMethods(
         if (!clientCapabilities.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
           throw new Error('browser_client_host_capability_required')
         }
+        const requireExecutionHostGrant =
+          clientKind === 'mobile' || params.executionHost.kind !== 'native'
         if (
-          params.executionHost.kind !== 'native' &&
+          requireExecutionHostGrant &&
           !clientCapabilities.includes(BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY)
         ) {
           throw new Error('browser_tunnel_execution_hosts_capability_required')
@@ -71,8 +80,18 @@ export function createBrowserNetworkTunnelMethods(
           pairedDeviceId,
           executionHostKey: browserNetworkExecutionHostKey(params.executionHost)
         }
-        leaseRegistry.requireLease(tunnelIdentity)
-        if (params.executionHost.kind !== 'native') {
+        const owningLease = leaseRegistry.requireLease(tunnelIdentity)
+        const requireTunnelLease = (): void => {
+          const lease = leaseRegistry.requireLease(tunnelIdentity)
+          if (
+            clientKind === 'mobile' &&
+            (lease.clientKind !== 'mobile' || lease.connectionId !== owningLease.connectionId)
+          ) {
+            throw new Error('browser_host_lease_stale')
+          }
+        }
+        requireTunnelLease()
+        if (requireExecutionHostGrant) {
           leaseRegistry.requireExecutionHost(tunnelIdentity, tunnelIdentity.executionHostKey)
         }
         if (signal?.aborted) {
@@ -80,14 +99,13 @@ export function createBrowserNetworkTunnelMethods(
         }
         const executionRouteAbort = new AbortController()
         const abortExecutionRoute = (): void => executionRouteAbort.abort()
-        const unlinkExecutionGrant =
-          params.executionHost.kind === 'native'
-            ? () => {}
-            : leaseRegistry.linkExecutionHostGrant(
-                tunnelIdentity,
-                tunnelIdentity.executionHostKey,
-                abortExecutionRoute
-              )
+        const unlinkExecutionGrant = !requireExecutionHostGrant
+          ? () => {}
+          : leaseRegistry.linkExecutionHostGrant(
+              tunnelIdentity,
+              tunnelIdentity.executionHostKey,
+              abortExecutionRoute
+            )
         signal?.addEventListener('abort', abortExecutionRoute, { once: true })
         const outboundMemory = memoryBudgets.acquire(
           `${pairedDeviceId}:${params.browserHostClientId}`
@@ -123,8 +141,9 @@ export function createBrowserNetworkTunnelMethods(
         }
         let route: ReturnType<ReturnType<typeof getBrowserHostLeaseRegistry>['openTunnel']>
         try {
+          requireTunnelLease()
           route = leaseRegistry.openTunnel(tunnelIdentity, {
-            requireExecutionHostGrant: params.executionHost.kind !== 'native'
+            requireExecutionHostGrant
           })
         } catch (error) {
           try {
