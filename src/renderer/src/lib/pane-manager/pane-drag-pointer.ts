@@ -24,7 +24,11 @@ export function beginPaneDragFromPointerDown(
   if ((e.button ?? 0) !== 0 || e.ctrlKey || callbacks.getPanes().size < 2) {
     return null
   }
-  e.preventDefault()
+  // Why: no preventDefault() here — Chromium suppresses the mousedown/click/
+  // dblclick compatibility events for a pointer sequence whose pointerdown was
+  // prevented, which broke double-click-to-rename once the pane title text
+  // became a drag surface (#19727). Defer it to pointermove, once an actual
+  // drag is detected, so a plain click/double-click still reaches the DOM.
   e.stopPropagation()
   handle.setPointerCapture(e.pointerId)
   activePointerId = e.pointerId
@@ -97,6 +101,7 @@ export function beginPaneDragFromPointerDown(
     const dy = ev.clientY - startY
     if (!dragging && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
       dragging = true
+      ev.preventDefault()
       state.dragSourcePaneId = paneId
       callbacks.getRoot().classList.add('is-pane-dragging')
       callbacks.onDragActiveChange?.(true)
