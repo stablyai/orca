@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
+import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
@@ -178,6 +179,10 @@ describe('worker-owned Store writes', () => {
 
   it('retains dirty intent while many durability waiters share an active snapshot', async () => {
     const { store, authority, readState } = await fixture()
+    const fullCapture = vi.spyOn(
+      StateSerializationSecretHandlingOperations.prototype,
+      'buildStateToSave'
+    )
     const gate = authority.pause()
     store.updateSettings({ terminalFontSize: 12 })
     const first = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
@@ -192,6 +197,8 @@ describe('worker-owned Store writes', () => {
     gate.finish.resolve()
     await Promise.all(waiters)
     expect(readState().settings.terminalFontSize).toBe(32)
+    expect(fullCapture).not.toHaveBeenCalled()
+    expect(authority.captures).toHaveLength(2)
   })
 
   it('cancels a queued checkpoint without aborting the preceding writer or losing edits', async () => {

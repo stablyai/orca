@@ -164,14 +164,34 @@ export function enqueueWrite(
   owner: PrimaryStateWriteOperations,
   options: { fullCheckpoint?: boolean; skipIfClean?: boolean; signal?: AbortSignal } = {}
 ): Promise<void> {
-  return enqueuePrimaryStateOperation(owner, async () => {
-    const { runtime } = owner[primaryStateWriteOperationsContext]
+  const context = owner[primaryStateWriteOperationsContext]
+  const { runtime } = context
+  const batchable =
+    runtime.profileStateAuthority?.asynchronous && !options.fullCheckpoint && !options.signal
+  const queued = context.queuedSnapshot
+  if (batchable && queued) {
+    queued.capture.skipIfClean &&= options.skipIfClean === true
+    queued.capture.pendingSnapshotFileWork = runtime.pendingSnapshotFileWork
+    return queued.completion
+  }
+  const capture = {
+    skipIfClean: options.skipIfClean === true,
+    pendingSnapshotFileWork: runtime.pendingSnapshotFileWork
+  }
+  const completion = enqueuePrimaryStateOperation(owner, async () => {
+    // Later flushes must capture edits made after this batch starts, even without a new generation.
+    if (context.queuedSnapshot?.capture === capture) {
+      context.queuedSnapshot = undefined
+    }
+    if (batchable) {
+      await capture.pendingSnapshotFileWork
+    }
     const { signal } = options
     if (signal?.aborted) {
       throw new Error('Persistence flush aborted')
     }
     if (
-      options.skipIfClean &&
+      capture.skipIfClean &&
       runtime.dirtyProfileStateDomains?.size === 0 &&
       runtime.pendingAutomationRunsAfter === undefined &&
       runtime.lastDurableWriteGeneration >= runtime.writeGeneration
@@ -199,18 +219,29 @@ export function enqueueWrite(
       signal?.removeEventListener('abort', abort)
     }
   })
+  if (batchable) {
+    context.queuedSnapshot = { completion, capture }
+  }
+  return completion
 }
 
 export function enqueuePrimaryStateOperation<T>(
   owner: PrimaryStateWriteOperations,
   operation: () => Promise<T>
 ): Promise<T> {
-  const { runtime } = owner[primaryStateWriteOperationsContext]
+  const context = owner[primaryStateWriteOperationsContext]
+  const { runtime } = context
+  // A durable mutation, export, or independent checkpoint separates adjacent snapshot batches.
+  context.queuedSnapshot = undefined
   const previousWrite = Promise.all([
     runtime.pendingWrite ?? runtime.staleTempCleanup,
     runtime.pendingSnapshotFileWork ?? Promise.resolve()
   ]).then(() => {})
-  const write = previousWrite.then(operation)
+  const write = previousWrite.then(operation).finally(() => {
+    if (context.queuedSnapshot?.completion === write) {
+      context.queuedSnapshot = undefined
+    }
+  })
   const trackedWrite = write
     .then(() => {})
     .catch((err) => {
