@@ -210,14 +210,19 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     if (startupActivationGateWorktreeIdsRef.current.has(activeWorktreeId)) {
       return
     }
-    startupActivationGateWorktreeIdsRef.current.add(activeWorktreeId)
     let cancelled = false
     void gateWorktreeAgentActivation(activeWorktreeId).then((outcome) => {
       if (
         cancelled ||
-        outcome !== 'empty' ||
+        outcome === 'blocked' ||
         useAppStore.getState().activeWorktreeId !== activeWorktreeId
       ) {
+        return
+      }
+      // Why mark only once a decision applies: a cancelled or blocked check must stay retryable,
+      // and a rerun shares the gate's in-flight promise instead of repeating its work.
+      startupActivationGateWorktreeIdsRef.current.add(activeWorktreeId)
+      if (outcome !== 'empty') {
         return
       }
       // A pending or unanswered chat create owns the surface even before its tab is published.

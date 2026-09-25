@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
@@ -105,6 +105,65 @@ describe('passive terminal seeding during native chat creation', () => {
     await act(async () => finishGate('empty'))
 
     expect(mocks.createTab).toHaveBeenCalledTimes(expectedTabs)
+  })
+})
+
+function deferredGate(): (outcome: 'empty' | 'blocked') => Promise<void> {
+  let finishGate!: (outcome: 'empty' | 'blocked') => void
+  // One shared promise, as the gate's in-flight dedupe hands every rerun.
+  mocks.gate.mockReturnValue(
+    new Promise((resolve) => {
+      finishGate = resolve
+    })
+  )
+  return async (outcome) => act(async () => finishGate(outcome))
+}
+
+describe('passive terminal seeding retries until a decision applies', () => {
+  it('seeds once after a StrictMode double run', async () => {
+    const finishGate = deferredGate()
+    const renderStrict = () =>
+      root?.render(
+        <StrictMode>
+          <Watcher />
+        </StrictMode>
+      )
+    root = createRoot(document.createElement('div'))
+    await act(async () => renderStrict())
+    await finishGate('empty')
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+
+    // The applied decision is final: a later run neither re-checks nor seeds again.
+    await act(async () => renderStrict())
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.gate).toHaveBeenCalledTimes(2)
+  })
+
+  it('seeds once when an input changes mid-check', async () => {
+    const finishGate = deferredGate()
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher />))
+    // Each render passes a fresh reconcile callback, so this rerun cancels the first check.
+    await act(async () => root?.render(<Watcher />))
+    await finishGate('empty')
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.gate).toHaveBeenCalledTimes(2)
+  })
+
+  it('seeds after leaving and returning to a blocked workspace', async () => {
+    mocks.gate.mockResolvedValue('blocked')
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher />))
+    expect(mocks.createTab).not.toHaveBeenCalled()
+
+    await act(async () => root?.render(<Watcher worktreeId="wt-2" />))
+    mocks.gate.mockResolvedValue('empty')
+    await act(async () => root?.render(<Watcher />))
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true
+    })
+    expect(mocks.gate.mock.calls.map(([id]) => id)).toEqual(['wt-1', 'wt-2', 'wt-1'])
   })
 })
 
