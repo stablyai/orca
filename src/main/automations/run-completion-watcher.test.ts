@@ -341,7 +341,7 @@ describe('automationsChanged publication', () => {
     })
 
     const run = await service.runNow(automation.id)
-    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run'])
+    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run'])
     expect(seen.at(-1)?.status).toBe('dispatched')
 
     await service.markDispatchResult({
@@ -350,7 +350,7 @@ describe('automationsChanged publication', () => {
       ...LAUNCH_TARGET,
       error: null
     })
-    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'usage'])
+    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'run', 'usage'])
     expect(seen.at(-1)?.status).toBe('completed')
     // Every run/usage write names its own host, so one automation's run cannot
     // invalidate the rest of the authority.
