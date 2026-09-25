@@ -169,7 +169,8 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // 530 -> 529: `'hardwareBackPress'` left with the Markdown actions' registration for `useBackClaim`.
 //
 // 529 -> 530, and the host-JSX hash: `key="terminal-frame"`, so the page's frame mounts with its
-// onLayout rather than reusing the loading View. A key on a phone changes nothing it renders.
+// onLayout rather than reusing the loading View. Native measured 47 rows before and after: its
+// frame reported either way, and its window is its frame, so both measure paths agree there.
 const HEAD_RUNTIME_STRING_SHA256 =
   'd7eea5438ff7b4ee77c9bf652626adfdc3d2b49716ffb660df078f70bae0d88d'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
