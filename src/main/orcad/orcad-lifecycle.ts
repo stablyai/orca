@@ -1,10 +1,14 @@
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
+import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import {
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
 } from '../persistence/profile-state/profile-state-access'
+
+const bundledLauncherChannel = process.env[ORCAD_BUNDLED_LAUNCHER_ENV] === '1'
+delete process.env[ORCAD_BUNDLED_LAUNCHER_ENV]
 
 function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promise<void> {
   let completion: Promise<void> | null = null
@@ -17,20 +21,20 @@ function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promi
 export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
 
 /** A launcher and its child can both receive the same process-group or service stop signal. */
-export function installOrcadShutdownSignals(stop: () => Promise<void>): void {
+export function installOrcadShutdownSignals(
+  stop: () => Promise<void>,
+  deadlineMs = ORCAD_SHUTDOWN_DEADLINE_MS
+): void {
   let stopping = false
-  const shutdown = (signal: NodeJS.Signals): void => {
+  const shutdown = (signal: string): void => {
     if (stopping) {
       return
     }
     stopping = true
-    const deadline = setTimeout(() => {
-      console.error(
-        `orcad: shutdown after ${signal} exceeded ${ORCAD_SHUTDOWN_DEADLINE_MS}ms — exiting`
-      )
+    setTimeout(() => {
+      console.error(`orcad: shutdown after ${signal} exceeded ${deadlineMs}ms — exiting`)
       process.exit(1)
-    }, ORCAD_SHUTDOWN_DEADLINE_MS)
-    deadline.unref()
+    }, deadlineMs)
     stop()
       .then(() => process.exit(0))
       .catch((error) => {
@@ -40,7 +44,16 @@ export function installOrcadShutdownSignals(stop: () => Promise<void>): void {
   }
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
-  process.on('SIGHUP', () => shutdown('SIGHUP'))
+  // Headless runtimes survive terminal hangups; INT/TERM are the graceful stop contract.
+  if (process.platform !== 'win32') {
+    process.on('SIGHUP', () => {})
+  }
+  if (bundledLauncherChannel && typeof process.send === 'function') {
+    process.once('disconnect', () => shutdown('launcher disconnect'))
+    if (!process.connected) {
+      shutdown('launcher disconnect')
+    }
+  }
 }
 
 export async function startOrcadWithLifecycle<T extends object>(

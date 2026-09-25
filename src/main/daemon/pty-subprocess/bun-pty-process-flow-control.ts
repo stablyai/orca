@@ -1,10 +1,8 @@
 import { constants } from 'node:os'
 import type { WindowsBunPtyJob } from './windows-bun-pty-job'
-import {
-  isPosixPtyRootStopped,
-  readPosixPtyProcessTable,
-  signalPosixPtyProcessGroups
-} from '../../pty/posix-pty-process-groups'
+import { isPosixPtyRootStopped, readPosixPtyProcessTable } from '../../pty/posix-pty-process-groups'
+
+import { createBunPtyProcessSuspension } from './bun-pty-process-suspension'
 
 const TRANSITION_RETRY_MS = 500
 
@@ -36,56 +34,21 @@ export function createBunPtyProducerFlowControl(
   let shuttingDown = false
   let pendingRead: AbortController | undefined
   let transitionRetry: ReturnType<typeof setTimeout> | undefined
-  let groupResumeRequired = false
+  let pauseDenied = false
   const signalRoot = (signal: 'SIGSTOP' | 'SIGCONT'): void => {
     // The runtime's named STOP/CONT signals are not portable across POSIX platforms.
     options.processHandle.kill(constants.signals[signal])
   }
 
-  const signalProcessGroup = (
-    signal: 'SIGSTOP' | 'SIGCONT',
-    table?: string,
-    requireGroups = false
-  ): void => {
-    let resumeFailed = false
-    signalPosixPtyProcessGroups(
-      options.processHandle.pid,
-      signal,
-      () => {
-        if (requireGroups) {
-          throw new Error('Paused PTY group ownership is unavailable')
-        }
-        signalRoot(signal)
-      },
-      {
-        platform: options.platform,
-        ...(table !== undefined
-          ? { readProcessTable: () => table }
-          : options.readProcessTable
-            ? { readProcessTable: options.readProcessTable }
-            : {}),
-        signalProcessGroup(pgid) {
-          // Keep the shell stopped until every preceding job group has resumed.
-          if (signal === 'SIGCONT' && requireGroups && resumeFailed) {
-            throw new Error('An earlier PTY group could not be resumed')
-          }
-          try {
-            if (options.signalProcessGroup) {
-              options.signalProcessGroup(pgid, signal)
-            } else {
-              process.kill(-pgid, signal)
-            }
-          } catch (error) {
-            resumeFailed = !(error instanceof Error && 'code' in error && error.code === 'ESRCH')
-            throw error
-          }
-          if (signal === 'SIGSTOP') {
-            groupResumeRequired = true
-          }
-        }
-      }
-    )
-  }
+  const suspension = createBunPtyProcessSuspension({
+    pid: options.processHandle.pid,
+    platform: options.platform,
+    signalRoot,
+    readProcessTable: options.readProcessTable,
+    signalProcessGroup: options.signalProcessGroup
+  })
+  const pausePermanentlyDenied = (error: unknown): boolean =>
+    error instanceof Error && 'code' in error && (error.code === 'EPERM' || error.code === 'EACCES')
 
   const clearTransitionRetry = (): void => {
     clearTimeout(transitionRetry)
@@ -118,11 +81,24 @@ export function createBunPtyProducerFlowControl(
     ) {
       return
     }
+    if (options.platform === 'win32') {
+      const succeeded = pauseRequested ? options.windowsJob?.pause() : options.windowsJob?.resume()
+      state = succeeded ? (pauseRequested ? 'paused' : 'running') : 'uncertain'
+      if (pauseRequested && !succeeded) {
+        pauseRequested = false
+      }
+      retryTransition()
+      return
+    }
     if (pauseRequested && state === 'running') {
       try {
         signalRoot('SIGSTOP')
         state = 'uncertain'
-      } catch {
+      } catch (error) {
+        if (pausePermanentlyDenied(error)) {
+          pauseDenied = true
+          pauseRequested = false
+        }
         retryTransition()
         return
       }
@@ -157,50 +133,43 @@ export function createBunPtyProducerFlowControl(
             retryTransition()
             return
           }
-          signalProcessGroup('SIGSTOP', table, true)
-        } else if (groupResumeRequired) {
-          signalProcessGroup('SIGCONT', table, true)
+          suspension.signal('SIGSTOP', table, true)
+        } else if (suspension.hasStoppedGroups()) {
+          suspension.signal('SIGCONT', table, true)
         } else {
           signalRoot('SIGCONT')
         }
         state = nextPaused ? 'paused' : 'running'
-        if (!nextPaused) {
-          groupResumeRequired = false
-        }
       })
-      .catch(() => {
-        retryTransition()
+      .catch((error) => {
+        if (pauseRequested && pausePermanentlyDenied(error)) {
+          pauseDenied = true
+          pauseRequested = false
+          reconcile()
+        } else {
+          retryTransition()
+        }
       })
   }
 
   return {
     pause() {
-      if (shuttingDown || options.isExited()) {
+      if (shuttingDown || options.isExited() || pauseDenied) {
         return
       }
       clearTransitionRetry()
-      if (options.platform === 'win32') {
-        if (state !== 'paused' && options.windowsJob?.pause()) {
-          state = 'paused'
-        }
-        return
-      }
       pauseRequested = true
       reconcile()
     },
     resume() {
       clearTransitionRetry()
-      if (options.platform === 'win32') {
-        if (!options.isExited() && options.windowsJob?.resume()) {
-          state = 'running'
-        }
-        return
-      }
+      pauseDenied = false
       pauseRequested = false
       reconcile()
     },
     resumeForShutdown() {
       clearTransitionRetry()
+      shuttingDown = true
       if (options.platform === 'win32') {
         if (!options.isExited()) {
           options.windowsJob?.resume()
@@ -208,13 +177,12 @@ export function createBunPtyProducerFlowControl(
         state = 'running'
         return
       }
-      shuttingDown = true
       pendingRead?.abort()
       try {
         if (!options.isExited() && state !== 'running') {
           // Teardown must release stopped jobs before the root receives its exit signal.
-          if (groupResumeRequired) {
-            signalProcessGroup('SIGCONT')
+          if (suspension.hasStoppedGroups()) {
+            suspension.signal('SIGCONT')
           } else {
             signalRoot('SIGCONT')
           }

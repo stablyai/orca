@@ -97,10 +97,7 @@ describe('asynchronous POSIX producer flow control', () => {
     expect(harness.readProcessTableAsync).toHaveBeenCalledTimes(3)
     harness.reads[1].resolve('4321 4321 pts/test T\n4322 4322 pts/other\n4323 4323 pts/test')
     await settled()
-    expect(harness.signalProcessGroup.mock.calls.slice(2)).toEqual([
-      [4323, 'SIGCONT'],
-      [4321, 'SIGCONT']
-    ])
+    expect(harness.signalProcessGroup.mock.calls.slice(2)).toEqual([[4321, 'SIGCONT']])
     await vi.advanceTimersByTimeAsync(5_000)
     expect(harness.readProcessTableAsync).toHaveBeenCalledTimes(3)
   })
@@ -287,7 +284,6 @@ describe('asynchronous POSIX producer flow control', () => {
     expect(harness.signalProcessGroup.mock.calls).toEqual([
       [4321, 'SIGSTOP'],
       [4322, 'SIGSTOP'],
-      [4323, 'SIGCONT'],
       [4321, 'SIGCONT']
     ])
   })
@@ -359,29 +355,30 @@ describe('asynchronous POSIX producer flow control', () => {
   it('automatically retries a partially failed resume of a partially stopped tree', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const harness = createHarness()
-    const denied = Object.assign(new Error('denied'), { code: 'EPERM' })
+    const table = `${TABLE}\n4323 4323 pts/test S`
     harness.signalProcessGroup.mockImplementation((pgid, signal) => {
-      if (pgid === 4322 && signal === 'SIGSTOP') {
-        throw denied
+      if (pgid === 4323 && signal === 'SIGSTOP') {
+        throw new Error('temporary stop failure')
       }
     })
     harness.flow.pause()
     await settled()
-    harness.reads[0].resolve(TABLE)
+    harness.reads[0].resolve(table)
     await settled()
     harness.signalProcessGroup.mockImplementationOnce(() => {
-      throw denied
+      throw Object.assign(new Error('denied'), { code: 'EPERM' })
     })
     harness.flow.resume()
     await settled()
-    harness.reads[1].resolve(TABLE)
+    harness.reads[1].resolve(table)
     await settled()
     await vi.advanceTimersByTimeAsync(500)
-    harness.reads[2].resolve(TABLE)
+    harness.reads[2].resolve(table)
     await settled()
     expect(harness.signalProcessGroup.mock.calls).toEqual([
       [4321, 'SIGSTOP'],
       [4322, 'SIGSTOP'],
+      [4323, 'SIGSTOP'],
       [4322, 'SIGCONT'],
       [4322, 'SIGCONT'],
       [4321, 'SIGCONT']

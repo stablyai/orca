@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +14,7 @@ beforeEach(async () => {
   await build({
     stdin: {
       contents: `
-        import { handoffToBundledOrcad } from './src/main/orcad/orcad-bundled-runtime'
+        import { handoffToBundledOrcad, OrcadBundledRuntimeError } from './src/main/orcad/orcad-bundled-runtime'
         import { installOrcadShutdownSignals, flushOrcadProfileStoreForShutdown } from './src/main/orcad/orcad-lifecycle'
         import { writeFile } from 'node:fs/promises'
         if (process.env.ORCA_TEST_HANDOFF_CHILD === '1') {
@@ -28,7 +28,7 @@ beforeEach(async () => {
               freezeWritesAsync: async () => console.log('closed')
             }))
           }
-          for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+          for (const signal of ['SIGINT', 'SIGTERM']) {
             process.on(signal, () => {
               console.log('received:' + signal)
               if (process.env.ORCA_TEST_HANDOFF_DURABLE !== '1') process.exit(29)
@@ -37,8 +37,13 @@ beforeEach(async () => {
           console.log('ready:' + JSON.stringify(process.argv.slice(2)))
           console.log('child-pid:' + process.pid)
           setTimeout(() => process.exit(99), 4_000)
-        } else if (!handoffToBundledOrcad()) {
-          throw new Error('handoff failed')
+        } else {
+          try {
+            if (!handoffToBundledOrcad()) throw new Error('handoff failed')
+          } catch (error) {
+            console.error(error.message)
+            process.exit(error instanceof OrcadBundledRuntimeError ? 78 : 1)
+          }
         }
       `,
       resolveDir: process.cwd(),
@@ -67,10 +72,18 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-function launch(args: string[], env: NodeJS.ProcessEnv = {}) {
+function launch(
+  args: string[],
+  env: NodeJS.ProcessEnv = {},
+  options: { entry?: string; nohup?: boolean } = {}
+) {
   const child = spawnProcess({
-    program: process.execPath,
-    args: [join(directory, 'orcad.js'), ...args],
+    program: options.nohup ? 'nohup' : process.execPath,
+    args: [
+      ...(options.nohup ? [process.execPath] : []),
+      options.entry ?? join(directory, 'orcad.js'),
+      ...args
+    ],
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true
@@ -104,12 +117,12 @@ describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle
       env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
       timeoutMs: 5_000
     })
-    expect(result.code).toBe(1)
+    expect(result.code).toBe(78)
     expect(result.stderr).toContain('bundled Orca runtime target is missing')
     expect(result.stdout).not.toContain('ready:')
   })
 
-  it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)(
+  it.each(['SIGINT', 'SIGTERM'] as const)(
     'forwards %s to the actual child and mirrors its exit',
     async (signal) => {
       const args = ['--label', 'two words', 'quote"$literal']
@@ -124,7 +137,7 @@ describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle
   )
 
   it.each(
-    (['SIGINT', 'SIGTERM', 'SIGHUP'] as const).flatMap((signal) =>
+    (['SIGINT', 'SIGTERM'] as const).flatMap((signal) =>
       (['process group', 'separate service deliveries'] as const).map((delivery) => ({
         signal,
         delivery
@@ -160,4 +173,49 @@ describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle
       }
     }
   )
+
+  it('hands off a symlinked entry to its adjacent runtime', async () => {
+    const aliases = join(directory, 'aliases')
+    await mkdir(aliases)
+    const entry = join(aliases, 'orcad.js')
+    await symlink(join(directory, 'orcad.js'), entry)
+    const { child, output, exit } = launch([], {}, { entry })
+    await vi.waitFor(() => expect(output()).toContain('child-pid:'), { timeout: 2_000 })
+    child.kill('SIGTERM')
+    expect(await exit).toEqual({ code: 29, signal: null })
+  })
+
+  it('drains the child after its launcher is force-killed', async () => {
+    const shutdownFile = join(directory, 'shutdown-complete')
+    const { child, output, exit } = launch([], {
+      ORCA_TEST_HANDOFF_DURABLE: '1',
+      ORCA_TEST_SHUTDOWN_FILE: shutdownFile
+    })
+    await vi.waitFor(() => expect(output()).toContain('child-pid:'), { timeout: 2_000 })
+    child.kill('SIGKILL')
+    expect(await exit).toEqual({ code: null, signal: 'SIGKILL' })
+    await vi.waitFor(async () => expect(await readFile(shutdownFile, 'utf8')).toBe('flushed'))
+    expect(output().match(/flushing/g)).toHaveLength(1)
+  })
+
+  it('preserves nohup across a terminal hangup and still stops gracefully on SIGTERM', async () => {
+    const shutdownFile = join(directory, 'shutdown-complete')
+    const { child, output, exit } = launch(
+      [],
+      { ORCA_TEST_HANDOFF_DURABLE: '1', ORCA_TEST_SHUTDOWN_FILE: shutdownFile },
+      { nohup: true }
+    )
+    await vi.waitFor(() => expect(output()).toContain('child-pid:'), { timeout: 2_000 })
+    if (!child.pid) {
+      throw new Error('Launcher has no process ID')
+    }
+    process.kill(-child.pid, 'SIGHUP')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(child.exitCode).toBeNull()
+    expect(child.signalCode).toBeNull()
+    expect(output()).not.toContain('flushing')
+    child.kill('SIGTERM')
+    expect(await exit).toEqual({ code: 0, signal: null })
+    expect(await readFile(shutdownFile, 'utf8')).toBe('flushed')
+  })
 })

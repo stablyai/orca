@@ -18,17 +18,21 @@ export class SqliteIntegerReader {
 
   result(result: StatementResultingChanges): StatementResultingChanges {
     return {
-      changes: this.integer(result.changes),
-      lastInsertRowid: this.integer(result.lastInsertRowid)
+      changes: this.integer(result.changes, false),
+      lastInsertRowid: this.integer(result.lastInsertRowid, false)
     }
   }
 
-  private integer(value: number | bigint): number | bigint {
+  private integer(value: number | bigint, requireSafeNumber = true): number | bigint {
     if (this.readBigInts) {
       return BigInt(value)
     }
     const number = Number(value)
     if (!Number.isSafeInteger(number)) {
+      // Metadata conversion must not report failure after a write has committed.
+      if (!requireSafeNumber) {
+        return BigInt(value)
+      }
       throw new RangeError('SQLite integer cannot be represented safely as a JavaScript number')
     }
     return number

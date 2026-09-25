@@ -22,6 +22,7 @@ import {
   resolveOrcadBindHost
 } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
+import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
@@ -383,12 +384,14 @@ export { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
 export function resolveOrcadExitCode(error: unknown): number {
   return error instanceof OrcadInstanceLockError ||
     error instanceof OrcadBindAddressError ||
+    error instanceof OrcadBundledRuntimeError ||
     error instanceof ProfileStateAccessError
     ? ORCAD_EXIT_CONFIGURATION
     : ORCAD_EXIT_FAILED
 }
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const handle = await startOrcad(parseArgs(argv))
-  installOrcadShutdownSignals(() => handle.stop())
+  const startup = startOrcad(parseArgs(argv))
+  installOrcadShutdownSignals(async () => (await startup).stop())
+  await startup
 }

@@ -1,0 +1,175 @@
+import { build } from 'esbuild'
+import { existsSync } from 'node:fs'
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawnProcess } from '../../shared/child-process/run-process'
+import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
+import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+
+const runtimePath =
+  process.env.BUN_EXECUTABLE ?? resolve('out/orcad', orcadBunRuntimeFilename(process.platform))
+const nodePath =
+  process.env.ORCA_TEST_NODE_EXECUTABLE ?? (process.versions.bun ? 'node' : process.execPath)
+let directory = ''
+const children = new Set<ReturnType<typeof spawnProcess>>()
+const runtimes = new Set<number>()
+
+describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
+  beforeEach(async () => {
+    directory = await mkdtemp(join(tmpdir(), 'orca-bun-launcher-'))
+    await copyFile(runtimePath, join(directory, orcadBunRuntimeFilename(process.platform)))
+    await writeFile(join(directory, '.build-target'), `${process.platform}-${process.arch}\n`)
+    await build({
+      stdin: {
+        contents: `
+          import {handoffToBundledOrcad} from './src/main/orcad/orcad-bundled-runtime'
+          import {installOrcadShutdownSignals} from './src/main/orcad/orcad-lifecycle'
+          import {writeFile} from 'node:fs/promises'
+          if (!process.versions.bun) {
+            if (!handoffToBundledOrcad()) throw new Error('Missing bundled runtime')
+          } else {
+            console.log('booting:' + process.pid)
+            console.log('runtime:' + process.versions.bun)
+            console.log('channel-env:' + (process.env.ORCA_BUNDLED_LAUNCHER_CHANNEL ?? 'absent'))
+            process.on('exit', code => console.log('runtime-exit:' + code))
+            const keepalive = setInterval(() => {}, 1_000)
+            const install = () => {
+              installOrcadShutdownSignals(async () => {
+                console.log('flushing')
+                clearInterval(keepalive)
+                if (process.env.ORCA_TEST_STALL === '1') await new Promise(() => {})
+                await new Promise(resolve => setTimeout(resolve, 150))
+                await writeFile(process.env.ORCA_TEST_DONE, 'flushed')
+              }, process.env.ORCA_TEST_STALL === '1' ? 100 : undefined)
+              console.log('ready')
+            }
+            if (process.env.ORCA_TEST_DELAY_INSTALL === '1') setTimeout(install, 300)
+            else install()
+          }
+        `,
+        resolveDir: process.cwd(),
+        loader: 'ts'
+      },
+      outfile: join(directory, 'orcad.js'),
+      bundle: true,
+      platform: 'node',
+      target: 'node18',
+      format: 'cjs'
+    })
+  })
+
+  afterEach(async () => {
+    for (const child of children) {
+      child.kill('SIGKILL')
+    }
+    children.clear()
+    for (const pid of runtimes) {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {}
+    }
+    runtimes.clear()
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  })
+
+  function launch(
+    options: { direct?: boolean; nohup?: boolean; delay?: boolean; stall?: boolean } = {}
+  ) {
+    const runtime = options.direct
+      ? join(directory, orcadBunRuntimeFilename(process.platform))
+      : nodePath
+    const child = spawnProcess({
+      program: options.nohup ? 'nohup' : runtime,
+      args: [...(options.nohup ? [runtime] : []), join(directory, 'orcad.js')],
+      env: {
+        ...process.env,
+        ORCA_BACKGROUND_LAUNCH: '1',
+        ORCA_TEST_DONE: join(directory, 'done'),
+        ORCA_TEST_DELAY_INSTALL: options.delay ? '1' : '0',
+        ORCA_TEST_STALL: options.stall ? '1' : '0'
+      },
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    children.add(child)
+    let closed = false
+    child.once('close', () => {
+      closed = true
+    })
+    let output = ''
+    const capture = (chunk: Buffer): void => {
+      output += chunk.toString()
+      const pid = /booting:(\d+)/.exec(output)?.[1]
+      if (pid && !output.includes('runtime-exit:')) {
+        runtimes.add(Number(pid))
+      } else if (pid) {
+        runtimes.delete(Number(pid))
+      }
+    }
+    child.stdout.on('data', capture)
+    child.stderr.on('data', capture)
+    const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolve, reject) => {
+        child.once('error', reject)
+        child.once('exit', (code, signal) => {
+          children.delete(child)
+          resolve({ code, signal })
+        })
+      }
+    )
+    return { child, output: () => output, exit, isClosed: () => closed }
+  }
+
+  it.each([false, true])(
+    'drains Bun after its launcher is killed (startup pending: %s)',
+    async (delay) => {
+      const h = launch({ delay })
+      await vi.waitFor(() => expect(h.output()).toContain(delay ? 'booting:' : 'ready'), {
+        timeout: 5_000
+      })
+      expect(h.output()).toContain(`runtime:${ORCAD_BUN_VERSION}`)
+      expect(h.output()).toContain('channel-env:absent')
+      h.child.kill('SIGKILL')
+      await h.exit
+      await vi.waitFor(
+        async () => expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed'),
+        { timeout: 5_000 }
+      )
+      expect(h.output().match(/flushing/g)).toHaveLength(1)
+      await vi.waitFor(() => expect(h.output()).toContain('runtime-exit:0'))
+      await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32').each([false, true])(
+    'survives nohup hangups and drains on TERM (direct Bun: %s)',
+    async (direct) => {
+      const h = launch({ direct, nohup: true })
+      await vi.waitFor(() => expect(h.output()).toContain('ready'), { timeout: 5_000 })
+      if (!h.child.pid) {
+        throw new Error('Missing launcher pid')
+      }
+      process.kill(-h.child.pid, 'SIGHUP')
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(h.child.exitCode).toBeNull()
+      expect(h.child.signalCode).toBeNull()
+      expect(h.output()).not.toContain('flushing')
+      h.child.kill('SIGTERM')
+      expect(await h.exit).toEqual({ code: 0, signal: null })
+      expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed')
+      await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+    }
+  )
+
+  it('keeps an unfinished shutdown alive until its failure deadline', async () => {
+    const h = launch({ stall: true })
+    await vi.waitFor(() => expect(h.output()).toContain('ready'), { timeout: 5_000 })
+    h.child.kill('SIGKILL')
+    await h.exit
+    await vi.waitFor(() => expect(h.output()).toContain('runtime-exit:1'))
+    expect(h.output()).toContain('exceeded 100ms')
+    await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+  })
+})

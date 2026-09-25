@@ -163,14 +163,34 @@ describe('SQLite runtime contract', () => {
     })
   })
 
-  it('rejects unsafe insert metadata without returning a rounded rowid', () => {
+  it('preserves large write metadata without reporting a committed write as failed', () => {
     const db = open(':memory:')
     db.exec('CREATE TABLE items(id INTEGER PRIMARY KEY)')
     const rowid = 9007199254740993n
-    expect(() => db.prepare('INSERT INTO items VALUES(?)').run(rowid)).toThrow(RangeError)
+    expect(db.prepare('INSERT INTO items VALUES(?)').run(rowid)).toEqual({
+      changes: 1,
+      lastInsertRowid: rowid
+    })
+    expect(db.prepare('UPDATE items SET id=id').run()).toEqual({
+      changes: 1,
+      lastInsertRowid: rowid
+    })
     const statement = db.prepare('SELECT id FROM items')
     statement.setReadBigInts(true)
     expect(statement.all()).toEqual([{ id: rowid }])
+  })
+
+  it('rejects explicit undefined bindings before modifying rows', () => {
+    const db = open(':memory:')
+    db.exec('CREATE TABLE items(value TEXT)')
+    const insert = db.prepare('INSERT INTO items VALUES(?)')
+    expect(() => Reflect.apply(insert.run, insert, [undefined])).toThrow()
+    expect(db.prepare('SELECT count(*) AS count FROM items').get()).toEqual({ count: 0 })
+    const select = db.prepare('SELECT ? AS value')
+    for (const method of [select.get, select.all]) {
+      expect(() => Reflect.apply(method, select, [undefined])).toThrow()
+    }
+    expect(() => [...Reflect.apply(select.iterate, select, [undefined])]).toThrow()
   })
 
   it('releases statements and an unfinished iterator before filesystem retirement', () => {

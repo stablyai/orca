@@ -168,6 +168,20 @@ export function isPosixPtyRootStopped(output: string, rootPid: number): boolean 
   )
 }
 
+/** The root was stopped by flow control; preserve independently stopped jobs. */
+export function getPosixPtyStoppedJobGroups(output: string, rootPid: number): Set<number> {
+  const rows = parseProcessRows(output)
+  const root = rows.find((row) => row.pid === rootPid)
+  return new Set(
+    rows
+      .filter(
+        (row) =>
+          root && row.tty === root.tty && row.pgid !== root.pgid && /^[Tt]/.test(row.state ?? '')
+      )
+      .map((row) => row.pgid)
+  )
+}
+
 export function getPosixPtyProcessGroups(
   output: string,
   rootPid: number,

@@ -9,6 +9,8 @@ import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
+import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
+import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
 
 type DisposableNativePty = pty.IPty & {
   destroy?: () => void
@@ -67,6 +69,10 @@ export function createDaemonPtySubprocessHandle(args: {
   const slavePath = readPtySlavePath(proc)
   return {
     pid: proc.pid,
+    processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
+    ...(process.platform === 'win32'
+      ? { inspectChildProcesses: () => inspectSpawnFileWindowsChildProcesses(proc) }
+      : {}),
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,
     shellPathEnv: args.env.PATH,

@@ -80,8 +80,14 @@ run(runtimePath, [
         ...(artifact
           ? [
               'src/main/daemon/pty-subprocess/bun-pty-process.integration.test.ts',
+              'src/main/daemon/pty-subprocess/bun-pty-job-control.integration.test.ts',
+              'src/main/daemon/pty-subprocess/bun-pty-process-suspension.test.ts',
+              'src/main/daemon/pty-subprocess-spawn-file-foreground.test.ts',
+              'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
+              'tests/e2e/daemon-running-work-probe.unit.test.ts',
               'src/main/daemon/pty-subprocess/windows-bun-pty-gate.integration.test.ts',
               'src/main/providers/local-pty-bun-artifact.integration.test.ts',
+              'src/main/orcad/orcad-bun-launcher.integration.test.ts',
               'config/scripts/zip-extractor-command.test.mjs'
             ]
           : [])

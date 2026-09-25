@@ -62,6 +62,9 @@ export class BunSqliteStatement implements SqliteStatement {
   }
 
   private bindings(parameters: SqliteBindings): BunBindings {
+    if (parameters.some((value) => value === undefined)) {
+      throw new TypeError('Undefined cannot be bound to a SQLite parameter')
+    }
     // No arguments would reuse the driver's previous bindings.
     if (parameters.length === 0) {
       return EMPTY_BINDINGS

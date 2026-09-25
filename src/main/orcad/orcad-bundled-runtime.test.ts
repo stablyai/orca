@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handoffToBundledOrcad } from './orcad-bundled-runtime'
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+import { ORCAD_VERSION_FILENAME } from '../../shared/orcad-artifacts'
 
 const fixture = vi.hoisted(() => ({
   exists: vi.fn<(path: string) => boolean>(),
@@ -58,10 +59,16 @@ describe('bundled Orca runtime handoff', () => {
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
+  it('refuses a versioned slot missing both its runtime and target marker', () => {
+    fixture.exists.mockImplementation((path) => path.endsWith(ORCAD_VERSION_FILENAME))
+    expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime target is missing')
+    expect(fixture.spawn).not.toHaveBeenCalled()
+  })
+
   it('refuses a remaining bundled runtime without its target marker', () => {
     fixture.exists.mockImplementation((path) => !path.endsWith('.build-target'))
     expect(() => handoffToBundledOrcad()).toThrow('bundled Orca runtime target is missing')
-    expect(fixture.realpath).not.toHaveBeenCalled()
+    expect(fixture.realpath).toHaveBeenCalledExactlyOnceWith('/slot/orcad.js')
     expect(fixture.spawn).not.toHaveBeenCalled()
   })
 
@@ -89,17 +96,25 @@ describe('bundled Orca runtime handoff', () => {
       expect(fixture.spawn).toHaveBeenCalledWith({
         program: expect.stringMatching(/bun-runtime(?:\.exe)?$/),
         args: ['/slot/orcad.js', '--port', '0'],
-        stdio: 'inherit'
+        env: expect.objectContaining({ ORCA_BUNDLED_LAUNCHER_CHANNEL: '1' }),
+        detached: platform !== 'win32',
+        stdio: ['inherit', 'inherit', 'inherit', 'ipc']
       })
       for (const signal of signalNames) {
         const listener = process
           .rawListeners(signal)
           .find((candidate) => !oldListeners.get(signal)?.includes(candidate))
+        if (signal === 'SIGHUP' && platform === 'win32') {
+          expect(listener).toBeUndefined()
+          continue
+        }
         expect(listener).toBeDefined()
         if (listener) {
           listener.call(process, signal)
         }
-        if (platform === 'win32') {
+        if (signal === 'SIGHUP') {
+          expect(child.kill).not.toHaveBeenCalledWith('SIGHUP')
+        } else if (platform === 'win32') {
           expect(child.kill).not.toHaveBeenCalled()
         } else {
           expect(child.kill).toHaveBeenLastCalledWith(signal)
@@ -116,6 +131,19 @@ describe('bundled Orca runtime handoff', () => {
     for (const signal of signalNames) {
       expect(process.rawListeners(signal)).toEqual(oldListeners.get(signal))
     }
+  })
+
+  it('locates the runtime beside the resolved entry rather than its symlink', () => {
+    fixture.realpath.mockImplementation((path) =>
+      path === '/slot/orcad.js' ? '/real/slot/orcad.js' : path
+    )
+    handoffToBundledOrcad()
+    expect(fixture.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: expect.stringMatching(/real\/slot\/bun-runtime(?:\.exe)?$/),
+        args: ['/real/slot/orcad.js', '--port', '0']
+      })
+    )
   })
 
   it('reports failed spawn as a configuration failure and removes listeners', () => {

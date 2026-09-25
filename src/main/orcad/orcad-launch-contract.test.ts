@@ -13,6 +13,7 @@ import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
+import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 
 describe('parseArgs', () => {
   it('accepts --bind and leaves it unset when absent', () => {
@@ -43,6 +44,9 @@ describe('resolveOrcadExitCode', () => {
       ORCAD_EXIT_CONFIGURATION
     )
     expect(resolveOrcadExitCode(new Error('port in use'))).toBe(ORCAD_EXIT_FAILED)
+    expect(resolveOrcadExitCode(new OrcadBundledRuntimeError('partial installation'))).toBe(
+      ORCAD_EXIT_CONFIGURATION
+    )
     expect(ORCAD_EXIT_CONFIGURATION).not.toBe(ORCAD_EXIT_FAILED)
   })
 })

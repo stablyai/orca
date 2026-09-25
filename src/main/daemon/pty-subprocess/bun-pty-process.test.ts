@@ -416,7 +416,7 @@ describe('Bun.Terminal PTY adapter', () => {
     proc.resume()
     proc.resume()
     expect(job.pause).toHaveBeenCalledOnce()
-    expect(job.resume).toHaveBeenCalledTimes(2)
+    expect(job.resume).toHaveBeenCalledOnce()
     expect(proc.jobRootProcessIsWrapper).toBe(true)
     expect(readWindowsPtyJobProcessIds(proc)).toBeNull()
     expect(harness.spawn.mock.calls[0]?.[1]).not.toHaveProperty('ipc')
@@ -458,7 +458,7 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(onExit).toHaveBeenCalledOnce()
     expect(job.close).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
-    expect(job.resume).toHaveBeenCalledTimes(2)
+    expect(job.resume).toHaveBeenCalledOnce()
     job.resume.mockImplementation(() => {
       throw new Error('job already closed')
     })
@@ -468,7 +468,7 @@ describe('Bun.Terminal PTY adapter', () => {
       proc.kill()
       proc.destroy()
     }).not.toThrow()
-    expect(job.resume).toHaveBeenCalledTimes(2)
+    expect(job.resume).toHaveBeenCalledOnce()
   })
 
   it('does not release a Windows gate without exact job ownership', async () => {

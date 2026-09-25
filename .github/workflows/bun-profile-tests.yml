@@ -45,6 +45,15 @@ jobs:
         run: node config/scripts/build-windows-process-tree-relay-addon.mjs
       - run: pnpm build:orcad
       - run: pnpm test:bun:profile --artifact
+      - uses: actions/setup-node@v6
+        if: runner.arch == 'X64'
+        with:
+          node-version: '18'
+      - name: Verify Node 18 loads and hands off to bundled Bun
+        if: runner.arch == 'X64'
+        run: |
+          node out/orcad/orcad.js --orcad-smoke-load-check
+          node out/orcad/orcad.js --orcad-profile-state-preflight 00000000-0000-4000-8000-000000000018
 
   linux_glibc_floor:
     strategy:

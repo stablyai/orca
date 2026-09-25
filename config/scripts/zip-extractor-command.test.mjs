@@ -1,12 +1,14 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from './script-child-process.mjs'
 import { getZipExtractorCommand } from './zip-extractor-command.mjs'
 
 const directories = []
 afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -25,6 +27,23 @@ function extract(bytes) {
 }
 
 describe('native archive extraction', () => {
+  it('uses the system archive reader on Windows unless an override is configured', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    vi.stubEnv('SystemRoot', 'C:\\Windows')
+    vi.stubEnv('ORCA_UNZIP_BIN', '')
+    expect(getZipExtractorCommand('source.zip', 'output')).toEqual({
+      file: join('C:\\Windows', 'System32', 'tar.exe'),
+      args: ['-xf', 'source.zip', '-C', 'output'],
+      label: 'tar'
+    })
+    vi.stubEnv('ORCA_UNZIP_BIN', 'C:\\tools\\unzip.exe')
+    expect(getZipExtractorCommand("source '$.zip", "output '$")).toEqual({
+      file: 'C:\\tools\\unzip.exe',
+      args: ['-q', "source '$.zip", '-d', "output '$"],
+      label: 'unzip'
+    })
+  })
+
   it('extracts through paths containing spaces, apostrophes and shell characters', () => {
     const { result, destination } = extract(
       Buffer.from(
