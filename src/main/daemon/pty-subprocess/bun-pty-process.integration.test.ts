@@ -82,7 +82,8 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
     it('pauses and resumes the owned process when process discovery is unavailable', async () => {
       const result = await runTerminalScript(`
       const expected = 'ready' + 'x'.repeat(1024 * 1024)
-      const proc = spawnBunPty({...args,args:['-e','process.stdout.write("ready");setTimeout(()=>process.stdout.write("x".repeat(1024*1024)),100)']},{readProcessTable:()=>''})
+      const continueOutput = require('node:path').join(args.cwd, 'continue-output')
+      const proc = spawnBunPty({...args,env:{...args.env,ORCA_TEST_CONTINUE:continueOutput},args:['-e','process.stdout.write("ready");const timer=setInterval(()=>{if(!require("node:fs").existsSync(process.env.ORCA_TEST_CONTINUE))return;clearInterval(timer);process.stdout.write("x".repeat(1024*1024))},1)']},{readProcessTable:()=>''})
       let output = '', paused = false, stable = false
       proc.onData(data => {
         output += data
@@ -91,6 +92,7 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
         proc.pause()
         setTimeout(() => {
           const settled = output.length
+          require('node:fs').writeFileSync(continueOutput, 'continue')
           setTimeout(() => { stable = output.length === settled;proc.resume() }, 150)
         }, 150)
       })
