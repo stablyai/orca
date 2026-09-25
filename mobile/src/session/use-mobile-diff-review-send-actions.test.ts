@@ -332,6 +332,15 @@ describe('useMobileDiffReviewSendActions', () => {
     )
   })
 
+  it('says it is waiting for the desktop instead of rejecting when there is no connection', async () => {
+    await mountWithoutClient()
+    await act(async () => {
+      await expect(actions?.createTerminalAndSend([COMMENT])).resolves.toBeUndefined()
+    })
+    expect(setSendSheet).toHaveBeenCalledWith(null)
+    expect(setActionError).toHaveBeenLastCalledWith('Waiting for desktop...')
+  })
+
   it('keeps the notes unsent when the agent started without them', async () => {
     await mount(launchClient('not-delivered').client)
     await act(async () => {

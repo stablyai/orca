@@ -123,8 +123,11 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
 
   const createTerminalAndSend = useCallback(
     async (comments: readonly DiffComment[]) => {
+      // Reported, not thrown: the sheet's caller drops the promise, so a throw would show nothing.
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        setSendSheet(null)
+        setActionError('Waiting for desktop...')
+        return
       }
       if (agentLaunchInFlightRef.current) {
         return
