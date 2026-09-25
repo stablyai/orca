@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -12,6 +13,8 @@ import {
   resolveEffectiveProjectHost,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
   return {
@@ -262,15 +265,22 @@ describe('deep-link resolution', () => {
 })
 
 describe('removeSettingsProjectFromAllHosts', () => {
+  beforeEach(() => {
+    vi.mocked(toast.error).mockReset()
+  })
+
+  const resolveHostLabel = (hostId: string): string | null =>
+    hostId === 'runtime:home-mac' ? 'Home Mac' : hostId
+
   it('removes every host setup with its own hostId and skips setups without a repo row', async () => {
-    const removeProject = vi.fn().mockResolvedValue(undefined)
+    const removeProject = vi.fn().mockResolvedValue({ status: 'removed' })
     const setups = [
       makeSetup({ hostId: 'local', repoId: 'local-1' }),
       makeSetup({ hostId: 'ssh:box', repoId: '  ' }),
       makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })
     ]
 
-    await removeSettingsProjectFromAllHosts(setups, removeProject)
+    await removeSettingsProjectFromAllHosts(setups, removeProject, resolveHostLabel)
 
     // errorFeedback: this is a user-initiated removal, so a failure must surface (#11994).
     expect(removeProject.mock.calls).toEqual([
@@ -285,22 +295,80 @@ describe('removeSettingsProjectFromAllHosts', () => {
       .fn()
       .mockImplementationOnce(
         () =>
-          new Promise<void>((resolve) => {
-            resolveFirst = resolve
+          new Promise<{ status: 'removed' }>((resolve) => {
+            resolveFirst = () => resolve({ status: 'removed' })
           })
       )
-      .mockResolvedValue(undefined)
+      .mockResolvedValue({ status: 'removed' })
     const setups = [
       makeSetup({ hostId: 'local', repoId: 'local-1' }),
       makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })
     ]
 
-    const pending = removeSettingsProjectFromAllHosts(setups, removeProject)
+    const pending = removeSettingsProjectFromAllHosts(setups, removeProject, resolveHostLabel)
     await Promise.resolve()
     expect(removeProject).toHaveBeenCalledTimes(1)
 
     resolveFirst?.()
     await pending
     expect(removeProject).toHaveBeenCalledTimes(2)
+  })
+
+  // The store keeps its toast for failures only, so this pane has to voice the unanswered host
+  // itself — otherwise a removal that changed nothing looks like it worked.
+  it('says which host went unanswered instead of looking successful', async () => {
+    const removeProject = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'removed' })
+      .mockResolvedValueOnce({ status: 'owner-unverifiable' })
+    const setups = [
+      makeSetup({ hostId: 'local', repoId: 'local-1' }),
+      makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })
+    ]
+
+    await removeSettingsProjectFromAllHosts(setups, removeProject, resolveHostLabel)
+
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    // The host's own name, never the raw `runtime:` routing id.
+    const description = vi.mocked(toast.error).mock.calls[0]?.[1]?.description
+    expect(description).toContain('Home Mac')
+    expect(description).not.toContain('runtime:home-mac')
+    expect(description).toContain('remove the project from the sidebar')
+  })
+
+  // An unreachable runtime is the case whose environment record may be gone, leaving no name.
+  it('names an unnamed host generically', async () => {
+    const removeProject = vi.fn().mockResolvedValue({ status: 'owner-unverifiable' })
+
+    await removeSettingsProjectFromAllHosts(
+      [makeSetup({ hostId: 'runtime:env-a1b2', repoId: 'remote-9' })],
+      removeProject,
+      () => null
+    )
+
+    const description = vi.mocked(toast.error).mock.calls[0]?.[1]?.description
+    expect(description).toContain('that host')
+    expect(description).not.toContain('env-a1b2')
+  })
+
+  // The sidebar withholds the client-only forget in a paired web client, so the toast must not
+  // send the user there.
+  it('does not point a paired web client at the sidebar forget', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    try {
+      const removeProject = vi.fn().mockResolvedValue({ status: 'owner-unverifiable' })
+
+      await removeSettingsProjectFromAllHosts(
+        [makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })],
+        removeProject,
+        resolveHostLabel
+      )
+
+      const description = vi.mocked(toast.error).mock.calls[0]?.[1]?.description
+      expect(description).toContain('Home Mac')
+      expect(description).not.toContain('sidebar')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

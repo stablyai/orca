@@ -47,3 +47,25 @@ it('retains a runtime-owned SSH project when VM cleanup fails', async () => {
     expect.objectContaining({ description: expect.stringContaining('Retry cleanup') })
   )
 })
+
+// forget-local promises to touch nothing outside this client, and this project's removal exists
+// to destroy its VM — both cannot hold, so the mode is refused rather than silently leaking a
+// live VM or quietly breaking the promise.
+it('refuses forget-local for a runtime-owned SSH project instead of leaking its VM', async () => {
+  const runtimeRepo: Repo = { ...sshRepo, connectionId: 'runtime-ssh-runtime-1' }
+  const store = createTestStore()
+  store.setState({ repos: [runtimeRepo], activeRepoId: runtimeRepo.id })
+
+  const outcome = await store
+    .getState()
+    .removeProject(runtimeRepo.id, { errorFeedback: 'toast', mode: 'forget-local' })
+
+  expect(outcome).toEqual({ status: 'failed' })
+  expect(store.getState().repos).toEqual([runtimeRepo])
+  expect(ephemeralVmCleanup).not.toHaveBeenCalled()
+  expect(reposRemove).not.toHaveBeenCalled()
+  expect(toast.error).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ description: expect.stringContaining('destroying that VM') })
+  )
+})

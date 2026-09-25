@@ -5336,7 +5336,11 @@
           "b79b39d865": "Remove Project",
           "removeDescriptionSsh": "This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.",
           "removeDescriptionLocal": "This only removes {{name}} from Orca. It is still on your disk.",
-          "removeDescriptionVmRecipe": "This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted."
+          "removeDescriptionVmRecipe": "This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.",
+          "removeDescriptionOwnerUnverifiable": "Orca could not confirm with {{host}} whether {{name}} was removed there. Removing it now clears this computer’s records only and sends nothing to {{host}}; if the project is still registered there, it comes back when that host reconnects.",
+          "removeFromOrcaOnly": "Remove from Orca",
+          "removeDescriptionOwnerUnverifiableWeb": "Orca could not confirm with {{host}} whether {{name}} was removed there. This client keeps no records of its own to clear, so reconnect {{host}} and try again.",
+          "unnamedOwnerHost": "that host"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Reveal active workspace"
@@ -12152,6 +12156,12 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "settingsProjectList": {
+          "removeOwnerUnverifiable": "Could not reach the host that owns this project",
+          "removeOwnerUnverifiableDescription": "Orca could not confirm the removal with {{host}}. Reconnect that host and try again, or remove the project from the sidebar to clear this computer’s records only.",
+          "removeOwnerUnverifiableDescriptionWeb": "Orca could not confirm the removal with {{host}}. Reconnect that host and try again.",
+          "unnamedOwnerHost": "that host"
         }
       },
       "right": {

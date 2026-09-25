@@ -3,6 +3,7 @@ import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
+import { selectNamedExecutionHostLabel } from '@/lib/execution-host-display-label'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -72,7 +73,11 @@ export function useSettingsStoreModel() {
   // Why: pane-level "Remove Project" removes every host setup, not just the selected host (per-host remove lives in "Available Hosts").
   const removeProjectAllHosts = useCallback(
     (setups: readonly ProjectHostSetup[]): Promise<void> =>
-      removeSettingsProjectFromAllHosts(setups, removeProject),
+      // Why: read the host catalogs when the removal reports back, not at render — a rename or a
+      // newly-hydrated environment landing mid-removal should still name the host correctly.
+      removeSettingsProjectFromAllHosts(setups, removeProject, (hostId) =>
+        selectNamedExecutionHostLabel(useAppStore.getState(), hostId)
+      ),
     [removeProject]
   )
 

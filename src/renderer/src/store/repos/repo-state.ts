@@ -26,6 +26,7 @@ import type {
   FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { RemoveProjectOutcome } from './project-removal-outcome'
 
 export const ERROR_TOAST_DURATION = 60_000
 
@@ -248,10 +249,16 @@ export type RepoSlice = {
   ) => Promise<boolean>
   // options.hostId disambiguates which host's row to remove when the id exists on multiple hosts; else the focused host is assumed.
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.
+  // options.mode 'forget-local' clears this client's records without calling the owning host; the
+  // returned 'owner-unverifiable' is what earns a caller the right to offer it.
   removeProject: (
     projectId: string,
-    options?: { hostId?: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
-  ) => Promise<void>
+    options?: {
+      hostId?: ExecutionHostId
+      errorFeedback?: 'toast' | 'silent'
+      mode?: 'delete-on-host' | 'forget-local'
+    }
+  ) => Promise<RemoveProjectOutcome>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.
   updateRepo: (

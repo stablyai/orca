@@ -5,6 +5,11 @@
  * aborted the local purge before the `set()` — the ghost row survived and nothing was
  * surfaced to the user. Only `repo_not_found` is tolerated; any other failure must keep
  * the row, and the error toast is opt-in so bulk/background callers stay silent.
+ *
+ * A later pass splits "any other failure" in two. A host that answers and refuses is a failure and
+ * toasts as before. A host that never answers is `owner-unverifiable`: the row is still kept —
+ * its catalog was not touched — but the caller is told so it can offer the client-only forget,
+ * so the store does not spend a dead-end toast on it.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
@@ -109,18 +114,19 @@ describe('removeProject when the owning host already dropped the project', () =>
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a'])
   })
 
-  it('keeps the row and stays silent when the remote fails for another reason', async () => {
-    answerRepoRmWith('runtime_unavailable')
+  it('keeps the row and stays silent when the remote refuses', async () => {
+    answerRepoRmWith('unauthorized')
     const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
 
-    await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
+    const outcome = await store.getState().removeProject('project-b', { hostId: 'runtime:env-1' })
 
+    expect(outcome).toEqual({ status: 'failed' })
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a', 'project-b'])
     expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('toasts once for a genuine failure when the caller opts in', async () => {
-    answerRepoRmWith('runtime_unavailable')
+    answerRepoRmWith('unauthorized')
     const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
 
     await store
@@ -128,6 +134,56 @@ describe('removeProject when the owning host already dropped the project', () =>
       .removeProject('project-b', { hostId: 'runtime:env-1', errorFeedback: 'toast' })
 
     expect(toast.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports owner-unverifiable without a toast when the host never answers', async () => {
+    answerRepoRmWith('runtime_unavailable')
+    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
+
+    const outcome = await store
+      .getState()
+      .removeProject('project-b', { hostId: 'runtime:env-1', errorFeedback: 'toast' })
+
+    // The host's catalog was never reached, so the row must survive: a purge here would claim
+    // a removal that did not happen.
+    expect(outcome).toEqual({ status: 'owner-unverifiable' })
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a', 'project-b'])
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  // The client refuses to dispatch to an environment the user disconnected, so the host answered
+  // nothing. Classified as a refusal this reported `failed` and the dialog offered no way out.
+  it('reports owner-unverifiable when the client never dispatched to a disconnected host', async () => {
+    answerRepoRmWith('runtime_manually_disconnected')
+    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
+
+    const outcome = await store
+      .getState()
+      .removeProject('project-b', { hostId: 'runtime:env-1', errorFeedback: 'toast' })
+
+    expect(outcome).toEqual({ status: 'owner-unverifiable' })
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a', 'project-b'])
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('forget-local clears the row without ever calling the unreachable host', async () => {
+    answerRepoRmWith('runtime_unavailable')
+    const store = seedRemoteProjects([liveRemoteRepo, staleRemoteRepo])
+
+    const outcome = await store
+      .getState()
+      .removeProject('project-b', { hostId: 'runtime:env-1', mode: 'forget-local' })
+
+    expect(outcome).toEqual({ status: 'removed' })
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['project-a'])
+    // Nothing at all is asked of the host — not the removal, not the terminal teardown.
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    // Host-scoped so a same-id row on another host keeps its own records.
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: 'project-b',
+      hostId: 'runtime:env-1'
+    })
+    expect(reposRemove).not.toHaveBeenCalled()
   })
 
   it('leaves a same-id project on another host untouched', async () => {
