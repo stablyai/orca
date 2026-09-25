@@ -55,7 +55,8 @@ const mocks = vi.hoisted(() => ({
   })),
   writeTerminalClipboardText: vi.fn(async (_text: string) => undefined),
   toastMessage: vi.fn(),
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  resolveForkSetupDecision: vi.fn(async (..._args: unknown[]): Promise<string> => 'run')
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
@@ -68,6 +69,9 @@ vi.mock('@/runtime/runtime-git-working-tree-carry-client', () => ({
 vi.mock('./agent-session-fork-launch', () => ({
   launchNativeAgentSessionFork: mocks.launchNativeAgentSessionFork,
   launchTranscriptAgentSessionFork: mocks.launchTranscriptAgentSessionFork
+}))
+vi.mock('./agent-session-fork-setup-decision', () => ({
+  resolveForkSetupDecision: mocks.resolveForkSetupDecision
 }))
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
@@ -146,7 +150,7 @@ describe('runAgentSessionFork', () => {
     expect(call[0]).toBe('repo')
     expect(call[1]).toBe('feedback-fork')
     expect(call[2]).toBe('a'.repeat(40))
-    expect(call[3]).toBe('inherit')
+    expect(call[3]).toBe('run')
     expect(call[5]).toBe('sidebar')
     expect(call[10]).toBe('claude')
     expect(call[24]).toBe('feedback')
@@ -277,6 +281,40 @@ describe('runAgentSessionFork', () => {
     const launchOrder = mocks.launchNativeAgentSessionFork.mock.invocationCallOrder[0] ?? 0
     expect(carryOrder).toBeLessThan(activateOrder)
     expect(activateOrder).toBeLessThan(launchOrder)
+  })
+
+  it('creates without setup and runs no setup commands when orca.yaml is not trusted', async () => {
+    mocks.resolveForkSetupDecision.mockResolvedValueOnce('skip')
+    const defaultTabs: WorktreeDefaultTabsLaunch = {
+      tabs: [{ title: 'Dev', command: 'pnpm dev' }],
+      runCommands: true
+    }
+    createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'repo::feedback-fork', path: '/r/feedback-fork' },
+      setup: { runnerScriptPath: '/r/feedback-fork/.orca/setup.sh', envVars: {} },
+      defaultTabs
+    })
+
+    await runAgentSessionFork(request(), onStage)
+
+    expect(createCall()[3]).toBe('skip')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith('repo::feedback-fork', {
+      sidebarRevealBehavior: 'auto',
+      defaultTabs: { ...defaultTabs, runCommands: false },
+      providesInitialSurface: true
+    })
+  })
+
+  it('resolves the setup decision for the source before creating anything', async () => {
+    await runAgentSessionFork(request(), onStage)
+
+    expect(mocks.resolveForkSetupDecision).toHaveBeenCalledExactlyOnceWith(
+      state,
+      knownWorktrees.get('repo::feedback')
+    )
+    const resolveOrder = mocks.resolveForkSetupDecision.mock.invocationCallOrder[0] ?? 0
+    expect(resolveOrder).toBeLessThan(createWorktree.mock.invocationCallOrder[0] ?? 0)
+    expect(resolveOrder).toBeLessThan(onStage.mock.invocationCallOrder[0] ?? 0)
   })
 
   it('lets activation seed the workspace when no agent is launched', async () => {

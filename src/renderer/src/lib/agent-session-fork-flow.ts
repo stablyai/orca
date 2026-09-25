@@ -15,6 +15,7 @@ import {
   type AgentForkLaunchSource
 } from './agent-session-fork-launch'
 import { findForkWorktreeRepo, forkWorktreeOwnerSettings } from './agent-session-fork-source-repo'
+import { resolveForkSetupDecision } from './agent-session-fork-setup-decision'
 import type { ForkableAgentSession } from './worktree-agent-fork-sessions'
 
 export type AgentSessionForkSource =
@@ -169,6 +170,8 @@ export async function runAgentSessionFork(
   const startsAtParentCommit =
     request.base.kind === 'parent-commit' && request.sourceHeadOid !== null
   const base = resolveCreateBase(request, parentBranch)
+  // Why: may open the orca.yaml trust prompt; it runs before anything exists, like every create path.
+  const setupDecision = await resolveForkSetupDecision(state, sourceWorktree)
 
   onStage('creating')
   let created: Awaited<ReturnType<typeof state.createWorktree>>
@@ -177,7 +180,7 @@ export async function runAgentSessionFork(
       sourceWorktree.repoId,
       request.name,
       base,
-      'inherit',
+      setupDecision,
       undefined,
       request.launchSource,
       undefined,
@@ -236,8 +239,16 @@ export async function runAgentSessionFork(
   // Why: after the carry so setup sees the carried files; before the agent tab so that tab stays in front.
   activateAndRevealWorktree(child.id, {
     sidebarRevealBehavior: 'auto',
-    ...(created.setup ? { setup: created.setup } : {}),
-    ...(created.defaultTabs ? { defaultTabs: created.defaultTabs } : {}),
+    ...(created.setup && setupDecision !== 'skip' ? { setup: created.setup } : {}),
+    ...(created.defaultTabs
+      ? {
+          // Why: untrusted default-tab commands must not run even if a host ignored the skip.
+          defaultTabs:
+            setupDecision === 'skip'
+              ? { ...created.defaultTabs, runCommands: false }
+              : created.defaultTabs
+        }
+      : {}),
     ...(agentOpensSurface ? { providesInitialSurface: true } : {})
   })
   const launched = await launchForkAgent(request.source, child, connectionId, request.launchSource)
