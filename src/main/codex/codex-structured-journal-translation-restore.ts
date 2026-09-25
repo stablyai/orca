@@ -1,5 +1,12 @@
 import type { AgentJournalTurnLifecycle } from '../../shared/agent-session-journal-types'
-import type { CodexTurnOrdinals } from './codex-structured-item-translation'
+import { readCodexThreadItem, type CodexTurnOrdinals } from './codex-structured-item-translation'
+import type { CodexJournalCompactions } from './codex-structured-journal-compactions'
+import type { CodexJournalItems } from './codex-structured-journal-items'
+import {
+  readCodexNotificationThreadItem,
+  readCodexSubagentAnnouncement
+} from './codex-subagent-activity'
+import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import {
   readCodexJournalRecord,
   readCodexJournalString
@@ -12,6 +19,33 @@ import {
 } from './codex-structured-journal-translation-turns'
 import { readCodexTurnDurationMs, readCodexTurnStatus } from './codex-structured-thread-facts'
 
+type CodexHistoryItemEvent = { threadId: string; method: string; params: unknown }
+
+/** One replayed item. History never runs the live item router, so a helper the replay announces
+ *  is registered here for its name and membership only: `register` starts no execution, so no
+ *  strip entry, record or roster row claims it runs until a live turn of its own says so. */
+export function restoreCodexHistoryItem(
+  event: CodexHistoryItemEvent,
+  input: {
+    primaryThreadId: string | null
+    compactions: Pick<CodexJournalCompactions, 'handle'>
+    items: Pick<CodexJournalItems, 'handle'>
+    executions: Pick<CodexSubagentExecutions, 'register'>
+  }
+): CodexJournalTranslationAdmission {
+  const item = readCodexNotificationThreadItem(event.params, readCodexThreadItem)
+  const announcement = item && readCodexSubagentAnnouncement(item)
+  if (announcement && announcement.agentThreadId !== input.primaryThreadId) {
+    input.executions.register(announcement.agentThreadId, announcement.label, undefined)
+  }
+  const compaction = input.compactions.handle(event)
+  if (compaction) {
+    return compaction
+  }
+  const translated = input.items.handle(event, 'history')
+  return translated.handled ? translated.admission : { accepted: false, reason: 'untranslated' }
+}
+
 /** Old providers may return the complete thread from resume. Keep that fallback
  * bounded before admitting any rows to the asynchronous sink. */
 export const CODEX_RESTORE_MAX_OPERATIONS = 1_024
@@ -22,11 +56,7 @@ export function restoreCodexJournalThread(input: {
   thread: Record<string, unknown>
   currentTurnIds: Map<string, Set<string>>
   ordinals: CodexTurnOrdinals
-  handleItem: (event: {
-    threadId: string
-    method: string
-    params: unknown
-  }) => CodexJournalTranslationAdmission
+  handleItem: (event: CodexHistoryItemEvent) => CodexJournalTranslationAdmission
   /** Absent when the caller has no session identity to key lifecycle rows by. */
   restoreTurnLifecycle?: (
     turnLifecycle: AgentJournalTurnLifecycle

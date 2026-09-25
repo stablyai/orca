@@ -24,8 +24,12 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
   const { linkageFor } = subagents.linkage
   const producerDeps = { ...deps, linkageFor }
   const genericFrames = new CodexJournalGenericFrames(producerDeps, activeTurn)
-  const items = new CodexJournalItems(producerDeps, activeTurn, (threadId, turnId) =>
-    genericFrames.suppress(threadId, turnId)
+  const items = new CodexJournalItems(
+    producerDeps,
+    activeTurn,
+    (threadId, turnId) => genericFrames.suppress(threadId, turnId),
+    // A collab call's row names its helpers the way the roster does.
+    (threadId) => subagents.executions.label(threadId)
   )
   return {
     activeTurns,

@@ -89,6 +89,8 @@ export type NativeChatToolResultBlock = {
   type: 'tool-result'
   output: string
   isError?: boolean
+  /** The call this result answers, when the producer knows it; otherwise pairing is positional. */
+  callId?: string
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
 }

@@ -238,10 +238,10 @@ const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = 
   // `restoreThread` replays them straight through `items.handle`, which is where
   // the classification earns its keep.
   //
-  // `collabAgentToolCall` is deliberately NOT suppressed with it. Nothing
-  // guarantees a session reports subagent work as `subAgentActivity` at all; one
-  // that only ever emits the collab tool call gets no roster row, and suppressing
-  // that too would leave its fan-out showing nothing.
+  // `collabAgentToolCall` is deliberately NOT suppressed with it. Codex's default
+  // multi-agent mode reports subagent work ONLY as that call, which renders as its
+  // own tool row and never reaches this catalog; were it ever to, suppressing it
+  // would leave that session's fan-out showing nothing.
   [CODEX_SUBAGENT_ITEM_TYPE]: 'status-chrome',
   // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
   // nothing at all. Every other item type this build does not model carries text
