@@ -118,13 +118,12 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-async function accept(text: string): Promise<string> {
+function sendParams(text: string) {
   const body = hostTestMessage(text)
-  const clientOperationId = hostTestOperationId()
-  const sent = await host.send(CALLER, {
+  return {
     envelope: {
       sessionId: SESSION,
-      clientOperationId,
+      clientOperationId: hostTestOperationId(),
       expectedRuntimeFence: 1,
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
@@ -133,9 +132,14 @@ async function accept(text: string): Promise<string> {
       })
     },
     body
-  })
+  }
+}
+
+async function accept(text: string): Promise<string> {
+  const params = sendParams(text)
+  const sent = await host.send(CALLER, params)
   expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
-  return clientOperationId
+  return params.envelope.clientOperationId
 }
 
 function stop() {
@@ -474,3 +478,36 @@ describe('a quit with a message still queued', () => {
     })
   })
 })
+
+describe('a send whose start failed, sent again with the same operation id', () => {
+  it('replays the recorded rejection and starts no second agent (R2)', async () => {
+    acquire.mockRejectedValueOnce(new Error('spawn claude ENOENT'))
+    const fenceBefore = store.getRecord(SESSION)!.lease.runtimeFence
+    const params = sendParams('hello')
+    // A failed start is a rejected message, never a refused send.
+    expect(await host.send(CALLER, params)).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    const id = params.envelope.clientOperationId
+    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
+    // The start moved the fence while the message was out.
+    expect(store.getRecord(SESSION)!.lease.runtimeFence).toBeGreaterThan(fenceBefore)
+    const starts = acquire.mock.calls.length
+
+    const replay = await host.send(CALLER, params)
+
+    expect(replay).toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { submission: { clientMessageId: id, dispatchState: 'rejected' } }
+    })
+    await settleLoop()
+    expect(acquire).toHaveBeenCalledTimes(starts)
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+})
+
+async function settleLoop(): Promise<void> {
+  await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
+}
