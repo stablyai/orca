@@ -10,7 +10,7 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
-import { agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDotState as asDotState, agentVerdictDotState } from '@/lib/agent-row-dot-state'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
@@ -29,7 +29,7 @@ function stateDotTooltipLabel(
   dotState: AgentDotState,
   now: number
 ): string {
-  if (agent.entry.interrupted === true) {
+  if (dotState === 'interrupted') {
     return 'Interrupted by user'
   }
   // Why: report the observation, not a verdict on the agent — the elapsed gap is what
@@ -141,7 +141,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
-  const isInterrupted = agent.entry.interrupted === true
+  const verdictDotState = agentVerdictDotState(agent.entry)
+  const isInterrupted = verdictDotState === 'interrupted'
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1
   const lineageChildCount = lineage?.childCount ?? 0
@@ -152,10 +153,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           lineageChildCount === 1 ? 'agent' : 'agents'
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
-  // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
-  const dotState: AgentDotState = isInterrupted
-    ? 'interrupted'
-    : asDotState(agent.state, agent.entry.workingMode)
+  // Why: a stop or a failure is a terminal outcome, so surface it in the leading state dot.
+  const dotState: AgentDotState =
+    verdictDotState ?? asDotState(agent.state, agent.entry.workingMode)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.

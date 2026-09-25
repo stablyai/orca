@@ -8,7 +8,8 @@ import {
 } from '../../../../shared/agent-status-child-work-projection'
 import {
   continueMainAgentStatus,
-  isAgentStatusHeldOpenByChildWork
+  isAgentStatusHeldOpenByChildWork,
+  mainAgentTurnInterrupted
 } from '../../../../shared/agent-lead-status-fold'
 import { mainAgentStatusEqual, agentSubagentsEqual } from '../../../../shared/agent-status-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
@@ -98,6 +99,8 @@ function projectStatus(
     state: agentStatus.state,
     ...(agentStatus.workingMode ? { workingMode: agentStatus.workingMode } : {}),
     mainAgent,
+    // Derived from `mainAgent`, so the equality below needs no second check of it.
+    interrupted: mainAgentTurnInterrupted(mainAgent),
     prompt: summary.latestPrompt,
     agentType: tab.agentSessionAgent,
     // The host projects these from the journal so the row reads like a hook-reported one:

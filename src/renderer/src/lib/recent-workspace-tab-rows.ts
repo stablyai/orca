@@ -7,6 +7,7 @@ import {
   type WorktreeAttention
 } from '@/components/sidebar/smart-attention'
 import { tabHasLivePty } from './tab-has-live-pty'
+import { agentVerdictDotState } from './agent-row-dot-state'
 import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 import type { WorktreeStatus } from './worktree-status'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -85,13 +86,18 @@ export function resolveRecentWorkspaceTabStatus(
   if (explicit === 'permission') {
     return explicit
   }
-  const hasInterrupted = panes.some(
-    (pane) =>
+  const verdicts = new Set(
+    panes.flatMap((pane) =>
       pane.kind === 'hook' &&
-      pane.entry.interrupted === true &&
       isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        ? [agentVerdictDotState(pane.entry)]
+        : []
+    )
   )
-  if (hasInterrupted) {
+  if (verdicts.has('failed')) {
+    return 'failed'
+  }
+  if (verdicts.has('interrupted')) {
     return 'interrupted'
   }
   if (explicit === 'done') {

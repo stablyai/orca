@@ -68,7 +68,12 @@ function makeTab(overrides: Partial<TerminalTab> & { id: string }): TerminalTab 
   }
 }
 
-function makeAgentRow(args: { paneKey: string; state: AgentStatusState; interrupted?: boolean }) {
+function makeAgentRow(args: {
+  paneKey: string
+  state: AgentStatusState
+  interrupted?: boolean
+  mainAgent?: AgentStatusEntry['mainAgent']
+}) {
   const entry: AgentStatusEntry = {
     state: args.state,
     prompt: 'Fix it',
@@ -78,7 +83,8 @@ function makeAgentRow(args: { paneKey: string; state: AgentStatusState; interrup
     terminalTitle: 'Claude',
     stateHistory: [],
     agentType: 'claude',
-    interrupted: args.interrupted
+    interrupted: args.interrupted,
+    mainAgent: args.mainAgent
   }
 
   return {
@@ -124,6 +130,24 @@ describe('collectRetainedAgentsOnDisappear', () => {
 
     const result = collectRetainedAgentsOnDisappear({
       previousAgents,
+      currentAgents: new Map(),
+      retainedAgentsByPaneKey: {},
+      retentionSuppressedPaneKeys: {},
+      recentlyClosedAgentStatusTabIds: {},
+      recentlyRetiredAgentStatusPaneKeys: {}
+    })
+
+    expect(result.toRetain).toEqual([])
+  })
+
+  it('does not retain a failed done row', () => {
+    const failed = makeAgentRow({
+      paneKey: 'tab-1:1',
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 100 }
+    })
+    const result = collectRetainedAgentsOnDisappear({
+      previousAgents: new Map([['tab-1:1', { row: failed, worktreeId: 'wt-1' }]]),
       currentAgents: new Map(),
       retainedAgentsByPaneKey: {},
       retentionSuppressedPaneKeys: {},

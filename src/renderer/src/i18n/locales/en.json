@@ -18230,6 +18230,7 @@
       "needsInput": "needs input",
       "working": "working",
       "stopped": "stopped",
+      "failed": "failed",
       "finished": "finished"
     }
   },

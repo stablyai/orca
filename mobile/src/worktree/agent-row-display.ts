@@ -1,4 +1,5 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { AgentJournalTurnOutcome } from '../../../src/shared/agent-turn-outcome'
 
 // Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
 // 30 min). Defined locally rather than imported because a runtime-value import
@@ -17,12 +18,31 @@ export type AgentDotState =
   | 'done'
   | 'idle'
   | 'interrupted'
+  | 'failed'
+
+// Mirrors desktop agentMainAgentVerdict (src/shared/agent-main-agent-verdict.ts) for the row's
+// two fidelities; a desktop parity test runs both over one table. An old host sends no `outcome`.
+export function agentRowVerdict(
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'outcome'>
+): AgentJournalTurnOutcome | null {
+  if (row.state !== 'done') {
+    return null
+  }
+  return row.outcome ?? (row.interrupted ? 'cancellation' : null)
+}
 
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'workingMode' | 'interrupted' | 'updatedAt'>,
+  row: Pick<
+    RuntimeWorktreeAgentRow,
+    'state' | 'workingMode' | 'interrupted' | 'outcome' | 'updatedAt'
+  >,
   now: number
 ): AgentDotState {
-  if (row.interrupted) {
+  const verdict = agentRowVerdict(row)
+  if (verdict === 'failure') {
+    return 'failed'
+  }
+  if (verdict === 'cancellation') {
     return 'interrupted'
   }
   switch (row.state) {
@@ -56,6 +76,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Waiting for input'
     case 'interrupted':
       return 'Interrupted'
+    case 'failed':
+      return 'Failed'
     case 'done':
       return 'Done'
     case 'idle':

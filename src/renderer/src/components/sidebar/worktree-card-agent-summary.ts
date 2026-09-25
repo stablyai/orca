@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { agentRowDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDotState, agentVerdictDotState } from '@/lib/agent-row-dot-state'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
@@ -13,6 +13,7 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'blocked',
   'working',
   'monitoring',
+  'failed',
   'interrupted',
   'done',
   // Why: below every reporting state, above true idle — the pane is still held.
@@ -21,10 +22,7 @@ const SUMMARY_STATE_ORDER: AgentDotState[] = [
 ]
 
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  if (agent.entry.interrupted === true) {
-    return 'interrupted'
-  }
-  return agentRowDotState(agent.state, agent.entry.workingMode)
+  return agentVerdictDotState(agent.entry) ?? agentRowDotState(agent.state, agent.entry.workingMode)
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {

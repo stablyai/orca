@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { agentMainAgentVerdict } from '../../../src/shared/agent-main-agent-verdict'
+import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
+  agentRowVerdict,
   formatTimeAgo
 } from './agent-row-display'
 
@@ -37,8 +40,25 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
-  it('reports interrupted regardless of state', () => {
+  it('reports the verdict of a done row: failed, interrupted, or an old host legacy flag', () => {
     expect(agentDotState(row({ state: 'done', interrupted: true }), 0)).toBe('interrupted')
+    expect(agentDotState(row({ state: 'done', outcome: 'failure' }), 0)).toBe('failed')
+    expect(
+      agentDotState(row({ state: 'done', outcome: 'cancellation', interrupted: true }), 0)
+    ).toBe('interrupted')
+    expect(agentDotState(row({ state: 'done', outcome: 'success' }), 0)).toBe('done')
+  })
+
+  // The shared accessor cannot be imported by app code here, so this mirror must not drift from it.
+  it('agrees with the desktop verdict accessor on every row shape', () => {
+    for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
+      for (const outcome of [undefined, ...AGENT_JOURNAL_TURN_OUTCOMES]) {
+        for (const interrupted of [false, true]) {
+          const shape = { state, interrupted, ...(outcome ? { outcome } : {}) }
+          expect(agentRowVerdict(shape), JSON.stringify(shape)).toBe(agentMainAgentVerdict(shape))
+        }
+      }
+    }
   })
 
   it('decays a stale active state to idle, matching desktop', () => {
@@ -51,9 +71,9 @@ describe('agentDotState', () => {
     expect(
       agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
     ).toBe('working')
-    // 'done' never decays; interrupted still wins.
+    // 'done' never decays, and neither does its verdict.
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
-    expect(agentDotState(row({ state: 'working', updatedAt: 0, interrupted: true }), stale)).toBe(
+    expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
       'interrupted'
     )
   })

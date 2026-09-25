@@ -34,6 +34,7 @@ export function selectWorktreeActivityStatuses(
       hasPermission,
       hasLiveWorking,
       hasLiveMonitoring,
+      hasFailed,
       hasInterrupted,
       hasLiveDone,
       hasRetainedDone,
@@ -53,6 +54,7 @@ export function selectWorktreeActivityStatuses(
         hasPermission,
         hasLiveWorking,
         hasLiveMonitoring,
+        hasFailed,
         hasInterrupted,
         hasLiveDone,
         hasRetainedDone

@@ -1,4 +1,5 @@
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
 import type { DashboardAgentRow } from './useDashboardData'
 
 /**
@@ -22,8 +23,8 @@ export function lastEnteredDoneAt(
   if (completedAt !== null) {
     return completedAt
   }
-  // Why: display is looser than ranking — an interrupted turn still shows when it stopped.
-  if (entry.state === 'done' && entry.interrupted === true && entry.sessionBoundary !== true) {
+  // Why: display is looser than ranking — a stopped or failed turn still shows when it ended.
+  if (agentTurnEndedUncleanly(entry) && entry.sessionBoundary !== true) {
     return entry.stateStartedAt
   }
   for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {

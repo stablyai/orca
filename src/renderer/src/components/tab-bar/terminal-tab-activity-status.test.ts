@@ -163,6 +163,20 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('interrupted')
   })
 
+  it('reports a failed done as failed, and not as a clean finish', () => {
+    const failed = entry(FIRST_LEAF_ID, 'done', {
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW }
+    })
+    const finished = entry(SECOND_LEAF_ID, 'done')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [failed.paneKey]: failed, [finished.paneKey]: finished },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('failed')
+  })
+
   it('does not let a finished sibling mask an interrupted outcome', () => {
     const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
     const finished = entry(SECOND_LEAF_ID, 'done')

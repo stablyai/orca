@@ -11,11 +11,14 @@ import {
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
+  /** Fresh failed completion, kept separate from clean done outcomes. */
+  hasFailed: boolean
   /** Fresh interrupted completion, kept separate from clean done outcomes. */
   hasInterrupted: boolean
   hasLiveDone: boolean
@@ -31,6 +34,7 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasPermission: false,
   hasLiveWorking: false,
   hasLiveMonitoring: false,
+  hasFailed: false,
   hasInterrupted: false,
   hasLiveDone: false,
   hasRetainedDone: false,
@@ -190,6 +194,7 @@ function summariesEqual(
     previous.hasPermission === next.hasPermission &&
     previous.hasLiveWorking === next.hasLiveWorking &&
     previous.hasLiveMonitoring === next.hasLiveMonitoring &&
+    previous.hasFailed === next.hasFailed &&
     previous.hasInterrupted === next.hasInterrupted &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
@@ -229,12 +234,15 @@ function agentStatusPaneIdsByTabIdEqual(
 
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted'>
+  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'mainAgent'>
 ): void {
+  const verdict = agentMainAgentVerdict(entry)
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
-  } else if (entry.interrupted === true) {
-    // Interrupted is encoded as done, so it must be checked first.
+  } else if (verdict === 'failure') {
+    // A stop or a failure is encoded as done, so it must be checked first.
+    summary.hasFailed = true
+  } else if (verdict === 'cancellation') {
     summary.hasInterrupted = true
   } else if (entry.state === 'working') {
     if (entry.workingMode === 'monitoring') {

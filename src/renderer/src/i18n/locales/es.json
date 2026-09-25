@@ -15053,6 +15053,7 @@
       "needsInput": "necesita información",
       "working": "trabajando",
       "stopped": "detenido",
+      "failed": "fallido",
       "finished": "finalizado"
     }
   }

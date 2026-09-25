@@ -160,6 +160,13 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects a verdict change that leaves the interrupted flag as it was', () => {
+    const first = [worktree({ agents: [agent({ state: 'done', outcome: 'success' })] })]
+    const second = [worktree({ agents: [agent({ state: 'done', outcome: 'failure' })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
   it('detects monitoring mode changes within working', () => {
     const first = [worktree({ agents: [agent({ state: 'working' })] })]
     const second = [worktree({ agents: [agent({ state: 'working', workingMode: 'monitoring' })] })]

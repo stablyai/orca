@@ -18148,6 +18148,7 @@
       "needsInput": "입력 필요",
       "working": "작업 중",
       "stopped": "중지됨",
+      "failed": "실패함",
       "finished": "완료됨"
     }
   },

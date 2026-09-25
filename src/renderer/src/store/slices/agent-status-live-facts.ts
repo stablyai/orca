@@ -16,6 +16,7 @@ import {
 } from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
   existingSleepingRecord: SleepingAgentSessionRecord | undefined
@@ -96,7 +97,8 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.orchestration !== existing.orchestration ||
       entry.subagents !== existing.subagents ||
       entry.providerSession !== existing.providerSession ||
-      entry.interrupted !== existing.interrupted)
+      // A failure changes the verdict and leaves `interrupted` as it was.
+      agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing))
   const retentionRelevantChange =
     sortRelevantChange ||
     attributionChanged ||

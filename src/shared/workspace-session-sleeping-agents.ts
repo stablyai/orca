@@ -5,6 +5,7 @@ import {
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { AGENT_JOURNAL_TURN_OUTCOMES } from './agent-turn-outcome'
 import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
@@ -96,6 +97,8 @@ const sleepingAgentSessionRecordSchema = z
     terminalTitle: z.string().optional(),
     lastAssistantMessage: z.string().optional(),
     interrupted: z.boolean().optional(),
+    // A verdict this build cannot place drops the field, never the record.
+    outcome: z.enum(AGENT_JOURNAL_TURN_OUTCOMES).optional().catch(undefined),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),

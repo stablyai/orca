@@ -3,6 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 
 export function launchConfigsEqual(
   a: SleepingAgentLaunchConfig | undefined,
@@ -41,7 +42,7 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.updatedAt === next.updatedAt &&
     existing.terminalTitle === next.terminalTitle &&
     existing.lastAssistantMessage === next.lastAssistantMessage &&
-    existing.interrupted === next.interrupted &&
+    agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     existing.origin === next.origin &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
@@ -61,7 +62,7 @@ export function recoveryRecordMatches(
     existing.worktreeId === next.worktreeId &&
     existing.tabId === next.tabId &&
     existing.state === next.state &&
-    existing.interrupted === next.interrupted &&
+    agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )

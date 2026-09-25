@@ -31,14 +31,16 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
           state: history.state,
           prompt: history.prompt,
           startedAt: history.startedAt,
-          interrupted: history.interrupted ?? null
+          interrupted: history.interrupted ?? null,
+          outcome: history.outcome ?? null
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-        interrupted: entry.interrupted ?? null
+        interrupted: entry.interrupted ?? null,
+        outcome: entry.mainAgent?.outcome ?? null
       }))
   )
 }

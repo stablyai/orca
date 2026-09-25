@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
+import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -22,6 +23,9 @@ export type RuntimeWorktreeAgentRow = {
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
+  /** The main agent's verdict on this `done`. Optional on the wire: old hosts never send it, and
+   *  a reader falls back to `interrupted`. */
+  outcome?: AgentJournalTurnOutcome
   stateStartedAt: number
   updatedAt: number
   restoredUnconfirmed?: boolean
