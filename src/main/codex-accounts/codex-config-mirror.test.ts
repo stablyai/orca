@@ -65,6 +65,22 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     expect(existsSync(join(testState.fakeHomeDir, '.codex'))).toBe(false)
   })
 
+  it('leaves a WSL home to launch prep instead of running its blocking ownership check', () => {
+    const assertManagedHomePath = vi.fn((path: string) => path)
+    const wslMirror = new CodexConfigMirror(
+      { getSettings: () => getDefaultSettings(testState.fakeHomeDir) },
+      assertManagedHomePath
+    )
+
+    wslMirror.safeSyncIntoManagedHome(
+      '\\\\wsl.localhost\\Ubuntu\\home\\u\\.local\\share\\orca\\codex-accounts\\acct\\home',
+      undefined,
+      'acct'
+    )
+
+    expect(assertManagedHomePath).not.toHaveBeenCalled()
+  })
+
   it('adds the guard without touching settings already in the managed home', () => {
     writeFileSync(join(managedHomePath, 'config.toml'), 'model = "gpt-5"\n')
 

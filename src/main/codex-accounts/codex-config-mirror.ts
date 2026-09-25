@@ -108,12 +108,15 @@ export class CodexConfigMirror {
     canonicalConfig = this.readForManagedHome(managedHomePath),
     expectedAccountId?: string
   ): void {
-    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     if (canonicalConfig === null) {
       // Why: with no ~/.codex/config.toml there is nothing to mirror, but Codex still cannot start in a long home without the daemon guard.
-      ensureCodexDaemonSocketGuard(trustedManagedHomePath)
+      // WSL homes are skipped: their ownership check is a blocking wsl.exe call (startup, account switch), and WSL launch prep guards the home it launches.
+      if (!parseWslUncPath(managedHomePath)) {
+        ensureCodexDaemonSocketGuard(this.assertManagedHomePath(managedHomePath, expectedAccountId))
+      }
       return
     }
+    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
     // granted there while refreshing ordinary settings from the lane's source.
     syncSystemConfigIntoManagedCodexHome({
