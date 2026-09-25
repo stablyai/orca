@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type {
+  WorktreeDefaultTabsLaunch,
+  WorktreeSetupLaunch
+} from '../../../shared/worktree/launch-types'
 import type { ForkableAgentSession } from './worktree-agent-fork-sessions'
 import {
   runAgentSessionFork,
@@ -23,7 +27,13 @@ type MockState = {
   settings: Settings
 }
 
-const createWorktree = vi.fn(async (..._args: unknown[]) => ({
+type CreatedWorktree = {
+  worktree: { id: string; path: string }
+  setup?: WorktreeSetupLaunch
+  defaultTabs?: WorktreeDefaultTabsLaunch
+}
+
+const createWorktree = vi.fn(async (..._args: unknown[]): Promise<CreatedWorktree> => ({
   worktree: { id: 'repo::feedback-fork', path: '/r/feedback-fork' }
 }))
 const knownWorktrees = new Map<string, Worktree>()
@@ -210,8 +220,51 @@ describe('runAgentSessionFork', () => {
       connectionId: 'ssh-1',
       launchSource: 'sidebar'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo::feedback-fork', {
-      sidebarRevealBehavior: 'auto'
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith('repo::feedback-fork', {
+      sidebarRevealBehavior: 'auto',
+      providesInitialSurface: true
+    })
+  })
+
+  it('hands the setup script and default tabs to activation, after the carry and before the agent tab', async () => {
+    const setup = { runnerScriptPath: '/r/feedback-fork/.orca/setup.sh', envVars: {} }
+    const defaultTabs: WorktreeDefaultTabsLaunch = {
+      tabs: [{ title: 'Dev', command: 'pnpm dev' }],
+      runCommands: true
+    }
+    createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'repo::feedback-fork', path: '/r/feedback-fork' },
+      setup,
+      defaultTabs
+    })
+
+    await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith('repo::feedback-fork', {
+      sidebarRevealBehavior: 'auto',
+      setup,
+      defaultTabs,
+      providesInitialSurface: true
+    })
+    const carryOrder = mocks.carryRuntimeWorkingTreeChanges.mock.invocationCallOrder[0] ?? 0
+    const activateOrder = mocks.activateAndRevealWorktree.mock.invocationCallOrder[0] ?? 0
+    const launchOrder = mocks.launchNativeAgentSessionFork.mock.invocationCallOrder[0] ?? 0
+    expect(carryOrder).toBeLessThan(activateOrder)
+    expect(activateOrder).toBeLessThan(launchOrder)
+  })
+
+  it('lets activation seed the workspace when no agent is launched', async () => {
+    const setup = { runnerScriptPath: '/r/feedback-fork/.orca/setup.sh', envVars: {} }
+    createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'repo::feedback-fork', path: '/r/feedback-fork' },
+      setup
+    })
+
+    await runAgentSessionFork(request({ source: { kind: 'none' } }), onStage)
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith('repo::feedback-fork', {
+      sidebarRevealBehavior: 'auto',
+      setup
     })
   })
 
@@ -310,7 +363,11 @@ describe('runAgentSessionFork', () => {
       warnings: [{ kind: 'agent-not-started' }]
     })
     expect(mocks.writeTerminalClipboardText).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    // Why: the first activation left the surface to the agent tab, so a failed launch reseeds a shell.
+    expect(mocks.activateAndRevealWorktree.mock.calls).toEqual([
+      ['repo::feedback-fork', { sidebarRevealBehavior: 'auto', providesInitialSurface: true }],
+      ['repo::feedback-fork', { sidebarRevealBehavior: 'auto' }]
+    ])
   })
 
   it('launches the transcript fork with its agent and prompt', async () => {
@@ -349,7 +406,7 @@ describe('runAgentSessionFork', () => {
     })
     expect(mocks.writeTerminalClipboardText).toHaveBeenCalledWith('fork context')
     expect(mocks.toastMessage).toHaveBeenCalledTimes(1)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo::feedback-fork', {
+    expect(mocks.activateAndRevealWorktree).toHaveBeenLastCalledWith('repo::feedback-fork', {
       sidebarRevealBehavior: 'auto'
     })
   })

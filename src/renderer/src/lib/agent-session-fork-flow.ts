@@ -230,10 +230,19 @@ export async function runAgentSessionFork(
   }
 
   onStage('launching')
+  const agentOpensSurface = request.source.kind !== 'none'
+  // Why: after the carry so setup sees the carried files; before the agent tab so that tab stays in front.
+  activateAndRevealWorktree(child.id, {
+    sidebarRevealBehavior: 'auto',
+    ...(created.setup ? { setup: created.setup } : {}),
+    ...(created.defaultTabs ? { defaultTabs: created.defaultTabs } : {}),
+    ...(agentOpensSurface ? { providesInitialSurface: true } : {})
+  })
   const launched = await launchForkAgent(request.source, child, connectionId, request.launchSource)
   if (!launched) {
     warnings.push({ kind: 'agent-not-started' })
+    // Why: the first activation left the surface to the agent tab, so reseed a shell in its place.
+    activateAndRevealWorktree(child.id, { sidebarRevealBehavior: 'auto' })
   }
-  activateAndRevealWorktree(child.id, { sidebarRevealBehavior: 'auto' })
   return { ok: true, worktreeId: child.id, warnings }
 }

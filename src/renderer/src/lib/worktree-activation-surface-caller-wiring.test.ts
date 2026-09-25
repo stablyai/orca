@@ -14,6 +14,7 @@ const SURFACE_PROVIDING_CALLERS = [
   'src/renderer/src/components/sidebar/run-worktree-delete-with-toast.ts',
   'src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts',
   'src/renderer/src/hooks/composer-state/full-creation-execution.ts',
+  'src/renderer/src/lib/agent-session-fork-flow.ts',
   'src/renderer/src/lib/agent-session-fork-launch.ts',
   'src/renderer/src/lib/fix-checks-agent-launch.ts',
   'src/renderer/src/lib/launch-work-item-direct.ts',
