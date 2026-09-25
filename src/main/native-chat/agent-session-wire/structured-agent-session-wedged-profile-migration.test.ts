@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { evaluateAgentSessionAcquisition } from '../../../shared/agent-session-lease-adjudication'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type {
   AgentSessionClaimStatus,
@@ -279,6 +280,49 @@ describe('already-wedged profiles become usable on load', () => {
 
       expect(restoredJournal().cursor()).toEqual(firstCursor)
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
+    }
+  )
+
+  it.each([
+    [
+      'an exit the host saw but could not settle before quitting',
+      wedgedRecord({ claimStatus: 'released', handoffStage: null }),
+      {
+        kind: 'exit-observed',
+        detail: 'provider exited: transport closed',
+        observedAt: NOW - 1_000
+      } as const,
+      { state: 'interrupted', completedAt: NOW - 1_000 }
+    ],
+    [
+      'a quit that left the owner for a probe to prove gone',
+      wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER }),
+      null,
+      { state: 'unverifiable' }
+    ]
+  ] as const)(
+    'reopens a chat that was mid-turn at %s with nothing running and no working status',
+    async (_quit, seeded, deathEvidence, verdict) => {
+      await seedStore({ ...seeded, lease: { ...seeded.lease, deathEvidence } })
+      await seedRunningTurn()
+      const published: AgentSessionStatusSummary[] = []
+      openHost({
+        statusSink: { publish: (summary) => published.push(summary), forget: () => {} }
+      })
+
+      await host.restoreReadableSessions()
+
+      expect(acquire).not.toHaveBeenCalled()
+      expect(turnLifecycle('turn-1')).toEqual({
+        turnId: 'turn-1',
+        startedAt: NOW - 5_000,
+        recovered: true,
+        ...verdict
+      })
+      expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
+      // What the sidebar reads: every status this restart published says the chat is not working.
+      expect(published.filter((summary) => summary.sessionId === SESSION)).not.toEqual([])
+      expect(published.map((summary) => summary.status)).not.toContain('working')
     }
   )
 
