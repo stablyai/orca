@@ -3,10 +3,10 @@
   "family": "relay.direct-upgrade",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "9c6c0ed34d50fc9b17df515102f63c578b5e4741",
+  "baseline": "c5c1477ad4daabde26c6f1746beb22b2fd4e5475",
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "97bde2f0053411bd2ef73089d9852ea4ef52ce0346c59a9765ff04a8f81012a5",
+  "adapterSha256": "374a16da4187ee44fcc6e07daf822ae96ecfc13ab47ee6c29d048b1c0bd0f291",
   "scenarioSha256": "0fe163f405373adbb1913dddd79d6d596bf88d69fc27c824ba5a2cd4c1406446",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -98,6 +98,32 @@
             },
             "ok": false
           }
+        }
+      }
+    },
+    "232ca274f695": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "bundle": {
+          "current": {
+            "expiresAt": 1767830400000,
+            "hash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
+            "token": "pending00000000000000000000000000000000001x",
+            "version": 4
+          },
+          "deviceToken": "device-token-1",
+          "hostId": "host-1",
+          "v": 1
+        },
+        "relay": {
+          "assignmentEpoch": 1,
+          "cellUrl": "https://cell.example",
+          "directorUrl": "https://director.example",
+          "e2eeFraming": 2,
+          "relayHostId": "relay-host-0001x",
+          "v": 1
         }
       }
     },
@@ -493,40 +519,6 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "c939e4707290": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "bundle": {
-          "current": {
-            "expiresAt": 1767830400000,
-            "hash": "7ehR_WuQWkxwOFJdkHfI5jEg4DeVYWImtDuip60LHK4",
-            "token": "pending00000000000000000000000000000000001x",
-            "version": 4
-          },
-          "deviceToken": "device-token-1",
-          "hostId": "host-1",
-          "v": 1
-        },
-        "host": {
-          "deviceToken": "device-token-1",
-          "endpoint": "ws://192.168.1.10:8765",
-          "id": "host-1",
-          "lastConnected": 1767225600000,
-          "name": "Fixture host",
-          "publicKeyB64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
-          "relay": {
-            "assignmentEpoch": 1,
-            "cellUrl": "https://cell.example",
-            "directorUrl": "https://director.example",
-            "e2eeFraming": 2,
-            "relayHostId": "relay-host-0001x",
-            "v": 1
-          }
-        }
-      }
-    },
     "cb253920d469": {
       "name": "pairing.provisionRelay#1",
       "ordinal": 3,
@@ -675,7 +667,7 @@
           "sender": ["6e14239ef339", "2fce658b56a1", "240d8ec7e573"],
           "payloads": ["c5d28dd067e4", "f41ffc93936f", "10098087f961"],
           "settlements": {
-            "upgrade": "c939e4707290"
+            "upgrade": "232ca274f695"
           },
           "state": "980bbba0b617",
           "effects": ["aaef09eec3f3", "161baaed4df3", "691df8767d71"]
