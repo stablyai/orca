@@ -1,0 +1,20 @@
+{
+  // Cổng kiểu riêng cho fleet/ — `pnpm tc` của repo gốc không phủ thư mục này.
+  // Chạy được trực tiếp bằng Node 24 (type stripping), nên chỉ cho phép cú pháp "xoá được":
+  // không enum, không namespace, không parameter property (erasableSyntaxOnly).
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}
