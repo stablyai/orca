@@ -6,8 +6,9 @@
  * naming anyone else is refused before any request — never silently dropped, never allowed to win.
  * The #21097 accident was a chat that named a sibling's terminal and consumed that sibling's mail.
  *
- * The session env here is the hardest case, a chat in terminal view: it also carries its pane's
- * `ORCA_TERMINAL_HANDLE` and `ORCA_PANE_KEY`, and the implicit-terminal guess has a sibling to find.
+ * The session env here is the hardest case, a chat that inherited a pane's `ORCA_TERMINAL_HANDLE`
+ * and `ORCA_PANE_KEY` (an Orca launched from an Orca terminal), and the implicit-terminal guess has
+ * a sibling to find.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -238,12 +239,12 @@ function setEnv(env: Partial<Record<(typeof IDENTITY_ENV)[number], string>>): vo
   }
 }
 
-/** A chat in terminal view: its id, plus the pane identity that view inherits. */
-function asSessionInTerminalView(): void {
+/** A chat with its id, plus a pane identity it inherited from the Orca that launched it. */
+function asSessionWithInheritedPane(): void {
   setEnv({
     ORCA_AGENT_SESSION_ID: SESSION,
-    ORCA_TERMINAL_HANDLE: 'term_view_pane',
-    ORCA_PANE_KEY: 'tab_view:11111111-1111-4111-8111-111111111111'
+    ORCA_TERMINAL_HANDLE: 'term_inherited_pane',
+    ORCA_PANE_KEY: 'tab_inherited:11111111-1111-4111-8111-111111111111'
   })
 }
 
@@ -261,7 +262,7 @@ afterEach(() => {
 })
 
 describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (verb) => {
-  beforeEach(asSessionInTerminalView)
+  beforeEach(asSessionWithInheritedPane)
 
   it('acts as the session: no terminal is resolved, guessed or sent', async () => {
     await invoke(verb.command, flagMap(verb.flags))
@@ -269,7 +270,7 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
     const [params] = callsTo(verb.method)
     expect(params, 'the verb reached its method').toBeDefined()
     expect(params?.[verb.callerParam]).toBeUndefined()
-    // A terminal view's pane is not the session's identity.
+    // An inherited pane is not the session's identity.
     expect(params?.terminalPaneKey).toBeUndefined()
     expect(params?.senderPaneKey).toBeUndefined()
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
@@ -293,9 +294,9 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
   )
 
   it.runIf(verb.callerFlag !== undefined)(
-    "refuses its own terminal view's pane handle too: the session, not the pane, is the caller",
+    'refuses an inherited pane handle too: the session, not the pane, is the caller',
     async () => {
-      const flags = flagMap({ ...verb.flags, [verb.callerFlag ?? 'from']: 'term_view_pane' })
+      const flags = flagMap({ ...verb.flags, [verb.callerFlag ?? 'from']: 'term_inherited_pane' })
 
       await expect(invoke(verb.command, flags)).rejects.toMatchObject({ code: 'consumer_fenced' })
       expect(callMock).not.toHaveBeenCalled()
@@ -318,7 +319,7 @@ describe.each([
   { command: 'gate-list', method: 'gateList', callerParam: 'from' },
   { command: 'task-list', method: 'taskList', callerParam: 'callerTerminalHandle' }
 ])('orchestration $command --run run as an agent session', ({ command, method, callerParam }) => {
-  beforeEach(asSessionInTerminalView)
+  beforeEach(asSessionWithInheritedPane)
 
   it('needs no caller, but refuses a --from naming another caller, before any request', async () => {
     await invoke(command, flagMap({ run: 'run_1' }))
@@ -406,7 +407,7 @@ describe('the identity a session presents', () => {
       await invoke('dispatch-show', flagMap({ task: 'task_1', preamble: true, ...flags }))
       return callsTo('dispatchShow')[0]?.from
     }
-    asSessionInTerminalView()
+    asSessionWithInheritedPane()
     expect(await preview({})).toBe(`session:${SESSION}`)
     // Not a caller flag: it names the text to preview, so it is never fenced.
     expect(await preview({ from: 'term_sibling' })).toBe('term_sibling')
@@ -416,7 +417,7 @@ describe('the identity a session presents', () => {
   })
 
   it('resumes a timed-out ask as the session, without naming a terminal', async () => {
-    asSessionInTerminalView()
+    asSessionWithInheritedPane()
     callMock.mockResolvedValue({ result: { ...RESULT.result, answer: null, timedOut: true } })
     const errors = vi.mocked(console.error)
 
@@ -443,7 +444,7 @@ describe('a host refusal of the session', () => {
   it.each(['check', 'run-current', 'worker-list'])(
     'surfaces from %s verbatim, never widened, retried or turned into a terminal guess',
     async (command) => {
-      asSessionInTerminalView()
+      asSessionWithInheritedPane()
       callMock.mockRejectedValue(WORKER_GONE)
 
       await expect(invoke(command, flagMap({}))).rejects.toBe(WORKER_GONE)
@@ -481,11 +482,11 @@ describe('the orchestration envelope', () => {
   it('carries the injected id beside whatever terminal evidence the process also has', () => {
     const envelope = createOrchestrationCompatibilityEnvelope({
       ORCA_AGENT_SESSION_ID: ` ${SESSION} `,
-      ORCA_TERMINAL_HANDLE: 'term_view_pane'
+      ORCA_TERMINAL_HANDLE: 'term_inherited_pane'
     })
 
     expect(envelope.orchestrationCompatibilityEvidence).toEqual({
-      terminalHandle: 'term_view_pane',
+      terminalHandle: 'term_inherited_pane',
       agentSessionId: SESSION
     })
   })
@@ -539,7 +540,7 @@ describe('which flag names the caller, declared on every spec', () => {
   it.each(callerFlagVerbs)(
     '$command refuses --$flag naming another caller, before any request',
     async ({ command, flag }) => {
-      asSessionInTerminalView()
+      asSessionWithInheritedPane()
       await expect(
         invoke(command, flagMap({ ...EVERY_REQUIRED_FLAG, [flag]: 'term_sibling' }))
       ).rejects.toMatchObject({ code: 'consumer_fenced' })
@@ -555,7 +556,7 @@ describe('which flag names the caller, declared on every spec', () => {
         .map((flag) => ({ command: spec.path[1] ?? '', flag }))
     )
   )('$command passes a --$flag target through unfenced', async ({ command, flag }) => {
-    asSessionInTerminalView()
+    asSessionWithInheritedPane()
     await invoke(command, flagMap({ ...EVERY_REQUIRED_FLAG, [flag]: 'term_sibling' })).catch(
       (error: unknown) => {
         expect(error).not.toMatchObject({ code: 'consumer_fenced' })
@@ -608,7 +609,7 @@ describe('every orchestration verb, enumerated', () => {
       'worker-start'
     ])
 
-    asSessionInTerminalView()
+    asSessionWithInheritedPane()
     expect(await verbsThatGuess()).toEqual([])
   })
 })

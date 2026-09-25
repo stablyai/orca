@@ -37,9 +37,7 @@
  * `ORCA_STRUCTURED_SESSION` stays beside the id for a CLI that predates it — one reached through a
  * global install when a shell rc resets PATH — which would otherwise guess a sibling's terminal;
  * such a CLI refuses on the marker. A current CLI checks the id first, so the marker never makes a
- * session with an id identity-less. The terminal view deliberately gets the id WITHOUT the marker:
- * there an older CLI has the view's own pane handle and legitimately acts as that pane, and the
- * marker would make it refuse its own pane.
+ * session with an id identity-less.
  *
  * The handle is read from the registry at spawn time, so an in-host recovery respawn re-bakes the
  * SAME handle rather than a stale or fresh one.
@@ -64,20 +62,6 @@ export function structuredSessionChildIdentityEnv(
   }
   applyThisAppCli(env)
   return env
-}
-
-/**
- * The same session id for its terminal view, so switching views never changes who the session is.
- * Same-host only, as above: the host refuses the claim from a terminal that runs in WSL or over SSH.
- * A terminal that is not a session's view keeps its env exactly as given. No marker (see above), and
- * no CLI command: the PTY lane names this app's launcher for every local terminal, and this env also
- * crosses to SSH hosts, where a local path means nothing.
- */
-export function withStructuredSessionTerminalViewEnv(
-  env: Record<string, string> | undefined,
-  sessionId: string | undefined
-): Record<string, string> | undefined {
-  return sessionId ? { ...env, [ORCA_AGENT_SESSION_ID_ENV]: sessionId } : env
 }
 
 /**

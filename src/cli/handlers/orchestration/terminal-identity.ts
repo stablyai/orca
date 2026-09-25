@@ -3,8 +3,10 @@ import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
-import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
-import { injectedSessionAddress } from '../../session-caller-flags'
+import {
+  injectedSessionAddress,
+  readInjectedAgentSessionId
+} from '../../../shared/agent-session-caller-env'
 
 /**
  * The caller's terminal handle, or `undefined` when an injected agent session id names the caller:

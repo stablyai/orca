@@ -10,8 +10,10 @@
 
 import type { CommandSpec, IdentityFlag } from './command-spec'
 import { RuntimeClientError } from './runtime/types'
-import { readInjectedAgentSessionId } from '../shared/agent-session-caller-env'
-import { isStructuredWorkerHandle } from '../shared/structured-worker-handle'
+import {
+  injectedSessionAddress,
+  readInjectedAgentSessionId
+} from '../shared/agent-session-caller-env'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../shared/orca-session-address-prefix'
 
 export function refuseConflictingSessionCallerFlags(
@@ -52,19 +54,4 @@ function namesInjectedSession(value: string, sessionId: string, env: NodeJS.Proc
     value === `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}` ||
     value === injectedSessionAddress(env)
   )
-}
-
-/**
- * The address the host gives this session: a structured worker keeps the handle it was minted, any
- * other session is `session:<id>`. Only for text that must match what the host writes.
- */
-export function injectedSessionAddress(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const sessionId = readInjectedAgentSessionId(env)
-  if (!sessionId) {
-    return undefined
-  }
-  const ownHandle = env.ORCA_TERMINAL_HANDLE
-  return isStructuredWorkerHandle(ownHandle)
-    ? ownHandle
-    : `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}`
 }

@@ -141,11 +141,12 @@ export function getInheritedAgentSessionStampEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: strip only values inherited from the pty host; a caller that explicitly
-  // provides a stamp (a nested Claude child, a structured session's terminal view) keeps it.
-  return [...CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS, ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS].filter(
-    (key) => env[key] === undefined
-  )
+  // Why: a caller that explicitly provides a Claude stamp (a nested Claude child) keeps it; no
+  // terminal is a structured session, so the session caller keys always go.
+  return [
+    ...CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined),
+    ...ORCA_AGENT_SESSION_CALLER_ENV_KEYS
+  ]
 }
 
 // Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.

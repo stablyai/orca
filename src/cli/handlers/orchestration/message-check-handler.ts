@@ -41,7 +41,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
-    // Why: a session names itself by its id alone; a terminal view's pane is not its identity.
+    // Why: a session names itself by its id alone; a pane key it inherited is not its identity.
     const paneKey =
       explicitTerminal || terminal === undefined ? undefined : process.env.ORCA_PANE_KEY
     const callerLabel = orchestrationCallerLabel(terminal)
