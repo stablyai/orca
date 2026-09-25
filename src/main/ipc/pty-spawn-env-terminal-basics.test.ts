@@ -1,6 +1,11 @@
 import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
-import { piBuildPtyEnvMock, spawnMock } from './pty-ipc-mock-registry'
+import {
+  openCode2BuildPtyEnvMock,
+  openCodeBuildPtyEnvMock,
+  piBuildPtyEnvMock,
+  spawnMock
+} from './pty-ipc-mock-registry'
 import { BUNDLED_CLI_PATH, TEST_CODEX_HOME, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { delimiter } from 'node:path'
@@ -96,6 +101,48 @@ describe('registerPtyHandlers', () => {
 
       expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
       expect(env.ORCA_OMP_FRESH_CONFIG).toBe('/tmp/orca-fresh-session.yml')
+    })
+
+    it('installs the OpenCode 2 status plugin when only OpenCode 2 is enabled', () => {
+      openCodeBuildPtyEnvMock.mockClear()
+      openCode2BuildPtyEnvMock.mockClear()
+
+      const env = buildPtyHostEnv(
+        'pty-opencode-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['opencode']
+        }
+      )
+
+      expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(openCode2BuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(env.ORCA_OPENCODE_AGENT).toBe('opencode2')
+    })
+
+    it('does not install an OpenCode status plugin when both OpenCode agents are disabled', () => {
+      openCodeBuildPtyEnvMock.mockClear()
+      openCode2BuildPtyEnvMock.mockClear()
+
+      const env = buildPtyHostEnv(
+        'pty-opencode-all-disabled',
+        {},
+        {
+          isPackaged: true,
+          userDataPath: '/tmp/orca-user-data',
+          selectedCodexHomePath: null,
+          agentStatusHooksEnabled: true,
+          disabledTuiAgents: ['opencode', 'opencode2']
+        }
+      )
+
+      expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(openCode2BuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.ORCA_OPENCODE_AGENT).toBeUndefined()
     })
 
     it('threads disabled Pi settings through a bare PTY spawn', async () => {

@@ -49,8 +49,11 @@ export function buildPtyHostEnv(
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
   // Typed launches do not carry the picker identity; infer the beta binary so
   // it receives the OpenCode 2 hook endpoint and isolated plugin overlay.
+  // Plain terminals follow the enabled OpenCode, so a disabled one never gets its plugin written.
   const openCodeAgent =
-    opts.launchAgent === 'opencode2' || isOpenCode2LaunchCommand(launchCommandHint)
+    opts.launchAgent === 'opencode2' ||
+    isOpenCode2LaunchCommand(launchCommandHint) ||
+    (opts.launchAgent !== 'opencode' && !isTuiAgentEnabled('opencode', opts.disabledTuiAgents))
       ? 'opencode2'
       : 'opencode'
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
@@ -88,20 +91,28 @@ export function buildPtyHostEnv(
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
   if (opts.agentStatusHooksEnabled) {
-    // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
-    const openCodeStatusService =
-      openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
-    baseEnv.ORCA_OPENCODE_AGENT = openCodeAgent
-    Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
-    if (baseEnv.OPENCODE_CONFIG_DIR) {
-      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
-      baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
-      if (preexistingOpenCodeConfigDir) {
-        // Why: nested Orca terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
-        baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
-      } else {
-        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    if (isTuiAgentEnabled(openCodeAgent, opts.disabledTuiAgents)) {
+      // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
+      const openCodeStatusService =
+        openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
+      baseEnv.ORCA_OPENCODE_AGENT = openCodeAgent
+      Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+      if (baseEnv.OPENCODE_CONFIG_DIR) {
+        // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
+        baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
+        if (preexistingOpenCodeConfigDir) {
+          // Why: nested Orca terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
+          baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
+        } else {
+          delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+        }
       }
+    } else {
+      restoreOrStripOverlayEnv(baseEnv, {
+        primary: 'OPENCODE_CONFIG_DIR',
+        overlay: 'ORCA_OPENCODE_CONFIG_DIR',
+        source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+      })
     }
     if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
