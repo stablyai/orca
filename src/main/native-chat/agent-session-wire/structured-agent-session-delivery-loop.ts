@@ -129,8 +129,13 @@ export class StructuredAgentSessionDeliveryLoop {
       // A handle closes only with nothing queued, so one an earlier handle wrote is a leftover.
       (submission) => session.journal.wroteBeforeOpen(submission.acceptedSequence)
     )
-    if (!oldestQueuedSubmission(session)) {
+    const oldest = oldestQueuedSubmission(session)
+    if (!oldest) {
       return this.stop(sessionId)
+    }
+    const failedStart = startThatFailedWhileQueued(session, oldest)
+    if (failedStart) {
+      return this.fail(sessionId, failedStart)
     }
     const ready = await this.deps.ensureProviderChild(sessionId)
     if (!ready.ok) {
@@ -165,8 +170,9 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!awaitedChild || (awaitedChild.phase === 'starting' && startFailure !== null)) {
       // The child waited on is gone, replaced by another, or settled its start without proving it.
       const ended = awaitedChild ? undefined : session.lastEndedChild
-      // A Stop is not a failure: the next step starts, or waits on, a child for what is queued.
-      if (ended?.cause === 'stop') {
+      // A user's Stop is not a failure: the next step starts, or waits on, a child for what is
+      // queued. A host stop is: its cause is why the start did not land.
+      if (ended?.cause === 'user-stop') {
         return 'continue'
       }
       return this.fail(sessionId, {
@@ -191,7 +197,7 @@ export class StructuredAgentSessionDeliveryLoop {
     return 'continue'
   }
 
-  private async fail(sessionId: string, failure: StartFailure): Promise<Step> {
+  private async fail(sessionId: string, failure: StartFailure): Promise<'stop'> {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
       await recordStructuredAgentSessionStartFailure(
@@ -209,8 +215,33 @@ export class StructuredAgentSessionDeliveryLoop {
   }
 }
 
+/** A start that died while this message waited on it — a view's, say — is the message's failed
+ *  start: settled with it, under its key, rather than started again into the same failure. */
+function startThatFailedWhileQueued(
+  session: StructuredAgentSessionHostSession,
+  oldest: NonNullable<ReturnType<typeof oldestQueuedSubmission>>
+): StartFailure | null {
+  const ended = session.lastEndedChild
+  if (
+    session.child ||
+    !ended?.duringStartup ||
+    ended.cause === 'user-stop' ||
+    oldest.acceptedSequence === undefined ||
+    ended.endedAt.epoch !== session.journal.cursor().epoch ||
+    ended.endedAt.sequence < oldest.acceptedSequence
+  ) {
+    return null
+  }
+  return { startKey: ended.generation, text: endedChildRejection(ended) }
+}
+
+const HOST_STOPPED_BEFORE_DELIVERY = 'Orca stopped the agent before this message was sent.'
+
 /** Why a queued message the child never took is rejected, in the words the chat row uses. */
 function endedChildRejection(ended: StructuredAgentSessionEndedChild): string {
+  if (ended.cause === 'host-stop') {
+    return ended.reason ?? HOST_STOPPED_BEFORE_DELIVERY
+  }
   const reason = ended.reason ?? undefined
   return ended.duringStartup
     ? providerStartupFailureOutcome(reason)

@@ -20,6 +20,7 @@ import { providerStartupFailureOutcome } from './structured-agent-session-dead-g
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -266,7 +267,7 @@ describe('Stop on a child still proving its start', () => {
     // The same conversation: no reopen, the holder kept, and the chat told it is idle again.
     expect(conversation()?.journal).toBe(journal)
     expect(conversation()?.child).toBeNull()
-    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'stop', rootGone: true })
+    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-stop', rootGone: true })
     expect(host.isHeld(SESSION)).toBe(true)
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionPhase')
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionOwned')
@@ -360,6 +361,60 @@ describe('a published child that dies while it proves its start', () => {
       expect(acquire).toHaveBeenCalledTimes(2)
     }
   )
+})
+
+describe("a view's start that dies while a sent message waits on it", () => {
+  const EXIT = 'claude stream-json exited (code 1)'
+  const TEXT = providerStartupFailureOutcome(EXIT)
+
+  it("is the message's own failed start: one error row, the message rejected, no second start (R2)", async () => {
+    adapterExtras = { awaitStarted: vi.fn(async () => TEXT) }
+    await restartHost()
+    acquire.mockImplementation(spawnStartingChild)
+    // Opening the tab: the view's hold starts a child that has not proven its start.
+    await host.hold(SESSION, 'surface-1')
+    const viewChild = currentChild()
+    const events = subscribe()
+    const params = sendParams('hello')
+
+    // Accepted first; the view's child's exit is settled before the loop's first step.
+    const sent = host.send(CALLER, params)
+    const exited = exit(viewChild, EXIT, true)
+    expect(await sent).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    await exited
+    const id = params.envelope.clientOperationId
+
+    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
+    await settleLoop()
+    expect(submission(id)?.reason).toBe(TEXT)
+    expect(statusRows()).toEqual([
+      {
+        itemId: `orca:${encodeURIComponent(`start-failure:${viewChild.acquisitionGeneration}`)}`,
+        text: TEXT,
+        tone: 'error'
+      }
+    ])
+    expect(rejectedIn(events, id)).toBe(true)
+    // The setup's child and the view's: nothing started again into the same failure.
+    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('leaves a message sent after that start failed to a fresh start (R2)', async () => {
+    await restartHost()
+    acquire.mockImplementationOnce(spawnStartingChild)
+    await host.hold(SESSION, 'surface-1')
+    await exit(currentChild(), EXIT, true)
+    expect(statusRows()).toHaveLength(1)
+
+    const id = await accept('after the failure')
+
+    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
+    expect(acquire).toHaveBeenCalledTimes(3)
+  })
 })
 
 describe('a child that ends before its message is handed over', () => {
@@ -511,3 +566,51 @@ describe('a send whose start failed, sent again with the same operation id', () 
 async function settleLoop(): Promise<void> {
   await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
 }
+
+describe('how a stopped child ends the start its loop was waiting on', () => {
+  /** A child the loop waits on, whose start the stop below does not settle, so a message sent
+   *  after the stop is queued when the loop next looks. */
+  async function stoppedWhileStarting(stop: () => Promise<void>) {
+    const start = deferred<void>()
+    adapterExtras = {
+      awaitStarted: vi.fn(() => start.promise),
+      closeSession: vi.fn(async () => true)
+    }
+    await restartHost()
+    acquire.mockImplementationOnce(spawnStartingChild)
+    await accept('first')
+    await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalledTimes(1))
+    await stop()
+    const second = await accept('second')
+    adapterExtras.awaitStarted = undefined
+    start.resolve()
+    return second
+  }
+
+  it("goes on after a user's Stop and delivers what was sent since (R2)", async () => {
+    const second = await stoppedWhileStarting(async () => {
+      expect(await stop()).toMatchObject({ ok: true })
+    })
+
+    await eventually(() => expect(submission(second)?.dispatchState).toBe('accepted'))
+    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-stop', reason: null })
+    expect(statusRows()).toEqual([])
+  })
+
+  it('fails the start after a host stop, with the stop as the reason (R2)', async () => {
+    const reason = 'Claude never finished starting, so Orca stopped it.'
+    const second = await stoppedWhileStarting(() =>
+      host['serialize'](SESSION, () =>
+        stopStructuredAgentSessionAgentUnderSerialize(host['lifetimeContext'](), SESSION, {
+          cause: 'host-stop',
+          reason
+        })
+      )
+    )
+
+    await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
+    expect(submission(second)?.reason).toBe(reason)
+    expect(statusRows()).toEqual([{ itemId: expect.any(String), text: reason, tone: 'error' }])
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+})

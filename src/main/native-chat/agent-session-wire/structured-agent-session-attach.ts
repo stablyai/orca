@@ -182,7 +182,7 @@ export async function attachJournal(input: {
   params: AgentSessionAttachParams
   journalRoot: string
   adapter: StructuredAgentSessionAdapter
-  /** The host's open conversation; omitted, the journal is opened for this caller alone. */
+  /** The host's open conversation, whose journal the attach adopts. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
   /** Provider history sampled before a new child is acquired. `null` means the
    *  adapter had no usable history; omit to read lazily for direct callers. */

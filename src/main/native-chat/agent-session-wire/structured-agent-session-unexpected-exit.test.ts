@@ -40,7 +40,8 @@ function recoveryContext(input: {
       cause: 'exit',
       reason: null,
       duringStartup: false,
-      rootGone: true
+      rootGone: true,
+      endedAt: { epoch: 'epoch-1', sequence: 0 }
     }
   }
   const record = {
@@ -137,6 +138,7 @@ describe('provider-exit recovery tickets', () => {
     const session = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
+        cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
@@ -206,6 +208,7 @@ describe('provider-exit recovery tickets', () => {
     const session = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
+        cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         snapshot: () => ({ items }),
         appendLifecycleBatch,
         markPendingSubmissionsUnknown: vi.fn(async () => [])
@@ -311,6 +314,7 @@ describe('provider-exit recovery tickets', () => {
       const session: StructuredAgentSessionUnexpectedExitSession = {
         child: { generation: GENERATION, fence: 7, phase: 'ready' },
         journal: {
+          cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
           snapshot: () => ({ items }),
           appendLifecycleBatch,
           markPendingSubmissionsUnknown: vi.fn(async () => []),
@@ -366,6 +370,7 @@ describe('provider-exit recovery tickets', () => {
     const session: StructuredAgentSessionUnexpectedExitSession = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
+        cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
         markPendingSubmissionsUnknown,
@@ -412,6 +417,7 @@ describe('provider-exit recovery tickets', () => {
     const session: StructuredAgentSessionUnexpectedExitSession = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
+        cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
         markPendingSubmissionsUnknown: vi.fn(async () => []),
         rejectPendingSubmissions: vi.fn(async () => []),
         snapshot: () => ({

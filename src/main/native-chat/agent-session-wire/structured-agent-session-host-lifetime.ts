@@ -17,6 +17,7 @@ import { withStructuredAgentSessionEvictionDeadline } from './structured-agent-s
 import { StructuredAgentSessionHolds } from './structured-agent-session-holds'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type {
+  StructuredAgentSessionChildEndCause,
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChildIdentity
@@ -104,13 +105,16 @@ function owedProviderChildWindDown(
 /**
  * The agent goes to rest; the conversation stays. Runs the eviction steps under a deadline. A step
  * that fails — or runs out of time — aborts the rest and leaves the wind-down owed, so the next
- * stop is a real retry. `ending` is how the child's end is told: a Stop, or an eviction whose close
- * forgets the conversation next.
+ * stop is a real retry. `ending` is how the child's end is told: a user's Stop, the host stopping it
+ * for a cause (with its text), or an eviction whose close forgets the conversation next.
  */
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
-  ending: 'stop' | 'evict' = 'stop'
+  ending: {
+    cause: Extract<StructuredAgentSessionChildEndCause, 'user-stop' | 'host-stop' | 'evict'>
+    reason?: string
+  } = { cause: 'user-stop' }
 ): Promise<void> {
   const session = context.sessions.get(sessionId)
   if (!session) {
@@ -139,8 +143,8 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         endProviderChild(session, {
           generation: stopping.generation,
           fence: stopping.fence,
-          cause: ending,
-          reason: null,
+          cause: ending.cause,
+          reason: ending.reason ?? null,
           duringStartup: stopping.phase === 'starting',
           ...verdict
         })
@@ -181,7 +185,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         })
       }
       session.owesProviderChildWindDown = undefined
-      if (ending === 'evict') {
+      if (ending.cause === 'evict') {
         context.forgetStatus(sessionId)
         return
       }
@@ -204,7 +208,7 @@ export async function evictHeldStructuredAgentSession(
   if (!context.sessions.has(sessionId)) {
     return
   }
-  await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, 'evict')
+  await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, { cause: 'evict' })
   await forgetStructuredAgentSession(context, sessionId)
 }
 
