@@ -14,8 +14,16 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { carryWorkingTreeChanges, type WorkingTreeCarryIo } from './working-tree-change-carry'
-import { copyNodeWorkingTreeEntry, sumNodeEntrySizes } from './working-tree-change-carry-node-fs'
+import {
+  CARRY_MAX_UNTRACKED_FILES,
+  carryWorkingTreeChanges,
+  type WorkingTreeCarryIo
+} from './working-tree-change-carry'
+import {
+  copyNodeWorkingTreeEntry,
+  removeNodeWorkingTreeEntry,
+  sumNodeEntrySizes
+} from './working-tree-change-carry-node-fs'
 
 const tempPaths: string[] = []
 afterEach(() => {
@@ -31,10 +39,14 @@ function git(cwd: string, ...args: string[]): string {
 const io: WorkingTreeCarryIo = {
   git: async (args, cwd) => git(cwd, ...args),
   sumEntrySizes: sumNodeEntrySizes,
-  copyEntry: copyNodeWorkingTreeEntry
+  copyEntry: copyNodeWorkingTreeEntry,
+  removeEntry: removeNodeWorkingTreeEntry
 }
 
-function createRepoWithChild(): { source: string; target: string } {
+function createRepoWithChild(extraFiles: Record<string, string> = {}): {
+  source: string
+  target: string
+} {
   const root = mkdtempSync(join(tmpdir(), 'orca-carry-'))
   tempPaths.push(root)
   const source = join(root, 'source')
@@ -47,12 +59,29 @@ function createRepoWithChild(): { source: string; target: string } {
   writeFileSync(join(source, 'tracked.txt'), 'base\n')
   writeFileSync(join(source, 'staged.txt'), 'base\n')
   writeFileSync(join(source, '.gitignore'), 'ignored.log\n')
+  for (const [name, contents] of Object.entries(extraFiles)) {
+    writeFileSync(join(source, name), contents)
+  }
   git(source, 'add', '.')
   git(source, 'commit', '--quiet', '-m', 'base')
   const head = git(source, 'rev-parse', 'HEAD').trim()
   const target = join(root, 'target')
   git(source, 'worktree', 'add', '--quiet', '-b', 'child', target, head)
   return { source, target }
+}
+
+// Why: a copyEntry that fails only on 'copy-b.txt' exercises the rollback path deterministically.
+function ioFailingOnCopyB(overrides: Partial<WorkingTreeCarryIo> = {}): WorkingTreeCarryIo {
+  return {
+    ...io,
+    copyEntry: async (fromRoot, toRoot, relativePath) => {
+      if (relativePath === 'copy-b.txt') {
+        throw new Error('simulated copy failure')
+      }
+      await copyNodeWorkingTreeEntry(fromRoot, toRoot, relativePath)
+    },
+    ...overrides
+  }
 }
 
 describe('carryWorkingTreeChanges', () => {
@@ -106,6 +135,40 @@ describe('carryWorkingTreeChanges', () => {
     })
   })
 
+  it('excludes an untracked nested repository from the carried files', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    const nestedDir = join(source, 'nested')
+    mkdirSync(nestedDir)
+    git(nestedDir, 'init', '--quiet')
+    writeFileSync(join(nestedDir, 'inner.txt'), 'inner\n')
+    writeFileSync(join(source, 'plain.txt'), 'plain\n')
+
+    const result = await carryWorkingTreeChanges(io, source, target)
+
+    expect(result).toEqual({ ok: true, trackedChanges: true, untrackedCopied: 1 })
+    expect(readFileSync(join(target, 'tracked.txt'), 'utf8')).toBe('edited\n')
+    expect(readFileSync(join(target, 'plain.txt'), 'utf8')).toBe('plain\n')
+    expect(existsSync(join(target, 'nested'))).toBe(false)
+  })
+
+  it('carries a staged deletion and a staged rename as unstaged changes', async () => {
+    const { source, target } = createRepoWithChild({
+      'to-delete.txt': 'gone\n',
+      'to-rename.txt': 'renamed\n'
+    })
+    git(source, 'rm', '--quiet', 'to-delete.txt')
+    git(source, 'mv', 'to-rename.txt', 'renamed.txt')
+
+    const result = await carryWorkingTreeChanges(io, source, target)
+
+    expect(result).toEqual({ ok: true, trackedChanges: true, untrackedCopied: 0 })
+    expect(existsSync(join(target, 'to-delete.txt'))).toBe(false)
+    expect(existsSync(join(target, 'to-rename.txt'))).toBe(false)
+    expect(readFileSync(join(target, 'renamed.txt'), 'utf8')).toBe('renamed\n')
+    expect(git(target, 'diff', '--cached', '--name-only')).toBe('')
+  })
+
   it('refuses without writing when the target is on a different commit', async () => {
     const { source, target } = createRepoWithChild()
     writeFileSync(join(target, 'tracked.txt'), 'target commit\n')
@@ -131,7 +194,19 @@ describe('carryWorkingTreeChanges', () => {
     expect(existsSync(join(target, 'new.txt'))).toBe(false)
   })
 
-  it('refuses without writing when there are too many new files', async () => {
+  it('refuses without writing when the target hides untracked files via config', async () => {
+    const { source, target } = createRepoWithChild()
+    git(target, 'config', 'status.showUntrackedFiles', 'no')
+    writeFileSync(join(target, 'stray.txt'), 'stray\n')
+    writeFileSync(join(source, 'new.txt'), 'x\n')
+
+    expect(await carryWorkingTreeChanges(io, source, target)).toEqual({
+      ok: false,
+      reason: 'target_dirty'
+    })
+  })
+
+  it('refuses without writing when new files exceed the size cap', async () => {
     const { source, target } = createRepoWithChild()
     writeFileSync(join(source, 'new.txt'), 'x\n')
     const cappedIo: WorkingTreeCarryIo = { ...io, sumEntrySizes: async () => 201 * 1024 * 1024 }
@@ -141,5 +216,62 @@ describe('carryWorkingTreeChanges', () => {
       reason: 'too_large'
     })
     expect(existsSync(join(target, 'new.txt'))).toBe(false)
+  })
+
+  it('refuses without writing when new files exceed the count cap', async () => {
+    const { source, target } = createRepoWithChild()
+    for (let index = 0; index < CARRY_MAX_UNTRACKED_FILES + 1; index += 1) {
+      writeFileSync(join(source, `new-${index}.txt`), 'x\n')
+    }
+
+    expect(await carryWorkingTreeChanges(io, source, target)).toEqual({
+      ok: false,
+      reason: 'too_large'
+    })
+    expect(existsSync(join(target, 'new-0.txt'))).toBe(false)
+  })
+
+  it('rolls back the target when a copy fails partway through', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    writeFileSync(join(source, 'staged-new.txt'), 'staged\n')
+    git(source, 'add', 'staged-new.txt')
+    writeFileSync(join(source, 'copy-a.txt'), 'a\n')
+    writeFileSync(join(source, 'copy-b.txt'), 'b\n')
+
+    const result = await carryWorkingTreeChanges(ioFailingOnCopyB(), source, target)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'apply_failed',
+      detail: expect.stringContaining('simulated copy failure')
+    })
+    expect(git(target, 'status', '--porcelain', '--untracked-files=normal')).toBe('')
+    expect(readFileSync(join(target, 'tracked.txt'), 'utf8')).toBe('base\n')
+    expect(existsSync(join(target, 'staged-new.txt'))).toBe(false)
+    expect(existsSync(join(target, 'copy-a.txt'))).toBe(false)
+  })
+
+  it('reports partially_applied when the rollback itself fails', async () => {
+    const { source, target } = createRepoWithChild()
+    writeFileSync(join(source, 'tracked.txt'), 'edited\n')
+    writeFileSync(join(source, 'copy-a.txt'), 'a\n')
+    writeFileSync(join(source, 'copy-b.txt'), 'b\n')
+    const failingIo = ioFailingOnCopyB({
+      removeEntry: async () => {
+        throw new Error('simulated rollback failure')
+      }
+    })
+
+    const result = await carryWorkingTreeChanges(failingIo, source, target)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'partially_applied',
+      detail: expect.stringContaining('simulated copy failure')
+    })
+    if (!result.ok) {
+      expect(result.detail).toContain('simulated rollback failure')
+    }
   })
 })

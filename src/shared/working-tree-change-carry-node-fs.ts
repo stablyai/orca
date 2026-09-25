@@ -1,5 +1,5 @@
 import { constants as fsConstants } from 'node:fs'
-import { chmod, copyFile, lstat, mkdir, readlink, symlink } from 'node:fs/promises'
+import { chmod, copyFile, lstat, mkdir, readlink, rm, symlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 // Why: git reports paths with '/', so split before joining with the host separator.
@@ -33,4 +33,12 @@ export async function copyNodeWorkingTreeEntry(
   }
   await copyFile(from, to, fsConstants.COPYFILE_EXCL)
   await chmod(to, stats.mode)
+}
+
+export async function removeNodeWorkingTreeEntry(
+  root: string,
+  relativePath: string
+): Promise<void> {
+  // Why: no `recursive` so an unexpected directory errors instead of being deleted wholesale.
+  await rm(resolveEntryPath(root, relativePath), { force: true })
 }

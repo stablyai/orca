@@ -7,6 +7,7 @@ export type WorkingTreeCarryIo = {
   git: WorkingTreeCarryGit
   sumEntrySizes: (root: string, relativePaths: readonly string[]) => Promise<number>
   copyEntry: (fromRoot: string, toRoot: string, relativePath: string) => Promise<void>
+  removeEntry: (root: string, relativePath: string) => Promise<void>
 }
 
 export type WorkingTreeCarryFailureReason =
@@ -14,6 +15,7 @@ export type WorkingTreeCarryFailureReason =
   | 'target_dirty'
   | 'too_large'
   | 'apply_failed'
+  | 'partially_applied'
 
 export type WorkingTreeCarryResult =
   | { ok: true; trackedChanges: boolean; untrackedCopied: number }
@@ -21,6 +23,38 @@ export type WorkingTreeCarryResult =
 
 function splitNulSeparated(output: string): string[] {
   return output.split('\0').filter((entry) => entry.length > 0)
+}
+
+// Why: git lists an untracked nested repo/in-tree worktree as one entry ending in '/', not its contents.
+function isNestedRepositoryEntry(relativePath: string): boolean {
+  return relativePath.endsWith('/')
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+// Why: reset --hard restores tracked state but leaves stash-added/copied paths untracked, so remove them explicitly.
+async function rollBackTarget(
+  io: WorkingTreeCarryIo,
+  targetPath: string,
+  writtenPaths: readonly string[],
+  originalError: unknown
+): Promise<WorkingTreeCarryResult> {
+  const originalMessage = errorMessage(originalError)
+  try {
+    await io.git(['reset', '-q', '--hard', 'HEAD'], targetPath)
+    for (const relativePath of writtenPaths) {
+      await io.removeEntry(targetPath, relativePath)
+    }
+  } catch (rollbackError) {
+    return {
+      ok: false,
+      reason: 'partially_applied',
+      detail: `carry failed: ${originalMessage}; rollback failed: ${errorMessage(rollbackError)}`
+    }
+  }
+  return { ok: false, reason: 'apply_failed', detail: originalMessage }
 }
 
 // Why: stash create/apply moves tracked edits as git objects (binary-safe, Git 2.25) without touching the source.
@@ -32,7 +66,8 @@ export async function carryWorkingTreeChanges(
   const [sourceHead, targetHead, targetStatus] = await Promise.all([
     io.git(['rev-parse', 'HEAD'], sourcePath),
     io.git(['rev-parse', 'HEAD'], targetPath),
-    io.git(['status', '--porcelain'], targetPath)
+    // Why: --untracked-files=normal overrides a local status.showUntrackedFiles=no config.
+    io.git(['status', '--porcelain', '--untracked-files=normal'], targetPath)
   ])
   if (sourceHead.trim() !== targetHead.trim()) {
     return { ok: false, reason: 'base_mismatch' }
@@ -42,7 +77,7 @@ export async function carryWorkingTreeChanges(
   }
   const untracked = splitNulSeparated(
     await io.git(['ls-files', '--others', '--exclude-standard', '-z'], sourcePath)
-  )
+  ).filter((entry) => !isNestedRepositoryEntry(entry))
   if (
     untracked.length > CARRY_MAX_UNTRACKED_FILES ||
     (await io.sumEntrySizes(sourcePath, untracked)) > CARRY_MAX_UNTRACKED_BYTES
@@ -50,21 +85,29 @@ export async function carryWorkingTreeChanges(
     return { ok: false, reason: 'too_large' }
   }
   const stashCommit = (await io.git(['stash', 'create'], sourcePath)).trim()
+  // Why: paths the stash adds land untracked in the target after `reset -q`; rollback must delete them explicitly.
+  const stashAddedPaths = stashCommit
+    ? splitNulSeparated(
+        await io.git(
+          ['diff', '--name-only', '-z', '--diff-filter=A', 'HEAD', stashCommit],
+          sourcePath
+        )
+      )
+    : []
+  const writtenPaths: string[] = []
   try {
     if (stashCommit) {
+      writtenPaths.push(...stashAddedPaths)
       await io.git(['stash', 'apply', stashCommit], targetPath)
       // Why: staging cannot be reproduced faithfully across worktrees, so everything lands unstaged.
       await io.git(['reset', '-q'], targetPath)
     }
     for (const relativePath of untracked) {
+      writtenPaths.push(relativePath)
       await io.copyEntry(sourcePath, targetPath, relativePath)
     }
   } catch (error) {
-    return {
-      ok: false,
-      reason: 'apply_failed',
-      detail: error instanceof Error ? error.message : String(error)
-    }
+    return await rollBackTarget(io, targetPath, writtenPaths, error)
   }
   return { ok: true, trackedChanges: stashCommit.length > 0, untrackedCopied: untracked.length }
 }
