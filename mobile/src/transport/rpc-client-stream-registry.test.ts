@@ -98,4 +98,78 @@ describe('RpcClientStreamRegistry', () => {
       params: { subscriptionId: 'browser-screencast:page-1:test' }
     })
   })
+
+  describe.each([
+    ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe', null],
+    ['browser.screencast', 'browser.screencast.unsubscribe', { page: 'page-1' }]
+  ])('%s ready id across a replay', (method, unsubscribeMethod, params) => {
+    function unsubscribes(sent: SentRequest[]): unknown[] {
+      return sent.filter((request) => request.method === unsubscribeMethod).map((r) => r.params)
+    }
+
+    function subscribeReady() {
+      const harness = createRegistry()
+      const dispose = harness.registry.subscribe(method, params, () => {})
+      const requestId = harness.sent[0]!.id
+      harness.registry.handleResponse(
+        streamingResponse(requestId, { type: 'ready', subscriptionId: 'old-connection-id' })
+      )
+      return { ...harness, dispose, requestId }
+    }
+
+    it('releases the replayed registration when disposed before its new ready', () => {
+      const { registry, sent, dispose, requestId } = subscribeReady()
+
+      registry.markForReplay()
+      registry.replayAfterAuthentication()
+      dispose()
+      registry.handleResponse(
+        streamingResponse(requestId, { type: 'ready', subscriptionId: 'new-connection-id' })
+      )
+
+      expect(unsubscribes(sent)).toEqual([{ subscriptionId: 'new-connection-id' }])
+    })
+
+    it('forgets the previous connection id when marked for replay', () => {
+      const { registry, sent, dispose } = subscribeReady()
+
+      registry.markForReplay()
+      dispose()
+
+      // A disposal while disconnected has nothing to name on the next connection.
+      expect(unsubscribes(sent)).toEqual([])
+      expect(registry.size()).toBe(0)
+    })
+
+    it('still releases a stream cancelled before its first ready', () => {
+      const { registry, sent } = createRegistry()
+      const dispose = registry.subscribe(method, params, () => {})
+      const requestId = sent[0]!.id
+
+      dispose()
+      expect(unsubscribes(sent)).toEqual([])
+      registry.handleResponse(
+        streamingResponse(requestId, { type: 'ready', subscriptionId: 'first-id' })
+      )
+
+      expect(unsubscribes(sent)).toEqual([{ subscriptionId: 'first-id' }])
+      expect(registry.size()).toBe(0)
+    })
+
+    it('sends one unsubscribe however often the stream is disposed', () => {
+      const { registry, sent, dispose, requestId } = subscribeReady()
+
+      registry.markForReplay()
+      registry.replayAfterAuthentication()
+      dispose()
+      dispose()
+      registry.handleResponse(
+        streamingResponse(requestId, { type: 'ready', subscriptionId: 'new-connection-id' })
+      )
+      dispose()
+
+      expect(unsubscribes(sent)).toEqual([{ subscriptionId: 'new-connection-id' }])
+      expect(registry.size()).toBe(0)
+    })
+  })
 })
