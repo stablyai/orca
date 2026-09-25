@@ -3,6 +3,7 @@ import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/st
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+import { AgentPromptPendingInputError } from '../../../../../shared/agent-prompt-pending-input-error'
 import { TerminalSend } from './unary-schemas'
 import {
   assertTerminalSendExactPtyBinding,
@@ -213,6 +214,7 @@ export const TERMINAL_SEND_METHODS = [
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               beforeWrite,
               signal,
+              ...(params.allowPendingInput === true ? { allowPendingInput: true } : {}),
               ...(orchestrationMutation
                 ? {
                     acceptQueued: true,
@@ -243,40 +245,25 @@ export const TERMINAL_SEND_METHODS = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
+        const refused = { handle: params.terminal, accepted: false as const, bytesWritten: 0 }
+        if (error instanceof AgentPromptPendingInputError) {
+          const { pendingInput } = error
+          return { send: { ...refused, refusedReason: 'pending-input' as const, pendingInput } }
+        }
         if (isAgentSessionPtyWriteRefusedError(error)) {
           // Why: name the owner and the stage instead of a bare not-writable, so a client can say
           // who holds the session rather than retrying into a lease it will never win.
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0,
-              agentSessionRefusal: error.refusal
-            }
-          }
+          return { send: { ...refused, agentSessionRefusal: error.refusal } }
         }
         if (acceptedPromptCheckpoint) {
           return acceptedPromptCheckpoint
         }
         const refusedReason = getTerminalSendGuardRefusedReason(error)
         if (refusedReason) {
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0,
-              refusedReason
-            }
-          }
+          return { send: { ...refused, refusedReason } }
         }
         if (isTerminalSendGuardNotWritable(error)) {
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0
-            }
-          }
+          return { send: refused }
         }
         throw error
       }

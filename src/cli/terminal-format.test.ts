@@ -72,6 +72,32 @@ describe('formatTerminalClose', () => {
 })
 
 describe('formatTerminalSend', () => {
+  it('reports delivered bytes only for an accepted send', () => {
+    expect(
+      formatTerminalSend({ send: { handle: 'term_1', accepted: true, bytesWritten: 9 } })
+    ).toBe('Sent 9 bytes to term_1.')
+    expect(
+      formatTerminalSend({ send: { handle: 'term_1', accepted: false, bytesWritten: 0 } })
+    ).toBe('Input refused by term_1.')
+  })
+
+  it('shows the unsent draft and the --force escape hatch for a pending-input refusal', () => {
+    expect(
+      formatTerminalSend({
+        send: {
+          handle: 'term_1',
+          accepted: false,
+          bytesWritten: 0,
+          refusedReason: 'pending-input',
+          pendingInput: 'fix the\nflaky test'
+        }
+      })
+    ).toBe(
+      'Refused: terminal term_1 has unsent input in its composer: "fix the\\nflaky test"\n' +
+        'Wait for the user to send or clear it, or re-run with --force to append to it.'
+    )
+  })
+
   it('exposes the provider and healthy delivery observation', () => {
     expect(
       formatTerminalSend({

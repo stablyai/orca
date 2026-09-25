@@ -8,6 +8,7 @@ import {
   waitForAgentPromptPromise
 } from './orca-runtime-core'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
+import { AgentPromptPendingInputError } from '../../shared/agent-prompt-pending-input-error'
 import {
   AGENT_PROMPT_SUBMIT,
   agentPromptSubmitJoinsPasteFrame,
@@ -22,7 +23,51 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 
+const COMPOSER_DRAFT_READ_ATTEMPTS = 3
+const COMPOSER_DRAFT_RETRY_MS = 50
+
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
+  // Why: the paste lands wherever the composer cursor is, and Enter submits the whole
+  // row — a user's half-typed draft would ship glued to the prompt (#16289). Only a
+  // rendered draft refuses; an unreadable screen is unknown and never blocks a send.
+  private async assertNoPendingComposerInput(
+    ptyId: string,
+    options: { allowPendingInput?: boolean; signal?: AbortSignal }
+  ): Promise<void> {
+    if (options.allowPendingInput === true) {
+      return
+    }
+    const pty = this.ptysById.get(ptyId)
+    // Why: the launch agent is stale once the user swaps agents in the pane.
+    const agent = pty?.foregroundAgent ?? pty?.launchAgent
+    if (!isTerminalSendSettlementAgent(agent)) {
+      return
+    }
+    const pendingInput = await this.readComposerDraft(ptyId, options.signal)
+    if (pendingInput !== null) {
+      throw new AgentPromptPendingInputError(pendingInput)
+    }
+  }
+
+  // Why: a provider frame is discarded when output advanced past it — which is exactly
+  // what a user's keystroke echo does — so retry briefly before giving up on evidence.
+  private async readComposerDraft(ptyId: string, signal?: AbortSignal): Promise<string | null> {
+    const attempts = this.providerSnapshotPreferredPtys.has(ptyId)
+      ? COMPOSER_DRAFT_READ_ATTEMPTS
+      : 1
+    for (let attempt = 0; ; attempt += 1) {
+      assertAgentPromptRequestActive(signal)
+      const visibleState = await this.readVisibleTerminalState(ptyId)
+      if (visibleState) {
+        return visibleState.draft?.trim() ? visibleState.draft : null
+      }
+      if (attempt >= attempts - 1) {
+        return null
+      }
+      await waitForAgentPromptDelay(COMPOSER_DRAFT_RETRY_MS, signal)
+    }
+  }
+
   protected async writeTerminalAgentPrompt(
     handle: string,
     ptyId: string,
@@ -35,6 +80,16 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
     const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
+    // Why: after the permission check — a dialog's selected option row also starts with `❯`.
+    // Why here: the screen read costs a frame, so the cheap lease gate refuses first.
+    await this.assertNoPendingComposerInput(ptyId, options)
+    assertAgentPromptRequestActive(options.signal)
+    this.assertAgentPromptGeneration(ptyId, generation)
+    this.assertAgentPromptPermissionSafe(
+      permissionBaseline,
+      this.getAgentPromptActivity(handle, ptyId)
+    )
+    agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP treats a large bracketed paste as a menu unless submit arrives in the same PTY write.
@@ -54,6 +109,10 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       await options.beforeWrite?.(ptyId)
+      // Why: a sendable precondition polls for up to a second waiting for the agent, which is
+      // ample time for the user to start typing. Re-read before the paste, and keep the checks
+      // below after it so they also cover this read's own window.
+      await this.assertNoPendingComposerInput(ptyId, options)
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
       this.assertAgentPromptPermissionSafe(
@@ -85,11 +144,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     } else {
       const agent = this.getPtyAgent(ptyId)
       const submitDelayMs = options.promptForSchedule
-        ? resolveAgentPromptSubmitDelayForAgent(
-            writeHostPlatform,
-            options.promptForSchedule,
-            agent
-          )
+        ? resolveAgentPromptSubmitDelayForAgent(writeHostPlatform, options.promptForSchedule, agent)
         : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
       await waitForAgentPromptDelay(submitDelayMs, options.signal)
     }

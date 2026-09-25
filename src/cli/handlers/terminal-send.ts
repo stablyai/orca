@@ -65,6 +65,7 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
           ...(waitSubmitMs ? { waitSubmitMs } : {})
         }
       : {}),
+    ...(flags.get('force') === true ? { allowPendingInput: true as const } : {}),
     client: { id: 'orca-cli', type: 'desktop' }
   }
   const options = promptDeliverySupported
@@ -108,6 +109,7 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
     formatTerminalSend
   )
   if (!result.result.send.accepted) {
+    // Why: callers chain `terminal send && ...`; a refusal must not read as delivered.
     process.exitCode = 1
   }
 }

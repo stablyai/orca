@@ -5,7 +5,7 @@ export const TERMINAL_SEND_COMMAND_SPEC: CommandSpec = {
   path: ['terminal', 'send'],
   summary: 'Send input to a live terminal',
   usage:
-    'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--json]',
+    'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--wait-submit <seconds>] [--retry-request <id>] [--force] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'terminal',
@@ -13,7 +13,8 @@ export const TERMINAL_SEND_COMMAND_SPEC: CommandSpec = {
     'enter',
     'interrupt',
     'wait-submit',
-    'retry-request'
+    'retry-request',
+    'force'
   ],
   notes: [
     'For a text-plus-Enter agent prompt, the result separates input acceptance from observed submission and turn start.',

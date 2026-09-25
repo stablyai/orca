@@ -182,6 +182,12 @@ export function formatTerminalSend(result: { send: RuntimeTerminalSend }): strin
       return copy
     }
   }
+  if (result.send.refusedReason === 'pending-input') {
+    return [
+      `Refused: terminal ${result.send.handle} has unsent input in its composer: ${JSON.stringify(result.send.pendingInput ?? '')}`,
+      'Wait for the user to send or clear it, or re-run with --force to append to it.'
+    ].join('\n')
+  }
   if (!result.send.accepted) {
     const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
     return `Input refused by ${result.send.handle}${reason}.`

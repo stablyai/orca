@@ -171,6 +171,7 @@ Terminal rules:
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
+- `terminal send --text ... --enter` into a Claude Code or Codex composer is refused while the composer holds unsent input (`accepted: false`, `refusedReason: pending-input`, `pendingInput: <draft>`), so a user's draft is never submitted with your text. Wait for the user to send or clear it; pass `--force` only when appending to that draft is intended.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.
 - A text-plus-Enter agent prompt returns a durable request ID and additive stages: `input_accepted`, then `turn_started` once the agent's turn is proven. Raw text-only, bare Enter, interrupt, and terminal query replies keep their existing direct-input behavior.

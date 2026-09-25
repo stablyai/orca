@@ -8,10 +8,22 @@ import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
+import type { RuntimeTerminalVisualLayout } from './runtime-terminal-visual-layout'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
+
+// Why: the visual layout tree is its own shape; the barrel keeps re-exporting it so
+// existing importers of these names are unaffected.
+export type {
+  RuntimeTerminalVisualGroupNode,
+  RuntimeTerminalVisualLayout,
+  RuntimeTerminalVisualLayoutNode,
+  RuntimeTerminalVisualPaneNode,
+  RuntimeTerminalVisualTab,
+  RuntimeTerminalVisualTerminalNode
+} from './runtime-terminal-visual-layout'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -34,54 +46,6 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
-}
-
-export type RuntimeTerminalVisualTerminalNode = {
-  type: 'terminal'
-  handle: string
-  tabId: string
-  leafId: string
-  title: string | null
-  connected: boolean
-  active: boolean
-}
-
-export type RuntimeTerminalVisualPaneNode =
-  | RuntimeTerminalVisualTerminalNode
-  | {
-      type: 'pane-split'
-      direction: Extract<TerminalPaneLayoutNode, { type: 'split' }>['direction']
-      first: RuntimeTerminalVisualPaneNode
-      second: RuntimeTerminalVisualPaneNode
-    }
-
-export type RuntimeTerminalVisualTab = {
-  tabId: string
-  title: string | null
-  activeLeafId: string | null
-  panes: RuntimeTerminalVisualPaneNode
-}
-
-export type RuntimeTerminalVisualGroupNode = {
-  type: 'group'
-  groupId: string | null
-  activeTabId: string | null
-  tabs: RuntimeTerminalVisualTab[]
-}
-
-export type RuntimeTerminalVisualLayoutNode =
-  | RuntimeTerminalVisualGroupNode
-  | {
-      type: 'split'
-      direction: Extract<TabGroupLayoutNode, { type: 'split' }>['direction']
-      first: RuntimeTerminalVisualLayoutNode
-      second: RuntimeTerminalVisualLayoutNode
-    }
-
-export type RuntimeTerminalVisualLayout = {
-  worktreeId: string
-  worktreePath: string
-  root: RuntimeTerminalVisualLayoutNode
 }
 
 /** The shared listing-scope shape, kept under its incumbent name for existing consumers. */
@@ -209,7 +173,9 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission'
+  refusedReason?: 'no-agent' | 'permission' | 'pending-input'
+  /** Unsent composer text that refused a submitting send (`refusedReason: 'pending-input'`). */
+  pendingInput?: string
   /**
    * Present only when a durable agent-session lease refused the write. Additive and optional: an
    * old client sees the `accepted: false` it already handles and ignores this field.
