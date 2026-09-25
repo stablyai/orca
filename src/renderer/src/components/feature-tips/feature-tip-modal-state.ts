@@ -1,4 +1,3 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 import {
   FEATURE_TIPS,
@@ -8,13 +7,18 @@ import {
   type FeatureTip,
   type FeatureTipId
 } from '../../../../shared/feature-tips'
+import {
+  isSessionSearchFeatureTipCompleted,
+  type FeatureTipSettings
+} from './feature-tip-startup-gate'
 
 export function getFeatureTipForModal(args: {
   cliInstalled: boolean
   modalData: Record<string, unknown>
   seenTipIds: readonly FeatureTipId[]
   featureInteractions: FeatureInteractionState
-  settings: { voice?: GlobalSettings['voice'] } | null | undefined
+  settings: FeatureTipSettings | null | undefined
+  webClient: boolean
 }): FeatureTip | null {
   const modalTipId = isFeatureTipId(args.modalData.tipId) ? args.modalData.tipId : null
   if (modalTipId) {
@@ -26,6 +30,7 @@ export function getFeatureTipForModal(args: {
     completedTipIds: getCompletedFeatureTipIds({
       cliInstalled: args.cliInstalled,
       voiceDictationEnabled: args.settings?.voice?.enabled === true,
+      sessionSearchTipCompleted: isSessionSearchFeatureTipCompleted(args.settings, args.webClient),
       featureInteractions: args.featureInteractions
     })
   })

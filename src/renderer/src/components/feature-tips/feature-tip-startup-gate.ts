@@ -3,6 +3,7 @@ import {
   getCompletedFeatureTipIds,
   getOrderedUnseenFeatureTips
 } from '../../../../shared/feature-tips'
+import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -20,6 +21,19 @@ export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
   return !status.supported || (status.state === 'installed' && status.pathConfigured === true)
 }
 
+export type FeatureTipSettings = {
+  voice?: GlobalSettings['voice']
+  aiVaultSearch?: GlobalSettings['aiVaultSearch']
+}
+
+export function isSessionSearchFeatureTipCompleted(
+  settings: FeatureTipSettings | null | undefined,
+  webClient: boolean
+): boolean {
+  // Why: the browser client cannot index transcripts, so there is nothing to turn on.
+  return webClient || resolveAiVaultSearchSettings(settings).enabled
+}
+
 export function getFeatureTipsAppOpenDecision(args: {
   activeModal: string
   cliInstalled: boolean | null
@@ -28,8 +42,9 @@ export function getFeatureTipsAppOpenDecision(args: {
   onboarding: OnboardingState | null
   persistedUIReady: boolean
   promptedThisSession: boolean
-  settings: { voice?: GlobalSettings['voice'] } | null | undefined
+  settings: FeatureTipSettings | null | undefined
   suppressedByOnboardingThisSession: boolean
+  webClient: boolean
 }): FeatureTipsAppOpenDecision {
   if (args.onboarding !== null && shouldShowOnboarding(args.onboarding)) {
     return { kind: 'suppress-for-onboarding' }
@@ -53,6 +68,7 @@ export function getFeatureTipsAppOpenDecision(args: {
     completedTipIds: getCompletedFeatureTipIds({
       cliInstalled: args.cliInstalled,
       voiceDictationEnabled: args.settings.voice?.enabled === true,
+      sessionSearchTipCompleted: isSessionSearchFeatureTipCompleted(args.settings, args.webClient),
       featureInteractions: args.featureInteractions
     })
   })
