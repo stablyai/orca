@@ -9,6 +9,10 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from '../../../../shared/agent-session-host-authority'
+import {
+  CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY,
+  type RuntimeCapability
+} from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod } from '../core'
 import {
@@ -31,11 +35,15 @@ type AgentSessionRuntime = OrcaRuntimeService & {
 function callerContext(
   clientId: string | undefined,
   clientKind: 'mobile' | 'runtime' | undefined,
+  clientCapabilities: readonly RuntimeCapability[] | undefined,
   signal: AbortSignal | undefined
 ): RuntimeAgentSessionRpcCaller {
   return {
     ...(clientId !== undefined ? { clientId } : {}),
     ...(clientKind !== undefined ? { clientKind } : {}),
+    ...(clientCapabilities?.includes(CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY)
+      ? { clientSurface: 'web' as const }
+      : {}),
     ...(signal ? { signal } : {})
   }
 }
@@ -62,20 +70,26 @@ export const AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'terminal.ensureAgentSession',
     params: EnsureAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) =>
+    handler: (
+      params,
+      { runtime, pairedDeviceId, clientId, clientKind, clientCapabilities, signal }
+    ) =>
       (runtime as AgentSessionRuntime).ensureAgentSession(
         withExecutionHostAgentPresentation(params, clientKind),
-        callerContext(pairedDeviceId ?? clientId, clientKind, signal)
+        callerContext(pairedDeviceId ?? clientId, clientKind, clientCapabilities, signal)
       )
   }),
   defineMethod({
     name: 'terminal.createAgentSession',
     params: CreateAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
+    handler: (
+      params,
+      { runtime, pairedDeviceId, clientId, clientKind, clientCapabilities, signal }
+    ) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
       return (runtime as AgentSessionRuntime).createAgentSession(
         withExecutionHostAgentPresentation(params, clientKind),
-        callerContext(pairedDeviceId ?? clientId, clientKind, signal)
+        callerContext(pairedDeviceId ?? clientId, clientKind, clientCapabilities, signal)
       )
     }
   })

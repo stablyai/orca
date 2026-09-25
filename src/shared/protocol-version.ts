@@ -218,6 +218,10 @@ export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
 // stop capability above, which a client can advertise while predating this.
 export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
+// Why: `clientKind=runtime` covers both Electron remote clients and the paired
+// browser. Agent interaction guidance must not infer a Web surface from that
+// broad transport class, so the Web client negotiates this narrower fact.
+export const CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY = 'client-surface.web.v1' as const
 // Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
@@ -377,6 +381,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,

@@ -148,7 +148,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
-      const startupArgs = resolveAgentStartupPlanInputs({
+      const baseStartupArgs = resolveAgentStartupPlanInputs({
         agent: request.agent,
         settings,
         platform: this.getAgentLaunchPlatformForWorkspace(workspace),
@@ -158,12 +158,18 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
       })
+      const startupArgs = {
+        ...baseStartupArgs,
+        agentEnv: this.decorateAgentEnvForClient(baseStartupArgs.agentEnv, caller.clientSurface)
+      }
       const startup =
         request.promptDelivery === 'draft'
           ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
           : buildAgentStartupPlan({
               ...startupArgs,
-              prompt: request.prompt ?? '',
+              prompt: request.prompt
+                ? this.decorateAgentPromptForClient(request.prompt, caller.clientSurface)
+                : '',
               allowEmptyPromptLaunch: true
             })
       if (!startup) {
@@ -218,6 +224,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           retainReplayFence = true
         }
         throw error
+      }
+      if (request.promptDelivery === 'draft' || !request.prompt) {
+        this.armAgentClientContextForPty(terminal.ptyId, caller.clientSurface)
       }
       return { terminal, disposition: 'created' }
     })()

@@ -2,6 +2,7 @@ import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,
+  RuntimeAgentSessionRpcCaller,
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
@@ -212,4 +213,6 @@ export type RuntimeAgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
+  /** Paired Web UI prompts consume one armed client-context injection for this PTY generation. */
+  clientSurface?: RuntimeAgentSessionRpcCaller['clientSurface']
 }

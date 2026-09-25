@@ -19,6 +19,7 @@ import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
 } from './terminal-prompt-receipt'
+import { CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
 
 export const TERMINAL_SEND_METHODS = [
   defineMethod({
@@ -29,6 +30,7 @@ export const TERMINAL_SEND_METHODS = [
       {
         runtime,
         clientId,
+        clientCapabilities,
         signal,
         orchestrationMutation,
         recordMutationReceipt,
@@ -36,6 +38,9 @@ export const TERMINAL_SEND_METHODS = [
         replayedMutationReceipt
       }
     ) => {
+      const clientSurface = clientCapabilities?.includes(CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY)
+        ? ('web' as const)
+        : undefined
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       if (params.text) {
@@ -189,13 +194,14 @@ export const TERMINAL_SEND_METHODS = [
               markMutationEffectPossible?.()
             }
           : assertSendPreconditions
-      const useSettledAgentPrompt =
+      const useAgentPromptPath =
         params.agentPrompt === true &&
         hasText &&
         params.enter === true &&
         params.interrupt !== true &&
         params.client?.type === 'desktop' &&
-        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
+        (clientSurface === 'web' ||
+          (await runtime.isTerminalRunningSettledPromptAgent(params.terminal)))
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -209,10 +215,11 @@ export const TERMINAL_SEND_METHODS = [
       let result
       let acceptedPromptCheckpoint: unknown
       try {
-        result = useSettledAgentPrompt
+        result = useAgentPromptPath
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               beforeWrite,
               signal,
+              ...(clientSurface ? { clientSurface } : {}),
               ...(orchestrationMutation
                 ? {
                     acceptQueued: true,

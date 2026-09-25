@@ -18,7 +18,10 @@ import { restoreStructuredTabsIfSupported } from './structured-session-tab-resto
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY,
+  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 
 export const SESSION_TAB_METHODS = [
   defineMethod({
@@ -56,16 +59,33 @@ export const SESSION_TAB_METHODS = [
           runtime.ensureStructuredAgentSessionHost()
         )
       }
-      return runtime.createMobileSessionTerminal(params.worktree, {
+      const clientSurface = clientCapabilities?.includes(CLIENT_SURFACE_WEB_RUNTIME_CAPABILITY)
+        ? ('web' as const)
+        : undefined
+      const created = await runtime.createMobileSessionTerminal(params.worktree, {
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
         cwd: params.cwd,
-        ...(params.env ? { env: params.env } : {}),
+        ...(params.env || (clientSurface === 'web' && (params.agent || params.launchAgent))
+          ? {
+              env:
+                clientSurface === 'web'
+                  ? runtime.decorateAgentEnvForClient(params.env, clientSurface)
+                  : params.env
+            }
+          : {}),
         ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
-        ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
+        ...(params.agentPrompt !== undefined
+          ? {
+              agentPrompt:
+                clientSurface === 'web'
+                  ? runtime.decorateAgentPromptForClient(params.agentPrompt, clientSurface)
+                  : params.agentPrompt
+            }
+          : {}),
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
@@ -90,6 +110,14 @@ export const SESSION_TAB_METHODS = [
         // of running down the timeout and rolling back a live tab (#7718).
         signal
       })
+      if (
+        clientSurface === 'web' &&
+        params.agentPrompt === undefined &&
+        (params.agent || params.launchAgent)
+      ) {
+        runtime.armAgentClientContextForPty(created.tab.ptyId, clientSurface)
+      }
+      return created
     }
   }),
   defineStreamingMethod({

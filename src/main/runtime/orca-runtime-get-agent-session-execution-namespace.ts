@@ -148,14 +148,17 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
         defaultArgs: resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
         shell: resolveStartupShell(platform, shell)
       }),
-      agentEnv: {
-        ...resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
-        ...(handoffAuthority && request.agent === 'codex'
-          ? { CODEX_HOME: handoffAuthority.providerRoot }
-          : handoffAuthority && request.agent === 'claude'
-            ? { CLAUDE_CONFIG_DIR: handoffAuthority.providerRoot }
-            : {})
-      },
+      agentEnv: this.decorateAgentEnvForClient(
+        {
+          ...resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+          ...(handoffAuthority && request.agent === 'codex'
+            ? { CODEX_HOME: handoffAuthority.providerRoot }
+            : handoffAuthority && request.agent === 'claude'
+              ? { CLAUDE_CONFIG_DIR: handoffAuthority.providerRoot }
+              : {})
+        },
+        _caller.clientSurface
+      ),
       ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
@@ -189,9 +192,10 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
         : {}),
       signal: _caller.signal
     })
-    return {
-      terminal,
-      disposition: terminal.agentSessionDisposition ?? 'created'
+    const disposition = terminal.agentSessionDisposition ?? 'created'
+    if (disposition === 'created') {
+      this.armAgentClientContextForPty(terminal.ptyId, _caller.clientSurface)
     }
+    return { terminal, disposition }
   }
 }

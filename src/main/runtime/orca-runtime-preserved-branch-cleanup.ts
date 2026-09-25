@@ -14,6 +14,7 @@ import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-sess
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
+import type { OrcaAgentHostMode } from '../../shared/agent-client-context'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
@@ -102,6 +103,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
 
+  protected readonly agentHostMode: OrcaAgentHostMode
+
   protected readonly prepareAiVaultSessionResumeFn:
     | ((args: AiVaultPrepareSessionResumeArgs) => Promise<AiVaultPrepareSessionResumeResult>)
     | null
@@ -134,6 +137,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly agentPromptPermissionSequenceByPtyId = new Map<string, number>()
 
   protected readonly agentPromptExplicitStatusFloorByPtyId = new Map<string, number>()
+
+  protected readonly agentClientContextByPtyId = new Map<
+    string,
+    { generation: number; pending: boolean }
+  >()
 
   protected readonly orchestrationCompatibilitySshAttachments = new Map<
     string,

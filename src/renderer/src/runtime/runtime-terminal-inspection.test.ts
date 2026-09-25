@@ -48,6 +48,7 @@ function liveEvidence(ptyId: string, processName = 'bash'): RemoteForegroundEvid
 describe('runtime terminal owner routing', () => {
   const runtimeCall = vi.fn()
   const runtimeTransportCall = vi.fn()
+  const runtimeTransportSubscribe = vi.fn()
   const localWrite = vi.fn()
   const localWriteAccepted = vi.fn()
   const localForeground = vi.fn()
@@ -72,8 +73,13 @@ describe('runtime terminal owner routing', () => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeCall(args)
     })
     vi.stubGlobal('window', {
+      __ORCA_WEB_CLIENT__: false,
+      location: { pathname: '' },
       api: {
-        runtimeEnvironments: { call: runtimeTransportCall },
+        runtimeEnvironments: {
+          call: runtimeTransportCall,
+          subscribe: runtimeTransportSubscribe
+        },
         pty: {
           write: localWrite,
           writeAccepted: localWriteAccepted,

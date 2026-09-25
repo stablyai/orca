@@ -75,6 +75,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
     prepareClaudeAuth: (target) => state.claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+    agentHostMode: state.isServeMode ? 'serve' : 'desktop',
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
       getProfileUserDataPath()

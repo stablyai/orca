@@ -41,7 +41,12 @@ const mocks = vi.hoisted(() => ({
   draft: 'hello',
   imageAttachments: [] as { id: string; path: string; pending?: boolean }[],
   getMainBufferSnapshot: vi.fn(),
-  sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
+  sendHandle: {
+    cancel: vi.fn(),
+    settleAfterMs: 500,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the composer stub only needs the accepted promise slot this test reads.
+    accepted: undefined as Promise<boolean> | undefined
+  },
   sendNativeChatMessage: vi.fn(),
   sendNativeChatMessageWithImageAttachments: vi.fn(),
   sendNativeChatTypedCommand: vi.fn(),
@@ -211,6 +216,7 @@ describe('NativeChatComposer', () => {
     mocks.sendNativeChatMessageVerified.mockResolvedValue(true)
     mocks.typeNativeChatCommand.mockResolvedValue(true)
     mocks.sendHandle.settleAfterMs = 500
+    mocks.sendHandle.accepted = undefined
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -437,7 +443,7 @@ describe('NativeChatComposer', () => {
       'pty-1',
       'hello',
       ['/tmp/pasted.png'],
-      undefined
+      { agentPrompt: true }
     )
   })
 
