@@ -16,6 +16,12 @@ import type { CodexJournalTranslator } from './codex-structured-journal-translat
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type {
+  AgentModelCatalogSessionAccess,
+  AgentModelCatalogStore
+} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+
+export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
 
 export type CodexStructuredLaunch = {
   command: string
@@ -89,6 +95,8 @@ export type CodexStructuredSessionAdapterDeps = {
     rootPid: number,
     baseline: CodexTurnProcessSnapshot | null
   ) => Promise<boolean>
+  /** Host model catalog; sessions write their listings through and read back. */
+  modelCatalog?: AgentModelCatalogStore
 }
 
 export type CodexSession = {
@@ -114,6 +122,8 @@ export type CodexSession = {
   }
   /** Exact provider-advertised Fast request value for each discovered model. */
   fastModeTierByModel: Map<string, string>
+  /** Absent when the adapter runs without a host catalog store (tests). */
+  catalogAccess?: CodexSessionCatalogAccess
   /** Sends whose identity is still to be settled by the provider echo. */
   dispatchEchoes: CodexDispatchEchoes
   translator: CodexJournalTranslator | null

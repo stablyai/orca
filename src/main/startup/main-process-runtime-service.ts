@@ -136,6 +136,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         launchAgent: 'codex',
         workspacePath
       }),
+    // Why throw like prepare does: a null from an uninitialized service would
+    // map to the system home and key a catalog read to the wrong account.
+    resolveCodexStructuredLaunchHome: ({ launchEnv }) => {
+      const runtimeHome = state.codexRuntimeHome
+      if (!runtimeHome) {
+        throw new Error('Codex runtime home service is not initialized')
+      }
+      return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv)
+    },
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(state.store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,

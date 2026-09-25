@@ -13,7 +13,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
-import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
+import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 
 export type CodexStructuredLaunchResolverDeps = {
@@ -31,6 +31,31 @@ export type CodexStructuredLaunchResolverDeps = {
   /** The user's Agent Permissions setting as thread policy, re-read per acquisition.
    *  States both postures outright — a resume inherits the last one for any field left absent. */
   resolvePermissionPolicy?: () => CodexStructuredPermissionPolicy
+}
+
+export type CodexStructuredInvocation = {
+  command: string
+  environment: NodeJS.ProcessEnv | undefined
+}
+
+/**
+ * The one place a structured Codex child's binary and environment are
+ * resolved. The session launch and the session-less catalog probe both build
+ * on it, so a probe can never list under a different binary or env than the
+ * session it stands in for. Env VALUES stay out of the catalog fingerprint:
+ * drift there heals on the next refresh.
+ */
+export async function resolveCodexStructuredInvocation(
+  deps: Pick<CodexStructuredLaunchResolverDeps, 'resolveCommand' | 'resolveEnvironment'>
+): Promise<CodexStructuredInvocation> {
+  const environment = await deps.resolveEnvironment?.()
+  const pathEnv = environment?.PATH ?? environment?.Path ?? null
+  const homePath = environment?.HOME ?? environment?.USERPROFILE
+  const command = (deps.resolveCommand ?? resolveCodexCommand)({
+    pathEnv,
+    ...(homePath ? { homePath } : {})
+  })
+  return { command, environment }
 }
 
 export function createCodexStructuredLaunchResolver(
@@ -63,13 +88,7 @@ export function createCodexStructuredLaunchResolver(
     if (accountHome.variable !== 'CODEX_HOME') {
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
-    const environment = await deps.resolveEnvironment?.()
-    const pathEnv = environment?.PATH ?? environment?.Path ?? null
-    const homePath = environment?.HOME ?? environment?.USERPROFILE
-    const command = (deps.resolveCommand ?? resolveCodexCommand)({
-      pathEnv,
-      ...(homePath ? { homePath } : {})
-    })
+    const { command, environment } = await resolveCodexStructuredInvocation(deps)
     // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
     // concern, and the permission posture they used to smuggle in is derived per acquisition.
     const permissionPolicy = deps.resolvePermissionPolicy?.()

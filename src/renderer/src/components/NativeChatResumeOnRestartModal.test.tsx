@@ -160,6 +160,27 @@ it('offers exactly Dismiss all and the resume action', async () => {
   ])
 })
 
+// Rows the sidebar showed as working for different reasons must read differently.
+it('says under each chat what it was doing when Orca went away', async () => {
+  rpc.mockResolvedValue({
+    sessions: [
+      { ...offered[0], activity: { state: 'working', prompts: [], tasks: [] } },
+      {
+        ...offered[1],
+        activity: {
+          state: 'done',
+          prompts: [],
+          tasks: [{ kind: 'command', label: 'Watch CI' }]
+        }
+      }
+    ]
+  })
+  await mount(<NativeChatResumeOnRestartModal />)
+  const text = document.querySelector('[role="dialog"]')?.textContent ?? ''
+  expect(text).toContain('Was mid-reply')
+  expect(text).toContain('Monitoring: Watch CI')
+})
+
 // Closing is the only snooze, so it carries the whole of one: saves the preference like every
 // other way out, and calls NOTHING — the offer is the host's and stays exactly where it was.
 it('snoozes to the status-bar offer when the dialog is closed', async () => {

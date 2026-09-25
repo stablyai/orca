@@ -21,7 +21,8 @@ export function recordFailedStartDispatchIdentity(
   db.db
     .prepare(
       `UPDATE dispatch_contexts
-         SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ?, host_scope = ?
+         SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ?, host_scope = ?,
+             assignee_orca_session_id = NULL
        WHERE id = ? AND status = 'failed' AND capability_hash IS NULL`
     )
     .run(

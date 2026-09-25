@@ -593,7 +593,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3209,6 +3210,14 @@
             "38c282a2c4": "L'analyseur s'ouvre directement depuis ici. Vous pouvez aussi l'ouvrir plus tard depuis le menu d'outils en bas à gauche, en choisissant Analyseur d'espace.",
             "e2fcf07c0d": "Orca n'a pas pu enregistrer cette session de terminal car le stockage local est plein ou inaccessible en écriture. Ouvrez l'analyseur d'espace disque pour trouver du stockage de espace de travail à nettoyer.",
             "678c780a2c": "Espace disque indisponible"
+          },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
           },
           "osc52": {
             "clipboard": {
@@ -6231,7 +6240,6 @@
           "parkTerminal": "Parquer le terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "Joignez jusqu'à {count} captures d'écran",
           "attachImages": "Joindre",
           "removeImage": "Supprimer {{fileName}}"
         },
@@ -17132,8 +17140,8 @@
       },
       "NativeChatResumeOnRestartModal": {
         "title": "Reprendre les discussions interrompues ?",
-        "body": "Ces discussions étaient à mi-parcours lorsque Orca a fermé ses portes. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier sa dernière action avant de continuer. Votre propre invite n'est pas renvoyée.",
-        "updateBody": "Ces discussions étaient à mi-parcours lorsqu'Orca a installé une mise à jour. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier sa dernière action avant de continuer. Votre propre invite n'est pas renvoyée.",
+        "body": "Ces discussions étaient en cours lorsqu'Orca s'est fermé. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier ce qu'il faisait avant de continuer. Votre propre invite n'est pas renvoyée.",
+        "updateBody": "Ces discussions étaient en cours lorsqu'Orca a installé une mise à jour. La reprise restaure chacune là où elle s'est arrêtée, avec son contexte complet, et demande à l'agent de vérifier ce qu'il faisait avant de continuer. Votre propre invite n'est pas renvoyée.",
         "resuming": "Reprise…",
         "untitled": "Discussion sans titre",
         "listLabel": "Des discussions qui reprendraient",
@@ -17156,7 +17164,15 @@
         "notConfirmedOtherOne": "Impossible de confirmer qu'une autre discussion a repris",
         "notConfirmedOtherMany": "Impossible de confirmer que {{value0}}, les autres discussions ont repris",
         "show": "Montrer",
-        "dismiss": "Rejeter"
+        "dismiss": "Rejeter",
+        "activityUnnamed": "sans nom",
+        "activityApproval": "En attente de votre approbation : {{value0}}",
+        "activityQuestion": "En attente de votre réponse : {{value0}}",
+        "activityMidReply": "Réponse en cours",
+        "activitySubagentOne": "Sous-agent en cours : {{value0}}",
+        "activitySubagentMany": "{{value0}} sous-agents en cours",
+        "activityMonitorOne": "Surveillance : {{value0}}",
+        "activityMonitorMany": "Surveillance de {{value0}} tâches en arrière-plan"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "Filtrage des statuts des équipes {{value0}} sur {{value1}} : les problèmes des équipes restantes ne sont pas inclus.",
@@ -17592,38 +17608,6 @@
         "questionCount": "{{value0}} questions"
       },
       "structuredSessionLaunchFailed": "Impossible d'ouvrir le chat {{value0}}",
-      "handoff": {
-        "stage": {
-          "finishingChat": "Fin de la session de discussion…",
-          "finishingTerminal": "Terminal d'agent de finition…",
-          "openingTerminal": "Ouverture du terminal des agents…",
-          "resumingChat": "Reprise de la session de discussion…",
-          "verifyingTerminal": "Terminal de l'agent de vérification…",
-          "verifyingChat": "Vérification de la session de discussion…",
-          "recovering": "Récupération de la session de l'agent…",
-          "manualRecovery": "La session de l'agent doit être récupérée"
-        },
-        "switchingOwner": "Changer de propriétaire de session…",
-        "mode": {
-          "switching": "Commutation",
-          "terminal": "Terminal",
-          "chat": "Chat"
-        },
-        "switchingAfterTurn": "Changer après ce tour",
-        "returningAfterTurn": "Revenir après ce tour",
-        "cancel": "Annuler",
-        "switchAfterTurn": "Changer après ce tour",
-        "stopTurnAndSwitch": "Arrêtez de tourner et de changer",
-        "openAgentTui": "TUI à agent ouvert",
-        "returnAfterTurn": "Revenir après ce tour",
-        "returnToChat": "Revenir au chat",
-        "agentOpenOnHost": "L'agent est ouvert dans le terminal le {{value0}}.",
-        "agentOpen": "L'agent est ouvert dans le terminal.",
-        "exitTerminal": "Quittez le terminal de l'agent pour continuer le chat.",
-        "retryProof": "Réessayez la preuve",
-        "retry": "Réessayer",
-        "details": "Détails"
-      },
       "structuredSessionLaunchFailedDescription": "Orca n'a pas pu ouvrir une discussion structurée {{value0}}. Consultez les journaux pour plus de détails.",
       "subagents": {
         "state": {

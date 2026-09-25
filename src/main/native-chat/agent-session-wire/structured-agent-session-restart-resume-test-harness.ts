@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
 
 export const SESSION = 'session-working-1'
 export const THREAD = 'thread-1'
@@ -135,7 +136,11 @@ export function claudeRecord(
  *  The code under test sees the real `AgentSessionJournal` type; tests see this. */
 export type HarnessJournal = {
   isReadOnly: boolean
-  snapshot: () => { items: AgentJournalRenderItem[]; submissions: AgentJournalSubmission[] }
+  snapshot: () => {
+    items: AgentJournalRenderItem[]
+    submissions: AgentJournalSubmission[]
+    cursor: { epoch: string; sequence: number }
+  }
   submissions: () => AgentJournalSubmission[]
   appendItem: (envelope: unknown, body: { kind: string; text: string }) => Promise<void>
 }
@@ -150,7 +155,7 @@ export function journal(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test calls only isReadOnly, snapshot(), submissions() and appendItem(); a real AgentSessionJournal needs an on-disk SQLite store.
   return {
     isReadOnly,
-    snapshot: () => ({ items, submissions }),
+    snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
     submissions: () => submissions,
     appendItem: async () => undefined
   } as never
@@ -188,4 +193,23 @@ export function submission(
     submittedAt: NOW,
     resolvedAt: null
   }
+}
+
+/** The epoch the fake journal reports. */
+export const EPOCH = 'epoch-1'
+
+/** The resumable set over one fake journal, wired as the host's candidate reader wires it. */
+export function resumableSet(input: {
+  markers: AgentSessionResumeMarker[]
+  items?: AgentJournalRenderItem[]
+  chain?: AgentSessionRecord['providerHandleChain']
+  latestUserItemId?: string | null
+}) {
+  return structuredAgentSessionResumableSet({
+    markers: input.markers,
+    getRecord: () => record(input.chain === undefined ? {} : { chain: input.chain }),
+    supportsRecord: () => true,
+    latestPrompt: () => 'fix the auth bug',
+    latestUserItemId: () => input.latestUserItemId ?? null
+  })
 }

@@ -73,7 +73,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
     }
     const record = context.store.getRecord(unexpectedEvent.sessionId)
     if (!record || record.lease.handoffStage !== null) {
-      // The handoff coordinator owns an already-started transition.
+      // An acquisition or recovery already owns this lease's transition.
       session.hasProviderChild = false
       context.publishStatus?.(unexpectedEvent.sessionId)
       return null

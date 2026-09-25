@@ -14,6 +14,10 @@ import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structu
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
 import type {
+  AgentModelCatalogSessionAccess,
+  AgentModelCatalogStore
+} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type {
   AgentSessionBackgroundTaskState,
   AgentSessionFastModeState
 } from '../../shared/agent-session-wire'
@@ -112,6 +116,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
     leafUuid: string
     fence: number
   }) => Promise<void>
+  /** Host model catalog; sessions write their listings through. */
+  modelCatalog?: AgentModelCatalogStore
 }
 
 export type ClaudeDispatchWaiter = {
@@ -150,6 +156,9 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
+  /** What `get_settings` says the next request will send, after Claude's own env and settings
+   *  precedence: the lowest-ranked answer, unconfirmed until a turn reports it. */
+  appliedOptions?: { model?: string; effort?: string }
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
   fastModePerSessionOptIn?: boolean
@@ -159,6 +168,8 @@ export type ClaudeSession = {
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   restoreSkippedOptions: Set<string>
+  /** Absent when the adapter runs without a host catalog store (tests). */
+  catalogAccess?: AgentModelCatalogSessionAccess
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker

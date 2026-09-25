@@ -494,7 +494,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3087,6 +3088,14 @@
             "38c282a2c4": "分析器直接从这里打开。您也可以稍后从左下角的工具箱菜单中选择“空间分析器”将其打开。",
             "e2fcf07c0d": "Orca 无法保存此终端会话，因为本地存储已满或不可写。打开磁盘空间分析器以查找可以清理的工作区存储。",
             "678c780a2c": "磁盘空间不可用"
+          },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
           },
           "osc52": {
             "clipboard": {
@@ -6154,7 +6163,6 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "最多附加 {count} 张截图",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },
@@ -7057,7 +7065,7 @@
             "structuredScope": "目前仅限本地会话。 WSL 和远程执行主机（包括 SSH）继续使用终端聊天，Windows 会回退到它，除非 Orca 可以读取进程启动时间。",
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
-            "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 时，中途聊天会自动恢复。",
+            "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
             "resumeToggleLabel": "重启后切换自动恢复"
           },
           "agentDashboard": {
@@ -17018,8 +17026,8 @@
       },
       "NativeChatResumeOnRestartModal": {
         "title": "恢复中断的聊天？",
-        "body": "当 Orca 关闭时，这些聊天正在进行中。恢复会恢复每个停止的位置及其完整上下文，并要求代理在继续之前检查其最后一个操作。您自己的提示不会重新发送。",
-        "updateBody": "这些聊天是在 Orca 安装更新时进行的。恢复会恢复每个停止的位置及其完整上下文，并要求代理在继续之前检查其最后一个操作。您自己的提示不会重新发送。",
+        "body": "当 Orca 关闭时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求代理在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
+        "updateBody": "当 Orca 安装更新时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求代理在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
         "resuming": "正在恢复…",
         "untitled": "无标题聊天",
         "listLabel": "将恢复的聊天",
@@ -17042,7 +17050,15 @@
         "notConfirmedOtherOne": "无法确认另外 1 条聊天已恢复",
         "notConfirmedOtherMany": "无法确认 {{value0}} 其他聊天已恢复",
         "show": "显示",
-        "dismiss": "关闭"
+        "dismiss": "关闭",
+        "activityUnnamed": "未命名",
+        "activityApproval": "等待您的批准：{{value0}}",
+        "activityQuestion": "等待您的回答：{{value0}}",
+        "activityMidReply": "回复进行中",
+        "activitySubagentOne": "子代理运行中：{{value0}}",
+        "activitySubagentMany": "{{value0}} 个子代理运行中",
+        "activityMonitorOne": "正在监控：{{value0}}",
+        "activityMonitorMany": "正在监控 {{value0}} 个后台任务"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "过滤 {{value1}} 团队状态中的 {{value0}} — 不包括其余团队的问题。",
@@ -17493,38 +17509,6 @@
         "questionCount": "{{value0}} 问题"
       },
       "structuredSessionLaunchFailed": "无法打开 {{value0}} 聊天",
-      "handoff": {
-        "stage": {
-          "finishingChat": "正在完成聊天会话...",
-          "finishingTerminal": "整理代理终端...",
-          "openingTerminal": "打开代理终端...",
-          "resumingChat": "正在恢复聊天会话...",
-          "verifyingTerminal": "正在验证代理终端...",
-          "verifyingChat": "正在验证聊天会话...",
-          "recovering": "正在恢复代理会话...",
-          "manualRecovery": "代理会话需要恢复"
-        },
-        "switchingOwner": "切换会话所有者...",
-        "mode": {
-          "switching": "交换",
-          "terminal": "终端",
-          "chat": "聊天"
-        },
-        "switchingAfterTurn": "本回合后切换",
-        "returningAfterTurn": "本回合后返回",
-        "cancel": "取消",
-        "switchAfterTurn": "本回合后切换",
-        "stopTurnAndSwitch": "停止转弯并切换",
-        "openAgentTui": "打开代理 TUI",
-        "returnAfterTurn": "本回合后返回",
-        "returnToChat": "返回聊天",
-        "agentOpenOnHost": "代理已在 {{value0}} 的终端中打开。",
-        "agentOpen": "代理在终端中打开。",
-        "exitTerminal": "退出代理终端以继续聊天。",
-        "retryProof": "重试证明",
-        "retry": "重试",
-        "details": "细节"
-      },
       "structuredSessionLaunchFailedDescription": "Orca 无法打开结构化 {{value0}} 聊天。有关详细信息，请参阅日志。",
       "subagents": {
         "state": {

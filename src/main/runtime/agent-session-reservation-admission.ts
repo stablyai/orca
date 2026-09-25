@@ -62,7 +62,6 @@ export type AgentSessionReserveRequest = {
   /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
    *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
-  runtimeKind: AgentSessionReservation['runtimeKind']
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */
@@ -154,7 +153,6 @@ export function applyAgentSessionReservation(
     throw new Error('agent_session_options_invalid')
   }
   const reservation: AgentSessionReservation = {
-    runtimeKind: request.runtimeKind,
     spawnToken:
       typeof request.spawnToken === 'function' ? request.spawnToken() : request.spawnToken,
     claimKeyId: request.claimKeyId,
@@ -283,7 +281,7 @@ function createAgentSessionRecord(
     updatedAt: request.now,
     lease: {
       sessionId: request.sessionId,
-      runtimeKind: reservation.runtimeKind,
+      runtimeKind: 'native',
       // Why: fence 1 is the first reservation; 0 is reserved for "no owner has ever existed".
       runtimeFence: 1,
       handoffStage: 'new-owner-proving',

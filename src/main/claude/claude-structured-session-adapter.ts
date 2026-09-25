@@ -12,6 +12,8 @@ import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
+import { claudeStartupSettledWithin } from './claude-structured-session-startup-gate'
+import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
 import {
   ClaudeAcquisitionRegistry,
   type ClaudeAcquisitionAttempt,
@@ -232,6 +234,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       this.session(input.sessionId),
       input,
       this.deps.requestTimeoutMs
+    )
+  awaitOptionWritable = (sessionId: string): Promise<void> =>
+    claudeStartupSettledWithin(
+      this.sessions.get(sessionId),
+      this.deps.requestTimeoutMs ?? CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS
     )
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)

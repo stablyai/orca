@@ -43,7 +43,6 @@ describe('Claude root-exit eviction', () => {
       },
       provider: 'claude',
       accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: root },
-      runtimeKind: 'native',
       expectedFence: null,
       spawnToken: 'spawn-1',
       claimKeyId: 'key-1',

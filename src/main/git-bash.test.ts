@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   getGitBashCandidatePaths,
+  isGitForWindowsBashLauncherPath,
   isWindowsGitBashShellPath,
   resolveGitBashPath,
   resolveWindowsGitBashShellPath
@@ -158,5 +159,14 @@ describe('Git Bash path discovery', () => {
         exists: (path) => path === 'C:\\msys64\\usr\\bin\\bash.exe'
       })
     ).toBeNull()
+  })
+
+  it('identifies only the bin\\bash.exe launcher, not the MSYS bash it runs', () => {
+    expect(isGitForWindowsBashLauncherPath('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
+    expect(isGitForWindowsBashLauncherPath('D:\\PortableGit\\bin\\bash.exe')).toBe(true)
+    expect(isGitForWindowsBashLauncherPath('C:\\Program Files\\Git\\usr\\bin\\bash.exe')).toBe(
+      false
+    )
+    expect(isGitForWindowsBashLauncherPath('bash.exe')).toBe(false)
   })
 })

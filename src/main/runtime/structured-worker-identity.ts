@@ -32,8 +32,8 @@ import {
 
 // Deliberately not `term_`: `issueHandle` revalidates the renderer graph epoch against the
 // renderer-driven leaves map, so a main-minted `term_` leaf evaporates on the next window reload.
-const STRUCTURED_WORKER_HANDLE_PREFIX = 'structworker_'
-const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
+export const STRUCTURED_WORKER_HANDLE_PREFIX = 'structworker_'
+export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 
 export type StructuredWorkerIdentity = {
   handle: string
@@ -137,7 +137,8 @@ export function structuredWorkerRecordIsCurrent(
 ): boolean {
   return Boolean(
     record &&
-    record.lease.runtimeKind === 'native' &&
+    // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
+    record.lease.claimStatus !== 'conflicted' &&
     record.lease.claimStatus !== 'released' &&
     structuredWorkerHostScope(record.location)
   )

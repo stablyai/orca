@@ -458,10 +458,10 @@ describe('provider-exit recovery tickets', () => {
     expect(isStructuredAgentSessionRecoveryTicketCurrent(recoveryContext({}), ticket)).toBe(true)
   })
 
-  it('is cancelled by a queued handoff before reattachment', () => {
+  it('is cancelled by a latched stage before reattachment', () => {
     expect(
       isStructuredAgentSessionRecoveryTicketCurrent(
-        recoveryContext({ handoffStage: 'preparing' }),
+        recoveryContext({ handoffStage: 'recovering' }),
         ticket
       )
     ).toBe(false)

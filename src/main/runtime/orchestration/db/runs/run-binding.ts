@@ -133,10 +133,12 @@ export function bindRun(
           this.setLegacyCompatibilityPrincipalStatus(coordinatorPrincipal.id, 'revoked')
         }
       }
+      // The Orca session id belongs to the coordinator being replaced; nothing here resolves the new one's.
       this.db
         .prepare(
           `UPDATE runs
-           SET coordinator_handle = ?, coordinator_pane_key = ?,
+           SET coordinator_handle = ?, coordinator_pane_key = ?, coordinator_orca_session_id = NULL,
+               coordinator_orca_session_id_generation = NULL,
                consumer_generation = consumer_generation + 1,
                updated_at = datetime('now')
            WHERE id = ?`

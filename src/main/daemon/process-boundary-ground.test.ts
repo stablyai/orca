@@ -137,7 +137,8 @@ describe('process boundary ground at a proven crash', () => {
       isAlive: () => true
     })
 
-    const data = `$ tui\r\n\x1b[?1049h${DEAD_PROCESS_ARMS}TUI\x1b]133;D;137\x07\x1b[?2004h$ `
+    // The prompt's 133;A: focus armed before any marker is the host's and survives the ground.
+    const data = `\x1b]133;A\x07$ tui\r\n\x1b[?1049h${DEAD_PROCESS_ARMS}TUI\x1b]133;D;137\x07\x1b[?2004h$ `
     barrier.accept({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
 
     await vi.waitFor(() => expect(released).toHaveLength(3))

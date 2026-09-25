@@ -1,4 +1,3 @@
-import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 import { TerminalShellCleanExitConfirmation } from './terminal-shell-clean-exit-confirmation'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
@@ -281,12 +280,11 @@ export class TerminalShellRecoveryBarrier {
     this.queuedBytes = 0
     try {
       if (confirmed && this.isAlive()) {
-        // Scanned before release so alt-state stays honest; the reset bytes are
-        // deliberately inert for ownership (no OSC 133, no TUI mode enables).
-        this.scanner.scan(PROCESS_BOUNDARY_GROUND)
+        // Scanned before release so alt-state stays honest.
+        const ground = this.scanner.groundProcessBoundary()
         try {
           this.releaseDownstream({
-            data: PROCESS_BOUNDARY_GROUND,
+            data: ground,
             rawStartSeq: this.pendingRawSeq,
             rawEndSeq: this.pendingRawSeq,
             transformed: true

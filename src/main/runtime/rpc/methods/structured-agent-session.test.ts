@@ -696,21 +696,6 @@ describe('method routing', () => {
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
   })
-
-  it('routes the structured handoff mutation through the host', async () => {
-    const response = await call('agentSession.requestHandoff', {
-      envelope: envelope(),
-      direction: 'to-tui',
-      mode: 'now',
-      action: 'start'
-    })
-
-    expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ direction: 'to-tui', mode: 'now', action: 'start' })
-    )
-  })
 })
 
 describe('parameter validation', () => {

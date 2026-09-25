@@ -16,6 +16,7 @@ export type SkillInstallProviderId =
   | 'grok'
   | 'aug'
   | 'muse'
+  | 'zcode'
 
 export type SkillInstallProviderDefinition = {
   id: SkillInstallProviderId
@@ -87,6 +88,14 @@ export const SKILL_INSTALL_PROVIDERS: readonly SkillInstallProviderDefinition[] 
     id: 'muse',
     displayName: 'Muse',
     globalSegments: null,
+    workspaceSegments: null
+  },
+  // Why: ZCode loads user skills from `~/.zcode/skills`; project skills come from the
+  // canonical `.agents/skills` root the shared repo source already covers.
+  {
+    id: 'zcode',
+    displayName: 'ZCode',
+    globalSegments: ['.zcode', 'skills'],
     workspaceSegments: null
   }
 ]

@@ -16,6 +16,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'ante',
   'trae',
   'muse',
+  'zcode',
   'pi',
   'omp',
   'prime-agent',

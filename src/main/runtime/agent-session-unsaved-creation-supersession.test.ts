@@ -26,7 +26,6 @@ function reserveRequest(
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: `spawn-${operations}`,
     claimKeyId: 'key-1',

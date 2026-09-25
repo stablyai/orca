@@ -17,6 +17,7 @@ import { useStructuredAgentSessionMessages } from './use-structured-agent-sessio
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import { useStructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
 import { useStructuredAgentSessionContextUsage } from './use-structured-agent-session-context-usage'
 import { useStructuredAgentSessionRailOutline } from './use-structured-agent-session-rail-outline'
@@ -31,8 +32,20 @@ export function useStructuredAgentSession(args: {
   agent: AgentType
   isVisible: boolean
   transportEnabled?: boolean
+  /** The host has published the session but its provider has not answered startup yet. */
+  providerStarting?: boolean
+  /** This view started the session; only then does the stored selection name what it runs. */
+  launch?: StructuredAgentSessionLaunchView
 }) {
-  const { agent, isVisible, sessionId, target, transportEnabled = true } = args
+  const {
+    agent,
+    isVisible,
+    launch,
+    providerStarting = false,
+    sessionId,
+    target,
+    transportEnabled = true
+  } = args
   const {
     state,
     loadingOlder,
@@ -40,6 +53,7 @@ export function useStructuredAgentSession(args: {
     loadOlder,
     mutate,
     writeError,
+    reportWriteError,
     providerVisible
   } = useStructuredAgentSessionTransport({
     sessionId,
@@ -61,11 +75,15 @@ export function useStructuredAgentSession(args: {
     sessionId,
     target,
     transportEnabled,
+    isVisible,
     providerVisible,
+    providerStarting,
     fence: state.fence,
     turnId: transportState.turnId,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
-    mutate
+    mutate,
+    reportWriteError,
+    ...(launch ? { launch } : {})
   })
   const outboxController = useStructuredAgentSessionOutbox({
     sessionId,

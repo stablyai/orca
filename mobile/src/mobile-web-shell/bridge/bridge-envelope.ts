@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
@@ -90,6 +92,22 @@ export { BridgeInitRouteSchema, type BridgeInitRoute }
 export const BridgeInitHostSchema = z.object({
   id: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
   name: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
+  // Why: `name` alone cannot say whether it is the phone's override or the desktop's name.
+  // Optional and additive: an older shell sends none and the page falls back to classifying `name`.
+  // Salvaged so a value this page cannot read (a newer shell's platform) drops the field, not `init`;
+  // the outer `.optional()` keeps the inferred key optional rather than required `T | undefined`.
+  personalName: salvagedOptional(
+    'personalName',
+    z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS)
+  ).optional(),
+  lastKnownMachineName: salvagedOptional(
+    'lastKnownMachineName',
+    z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS)
+  ).optional(),
+  lastKnownHostPlatform: salvagedOptional(
+    'lastKnownHostPlatform',
+    z.enum(NODE_PLATFORM_NAMES)
+  ).optional(),
   endpoint: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
   lastConnected: z.number().finite()
 })
