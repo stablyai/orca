@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   clearWebSessionCloseIntent,
@@ -75,28 +74,26 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     )
 
+    const [chatTab] = patch.unifiedTabsByWorktree?.[WT] ?? []
     expect(patch.unifiedTabsByWorktree?.[WT]).toEqual([
       expect.objectContaining({
-        id: 'structured-agent-session-session-1',
         entityId: 'session-1',
         contentType: 'agent-session',
         agentSessionAgent: 'codex'
       })
     ])
+    // A chat tab's id is its own; it points at its session only through entityId.
+    expect(chatTab?.id).not.toContain('session-1')
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('agent-session')
     expect(
       resolveHostSessionTabIdForWebSessionTab(
         { ...makeState(), ...patch },
-        { environmentId: ENV, worktreeId: WT, tabId: 'structured-agent-session-session-1' }
+        { environmentId: ENV, worktreeId: WT, tabId: chatTab!.id }
       )
     ).toBe(agentTab.id)
   })
 
-  it('mints a first publication under the id the launch draft seed is keyed on', () => {
-    // Why: the draft seed is written under `structuredAgentSessionTabId(sessionId)` before the tab
-    // exists, so a first publication that landed on any other id would leave the composer empty and
-    // silently lose the user's launch context. Collision avoidance can produce another id — the
-    // second half proves that — but never for a session the client has not seen before.
+  it('mints a fresh id for a first publication even when another tab holds the legacy id', () => {
     const agentTab = {
       type: 'agent-session' as const,
       id: 'agent-session:session-seed',
@@ -106,13 +103,9 @@ describe('applyWebSessionTabsSnapshot', () => {
       isActive: true
     }
     const snapshot = makeSnapshot([agentTab], { activeTabId: agentTab.id })
-
-    expect(
-      applyWebSessionTabsSnapshot(makeState(), snapshot, ENV, NOW).unifiedTabsByWorktree?.[WT]
-    ).toEqual([expect.objectContaining({ id: structuredAgentSessionTabId('session-seed') })])
-
-    const squatter: Tab = {
-      id: structuredAgentSessionTabId('session-seed'),
+    // The id the old derivation would have produced, restored from an earlier session.
+    const legacyIdHolder: Tab = {
+      id: 'structured-agent-session-session-seed',
       entityId: 'other-session',
       groupId: 'host-group-1',
       worktreeId: WT,
@@ -126,16 +119,19 @@ describe('applyWebSessionTabsSnapshot', () => {
     }
     const collided = applyWebSessionTabsSnapshot(
       makeState({
-        unifiedTabsByWorktree: { [WT]: [squatter] },
-        tabBarOrderByWorktree: { [WT]: [squatter.id] }
+        unifiedTabsByWorktree: { [WT]: [legacyIdHolder] },
+        tabBarOrderByWorktree: { [WT]: [legacyIdHolder.id] }
       }),
       snapshot,
       ENV,
       NOW
     )
-    expect(
-      collided.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === 'session-seed')?.id
-    ).not.toBe(structuredAgentSessionTabId('session-seed'))
+    const minted = collided.unifiedTabsByWorktree?.[WT]?.find(
+      (tab) => tab.entityId === 'session-seed'
+    )
+    expect(minted?.id).toBeDefined()
+    expect(minted?.id).not.toBe(legacyIdHolder.id)
+    expect(minted?.id).not.toContain(':history-')
   })
 
   it('removes a restored structured tab when the host publishes no structured sessions', () => {

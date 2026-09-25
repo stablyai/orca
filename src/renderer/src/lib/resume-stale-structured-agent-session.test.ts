@@ -16,6 +16,7 @@ afterEach(() => {
 
 describe('stale structured sleeping session', () => {
   it('clears the synthetic terminal projection without spawning', () => {
+    // Legacy persisted shape: pre-restructure records carried the session-derived tab id.
     const tabId = structuredAgentSessionTabId(SESSION_ID)
     const paneKey = makePaneKey(tabId, LEAF_ID)
     const record: SleepingAgentSessionRecord = {

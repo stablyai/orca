@@ -29,7 +29,8 @@ export function retireStructuredAgentSessionTab(args: {
     return
   }
   const closeHostTab = () =>
-    withLocalSessionTabCloseOwner(args.worktreeId, args.tabId, () =>
+    // Why the session id: main's close echo names a chat tab by session, not by any tab id.
+    withLocalSessionTabCloseOwner(args.worktreeId, args.sessionId, () =>
       callRuntimeRpc(args.target, 'session.tabs.close', {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
         tabId: `agent-session:${args.sessionId}`,

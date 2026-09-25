@@ -21,7 +21,7 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
 export function isReadyTerminalTab(
@@ -68,49 +68,33 @@ export function buildMirroredAgentTabs(
       (tab) =>
         !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     )
-  const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
-  const assignedIds = new Set<string>()
+  // Why: one local tab can back only one host row, so a claimed tab is never handed out twice.
+  const claimedIds = new Set<string>()
+  const findUnclaimed = (sessionId: string): Tab | undefined =>
+    currentUnifiedTabs.find(
+      (candidate) =>
+        !claimedIds.has(candidate.id) &&
+        candidate.contentType === 'agent-session' &&
+        candidate.entityId === sessionId
+    )
   const replacementTabs = new Map<string, Tab>()
-  const replacementIds = new Set<string>()
   for (const tab of agentTabs) {
     if (!tab.replacesSessionId) {
       continue
     }
-    const existing =
-      currentUnifiedTabs.find(
-        (candidate) =>
-          candidate.contentType === 'agent-session' && candidate.entityId === tab.sessionId
-      ) ??
-      currentUnifiedTabs.find(
-        (candidate) =>
-          !replacementIds.has(candidate.id) &&
-          candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.replacesSessionId
-      )
+    const existing = findUnclaimed(tab.sessionId) ?? findUnclaimed(tab.replacesSessionId)
     if (existing) {
       replacementTabs.set(tab.sessionId, existing)
-      replacementIds.add(existing.id)
+      claimedIds.add(existing.id)
     }
   }
   return agentTabs.map((tab, index) => {
-    const existing =
-      replacementTabs.get(tab.sessionId) ??
-      currentUnifiedTabs.find(
-        (candidate) =>
-          !replacementIds.has(candidate.id) &&
-          candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.sessionId
-      )
-    const baseId = structuredAgentSessionTabId(tab.sessionId)
-    let localId = existing?.id ?? baseId
-    if (!existing || assignedIds.has(localId)) {
-      let suffix = 0
-      while (occupiedIds.has(localId)) {
-        localId = `${baseId}:history-${++suffix}`
-      }
+    const existing = replacementTabs.get(tab.sessionId) ?? findUnclaimed(tab.sessionId)
+    if (existing) {
+      claimedIds.add(existing.id)
     }
-    occupiedIds.add(localId)
-    assignedIds.add(localId)
+    // Why: a replaced conversation keeps its visible tab; only entityId moves to the new session.
+    const localId = existing?.id ?? createBrowserUuid()
     return {
       hostTabId: tab.id,
       unifiedTab: {

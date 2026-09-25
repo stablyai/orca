@@ -59,6 +59,7 @@ export { useStructuredAgentLaunchStatus } from './structured-agent-session-launc
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
   caller: StructuredLaunchCaller
+  seedLaunchDraft: (tabId: string) => void
 }
 
 export type StructuredAgentLaunchResult = {
@@ -67,6 +68,8 @@ export type StructuredAgentLaunchResult = {
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   isVisibilityUnknown: () => boolean
   releaseCallerAfterUnknownOutcome: () => boolean
+  /** The tab does not exist until the caller opens it, so the caller names where the draft lands. */
+  seedLaunchDraft: (tabId: string) => void
 }
 
 /** What the outbox must carry: a draft goes to the composer seed instead. */
@@ -186,9 +189,6 @@ function structuredAgentLaunchState(
     const stagedPrompt = text
       ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
       : null
-    if (!retrying) {
-      launchDraft.seedStructuredAgentLaunchDraft(existing.intent.sessionId, agent, joined)
-    }
     const { prompt: _retryPrompt, ...joinedWithoutPrompt } = joined
     const callerOptions = retrying ? joinedWithoutPrompt : joined
     return {
@@ -198,7 +198,12 @@ function structuredAgentLaunchState(
         launchResult: existing.promise,
         options: callerOptions,
         stagedEntry: stagedPrompt
-      })
+      }),
+      seedLaunchDraft: (tabId) => {
+        if (!retrying) {
+          launchDraft.seedStructuredAgentLaunchDraft(tabId, agent, joined)
+        }
+      }
     }
   }
 
@@ -212,7 +217,6 @@ function structuredAgentLaunchState(
   const stagedPrompt = text
     ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)
     : null
-  launchDraft.seedStructuredAgentLaunchDraft(intent.sessionId, agent, options)
   const callers = createStructuredLaunchCallerGroup()
   const state: StructuredLaunchState = {
     identity,
@@ -245,7 +249,8 @@ function structuredAgentLaunchState(
   trackStructuredLaunchFailureToast(state.intent.agent, state.promise)
   return {
     state,
-    caller
+    caller,
+    seedLaunchDraft: (tabId) => launchDraft.seedStructuredAgentLaunchDraft(tabId, agent, options)
   }
 }
 
@@ -256,7 +261,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
   }
   markStructuredAgentSessionLaunchCancelled(worktreeId, sessionId)
   discardStructuredAgentSessionLaunchOutbox(state.intent.sessionId)
-  launchDraft.clearStructuredAgentLaunchDraft(state.intent.sessionId)
+  launchDraft.clearStructuredAgentLaunchDraftForSession(worktreeId, state.intent.sessionId)
   abandonStructuredAgentSessionLaunchIntent(state.intent)
   notifyStructuredLaunchListeners()
   return true
@@ -267,9 +272,10 @@ export function startStructuredAgentLaunch(
   agent: AgentSessionHandleProvider,
   options: StructuredAgentLaunchOptions = {}
 ): StructuredAgentLaunchResult {
-  const { state, caller } = structuredAgentLaunchState(worktreeId, agent, options)
+  const { state, caller, seedLaunchDraft } = structuredAgentLaunchState(worktreeId, agent, options)
   return {
     sessionId: state.intent.sessionId,
+    seedLaunchDraft,
     launchResult: state.promise,
     ...(caller.promptDeliveryResult ? { promptDeliveryResult: caller.promptDeliveryResult } : {}),
     isVisibilityUnknown: () => state.visibilityUnknown,

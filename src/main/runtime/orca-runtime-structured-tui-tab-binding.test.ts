@@ -722,9 +722,24 @@ describe('structured TUI launch tab binding', () => {
         activate: false
       })
     )
-    expect(focusEditorTab).toHaveBeenCalledWith(
-      'structured-agent-session-session-claude',
-      WORKTREE_ID
-    )
+    // The renderer owns chat tab ids; main names the chat by its session.
+    expect(focusEditorTab).toHaveBeenCalledWith('session-claude', WORKTREE_ID)
+  })
+
+  it('focuses the renderer chat by session id when a client activates its agent tab', async () => {
+    // Before, main forwarded the host spelling `agent-session:<id>`, which no renderer tab carries.
+    const runtime = new OrcaRuntimeService()
+    const focusEditorTab = vi.fn()
+    runtime.setNotifier({ focusEditorTab } as never)
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: WORKTREE_ID,
+      sessionId: 'session-codex',
+      agent: 'codex',
+      activate: false
+    })
+
+    await runtime.activateMobileSessionTab(`id:${WORKTREE_ID}`, 'agent-session:session-codex')
+
+    expect(focusEditorTab).toHaveBeenCalledWith('session-codex', WORKTREE_ID)
   })
 })

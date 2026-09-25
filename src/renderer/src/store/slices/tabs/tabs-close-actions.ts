@@ -15,7 +15,6 @@ import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab
 } from '@/lib/structured-agent-session-launch-registry'
-import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
 
@@ -68,7 +67,7 @@ export function createTabsCloseActions(
           sessionId: tab.entityId,
           provisional
         })
-        get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
+        get().clearNativeChatLaunchDraft(tab.id)
       }
       // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
       const nextActiveTabId =

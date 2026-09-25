@@ -238,6 +238,11 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       if (targetsHost) {
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)
       }
+    } else if (tab.type === 'agent-session') {
+      // Why the session id: the renderer owns its chat tab ids and resolves this by entityId.
+      if (targetsHost) {
+        this.notifier?.focusEditorTab?.(tab.sessionId, worktreeId)
+      }
     } else {
       if (targetsHost) {
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)

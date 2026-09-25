@@ -1,7 +1,6 @@
 import type { Tab } from '../../../shared/tab-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { defaultAgentChatLabel } from '../../../shared/agent-session-chat-label'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import type {
   AgentSessionLaunchPlan,
   AgentSessionLaunchTarget
@@ -10,6 +9,7 @@ import type {
   StructuredAgentLaunchHandle,
   StructuredAgentLaunchHooks
 } from '@/lib/structured-agent-launch-settlement'
+import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
 
 export type StructuredAgentSessionProvisionalLaunch = StructuredAgentLaunchHandle & { tab: Tab }
@@ -22,13 +22,10 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   activate?: boolean
 }): Tab {
   const state = useAppStore.getState()
-  const tabId = structuredAgentSessionTabId(args.sessionId)
-  const existing = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
-    (candidate) =>
-      candidate.id === tabId &&
-      candidate.contentType === 'agent-session' &&
-      candidate.entityId === args.sessionId
-  )
+  const existing = findStructuredAgentSessionTab(state.unifiedTabsByWorktree, {
+    workspaceId: args.worktreeId,
+    sessionId: args.sessionId
+  })
   if (existing) {
     if (args.activate !== false) {
       state.focusGroup(args.worktreeId, existing.groupId)
@@ -37,8 +34,8 @@ export function openStructuredAgentSessionProvisionalTab(args: {
     }
     return existing
   }
+  // Why no id: a chat tab's id is its own; it names its session only through entityId.
   const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
-    id: tabId,
     entityId: args.sessionId,
     executionHostId: LOCAL_EXECUTION_HOST_ID,
     agentSessionAgent: args.agent,
@@ -75,16 +72,15 @@ export function beginStructuredAgentSessionProvisionalLaunch(args: {
       handle.cancel()
       return null
     }
-    return {
-      ...handle,
-      tab: openStructuredAgentSessionProvisionalTab({
-        worktreeId,
-        sessionId: handle.sessionId,
-        agent: args.plan.agent,
-        ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
-        ...(args.activate !== undefined ? { activate: args.activate } : {})
-      })
-    }
+    const tab = openStructuredAgentSessionProvisionalTab({
+      worktreeId,
+      sessionId: handle.sessionId,
+      agent: args.plan.agent,
+      ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
+      ...(args.activate !== undefined ? { activate: args.activate } : {})
+    })
+    handle.seedLaunchDraft(tab.id)
+    return { ...handle, tab }
   } catch (error) {
     // Why: a launch without its owning surface would strand a late publication.
     handle.cancel()

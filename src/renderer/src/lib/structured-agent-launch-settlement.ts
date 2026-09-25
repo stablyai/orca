@@ -32,6 +32,8 @@ export type StructuredAgentLaunchHandle = {
   settlement: Promise<StructuredAgentLaunchSettlement>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   cancel: () => void
+  /** Seeds this launch's composer draft under the chat tab that now owns the session. */
+  seedLaunchDraft: (tabId: string) => void
 }
 
 async function settleStartedStructuredAgentLaunch(
@@ -99,6 +101,7 @@ export function beginStructuredAgentLaunchSettlement(
     sessionId: launch.sessionId,
     settlement: settleStartedStructuredAgentLaunch(worktreeId, launch, hooks),
     cancel: () => cancelStructuredAgentLaunch(worktreeId, launch.sessionId),
+    seedLaunchDraft: launch.seedLaunchDraft,
     ...(launch.promptDeliveryResult ? { promptDeliveryResult: launch.promptDeliveryResult } : {})
   }
 }

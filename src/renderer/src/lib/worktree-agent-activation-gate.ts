@@ -17,7 +17,7 @@ import {
 } from './worktree-agent-live-surface-adoption'
 import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
 import { readWorktreeLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
-import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
+import { isLegacyStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,
   type StructuredActivationInventory
@@ -122,7 +122,7 @@ function liveSleepingAgentClaims(
       : undefined
     const tabPtyIds = tabId ? store.ptyIdsByTabId[tabId] : undefined
     const structuredOwner =
-      stable && isStructuredAgentSyntheticSleepingRecord(record)
+      stable && isLegacyStructuredAgentSyntheticSleepingRecord(record)
         ? structuredInventory?.ownerBySessionId.get(record.providerSession.id)
         : undefined
     if (structuredOwner?.owner === 'native') {

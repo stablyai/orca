@@ -66,15 +66,57 @@ describe('useIpcEvents session tab close requests', () => {
     })
     const { withLocalSessionTabCloseOwner } =
       await import('@/runtime/local-session-tab-close-owner')
-    await withLocalSessionTabCloseOwner('wt-1', 'chat-tab', async () => {
-      listenerRef.current?.({ requestId: 'owned-close', worktreeId: 'wt-1', tabId: 'chat-tab' })
+    // Main echoes a chat close by its session id, so the initiating close owns that name.
+    await withLocalSessionTabCloseOwner('wt-1', 'session-1', async () => {
+      listenerRef.current?.({ requestId: 'owned-close', worktreeId: 'wt-1', tabId: 'session-1' })
       expect(respondSessionTabClose).toHaveBeenCalledWith({ requestId: 'owned-close' })
       expect(closeUnifiedTab).not.toHaveBeenCalled()
       expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
     })
-    listenerRef.current?.({ requestId: 'independent-close', worktreeId: 'wt-1', tabId: 'chat-tab' })
+    listenerRef.current?.({
+      requestId: 'independent-close',
+      worktreeId: 'wt-1',
+      tabId: 'session-1'
+    })
     expect(requestPinnedTabCloseConfirm).toHaveBeenCalledOnce()
     expect(respondSessionTabClose).not.toHaveBeenCalledWith({ requestId: 'independent-close' })
+  })
+
+  it('closes the chat tab main names by session id through the renderer close path', async () => {
+    const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
+    const closeUnifiedTab = vi.fn().mockReturnValue({ id: 'chat-tab-1' })
+    const respondSessionTabClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn<(request: { onConfirm: () => void }) => void>()
+    await useIpcEventsForCloseRouting({
+      sessionTabCloseRequestListenerRef: listenerRef,
+      respondSessionTabClose,
+      getState: () => ({
+        closeUnifiedTab,
+        requestPinnedTabCloseConfirm,
+        browserTabsByWorktree: {},
+        openFiles: [],
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'chat-tab-1',
+              entityId: 'session-1',
+              contentType: 'agent-session',
+              label: 'Codex Chat',
+              isPinned: true
+            }
+          ]
+        }
+      })
+    })
+
+    listenerRef.current?.({ requestId: 'mobile-close', worktreeId: 'wt-1', tabId: 'session-1' })
+    // The pin guard still sees the chat, and confirming closes it by its renderer-owned id.
+    const request = requestPinnedTabCloseConfirm.mock.calls[0]?.[0]
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    request.onConfirm()
+
+    expect(closeUnifiedTab).toHaveBeenCalledWith('chat-tab-1')
+    expect(respondSessionTabClose).toHaveBeenCalledWith({ requestId: 'mobile-close' })
   })
 
   it('rejects a pinned browser close when confirmation is canceled', async () => {

@@ -307,6 +307,7 @@ describe('worktree agent activation gate', () => {
   })
 
   it('does not activate a terminal for a stale structured sleeping projection', async () => {
+    // Legacy persisted shape: pre-restructure records carried the session-derived tab id.
     const tabId = structuredAgentSessionTabId(STALE_STRUCTURED_SESSION_ID)
     const stale = sleepingRecord(tabId, LIVE_LEAF_ID, STALE_STRUCTURED_SESSION_ID)
     const { deps, createTab, resume } = testDeps({ structured: true, sleeping: [stale] })

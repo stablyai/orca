@@ -25,5 +25,7 @@ export function closeMobileSessionTabInStore(
     return true
   }
 
-  return store.closeUnifiedTab(tabId) !== null
+  // Why: main names a chat tab by its session id; only the renderer knows the tab's own id.
+  const closeTabId = unifiedTab?.contentType === 'agent-session' ? unifiedTab.id : tabId
+  return store.closeUnifiedTab(closeTabId) !== null
 }

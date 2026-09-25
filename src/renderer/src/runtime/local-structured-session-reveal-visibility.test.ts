@@ -23,8 +23,8 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs
 
 const WORKTREE = 'repo-1::/tmp/wt-reveal'
 const HOST_TAB_ID = 'agent-session:codex-reveal-1'
-// The projection renames a host tab id into the renderer's own namespace.
-const SESSION_TAB = 'structured-agent-session-codex-reveal-1'
+// A chat tab's own id is renderer-minted; the row is identified by the session it points at.
+const SESSION_ID = 'codex-reveal-1'
 // One string for the renderer's whole lifetime, which is exactly why retiring it is unrecoverable.
 const RENDERER_EPOCH = 'renderer:11111111-2222-3333-4444-555555555555'
 
@@ -69,6 +69,7 @@ function baseState(): SyncState {
 }
 
 function chatFrame(epoch: string, version: number): RuntimeMobileSessionTabsResult {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a minimal frame; the reveal path reads only the fields set here.
   return {
     worktree: WORKTREE,
     publicationEpoch: epoch,
@@ -81,7 +82,7 @@ function chatFrame(epoch: string, version: number): RuntimeMobileSessionTabsResu
         type: 'agent-session',
         id: HOST_TAB_ID,
         title: 'Codex Chat',
-        sessionId: 'codex-reveal-1',
+        sessionId: SESSION_ID,
         agent: 'codex',
         isActive: true
       }
@@ -105,19 +106,19 @@ function apply(state: SyncState, snapshot: RuntimeMobileSessionTabsResult): Sync
   return applyLocalStructuredSessionTabSnapshots(state, [snapshot])
 }
 
-function chatTabIds(state: SyncState): string[] {
+function chatSessionIds(state: SyncState): string[] {
   return (state.unifiedTabsByWorktree[WORKTREE] ?? [])
     .filter((tab) => tab.contentType === 'agent-session')
-    .map((tab) => tab.id)
+    .map((tab) => tab.entityId)
 }
 
 describe('a revealed chat survives the frames the reveal provokes', () => {
   it('reopens after the click asks an unpublished worktree for its inventory', () => {
     let state = apply(baseState(), chatFrame(RENDERER_EPOCH, 120))
-    expect(chatTabIds(state)).toHaveLength(1)
+    expect(chatSessionIds(state)).toHaveLength(1)
 
     state = apply(state, emptyFrame(RENDERER_EPOCH, 121)) // the user closes the chat
-    expect(chatTabIds(state)).toEqual([])
+    expect(chatSessionIds(state)).toEqual([])
 
     // The Resume click's own `session.tabs.list`: the host holds no entry, so it answers the
     // sentinel. Recording it retired the renderer's epoch and poisoned the reveal that follows.
@@ -125,7 +126,7 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
 
     state = apply(state, chatFrame(RENDERER_EPOCH, 122)) // reveal republishes
 
-    expect(chatTabIds(state)).toEqual([SESSION_TAB])
+    expect(chatSessionIds(state)).toEqual([SESSION_ID])
   })
 
   it('reopens after the host pruned and rebuilt its entry for the worktree', () => {
@@ -138,7 +139,7 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
     state = apply(state, { ...emptyFrame('removed:abc', 0), removed: true } as never)
     state = apply(state, chatFrame('structured:mf3k1', 1))
 
-    expect(chatTabIds(state)).toEqual([SESSION_TAB])
+    expect(chatSessionIds(state)).toEqual([SESSION_ID])
   })
 
   it('does not let a frame from before the retraction strand a row', () => {
@@ -150,7 +151,7 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
 
     state = apply(state, chatFrame(RENDERER_EPOCH, 119)) // in flight since before the close
 
-    expect(chatTabIds(state)).toEqual([])
+    expect(chatSessionIds(state)).toEqual([])
   })
 
   it('does not retire the renderer\u2019s own epoch when a reveal republishes under a new one', () => {
@@ -165,7 +166,7 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
     state = apply(state, emptyFrame('structured:mf3k1', 2)) // closed again
     state = apply(state, chatFrame(RENDERER_EPOCH, 130)) // renderer publishes a new chat
 
-    expect(chatTabIds(state)).toEqual([SESSION_TAB])
+    expect(chatSessionIds(state)).toEqual([SESSION_ID])
   })
 
   it('still fences a delayed frame from an epoch that was already superseded', () => {
@@ -179,18 +180,18 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
 
     state = apply(state, chatFrame('structured:old', 6)) // straggler from the dead epoch
 
-    expect(chatTabIds(state)).toEqual([])
+    expect(chatSessionIds(state)).toEqual([])
   })
 
   it('still prunes the mirrored rows when the host retracts the worktree', () => {
     // The retraction must not merely stop fencing later frames — it has to take the rows with it,
     // or a worktree the host no longer publishes keeps a chat on screen that nothing backs.
     let state = apply(baseState(), chatFrame(RENDERER_EPOCH, 120))
-    expect(chatTabIds(state)).toEqual([SESSION_TAB])
+    expect(chatSessionIds(state)).toEqual([SESSION_ID])
 
     state = apply(state, { ...chatFrame('removed:abc', 0), tabs: [], removed: true } as never)
 
-    expect(chatTabIds(state)).toEqual([])
+    expect(chatSessionIds(state)).toEqual([])
   })
 
   it('still ignores a genuinely superseded republication', () => {
@@ -201,6 +202,6 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
 
     state = apply(state, chatFrame(RENDERER_EPOCH, 9))
 
-    expect(chatTabIds(state)).toEqual([])
+    expect(chatSessionIds(state)).toEqual([])
   })
 })

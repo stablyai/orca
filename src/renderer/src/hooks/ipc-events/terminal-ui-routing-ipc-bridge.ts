@@ -6,6 +6,7 @@ import {
 } from '@/components/terminal-pane/terminal-pane-split-request-routing'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
@@ -147,7 +148,13 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated }) => {
       const store = useAppStore.getState()
-      const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
+      // Why the fallback: main names a chat tab by its session id; the tab id is renderer-owned.
+      const tab =
+        (store.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId) ??
+        findStructuredAgentSessionTab(store.unifiedTabsByWorktree, {
+          workspaceId: worktreeId,
+          sessionId: tabId
+        })
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
       // Why: chat-completion focus is a courtesy reveal, not navigation — never yank the user
       // back into a workspace they deliberately left. A notification click is the opposite: the

@@ -113,7 +113,7 @@ describe('clear pane identity', () => {
   it('gives reopened history its own tab when clear retained its former local ID', () => {
     const current = [
       {
-        id: 'structured-agent-session-old-session',
+        id: 'chat-tab-1',
         entityId: 'new-session',
         contentType: 'agent-session' as const,
         worktreeId: WT,
@@ -148,5 +148,71 @@ describe('clear pane identity', () => {
     expect(new Set(tabs.map((tab) => tab.unifiedTab.id)).size).toBe(2)
     expect(tabs[0]!.unifiedTab.id).toBe(current[0]!.id)
     expect(tabs[1]!.unifiedTab.entityId).toBe('old-session')
+    expect(tabs[1]!.unifiedTab.id).not.toContain(':history-')
+  })
+})
+
+function chatTab(id: string, entityId: string) {
+  return {
+    id,
+    entityId,
+    contentType: 'agent-session' as const,
+    worktreeId: WT,
+    groupId: 'g',
+    label: 'Codex Chat',
+    customLabel: null,
+    color: null,
+    createdAt: 1,
+    sortOrder: 0
+  }
+}
+
+function hostChat(sessionId: string, replacesSessionId?: string) {
+  return {
+    type: 'agent-session' as const,
+    id: `agent-session:${sessionId}`,
+    sessionId,
+    ...(replacesSessionId ? { replacesSessionId } : {}),
+    agent: 'codex' as const,
+    title: 'Codex Chat',
+    isActive: false
+  }
+}
+
+describe('mirrored chat tab identity', () => {
+  it('reuses the tab found by entityId and mints fresh, non-derived ids for new sessions', () => {
+    const snapshot = makeSnapshot([hostChat('s-a'), hostChat('s-b'), hostChat('s-c')])
+    const tabs = buildMirroredAgentTabs(
+      snapshot,
+      new Map(),
+      'g',
+      0,
+      [chatTab('chat-a', 's-a')],
+      NOW
+    )
+    const ids = tabs.map((tab) => tab.unifiedTab.id)
+    expect(ids[0]).toBe('chat-a')
+    expect(new Set(ids).size).toBe(3)
+    for (const [index, tab] of tabs.entries()) {
+      expect(tab.unifiedTab.entityId).toBe(['s-a', 's-b', 's-c'][index])
+      expect(tab.unifiedTab.id).not.toContain(tab.unifiedTab.entityId)
+      expect(tab.unifiedTab.id).not.toContain(':history-')
+    }
+  })
+
+  it('never hands one local tab to two host rows when replacements chain', () => {
+    const snapshot = makeSnapshot([hostChat('s-a', 's-b'), hostChat('s-b', 's-z')])
+    const tabs = buildMirroredAgentTabs(
+      snapshot,
+      new Map(),
+      'g',
+      0,
+      [chatTab('chat-x', 's-b')],
+      NOW
+    )
+    expect(tabs.map((tab) => tab.unifiedTab.entityId)).toEqual(['s-a', 's-b'])
+    expect(tabs[0]!.unifiedTab.id).toBe('chat-x')
+    expect(tabs[1]!.unifiedTab.id).not.toBe('chat-x')
+    expect(tabs[1]!.unifiedTab.id).not.toContain(':history-')
   })
 })

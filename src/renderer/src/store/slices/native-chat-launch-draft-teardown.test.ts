@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as TabRetirementModule from '@/runtime/structured-agent-session-tab-retirement'
 import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
 
 vi.mock('sonner', () => ({
@@ -24,6 +25,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
+// Host retirement is best-effort RPC; this file only pins the local draft teardown.
+vi.mock('@/runtime/structured-agent-session-tab-retirement', async (importOriginal) => ({
+  ...(await importOriginal<typeof TabRetirementModule>()),
+  beginStructuredAgentSessionTabClose: vi.fn()
+}))
+
 const mockApi = {
   worktrees: {
     list: vi.fn().mockResolvedValue([]),
@@ -38,7 +45,13 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
+import {
+  createTestStore,
+  seedStore,
+  makeWorktree,
+  makeTab,
+  makeTabGroup
+} from './store-test-helpers'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -140,6 +153,44 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
       createdAt: entry.createdAt
     })
     expect(store.getState().nativeChatLaunchDraftByTabId[TAB1]?.resolved).toBe(true)
+  })
+
+  it('closing a chat whose conversation was replaced drops the draft under its own tab id', () => {
+    // After /clear the tab keeps its id while entityId moves on, so no session-derived id finds it.
+    const store = createTestStore()
+    const chatTabId = 'chat-tab-1'
+    seedStore(store, {
+      unifiedTabsByWorktree: {
+        [WT1]: [
+          {
+            id: chatTabId,
+            entityId: 'session-after-clear',
+            groupId: 'group-1',
+            worktreeId: WT1,
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex',
+            label: 'Codex Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [WT1]: [makeTabGroup({ id: 'group-1', worktreeId: WT1, tabOrder: [chatTabId] })]
+      },
+      nativeChatLaunchDraftByTabId: {
+        [chatTabId]: draft(chatTabId, 'https://github.com/o/r/issues/1'),
+        [TAB2]: draft(TAB2, 'https://github.com/o/r/issues/2')
+      }
+    })
+
+    store.getState().closeUnifiedTab(chatTabId)
+
+    const s = store.getState()
+    expect(s.nativeChatLaunchDraftByTabId[chatTabId]).toBeUndefined()
+    expect(s.nativeChatLaunchDraftByTabId[TAB2]).toBeDefined()
   })
 
   it('the orphan terminal cleanup patch drops swept tabs’ drafts only', () => {

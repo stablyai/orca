@@ -26,7 +26,6 @@ import { codexStructuredPermissionPolicyForSettings } from '../codex/codex-struc
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner {
   async getWorktreePs(
@@ -223,7 +222,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
           agent,
           activate: false
         })
-        this.notifier?.focusEditorTab?.(structuredAgentSessionTabId(sessionId), workspaceId)
+        this.notifier?.focusEditorTab?.(sessionId, workspaceId)
       },
       stopFailedTuiLaunch: async (owner) => void (await this.closeStructuredTuiOwner(owner))
     }

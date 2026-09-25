@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>(),
   discardOutbox: vi.fn<(sessionId: string) => void>(),
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
-  markCancelled: vi.fn<(worktreeId: string, sessionId: string) => boolean>()
+  markCancelled: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
+  closeOwner: vi.fn<(worktreeId: string, tabId: string) => void>()
 }))
 
 vi.mock('@/lib/structured-agent-session-launch-registry', () => ({
@@ -27,10 +28,13 @@ vi.mock('./runtime-rpc-client', () => ({
 }))
 vi.mock('./local-session-tab-close-owner', () => ({
   withLocalSessionTabCloseOwner: async (
-    _worktreeId: string,
-    _tabId: string,
+    worktreeId: string,
+    tabId: string,
     close: () => Promise<unknown>
-  ) => close()
+  ) => {
+    mocks.closeOwner(worktreeId, tabId)
+    return close()
+  }
 }))
 vi.mock('./runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (worktreeId: string) => `id:${worktreeId}`
@@ -92,6 +96,17 @@ describe('structured agent session tab retirement', () => {
     expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
     expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
+  })
+
+  it('owns the close under the session id main echoes it back by', async () => {
+    retireStructuredAgentSessionTab({
+      target,
+      worktreeId: 'wt-1',
+      tabId: 'chat-tab-1',
+      sessionId: 'session-1'
+    })
+    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
+    expect(mocks.closeOwner).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
   it('suppresses and retires a late cancelled publication', async () => {

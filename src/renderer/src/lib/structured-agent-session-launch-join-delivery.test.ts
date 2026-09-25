@@ -114,6 +114,8 @@ function publishedSnapshot(worktreeId: string, sessionId: string): RuntimeMobile
   }
 }
 
+const CHAT_TAB_ID = 'chat-tab-joined'
+
 async function flushLaunchSettlement(): Promise<void> {
   for (let i = 0; i < 20; i += 1) {
     await Promise.resolve()
@@ -146,8 +148,11 @@ describe('coalesced launch delivery mode', () => {
       publishedSnapshot(args.worktreeId, intent.sessionId)
     ])
 
-    startStructuredAgentLaunch(args.worktreeId, 'codex', args.established)
+    startStructuredAgentLaunch(args.worktreeId, 'codex', args.established).seedLaunchDraft(
+      CHAT_TAB_ID
+    )
     const joiner = startStructuredAgentLaunch(args.worktreeId, 'codex', args.joining)
+    joiner.seedLaunchDraft(CHAT_TAB_ID)
     resolveLaunch({ sessionId: intent.sessionId, fence: 1 })
     await flushLaunchSettlement()
     return { intent, joiner }
@@ -170,7 +175,7 @@ describe('coalesced launch delivery mode', () => {
     ).toBe(false)
     expect(mocks.seedDraft).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        tabId: 'structured-agent-session-unset-delivery-session',
+        tabId: CHAT_TAB_ID,
         text: 'PR context'
       })
     )

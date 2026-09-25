@@ -185,10 +185,12 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'PR #19423 — review this change',
       promptDelivery: 'draft'
     })
+    expect(mocks.seedDraft).not.toHaveBeenCalled()
+    launch.seedLaunchDraft('chat-tab-draft')
     await launch.launchResult
 
     expect(mocks.seedDraft).toHaveBeenCalledWith({
-      tabId: 'structured-agent-session-draft-session',
+      tabId: 'chat-tab-draft',
       agent: 'codex',
       text: 'PR #19423 — review this change',
       createdAt: expect.any(Number)
@@ -200,7 +202,7 @@ describe('startStructuredAgentLaunch', () => {
     ).toBe(false)
   })
 
-  it('seeds a draft longer than the terminal mirror cap under the projected tab id', async () => {
+  it('seeds a draft longer than the terminal mirror cap under the owning tab id', async () => {
     const worktreeId = 'wt-long-draft'
     const intent = launchIntent(worktreeId, 'long-draft-session')
     mocks.createIntent.mockReturnValueOnce(intent)
@@ -214,10 +216,11 @@ describe('startStructuredAgentLaunch', () => {
       prompt: sixtyLineDraft,
       promptDelivery: 'draft'
     })
+    launch.seedLaunchDraft('chat-tab-long-draft')
     await launch.launchResult
 
     expect(mocks.seedDraft).toHaveBeenCalledWith({
-      tabId: 'structured-agent-session-long-draft-session',
+      tabId: 'chat-tab-long-draft',
       agent: 'codex',
       text: sixtyLineDraft,
       createdAt: expect.any(Number)
@@ -235,6 +238,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'review this',
       promptDelivery: 'draft'
     })
+    launch.seedLaunchDraft('chat-tab-draft')
     await expect(launch.launchResult).rejects.toBeInstanceOf(
       StructuredAgentSessionCreateRefusalError
     )
@@ -257,6 +261,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'review this',
       promptDelivery: 'draft'
     })
+    launch.seedLaunchDraft('chat-tab-draft')
     await expect(launch.launchResult).rejects.toThrow()
     await flushLaunchSettlement()
 
@@ -278,15 +283,22 @@ describe('startStructuredAgentLaunch', () => {
     startStructuredAgentLaunch(worktreeId, 'codex', {
       prompt: 'review this',
       promptDelivery: 'draft'
-    })
+    }).seedLaunchDraft('chat-tab-cancelled')
+    // The owning tab is found by the session it points at; its own id is never derived from it.
+    mocks.rendererTabs[worktreeId] = [
+      {
+        id: 'chat-tab-cancelled',
+        worktreeId,
+        contentType: 'agent-session',
+        entityId: intent.sessionId
+      }
+    ]
     await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
     expect(cancelStructuredAgentLaunch(worktreeId, intent.sessionId)).toBe(true)
     resolveRefresh([])
     await flushLaunchSettlement()
 
-    expect(mocks.clearDraft).toHaveBeenCalledWith(
-      'structured-agent-session-cancelled-draft-session'
-    )
+    expect(mocks.clearDraft).toHaveBeenCalledWith('chat-tab-cancelled')
   })
 
   it('opens the chat without an informational progress toast', async () => {
@@ -677,7 +689,7 @@ describe('startStructuredAgentLaunch', () => {
     startStructuredAgentLaunch(worktreeId, 'codex', {
       prompt: 'only once',
       promptDelivery: 'draft'
-    })
+    }).seedLaunchDraft('chat-tab-retry')
     await flushLaunchSettlement()
     expect(readOutbox(intent.sessionId)).toEqual([])
 
@@ -685,6 +697,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'only once',
       promptDelivery: 'draft'
     })
+    retry.seedLaunchDraft('chat-tab-retry')
     await expect(retry.launchResult).resolves.toEqual({ sessionId: intent.sessionId, fence: 1 })
 
     expect(readOutbox(intent.sessionId)).toEqual([])
@@ -786,11 +799,12 @@ describe('startStructuredAgentLaunch', () => {
     startStructuredAgentLaunch(worktreeId, 'codex', {
       prompt: 'PR #1 context',
       promptDelivery: 'draft'
-    })
+    }).seedLaunchDraft('chat-tab-coalesced')
     const joiner = startStructuredAgentLaunch(worktreeId, 'codex', {
       prompt: 'PR #1 context',
       promptDelivery: 'auto-submit'
     })
+    joiner.seedLaunchDraft('chat-tab-coalesced')
     resolveLaunch({ sessionId: intent.sessionId, fence: 1 })
     await flushLaunchSettlement()
 
@@ -803,7 +817,7 @@ describe('startStructuredAgentLaunch', () => {
     ).toBe(false)
     expect(mocks.seedDraft).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        tabId: 'structured-agent-session-coalesced-delivery-session',
+        tabId: 'chat-tab-coalesced',
         text: 'PR #1 context'
       })
     )
