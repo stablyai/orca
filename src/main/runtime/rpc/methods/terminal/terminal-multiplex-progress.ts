@@ -80,7 +80,13 @@ export function recordTerminalMultiplexCredit(
 }
 
 export function clearTerminalMultiplexCredit(stream: TerminalMultiplexStream): void {
-  streamProgress.get(stream)?.progress.creditRestored()
+  const entry = streamProgress.get(stream)
+  if (!entry) {
+    return
+  }
+  entry.chunkBytes = 0
+  entry.ledgerAllowed = null
+  entry.progress.creditRestored()
 }
 
 export function disposeTerminalMultiplexProgress(stream: TerminalMultiplexStream): void {
@@ -97,5 +103,11 @@ export function rejectTerminalMultiplexAck(
 }
 
 export function cancelTerminalMultiplexCredit(stream: TerminalMultiplexStream): void {
-  streamProgress.get(stream)?.progress.creditCancelled()
+  const entry = streamProgress.get(stream)
+  if (!entry) {
+    return
+  }
+  entry.chunkBytes = 0
+  entry.ledgerAllowed = null
+  entry.progress.creditCancelled()
 }

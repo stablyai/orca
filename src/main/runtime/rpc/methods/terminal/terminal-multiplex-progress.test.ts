@@ -99,6 +99,19 @@ describe('terminal multiplex progress observations', () => {
 
   afterEach(() => vi.restoreAllMocks())
 
+  it('does not charge a successfully sent chunk again in later refusal summaries', () => {
+    const { state, stream, entry } = fixture()
+    expect(state.canSendAckGatedOutput(stream, 70)).toBe(true)
+    expect(state.sendAckGatedOutput(stream, { bytes: new Uint8Array(70), displayLength: 1 })).toBe(true)
+    expect(stream.ackInFlightBytes).toBe(70)
+    expect(entry.progress.snapshot()).toMatchObject({
+      chunkBytes: 0,
+      streamCreditBlocked: false,
+      connectionCreditBlocked: false,
+      ledgerChecked: false
+    })
+  })
+
   it('distinguishes simultaneous stream and connection debt without probing the ledger', () => {
     const { state, stream, ledger, entry } = fixture()
     stream.ackOutputSourceRanges = true

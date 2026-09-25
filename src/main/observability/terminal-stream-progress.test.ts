@@ -86,6 +86,71 @@ describe('terminal stream progress reports', () => {
     expect(emit.mock.calls[1]?.[0].observedForMs).toBe(10_500)
   })
 
+  it('does not rearm a refusal timer when healthy output clears unrelated credit', () => {
+    const emit = vi.fn()
+    const reporter = new TerminalStreamProgressReporter(emit)
+    const progress = new TerminalStreamProgress(reporter, { side: 'host', streamId: 6 })
+    progress.report('input_refused')
+    const schedule = vi.spyOn(globalThis, 'setTimeout')
+    for (let index = 0; index < 1_000; index++) {
+      progress.creditRestored()
+    }
+    expect(schedule).not.toHaveBeenCalled()
+    schedule.mockRestore()
+    vi.advanceTimersByTime(1_000)
+    expect(emit).toHaveBeenCalledOnce()
+  })
+
+  it('retains a due credit episode that ends before the rate gate opens', () => {
+    const emit = vi.fn()
+    const reporter = new TerminalStreamProgressReporter(emit)
+    const progress = new TerminalStreamProgress(reporter, { side: 'host', streamId: 9 })
+    progress.report('input_refused')
+    vi.advanceTimersByTime(1_000)
+    progress.creditBlocked()
+    vi.advanceTimersByTime(6_000)
+    progress.creditRestored()
+    const schedule = vi.spyOn(globalThis, 'setTimeout')
+    progress.creditRestored()
+    expect(schedule).not.toHaveBeenCalled()
+    schedule.mockRestore()
+    vi.advanceTimersByTime(4_000)
+    expect(emit).toHaveBeenCalledTimes(2)
+    expect(emit.mock.calls[1]?.[0]).toMatchObject({
+      reasons: ['credit_blocked'],
+      endedReasons: ['credit_blocked'],
+      observedForMs: 6_000
+    })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps a new blockage armed while an ended episode awaits emission', () => {
+    const emit = vi.fn()
+    const reporter = new TerminalStreamProgressReporter(emit)
+    const progress = new TerminalStreamProgress(reporter, { side: 'host', streamId: 10 })
+    progress.report('input_refused')
+    vi.advanceTimersByTime(1_000)
+    progress.creditBlocked()
+    vi.advanceTimersByTime(6_000)
+    progress.creditRestored()
+    vi.advanceTimersByTime(1_000)
+    progress.creditBlocked()
+    vi.advanceTimersByTime(3_000)
+    expect(emit.mock.calls[1]?.[0]).toMatchObject({
+      reasons: ['credit_blocked'],
+      endedReasons: ['credit_blocked'],
+      observedForMs: 6_000
+    })
+    expect(vi.getTimerCount()).toBe(1)
+    vi.advanceTimersByTime(TERMINAL_PROGRESS_REPORT_INTERVAL_MS)
+    expect(emit.mock.calls[2]?.[0]).toMatchObject({
+      reasons: ['credit_blocked'],
+      endedReasons: [],
+      observedForMs: 13_000
+    })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('bounds pending records and emission across connections', () => {
     const emit = vi.fn()
     const reporter = new TerminalStreamProgressReporter(emit)
