@@ -15,7 +15,7 @@ import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { openAgentSessionJournalWithRecovery } from './agent-session-journal-recovery'
-import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
+import { closeStructuredAgentSessionConversationUnderSerialize } from './structured-agent-session-host-lifetime'
 import { tearDownStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
@@ -73,10 +73,6 @@ function hostSession(journal: AgentSessionJournal): StructuredAgentSessionHostSe
   }
 }
 
-function forgetContext(sessions: Map<string, StructuredAgentSessionHostSession>) {
-  return { deps: { store: { getRecord: () => null } }, sessions, forgetStatus: () => undefined }
-}
-
 beforeEach(async () => {
   legacyImport.throws = false
   root = await mkdtemp(join(tmpdir(), 'orca-wire-handles-'))
@@ -119,35 +115,42 @@ describe('site 6: recovery rehydration', () => {
 })
 
 describe('sites 9 and 10: closing a conversation handle', () => {
-  it('awaits the journal close before dropping the map entry', async () => {
+  it('drops the map entry before the close, and releases the handle', async () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir })
     const sessions = new Map([[SESSION, hostSession(journal)]])
     const order: string[] = []
     const close = journal.close.bind(journal)
     journal.close = async () => {
-      order.push('close-started')
+      // A lock-free reader arriving now must find no entry, never a closing handle.
+      order.push(sessions.has(SESSION) ? 'close-while-indexed' : 'close-after-delete')
       await close()
-      order.push(sessions.has(SESSION) ? 'closed' : 'dropped-before-close')
+      order.push('closed')
     }
 
-    await forgetStructuredAgentSession(forgetContext(sessions), SESSION)
+    await expect(
+      closeStructuredAgentSessionConversationUnderSerialize(
+        { sessions, closeStatus: () => order.push('status') },
+        SESSION
+      )
+    ).resolves.toBe(true)
 
-    expect(order).toEqual(['close-started', 'closed'])
+    expect(order).toEqual(['status', 'close-after-delete', 'closed'])
     expect(sessions.size).toBe(0)
     await expectNothingHoldsTheDirectory(journalDir)
   })
 
-  it('keeps the session indexed when the close rejects', async () => {
+  it('surfaces a rejected close to its caller', async () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir })
     const sessions = new Map([[SESSION, hostSession(journal)]])
     const close = journal.close.bind(journal)
     journal.close = () => Promise.reject(new Error('close rejected'))
 
-    await expect(forgetStructuredAgentSession(forgetContext(sessions), SESSION)).rejects.toThrow(
-      'close rejected'
-    )
-    // Still indexed, so the next close is a real retry.
-    expect(sessions.has(SESSION)).toBe(true)
+    await expect(
+      closeStructuredAgentSessionConversationUnderSerialize(
+        { sessions, closeStatus: () => undefined },
+        SESSION
+      )
+    ).rejects.toThrow('close rejected')
     journal.close = close
   })
 })

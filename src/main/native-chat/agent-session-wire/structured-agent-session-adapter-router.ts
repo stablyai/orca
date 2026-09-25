@@ -61,8 +61,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 
-  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
-    this.liveOwnerOrNull(sessionId)?.rewindSupport?.(sessionId) ?? {
+  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId, agent) =>
+    this.capabilityOwner(sessionId, agent)?.rewindSupport?.(sessionId) ?? {
       supported: false,
       reason: 'unsupported'
     }
@@ -94,11 +94,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return change(input)
   }
 
-  supportsThreadGoal = (sessionId: string): boolean =>
-    this.liveOwnerOrNull(sessionId)?.supportsThreadGoal?.(sessionId) ?? false
+  supportsThreadGoal = (sessionId: string, agent?: string): boolean =>
+    this.capabilityOwner(sessionId, agent)?.supportsThreadGoal?.(sessionId) ?? false
 
-  recordsContextUsage = (sessionId: string): boolean =>
-    this.liveOwnerOrNull(sessionId)?.recordsContextUsage?.(sessionId) ?? false
+  recordsContextUsage = (sessionId: string, agent?: string): boolean =>
+    this.capabilityOwner(sessionId, agent)?.recordsContextUsage?.(sessionId) ?? false
 
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
@@ -214,6 +214,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       throw new Error(`no live structured adapter owns ${sessionId}`)
     }
     return adapter
+  }
+
+  /** The live owner, or for a session at rest the provider it would start under. */
+  private capabilityOwner(sessionId: string, agent?: string): StructuredAgentSessionAdapter | null {
+    return this.liveOwnerOrNull(sessionId) ?? (agent ? this.adapterForAgent(agent) : null)
   }
 
   private liveOwnerOrNull(sessionId: string): StructuredAgentSessionAdapter | null {

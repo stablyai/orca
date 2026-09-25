@@ -19,7 +19,9 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null,
-  error?: string
+  error?: string,
+  /** The structured lane, whose read retries on its own. */
+  retrying = false
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
@@ -31,7 +33,7 @@ export function mobileNativeChatEmptyState(
     case 'ready':
       return formatNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
-      const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
+      const copy = formatNativeChatEmptyStateCopy(retrying ? 'retryingError' : 'error', agentLabel)
       return error ? { ...copy, subtitle: error } : copy
     }
     default:

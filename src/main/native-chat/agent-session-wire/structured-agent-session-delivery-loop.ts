@@ -16,7 +16,7 @@ import {
   providerExitBeforeDeliveryRejection,
   providerStartupFailureOutcome
 } from './structured-agent-session-dead-generation-settlement'
-import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-hold-resume'
+import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type {
   StructuredAgentSessionEndedChild,
   StructuredAgentSessionHostSession,

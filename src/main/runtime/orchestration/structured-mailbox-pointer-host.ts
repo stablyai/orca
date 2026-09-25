@@ -39,15 +39,16 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
  * idle-with-history is the normal steady state of a working agent. Shared so the pointer lane and
  * group addressing cannot disagree about it.
  */
-export function readStructuredSessionGateFacts(
+export async function readStructuredSessionGateFacts(
   sessionId: string
-): StructuredSessionGateFacts | null {
+): Promise<StructuredSessionGateFacts | null> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
   }
   try {
-    return structuredSessionGateFacts(host.journalSnapshot(sessionId).items)
+    // Opens a conversation the idle sweep closed; that starts no agent.
+    return structuredSessionGateFacts((await host.journalSnapshot(sessionId)).items)
   } catch (error) {
     // Not attached is a retain reason, not a failure; anything else is still unreadable.
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {

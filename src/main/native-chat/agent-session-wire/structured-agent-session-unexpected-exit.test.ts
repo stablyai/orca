@@ -10,52 +10,13 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import {
-  isStructuredAgentSessionRecoveryTicketCurrent,
   settleUnexpectedStructuredAgentSessionExit,
   type StructuredAgentSessionUnexpectedExitContext,
-  type StructuredAgentSessionUnexpectedExitSession,
-  type StructuredAgentSessionRecoveryTicket
+  type StructuredAgentSessionUnexpectedExitSession
 } from './structured-agent-session-unexpected-exit'
 
 const SESSION = 'session-1'
 const GENERATION = 'generation-1'
-
-const ticket: StructuredAgentSessionRecoveryTicket = {
-  sessionId: SESSION,
-  releasedFence: 8,
-  deadAcquisitionGeneration: GENERATION,
-  stableSettlementId: 'settlement-1'
-}
-
-function recoveryContext(input: {
-  generation?: string
-  handoffStage?: AgentSessionRecord['lease']['handoffStage']
-  resumeCapable?: boolean
-}) {
-  const session: Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'> = {
-    child: null,
-    lastEndedChild: {
-      generation: input.generation ?? GENERATION,
-      fence: 7,
-      cause: 'exit',
-      reason: null,
-      duringStartup: false,
-      rootGone: true
-    }
-  }
-  const record = {
-    lease: {
-      runtimeFence: 8,
-      claimStatus: 'released',
-      handoffStage: input.handoffStage ?? null
-    }
-  } as AgentSessionRecord
-  return {
-    sessions: new Map([[SESSION, session]]),
-    store: { getRecord: () => record },
-    hasResumeCapableHolder: () => input.resumeCapable ?? true
-  } as never
-}
 
 function lifecycleItem(
   turnId: string,
@@ -108,7 +69,7 @@ function mutableStore() {
   }
 }
 
-describe('provider-exit recovery tickets', () => {
+describe('provider-exit settlement', () => {
   it.each([undefined, 2_000])('keeps exit receipt %s on retry', async (observedAt) => {
     let now = observedAt === undefined ? 2_000 : 30_000
     let record = {
@@ -154,7 +115,6 @@ describe('provider-exit recovery tickets', () => {
           return { ok: false, error: new Error('sink unavailable') }
         },
         publishFence: vi.fn(),
-        hasResumeCapableHolder: () => true,
         serialize: async (_sessionId, task) => task(),
         now: () => now
       } as never,
@@ -226,13 +186,12 @@ describe('provider-exit recovery tickets', () => {
       transitionHandoff: async () => ({ lease: { runtimeFence: 8 } })
     }
 
-    const result = await settleUnexpectedStructuredAgentSessionExit(
+    await settleUnexpectedStructuredAgentSessionExit(
       {
         store,
         sessions: new Map([[SESSION, session]]),
         flushLifecycle: async () => ({ ok: true }),
         publishFence: vi.fn(),
-        hasResumeCapableHolder: () => true,
         serialize: async (_sessionId, task) => task(),
         now: () => 1_234
       } as never,
@@ -247,7 +206,6 @@ describe('provider-exit recovery tickets', () => {
       }
     )
 
-    expect(result).toMatchObject({ releasedFence: 8 })
     expect(session.journal.markPendingSubmissionsUnknown).toHaveBeenCalledWith(
       7,
       'provider_exited_before_acknowledgement'
@@ -333,7 +291,6 @@ describe('provider-exit recovery tickets', () => {
           return { ok: true }
         },
         publishFence: vi.fn(),
-        hasResumeCapableHolder: () => true,
         serialize: async <T>(_sessionId: string, task: () => Promise<T>) => task(),
         now: () => 1_234
       }
@@ -380,7 +337,6 @@ describe('provider-exit recovery tickets', () => {
       sessions: new Map([[SESSION, session]]),
       flushLifecycle: async () => ({ ok: true }),
       publishFence: vi.fn(),
-      hasResumeCapableHolder: () => true,
       serialize: async <T>(_sessionId: string, task: () => Promise<T>) => task(),
       now: () => 1
     }
@@ -438,44 +394,14 @@ describe('provider-exit recovery tickets', () => {
       sessions: new Map([[SESSION, session]]),
       flushLifecycle: async () => ({ ok: false, error: new Error('sink failed') }),
       publishFence,
-      hasResumeCapableHolder: () => true,
       serialize: async (_sessionId, task) => task(),
       now: () => 1,
       onBarrierError: release
     }
-    const result = await settleUnexpectedStructuredAgentSessionExit(context, event)
+    await settleUnexpectedStructuredAgentSessionExit(context, event)
 
-    expect(result).toBeNull()
     expect(session.child).toBeNull()
     expect(publishFence).toHaveBeenCalledTimes(1)
     expect(release).toHaveBeenCalledTimes(2)
-  })
-
-  it('admits the exact released generation for a resume-capable holder', () => {
-    expect(isStructuredAgentSessionRecoveryTicketCurrent(recoveryContext({}), ticket)).toBe(true)
-  })
-
-  it('is cancelled by a latched stage before reattachment', () => {
-    expect(
-      isStructuredAgentSessionRecoveryTicketCurrent(
-        recoveryContext({ handoffStage: 'recovering' }),
-        ticket
-      )
-    ).toBe(false)
-  })
-
-  it('is cancelled when its holder or dead acquisition generation is no longer current', () => {
-    expect(
-      isStructuredAgentSessionRecoveryTicketCurrent(
-        recoveryContext({ resumeCapable: false }),
-        ticket
-      )
-    ).toBe(false)
-    expect(
-      isStructuredAgentSessionRecoveryTicketCurrent(
-        recoveryContext({ generation: 'generation-new' }),
-        ticket
-      )
-    ).toBe(false)
   })
 })

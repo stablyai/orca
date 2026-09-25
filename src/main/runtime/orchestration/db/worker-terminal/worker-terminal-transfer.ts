@@ -81,14 +81,52 @@ export function workerTerminalResourceHasIdentityConflict(
   )
 }
 
+/** Whether a dispatch that has not settled still owns the terminal of this process, read through
+ *  the resource row so a transferred terminal answers for its current owner. */
+export function hasOpenWorkerDispatchForProcess(
+  this: OrchestrationDb,
+  params: { processIncarnation: string; hostScope: string }
+): boolean {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT names exactly this one column.
+  const owners = this.db
+    .prepare(
+      `SELECT owner_dispatch_id FROM worker_terminal_resources
+        WHERE process_incarnation = ? AND host_scope IS ? AND ownership_state = 'owned'`
+    )
+    .all(params.processIncarnation, params.hostScope) as { owner_dispatch_id: string }[]
+  return owners.some((row) =>
+    ['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'].includes(
+      this.getWorkerDispatch(row.owner_dispatch_id)?.state ?? ''
+    )
+  )
+}
+
+/** Every resource whose process incarnation starts with `prefix`, newest first. */
+export function listWorkerTerminalResourcesByIncarnationPrefix(
+  this: OrchestrationDb,
+  prefix: string
+): WorkerTerminalResourceRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  return this.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources
+        WHERE substr(process_incarnation, 1, ?) = ? ORDER BY updated_at DESC`
+    )
+    .all(prefix.length, prefix) as WorkerTerminalResourceRow[]
+}
+
 export type WorkerTerminalTransferMethods = {
   findTransferableWorkerTerminalResource: typeof findTransferableWorkerTerminalResource
   workerTerminalResourceHasIdentityConflict: typeof workerTerminalResourceHasIdentityConflict
+  hasOpenWorkerDispatchForProcess: typeof hasOpenWorkerDispatchForProcess
+  listWorkerTerminalResourcesByIncarnationPrefix: typeof listWorkerTerminalResourcesByIncarnationPrefix
 }
 
 export function attachWorkerTerminalTransfer(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     findTransferableWorkerTerminalResource,
-    workerTerminalResourceHasIdentityConflict
+    workerTerminalResourceHasIdentityConflict,
+    hasOpenWorkerDispatchForProcess,
+    listWorkerTerminalResourcesByIncarnationPrefix
   })
 }

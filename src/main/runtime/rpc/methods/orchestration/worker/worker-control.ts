@@ -143,7 +143,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
         )
       }
-      const structured = readStructuredWorkerOutput({
+      const structured = await readStructuredWorkerOutput({
         db,
         dispatchId: params.dispatch,
         workerState: worker?.state ?? 'unsupervised',

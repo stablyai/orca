@@ -29,6 +29,7 @@ import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
 } from './orchestration/worker-terminal-process-liveness'
+import type { OrchestrationDb } from './orchestration/db'
 
 // Deliberately not `term_`: `issueHandle` revalidates the renderer graph epoch against the
 // renderer-driven leaves map, so a main-minted `term_` leaf evaporates on the next window reload.
@@ -131,17 +132,77 @@ export function structuredWorkerHostScope(
     : null
 }
 
-/** Whether the durable record still describes THIS worker under this host. */
+/**
+ * Whether the durable record still describes THIS worker under this host — ownership, not whether
+ * its process runs. A released lease is a worker at rest while its chat tab is listed; released
+ * with the tab gone is retired. `tabListed` is the persisted tab index's answer.
+ */
 export function structuredWorkerRecordIsCurrent(
-  record: AgentSessionRecord | null | undefined
+  record: AgentSessionRecord | null | undefined,
+  tabListed: boolean
 ): boolean {
   return Boolean(
     record &&
     // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
     record.lease.claimStatus !== 'conflicted' &&
-    record.lease.claimStatus !== 'released' &&
+    (record.lease.claimStatus !== 'released' || tabListed) &&
     structuredWorkerHostScope(record.location)
   )
+}
+
+/** Whether a dispatch that has not settled still owns this session's worker, keyed the way the
+ *  worker's terminal resource row is: its process incarnation and host scope. */
+export function structuredWorkerHasOpenDispatch(
+  db: OrchestrationDb | null,
+  record: AgentSessionRecord
+): boolean {
+  const hostScope = structuredWorkerHostScope(record.location)
+  return Boolean(
+    db &&
+    hostScope &&
+    db.hasOpenWorkerDispatchForProcess({
+      processIncarnation: structuredWorkerProcessIncarnation(record.sessionId),
+      hostScope: JSON.stringify(hostScope)
+    })
+  )
+}
+
+type StructuredWorkerResourceRow = {
+  terminal_handle: string
+  pane_key: string | null
+  process_incarnation: string | null
+  worktree_id: string | null
+  host_scope: string | null
+}
+
+/** A worker's identity as its durable worker-terminal resource row records it, or null for a row
+ *  that is not a structured worker's or whose pane key does not belong to its own session. */
+export function structuredWorkerIdentityFromRow(
+  row: StructuredWorkerResourceRow
+): StructuredWorkerIdentity | null {
+  const sessionId = sessionIdFromStructuredWorkerIncarnation(row.process_incarnation)
+  const hostScope = parseWorkerTerminalHostScope(row.host_scope)
+  const paneKey = row.pane_key
+  if (
+    !sessionId ||
+    !hostScope ||
+    !row.worktree_id ||
+    !paneKey ||
+    !isStructuredWorkerHandle(row.terminal_handle) ||
+    !persistedStructuredWorkerPaneKeyIsValid(paneKey, sessionId)
+  ) {
+    return null
+  }
+  return {
+    handle: row.terminal_handle,
+    sessionId,
+    // The row does not carry the provider; callers that need it read the durable record.
+    agent: null,
+    paneKey,
+    processIncarnation: structuredWorkerProcessIncarnation(sessionId),
+    worktreeId: row.worktree_id,
+    hostScope
+  }
 }
 
 export class StructuredWorkerIdentityRegistry {
@@ -183,35 +244,9 @@ export class StructuredWorkerIdentityRegistry {
    * only place a structured worker's pane key and host scope outlive this process. A row whose
    * pane key does not belong to its own recorded session is refused rather than trusted.
    */
-  rehydrate(row: {
-    terminal_handle: string
-    pane_key: string | null
-    process_incarnation: string | null
-    worktree_id: string | null
-    host_scope: string | null
-  }): StructuredWorkerIdentity | null {
-    const sessionId = sessionIdFromStructuredWorkerIncarnation(row.process_incarnation)
-    const hostScope = parseWorkerTerminalHostScope(row.host_scope)
-    if (
-      !sessionId ||
-      !hostScope ||
-      !row.worktree_id ||
-      !isStructuredWorkerHandle(row.terminal_handle) ||
-      // The durable row bootstraps the registry after restart, so validate it before registration.
-      !persistedStructuredWorkerPaneKeyIsValid(row.pane_key, sessionId)
-    ) {
-      return null
-    }
-    return this.register({
-      handle: row.terminal_handle,
-      sessionId,
-      // The row does not carry the provider; callers that need it read the durable record.
-      agent: null,
-      paneKey: row.pane_key,
-      processIncarnation: structuredWorkerProcessIncarnation(sessionId),
-      worktreeId: row.worktree_id,
-      hostScope
-    })
+  rehydrate(row: StructuredWorkerResourceRow): StructuredWorkerIdentity | null {
+    const identity = structuredWorkerIdentityFromRow(row)
+    return identity ? this.register(identity) : null
   }
 
   clear(): void {

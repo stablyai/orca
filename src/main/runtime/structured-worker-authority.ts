@@ -3,8 +3,9 @@
  *
  * The registry holds the handle→session mapping for this process; the durable worker-terminal
  * resource row is what survives a restart, so a miss falls back to rehydrating from it. The
- * durable agent-session record is the liveness half: a session whose claim is conflicted or
- * released, or pinned to another execution host, is no longer this runtime's structured worker.
+ * durable agent-session record and the chat's tab are the ownership half: see `structuredWorkerOwned`.
+ * Whether its provider process runs is a separate fact, `observeStructuredWorker`, and routing
+ * never reads it — an agent at rest still receives mail, which starts it.
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -47,6 +48,35 @@ export function resolveStructuredWorkerIdentity(
   return row ? structuredWorkerIdentities.rehydrate(row) : null
 }
 
+/**
+ * Whether this runtime still owns the worker's session: routing, addressing and authority ask
+ * this, never whether its process runs. Null when the host is not installed, because reading the
+ * record store would install it — not being able to look is not an answer.
+ */
+export function structuredWorkerOwned(sessionId: string): boolean | null {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    return null
+  }
+  const record = readStructuredAgentSessionRecord(sessionId)
+  return structuredWorkerRecordIsCurrent(
+    record,
+    record?.lease.claimStatus === 'released' && structuredWorkerTabListed(host, sessionId)
+  )
+}
+
+/** Retirement is the tab index: every path that ends a chat for good hides its tab. */
+function structuredWorkerTabListed(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): boolean {
+  try {
+    return host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ?? false
+  } catch {
+    return false
+  }
+}
+
 /** Identity plus a record that still proves this runtime owns the session. */
 export function resolveStructuredWorkerAuthority(
   handle: string,
@@ -57,7 +87,7 @@ export function resolveStructuredWorkerAuthority(
     return null
   }
   const record = readStructuredAgentSessionRecord(identity.sessionId)
-  return record && structuredWorkerRecordIsCurrent(record) ? { identity, record } : null
+  return record && structuredWorkerOwned(identity.sessionId) ? { identity, record } : null
 }
 
 /**
@@ -78,6 +108,20 @@ export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'clau
 export type StructuredWorkerObservation = {
   status: 'live' | 'unverifiable' | 'exited'
   reason?: string
+}
+
+/**
+ * Whether a close left nothing running: `exited`, or `unverifiable` on a released lease — a release
+ * whose stop could not be proven, which sent no signal and is left as it is. Closing a chat is the
+ * user's action, and bookkeeping about a process already released must not refuse it.
+ */
+export function structuredSessionCloseSettled(sessionId: string): boolean {
+  const status = observeStructuredWorker({ sessionId }).status
+  return (
+    status === 'exited' ||
+    (status === 'unverifiable' &&
+      readStructuredAgentSessionRecord(sessionId)?.lease.claimStatus === 'released')
+  )
 }
 
 /**

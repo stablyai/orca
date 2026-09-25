@@ -184,7 +184,7 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
   ): Promise<RuntimeTerminalRead> {
     // Before the PTY lookup, because a structured worker has no PTY and no leaf: without this the
     // only peer read verb answers `terminal_handle_stale` for a perfectly live worker.
-    const structured = readStructuredWorkerTerminal({
+    const structured = await readStructuredWorkerTerminal({
       handle,
       db: this.getOrchestrationDbIfAvailable?.() ?? null,
       ...(opts.cursor === undefined ? {} : { cursor: opts.cursor }),

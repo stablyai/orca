@@ -154,8 +154,8 @@ describe('structured session options and close', () => {
     })
     // Accepted, then handed over by the delivery loop; the status is read once it answered.
     await vi.waitFor(() => expect(dispatchedModels).toEqual([DEFAULT_MODEL]))
-    await vi.waitFor(() =>
-      expect(host.journalSnapshot(SESSION).submissions[0]?.dispatchState).toBe('accepted')
+    await vi.waitFor(async () =>
+      expect((await host.journalSnapshot(SESSION)).submissions[0]?.dispatchState).toBe('accepted')
     )
     const events: AgentSessionStatusEvent[] = []
     host.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })

@@ -62,12 +62,11 @@ async function launchAndDeliver(): Promise<{
   }
   // Accepted first; the delivery loop hands it over, and that outcome is what reached the agent.
   let dispatchState = sent.value.submission.dispatchState
-  await vi.waitFor(() => {
+  await vi.waitFor(async () => {
     dispatchState =
-      host
-        .journalSnapshot(created.value.sessionId)
-        .submissions.find((entry) => entry.clientMessageId === sent.value.clientMessageId)
-        ?.dispatchState ?? 'missing'
+      (await host.journalSnapshot(created.value.sessionId)).submissions.find(
+        (entry) => entry.clientMessageId === sent.value.clientMessageId
+      )?.dispatchState ?? 'missing'
     expect(dispatchState).not.toBe('pending')
   })
   return { messageId, dispatchState }

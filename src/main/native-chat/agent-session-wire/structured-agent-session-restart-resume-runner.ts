@@ -1,13 +1,12 @@
 // Delivering the explicit restart action: the one path that turns a resumable candidate back into
-// a live agent.
+// a working agent.
 //
 // The manual "Resume" button and the automatic setting both land here, so the two can never drift
 // into different eligibility or different double-fire protection.
 //
-// Resume itself acquires a provider child, not a new send. The first resume-capable hold on a
-// childless session re-acquires the provider's own conversation — Claude's `resume` by session id,
-// Codex's thread id — which is native continuation. Nothing re-sends the user's prompt: that is
-// what makes an agent redo work it already finished.
+// A resume is the continuation send. Its delivery starts the provider on its own conversation —
+// Claude's `resume` by session id, Codex's thread id — which is native continuation. Nothing
+// re-sends the user's prompt: that is what makes an agent redo work it already finished.
 
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
@@ -52,7 +51,7 @@ function resumeAdmissionOwner(error: unknown): string | null {
  * One resume per session at a time, whoever is asking.
  *
  * Two surfaces can reach for the same chat at once — the banner's "Resume all" and a user clicking
- * one row — and both would otherwise take a hold, race the acquisition, and leave the loser's
+ * one row — and both would otherwise send the continuation twice, and leave the loser's
  * refusal looking like a real failure. The second caller is told who holds it instead.
  */
 export class StructuredAgentSessionResumeAdmission {
@@ -80,7 +79,7 @@ export type StructuredAgentSessionResumeRunnerDeps = {
   admission: StructuredAgentSessionResumeAdmission
   /** Validates this action's durable reservation. False means the candidate is no longer eligible. */
   consumeMarker: (sessionId: string) => Promise<boolean>
-  /** Acquires the provider child for the reserved session. */
+  /** Continues the reserved session; resolves once its agent took the message or refused it. */
   resume: (sessionId: string) => Promise<void>
   concurrency?: number
 }

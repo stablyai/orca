@@ -423,7 +423,7 @@ describe('a structured Claude session over agentSession.*', () => {
     claude.setSelfExit(null)
   })
 
-  it('reopens a chat whose stop saw the Claude root exit but not its descendants', async () => {
+  it('restarts a chat whose stop saw the Claude root exit but not its descendants', async () => {
     await ok('agentSession.create', createIntentParams())
     const first = claude.live()
     first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
@@ -432,14 +432,19 @@ describe('a structured Claude session over agentSession.*', () => {
       return false
     }
     const host = getStructuredAgentSessionHost()
-    // The idle release clock's eviction: the lease follows the root, so the host lets go.
+    // The lease follows the root, so the host lets go.
     await host?.close(SESSION)
     expect(host?.hasSession(SESSION)).toBe(false)
 
-    // What the chat surface's `agentSession.hold` does when the user comes back to it.
-    await host?.hold(SESSION, 'desktop-chat:reopen')
+    // The user comes back and sends: that send is what starts Claude again.
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'back' }] }
+    await ok('agentSession.send', {
+      envelope: envelope('agentSession.send', { body }, leaseOf(SESSION).runtimeFence),
+      body
+    })
 
-    expect(claude.connections).toHaveLength(2)
+    await vi.waitFor(() => expect(claude.connections).toHaveLength(2))
+    await vi.waitFor(() => expect(claude.live().sent).toHaveLength(1))
     expect(host?.hasSession(SESSION)).toBe(true)
   })
 
@@ -455,10 +460,8 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
   })
 
-  it('restarts an open chat after a Claude crash whose descendants could not be verified', async () => {
+  it('restarts a chat on its next send after a Claude crash whose descendants could not be verified', async () => {
     const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
-    // The open chat surface is what asks the host to bring Claude back.
-    await getStructuredAgentSessionHost()?.hold(SESSION, 'desktop-chat:open')
     const connection = claude.live()
     connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     connection.close = async () => {
@@ -481,19 +484,19 @@ describe('a structured Claude session over agentSession.*', () => {
       dispatchState: 'unknown',
       reason: 'provider_exited_before_acknowledgement'
     })
-    // Held back, sends failed with the crash until the idle clock stopped the chat.
+    // The crash releases the lease; nothing restarts Claude until the chat has work for it.
     await waitForStructuredAgentSessionRecovery()
-    expect(claude.connections).toHaveLength(2)
-    expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
-    const lease = leaseOf(SESSION)
-    expect(lease).toMatchObject({ claimStatus: 'live', handoffStage: null })
+    expect(claude.connections).toHaveLength(1)
+    expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     const next = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'after' }] }
-    const sent = await ok<{ submission: { dispatchState: string } }>('agentSession.send', {
-      envelope: envelope('agentSession.send', { body: next }, lease.runtimeFence),
+    await ok('agentSession.send', {
+      envelope: envelope('agentSession.send', { body: next }, leaseOf(SESSION).runtimeFence),
       body: next
     })
-    expect(sent.submission.dispatchState).toBe('accepted')
-    expect(claude.live().sent).toHaveLength(1)
+    await vi.waitFor(() => expect(claude.connections).toHaveLength(2))
+    expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
+    await vi.waitFor(() => expect(claude.live().sent).toHaveLength(1))
+    expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'live', handoffStage: null })
   })
 
   it('creates, sends, streams, approves, interrupts, and resumes from the chain head', async () => {

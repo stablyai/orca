@@ -7,13 +7,17 @@ import type { NativeChatSession } from '../../../../shared/native-chat-types'
 export function NativeChatEmptyState({
   kind,
   message,
-  agent
+  agent,
+  retrying = false
 }: {
   kind: 'loading' | 'empty' | 'error' | 'not-agent'
   message?: string
   agent?: NativeChatSession['agent']
+  /** The read retries on its own (structured chat), so the error says so instead of pointing
+   *  back to the terminal. */
+  retrying?: boolean
 }): React.JSX.Element {
-  const copy = emptyStateCopy(kind, message, agent)
+  const copy = emptyStateCopy(kind, message, agent, retrying)
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div
@@ -40,7 +44,8 @@ export function NativeChatEmptyState({
 function emptyStateCopy(
   kind: 'loading' | 'empty' | 'error' | 'not-agent',
   message?: string,
-  agent?: NativeChatSession['agent']
+  agent?: NativeChatSession['agent'],
+  retrying = false
 ): { title: string; subtitle: string | null } {
   switch (kind) {
     case 'loading':
@@ -62,10 +67,15 @@ function emptyStateCopy(
         ),
         subtitle:
           message ??
-          translate(
-            'components.native-chat.state.error.subtitle',
-            NATIVE_CHAT_EMPTY_STATE_COPY.error.subtitle
-          )
+          (retrying
+            ? translate(
+                'components.native-chat.state.error.retryingSubtitle',
+                NATIVE_CHAT_EMPTY_STATE_COPY.retryingError.subtitle
+              )
+            : translate(
+                'components.native-chat.state.error.subtitle',
+                NATIVE_CHAT_EMPTY_STATE_COPY.error.subtitle
+              ))
       }
     case 'not-agent':
       return {

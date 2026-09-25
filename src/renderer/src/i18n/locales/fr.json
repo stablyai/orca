@@ -17478,7 +17478,8 @@
         },
         "error": {
           "title": "Impossible de charger la conversation",
-          "subtitle": "La transcription n'a pas pu être lue. Rebasculez sur le terminal pour continuer à travailler."
+          "subtitle": "La transcription n'a pas pu être lue. Rebasculez sur le terminal pour continuer à travailler.",
+          "retryingSubtitle": "La transcription n'a pas pu être lue. Orca continue d'essayer de la charger."
         },
         "pairHost": "Associez un hôte pour consulter l'historique de chat des agents.",
         "notAgent": {

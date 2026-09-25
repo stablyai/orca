@@ -63,9 +63,9 @@ export async function commitStructuredAgentSessionLaunchPrompt(args: {
     // Settlement can fail after the journal append. Re-read the authoritative row before asking
     // the caller to resend, otherwise a retry creates a duplicate turn.
     try {
-      const committed = args.host
-        .journalSnapshot(args.sessionId)
-        .submissions.find((submission) => submission.clientMessageId === clientMessageId)
+      const committed = (await args.host.journalSnapshot(args.sessionId)).submissions.find(
+        (submission) => submission.clientMessageId === clientMessageId
+      )
       if (committed) {
         return clientMessageId
       }

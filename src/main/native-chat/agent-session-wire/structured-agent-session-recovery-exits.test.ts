@@ -59,6 +59,12 @@ async function stopOwner(child: ReturnType<typeof spawnProcess>): Promise<void> 
   spawnedOwners.delete(child)
 }
 
+/** What a send's delivery or `agentSession.ensure` does: attach at the record's current fence. */
+async function startAgent(): Promise<void> {
+  const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+  expect((await host.attach(CALLER, hostTestAttachParams(fence))).ok).toBe(true)
+}
+
 function adapter(): StructuredAgentSessionAdapter {
   return {
     acquire,
@@ -84,7 +90,7 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
 
 async function abandonHost(abandonedHost: StructuredAgentSessionHost): Promise<void> {
   abandonedHost['runtimeState'].stopLeaseRenewal()
-  abandonedHost['holds'].dispose()
+  abandonedHost['lifetime'].dispose()
   await Promise.all(
     [...abandonedHost['sessions'].values()].map((session) => session.journal.close())
   )
@@ -197,8 +203,8 @@ describe('recovery exits', () => {
       runtimeFence: 4
     })
 
-    // The ordinary native recovery path remains: the first surface hold resumes it.
-    await host.hold(SESSION, 'surface-1')
+    // The ordinary native recovery path remains: the next start resumes it.
+    await startAgent()
     expect(acquire).toHaveBeenCalledTimes(3)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
@@ -242,7 +248,7 @@ describe('recovery exits', () => {
     })
   })
 
-  it('heals a stranded native owner during startup restore, and spawns nothing until a surface asks', async () => {
+  it('heals a stranded native owner during startup restore, and spawns nothing until work asks', async () => {
     expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
     await reopenStore()
 
@@ -262,7 +268,7 @@ describe('recovery exits', () => {
     await host.restoreReadableSessions()
 
     // Healing is startup's job; spawning is not. The orphan is stopped and the lease is free, but
-    // nothing has asked to look at this session, so no replacement child exists yet.
+    // nothing has asked this session for work, so no replacement child exists yet.
     expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGTERM')
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -271,7 +277,7 @@ describe('recovery exits', () => {
       ownerProcess: null
     })
 
-    await host.hold(SESSION, 'surface-1')
+    await startAgent()
 
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -340,7 +346,7 @@ describe('recovery exits', () => {
       }
     })
 
-    await host.hold(SESSION, 'surface-overlap')
+    await startAgent()
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeFence: 3,
@@ -348,6 +354,6 @@ describe('recovery exits', () => {
       handoffStage: null,
       ownerProcess: { pid: replacement.process.pid, spawnToken: 'spawn-b' }
     })
-    expect(host.history({ sessionId: SESSION, direction: 'tail' }).ok).toBe(true)
+    expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
   })
 })

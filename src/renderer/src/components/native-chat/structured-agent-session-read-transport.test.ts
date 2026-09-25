@@ -269,7 +269,7 @@ describe('structured agent-session read transport unattached refusals', () => {
       // ...and the failure is owed once it has passed.
       await vi.advanceTimersByTimeAsync(750)
       attempts.at(-1)?.onError(rpcRefusal(UNATTACHED))
-      expect(applyError).toHaveBeenCalledWith(`RuntimeRpcCallError: ${UNATTACHED}`)
+      expect(applyError).toHaveBeenCalledWith(UNATTACHED)
       transport.dispose()
     } finally {
       vi.useRealTimers()
@@ -284,7 +284,7 @@ describe('structured agent-session read transport unattached refusals', () => {
         throw new Error('journal read failed')
       }, applyError)
       await flushPromises()
-      expect(applyError).toHaveBeenCalledExactlyOnceWith('Error: journal read failed')
+      expect(applyError).toHaveBeenCalledExactlyOnceWith('journal read failed')
       transport.dispose()
     } finally {
       vi.useRealTimers()
@@ -303,7 +303,32 @@ describe('structured agent-session read transport unattached refusals', () => {
       expect(applyError).not.toHaveBeenCalled()
 
       attempts[0].onError({ code: 'runtime_error', message: 'transport died' })
-      expect(applyError).toHaveBeenCalledOnce()
+      // The host's own words, never `[object Object]` (P2-04).
+      expect(applyError).toHaveBeenCalledExactlyOnceWith('transport died')
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-opens after a failed open and leaves the error once the conversation reads (P2-04)', async () => {
+    vi.useFakeTimers()
+    try {
+      const applyError = vi.fn()
+      const applyEvent = vi.fn()
+      const transport = startWithHydration(async () => undefined, applyError, applyEvent)
+      await flushPromises()
+      attempts[0].onError({ code: 'agent_session_journal_unreadable', message: 'disk full' })
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      expect(applyError).toHaveBeenCalledExactlyOnceWith('disk full')
+
+      // The retry re-asks, and the host's open runs again: a fault that cleared now reads.
+      await vi.advanceTimersByTimeAsync(750)
+      expect(attempts).toHaveLength(2)
+      attempts[1].onEvent(snapshot(1))
+      await flushPromises()
+      expect(applyEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'snapshot' }))
       transport.dispose()
     } finally {
       vi.useRealTimers()

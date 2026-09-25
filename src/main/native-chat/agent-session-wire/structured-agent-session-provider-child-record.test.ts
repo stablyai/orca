@@ -19,6 +19,7 @@ import {
 import { providerStartupFailureOutcome } from './structured-agent-session-dead-generation-settlement'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { ensureStructuredAgentSessionAgent } from './structured-agent-session-agent-start'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import {
@@ -84,7 +85,6 @@ function startHost(): void {
     journalRoot: root,
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
-    releaseGraceMs: 60_000,
     now: () => NOW
   })
 }
@@ -160,12 +160,12 @@ function stop() {
   })
 }
 
-function submission(id: string): AgentJournalSubmission | undefined {
-  return host.journalSnapshot(SESSION).submissions.find((entry) => entry.clientMessageId === id)
+async function submission(id: string): Promise<AgentJournalSubmission | undefined> {
+  return (await host.journalSnapshot(SESSION)).submissions.find((entry) => entry.clientMessageId === id)
 }
 
-function statusRows(): { itemId: string; text: string; tone?: string }[] {
-  return host.journalSnapshot(SESSION).items.flatMap((item) =>
+async function statusRows(): Promise<{ itemId: string; text: string; tone?: string }[]> {
+  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
     item.body.kind === 'status'
       ? [
           {
@@ -211,9 +211,9 @@ function conversation() {
   return host['sessions'].get(SESSION)
 }
 
-function subscribe(): AgentSessionSubscribeEvent[] {
+async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
   const events: AgentSessionSubscribeEvent[] = []
-  host.subscribe({
+  await host.subscribe({
     id: 'sub-1',
     sessionId: SESSION,
     emit: (event) => events.push(structuredClone(event))
@@ -244,7 +244,7 @@ function deferred<T>() {
 }
 
 describe('Stop on a child still proving its start', () => {
-  it('ends the child and keeps the conversation, its holders and its readers (R1)', async () => {
+  it('ends the child and keeps the conversation and its readers (R1)', async () => {
     const ended = deferred<void>()
     adapterExtras = {
       awaitStarted: vi.fn(() => ended.promise),
@@ -255,32 +255,30 @@ describe('Stop on a child still proving its start', () => {
     }
     await restartHost()
     acquire.mockImplementationOnce(spawnStartingChild)
-    await host.hold(SESSION, 'surface-1', { resume: false })
     const first = await accept('hello')
     const journal = conversation()?.journal
-    const events = subscribe()
+    const events = await subscribe()
     const frames = watchStatus()
     await eventually(() => expect(conversation()?.child?.phase).toBe('starting'))
 
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
-    // The same conversation: no reopen, the holder kept, and the chat told it is idle again.
+    // The same conversation: no reopen, and the chat told it is idle again.
     expect(conversation()?.journal).toBe(journal)
     expect(conversation()?.child).toBeNull()
     expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-stop', rootGone: true })
-    expect(host.isHeld(SESSION)).toBe(true)
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionPhase')
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionOwned')
-    expect(submission(first)).toMatchObject({
+    expect(await submission(first)).toMatchObject({
       dispatchState: 'rejected',
       reason: DISPATCH_REJECTED_CANCELLED
     })
     // A Stop is not a failure: no row, and the loop is gone.
-    expect(statusRows()).toEqual([])
+    expect(await statusRows()).toEqual([])
     await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
 
     const next = await accept('after stop')
-    await eventually(() => expect(submission(next)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(next))?.dispatchState).toBe('accepted'))
     expect(conversation()?.journal).toBe(journal)
     expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([next])
     // The reader opened before the Stop saw the next message delivered on the same stream.
@@ -310,12 +308,12 @@ describe('a settlement retry for an earlier child inside the attach for the next
     const retryFence = store.getRecord(SESSION)!.lease.runtimeFence
     const id = await accept('for the next child')
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
     expect(store.getRecord(SESSION)?.lease.settlementRetryRequired).toBeUndefined()
     // Handed over at the new child's fence, which the attach reserved after the retry.
     const newFence = store.getRecord(SESSION)!.lease.runtimeFence
     expect(newFence).toBeGreaterThan(retryFence)
-    expect(submission(id)?.fence).toBe(newFence)
+    expect((await submission(id))?.fence).toBe(newFence)
     expect(conversation()?.child).toMatchObject({ generation: generation(), fence: newFence })
   })
 })
@@ -332,7 +330,7 @@ describe('a published child that dies while it proves its start', () => {
       await restartHost()
       acquire.mockImplementation(spawnStartingChild)
       const first = await accept('first')
-      const events = subscribe()
+      const events = await subscribe()
       const second = await accept('second')
       await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalled())
       const child = currentChild()
@@ -342,20 +340,20 @@ describe('a published child that dies while it proves its start', () => {
         settled.resolve(TEXT)
       } else {
         settled.resolve(TEXT)
-        await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
+        await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
         await exit(child, EXIT, true)
       }
 
-      await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
-      expect(statusRows()).toEqual([
+      await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+      expect(await statusRows()).toEqual([
         {
           itemId: `orca:${encodeURIComponent(`start-failure:${child.acquisitionGeneration}`)}`,
           text: TEXT,
           tone: 'error'
         }
       ])
-      expect(submission(first)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
-      expect(submission(second)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
+      expect(await submission(first)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
+      expect(await submission(second)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
       expect(rejectedIn(events, second)).toBe(true)
       expect(dispatch).not.toHaveBeenCalled()
       expect(acquire).toHaveBeenCalledTimes(2)
@@ -373,12 +371,12 @@ describe('a child that ends before its message is handed over', () => {
     }
     await restartHost()
     const id = await accept('hello')
-    const events = subscribe()
+    const events = await subscribe()
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
-    expect(submission(id)?.reason).toContain('codex app-server crashed')
-    expect(statusRows()).toEqual([
-      { itemId: expect.any(String), text: submission(id)?.reason, tone: 'error' }
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    expect((await submission(id))?.reason).toContain('codex app-server crashed')
+    expect(await statusRows()).toEqual([
+      { itemId: expect.any(String), text: (await submission(id))?.reason, tone: 'error' }
     ])
     expect(rejectedIn(events, id)).toBe(true)
     await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
@@ -407,8 +405,10 @@ describe('another child indexed while the loop waits on the one it started', () 
     const stopped = currentChild()
     expect(await stop()).toMatchObject({ ok: true })
     const second = await accept('second')
-    // A view's hold starts its own child before the loop's handover step runs.
-    await host.hold(SESSION, 'surface-1')
+    // An operation that needs the agent starts its own child before the loop's handover step runs.
+    await host['serialize'](SESSION, () =>
+      ensureStructuredAgentSessionAgent(host['attachContext'](), SESSION)
+    )
     const replacement = currentChild()
     expect(replacement.acquisitionGeneration).not.toBe(stopped.acquisitionGeneration)
 
@@ -424,9 +424,9 @@ describe('another child indexed while the loop waits on the one it started', () 
     })
     startOf(replacement.acquisitionGeneration).resolve()
 
-    await eventually(() => expect(submission(second)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
     expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([second])
-    expect(submission(first)).toMatchObject({ reason: DISPATCH_REJECTED_CANCELLED })
+    expect(await submission(first)).toMatchObject({ reason: DISPATCH_REJECTED_CANCELLED })
   })
 })
 
@@ -435,7 +435,7 @@ describe('a quit with a message still queued', () => {
   async function afterRelaunch(id: string): Promise<AgentJournalSubmission | undefined> {
     startHost()
     await host.revealSession(SESSION)
-    return submission(id)
+    return await submission(id)
   }
 
   it('settles a message no child ever had the way a chat close does (R2)', async () => {
@@ -491,7 +491,7 @@ describe('a send whose start failed, sent again with the same operation id', () 
       value: { submission: { dispatchState: 'pending' } }
     })
     const id = params.envelope.clientOperationId
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
     // The start moved the fence while the message was out.
     expect(store.getRecord(SESSION)!.lease.runtimeFence).toBeGreaterThan(fenceBefore)
     const starts = acquire.mock.calls.length
@@ -538,9 +538,9 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
       expect(await stop()).toMatchObject({ ok: true })
     })
 
-    await eventually(() => expect(submission(second)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
     expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-stop', reason: null })
-    expect(statusRows()).toEqual([])
+    expect(await statusRows()).toEqual([])
   })
 
   it('fails the start after a host stop, with the stop as the reason (R2)', async () => {
@@ -554,9 +554,9 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
       )
     )
 
-    await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
-    expect(submission(second)?.reason).toBe(reason)
-    expect(statusRows()).toEqual([{ itemId: expect.any(String), text: reason, tone: 'error' }])
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+    expect((await submission(second))?.reason).toBe(reason)
+    expect(await statusRows()).toEqual([{ itemId: expect.any(String), text: reason, tone: 'error' }])
     expect(dispatch).not.toHaveBeenCalled()
   })
 })

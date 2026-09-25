@@ -16,16 +16,17 @@ export type NativeChatViewState =
   | { kind: 'ready'; isWorking: true }
 
 /**
- * Decide which surface to render. Error is terminal, but any renderable message
- * wins over loading/empty so optimistic first sends never get replaced by a
- * full-pane placeholder while transcript discovery catches up.
+ * Decide which surface to render. Any renderable message wins, error included: a read that fails
+ * after the transcript loaded must not replace it with a full-pane placeholder, and the error still
+ * reaches the composer's error line. Messages also win over loading/empty so optimistic first sends
+ * never get replaced while transcript discovery catches up.
  */
 export function selectNativeChatViewState(session: NativeChatSession): NativeChatViewState {
-  if (session.status === 'error') {
-    return { kind: 'error', message: session.error ?? 'Conversation could not be loaded.' }
-  }
   if (session.messages.length > 0) {
     return { kind: 'ready', isWorking: session.status === 'working' }
+  }
+  if (session.status === 'error') {
+    return { kind: 'error', message: session.error ?? 'Conversation could not be loaded.' }
   }
   if (session.status === 'loading') {
     return { kind: 'loading' }

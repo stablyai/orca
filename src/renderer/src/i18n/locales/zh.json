@@ -17379,7 +17379,8 @@
         },
         "error": {
           "title": "无法加载对话",
-          "subtitle": "无法读取记录。请切回终端继续工作。"
+          "subtitle": "无法读取记录。请切回终端继续工作。",
+          "retryingSubtitle": "无法读取记录。Orca 会继续尝试加载。"
         },
         "pairHost": "配对主机以查看智能体聊天记录。",
         "notAgent": {

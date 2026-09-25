@@ -3,8 +3,9 @@
 
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
+import { rename, writeFile, rm } from 'node:fs/promises'
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
@@ -19,7 +20,6 @@ it('deletes the offer once the user sends their own message in that chat', async
   const capsule = new AgentSessionRecoveryCapsule(root)
   expect(await capsule.list(NOW)).toHaveLength(1)
 
-  await host.hold(SESSION, 'pane')
   dispatch.mockResolvedValueOnce({ state: 'admitted' })
   const body = hostTestMessage('Never mind, do this instead')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
@@ -28,20 +28,28 @@ it('deletes the offer once the user sends their own message in that chat', async
   await vi.waitFor(async () => {
     expect(await capsule.list(NOW)).toEqual([])
   })
-  host.release(SESSION, 'pane')
 })
 
 // A journal this host cannot read says nothing about the user moving on, so it must not end the offer.
 it('keeps the offer when the chat cannot be read on this host', async () => {
-  const { host, root } = await interruptedRestart('submission')
+  const { host, root, store } = await interruptedRestart('submission')
   const capsule = new AgentSessionRecoveryCapsule(root)
-  const restoring = vi
-    .spyOn(StructuredAgentSessionReadableRestorer.prototype, 'restoreOne')
-    .mockRejectedValue(new Error('journal unreadable'))
+  const location = store.getRecord(SESSION)?.location
+  if (!location) {
+    throw new Error('missing session record')
+  }
+  // A file where the journal directory belongs: this host cannot open the conversation at all.
+  const journalDir = journalDirectoryFor(root, {
+    workspaceId: location.workspaceId,
+    sessionId: SESSION
+  })
+  await rename(journalDir, `${journalDir}.aside`)
+  await writeFile(journalDir, 'not a journal')
   try {
     expect(await host.restartResume.list()).toMatchObject([{ sessionId: SESSION }])
   } finally {
-    restoring.mockRestore()
+    await rm(journalDir)
+    await rename(`${journalDir}.aside`, journalDir)
   }
   expect(await capsule.list(NOW)).toHaveLength(1)
   expect(await host.restartResume.list()).toMatchObject([{ sessionId: SESSION }])

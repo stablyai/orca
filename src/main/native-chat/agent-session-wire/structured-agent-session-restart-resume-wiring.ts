@@ -23,8 +23,6 @@ export const STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER =
  *  dependency, and nothing outside this list is reachable from here. */
 type RestartResumeHostBindings = {
   revealSession: (sessionId: string) => Promise<{ readable: boolean }>
-  hold: (sessionId: string, holderId: string) => Promise<void>
-  release: (sessionId: string, holderId: string) => void
   send: (
     caller: { callerKey: string },
     params: {
@@ -47,14 +45,19 @@ export function structuredAgentSessionRestartResumeSurfaces(
 ): StructuredAgentSessionRestartResumeSurfaces {
   return {
     revealSession: host.revealSession,
-    hold: host.hold,
-    release: host.release,
     send: (params) =>
       host.send({ callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER }, params),
     // Accepted like any send, so its verdict is its delivery, however long the start takes; the
     // wait ends when the submission settles or the session closes.
     awaitSendSettlement: (sessionId, clientMessageId) =>
       host.waitForSendSettlement(sessionId, clientMessageId, { budgetMs: MAX_TIMER_DELAY_MS }),
+    // How long a restart batch holds a chat's slot: until the agent took the message or its start
+    // failed. Undefined — the session closed, or too many waited — frees the slot too.
+    awaitSendHandedOver: (sessionId, clientMessageId) =>
+      host.waitForSendSettlement(sessionId, clientMessageId, {
+        until: 'handed-over',
+        budgetMs: MAX_TIMER_DELAY_MS
+      }),
     onNoteFailed: () =>
       console.warn('[structured-agent-session] restart continuation attribution failed'),
     now

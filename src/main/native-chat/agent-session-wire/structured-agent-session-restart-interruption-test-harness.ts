@@ -24,10 +24,22 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
+  hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 
-export const GRACE = 15_000
+/** Starts the agent explicitly — the attach a client's ensure makes — for a test that needs a
+ *  running child before its next step. Nothing else starts one ahead of a send. */
+export async function startAgent(state: {
+  host: StructuredAgentSessionHost
+  store: AgentSessionRecordStore
+}): Promise<void> {
+  const result = await state.host.attach(
+    CALLER,
+    hostTestAttachParams(state.store.getRecord(SESSION)?.lease.runtimeFence ?? null)
+  )
+  expect(result.ok).toBe(true)
+}
 
 export async function interruptedRestart(
   work: 'turn' | 'submission' | 'send-after-reply' | 'children' = 'turn',
@@ -118,7 +130,6 @@ export async function interruptedRestart(
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => ({ outcome: 'pid-absent' }),
     recoveryCapsule: new AgentSessionRecoveryCapsule(previous.root),
-    releaseGraceMs: GRACE,
     now: () => NOW
   })
   replaceHostTestState({ store, host })
@@ -132,21 +143,20 @@ export async function interruptedRestart(
   return { ...hostTestState(), host, store, closeSession, marker }
 }
 
-export function statusNotes(host: StructuredAgentSessionHost) {
-  return host
-    .journalSnapshot(SESSION)
-    .items.flatMap((item) =>
-      item.body.kind === 'status' ? [{ text: item.body.text, tone: item.body.tone }] : []
-    )
+export async function statusNotes(host: StructuredAgentSessionHost) {
+  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+    item.body.kind === 'status' ? [{ text: item.body.text, tone: item.body.tone }] : []
+  )
 }
 
 /** A reattach that succeeds and a continuation the host refuses: a message from another client
  *  lands while the continuation is being recorded. `userAnswers` has the user reply in the chat
  *  just before or after its own attempt, while the rest of a batch would still be running. */
 export async function supersededRefusal(userAnswers?: 'before' | 'after') {
-  const { host, acquire, dispatch, root } = await interruptedRestart()
+  const { host, store, acquire, dispatch, root } = await interruptedRestart()
   await host.restartResume.list()
-  await host.hold(SESSION, 'pane')
+  // Started ahead of the continuation, so a newer message can land from the provider.
+  await startAgent({ host, store })
   const events = acquire.mock.calls[0]?.[0].events
   if (!events) {
     throw new Error('missing resumed provider event sink')

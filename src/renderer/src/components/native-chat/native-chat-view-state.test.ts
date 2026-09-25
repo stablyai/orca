@@ -34,9 +34,16 @@ describe('selectNativeChatViewState', () => {
     })
   })
 
-  it('maps error with its message', () => {
-    const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }))
+  it('maps error with its message when nothing has loaded (P2-21)', () => {
+    const state = selectNativeChatViewState(
+      session({ messages: [], status: 'error', error: 'boom' })
+    )
     expect(state).toEqual({ kind: 'error', message: 'boom' })
+  })
+
+  it('keeps a loaded transcript on screen when a later read fails (P2-21)', () => {
+    const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }))
+    expect(state).toEqual({ kind: 'ready', isWorking: false })
   })
 
   it('maps empty when there are no messages', () => {

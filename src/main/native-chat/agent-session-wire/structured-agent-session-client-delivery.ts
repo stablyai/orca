@@ -62,10 +62,16 @@ export class StructuredAgentSessionClientDelivery {
     subscriber: StructuredAgentSessionTurnCompletionSubscriber
   ): (() => void) => this.turnCompletionFeed.subscribe(subscriber)
 
-  closeSession(sessionId: string): void {
+  /** The conversation's handle closed. Its status row stays in every session list; the
+   *  agent-status store keeps it too while the chat still has a tab to show it in. */
+  closeSession(sessionId: string, options: { listed: boolean }): void {
     this.sendSettlement.closeSession(sessionId)
-    this.statusFeed.close(sessionId)
-    // The next attach re-baselines rather than announcing the turn it was already holding.
+    if (options.listed) {
+      this.statusFeed.revokeLive(sessionId)
+    } else {
+      this.statusFeed.close(sessionId)
+    }
+    // The next open re-baselines rather than announcing the turn it was already holding.
     this.turnCompletionFeed.forget(sessionId)
   }
 

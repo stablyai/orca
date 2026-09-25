@@ -5,7 +5,10 @@ import { expect, it } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../shared/agent-session-restart-continuation'
 import { restartContinuationBody } from './structured-agent-session-restart-continuation'
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import {
+  interruptedRestart,
+  startAgent
+} from './structured-agent-session-restart-interruption-test-harness'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -30,7 +33,7 @@ it.each(['turn', 'submission'] as const)(
   async (work) => {
     const state = await interruptedRestart(work, false)
     const { host, dispatch } = state
-    await host.hold(SESSION, 'pane')
+    await startAgent(state)
     const events = resumedEvents(state)
     const notice = { provider: 'codex', threadId: THREAD, turnId: 'notice-turn' } as const
     events.appendItem(
@@ -56,7 +59,6 @@ it.each(['turn', 'submission'] as const)(
       (await host.restartResume.continueAfterRestart([SESSION], 'modal')).continued
     ).toMatchObject([{ outcome: 'continued' }])
     expect(dispatch).toHaveBeenCalledTimes(1)
-    host.release(SESSION, 'pane')
   }
 )
 
@@ -64,15 +66,31 @@ it.each(['turn', 'submission'] as const)(
 // the body depends on the marker alone, so the ledger fingerprint stays the offer's.
 it('sends the same continuation body on a retry after the provider restates its rows', async () => {
   const state = await interruptedRestart('children')
-  const { host, acquire, dispatch, marker } = state
+  const { host, root, dispatch, marker } = state
   if (!marker) {
     throw new Error('missing interrupted restart marker')
   }
-  acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
-  await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  // An earlier action refused before any continuation was accepted.
+  const capsule = new AgentSessionRecoveryCapsule(root)
+  expect(await host.restartResume.list()).toHaveLength(1)
+  await capsule.beginResume([SESSION], 'earlier-action', NOW)
+  await capsule.failResume(
+    'earlier-action',
+    [
+      {
+        sessionId: SESSION,
+        failedAt: NOW,
+        outcome: 'refused',
+        reason: 'agent_session_conflict',
+        latestPrompt: '',
+        latestUserItemId: marker.latestUserItemId
+      }
+    ],
+    NOW
+  )
   expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: true }])
 
-  await host.hold(SESSION, 'pane')
+  await startAgent(state)
   resumedEvents(state).appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'settled-turn', ordinal: 2 },
     {
@@ -93,7 +111,6 @@ it('sends the same continuation body on a retry after the provider restates its 
   expect(retried.continued).toMatchObject([{ outcome: 'continued' }])
   expect(dispatch).toHaveBeenCalledTimes(1)
   expect(dispatch.mock.calls[0]?.[0].body).toEqual(restartContinuationBody(marker))
-  host.release(SESSION, 'pane')
 })
 
 // A marker from a build that recorded only a working lead: no snapshot, so no activity to name,

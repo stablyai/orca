@@ -54,7 +54,6 @@ function contextFor(session: StructuredAgentSessionUnexpectedExitSession) {
     sessions: new Map([[SESSION, session]]),
     flushLifecycle: async () => ({ ok: true }),
     publishFence: vi.fn(),
-    hasResumeCapableHolder: () => true,
     serialize: async <T>(_sessionId: string, task: () => Promise<T>) => task(),
     now: () => 1
   }
@@ -71,15 +70,14 @@ const ended = {
 }
 
 describe('a provider that ends before it finished starting', () => {
-  it('tells the user why, even with no response in progress, and does not auto-resume', async () => {
+  it('tells the user why, even with no response in progress', async () => {
     const session = startedSession()
 
-    const ticket = await settleUnexpectedStructuredAgentSessionExit(contextFor(session), {
+    await settleUnexpectedStructuredAgentSessionExit(contextFor(session), {
       ...ended,
       startupUnproven: true
     })
 
-    expect(ticket).toBeNull()
     expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         mutations: [
@@ -94,12 +92,12 @@ describe('a provider that ends before it finished starting', () => {
     expect(providerStartupFailureOutcome(REASON)).toContain('not signed in')
   })
 
-  it('keeps an ordinary idle exit silent and resumable', async () => {
+  it('keeps an ordinary idle exit silent', async () => {
     const session = startedSession()
 
-    const ticket = await settleUnexpectedStructuredAgentSessionExit(contextFor(session), ended)
+    await settleUnexpectedStructuredAgentSessionExit(contextFor(session), ended)
 
-    expect(ticket).not.toBeNull()
+    expect(session.child).toBeNull()
     expect(session.journal.appendLifecycleBatch).not.toHaveBeenCalled()
   })
 
@@ -109,9 +107,8 @@ describe('a provider that ends before it finished starting', () => {
       child: { generation: GENERATION, fence: 7, phase: 'starting' as const }
     }
 
-    const ticket = await settleUnexpectedStructuredAgentSessionExit(contextFor(session), ended)
+    await settleUnexpectedStructuredAgentSessionExit(contextFor(session), ended)
 
-    expect(ticket).toBeNull()
     expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         mutations: [

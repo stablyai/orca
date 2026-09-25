@@ -6,13 +6,22 @@ import {
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
 } from '../../../shared/agent-session-restart-continuation'
 import {
-  continueStructuredAgentSessionAfterRestart,
   RestartContinuationSupersededError,
+  startStructuredAgentSessionContinuation,
   type StructuredAgentSessionContinuationDeps
 } from './structured-agent-session-restart-continuation'
 
+/** The whole continuation: handed over, then its verdict. */
+async function continueStructuredAgentSessionAfterRestart(
+  ...args: Parameters<typeof startStructuredAgentSessionContinuation>
+) {
+  const started = await startStructuredAgentSessionContinuation(...args)
+  return 'done' in started ? started.done : started.verdict()
+}
+
 function dependencies(
-  settledDispatch: 'accepted' | 'pending' | 'unknown' | 'rejected'
+  settledDispatch: 'accepted' | 'pending' | 'unknown' | 'rejected',
+  handedOver: 'pending' | 'rejected' | undefined = 'pending'
 ): StructuredAgentSessionContinuationDeps & {
   note: ReturnType<typeof vi.fn>
   send: ReturnType<typeof vi.fn>
@@ -27,6 +36,14 @@ function dependencies(
       dispatchState: settledDispatch,
       reason: settledDispatch === 'rejected' ? 'provider_refused' : null
     })),
+    awaitHandedOver: vi.fn(async () =>
+      handedOver
+        ? {
+            dispatchState: handedOver,
+            reason: handedOver === 'rejected' ? 'Codex could not start.' : null
+          }
+        : undefined
+    ),
     note: vi.fn(async () => undefined),
     onNoteFailed: vi.fn()
   }
@@ -105,4 +122,41 @@ it('reports an unattached chat without sending', async () => {
     reason: 'agent_session_not_attached'
   })
   expect(deps.send).not.toHaveBeenCalled()
+})
+
+// A start that failed rejects the continuation before any provider saw it: that is the verdict.
+it('reports a continuation rejected at handover without waiting for the provider', async () => {
+  const deps = dependencies('accepted', 'rejected')
+
+  await expect(
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+  ).resolves.toEqual({ sessionId: SESSION, outcome: 'refused', reason: 'Codex could not start.' })
+  expect(deps.awaitSettlement).not.toHaveBeenCalled()
+  expect(deps.note).toHaveBeenCalledExactlyOnceWith(...REFUSED)
+})
+
+// The start completes once the agent took the message; the provider's answer is a later verdict.
+it('returns at handover and leaves the provider verdict to be awaited', async () => {
+  const deps = dependencies('accepted')
+
+  const started = await startStructuredAgentSessionContinuation(deps, SESSION, marker())
+
+  expect(deps.awaitHandedOver).toHaveBeenCalledOnce()
+  expect(deps.awaitSettlement).not.toHaveBeenCalled()
+  if (!('verdict' in started)) {
+    throw new Error('expected a handed-over continuation')
+  }
+  await expect(started.verdict()).resolves.toEqual({ sessionId: SESSION, outcome: 'continued' })
+  expect(deps.note).toHaveBeenCalledOnce()
+})
+
+// A handover wait that ends without an answer — the session closed, or too many waited — proves
+// nothing, so the provider's verdict still decides.
+it('still awaits the verdict when the handover wait ends unanswered', async () => {
+  const deps = dependencies('unknown', undefined)
+
+  await expect(
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+  ).resolves.toEqual({ sessionId: SESSION, outcome: 'unknown' })
+  expect(deps.note).toHaveBeenCalledExactlyOnceWith(...UNCONFIRMED)
 })

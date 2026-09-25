@@ -115,7 +115,8 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'revealSession',
     result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
   },
-  { method: 'agentSession.hold', hostMethod: 'hold', result: { held: true } },
+  // A no-op on a host that starts an agent only for work; it still builds the host.
+  { method: 'agentSession.hold', hostMethod: null, result: { held: true } },
   // The restart-resume surface. Bare additions, not capability-negotiated: an RPC method's
   // absence is explicit (`method_not_found`), which the old-dispatcher case below asserts, so a
   // newer client learns it during negotiation instead of by being met with silence.
@@ -129,17 +130,14 @@ export const STRUCTURED_CALLS: {
     hostMethod: 'restartResumableDismiss',
     result: { dismissed: 0 }
   },
-  {
-    method: 'agentSession.restartResume',
-    hostMethod: 'restartResumeAll',
-    result: { results: [] }
-  },
+  // Reattaching alone is nothing now, so this answers that nothing was resumed.
+  { method: 'agentSession.restartResume', hostMethod: null, result: { results: [] } },
   {
     method: 'agentSession.restartContinue',
     hostMethod: 'restartContinueAll',
     result: { resumed: [], continued: [] }
   },
-  { method: 'agentSession.release', hostMethod: 'release', result: { released: true } },
+  { method: 'agentSession.release', hostMethod: null, result: { released: true } },
   {
     method: 'agentSession.history',
     hostMethod: 'history',

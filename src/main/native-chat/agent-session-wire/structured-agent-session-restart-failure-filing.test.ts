@@ -2,16 +2,17 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
-  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
+  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
 } from '../../../shared/agent-session-restart-continuation'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-projection'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
 import {
   interruptedRestart,
+  startAgent,
   statusNotes
 } from './structured-agent-session-restart-interruption-test-harness'
+import { hostTestState } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -36,7 +37,7 @@ function providerEvents(acquire: Awaited<ReturnType<typeof interruptedRestart>>[
 it('files a continuation superseded by a replayed message, lists it and says so in the chat', async () => {
   const { host, acquire, dispatch, root } = await interruptedRestart()
   await host.restartResume.list()
-  await host.hold(SESSION, 'pane')
+  await startAgent(hostTestState())
   const events = providerEvents(acquire)
   // The replay lands after the reattach and just before the continuation is accepted, which is
   // where a send asks whether its offer still stands.
@@ -64,18 +65,17 @@ it('files a continuation superseded by a replayed message, lists it and says so 
   expect(result.failed).toMatchObject([failure])
   expect(await host.restartResume.listFailures()).toMatchObject([failure])
   expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toHaveLength(1)
-  expect(statusNotes(host)).toContainEqual({
+  expect(await statusNotes(host)).toContainEqual({
     text: AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
     tone: 'error'
   })
-  host.release(SESSION, 'pane')
 })
 
 // Nothing was attempted and nothing is owed: the user moved on between listing and acting.
 it('files nothing for a chat the user moved on in before its attempt, and spends the offer', async () => {
   const { host, acquire, root } = await interruptedRestart()
   await host.restartResume.list()
-  await host.hold(SESSION, 'pane')
+  await startAgent(hostTestState())
   const events = providerEvents(acquire)
   const admit = StructuredAgentSessionResumeAdmission.prototype.run
   vi.spyOn(StructuredAgentSessionResumeAdmission.prototype, 'run').mockImplementationOnce(
@@ -96,28 +96,26 @@ it('files nothing for a chat the user moved on in before its attempt, and spends
   const capsule = new AgentSessionRecoveryCapsule(root)
   expect(await capsule.listFailed(NOW)).toEqual([])
   expect(await capsule.list(NOW)).toEqual([])
-  expect(statusNotes(host)).toEqual([])
-  host.release(SESSION, 'pane')
+  expect(await statusNotes(host)).toEqual([])
 })
 
-it.each(['resume', 'continueAfterRestart'] as const)(
-  'says so in the chat when the reattach itself fails (%s)',
-  async (action) => {
-    const { host, acquire } = await interruptedRestart()
-    await host.restartResume.list()
-    acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+// The continuation is accepted and its agent then fails to start: the message is rejected with the
+// cause, the failure is filed, and the chat says the agent did not carry on.
+it('says so in the chat when the agent cannot start for the continuation', async () => {
+  const { host, acquire } = await interruptedRestart()
+  await host.restartResume.list()
+  acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
 
-    await host.restartResume[action]([SESSION], 'modal')
+  await host.restartResume.continueAfterRestart([SESSION], 'modal')
 
-    expect(await host.restartResume.listFailures()).toMatchObject([
-      { sessionId: SESSION, outcome: 'refused' }
-    ])
-    // The fix depends on why it failed, which the dialog explains; "send a message" would not work.
-    expect(statusNotes(host)).toEqual([
-      { text: AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE, tone: 'error' }
-    ])
-  }
-)
+  expect(await host.restartResume.listFailures()).toMatchObject([
+    { sessionId: SESSION, outcome: 'refused' }
+  ])
+  expect(await statusNotes(host)).toContainEqual({
+    text: AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
+    tone: 'error'
+  })
+})
 
 /** A continuation the provider accepted whose settlement could not be written: filed unconfirmed. */
 async function unconfirmedContinuation() {
@@ -125,7 +123,7 @@ async function unconfirmedContinuation() {
   const { host, store } = state
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   await host.restartResume.list()
-  await host.hold(SESSION, 'pane')
+  await startAgent(hostTestState())
   const settle = store.recordOperationOutcome.bind(store)
   vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
     if (input.outcome.status === 'succeeded') {
@@ -135,11 +133,11 @@ async function unconfirmedContinuation() {
   })
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
-  expect(statusNotes(host)).toContainEqual({
+  expect(await statusNotes(host)).toContainEqual({
     text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
     tone: 'warning'
   })
-  const continuation = host.journalSnapshot(SESSION).submissions.at(-1)
+  const continuation = (await host.journalSnapshot(SESSION)).submissions.at(-1)
   const providerItemId = continuation?.providerItemId
   if (!continuation || !providerItemId) {
     throw new Error('missing accepted continuation')
@@ -172,7 +170,6 @@ it.each(['submission key', 'provider key'] as const)(
     await vi.waitFor(async () => {
       expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
     })
-    host.release(SESSION, 'pane')
   }
 )
 
@@ -187,7 +184,6 @@ it('keeps an unconfirmed failure while the newest turn is not the continuationâ€
   await host.flushStreamedEvents(SESSION)
 
   expect(await host.restartResume.listFailures()).toMatchObject([{ outcome: 'unconfirmed' }])
-  host.release(SESSION, 'pane')
 })
 
 // Nothing journaled the continuation, so the newest user message is still the interrupted one and
@@ -196,7 +192,7 @@ it('keeps an unconfirmed failure whose continuation was never journaled while th
   const { host, acquire, store, marker } = await interruptedRestart('submission', false)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   await host.restartResume.list()
-  await host.hold(SESSION, 'pane')
+  await startAgent(hostTestState())
   const events = providerEvents(acquire)
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'original-turn', ordinal: 1 },
@@ -207,14 +203,14 @@ it('keeps an unconfirmed failure whose continuation was never journaled while th
   vi.spyOn(store, 'admitMutationOperation').mockRejectedValueOnce(new Error('store unavailable'))
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
-  const submissions = host.journalSnapshot(SESSION).submissions
+  const submissions = (await host.journalSnapshot(SESSION)).submissions
   const original = submissions[0]?.providerItemId
   if (submissions.length !== 1 || !original) {
     throw new Error('expected only the original submission, accepted by the provider')
   }
-  expect(latestStructuredAgentSessionUserItem(host.journalSnapshot(SESSION).items)?.itemId).toBe(
-    marker?.latestUserItemId
-  )
+  expect(
+    latestStructuredAgentSessionUserItem((await host.journalSnapshot(SESSION)).items)?.itemId
+  ).toBe(marker?.latestUserItemId)
 
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'original-turn', ordinal: 2 },
@@ -224,5 +220,4 @@ it('keeps an unconfirmed failure whose continuation was never journaled while th
   await host.flushStreamedEvents(SESSION)
 
   expect(await host.restartResume.listFailures()).toMatchObject([{ outcome: 'unconfirmed' }])
-  host.release(SESSION, 'pane')
 })

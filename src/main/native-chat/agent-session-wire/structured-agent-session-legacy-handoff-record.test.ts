@@ -26,7 +26,7 @@ import {
 const CALLER = { callerKey: 'client-1' }
 
 /** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
-function eventually(assertion: () => void): Promise<void> {
+function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
 }
 
@@ -77,15 +77,14 @@ async function delivered(text: string) {
   const sent = await send(text)
   expect(sent).toMatchObject({ ok: true })
   const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
-  const submission = () =>
-    host
-      .journalSnapshot(SESSION)
-      .submissions.find((candidate) => candidate.clientMessageId === clientMessageId)
-  await eventually(() =>
-    expect(
-      submission()?.dispatchState !== 'pending' || submission()?.handedOverAt !== undefined
-    ).toBe(true)
-  )
+  const submission = async () =>
+    (await host.journalSnapshot(SESSION)).submissions.find(
+      (candidate) => candidate.clientMessageId === clientMessageId
+    )
+  await eventually(async () => {
+    const current = await submission()
+    expect(current?.dispatchState !== 'pending' || current?.handedOverAt !== undefined).toBe(true)
+  })
   return submission()
 }
 
@@ -243,17 +242,16 @@ describe('a record an older build left mid terminal handoff', () => {
       dispatchState: 'rejected'
     })
     expect(
-      host
-        .journalSnapshot(SESSION)
-        .items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
+      (await host.journalSnapshot(SESSION)).items.filter(
+        (item) => item.body.kind === 'status' && item.body.tone === 'error'
+      )
     ).toHaveLength(1)
     expect(dispatch).not.toHaveBeenCalled()
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(acquire).not.toHaveBeenCalled()
 
-    // The user closes the terminal; the next open proves it gone and the chat takes over.
+    // The user closes the terminal; the next send's start proves it gone and the chat takes over.
     probe.mockResolvedValue({ outcome: 'pid-absent' })
-    await host.hold(SESSION, 'surface-1')
 
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(await delivered('after the terminal closed')).toMatchObject({

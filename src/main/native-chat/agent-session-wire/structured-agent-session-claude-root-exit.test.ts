@@ -11,7 +11,7 @@ import {
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import { evictHeldStructuredAgentSession } from './structured-agent-session-host-lifetime'
+import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
@@ -24,7 +24,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('Claude root-exit eviction', () => {
+describe('Claude root-exit stop', () => {
   it('releases a captured live claim after the provider root exits', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-claude-root-exit-'))
     roots.push(root)
@@ -78,6 +78,7 @@ describe('Claude root-exit eviction', () => {
       journalDir: join(root, 'journal')
     })
     const close = vi.spyOn(journal, 'close')
+    const publishStatus = vi.fn()
     const params: AgentSessionAttachParams = {
       envelope: {
         sessionId: 'session-1',
@@ -116,13 +117,13 @@ describe('Claude root-exit eviction', () => {
 
     claude.connections[0]!.handlers.onExit?.(new Error('provider exited'))
     await expect(
-      evictHeldStructuredAgentSession(
+      stopStructuredAgentSessionAgentUnderSerialize(
         {
           deps,
           runtimeState,
           sessions,
           now: () => NOW + 30 * 60_000,
-          forgetStatus: vi.fn()
+          publishStatus
         },
         'session-1'
       )
@@ -133,8 +134,10 @@ describe('Claude root-exit eviction', () => {
       ownerProcess: null,
       deathEvidence: { kind: 'exit-observed' }
     })
-    expect(sessions.size).toBe(0)
-    expect(close).toHaveBeenCalledOnce()
+    // The agent went to rest; the conversation stays open and listed.
+    expect(sessions.get('session-1')?.child).toBeNull()
+    expect(close).not.toHaveBeenCalled()
+    expect(publishStatus).toHaveBeenCalledWith('session-1')
     // The adapter agrees the session is over: nothing is left to refuse the next start.
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
   })

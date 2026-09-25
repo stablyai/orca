@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   isUnattachedAgentSessionReadRefusal
 } from '../../../../shared/structured-agent-session-read-refusal'
+import { agentSessionErrorText } from '../../../../shared/agent-session-error-text'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { subscribeStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 
@@ -69,8 +70,8 @@ export function startStructuredAgentSessionReadTransport(args: {
    * A read failure, reported to the pane only once it is one.
    *
    * A refusal saying this host holds no attached session is the retry loop's own subject, not a
-   * verdict: the reconnect below re-asks, and either the hold that attaches the session or the tab
-   * retirement that ends the pane resolves it. Painting the pane red inside that window turned an
+   * verdict: the reconnect below re-asks, and either the host opening the session or the tab
+   * retirement that ends the pane resolves it. Only an older host still refuses this way. Painting the pane red inside that window turned an
    * ordinary chat close into a `Could not load conversation` the user could do nothing about.
    *
    * A window, not a mute. An unattached read still refusing past the grace is no longer
@@ -79,13 +80,13 @@ export function startStructuredAgentSessionReadTransport(args: {
   const reportReadFailure = (error: unknown): void => {
     if (!isUnattachedAgentSessionReadRefusal(error)) {
       clearUnattachedReadGrace()
-      args.applyError(String(error))
+      args.applyError(agentSessionErrorText(error))
       return
     }
     const now = Date.now()
     unattachedSince ??= now
     if (now - unattachedSince >= AGENT_SESSION_UNATTACHED_READ_GRACE_MS) {
-      args.applyError(String(error))
+      args.applyError(agentSessionErrorText(error))
     }
   }
   const captureHistoryReadGuard = (): (() => boolean) => {

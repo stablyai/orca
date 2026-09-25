@@ -10,7 +10,7 @@ import {
   type OpenedStructuredAgentSessionConversation
 } from './structured-agent-session-conversation-open'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
-import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-hold-resume'
+import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession

@@ -199,7 +199,8 @@ export type StructuredAgentSessionAdapter = {
     /** Revalidate after preparation, immediately before writing to the provider. */
     beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome>
-  rewindSupport?(sessionId: string): AgentSessionRewindSupport
+  /** `agent` answers for a session with no child running, from the provider alone. */
+  rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
   recoverRewind?(input: {
     sessionId: string
     fence: number
@@ -250,10 +251,10 @@ export type StructuredAgentSessionAdapter = {
      *  start a new goal rather than rewrite that one's objective in place. */
     replacesGoal: boolean
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Whether this live session can change its goal. */
-  supportsThreadGoal?(sessionId: string): boolean
-  /** Whether this live session writes context facts to its turn rows. */
-  recordsContextUsage?(sessionId: string): boolean
+  /** Whether this session can change its goal; `agent` answers one at rest. */
+  supportsThreadGoal?(sessionId: string, agent?: string): boolean
+  /** Whether this session writes context facts to its turn rows; `agent` answers one at rest. */
+  recordsContextUsage?(sessionId: string, agent?: string): boolean
   stopBackgroundTasks?(input: {
     sessionId: string
     fence: number

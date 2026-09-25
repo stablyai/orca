@@ -50,6 +50,9 @@ describe('mobileNativeChatEmptyState', () => {
     expect(mobileNativeChatEmptyState('error', 'claude')?.subtitle).toBe(
       'The transcript could not be read. Toggle back to the terminal to keep working.'
     )
+    expect(mobileNativeChatEmptyState('error', 'claude', undefined, true)?.subtitle).toBe(
+      'The transcript could not be read. Orca keeps trying to load it.'
+    )
   })
 
   it('returns null for states that show no empty copy', () => {
