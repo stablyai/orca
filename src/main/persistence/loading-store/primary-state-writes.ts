@@ -70,6 +70,7 @@ export class PrimaryStateWriteOperations {
     this[primaryStateWriteOperationsContext].runtime.activeViewPreference.flushOrThrow()
   }
 
+  /** Expected refusals return persist: false; thrown callbacks stop saving to protect partial state. */
   runDurableMutation<T>(mutate: () => DurableProfileStateMutation<T>): Promise<T> {
     const { runtime } = this[primaryStateWriteOperationsContext]
     if (runtime.writesFrozen || runtime.quitFlushStarted || runtime.profileMaintenancePending) {

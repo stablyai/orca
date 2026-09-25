@@ -107,24 +107,24 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       throw new Error('workspace_session_unavailable')
     }
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, parentTabId)
-    return this.store.runDurableMutation(() => {
+    const committed = await this.store.runDurableMutation<string[] | Error>(() => {
       if (!acknowledgeRetirement().matches) {
-        throw new Error('terminal_pane_owner_changed')
+        return { value: new Error('terminal_pane_owner_changed'), persist: false }
       }
       const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
       const currentSession = this.store.getWorkspaceSession(hostId)
       if (!currentSession) {
-        throw new Error('workspace_session_unavailable')
+        return { value: new Error('workspace_session_unavailable'), persist: false }
       }
       const session = cloneWorkspaceSessionState(currentSession)
       const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId, {
         force: options.force
       })
       if (result.pinned) {
-        throw new Error('terminal_tab_pinned')
+        return { value: new Error('terminal_tab_pinned'), persist: false }
       }
       if (!result.closed && !options.allowMissing) {
-        throw new Error('tab_not_found')
+        return { value: new Error('tab_not_found'), persist: false }
       }
       const persisted = result.closed
         ? advanceTerminalTopologyRevision(result.session, worktreeId)
@@ -148,6 +148,10 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         }
       }
     })
+    if (committed instanceof Error) {
+      throw committed
+    }
+    return committed
   }
 
   protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
