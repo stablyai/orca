@@ -231,7 +231,7 @@ describe('registerOrcaProfileHandlers', () => {
       handlers.get('orcaProfiles:switch')?.(ipcEvent, { profileId: 'local-work' })
     )
     const rejection = expect(switchProfile).rejects.toThrow('orca_profile_persistence_timeout')
-    await vi.advanceTimersByTimeAsync(20_000)
+    await vi.advanceTimersByTimeAsync(60_000)
     await rejection
 
     expect(setActiveOrcaProfileMock).not.toHaveBeenCalled()
@@ -383,6 +383,23 @@ describe('registerOrcaProfileHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
     expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
     expect(appQuitMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the active profile writable during a transfer between inactive profiles', async () => {
+    const store = makeStoreMock()
+    getOrcaProfileListStateMock.mockReturnValue({ activeProfileId: 'active', profiles: [] })
+    transferOrcaProfileProjectMock.mockReturnValue({ status: 'transferred', mode: 'copy' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the Store operations exercised by the handlers.
+    registerOrcaProfileHandlers(store as never)
+    await handlers.get('orcaProfiles:transferProject')?.(ipcEvent, {
+      sourceProfileId: 'personal',
+      targetProfileId: 'work',
+      repoId: 'repo-1',
+      mode: 'copy'
+    })
+    expect(store.beginProfileMaintenance).not.toHaveBeenCalled()
+    expect(store.freezeWrites).not.toHaveBeenCalled()
+    expect(store.flushPendingOrThrowAsync).toHaveBeenCalledBefore(transferOrcaProfileProjectMock)
   })
 
   it('rejects transfers that would mutate the active target profile offline', async () => {

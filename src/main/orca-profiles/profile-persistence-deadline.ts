@@ -2,7 +2,7 @@ import type { Store } from '../persistence'
 import type { ProfileStateMaintenance } from '../persistence/loading-store/profile-state-authority'
 import type { ProfileStateMaintenanceOptions } from '../persistence/loading-store/profile-state-maintenance'
 
-const PROFILE_PERSISTENCE_TIMEOUT_MS = 20_000
+const PROFILE_PERSISTENCE_TIMEOUT_MS = 60_000
 
 export async function flushActiveProfileBeforeFileMutation(
   store: Pick<Store, 'beginProfileMaintenance'>,
@@ -18,7 +18,15 @@ export async function flushActiveProfileBeforeFileMutation(
   })
   try {
     return await Promise.race([
-      store.beginProfileMaintenance({ ...options, signal: controller.signal }),
+      store
+        .beginProfileMaintenance({ ...options, signal: controller.signal })
+        .then(async (handle) => {
+          if (controller.signal.aborted && options.flush !== false) {
+            await handle.resume()
+            throw new Error('orca_profile_persistence_timeout')
+          }
+          return handle
+        }),
       deadline
     ])
   } finally {

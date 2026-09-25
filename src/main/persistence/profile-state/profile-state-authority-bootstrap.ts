@@ -11,6 +11,10 @@ import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profi
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
 import {
+  PROFILE_STATE_LEGACY_BACKUP_COUNT,
+  profileStateLegacyBackupPath
+} from './profile-state-legacy-backup-path'
+import {
   assertProfileStateCanInitialize,
   ProfileStateAuthorityBootstrapError,
   ProfileStateRecoveryRequiredError
@@ -134,15 +138,7 @@ function migrateJsonOnlyProfile(
   options: ProfileStateAuthorityBootstrapOptions
 ): ProfileStateAuthorityBootstrapResult {
   const rawJson = readFileSync(options.dataFile, 'utf8')
-  // serializedState makes malformed input fail closed and prevents backup
-  // recovery or a normalization write from changing the legacy source.
-  const unboundPaneAliases: ProfileStateStartupPaneAlias[] = []
-  const store = new Store({
-    dataFile: options.dataFile,
-    serializedState: rawJson,
-    collectUnboundPaneAlias: (entry) => unboundPaneAliases.push(entry)
-  })
-  const prepared = store.prepareProfileStateExport()
+  const { prepared, unboundPaneAliases } = prepareLegacyProfileState(options.dataFile, rawJson)
   const migrated = migrateProfileStateToSqlite({
     ...options,
     expectedLegacyJson: rawJson,
@@ -155,4 +151,38 @@ function migrateJsonOnlyProfile(
     initialState: { ...migrated.initialState, unboundPaneAliases },
     migrated: true
   }
+}
+
+function prepareLegacyProfileState(dataFile: string, rawJson: string) {
+  try {
+    return prepareLegacySnapshot(dataFile, rawJson)
+  } catch (error) {
+    // Import the first usable legacy backup without overwriting the damaged source.
+    for (let index = 0; index < PROFILE_STATE_LEGACY_BACKUP_COUNT; index += 1) {
+      const path = profileStateLegacyBackupPath(dataFile, index)
+      if (!existsSync(path)) {
+        continue
+      }
+      try {
+        const prepared = prepareLegacySnapshot(dataFile, readFileSync(path, 'utf8'))
+        console.warn(`[profile-state] Recovered legacy state from ${path}`)
+        return prepared
+      } catch {
+        // A corrupt backup must not prevent trying the remaining legacy ring.
+      }
+    }
+    throw new ProfileStateAuthorityBootstrapError(
+      `Failed to load imported profile state or its legacy backups: ${dataFile}. ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
+function prepareLegacySnapshot(dataFile: string, serializedState: string) {
+  const unboundPaneAliases: ProfileStateStartupPaneAlias[] = []
+  const store = new Store({
+    dataFile,
+    serializedState,
+    collectUnboundPaneAlias: (entry) => unboundPaneAliases.push(entry)
+  })
+  return { prepared: store.prepareProfileStateExport(), unboundPaneAliases }
 }

@@ -18,11 +18,20 @@ export function withProfileStateWriteTransaction<T>(db: Database.Database, write
     throw new Error('Profile state write requires an idle database connection')
   }
   db.exec('BEGIN IMMEDIATE')
+  let committing = false
   try {
     const result = write()
+    committing = true
     db.exec('COMMIT')
     return result
   } catch (error) {
+    if (!db.isTransaction) {
+      // SQLite can roll back a failed statement itself; a failed COMMIT is ambiguous.
+      if (committing) {
+        throw new ProfileStateIndeterminateWriteError(error, undefined)
+      }
+      throw error
+    }
     try {
       db.exec('ROLLBACK')
     } catch (rollbackError) {

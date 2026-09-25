@@ -44,6 +44,13 @@ export async function writeProfileStateInWorker(
     runtime.lastWrittenStateHash =
       runtime.writeGeneration === generation ? prepared.stateHash : null
     markPrimaryStateWriteDurable(runtime, generation)
+    if (runtime.writeGeneration === generation) {
+      if (runtime.writeTimer) {
+        clearTimeout(runtime.writeTimer)
+        runtime.writeTimer = null
+      }
+      runtime.firstPendingSaveAt = null
+    }
   } catch (error) {
     restoreIntent()
     throw error

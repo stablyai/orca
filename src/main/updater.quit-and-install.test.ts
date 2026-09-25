@@ -229,6 +229,20 @@ describe('updater', () => {
     expect(killAllPtyMock).toHaveBeenCalledTimes(1)
   })
 
+  it('allows a required profile export to finish beyond the optional cleanup budget', async () => {
+    vi.useFakeTimers()
+    const onBeforeQuit = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 5_000)))
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: updater only reads the mocked webContents.send in this lifecycle test.
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit, onBeforeQuitFailure: 'abort' })
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(2_600)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(2_500)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
+  })
+
   it('aborts native install when required pre-quit cleanup times out', async () => {
     vi.useFakeTimers()
 
@@ -246,7 +260,7 @@ describe('updater', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(2_500)
+    await vi.advanceTimersByTimeAsync(90_000)
 
     expect(onBeforeQuit).toHaveBeenCalledTimes(1)
     expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()

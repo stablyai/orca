@@ -6,6 +6,7 @@ export type ProfileStateBackupJob = {
   databasePath: string
   profileId: string
   targetPath: string
+  temporaryPath?: string
 }
 
 /** Own every connection until the copy and its strict validation finish. */
@@ -13,6 +14,7 @@ export async function writeProfileStateBackup(job: ProfileStateBackupJob): Promi
   const opened = openProfileStateDatabaseReadOnly(job.databasePath, job.profileId)
   try {
     await writeProfileStateDatabaseSnapshotAsync(opened.db, job.targetPath, {
+      temporaryPath: job.temporaryPath,
       validateStagedSnapshot: (stagingPath) =>
         validateProfileStateBackup(stagingPath, job.profileId)
     })

@@ -1,14 +1,10 @@
 import { unlinkSync } from 'node:fs'
-import { mkdir, open, rm } from 'node:fs/promises'
-import { durableWriteTempPath, renameDurable } from '../../durable-file-write'
-import { dirname } from 'node:path'
 import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
 } from '../../../shared/codex-reset-credit-attempt-ledger'
 import {
-  canReuseDurableProfileState,
-  markPrimaryStateWriteDurable,
+  stopAfterFailedPrimaryStateMutation,
   type PrimaryStateWriteOperationsRuntime
 } from './primary-state-write-runtime'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
@@ -16,6 +12,7 @@ import type { BackupRecoveryRotationOperations } from './backup-recovery-rotatio
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import { writeToDiskSync } from './primary-state-write-sync'
 import { writeProfileStateInWorker } from './primary-state-write-worker'
+import { writeJsonProfileState } from './primary-state-write-json'
 import type { DurableProfileStateMutation } from './store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
 
@@ -82,7 +79,13 @@ export class PrimaryStateWriteOperations {
       if (runtime.profileStateAuthority?.asynchronous) {
         runtime.profileStateAuthority.assertWritable()
       }
-      const mutation = this.runAdmittedMutationCallback('mutate', mutate)
+      let mutation: DurableProfileStateMutation<T>
+      try {
+        mutation = this.runAdmittedMutationCallback('mutate', mutate)
+      } catch (error) {
+        await stopAfterFailedPrimaryStateMutation(runtime, error)
+        throw error
+      }
       if (
         mutation.persist === false ||
         (mutation.persist === 'if-dirty' &&
@@ -104,7 +107,12 @@ export class PrimaryStateWriteOperations {
       } catch (error) {
         if (profileStateWriterFailureOutcome(error) !== 'indeterminate') {
           if (mutation.rollback) {
-            this.runAdmittedMutationCallback('rollback', mutation.rollback)
+            try {
+              this.runAdmittedMutationCallback('rollback', mutation.rollback)
+            } catch (rollbackError) {
+              await stopAfterFailedPrimaryStateMutation(runtime, rollbackError)
+              throw rollbackError
+            }
           }
         }
         throw error
@@ -153,13 +161,21 @@ export class PrimaryStateWriteOperations {
 
 export function enqueueWrite(
   owner: PrimaryStateWriteOperations,
-  options: { fullCheckpoint?: boolean; signal?: AbortSignal } = {}
+  options: { fullCheckpoint?: boolean; skipIfClean?: boolean; signal?: AbortSignal } = {}
 ): Promise<void> {
   return enqueuePrimaryStateOperation(owner, async () => {
     const { runtime } = owner[primaryStateWriteOperationsContext]
     const { signal } = options
     if (signal?.aborted) {
       throw new Error('Persistence flush aborted')
+    }
+    if (
+      options.skipIfClean &&
+      runtime.dirtyProfileStateDomains?.size === 0 &&
+      runtime.pendingAutomationRunsAfter === undefined &&
+      runtime.lastDurableWriteGeneration >= runtime.writeGeneration
+    ) {
+      return
     }
     // A queued predecessor can clear dirty domains before this checkpoint runs.
     if (options.fullCheckpoint) {
@@ -209,7 +225,10 @@ export function enqueuePrimaryStateOperation<T>(
 }
 
 export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Promise<boolean> {
-  const { runtime, serialization, backups } = owner[primaryStateWriteOperationsContext]
+  const { runtime } = owner[primaryStateWriteOperationsContext]
+  if (runtime.fatalMutationError) {
+    throw runtime.fatalMutationError
+  }
   if (runtime.writesFrozen) {
     return false
   }
@@ -224,79 +243,7 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     // SQL commits are synchronous so both entry points share the same generation fence.
     return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
   }
-  const built = serialization.buildStateToSave()
-  const { stateHash, protectedSecretUpdates } = built
-  // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
-  if (canReuseDurableProfileState(runtime, stateHash)) {
-    runtime.dirtyProfileStateDomains = new Set()
-    runtime.pendingAutomationRunsAfter = undefined
-    markPrimaryStateWriteDurable(runtime, gen)
-    return true
-  }
-  const dataFile = runtime.dataFile
-  const payload = built.payload
-  const dir = dirname(dataFile)
-  await mkdir(dir, { recursive: true }).catch(() => {})
-  const tmpFile = durableWriteTempPath(dataFile)
-
-  // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
-  let renamed = false
-  try {
-    // Why: fsync before rename, then fsync the directory; see writeFileDurable.
-    const handle = await open(tmpFile, 'w')
-    try {
-      // Already UTF-8 bytes: passing the string here would re-encode the whole state on the main thread.
-      await handle.writeFile(payload)
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
-    if (runtime.writeGeneration !== gen) {
-      return false
-    }
-    runtime.inFlightAsyncTmpFile = tmpFile
-    try {
-      await renameDurable(tmpFile, dataFile)
-      renamed = true
-    } catch (error) {
-      if (
-        !(error instanceof Error && 'code' in error && error.code === 'ENOENT') ||
-        runtime.writeGeneration === gen
-      ) {
-        throw error
-      }
-    } finally {
-      if (runtime.inFlightAsyncTmpFile === tmpFile) {
-        runtime.inFlightAsyncTmpFile = null
-      }
-    }
-    // Why re-check gen: a mutation or sync flush during rename makes the installed hash ambiguous; invalidate the no-op guard.
-    if (renamed && runtime.writeGeneration === gen) {
-      runtime.lastWrittenStateHash = stateHash
-      runtime.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)
-    } else if (renamed) {
-      runtime.lastWrittenStateHash = null
-    }
-    if (renamed) {
-      runtime.dirtyProfileStateDomains = new Set()
-      runtime.pendingAutomationRunsAfter = undefined
-      markPrimaryStateWriteDurable(runtime, gen)
-    }
-  } finally {
-    if (!renamed) {
-      await rm(tmpFile).catch(() => {})
-    }
-  }
-  if (!renamed) {
-    return false
-  }
-  // Why (#1158): rotate only after the primary rename while this write still owns its generation.
-  if (runtime.writeGeneration !== gen) {
-    return true
-  }
-  await backups.rotateBackupsAsync(dataFile)
-  return true
+  return writeJsonProfileState(owner[primaryStateWriteOperationsContext], gen)
 }
 
 export function installPrimaryStateWriteOperationsContext(

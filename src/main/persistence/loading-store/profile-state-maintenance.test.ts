@@ -158,16 +158,20 @@ describe('profile maintenance admission', () => {
     }
   )
 
-  it('waits for the backup worker before closing and releasing maintenance', async () => {
+  it('cancels a backup and waits for its worker to exit before releasing maintenance', async () => {
     const { store, authority, databaseFile } = await createWorkerMaintenanceFixture()
     const started = maintenanceBarrier()
+    const canceled = maintenanceBarrier()
     const release = maintenanceBarrier()
-    const run = backupWorker.runProfileStateBackupWorker
     vi.spyOn(backupWorker, 'runProfileStateBackupWorker').mockImplementationOnce(
-      async (...args) => {
+      async (_job, options) => {
         started.resolve()
+        await new Promise<void>((resolve) =>
+          options?.signal?.addEventListener('abort', () => resolve(), { once: true })
+        )
+        canceled.resolve()
         await release.promise
-        await run(...args)
+        throw new Error('backup aborted')
       }
     )
     await store.runDurableMutation(() => {
@@ -181,13 +185,13 @@ describe('profile maintenance admission', () => {
     void paused.then(() => {
       done = true
     })
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    await canceled.promise
     expect(done).toBe(false)
     expect(close).not.toHaveBeenCalled()
     release.resolve()
     await paused
     expect(close).toHaveBeenCalledOnce()
-    expect(profileStateDatabaseBackups(databaseFile)).toHaveLength(1)
+    expect(profileStateDatabaseBackups(databaseFile)).toHaveLength(0)
   })
 
   it('drains an accepted flush before rejecting canceled maintenance', async () => {

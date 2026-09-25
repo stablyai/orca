@@ -47,6 +47,7 @@ import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-d
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
 import type { ProfileStateStoreAuthorityMode } from '../persistence/profile-state/profile-state-store-factory'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 
 export type ProfileStateStartupMetadata = {
   backend: 'json' | 'sqlite'
@@ -60,6 +61,10 @@ function createInitialProfileStateStartup(): ProfileStateStartupMetadata | null 
   return null
 }
 
+function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | undefined {
+  return undefined
+}
+
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
@@ -67,6 +72,7 @@ export const mainProcessState = {
   isQuitting: false,
   store: null as Store | null,
   profileStateStartup: createInitialProfileStateStartup(),
+  profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
   claudeUsage: null as ClaudeUsageStore | null,
   codexUsage: null as CodexUsageStore | null,

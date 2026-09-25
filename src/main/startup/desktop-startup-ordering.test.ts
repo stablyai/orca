@@ -108,7 +108,7 @@ describe('startup ordering', () => {
     const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
     expect(entrySource).toContain('formatProfileStateStartupFailure')
-    expect(entrySource).toContain('const message = formatProfileStateStartupFailure(error)')
+    expect(entrySource).toContain('formatProfileStateStartupFailure(error) ??')
     expect(entrySource).toContain('presentProfileStateStartupRecoveryDialog')
     expect(entrySource).toContain('!state.isServeMode && !isBackgroundLaunch()')
     expect(entrySource).toContain(

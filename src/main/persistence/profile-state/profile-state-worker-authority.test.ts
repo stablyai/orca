@@ -26,7 +26,7 @@ describe('worker authority close admission', () => {
 
     const closing = authority.close()
     expect(authority.close()).toBe(closing)
-    expect(closeWriter).not.toHaveBeenCalled()
+    expect(closeWriter).toHaveBeenCalledOnce()
     expect(() => authority.assertWritable()).toThrow('closing')
     await expect(
       authority.writeSerializedDomains([{ domain: 'settings', payload: '{}' }])

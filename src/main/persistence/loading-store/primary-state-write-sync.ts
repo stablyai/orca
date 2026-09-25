@@ -13,6 +13,9 @@ export function writeToDiskSync(
   opts: { force?: boolean; skipBackupRotation?: boolean; expectedGeneration?: number } = {}
 ): boolean {
   const { runtime, serialization, backups } = context
+  if (runtime.fatalMutationError) {
+    throw runtime.fatalMutationError
+  }
   if (runtime.writesFrozen) {
     return false
   }

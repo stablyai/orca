@@ -90,7 +90,10 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
   }
 
-  drainBackups(): Promise<void> {
+  drainBackups(cancel = false): Promise<void> {
+    if (cancel) {
+      this.backups.stop()
+    }
     return this.backups.drain()
   }
 
@@ -140,11 +143,12 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   private async finishClose(): Promise<void> {
-    try {
-      await this.backups.drain()
-    } finally {
-      this.backups.stop()
-      await this.writer.close()
+    this.backups.stop()
+    const settled = await Promise.allSettled([this.backups.drain(), this.writer.close()])
+    for (const result of settled) {
+      if (result.status === 'rejected') {
+        throw result.reason
+      }
     }
   }
 
@@ -153,7 +157,8 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       this.initialization.databasePath,
       this.initialization.profileId,
       Date.now,
-      (job) => runProfileStateBackupWorker(job, { workerPath: this.options.backupWorkerPath })
+      (job, signal) =>
+        runProfileStateBackupWorker(job, { workerPath: this.options.backupWorkerPath, signal })
     )
   }
 }

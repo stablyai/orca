@@ -86,6 +86,16 @@ describe('asynchronous profile-state database snapshots', () => {
     expectNoTemporaryFiles(directory)
   })
 
+  it('never removes an existing staging file when exclusive creation fails', async () => {
+    const { db, databasePath, targetPath, originalJson } = fixture()
+    await expect(
+      writeProfileStateDatabaseSnapshotAsync(db, targetPath, { temporaryPath: databasePath })
+    ).rejects.toThrow()
+    expect(existsSync(databasePath)).toBe(true)
+    expect(exportProfileStateJson(db)).toBe(originalJson)
+    expect(existsSync(targetPath)).toBe(false)
+  })
+
   it.each(['same connection', 'another connection'] as const)(
     'keeps a consistent complete revision while writes occur from %s',
     async (connection) => {

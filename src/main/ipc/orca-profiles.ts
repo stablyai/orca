@@ -57,14 +57,10 @@ type RegisterOrcaProfileHandlersOptions = {
 }
 
 function profileIdFromArgs(args: unknown): string {
-  if (
-    !args ||
-    typeof args !== 'object' ||
-    typeof (args as SwitchOrcaProfileArgs).profileId !== 'string'
-  ) {
-    throw new Error('invalid_orca_profile_id')
-  }
-  const profileId = (args as SwitchOrcaProfileArgs).profileId.trim()
+  const profileId =
+    args && typeof args === 'object' && 'profileId' in args && typeof args.profileId === 'string'
+      ? args.profileId.trim()
+      : ''
   if (!profileId) {
     throw new Error('invalid_orca_profile_id')
   }
@@ -253,6 +249,10 @@ export function registerOrcaProfileHandlers(
           return { ...result, willRelaunch: true }
         }
         return result
+      }
+      if (args.sourceProfileId !== current.activeProfileId) {
+        await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+        return transferOrcaProfileProject(args, getProfileUserDataPath())
       }
       const maintenance = await flushActiveProfileBeforeFileMutation(store)
       try {

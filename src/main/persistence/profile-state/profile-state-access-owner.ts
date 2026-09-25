@@ -13,6 +13,10 @@ import {
 } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
+import {
+  profileStateAccessBootIdentity,
+  profileStateAccessProcessIdentity
+} from './profile-state-access-identity'
 
 export class ProfileStateAccessError extends Error {
   readonly code = 'profile-state-access-refused' as const
@@ -48,9 +52,11 @@ type AccessOwner = {
   host: string
   platform: string
   pidNamespace: string | null
+  bootIdentity?: string | null
+  processStartIdentity?: string | null
 }
 
-function currentPidNamespace(): string | null {
+export function profileStateAccessPidNamespace(): string | null {
   if (process.platform !== 'linux') {
     return null
   }
@@ -90,7 +96,18 @@ function readOwner(path: string): AccessOwner | undefined {
         pid: owner.pid,
         host: owner.host,
         platform: owner.platform,
-        pidNamespace: owner.pidNamespace
+        pidNamespace: owner.pidNamespace,
+        bootIdentity:
+          'bootIdentity' in owner && typeof owner.bootIdentity === 'string'
+            ? owner.bootIdentity
+            : null,
+        processStartIdentity:
+          'processStartIdentity' in owner &&
+          typeof owner.processStartIdentity === 'string' &&
+          /^(?:linux-start-ticks|wall-time-ms):\d+$/.test(owner.processStartIdentity) &&
+          Number.isSafeInteger(Number(owner.processStartIdentity.split(':')[1]))
+            ? owner.processStartIdentity
+            : null
       }
     }
   } catch (error) {
@@ -103,22 +120,33 @@ function readOwner(path: string): AccessOwner | undefined {
 }
 
 function ownerExited(owner: AccessOwner): boolean {
-  if (owner.host !== hostname() || owner.platform !== process.platform) {
+  const sameBoot = Boolean(
+    owner.bootIdentity && owner.bootIdentity === profileStateAccessBootIdentity()
+  )
+  if ((!sameBoot && owner.host !== hostname()) || owner.platform !== process.platform) {
     return false
   }
   // Windows/WSL and Linux PID namespaces cannot establish each other's process absence.
   if (
     process.platform === 'linux' &&
-    (owner.pidNamespace === null || owner.pidNamespace !== currentPidNamespace())
+    (owner.pidNamespace === null || owner.pidNamespace !== profileStateAccessPidNamespace())
   ) {
     return false
   }
   try {
     process.kill(owner.pid, 0)
-    return false
   } catch (error) {
     return hasCode(error, 'ESRCH')
   }
+  const recordedStart = owner.processStartIdentity
+  const actualStart =
+    !sameBoot || recordedStart == null ? null : profileStateAccessProcessIdentity(owner.pid)
+  return (
+    actualStart !== null &&
+    recordedStart != null &&
+    actualStart.split(':')[0] === recordedStart.split(':')[0] &&
+    actualStart !== recordedStart
+  )
 }
 
 export function hasCode(error: unknown, code: string): boolean {
@@ -170,7 +198,7 @@ export function reclaimExitedOwner(path: string): void {
     }
     if (owner.token !== token || !ownerExited(owner)) {
       throw new ProfileStateAccessError(
-        `Profile state is in use or its owner is unverifiable: ${path}`
+        `Profile state is in use or its owner is unverifiable: ${path}. Stop Orca and orcad on every host using this profile, then retry. If this remains, verify PID ${owner.pid} on ${owner.host} has exited before removing its owner entry ${join(path, entry)}.`
       )
     }
     removeOwnerEntry(join(path, entry))
@@ -194,7 +222,9 @@ export function publishAccessOwner(paths: ProfileStateAccessPaths, exclusive: bo
         pid: process.pid,
         host: hostname(),
         platform: process.platform,
-        pidNamespace: currentPidNamespace()
+        pidNamespace: profileStateAccessPidNamespace(),
+        bootIdentity: profileStateAccessBootIdentity(),
+        processStartIdentity: profileStateAccessProcessIdentity(process.pid)
       }),
       {
         flag: 'wx',

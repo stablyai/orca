@@ -382,6 +382,42 @@ describe('profile state authority bootstrap', () => {
     expect(existsSync(options.databaseFile)).toBe(false)
   })
 
+  it.each([0, 1, 2, 3, 4])(
+    'migrates usable legacy backup slot %s after a corrupt primary',
+    (slot) => {
+      const options = paths(createDirectory())
+      const damaged = '{ malformed primary'
+      const recovered = JSON.stringify({ settings: { theme: 'dark' }, retainedBackup: slot })
+      writeFileSync(options.dataFile, damaged)
+      for (let index = 0; index < slot; index += 1) {
+        writeFileSync(`${options.dataFile}.bak.${index}`, '{ damaged backup')
+      }
+      writeFileSync(`${options.dataFile}.bak.${slot}`, recovered)
+
+      const result = bootstrapProfileStateAuthority(options)
+      expect(result.migrated).toBe(true)
+      expect(JSON.parse(result.authority?.readSerializedState() ?? '{}')).toMatchObject({
+        settings: { theme: 'dark' },
+        retainedBackup: slot
+      })
+      expect(readFileSync(options.dataFile, 'utf8')).toBe(damaged)
+      expect(readFileSync(`${options.dataFile}.bak.${slot}`, 'utf8')).toBe(recovered)
+      expect(bootstrapProfileStateAuthority(options).migrated).toBe(false)
+    }
+  )
+
+  it('preserves every source when legacy primary and backups are unusable', () => {
+    const options = paths(createDirectory())
+    writeFileSync(options.dataFile, '{ malformed primary')
+    writeFileSync(`${options.dataFile}.bak.0`, '{ malformed backup')
+    expect(() => bootstrapProfileStateAuthority(options)).toThrow(
+      ProfileStateAuthorityBootstrapError
+    )
+    expect(readFileSync(options.dataFile, 'utf8')).toBe('{ malformed primary')
+    expect(readFileSync(`${options.dataFile}.bak.0`, 'utf8')).toBe('{ malformed backup')
+    expect(existsSync(options.databaseFile)).toBe(false)
+  })
+
   it('cleans a temporary database when import fails after opening SQLite', () => {
     const directory = createDirectory()
     const options = paths(directory)

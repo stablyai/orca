@@ -6,6 +6,26 @@ import {
 } from './profile-state-write-transaction'
 
 describe('profile state write transaction ownership', () => {
+  it('preserves SQLITE_FULL after SQLite rolls back the transaction itself', () => {
+    const db = new Database(':memory:')
+    try {
+      db.exec('PRAGMA page_size=512; CREATE TABLE writes (data BLOB); PRAGMA max_page_count=2')
+      const rollback = vi.spyOn(db, 'exec')
+      expect(() =>
+        withProfileStateWriteTransaction(db, () => {
+          db.exec('INSERT INTO writes VALUES (zeroblob(4096))')
+        })
+      ).toThrow(/database or disk is full/)
+      expect(db.isTransaction).toBe(false)
+      expect(rollback).not.toHaveBeenCalledWith('ROLLBACK')
+      expect(db.prepare('SELECT COUNT(*) AS count FROM writes').get()).toMatchObject({ count: 0 })
+      withProfileStateWriteTransaction(db, () => db.exec("INSERT INTO writes VALUES ('small')"))
+      expect(db.prepare('SELECT COUNT(*) AS count FROM writes').get()).toMatchObject({ count: 1 })
+    } finally {
+      db.close()
+    }
+  })
+
   it('rolls back a failed deferred commit and leaves the connection usable', () => {
     const db = new Database(':memory:')
     try {

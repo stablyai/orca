@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-n
 import { PushUnregisterOutbox } from '../runtime/push/push-unregister-outbox'
 import { createPushHostKeypair } from '../runtime/push/push-host-challenge-fixtures'
 import { acquireProfileStateMaintenance } from '../persistence/profile-state/profile-state-access'
+import { profileStateAccessPaths } from '../persistence/profile-state/profile-state-access-owner'
 
 const state = vi.hoisted(() => ({
   root: '',
@@ -168,8 +169,19 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   } finally {
     await host.stop()
   }
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+  acquireProfileStateMaintenance(state.root).release()
   expect(state.controller.getListenerCount()).toBe(0)
   expect(await state.controller.registerPushDevice({} as never)).toMatchObject({
     registered: false
   })
+})
+
+it('releases admission when host setup fails before a runtime exists', async () => {
+  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-setup-failure-'))
+  state.browserProvider.mockRejectedValueOnce(new Error('browser setup failed'))
+  const { startOrcad } = await import('./orcad-entry')
+  await expect(startOrcad()).rejects.toThrow('browser setup failed')
+  expect(readdirSync(profileStateAccessPaths(state.root).participants)).toEqual([])
+  acquireProfileStateMaintenance(state.root).release()
 })

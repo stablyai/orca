@@ -89,9 +89,10 @@ export class WriteFlushBarrierOperations {
     runtime.quitFlushPromise = (
       maintenance
         ? Promise.resolve(runtime.pendingProfileMaintenance)
-        : drainProfileStateOperations(runtime.pendingProfileFlushes).then(() =>
-            flushCurrentStateAsync(this, true)
-          )
+        : drainProfileStateOperations([
+            ...runtime.pendingProfileFlushes,
+            runtime.profileStateAuthority?.drainBackups?.(true)
+          ]).then(() => flushCurrentStateAsync(this, true))
     )
       .then(async () => {
         if (options.exportJsonCompatibility && !maintenance) {
@@ -190,7 +191,9 @@ export async function flushCurrentStateAsync(
           : runtime.activeViewPreference.flushPendingAsync(signal))
         await writeGithubCacheSnapshotAsync(owner, final, signal)
         if (final || drainToStableGeneration) {
-          await runtime.profileStateAuthority?.drainBackups?.()
+          await runtime.profileStateAuthority?.drainBackups?.(
+            final || runtime.profileMaintenancePending
+          )
         }
       }
       if (signal?.aborted) {

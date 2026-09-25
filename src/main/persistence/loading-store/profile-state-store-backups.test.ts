@@ -161,7 +161,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
       let settled = false
       const barrier = (
         kind === 'quit'
-          ? state.store.flushAsync()
+          ? state.store.flushAsync({ exportJsonCompatibility: true })
           : flushActiveProfileBeforeFileMutation(state.store)
       ).then(() => {
         settled = true
@@ -178,7 +178,9 @@ describe('Store automatic SQLite recovery snapshots', () => {
       expect(backups).toHaveLength(2)
       expect(readSnapshot(backups[0].path).state.settings.theme).toBe('dark')
       expect(readFileSync(state.retained[0].path)).toEqual(state.retainedBytes)
-      expect(readFileSync(state.dataFile, 'utf8')).toBe(state.legacyBytes)
+      expect(JSON.parse(readFileSync(state.dataFile, 'utf8'))).toEqual(
+        readSnapshot(state.databasePath).state
+      )
     }
   )
 

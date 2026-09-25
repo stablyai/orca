@@ -15,21 +15,16 @@ import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
 import {
   describeOrcadBindExposure,
   OrcadBindAddressError,
   resolveOrcadBindHost
 } from './orcad-bind-address'
-import { acquireOrcadInstanceLock, OrcadInstanceLockError } from './orcad-instance-lock'
-import { flushOrcadProfileStoreForShutdown, startOrcadWithLifecycle } from './orcad-lifecycle'
+import { OrcadInstanceLockError } from './orcad-instance-lock'
+import { flushOrcadProfileStoreForShutdown, startOrcadWithHost } from './orcad-lifecycle'
 import { parseArgs } from './orcad-command-arguments'
-import {
-  acquireProfileStateRuntimeAdmission,
-  ProfileStateAccessError
-} from '../persistence/profile-state/profile-state-access'
+import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
 import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
@@ -114,29 +109,10 @@ export type OrcadHandle = {
  */
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
   installOrcadHostAdapters()
-  const userDataPath = resolveUserDataPath()
-  // Process lifetime covers workers even when a failed shutdown cannot finish their teardown.
-  acquireProfileStateRuntimeAdmission(userDataPath)
-  // Why before anything else touches the root: the profile index, the store and the daemon
-  // runtime dir all live under it, and two orcads sharing them corrupt state silently. This
-  // is also the last point at which refusing costs nothing.
-  const instanceLock = acquireOrcadInstanceLock(userDataPath)
-  const browserProvider = await resolveOrcadBrowserProvider({ userDataPath })
-  setRuntimeBrowserCommandsFactory(browserProvider?.factory ?? null, {
-    headless: browserProvider !== null,
-    ...(browserProvider ? { isAvailable: () => browserProvider.isAvailable() } : {})
-  })
-  return startOrcadWithLifecycle(
+  return startOrcadWithHost(
+    resolveUserDataPath(),
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),
-    async () => {
-      try {
-        await browserProvider?.stop()
-      } finally {
-        setRuntimeBrowserCommandsFactory(null)
-        runOrcadQuitHandlers()
-        instanceLock.release()
-      }
-    }
+    () => runOrcadQuitHandlers()
   )
 }
 
