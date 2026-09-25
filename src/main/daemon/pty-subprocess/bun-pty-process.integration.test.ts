@@ -79,9 +79,37 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
       expect(result).toEqual({ exitCode: 143, signal: 15 })
     })
 
-    it.skipIf(!existsSync('/bin/bash')).each([false, true])(
-      'stops foreground and background floods without losing output (transient resume failure: %s)',
-      async (rejectFirstResume) => {
+    it('pauses and resumes the owned process when process discovery is unavailable', async () => {
+      const result = await runTerminalScript(`
+      const expected = 'ready' + 'x'.repeat(1024 * 1024)
+      const proc = spawnBunPty({...args,args:['-e','process.stdout.write("ready");setTimeout(()=>process.stdout.write("x".repeat(1024*1024)),100)']},{readProcessTable:()=>''})
+      let output = '', paused = false, stable = false
+      proc.onData(data => {
+        output += data
+        if (paused) return
+        paused = true
+        proc.pause()
+        setTimeout(() => {
+          const settled = output.length
+          setTimeout(() => { stable = output.length === settled;proc.resume() }, 150)
+        }, 150)
+      })
+      proc.onExit(event => {
+        console.log(JSON.stringify({event,stable,exact:output===expected}))
+        proc.destroy()
+      })
+    `)
+      expect(result).toEqual({ event: { exitCode: 0 }, stable: true, exact: true })
+    })
+
+    it.skipIf(!existsSync('/bin/bash')).each([
+      [false, 0],
+      [false, 100],
+      [true, 0],
+      [true, 100]
+    ] as const)(
+      'stops foreground and background floods without losing output (resume failure: %s, signal gap: %sms)',
+      async (rejectFirstResume, stopSignalGapMs) => {
         const result = await runTerminalScript(`
       const expected = 16 * 1024 * 1024
       const {join} = require('node:path')
@@ -109,7 +137,11 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
           throw Object.assign(new Error('transient resume failure'), {code:'EPERM'})
         }
         process.kill(-pgid,signal)
-        if (signal === 'SIGSTOP') groups.add(pgid)
+        if (signal === 'SIGSTOP') {
+          groups.add(pgid)
+          // Give Bash time to react between signals; stopping its jobs first can end its wait.
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${stopSignalGapMs})
+        }
         if (groups.size < 3 || verifying) return
         verifying = true
         writeFileSync(continueOutput, 'continue')

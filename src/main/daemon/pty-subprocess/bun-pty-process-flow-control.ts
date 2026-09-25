@@ -1,5 +1,7 @@
+import { constants } from 'node:os'
 import type { WindowsBunPtyJob } from './windows-bun-pty-job'
 import {
+  isPosixPtyRootStopped,
   readPosixPtyProcessTable,
   signalPosixPtyProcessGroups
 } from '../../pty/posix-pty-process-groups'
@@ -35,6 +37,10 @@ export function createBunPtyProducerFlowControl(
   let pendingRead: AbortController | undefined
   let resumeRetry: ReturnType<typeof setTimeout> | undefined
   let groupResumeRequired = false
+  const signalRoot = (signal: 'SIGSTOP' | 'SIGCONT'): void => {
+    // The runtime's named STOP/CONT signals are not portable across POSIX platforms.
+    options.processHandle.kill(constants.signals[signal])
+  }
 
   const signalProcessGroup = (
     signal: 'SIGSTOP' | 'SIGCONT',
@@ -49,7 +55,7 @@ export function createBunPtyProducerFlowControl(
         if (requireGroups) {
           throw new Error('Paused PTY group ownership is unavailable')
         }
-        options.processHandle.kill(signal)
+        signalRoot(signal)
       },
       {
         platform: options.platform,
@@ -137,11 +143,16 @@ export function createBunPtyProducerFlowControl(
         const nextPaused = pauseRequested
         // Partial signals require a fresh transition even if the requested state changes again.
         state = 'uncertain'
-        signalProcessGroup(
-          nextPaused ? 'SIGSTOP' : 'SIGCONT',
-          table,
-          !nextPaused && groupResumeRequired
-        )
+        if (nextPaused) {
+          // Signal delivery is asynchronous; prove the shell stopped before suspending its jobs.
+          if (isPosixPtyRootStopped(table, options.processHandle.pid)) {
+            signalProcessGroup('SIGSTOP', table)
+          }
+        } else if (groupResumeRequired) {
+          signalProcessGroup('SIGCONT', table, true)
+        } else {
+          signalRoot('SIGCONT')
+        }
         state = nextPaused ? 'paused' : 'running'
         if (!nextPaused) {
           groupResumeRequired = false
@@ -165,6 +176,14 @@ export function createBunPtyProducerFlowControl(
         return
       }
       pauseRequested = true
+      if (state === 'running') {
+        try {
+          signalRoot('SIGSTOP')
+          state = 'uncertain'
+        } catch {
+          return
+        }
+      }
       reconcile()
     },
     resume() {
@@ -192,7 +211,11 @@ export function createBunPtyProducerFlowControl(
       try {
         if (!options.isExited() && state !== 'running') {
           // Teardown must release stopped jobs before the root receives its exit signal.
-          signalProcessGroup('SIGCONT')
+          if (groupResumeRequired) {
+            signalProcessGroup('SIGCONT')
+          } else {
+            signalRoot('SIGCONT')
+          }
         }
       } catch {
         // A failed resume must not prevent the caller from terminating the PTY.

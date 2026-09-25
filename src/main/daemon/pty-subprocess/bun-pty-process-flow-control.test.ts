@@ -1,7 +1,8 @@
+import { constants } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createBunPtyProducerFlowControl } from './bun-pty-process-flow-control'
 
-const TABLE = '4321 4321 pts/test\n4322 4322 pts/test'
+const TABLE = '4321 4321 pts/test T\n4322 4322 pts/test'
 const settled = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
 function createHarness() {
@@ -39,6 +40,43 @@ function createHarness() {
 afterEach(() => vi.useRealTimers())
 
 describe('asynchronous POSIX producer flow control', () => {
+  it.each(['S', 'R', ''])(
+    'leaves jobs running unless the shell is observed stopped (state %s)',
+    async (state) => {
+      const harness = createHarness()
+      harness.flow.pause()
+      expect(harness.kill.mock.calls).toEqual([[constants.signals.SIGSTOP]])
+      expect(harness.readProcessTableAsync).not.toHaveBeenCalled()
+      await settled()
+      harness.reads[0].resolve(TABLE.replace('pts/test T', `pts/test ${state}`))
+      await settled()
+      expect(harness.signalProcessGroup).not.toHaveBeenCalled()
+      harness.flow.resume()
+      await settled()
+      harness.reads[1].resolve(TABLE)
+      await settled()
+      expect(harness.kill.mock.calls).toEqual([
+        [constants.signals.SIGSTOP],
+        [constants.signals.SIGCONT]
+      ])
+      expect(harness.signalProcessGroup).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not attempt a group pause after the owned shell cannot be stopped', async () => {
+    const harness = createHarness()
+    harness.kill.mockImplementationOnce(() => {
+      throw Object.assign(new Error('denied'), { code: 'EPERM' })
+    })
+    harness.flow.pause()
+    await settled()
+    harness.flow.resume()
+    await settled()
+    expect(harness.kill.mock.calls).toEqual([[constants.signals.SIGSTOP]])
+    expect(harness.readProcessTableAsync).not.toHaveBeenCalled()
+    expect(harness.signalProcessGroup).not.toHaveBeenCalled()
+  })
+
   it('retries a failed resume lookup without another caller resume or stale group signals', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const harness = createHarness()
@@ -50,14 +88,14 @@ describe('asynchronous POSIX producer flow control', () => {
     harness.flow.resume()
     await settled()
     expect(harness.signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
-      [4321, 'SIGSTOP']
+      [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP']
     ])
-    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.kill.mock.calls).toEqual([[constants.signals.SIGSTOP]])
 
     await vi.advanceTimersByTimeAsync(1_000)
     expect(harness.readProcessTableAsync).toHaveBeenCalledTimes(3)
-    harness.reads[1].resolve('4321 4321 pts/test\n4322 4322 pts/other\n4323 4323 pts/test')
+    harness.reads[1].resolve('4321 4321 pts/test T\n4322 4322 pts/other\n4323 4323 pts/test')
     await settled()
     expect(harness.signalProcessGroup.mock.calls.slice(2)).toEqual([
       [4323, 'SIGCONT'],
@@ -112,7 +150,7 @@ describe('asynchronous POSIX producer flow control', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect(harness.readProcessTableAsync).toHaveBeenCalledTimes(6)
     expect(vi.getTimerCount()).toBe(1)
-    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.kill.mock.calls).toEqual([[constants.signals.SIGSTOP]])
     expect(harness.signalProcessGroup).toHaveBeenCalledTimes(2)
     harness.readProcessTableAsync.mockResolvedValue(TABLE)
     await vi.advanceTimersByTimeAsync(500)
@@ -128,7 +166,10 @@ describe('asynchronous POSIX producer flow control', () => {
     await settled()
     harness.flow.resume()
     await settled()
-    expect(harness.kill.mock.calls).toEqual([['SIGSTOP'], ['SIGCONT']])
+    expect(harness.kill.mock.calls).toEqual([
+      [constants.signals.SIGSTOP],
+      [constants.signals.SIGCONT]
+    ])
     expect(harness.signalProcessGroup).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -162,9 +203,9 @@ describe('asynchronous POSIX producer flow control', () => {
     harness.reads[2].resolve(table)
     await settled()
     expect(harness.signalProcessGroup.mock.calls.slice(5)).toEqual([
+      [4321, 'SIGSTOP'],
       [4322, 'SIGSTOP'],
-      [4323, 'SIGSTOP'],
-      [4321, 'SIGSTOP']
+      [4323, 'SIGSTOP']
     ])
     expect(vi.getTimerCount()).toBe(0)
     harness.flow.resume()
@@ -212,7 +253,10 @@ describe('asynchronous POSIX producer flow control', () => {
     harness.reads[0].resolve(TABLE)
     await settled()
     expect(harness.signalProcessGroup).not.toHaveBeenCalled()
-    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.kill.mock.calls).toEqual([
+      [constants.signals.SIGSTOP],
+      [constants.signals.SIGCONT]
+    ])
 
     for (let i = 0; i < 20; i += 1) {
       harness.flow.pause()
@@ -237,12 +281,12 @@ describe('asynchronous POSIX producer flow control', () => {
     await settled()
     harness.flow.resume()
     await settled()
-    harness.reads[1].resolve('4321 4321 pts/test\n4322 4322 pts/other\n4323 4323 pts/test')
+    harness.reads[1].resolve('4321 4321 pts/test T\n4322 4322 pts/other\n4323 4323 pts/test')
     await settled()
 
     expect(harness.signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
       [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP'],
       [4323, 'SIGCONT'],
       [4321, 'SIGCONT']
     ])
@@ -260,8 +304,8 @@ describe('asynchronous POSIX producer flow control', () => {
     harness.reads[1].resolve(TABLE)
     await settled()
     expect(harness.signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
-      [4321, 'SIGSTOP']
+      [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP']
     ])
 
     harness.flow.resume()
@@ -284,7 +328,11 @@ describe('asynchronous POSIX producer flow control', () => {
     harness.reads[0].resolve(TABLE)
     await settled()
     expect(harness.signalProcessGroup).not.toHaveBeenCalled()
-    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.kill.mock.calls).toEqual(
+      action === 'shutdown'
+        ? [[constants.signals.SIGSTOP], [constants.signals.SIGCONT]]
+        : [[constants.signals.SIGSTOP]]
+    )
   })
 
   it('releases stopped groups before shutdown while an asynchronous resume is pending', async () => {
@@ -298,8 +346,8 @@ describe('asynchronous POSIX producer flow control', () => {
     harness.flow.resumeForShutdown()
     expect(harness.reads[1].signal.aborted).toBe(true)
     expect(harness.signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
       [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP'],
       [4322, 'SIGCONT'],
       [4321, 'SIGCONT']
     ])
@@ -312,8 +360,10 @@ describe('asynchronous POSIX producer flow control', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const harness = createHarness()
     const denied = Object.assign(new Error('denied'), { code: 'EPERM' })
-    harness.signalProcessGroup.mockImplementationOnce(() => {
-      throw denied
+    harness.signalProcessGroup.mockImplementation((pgid, signal) => {
+      if (pgid === 4322 && signal === 'SIGSTOP') {
+        throw denied
+      }
     })
     harness.flow.pause()
     await settled()
@@ -330,8 +380,8 @@ describe('asynchronous POSIX producer flow control', () => {
     harness.reads[2].resolve(TABLE)
     await settled()
     expect(harness.signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
       [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP'],
       [4322, 'SIGCONT'],
       [4322, 'SIGCONT'],
       [4321, 'SIGCONT']

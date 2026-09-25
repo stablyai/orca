@@ -17,8 +17,10 @@ vi.mock('../../shared/child-process/run-process', () => ({
 import {
   forceKillPosixPtyProcessGroups,
   getPosixPtyProcessGroups,
+  isPosixPtyRootStopped,
   readPosixPtyProcessTable,
-  resetPosixPtyProcessTableDialectForTests
+  resetPosixPtyProcessTableDialectForTests,
+  signalPosixPtyProcessGroups
 } from './posix-pty-process-groups'
 
 beforeEach(() => {
@@ -37,7 +39,11 @@ const TABLE = `
   300  300 ??
 `
 
-const ALL_PROCESS_ARGS = ['-e', '-o', 'pid=PROCESS_ID,pgid=PROCESS_GID,tty=TERMINAL_DEVICE_NUMBER']
+const ALL_PROCESS_ARGS = [
+  '-e',
+  '-o',
+  'pid=PROCESS_ID,pgid=PROCESS_GID,tty=TERMINAL_DEVICE_NUMBER,stat=PROCESS_STATE'
+]
 const BUSYBOX_TABLE = `
 PROCESS_ID PROCESS_GID TERMINAL_DEVICE_NUMBER
 100 100 136,100
@@ -80,8 +86,8 @@ describe('ps selection compatibility', () => {
       expect(getPosixPtyProcessGroups(first, 100, 999)).toEqual([101, 100])
       expect(getPosixPtyProcessGroups(second, 200, 999)).toEqual([202, 200])
       expect(runProcessMock.mock.calls.map(([spec]) => spec.args)).toEqual([
-        ['-p', '100', '-o', 'pid=,pgid=,tty='],
-        ...(option === 't' ? [['-t', 'pts/100', '-o', 'pid=,pgid=,tty=']] : []),
+        ['-p', '100', '-o', 'pid=,pgid=,tty=,stat='],
+        ...(option === 't' ? [['-t', 'pts/100', '-o', 'pid=,pgid=,tty=,stat=']] : []),
         ALL_PROCESS_ARGS,
         ALL_PROCESS_ARGS
       ])
@@ -115,7 +121,7 @@ describe('ps selection compatibility', () => {
     expect(getPosixPtyProcessGroups(await first, 100, 999)).toEqual([101, 100])
     expect(getPosixPtyProcessGroups(await second, 200, 999)).toEqual([201, 200])
     expect(runProcessMock.mock.calls.map(([spec]) => spec.args)).toEqual([
-      ['-p', '100', '-o', 'pid=,pgid=,tty='],
+      ['-p', '100', '-o', 'pid=,pgid=,tty=,stat='],
       ALL_PROCESS_ARGS,
       ALL_PROCESS_ARGS
     ])
@@ -175,7 +181,12 @@ describe('ps selection compatibility', () => {
       .mockResolvedValueOnce({ code: 0, stdout: '100 100 ttys001' })
       .mockResolvedValueOnce({ code: 0, stdout: TABLE })
     await readPosixPtyProcessTable(100)
-    expect(runProcessMock.mock.calls[1][0].args).toEqual(['-p', '100', '-o', 'pid=,pgid=,tty='])
+    expect(runProcessMock.mock.calls[1][0].args).toEqual([
+      '-p',
+      '100',
+      '-o',
+      'pid=,pgid=,tty=,stat='
+    ])
   })
 
   it.each([{ code: 1 }, { code: 0, timedOut: true }, { code: 0, outputTruncated: true }])(
@@ -226,6 +237,13 @@ describe('ps selection compatibility', () => {
 })
 
 describe('asynchronous PTY process discovery', () => {
+  it('requires a stopped state for the exact shell process', () => {
+    expect(isPosixPtyRootStopped('100 100 pts/test Ts\n101 101 pts/test R+', 100)).toBe(true)
+    expect(isPosixPtyRootStopped('100 100 pts/test S\n101 101 pts/test T', 100)).toBe(false)
+    expect(isPosixPtyRootStopped('101 101 pts/test T', 100)).toBe(false)
+    expect(isPosixPtyRootStopped('100 100 pts/test\n101 101 pts/test T', 100)).toBe(false)
+  })
+
   it('bounds each lookup and selects the root terminal without synchronous subprocesses', async () => {
     const controller = new AbortController()
     runProcessMock
@@ -240,7 +258,7 @@ describe('asynchronous PTY process discovery', () => {
         {
           program: 'ps',
           env: { LC_ALL: 'C' },
-          args: ['-p', '100', '-o', 'pid=,pgid=,tty='],
+          args: ['-p', '100', '-o', 'pid=,pgid=,tty=,stat='],
           timeoutMs: 1000,
           maxOutputBytes: 1048576,
           signal: controller.signal
@@ -250,7 +268,7 @@ describe('asynchronous PTY process discovery', () => {
         {
           program: 'ps',
           env: { LC_ALL: 'C' },
-          args: ['-t', 'ttys001', '-o', 'pid=,pgid=,tty='],
+          args: ['-t', 'ttys001', '-o', 'pid=,pgid=,tty=,stat='],
           timeoutMs: 1000,
           maxOutputBytes: 1048576,
           signal: controller.signal
@@ -305,6 +323,43 @@ describe('POSIX PTY process-group termination', () => {
     expect(signalProcessGroup.mock.calls.map(([pgid]) => pgid)).toEqual([101, 103, 100])
     expect(fallback).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ['SIGSTOP', [99, 101, 103]],
+    ['SIGCONT', [101, 103, 99]]
+  ] as const)('orders shell and job groups safely for %s', (signal, expected) => {
+    const signalProcessGroup = vi.fn()
+    signalPosixPtyProcessGroups(100, signal, vi.fn(), {
+      platform: 'linux',
+      currentPid: 999,
+      readProcessTable: () => TABLE.replace('100  100', '100  99'),
+      signalProcessGroup
+    })
+    expect(signalProcessGroup.mock.calls.map(([pgid]) => pgid)).toEqual(expected)
+  })
+
+  it.each(['EPERM', 'ESRCH'])(
+    'does not stop jobs when stopping the shell fails with %s',
+    (code) => {
+      const error = Object.assign(new Error('stop failed'), { code })
+      const signalProcessGroup = vi.fn(() => {
+        throw error
+      })
+      const stop = () =>
+        signalPosixPtyProcessGroups(100, 'SIGSTOP', vi.fn(), {
+          platform: 'linux',
+          currentPid: 999,
+          readProcessTable: () => TABLE,
+          signalProcessGroup
+        })
+      if (code === 'ESRCH') {
+        expect(stop).not.toThrow()
+      } else {
+        expect(stop).toThrow(error)
+      }
+      expect(signalProcessGroup.mock.calls).toEqual([[100]])
+    }
+  )
 
   it('falls back when the process table cannot prove PTY ownership', () => {
     const fallback = vi.fn()

@@ -1,3 +1,4 @@
+import { constants } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { canUseBunPty, spawnBunPty } from './bun-pty-process'
 import type { BunRuntime, BunTerminalOptions } from './bun-pty-process-contract'
@@ -110,10 +111,10 @@ describe('Bun.Terminal PTY adapter', () => {
     harness.resolveExit(0)
     await harness.processHandle.exited
     expect(signal?.aborted).toBe(true)
-    finishRead('4321 4321 pts/test\n4322 4322 pts/test')
+    finishRead('4321 4321 pts/test T\n4322 4322 pts/test')
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(signalProcessGroup).not.toHaveBeenCalled()
-    expect(harness.processHandle.kill).not.toHaveBeenCalled()
+    expect(harness.processHandle.kill.mock.calls).toEqual([[constants.signals.SIGSTOP]])
   })
 
   it('cancels a queued resume retry immediately on natural exit', async () => {
@@ -121,7 +122,7 @@ describe('Bun.Terminal PTY adapter', () => {
     const harness = createBunHarness()
     const read = vi
       .spyOn(posixPtyGroups, 'readPosixPtyProcessTable')
-      .mockResolvedValueOnce('4321 4321 pts/test\n4322 4322 pts/test')
+      .mockResolvedValueOnce('4321 4321 pts/test T\n4322 4322 pts/test')
       .mockRejectedValueOnce(new Error('temporary ps failure'))
     const signalProcessGroup = vi.fn()
     const proc = spawn({ signalProcessGroup })
@@ -136,10 +137,10 @@ describe('Bun.Terminal PTY adapter', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     expect(read).toHaveBeenCalledTimes(2)
     expect(signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
-      [4321, 'SIGSTOP']
+      [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP']
     ])
-    expect(harness.processHandle.kill).not.toHaveBeenCalled()
+    expect(harness.processHandle.kill.mock.calls).toEqual([[constants.signals.SIGSTOP]])
   })
 
   it('exposes initial and successfully applied dimensions for terminal inspection', () => {
@@ -302,7 +303,7 @@ describe('Bun.Terminal PTY adapter', () => {
     createBunHarness()
     const signalProcessGroup = vi.fn()
     const proc = spawn({
-      readProcessTable: () => ' 4321 4321 pts/test\n 4322 4322 pts/test',
+      readProcessTable: () => ' 4321 4321 pts/test T\n 4322 4322 pts/test',
       signalProcessGroup
     })
 
@@ -314,8 +315,8 @@ describe('Bun.Terminal PTY adapter', () => {
     await vi.waitFor(() => expect(signalProcessGroup).toHaveBeenCalledTimes(4))
 
     expect(signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
       [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP'],
       [4322, 'SIGCONT'],
       [4321, 'SIGCONT']
     ])
@@ -325,7 +326,7 @@ describe('Bun.Terminal PTY adapter', () => {
     const harness = createBunHarness()
     const signalProcessGroup = vi.fn()
     const proc = spawn({
-      readProcessTable: () => ' 4321 4321 pts/test\n 4322 4322 pts/test',
+      readProcessTable: () => ' 4321 4321 pts/test T\n 4322 4322 pts/test',
       signalProcessGroup
     })
 
@@ -334,8 +335,8 @@ describe('Bun.Terminal PTY adapter', () => {
     proc.kill()
 
     expect(signalProcessGroup.mock.calls).toEqual([
-      [4322, 'SIGSTOP'],
       [4321, 'SIGSTOP'],
+      [4322, 'SIGSTOP'],
       [4322, 'SIGCONT'],
       [4321, 'SIGCONT']
     ])
@@ -350,11 +351,18 @@ describe('Bun.Terminal PTY adapter', () => {
     const proc = spawn({ readProcessTable: () => '' })
 
     proc.pause()
-    await vi.waitFor(() => expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGSTOP'))
+    await vi.waitFor(() =>
+      expect(harness.processHandle.kill).toHaveBeenCalledWith(constants.signals.SIGSTOP)
+    )
     proc.resume()
-    await vi.waitFor(() => expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGCONT'))
+    await vi.waitFor(() =>
+      expect(harness.processHandle.kill).toHaveBeenCalledWith(constants.signals.SIGCONT)
+    )
 
-    expect(harness.processHandle.kill.mock.calls).toEqual([['SIGSTOP'], ['SIGCONT']])
+    expect(harness.processHandle.kill.mock.calls).toEqual([
+      [constants.signals.SIGSTOP],
+      [constants.signals.SIGCONT]
+    ])
   })
 
   it('gates a Windows shell behind exact job ownership and exposes owned capabilities', async () => {
