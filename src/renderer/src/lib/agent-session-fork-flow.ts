@@ -4,11 +4,11 @@ import { settingsForRepoOwner } from '@/store/repos/owner-routing'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { carryRuntimeWorkingTreeChanges } from '@/runtime/runtime-git-working-tree-carry-client'
+import { classifyWorkingTreeCarryRejection } from '@/runtime/runtime-git-working-tree-carry-rejection'
 import type {
   WorkingTreeCarryFailureReason,
   WorkingTreeCarryResult
 } from '../../../shared/working-tree-change-carry'
-import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   launchNativeAgentSessionFork,
@@ -89,13 +89,7 @@ async function carryChangesIntoChild(
   } catch (error) {
     // Why: a rejected carry (unreachable host, RPC timeout) must not undo a fork that already exists.
     console.error('[agent-session-fork] carrying changes failed', error)
-    // Why: the host may still finish after our deadline, so a timeout is "outcome unknown", not "nothing written".
-    return {
-      ok: false,
-      reason: hasRuntimeRpcErrorCode(error, 'runtime_timeout')
-        ? 'partially_applied'
-        : 'apply_failed'
-    }
+    return { ok: false, reason: classifyWorkingTreeCarryRejection(error) }
   }
 }
 

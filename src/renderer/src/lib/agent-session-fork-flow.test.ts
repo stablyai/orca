@@ -295,12 +295,19 @@ describe('runAgentSessionFork', () => {
     expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps apply_failed for a runtime rejection that is not a timeout', async () => {
+  it.each([
+    ['runtime_rpc_queue_overloaded', 'Remote runtime call queue is full.'],
+    [
+      'remote_runtime_unavailable',
+      'Remote Orca runtime request was released before it could be sent.'
+    ],
+    ['method_not_found', 'Unknown method: git.carryWorkingTreeChanges']
+  ])('keeps apply_failed when the runtime request never ran (%s)', async (code, message) => {
     mocks.carryRuntimeWorkingTreeChanges.mockRejectedValue(
       new RuntimeRpcCallError({
         id: 'git.carryWorkingTreeChanges',
         ok: false,
-        error: { code: 'remote_runtime_unavailable', message: 'Remote Orca runtime is offline.' }
+        error: { code, message }
       })
     )
 
@@ -310,6 +317,28 @@ describe('runAgentSessionFork', () => {
       ok: true,
       worktreeId: 'repo::feedback-fork',
       warnings: [{ kind: 'changes-not-carried', reason: 'apply_failed' }]
+    })
+  })
+
+  it.each([
+    ['remote_runtime_unavailable', 'Remote Orca runtime closed the connection.'],
+    ['reconnecting', 'Remote Orca runtime is reconnecting.'],
+    ['timeout', 'Timed out waiting for the remote Orca runtime.']
+  ])('reports an uncertain carry when contact is lost mid-request (%s)', async (code, message) => {
+    mocks.carryRuntimeWorkingTreeChanges.mockRejectedValue(
+      new RuntimeRpcCallError({
+        id: 'git.carryWorkingTreeChanges',
+        ok: false,
+        error: { code, message }
+      })
+    )
+
+    const outcome = await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(outcome).toEqual({
+      ok: true,
+      worktreeId: 'repo::feedback-fork',
+      warnings: [{ kind: 'changes-not-carried', reason: 'partially_applied' }]
     })
   })
 
