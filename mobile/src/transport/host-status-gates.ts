@@ -76,97 +76,15 @@ export function useHostStatusGates(args: {
   // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
   const [unverified, setUnverified] = useState(false)
 
-  // The one retry timer is re-armed from inside the read; the returned cleanup clears it.
-  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
     if (connState !== 'connected' || !client) {
       setUnverified(true)
       return
     }
-    let cancelled = false
-    let retryTimer: ReturnType<typeof setTimeout> | null = null
-    let failures = 0
-    const requestClient = client
-    const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
-      setLoaded({ hostId, client: requestClient, ...gates })
+    return startHostStatusRead(client, hostId, (gates) => {
+      setLoaded({ hostId, client, ...gates })
       setUnverified(false)
-    }
-    const settleUnreadable = (retry: 'cutover' | 'backoff' | null) => {
-      // Later failures keep the first one's answer rather than re-render the same closed gates.
-      if (failures === 0) {
-        settle(UNREADABLE_STATUS_GATES)
-      }
-      if (retry) {
-        const delay =
-          retry === 'cutover'
-            ? CUTOVER_RETRY_DELAY_MS
-            : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failures, FAILURE_RETRY_MAX_DELAY_MS)
-        retryTimer = setTimeout(read, delay)
-      }
-      failures += 1
-    }
-    const read = () => {
-      void (async () => {
-        try {
-          const reply = await hostStatusProbe.request(requestClient)
-          if (cancelled) {
-            return
-          }
-          const status = readHostStatusGates(reply)
-          if (!status) {
-            settleUnreadable('backoff')
-            return
-          }
-          const verdict = evaluateCompat({
-            desktopProtocolVersion: status.protocolVersion,
-            desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-          })
-          const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
-          if (hostId && desktopAppVersion) {
-            void recordHostAppVersion(hostId, desktopAppVersion)
-          }
-          settle({
-            hostCapabilities: status.capabilities ?? [],
-            floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-            desktopAppVersion,
-            compatVerdict: verdict,
-            hostProtocolWindow: {
-              protocolVersion: status.protocolVersion,
-              minCompatibleMobileVersion: status.minCompatibleMobileVersion
-            },
-            statusReadable: true
-          })
-          if (verdict.kind === 'blocked') {
-            // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
-            console.warn('[protocol-compat] blocked', {
-              reason: verdict.reason,
-              desktopVersion: verdict.desktopVersion,
-              requiredMobileVersion: verdict.requiredMobileVersion,
-              requiredDesktopVersion: verdict.requiredDesktopVersion
-            })
-          }
-        } catch (error) {
-          // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
-          if (!cancelled) {
-            // A reply this app cannot decode reads the same on every retry.
-            settleUnreadable(
-              error instanceof RpcIncompatibleReplyError
-                ? null
-                : isLogicalClientCutoverError(error)
-                  ? 'cutover'
-                  : 'backoff'
-            )
-          }
-        }
-      })()
-    }
-    read()
-    return () => {
-      cancelled = true
-      if (retryTimer) {
-        clearTimeout(retryTimer)
-      }
-    }
+    })
   }, [client, connState, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
@@ -192,5 +110,95 @@ export function useHostStatusGates(args: {
     // Why (F10): unchanged pending timing — the reconnect refetch is still "unknown", it just no
     // longer blanks the capabilities this same host already proved.
     statusPending: connState === 'connected' && unverified
+  }
+}
+
+/**
+ * Reads status.get until it lands, settling closed on the first failure. Returns the stop function
+ * the effect hands back, so the one retry timer is owned outside React.
+ */
+function startHostStatusRead(
+  client: RpcClient,
+  hostId: string | undefined,
+  settle: (gates: Omit<HostStatusGates, 'statusPending'>) => void
+): () => void {
+  let cancelled = false
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let failures = 0
+  const settleUnreadable = (retry: 'cutover' | 'backoff' | null) => {
+    // Later failures keep the first one's answer rather than re-render the same closed gates.
+    if (failures === 0) {
+      settle(UNREADABLE_STATUS_GATES)
+    }
+    if (retry) {
+      const delay =
+        retry === 'cutover'
+          ? CUTOVER_RETRY_DELAY_MS
+          : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failures, FAILURE_RETRY_MAX_DELAY_MS)
+      retryTimer = setTimeout(read, delay)
+    }
+    failures += 1
+  }
+  const read = () => {
+    void (async () => {
+      try {
+        const reply = await hostStatusProbe.request(client)
+        if (cancelled) {
+          return
+        }
+        const status = readHostStatusGates(reply)
+        if (!status) {
+          settleUnreadable('backoff')
+          return
+        }
+        const verdict = evaluateCompat({
+          desktopProtocolVersion: status.protocolVersion,
+          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
+        })
+        const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+        if (hostId && desktopAppVersion) {
+          void recordHostAppVersion(hostId, desktopAppVersion)
+        }
+        settle({
+          hostCapabilities: status.capabilities ?? [],
+          floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+          desktopAppVersion,
+          compatVerdict: verdict,
+          hostProtocolWindow: {
+            protocolVersion: status.protocolVersion,
+            minCompatibleMobileVersion: status.minCompatibleMobileVersion
+          },
+          statusReadable: true
+        })
+        if (verdict.kind === 'blocked') {
+          // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
+          console.warn('[protocol-compat] blocked', {
+            reason: verdict.reason,
+            desktopVersion: verdict.desktopVersion,
+            requiredMobileVersion: verdict.requiredMobileVersion,
+            requiredDesktopVersion: verdict.requiredDesktopVersion
+          })
+        }
+      } catch (error) {
+        // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
+        if (!cancelled) {
+          // A reply this app cannot decode reads the same on every retry.
+          settleUnreadable(
+            error instanceof RpcIncompatibleReplyError
+              ? null
+              : isLogicalClientCutoverError(error)
+                ? 'cutover'
+                : 'backoff'
+          )
+        }
+      }
+    })()
+  }
+  read()
+  return () => {
+    cancelled = true
+    if (retryTimer) {
+      clearTimeout(retryTimer)
+    }
   }
 }
