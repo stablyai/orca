@@ -50,7 +50,7 @@ export function computeFitScale(scope: TerminalDocumentScope) {
   if (termWidth <= 0) {
     return 1
   }
-  const vpWidth = window.innerWidth
+  const vpWidth = scope.viewportSize().width
   return Math.min(1, vpWidth / termWidth)
 }
 
@@ -83,7 +83,7 @@ export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: bool
     scope.scrollIndicator.classList.remove('visible')
     return
   }
-  const trackHeight = Math.max(0, window.innerHeight - 8)
+  const trackHeight = Math.max(0, scope.viewportSize().height - 8)
   const totalRows = maxViewportY + (scope.term.rows || 0)
   if (trackHeight <= 0 || totalRows <= 0) {
     return

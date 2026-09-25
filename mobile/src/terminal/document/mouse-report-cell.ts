@@ -25,10 +25,10 @@ export function viewportToMouseReportCell(
     return null
   }
   if (typeof clientX !== 'number') {
-    clientX = window.innerWidth / 2
+    clientX = scope.viewportSize().width / 2
   }
   if (typeof clientY !== 'number') {
-    clientY = window.innerHeight / 2
+    clientY = scope.viewportSize().height / 2
   }
   let total = getTotalScale(scope)
   if (total <= 0) {

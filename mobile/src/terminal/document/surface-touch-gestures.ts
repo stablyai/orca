@@ -170,7 +170,7 @@ export function attachSurfaceEventHandlers(
         // single-finger scrolling, scrollback included.
         if (
           scope.term.element &&
-          scope.term.element.scrollWidth * getTotalScale(scope) > window.innerWidth + 1
+          scope.term.element.scrollWidth * getTotalScale(scope) > scope.viewportSize().width + 1
         ) {
           scope.panX += x - scope.touchGesture.lastX
           clampPan(scope)

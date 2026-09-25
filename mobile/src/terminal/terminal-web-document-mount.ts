@@ -14,7 +14,7 @@ import type { TerminalWebViewCommand } from './terminal-webview-messages'
  * Same program: the factory the WebView's script is generated from, called here with the page's
  * own hooks instead of the WebView's window (ruling 22). What the WebView's HTML gave the document
  * — the stylesheet, the elements it reads by id, the engine on `window`, a `postMessage` back to
- * React Native and the frames that arrive on it — this supplies instead, through the eight seams
+ * React Native and the frames that arrive on it — this supplies instead, through the nine seams
  * and the host element.
  *
  * A call is a document. Nothing here is shared between two of them and nothing is reset: each call
@@ -129,7 +129,7 @@ function startDocumentOrGiveTheHostBack(
   }
 }
 
-/** The nine seams, as the page answers them. */
+/** The ten seams, as the page answers them. */
 function startPageDocument(host: HTMLElement, receive: (message: Record<string, unknown>) => void) {
   // Written by this document's own reporter: `startHostNotify` installs it through the seam below,
   // which here is a `window` error listener, and every error it forwards is appended before the
@@ -175,6 +175,12 @@ function startPageDocument(host: HTMLElement, receive: (message: Record<string, 
     // Ruling 24: the WebView reads a global the engine bundle installs, because its script tag can
     // fail. Here the engine is the import above, so it is here or this module did not load.
     hasEngine: () => true,
+
+    // The window here is the whole page, header and dock included; the grid is shown in the host.
+    viewportSize: () => {
+      const box = host.getBoundingClientRect()
+      return { width: box.width, height: box.height }
+    },
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
     createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,

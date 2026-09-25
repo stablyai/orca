@@ -73,16 +73,17 @@ export function measureFitDimensions(
     notify(scope, { type: 'measure-result', cols: null, rows: null })
     return
   }
-  const vpWidth = window.innerWidth
-  // Why: prefer the container height passed from React Native over
-  // window.innerHeight. The RN layout system knows the exact pixel
-  // height of the terminal frame after the accessory/input bars are
-  // subtracted, whereas innerHeight can overstate the visible area
-  // due to layout timing or safe-area insets.
+  const viewport = scope.viewportSize()
+  const vpWidth = viewport.width
+  // Why: prefer the container height passed from React Native over the
+  // viewport's. The RN layout system knows the exact pixel height of the
+  // terminal frame after the accessory/input bars are subtracted, whereas
+  // the viewport can overstate the visible area due to layout timing or
+  // safe-area insets.
   const vpHeight =
     typeof containerHeightPx === 'number' && containerHeightPx > 0
       ? containerHeightPx
-      : window.innerHeight
+      : viewport.height
   const cols = Math.floor(vpWidth / cellWidth)
   if (cols < MIN_FIT_COLS) {
     flog(scope, 'measure-skip-small-width', {

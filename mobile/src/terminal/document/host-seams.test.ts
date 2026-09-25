@@ -7,6 +7,7 @@ import { notify } from './host-notify'
 import { flog } from './viewport-transform'
 import { attachWebglAddon } from './webgl-recovery'
 import type { TerminalDocumentHost } from './document-host-seams'
+import { documentSourceText } from './document-module-source.test-support'
 
 /**
  * The eight host seams the page sets, and the window reads and writes they default to.
@@ -195,9 +196,35 @@ describe('the document host seams, by default', () => {
     expect(built.createUnicode11Addon()).toBeInstanceOf(Unicode11Addon)
     expect(built.createWebglAddon()).toBeInstanceOf(WebglAddon)
   })
+  it('sizes the viewport from the window, read at call time', () => {
+    const scope = createTerminalDocumentScope()
+    vi.stubGlobal('innerWidth', 381)
+    vi.stubGlobal('innerHeight', 612)
+    expect(scope.viewportSize()).toEqual({ width: 381, height: 612 })
+  })
 })
 
 describe('the document host seams, once the page sets them', () => {
+  it('fits a measure with no container height to the host rather than the window', () => {
+    // The page's host is one element on a page that is taller and wider than it; the window is
+    // happy-dom's 1024x768, so a fit read off the window would answer 136x51.
+    const cell = { width: 7.5, height: 15 }
+    const terminal = Object.assign(terminalDouble(), {
+      _core: { _renderService: { dimensions: { css: { cell } } } }
+    })
+    const posted: Record<string, unknown>[] = []
+    const scope = startedScope({
+      createTerminal: () => terminal,
+      postToHost: (message) => posted.push(message),
+      viewportSize: () => ({ width: 390, height: 600 })
+    })
+    handleMsg(scope, { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
+    handleMsg(scope, { type: 'measure' })
+    expect(posted.filter((message) => message.type === 'measure-result')).toEqual([
+      { type: 'measure-result', cols: 52, rows: 40 }
+    ])
+  })
+
   it('routes every notify to the field and nothing to the bridge', () => {
     const postMessage = vi.fn<(data: string) => void>()
     vi.stubGlobal('ReactNativeWebView', { postMessage })
@@ -267,5 +294,17 @@ describe('the document host seams, once the page sets them', () => {
 
   it('reports no webgl addon as a DOM-renderer fallback rather than as a failure', () => {
     expect(attachWebglAddon(startedScope({ createWebglAddon: () => null }), true)).toBe(false)
+  })
+})
+
+describe("the document's viewport", () => {
+  it('is read through the seam everywhere, never off the window directly', () => {
+    // The default in `document-host-seams.ts` is the one window read, so the census runs over
+    // every other module; a raw read elsewhere sizes a page terminal to the whole page.
+    const raw = documentSourceText()
+      .split('\n')
+      .filter((line) => /window\.inner(Height|Width)|\binner(Height|Width)\b/.test(line))
+      .filter((line) => !line.includes('export function windowViewportSize'))
+    expect(raw).toEqual(['  return { width: window.innerWidth, height: window.innerHeight }'])
   })
 })
