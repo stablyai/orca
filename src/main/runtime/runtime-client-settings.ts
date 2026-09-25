@@ -9,6 +9,11 @@ import {
   type TerminalQuickCommandMutation
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
+import {
+  SOURCE_CONTROL_LAUNCH_ACTION_IDS,
+  type SourceControlAiActionDefaults
+} from '../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
@@ -49,7 +54,11 @@ export type RuntimeClientSettings = Pick<
   | 'machineName'
 > & {
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
+  sourceControlAi: RuntimeClientSourceControlAi
 }
+
+/** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
+export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }
 
 /** Safe paired projection: host labels only; filesystem defaults stay host-private. */
 export type RuntimeHostDisplayLabelOverrides = Partial<
@@ -124,6 +133,9 @@ export class RuntimeClientSettingsController {
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
+      // Why projected: a paired client's AI buttons start these actions' agents, and must honour
+      // the agent saved for each one as the desktop does. Absent on older hosts.
+      sourceControlAi: projectSourceControlLaunchRecipes(settings),
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })
@@ -228,5 +240,22 @@ export class RuntimeClientSettingsController {
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
+  }
+}
+
+function projectSourceControlLaunchRecipes(
+  settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
+): RuntimeClientSourceControlAi {
+  const { actions } = normalizeSourceControlAiSettings(
+    settings.sourceControlAi,
+    settings.commitMessageAi
+  )
+  return {
+    actions: Object.fromEntries(
+      SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
+        const recipe = actions?.[actionId]
+        return recipe ? [[actionId, recipe]] : []
+      })
+    )
   }
 }
