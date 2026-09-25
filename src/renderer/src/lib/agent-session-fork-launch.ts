@@ -16,6 +16,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { findForkWorktreeRepo } from './agent-session-fork-source-repo'
 import type { ForkableAgentSession } from './worktree-agent-fork-sessions'
 
 export type AgentForkLaunchSource = 'sidebar' | 'terminal_context_menu'
@@ -89,7 +90,7 @@ export async function launchTranscriptAgentSessionFork(args: {
 }): Promise<boolean> {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(args.worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : undefined
+  const repo = (worktree ? findForkWorktreeRepo(state, worktree) : null) ?? undefined
   const agentSessionLaunchPlan = planAgentSessionLaunch(state, {
     agent: args.agent,
     workspace: { kind: 'git-worktree', worktreeId: args.worktreeId },

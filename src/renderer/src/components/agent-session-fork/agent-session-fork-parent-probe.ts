@@ -1,5 +1,9 @@
 import { useAppStore } from '@/store'
-import { settingsForRepoOwner } from '@/store/repos/owner-routing'
+import type { settingsForRepoOwner } from '@/store/repos/owner-routing'
+import {
+  findForkWorktreeRepo,
+  forkWorktreeOwnerSettings
+} from '@/lib/agent-session-fork-source-repo'
 import type { AgentSessionForkBase } from '@/lib/agent-session-fork-flow'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { isWorkingTreeCarrySupported } from '@/runtime/runtime-git-working-tree-carry-client'
@@ -36,13 +40,13 @@ function shortBranchName(branch: string | null | undefined): string | null {
 export function readForkSource(sourceWorktreeId: string): ForkSourceSnapshot {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(sourceWorktreeId) ?? null
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : undefined
+  const repo = worktree ? findForkWorktreeRepo(state, worktree) : null
   const parentBranch = shortBranchName(worktree?.branch)
   return {
     worktree,
     connectionId: repo?.connectionId ?? null,
     // Why: the same owner routing the fork flow uses, so status and carry probe the child's host.
-    settings: worktree ? settingsForRepoOwner(state, worktree.repoId) : state.settings,
+    settings: worktree ? forkWorktreeOwnerSettings(state, worktree) : state.settings,
     parentBranch,
     label: worktree?.displayName?.trim() || parentBranch || sourceWorktreeId
   }

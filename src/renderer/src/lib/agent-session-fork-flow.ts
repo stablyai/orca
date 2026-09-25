@@ -1,6 +1,5 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { settingsForRepoOwner } from '@/store/repos/owner-routing'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { carryRuntimeWorkingTreeChanges } from '@/runtime/runtime-git-working-tree-carry-client'
@@ -15,6 +14,7 @@ import {
   launchTranscriptAgentSessionFork,
   type AgentForkLaunchSource
 } from './agent-session-fork-launch'
+import { findForkWorktreeRepo, forkWorktreeOwnerSettings } from './agent-session-fork-source-repo'
 import type { ForkableAgentSession } from './worktree-agent-fork-sessions'
 
 export type AgentSessionForkSource =
@@ -163,7 +163,7 @@ export async function runAgentSessionFork(
       )
     }
   }
-  const repo = state.repos.find((entry) => entry.id === sourceWorktree.repoId)
+  const repo = findForkWorktreeRepo(state, sourceWorktree)
   const connectionId = repo?.connectionId ?? null
   const parentBranch = shortBranchName(sourceWorktree.branch)
   const startsAtParentCommit =
@@ -213,12 +213,20 @@ export async function runAgentSessionFork(
     onStage('carrying')
     const carried = await carryChangesIntoChild({
       // Why: the same owner routing createWorktree used, so the carry runs on the child's host.
-      settings: settingsForRepoOwner(state, sourceWorktree.repoId),
+      settings: forkWorktreeOwnerSettings(state, sourceWorktree),
       connectionId: connectionId ?? undefined,
       source: { worktreeId: sourceWorktree.id, worktreePath: sourceWorktree.path },
       target: { worktreeId: child.id, worktreePath: child.path }
     })
     if (!carried.ok) {
+      if (carried.detail) {
+        // Why: the toast names only the reason; the host's detail is what diagnoses it.
+        console.warn(
+          '[agent-session-fork] changes were not carried',
+          carried.reason,
+          carried.detail
+        )
+      }
       warnings.push({ kind: 'changes-not-carried', reason: carried.reason })
     }
   }

@@ -17,6 +17,7 @@ type Worktree = {
   path: string
   branch: string
   displayName: string
+  hostId?: 'ssh:ssh-2'
 }
 type Repo = { id: string; connectionId: string | null }
 type Settings = { activeRuntimeEnvironmentId: string | null }
@@ -203,12 +204,37 @@ describe('runAgentSessionFork', () => {
       source: { worktreeId: 'repo::feedback', worktreePath: '/r/feedback' },
       target: { worktreeId: 'repo::feedback-fork', worktreePath: '/r/feedback-fork' }
     })
-    expect(mocks.settingsForRepoOwner).toHaveBeenCalledWith(state, 'repo')
+    expect(mocks.settingsForRepoOwner).toHaveBeenCalledWith(state, 'repo', 'ssh:ssh-1')
     const carryOrder = mocks.carryRuntimeWorkingTreeChanges.mock.invocationCallOrder[0]
     const launchOrder = mocks.launchNativeAgentSessionFork.mock.invocationCallOrder[0]
     const createOrder = createWorktree.mock.invocationCallOrder[0]
     expect(createOrder).toBeLessThan(carryOrder ?? 0)
     expect(carryOrder).toBeLessThan(launchOrder ?? 0)
+  })
+
+  it("routes the carry and launch through the repo on the source's own host", async () => {
+    state.repos = [
+      { id: 'repo', connectionId: 'ssh-1' },
+      { id: 'repo', connectionId: 'ssh-2' }
+    ]
+    knownWorktrees.set('repo::feedback', {
+      id: 'repo::feedback',
+      repoId: 'repo',
+      path: '/r/feedback',
+      branch: 'refs/heads/feedback',
+      displayName: 'feedback',
+      hostId: 'ssh:ssh-2'
+    })
+
+    await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(mocks.settingsForRepoOwner).toHaveBeenCalledWith(state, 'repo', 'ssh:ssh-2')
+    expect(mocks.carryRuntimeWorkingTreeChanges).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-2' })
+    )
+    expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-2' })
+    )
   })
 
   it('launches the native fork in the child with the repo connection', async () => {
@@ -280,6 +306,24 @@ describe('runAgentSessionFork', () => {
     })
     expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it("logs the host's detail when the carry fails", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.carryRuntimeWorkingTreeChanges.mockResolvedValue({
+      ok: false,
+      reason: 'apply_failed',
+      detail: 'error: could not write index'
+    })
+
+    await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(warn).toHaveBeenCalledWith(
+      '[agent-session-fork] changes were not carried',
+      'apply_failed',
+      'error: could not write index'
+    )
+    warn.mockRestore()
   })
 
   it('treats a rejected carry as a failed carry, not a failed fork', async () => {

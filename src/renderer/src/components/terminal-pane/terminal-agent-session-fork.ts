@@ -6,6 +6,7 @@ import {
 } from '@/lib/agent-session-fork-context'
 import { useAppStore } from '@/store'
 import { listForkableAgentSessions } from '@/lib/worktree-agent-fork-sessions'
+import { findForkWorktreeRepo } from '@/lib/agent-session-fork-source-repo'
 import { buildAgentSessionForkModalData } from '@/components/agent-session-fork/agent-session-fork-modal-data'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -42,7 +43,7 @@ function ensureForkableSourceWorkspace(worktreeId: string, pane: ManagedPane): b
     pane.terminal.focus()
     return false
   }
-  const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
+  const repo = findForkWorktreeRepo(state, worktree)
   const forkable =
     worktreeId !== FLOATING_TERMINAL_WORKTREE_ID &&
     Boolean(worktree.branch?.trim()) &&
