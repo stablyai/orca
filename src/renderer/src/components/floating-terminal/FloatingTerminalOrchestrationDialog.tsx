@@ -19,6 +19,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { isOrcaCliRegistrationRequired } from '@/lib/agent-skill-cli-prerequisite'
 import { refreshSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useAppStore } from '@/store'
 import {
@@ -149,10 +150,14 @@ export function FloatingTerminalOrchestrationDialog({
           installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
           variant="inline"
           hideHeader
-          installLabel={translate(
-            'auto.components.skills.SkillInstallDialog.39acb9e8f4',
-            'Install skill'
-          )}
+          installLabel={
+            isOrcaCliRegistrationRequired(activeSkillRuntime.agentRuntime)
+              ? translate(
+                  'auto.components.sidebar.LinearAgentSkillSetupPrompt.install',
+                  'Install CLI & Skill'
+                )
+              : translate('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')
+          }
           preInstallNotice={cliPrerequisite.preInstallNotice}
           getPrerequisiteStatus={cliPrerequisite.getPrerequisiteStatus}
           onBeforeOpenTerminal={async () => {

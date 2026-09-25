@@ -465,9 +465,6 @@
             "d8401975b1": "approved",
             "f27676a92c": "status:"
           },
-          "FeatureWallBrowserAction": {
-            "c2df599513": "Install CLI & Skill"
-          },
           "FeatureWallSetupChecklist": {
             "b1f1981c5e": "See tasks"
           },
@@ -1882,7 +1879,6 @@
           "63f36455cc": "Reconnect"
         },
         "LinearAgentSkillSetupPrompt": {
-          "install": "Install CLI & Skill",
           "missingBoth": "Orca CLI and Linear agent skill are missing.",
           "panelDescription": "Install the host agent skill for linked Linear task handoffs.",
           "panelTitle": "Linear agent skill"

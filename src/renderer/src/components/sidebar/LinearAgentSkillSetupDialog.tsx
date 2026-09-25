@@ -12,7 +12,10 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
+import {
+  isOrcaCliAvailableOnPath,
+  isOrcaCliRegistrationRequired
+} from '@/lib/agent-skill-cli-prerequisite'
 import { translate } from '@/i18n/i18n'
 
 type AgentSkillSetupPanelProps = ComponentProps<typeof AgentSkillSetupPanel>
@@ -142,10 +145,17 @@ export function LinearAgentSkillSetupDialog({
               installed={installed}
               loading={loading}
               error={error}
-              installLabel={translate(
-                'auto.components.skills.SkillInstallDialog.39acb9e8f4',
-                'Install skill'
-              )}
+              installLabel={
+                isOrcaCliRegistrationRequired(terminalRuntime)
+                  ? translate(
+                      'auto.components.sidebar.LinearAgentSkillSetupPrompt.install',
+                      'Install CLI & Skill'
+                    )
+                  : translate(
+                      'auto.components.skills.SkillInstallDialog.39acb9e8f4',
+                      'Install skill'
+                    )
+              }
               // Why: Install is this modal's sole CTA, so make it the filled primary —
               // matching the other setup surfaces (filled primary + muted dismiss).
               installVariant="default"
