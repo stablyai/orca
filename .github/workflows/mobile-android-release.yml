@@ -219,7 +219,27 @@ jobs:
           # Why: only the APK is kept current; the tag and its source archives stay at first publish.
           notes="Always the newest Orca Mobile Android APK. It is currently [$newest_tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$newest_tag); use that release for its source and changelog."
           if gh release view "$latest_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$latest_tag" --repo "$GITHUB_REPOSITORY" --clobber "$stable_apk"
+            # Why: --clobber deletes before uploading, which 404s the permanent link for the
+            # whole upload (and after a failed one). Stage under another name, then swap.
+            staged_apk="$RUNNER_TEMP/orca-android.next.apk"
+            cp "$stable_apk" "$staged_apk"
+            gh release upload "$latest_tag" --repo "$GITHUB_REPOSITORY" --clobber "$staged_apk"
+            asset_id() {
+              gh api "repos/$GITHUB_REPOSITORY/releases/tags/$latest_tag" \
+                --jq ".assets[] | select(.name == \"$1\") | .id"
+            }
+            staged_id="$(asset_id orca-android.next.apk)"
+            current_id="$(asset_id orca-android.apk)"
+            if [ -z "$staged_id" ]; then
+              echo "::error::Staged APK is missing from $latest_tag after upload"
+              exit 1
+            fi
+            if [ -n "$current_id" ]; then
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$current_id"
+            fi
+            # A failure here leaves only the staged asset; re-running the job completes the swap.
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$staged_id" \
+              -f name=orca-android.apk --silent
             gh release edit "$latest_tag" --repo "$GITHUB_REPOSITORY" --notes "$notes"
           else
             gh release create "$latest_tag" \
