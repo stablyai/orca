@@ -25,6 +25,26 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it.each([1, 2, 3, 8, 31])('lets unselected Cmd+C reach Kitty flags %i', (flags) => {
+    for (const type of ['keydown', 'keyup']) {
+      for (const repeat of [false, true]) {
+        const chord = event({ type, key: 'c', code: 'KeyC', metaKey: true, repeat })
+        expect(shouldBypassXtermKeyboardEvent(chord, { ...noSel, kittyKeyboardFlags: flags })).toBe(
+          false
+        )
+        expect(shouldBypassXtermKeyboardEvent(chord, { ...opts, kittyKeyboardFlags: flags })).toBe(
+          true
+        )
+        expect(
+          shouldBypassXtermKeyboardEvent(
+            { ...chord, defaultPrevented: true },
+            { ...noSel, kittyKeyboardFlags: flags }
+          )
+        ).toBe(true)
+      }
+    }
+  })
+
   it('bubbles Cmd+V so web clients receive the native paste event', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyV', metaKey: true }), noSel)

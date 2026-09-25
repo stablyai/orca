@@ -106,11 +106,11 @@ export function resolveTerminalShortcutAction(
     return { type: 'selectAll' }
   }
 
-  if (!event.repeat) {
-    if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
-      return { type: 'copySelection' }
-    }
+  if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
+    return { type: 'copySelection' }
+  }
 
+  if (!event.repeat) {
     if (keybindingMatchesAction('terminal.search', event, platform, keybindings)) {
       return { type: 'toggleSearch' }
     }
