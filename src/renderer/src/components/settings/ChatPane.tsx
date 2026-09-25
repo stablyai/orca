@@ -25,7 +25,7 @@ export function ChatPane({ settings, updateSettings }: ChatPaneProps): React.JSX
   const showStructuredRows = defaultView === 'native-chat' && !isPairedWebClientWindow()
 
   return (
-    <div className="space-y-3">
+    <div className="w-full max-w-3xl space-y-3">
       {/* Every other row depends on this switch, so a search that lands here must keep it reachable. */}
       <SearchableSetting {...getChatSearchEntry('chat-ui')} forceVisible className="space-y-3 py-2">
         <div className="flex items-start justify-between gap-4">
