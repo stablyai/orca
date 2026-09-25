@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'dev.orca.routeproof'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'dev.orca.routeproof'
+        minSdk 28
+        targetSdk 36
+        versionCode 1
+        versionName '1'
+    }
+}
+dependencies { implementation 'androidx.webkit:webkit:1.14.0' }

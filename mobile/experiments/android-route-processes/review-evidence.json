@@ -1,0 +1,731 @@
+{
+  "normal": {
+    "serial": "emulator-5682",
+    "events": [
+      {
+        "event": "a resumed",
+        "time": 1790328818759
+      },
+      {
+        "event": "a loaded",
+        "time": 1790328818759
+      },
+      {
+        "event": "b resumed; a stopped",
+        "time": 1790328819976
+      },
+      {
+        "event": "b loaded",
+        "time": 1790328819976
+      },
+      {
+        "event": "distinct processes",
+        "time": 1790328820051,
+        "detail": "6951,7079"
+      },
+      {
+        "event": "both HMR while b foreground",
+        "time": 1790328820602
+      },
+      {
+        "event": "both fetching concurrently",
+        "time": 1790328823113
+      },
+      {
+        "event": "a resumed; b stopped",
+        "time": 1790328824275
+      },
+      {
+        "event": "retained documents after switching to a",
+        "time": 1790328825029
+      },
+      {
+        "event": "both HMR after switching to a",
+        "time": 1790328825283
+      },
+      {
+        "event": "b resumed; a stopped",
+        "time": 1790328826498
+      },
+      {
+        "event": "retained documents after switching to b",
+        "time": 1790328827503
+      },
+      {
+        "event": "a process exited",
+        "time": 1790328827601
+      },
+      {
+        "event": "b survives a death",
+        "time": 1790328827852
+      },
+      {
+        "event": "a resumed",
+        "time": 1790328828748
+      },
+      {
+        "event": "a recovered",
+        "time": 1790328828748
+      },
+      {
+        "event": "recovered pid",
+        "time": 1790328828800,
+        "detail": "7303"
+      },
+      {
+        "event": "recovered a HMR",
+        "time": 1790328829052
+      },
+      {
+        "event": "storage isolation and recovery passed",
+        "time": 1790328829052
+      }
+    ],
+    "logs": "09-25 05:33:38.528  6951  6951 I RouteProof: create route=a pid=6951 provider=133.0.6943.137\n09-25 05:33:38.813  6951  6951 I RouteProof: resume route=a pid=6951\n09-25 05:33:39.444  7079  7079 I RouteProof: create route=b pid=7079 provider=133.0.6943.137\n09-25 05:33:39.614  7079  7079 I RouteProof: resume route=b pid=7079\n09-25 05:33:39.950  6951  6951 I RouteProof: stop route=a pid=6951\n09-25 05:33:43.852  6951  6951 I RouteProof: resume route=a pid=6951\n09-25 05:33:44.447  7079  7079 I RouteProof: stop route=b pid=7079\n09-25 05:33:46.072  7079  7079 I RouteProof: resume route=b pid=7079\n09-25 05:33:46.677  6951  6951 I RouteProof: stop route=a pid=6951\n09-25 05:33:48.579  7303  7303 I RouteProof: create route=a pid=7303 provider=133.0.6943.137\n09-25 05:33:48.793  7303  7303 I RouteProof: resume route=a pid=7303\n09-25 05:33:49.017  7079  7079 I RouteProof: stop route=b pid=7079",
+    "cleanup": [
+      {
+        "action": "uninstall test APK"
+      },
+      {
+        "action": "remove reverse 62692"
+      },
+      {
+        "action": "remove reverse 62696"
+      },
+      {
+        "action": "close route a"
+      },
+      {
+        "action": "close route b"
+      }
+    ],
+    "routes": [
+      {
+        "route": "a",
+        "reports": [
+          {
+            "time": 1790328818677,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"load\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328819941,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328820445,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328820936,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328821945,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328822939,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328823689,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328824706,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328825069,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"hmr\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328825688,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328826945,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"fetch\",\"page\":\"af7a3cc2-cbb6-49b9-a418-6cc7dd1ead50\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328828616,
+            "body": "{\"route\":\"a\",\"previous\":\"a\",\"previousCookie\":\"route=a\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":3,\"kind\":\"load\",\"page\":\"8240347f-dc93-4f7b-9e90-974fcb5e9a59\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328828822,
+            "body": "{\"route\":\"a\",\"previous\":\"a\",\"previousCookie\":\"route=a\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":4,\"kind\":\"hmr\",\"page\":\"8240347f-dc93-4f7b-9e90-974fcb5e9a59\",\"url\":\"http://localhost:5173/\"}"
+          }
+        ],
+        "targets": [
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          }
+        ]
+      },
+      {
+        "route": "b",
+        "reports": [
+          {
+            "time": 1790328819450,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":1,\"kind\":\"load\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328820443,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":1,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328820446,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328821444,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328822447,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328823449,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328824947,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328825069,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":3,\"kind\":\"hmr\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328825671,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":3,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328826461,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":3,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328827447,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":3,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328827729,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":4,\"kind\":\"hmr\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328828447,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":4,\"kind\":\"fetch\",\"page\":\"8b9d64ca-b5a3-4823-8a7e-081dfe263f3b\",\"url\":\"http://localhost:5173/\"}"
+          }
+        ],
+        "targets": [
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          }
+        ]
+      }
+    ]
+  },
+  "noSwitch": {
+    "failure": "Error: Timed out: a resumed; b stopped",
+    "serial": "emulator-5682",
+    "events": [
+      {
+        "event": "a resumed",
+        "time": 1790328834123
+      },
+      {
+        "event": "a loaded",
+        "time": 1790328834123
+      },
+      {
+        "event": "b resumed; a stopped",
+        "time": 1790328835013
+      },
+      {
+        "event": "b loaded",
+        "time": 1790328835013
+      },
+      {
+        "event": "distinct processes",
+        "time": 1790328835143,
+        "detail": "7460,7553"
+      },
+      {
+        "event": "both HMR while b foreground",
+        "time": 1790328835751
+      },
+      {
+        "event": "both fetching concurrently",
+        "time": 1790328840026
+      }
+    ],
+    "logs": "09-25 05:33:53.919  7460  7460 I RouteProof: create route=a pid=7460 provider=133.0.6943.137\n09-25 05:33:54.157  7460  7460 I RouteProof: resume route=a pid=7460\n09-25 05:33:54.876  7553  7553 I RouteProof: create route=b pid=7553 provider=133.0.6943.137\n09-25 05:33:55.035  7553  7553 I RouteProof: resume route=b pid=7553\n09-25 05:33:55.309  7460  7460 I RouteProof: stop route=a pid=7460",
+    "cleanup": [
+      {
+        "action": "uninstall test APK"
+      },
+      {
+        "action": "remove reverse 62967"
+      },
+      {
+        "action": "remove reverse 62971"
+      },
+      {
+        "action": "close route a"
+      },
+      {
+        "action": "close route b"
+      }
+    ],
+    "routes": [
+      {
+        "route": "a",
+        "reports": [
+          {
+            "time": 1790328833977,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"load\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328835522,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328835939,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328837942,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328839939,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328841943,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328843942,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328845940,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328847942,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328849942,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328851942,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328853937,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328855938,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328857938,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328859937,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328861939,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328863939,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328865940,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328867937,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328869941,
+            "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"440a8882-f965-4cb6-8629-071a5cbd692e\",\"url\":\"http://localhost:5173/\"}"
+          }
+        ],
+        "targets": [
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          }
+        ]
+      },
+      {
+        "route": "b",
+        "reports": [
+          {
+            "time": 1790328834804,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":1,\"kind\":\"load\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328835522,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"hmr\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328835799,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328836803,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328837800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328838801,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328839801,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328840802,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328841800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328842803,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328843800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328844798,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328845801,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328846799,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328847799,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328848800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328849800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328850800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328851800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328852798,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328853797,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328854795,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328855800,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328856796,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328857797,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328858798,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328859796,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328860798,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328861797,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328862805,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328863796,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328864796,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328865799,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328866798,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328867799,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328868797,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          },
+          {
+            "time": 1790328869797,
+            "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":2,\"kind\":\"fetch\",\"page\":\"0545ce04-64ac-4c5a-90c8-c97a809f60d2\",\"url\":\"http://localhost:5173/\"}"
+          }
+        ],
+        "targets": [
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          },
+          {
+            "host": "localhost",
+            "port": 5173
+          }
+        ]
+      }
+    ]
+  },
+  "collisions": [
+    {
+      "fixture": "collision",
+      "exit": 1,
+      "failure": "AssertionError [ERR_ASSERTION]: adb: error: cannot rebind existing socket\n64264\n\n\n1 !== 0\n",
+      "cleanup": [
+        {
+          "action": "uninstall test APK"
+        },
+        {
+          "action": "close route a"
+        }
+      ],
+      "remainingReverse": "host-16 tcp:64264 tcp:9\n\n"
+    },
+    {
+      "fixture": "collision-b",
+      "exit": 1,
+      "failure": "AssertionError [ERR_ASSERTION]: adb: error: cannot rebind existing socket\n64306\n\n\n1 !== 0\n",
+      "cleanup": [
+        {
+          "action": "uninstall test APK"
+        },
+        {
+          "action": "remove reverse 64301"
+        },
+        {
+          "action": "close route a"
+        },
+        {
+          "action": "close route b"
+        }
+      ],
+      "remainingReverse": "host-16 tcp:64306 tcp:9\n\n"
+    }
+  ],
+  "additionalFourthStartProbe": {
+    "result": "Did not reach injection: rejected duplicate B load on three attempts; cause unestablished",
+    "latest": {
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n2 !== 1\n",
+      "serial": "emulator-5682",
+      "events": [
+        {
+          "event": "a resumed",
+          "time": 1790328939344
+        },
+        {
+          "event": "a loaded",
+          "time": 1790328939345
+        },
+        {
+          "event": "b resumed; a stopped",
+          "time": 1790328943289
+        },
+        {
+          "event": "b loaded",
+          "time": 1790328943289
+        }
+      ],
+      "logs": "09-25 05:35:37.990  8761  8761 I RouteProof: create route=a pid=8761 provider=133.0.6943.137\n09-25 05:35:38.240  8761  8761 I RouteProof: resume route=a pid=8761\n09-25 05:35:41.267  8864  8864 I RouteProof: create route=b pid=8864 provider=133.0.6943.137\n09-25 05:35:41.892  8864  8864 I RouteProof: resume route=b pid=8864\n09-25 05:35:42.557  8761  8761 I RouteProof: stop route=a pid=8761",
+      "cleanup": [
+        {
+          "action": "uninstall test APK"
+        },
+        {
+          "action": "remove reverse 64462"
+        },
+        {
+          "action": "remove reverse 64469"
+        },
+        {
+          "action": "close route a"
+        },
+        {
+          "action": "close route b"
+        }
+      ],
+      "routes": [
+        {
+          "route": "a",
+          "reports": [
+            {
+              "time": 1790328938687,
+              "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"load\",\"page\":\"32e20bff-c031-439a-915d-6414001ce01d\",\"url\":\"http://localhost:5173/\"}"
+            },
+            {
+              "time": 1790328939712,
+              "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"fetch\",\"page\":\"32e20bff-c031-439a-915d-6414001ce01d\",\"url\":\"http://localhost:5173/\"}"
+            },
+            {
+              "time": 1790328940618,
+              "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"fetch\",\"page\":\"32e20bff-c031-439a-915d-6414001ce01d\",\"url\":\"http://localhost:5173/\"}"
+            },
+            {
+              "time": 1790328942069,
+              "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"fetch\",\"page\":\"32e20bff-c031-439a-915d-6414001ce01d\",\"url\":\"http://localhost:5173/\"}"
+            },
+            {
+              "time": 1790328942967,
+              "body": "{\"route\":\"a\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"a\",\"cookie\":\"route=a\",\"revision\":1,\"kind\":\"fetch\",\"page\":\"32e20bff-c031-439a-915d-6414001ce01d\",\"url\":\"http://localhost:5173/\"}"
+            }
+          ],
+          "targets": [
+            {
+              "host": "localhost",
+              "port": 5173
+            },
+            {
+              "host": "localhost",
+              "port": 5173
+            },
+            {
+              "host": "localhost",
+              "port": 5173
+            }
+          ]
+        },
+        {
+          "route": "b",
+          "reports": [
+            {
+              "time": 1790328942731,
+              "body": "{\"route\":\"b\",\"previous\":null,\"previousCookie\":\"\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":1,\"kind\":\"load\",\"page\":\"ccdcdf65-0988-4ba6-a524-70e6f052181a\",\"url\":\"http://localhost:5173/\"}"
+            },
+            {
+              "time": 1790328943049,
+              "body": "{\"route\":\"b\",\"previous\":\"b\",\"previousCookie\":\"route=b\",\"stored\":\"b\",\"cookie\":\"route=b\",\"revision\":1,\"kind\":\"load\",\"page\":\"eb417cf8-8bbd-424b-8125-fe40bd976bf7\",\"url\":\"http://localhost:5173/\"}"
+            }
+          ],
+          "targets": [
+            {
+              "host": "localhost",
+              "port": 5173
+            },
+            {
+              "host": "localhost",
+              "port": 5173
+            },
+            {
+              "host": "localhost",
+              "port": 5173
+            },
+            {
+              "host": "localhost",
+              "port": 5173
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

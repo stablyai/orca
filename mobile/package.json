@@ -10,6 +10,7 @@
     "postinstall": "node scripts/build-terminal-webview-engine.mjs && node scripts/build-mermaid-webview-engine.mjs && node scripts/build-mermaid-page-engine.mjs && node scripts/build-terminal-document-script.mjs && node scripts/build-rich-markdown-editor-script.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "typecheck:android-route-proof": "tsc --noEmit -p experiments/android-route-processes/tsconfig.json",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "check:tests-typecheck": "node scripts/check-tests-typecheck-ratchet.mjs",
     "lint": "oxlint",
