@@ -2768,15 +2768,6 @@
             "d9f3c6e2a4": "El teclado de escritorio está en pausa. Recupera este terminal para escribir aquí, recupera todos los terminales que controla tu teléfono o contrae para seguir observando.",
             "a6b1d8f3e2": "La sesión del teléfono terminó. Restaura el tamaño de escritorio para este terminal o para todos los terminales que tu teléfono dejó en tamaño móvil."
           },
-          "TerminalAgentSessionForkDialog": {
-            "17fc841e59": "Copiar contexto",
-            "0c8a8629b1": "El fork aparece como su propio espacio de trabajo, no como un hijo anidado. El nuevo agente recibe una transcripción acotada como borrador editable.",
-            "620461df22": "Fork de nivel superior",
-            "619b5a35d2": "Crea un fork de espacio de trabajo de nivel superior e inicia una nueva pestaña de agente con el contexto capturado.",
-            "64e292e8e3": "Fork de sesión de agente",
-            "9d25de2920": "Crear fork",
-            "2b10412cfc": "Creando..."
-          },
           "TerminalContextMenu": {
             "b4cdd9314e": "Borrar pantalla",
             "resetTerminal": "Restablecer terminal",
@@ -2878,8 +2869,6 @@
               "session": {
                 "fork": {
                   "2317900211": "No se pudo copiar el contexto del fork.",
-                  "88e34d00eb": "Fork de sesión de nivel superior abierto en un nuevo espacio de trabajo",
-                  "fd3d12a1e1": "No se pudo crear el espacio de trabajo del fork.",
                   "38e41edc6e": "Este espacio de trabajo no puede hacer fork hacia un worktree de git.",
                   "f867385bb5": "No se pudo encontrar el espacio de trabajo de origen para este fork.",
                   "046e8d853c": "No hay contexto de terminal para hacer fork",
@@ -15291,6 +15280,48 @@
         "queueFollowUpsCopy": "Los mensajes que envías mientras el agente trabaja esperan como tarjetas que puedes enviar ahora, editar o eliminar. Los mensajes con imágenes se envían de inmediato.",
         "queueFollowUpsToggleLabel": "Alternar la cola de mensajes"
       }
+    },
+    "agentSessionFork": {
+      "startFromHelpCommit": "Por defecto: el commit actual ({{commit}}).",
+      "startFromHelp": "Por defecto: el commit actual de {{branch}}.",
+      "currentCommit": "Commit actual",
+      "advanced": "Avanzado",
+      "startFrom": "Partir de",
+      "useParentCommit": "Partir del commit de {{workspace}}",
+      "stage": {
+        "preparing": "Preparando…",
+        "creating": "Creando espacio de trabajo…",
+        "carrying": "Copiando cambios…",
+        "launching": "Iniciando agente…"
+      },
+      "carryOtherBase": "Solo disponible al partir del commit actual de {{workspace}}.",
+      "carryUnsupported": "Este host no permite traer los cambios.",
+      "carryStagingNote": "No se conserva el estado de staging.",
+      "title": "Fork de sesión de agente",
+      "descriptionNoAgent": "Crea una rama nueva desde {{workspace}}.",
+      "description": "Crea una rama nueva desde {{workspace}} y continúa la conversación ahí.",
+      "name": "Nombre",
+      "asChild": "Crear como hijo de {{workspace}}",
+      "carryChanges": "Traer los cambios sin confirmar ({{modified}} modificados, {{added}} nuevos)",
+      "transcriptNotice": "Este agente recibirá la transcripción como borrador en lugar del historial de la conversación.",
+      "copyContext": "Copiar contexto",
+      "cancel": "Cancelar",
+      "submit": "Crear fork",
+      "noAgent": "Sin agente (solo rama)",
+      "transcriptOption": "{{agent}} (transcripción)",
+      "session": "Sesión",
+      "carryReason": {
+        "too_large": "Hay demasiados archivos nuevos para copiar.",
+        "base_mismatch": "La rama nueva no parte del mismo commit.",
+        "target_dirty": "El worktree nuevo ya tenía cambios.",
+        "partially_applied": "Es posible que algunos cambios sin confirmar ya estén en el worktree nuevo. Revisa sus cambios antes de continuar.",
+        "apply_failed": "No se pudieron aplicar los cambios."
+      },
+      "changesUncertain": "Se creó {{name}}, pero no está claro si se copiaron todos tus cambios sin confirmar.",
+      "changesNotCarried": "Se creó {{name}} sin tus cambios sin confirmar.",
+      "agentNotStarted": "Se creó {{name}}, pero el agente no pudo iniciarse.",
+      "menuItem": "Fork de sesión de agente...",
+      "sourceMissing": "El espacio de trabajo de origen ya no existe."
     }
   },
   "dashboardPopout": {

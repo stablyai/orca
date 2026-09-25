@@ -3044,15 +3044,6 @@
             "d9f3c6e2a4": "데스크톱 키보드가 일시 중지되었습니다. 여기서 입력하려면 이 terminals을 다시 가져오거나, 휴대폰이 제어하는 모든 terminals을 다시 가져오거나, 계속 보려면 접으세요.",
             "a6b1d8f3e2": "휴대폰 세션이 종료되었습니다. 이 terminals 또는 휴대폰이 휴대폰 크기로 남긴 모든 terminals을 데스크톱 크기로 복원하세요."
           },
-          "TerminalAgentSessionForkDialog": {
-            "17fc841e59": "컨텍스트 복사",
-            "0c8a8629b1": "포크는 중첩된 하위 항목이 아닌 자체 워크스페이스로 나타납니다. 새 agent는 편집 가능한 초안으로 한정된 기록을 받습니다.",
-            "620461df22": "최상위 포크",
-            "619b5a35d2": "최상위 워크스페이스 포크를 만들고 캡처된 컨텍스트로 새 agent 탭을 시작합니다.",
-            "64e292e8e3": "포크 Agent 세션",
-            "9d25de2920": "포크 만들기",
-            "2b10412cfc": "만드는 중..."
-          },
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
             "resetTerminal": "터미널 초기화",
@@ -3163,8 +3154,6 @@
               "session": {
                 "fork": {
                   "2317900211": "포크 컨텍스트를 복사하지 못했습니다.",
-                  "88e34d00eb": "새 워크스페이스에서 열린 최상위 세션 포크",
-                  "fd3d12a1e1": "포크 워크스페이스를 생성하지 못했습니다.",
                   "38e41edc6e": "이 워크스페이스는 git 작업 트리로 포크할 수 없습니다.",
                   "f867385bb5": "이 포크의 소스 워크스페이스를 찾을 수 없습니다.",
                   "046e8d853c": "포크할 terminal 컨텍스트가 없습니다.",
@@ -18171,6 +18160,48 @@
     },
     "agentChildRow": {
       "ended": "종료됨"
+    },
+    "agentSessionFork": {
+      "startFromHelpCommit": "기본값: 현재 커밋 ({{commit}}).",
+      "startFromHelp": "기본값: {{branch}}의 현재 커밋.",
+      "currentCommit": "현재 커밋",
+      "advanced": "고급",
+      "startFrom": "시작 지점",
+      "useParentCommit": "{{workspace}}의 커밋에서 시작",
+      "stage": {
+        "preparing": "준비 중…",
+        "creating": "워크스페이스 만드는 중…",
+        "carrying": "변경 사항 복사 중…",
+        "launching": "에이전트 시작 중…"
+      },
+      "carryOtherBase": "{{workspace}}의 현재 커밋에서 시작할 때만 사용할 수 있습니다.",
+      "carryUnsupported": "이 호스트는 변경 사항 가져오기를 지원하지 않습니다.",
+      "carryStagingNote": "스테이징 상태는 유지되지 않습니다.",
+      "title": "에이전트 세션 포크",
+      "descriptionNoAgent": "{{workspace}}에서 새 브랜치를 시작합니다.",
+      "description": "{{workspace}}에서 새 브랜치를 시작하고 그곳에서 대화를 이어갑니다.",
+      "name": "이름",
+      "asChild": "{{workspace}}의 하위 항목으로 만들기",
+      "carryChanges": "커밋되지 않은 변경 사항 가져오기 (수정 {{modified}}개, 새 파일 {{added}}개)",
+      "transcriptNotice": "이 에이전트는 대화 내역 대신 세션 기록을 초안으로 받습니다.",
+      "copyContext": "컨텍스트 복사",
+      "cancel": "취소",
+      "submit": "포크 만들기",
+      "noAgent": "에이전트 없음 (브랜치만)",
+      "transcriptOption": "{{agent}} (세션 기록)",
+      "session": "세션",
+      "carryReason": {
+        "too_large": "복사할 새 파일이 너무 많습니다.",
+        "base_mismatch": "새 브랜치가 같은 커밋에서 시작하지 않습니다.",
+        "target_dirty": "새 워크트리에 이미 변경 사항이 있었습니다.",
+        "partially_applied": "커밋되지 않은 변경 사항 일부가 이미 새 워크트리에 있을 수 있습니다. 계속하기 전에 변경 사항을 검토하세요.",
+        "apply_failed": "변경 사항을 적용할 수 없습니다."
+      },
+      "changesUncertain": "{{name}}을(를) 만들었지만 커밋되지 않은 변경 사항이 모두 복사되었는지 확실하지 않습니다.",
+      "changesNotCarried": "커밋되지 않은 변경 사항 없이 {{name}}을(를) 만들었습니다.",
+      "agentNotStarted": "{{name}}을(를) 만들었지만 에이전트를 시작할 수 없습니다.",
+      "menuItem": "에이전트 세션 포크...",
+      "sourceMissing": "원본 워크스페이스가 더 이상 존재하지 않습니다."
     }
   },
   "dashboardPopout": {

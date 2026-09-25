@@ -3219,15 +3219,6 @@
             "d9f3c6e2a4": "Desktop keyboard is paused. Take back this terminal to type here, take back all terminals your phone controls, or collapse to keep watching.",
             "a6b1d8f3e2": "Your phone session ended. Restore to desktop size for this terminal, or for all terminals your phone left at phone size."
           },
-          "TerminalAgentSessionForkDialog": {
-            "17fc841e59": "Copy context",
-            "0c8a8629b1": "The fork appears as its own workspace, not as a nested child. The new agent receives a bounded transcript as an editable draft.",
-            "620461df22": "Top-level fork",
-            "619b5a35d2": "Create a top-level workspace fork and start a fresh agent tab with captured context.",
-            "64e292e8e3": "Fork Agent Session",
-            "9d25de2920": "Create fork",
-            "2b10412cfc": "Creating..."
-          },
           "TerminalContextMenu": {
             "b4cdd9314e": "Clear Screen",
             "resetTerminal": "Reset Terminal",
@@ -3357,8 +3348,6 @@
               "session": {
                 "fork": {
                   "2317900211": "Failed to copy fork context.",
-                  "88e34d00eb": "Top-level session fork opened in a new workspace",
-                  "fd3d12a1e1": "Failed to create fork workspace.",
                   "38e41edc6e": "This workspace cannot be forked into a git worktree.",
                   "f867385bb5": "Could not find the source workspace for this fork.",
                   "046e8d853c": "No terminal context to fork",
@@ -18332,6 +18321,48 @@
     },
     "agentChildRow": {
       "ended": "Ended"
+    },
+    "agentSessionFork": {
+      "startFromHelpCommit": "Default: the current commit ({{commit}}).",
+      "startFromHelp": "Default: the current commit of {{branch}}.",
+      "currentCommit": "Current commit",
+      "advanced": "Advanced",
+      "startFrom": "Start from",
+      "useParentCommit": "Start from {{workspace}}'s commit",
+      "stage": {
+        "preparing": "Preparing…",
+        "creating": "Creating workspace…",
+        "carrying": "Copying changes…",
+        "launching": "Starting agent…"
+      },
+      "carryOtherBase": "Only available when starting from the current commit of {{workspace}}.",
+      "carryUnsupported": "This host does not support bringing changes.",
+      "carryStagingNote": "Staging is not preserved.",
+      "title": "Fork Agent Session",
+      "descriptionNoAgent": "Start a new branch from {{workspace}}.",
+      "description": "Start a new branch from {{workspace}} and continue the conversation there.",
+      "name": "Name",
+      "asChild": "Create as a child of {{workspace}}",
+      "carryChanges": "Bring uncommitted changes ({{modified}} modified, {{added}} new)",
+      "transcriptNotice": "This agent will get the transcript as a draft instead of the conversation history.",
+      "copyContext": "Copy context",
+      "cancel": "Cancel",
+      "submit": "Create fork",
+      "noAgent": "No agent (branch only)",
+      "transcriptOption": "{{agent}} (transcript)",
+      "session": "Session",
+      "carryReason": {
+        "too_large": "Too many new files to copy.",
+        "base_mismatch": "The new branch does not start at the same commit.",
+        "target_dirty": "The new worktree already had changes.",
+        "partially_applied": "Some uncommitted changes may already be in the new worktree. Review its changes before continuing.",
+        "apply_failed": "The changes could not be applied."
+      },
+      "changesUncertain": "Created {{name}}, but it is unclear whether all your uncommitted changes were copied.",
+      "changesNotCarried": "Created {{name}} without your uncommitted changes.",
+      "agentNotStarted": "Created {{name}}, but the agent could not start.",
+      "menuItem": "Fork Agent Session...",
+      "sourceMissing": "The source workspace no longer exists."
     }
   },
   "dashboardPopout": {

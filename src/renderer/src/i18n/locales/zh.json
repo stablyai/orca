@@ -3044,15 +3044,6 @@
             "d9f3c6e2a4": "桌面键盘已暂停。收回此终端以在此输入，收回手机控制的所有终端，或折叠以继续观看。",
             "a6b1d8f3e2": "手机会话已结束。将此终端或手机留在手机尺寸的所有终端恢复为桌面尺寸。"
           },
-          "TerminalAgentSessionForkDialog": {
-            "17fc841e59": "复制上下文",
-            "0c8a8629b1": "派生会话会显示为独立工作区，而非嵌套子项。新智能体会收到一份有界转录稿，可作为可编辑草稿。",
-            "620461df22": "顶级派生",
-            "619b5a35d2": "创建一个顶级工作区分支并使用捕获的上下文启动一个新的智能体选项卡。",
-            "64e292e8e3": "派生智能体会话",
-            "9d25de2920": "创建派生",
-            "2b10412cfc": "创建中..."
-          },
           "TerminalContextMenu": {
             "b4cdd9314e": "清屏",
             "resetTerminal": "重置终端",
@@ -3163,8 +3154,6 @@
               "session": {
                 "fork": {
                   "2317900211": "无法复制派生上下文。",
-                  "88e34d00eb": "顶级会话分支在新工作区中打开",
-                  "fd3d12a1e1": "无法创建派生工作区。",
                   "38e41edc6e": "该工作区无法派生为 Git 工作树。",
                   "f867385bb5": "找不到此派生的源工作区。",
                   "046e8d853c": "没有要派生的终端上下文",
@@ -18171,6 +18160,48 @@
     },
     "agentChildRow": {
       "ended": "已结束"
+    },
+    "agentSessionFork": {
+      "startFromHelpCommit": "默认：当前提交（{{commit}}）。",
+      "startFromHelp": "默认：{{branch}} 的当前提交。",
+      "currentCommit": "当前提交",
+      "advanced": "高级",
+      "startFrom": "起始位置",
+      "useParentCommit": "从 {{workspace}} 的提交开始",
+      "stage": {
+        "preparing": "正在准备…",
+        "creating": "正在创建工作区…",
+        "carrying": "正在复制更改…",
+        "launching": "正在启动智能体…"
+      },
+      "carryOtherBase": "仅在从 {{workspace}} 的当前提交开始时可用。",
+      "carryUnsupported": "此主机不支持带入更改。",
+      "carryStagingNote": "不会保留暂存状态。",
+      "title": "派生智能体会话",
+      "descriptionNoAgent": "从 {{workspace}} 新建一个分支。",
+      "description": "从 {{workspace}} 新建一个分支，并在其中继续对话。",
+      "name": "名称",
+      "asChild": "创建为 {{workspace}} 的子工作区",
+      "carryChanges": "带入未提交的更改（{{modified}} 个已修改，{{added}} 个新增）",
+      "transcriptNotice": "此智能体将以草稿形式收到会话记录，而不是对话历史。",
+      "copyContext": "复制上下文",
+      "cancel": "取消",
+      "submit": "创建派生",
+      "noAgent": "无智能体（仅分支）",
+      "transcriptOption": "{{agent}}（会话记录）",
+      "session": "会话",
+      "carryReason": {
+        "too_large": "要复制的新文件过多。",
+        "base_mismatch": "新分支的起始提交不同。",
+        "target_dirty": "新工作树中已有更改。",
+        "partially_applied": "部分未提交的更改可能已在新工作树中。继续之前请检查其更改。",
+        "apply_failed": "无法应用这些更改。"
+      },
+      "changesUncertain": "已创建 {{name}}，但无法确定是否已复制所有未提交的更改。",
+      "changesNotCarried": "已创建 {{name}}，但未带入你的未提交更改。",
+      "agentNotStarted": "已创建 {{name}}，但智能体未能启动。",
+      "menuItem": "派生智能体会话...",
+      "sourceMissing": "源工作区已不存在。"
     }
   },
   "dashboardPopout": {
