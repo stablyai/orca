@@ -9,7 +9,7 @@ import {
   type BrowserNetworkTunnelSessionOptions,
   type BrowserNetworkTunnelSocket,
   type BrowserNetworkTunnelStream
-} from './browser-network-tunnel-stream-state'
+} from '../../shared/browser-network-tunnel-stream-state'
 
 const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 128
 

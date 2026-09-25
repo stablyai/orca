@@ -7,7 +7,7 @@ import {
   BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES,
   BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS,
   type BrowserNetworkTunnelStream
-} from './browser-network-tunnel-stream-state'
+} from '../../shared/browser-network-tunnel-stream-state'
 
 // Aggregate retained-byte exhaustion, not a peer protocol violation: only the one stream fails.
 export const BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW = 'route_buffer_overflow'

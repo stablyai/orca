@@ -12,7 +12,7 @@ import {
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   type BrowserNetworkTunnelSocket
-} from './browser-network-tunnel-stream-state'
+} from '../../shared/browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 
 class FakeSocket extends EventEmitter implements BrowserNetworkTunnelSocket {

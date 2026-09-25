@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks'
-import type { BrowserNetworkTunnelSessionOptions } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSessionOptions } from '../../shared/browser-network-tunnel-stream-state'
 
 const MAX_PENDING_OPENS = 16
 const MAX_OPENS_PER_WINDOW = 128

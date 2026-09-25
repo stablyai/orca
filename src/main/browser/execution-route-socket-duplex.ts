@@ -2,7 +2,7 @@ import { Duplex } from 'node:stream'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   type BrowserNetworkTunnelSocket
-} from './browser-network-tunnel-stream-state'
+} from '../../shared/browser-network-tunnel-stream-state'
 
 /**
  * Adapts an execution route's socket into the `Duplex` the local SOCKS server

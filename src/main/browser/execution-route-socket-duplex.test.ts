@@ -2,7 +2,7 @@ import { EventEmitter, once } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSocket } from '../../shared/browser-network-tunnel-stream-state'
 import { openExecutionRouteSocketAsDuplex } from './execution-route-socket-duplex'
 
 class ScriptedSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
