@@ -9,6 +9,8 @@ vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability,
   getActiveRuntimeTarget
 }))
+const ensureLocalRuntimeCapabilities = vi.fn()
+vi.mock('./local-runtime-capabilities', () => ({ ensureLocalRuntimeCapabilities }))
 vi.mock('./runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => `id:${id}`
 }))
@@ -81,10 +83,23 @@ describe('carryRuntimeWorkingTreeChanges', () => {
 })
 
 describe('isWorkingTreeCarrySupported', () => {
-  it('is always supported locally', async () => {
+  it('is supported when the local runtime advertises the capability', async () => {
     getActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
+    ensureLocalRuntimeCapabilities.mockResolvedValue(['git.carryWorkingTreeChanges'])
     await expect(isWorkingTreeCarrySupported(null)).resolves.toBe(true)
     expect(runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
+  })
+
+  it('is unsupported when the web client is paired to a host that predates it', async () => {
+    getActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
+    ensureLocalRuntimeCapabilities.mockResolvedValue(['runtime.status.compat.v1'])
+    await expect(isWorkingTreeCarrySupported(null)).resolves.toBe(false)
+  })
+
+  it('stays offered when the local runtime has not answered yet', async () => {
+    getActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
+    ensureLocalRuntimeCapabilities.mockResolvedValue(null)
+    await expect(isWorkingTreeCarrySupported(null)).resolves.toBe(true)
   })
 
   it('asks remote environments for the capability', async () => {

@@ -3,6 +3,7 @@ import {
   normalizeWorkingTreeCarryResult,
   type WorkingTreeCarryResult
 } from '../../../shared/working-tree-change-carry'
+import { ensureLocalRuntimeCapabilities } from './local-runtime-capabilities'
 import type { RuntimeGitContext } from './runtime-git-client-context'
 import {
   callRuntimeRpc,
@@ -26,7 +27,10 @@ export async function isWorkingTreeCarrySupported(
 ): Promise<boolean> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return true
+    // Why: in the web client the "local" runtime is the paired host, which may predate the method.
+    const capabilities = await ensureLocalRuntimeCapabilities()
+    // Why: an unanswered probe is not evidence; the web shim still refuses an old host honestly.
+    return capabilities === null || capabilities.includes(WORKING_TREE_CARRY_RUNTIME_CAPABILITY)
   }
   return runtimeEnvironmentSupportsCapability(
     target.environmentId,
