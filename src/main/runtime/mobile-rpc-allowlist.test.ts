@@ -177,6 +177,5 @@ describe('mobile RPC allowlist', () => {
       'agentSession.release'
     ])
     expect(mobileRpcAllowlist().has('agentSession.attach')).toBe(false)
-    expect(mobileRpcAllowlist().has('agentSession.requestHandoff')).toBe(false)
   })
 })

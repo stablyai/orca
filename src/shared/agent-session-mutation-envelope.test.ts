@@ -133,7 +133,7 @@ describe('admitAgentSessionMutation', () => {
     })
   })
 
-  it('refuses a writer mid-handoff', () => {
+  it('refuses a writer while the chat is still starting', () => {
     const admission = admitAgentSessionMutation({
       ...base,
       lease: { ...LEASE, handoffStage: 'new-owner-proving' },
@@ -141,7 +141,23 @@ describe('admitAgentSessionMutation', () => {
     })
     expect(admission).toMatchObject({
       decision: 'refused',
-      refusal: { code: 'agent_session_conflict' }
+      refusal: { code: 'agent_session_conflict', message: 'The chat is still starting.' }
+    })
+  })
+
+  it('names recovery rather than a handoff when a restart left the owner unproven', () => {
+    const admission = admitAgentSessionMutation({
+      ...base,
+      lease: { ...LEASE, handoffStage: 'recovering' },
+      ledger: ADMIT('f'.repeat(64))
+    })
+    expect(admission).toMatchObject({
+      decision: 'refused',
+      refusal: {
+        code: 'agent_session_conflict',
+        message:
+          "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+      }
     })
   })
 

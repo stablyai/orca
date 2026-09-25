@@ -94,6 +94,26 @@ describe('structured agent session eviction', () => {
     ])
   })
 
+  it('still stops the child when the pre-stop snapshot cannot drain the sink', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const ctx = context()
+      const snapshot = vi.fn()
+      ctx.beforeProviderChildStop = snapshot
+      // A journal write that never settles, then a healthy sink once the child is stopped.
+      vi.mocked(ctx.eventSink.drained).mockReturnValueOnce(new Promise<never>(() => {}))
+
+      const eviction = evictStructuredAgentSession(ctx)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(snapshot).toHaveBeenCalledOnce()
+      expect(ctx.adapter.closeSession).toHaveBeenCalledOnce()
+      await eviction
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('aborts after a failed drain barrier without unbinding or forgetting the session', async () => {
     const ctx = context()
     ctx.eventSink.drained = vi.fn(async () => {

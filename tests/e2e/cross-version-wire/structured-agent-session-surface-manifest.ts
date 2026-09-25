@@ -91,11 +91,6 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
-    method: 'agentSession.requestHandoff',
-    hostMethod: 'requestHandoff',
-    result: { status: { owner: 'native' } }
-  },
-  {
     method: 'agentSession.handoffStatus',
     hostMethod: 'handoffStatus',
     result: { owner: 'native' }
@@ -260,14 +255,6 @@ export function paramsFor(method: string): unknown {
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
-      return { envelope: envelope({ method, fields, fence }), ...fields }
-    }
-    case 'agentSession.requestHandoff': {
-      const fields = {
-        direction: 'to-tui' as const,
-        mode: 'now' as const,
-        action: 'start' as const
-      }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
     case 'agentSession.setOption': {

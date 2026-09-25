@@ -17,9 +17,10 @@ import {
 } from '../../shared/agent-session-operation-ledger'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
-  isAgentSessionRecord,
+  isPersistedAgentSessionRecord,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
+import { normalizeLegacyHandoffRecord } from '../../shared/agent-session-legacy-handoff-lease'
 import { agentSessionStoreBackupPath as backupPath } from './agent-session-record-store-write'
 export { saveAgentSessionStore } from './agent-session-record-store-write'
 import { parseAgentSessionTabTable, type AgentSessionTabTable } from './agent-session-tab-table'
@@ -52,6 +53,8 @@ export type LoadedAgentSessionStore = {
   recoveredFromBackup: boolean
   /** True when the normalized current-schema quarantine must be persisted. */
   needsRewrite: boolean
+  /** True when decode mapped a lease value only the removed terminal handoff wrote. */
+  legacyHandoffLeasesNormalized: boolean
 }
 
 export function agentSessionStorePath(directory: string): string {
@@ -81,7 +84,10 @@ export function agentSessionStoreRevision(state: AgentSessionStoreState): string
 function parseState(
   raw: string,
   hostId: string
-): { state: AgentSessionStoreState; needsRewrite: boolean } | null {
+): Pick<
+  LoadedAgentSessionStore,
+  'state' | 'needsRewrite' | 'legacyHandoffLeasesNormalized'
+> | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -135,11 +141,17 @@ function parseState(
   state.schemaVersion = schemaVersion
   state.hostId = file.hostId
   let needsRewrite = false
+  let legacyHandoffLeasesNormalized = false
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
-      const record = isAgentSessionRecord(value) ? value : null
+      const decoded = isPersistedAgentSessionRecord(value)
+        ? normalizeLegacyHandoffRecord(value)
+        : null
+      const record = decoded?.record ?? null
       if (record?.sessionId === sessionId) {
         state.records.set(sessionId, record)
+        // Why: mapped while parsing, so every revision is taken over the same normalized state.
+        legacyHandoffLeasesNormalized ||= decoded?.normalized === true
       } else {
         const valueSchemaVersion =
           typeof value === 'object' &&
@@ -217,7 +229,7 @@ function parseState(
     return null
   }
   state.sessionTabs = sessionTabs.table
-  return { state, needsRewrite }
+  return { state, needsRewrite, legacyHandoffLeasesNormalized }
 }
 
 /** A record the primary retained as unreadable may still have a valid copy in the previous
@@ -285,11 +297,10 @@ export async function loadAgentSessionStore(
       await salvageUnreadableRecordsFromBackup(parsed.state, backupPath(filePath), hostId)
     }
     return {
-      state: parsed.state,
+      ...parsed,
       storeFound: true,
       readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
-      recoveredFromBackup,
-      needsRewrite: parsed.needsRewrite
+      recoveredFromBackup
     }
   }
   if (unusableStoreFound) {
@@ -300,6 +311,7 @@ export async function loadAgentSessionStore(
     storeFound: false,
     readOnly: false,
     recoveredFromBackup: false,
-    needsRewrite: false
+    needsRewrite: false,
+    legacyHandoffLeasesNormalized: false
   }
 }

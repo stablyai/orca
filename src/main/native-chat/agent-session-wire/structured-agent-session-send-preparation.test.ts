@@ -409,9 +409,9 @@ describe('a send with no live owner', () => {
     })
     expect(dispatch).not.toHaveBeenCalled()
     expect(hostErrors).not.toEqual([])
-    expect(
-      agentSessionRefusalOperationState('agentSession.send', 'agent_session_owner_restart_failed')
-    ).toBe('settled-rejected')
+    expect(agentSessionRefusalOperationState('agent_session_owner_restart_failed')).toBe(
+      'settled-rejected'
+    )
     // Refused before admission: the ledger holds nothing a resend would replay.
     expect(store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)).toBeNull()
     // The same status row a failed start leaves, so the reason outlives the error strip.

@@ -258,6 +258,39 @@ export function NativeChatStructuredSession(
           />
         )}
       </div>
+      <NativeChatDeliveryRetry
+        outbox={controller.outbox}
+        blockedClientMessageId={controller.blockedClientMessageId}
+        retry={controller.retry}
+      />
+      <NativeChatLaunchRetry
+        lifecycle={provisionalLaunch.lifecycle}
+        failureReason={provisionalLaunch.failureReason}
+        onRetry={provisionalLaunch.retry}
+      />
+      <NativeChatStructuredSessionStatus
+        sessionId={props.sessionId}
+        agentLabel={structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')}
+        startupPhase={startupPhase}
+        error={controller.error}
+        composerError={composerError}
+        isVisible={props.isVisible}
+        backgroundTasks={controller.backgroundTasks}
+        stopBackgroundTask={controller.stopBackgroundTask}
+      />
+      {!prompt && controller.threadGoal?.goal ? (
+        <NativeChatThreadGoalBanner
+          key={props.sessionId}
+          goal={controller.threadGoal.goal}
+          pending={controller.threadGoal.pending}
+          isVisible={props.isVisible}
+          runningTurn={
+            controller.turnId === null ? null : { startedAt: controller.workingStartedAt ?? null }
+          }
+          onChange={(change) => void controller.threadGoal?.change(change)}
+        />
+      ) : null}
+      {/* Prompt cards take the composer's slot, below the background-task dock. */}
       {prompt && approval ? (
         <NativeChatApprovalCard
           key={`${prompt.itemId}:${prompt.revision}`}
@@ -317,38 +350,6 @@ export function NativeChatStructuredSession(
             }
           }}
           onCancel={cancelPrompt}
-        />
-      ) : null}
-      <NativeChatDeliveryRetry
-        outbox={controller.outbox}
-        blockedClientMessageId={controller.blockedClientMessageId}
-        retry={controller.retry}
-      />
-      <NativeChatLaunchRetry
-        lifecycle={provisionalLaunch.lifecycle}
-        failureReason={provisionalLaunch.failureReason}
-        onRetry={provisionalLaunch.retry}
-      />
-      <NativeChatStructuredSessionStatus
-        sessionId={props.sessionId}
-        agentLabel={structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')}
-        startupPhase={startupPhase}
-        error={controller.error}
-        composerError={composerError}
-        isVisible={props.isVisible}
-        backgroundTasks={controller.backgroundTasks}
-        stopBackgroundTask={controller.stopBackgroundTask}
-      />
-      {!prompt && controller.threadGoal?.goal ? (
-        <NativeChatThreadGoalBanner
-          key={props.sessionId}
-          goal={controller.threadGoal.goal}
-          pending={controller.threadGoal.pending}
-          isVisible={props.isVisible}
-          runningTurn={
-            controller.turnId === null ? null : { startedAt: controller.workingStartedAt ?? null }
-          }
-          onChange={(change) => void controller.threadGoal?.change(change)}
         />
       ) : null}
       {prompt ? null : (

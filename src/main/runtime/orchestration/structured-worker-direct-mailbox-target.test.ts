@@ -104,7 +104,8 @@ describe('the mailbox target for direct peer mail to a structured worker', () =>
 
   it('leaves a handle whose session this runtime no longer owns to the PTY lane', () => {
     const handle = registerWorker()
-    installRecord({ runtimeKind: 'tui', claimStatus: 'live' })
+    // How a terminal owner an older build recorded loads; its mail must not park on the session.
+    installRecord({ runtimeKind: 'native', claimStatus: 'conflicted' })
     expect(probe({ id: 'd1' }).instance.probeResolveTarget(handle)).toBeNull()
     installRecord({ runtimeKind: 'native', claimStatus: 'released' })
     expect(probe({ id: 'd1' }).instance.probeResolveTarget(handle)).toBeNull()

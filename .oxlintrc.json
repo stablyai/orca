@@ -155,7 +155,7 @@
       }
     },
     {
-      "files": ["**/*.ts"],
+      "files": ["**/*.ts", "**/*.mts", "**/*.cts"],
       "rules": {
         "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
       }
@@ -173,7 +173,16 @@
       }
     },
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.test.mts",
+        "**/*.test.cts",
+        "**/*.spec.mts",
+        "**/*.spec.cts"
+      ],
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }
