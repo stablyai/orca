@@ -6,6 +6,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
+  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
+} from '../../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
 import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -49,6 +54,14 @@ function adapterThatNeverFinishesStarting(): StructuredAgentSessionAdapter {
     await handlers.onSpawned?.(CHILD_PID)
     return connection
   }
+  return Object.assign(adapterFor({ ...codex, openConnection }), { supportsCreate: () => true })
+}
+
+/** A Codex adapter whose child never gets as far as reporting its pid: the reservation is all the
+ *  next host finds. */
+function adapterThatNeverSpawns(): StructuredAgentSessionAdapter {
+  const codex = fakeCodex()
+  const openConnection: typeof openCodexAppServerConnection = () => new Promise(() => {})
   return Object.assign(adapterFor({ ...codex, openConnection }), { supportsCreate: () => true })
 }
 
@@ -115,5 +128,76 @@ describe('a host that dies while its Codex child is starting', () => {
       claimStatus: 'live',
       ownerProcess: { spawnToken: 'spawn-b' }
     })
+  })
+})
+
+// The client keeps a create it never heard back from and retries it under the same operation id, so
+// that replay, not a fresh hold, is what the user's Retry and first send go through.
+describe('a create replayed after the host that ran it died', () => {
+  const PAST_OPERATION_EXPIRY =
+    AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 60_000
+
+  it.each([
+    ['its child was recorded', adapterThatNeverFinishesStarting, 0],
+    [
+      'its child was recorded, and its operation row has since expired',
+      adapterThatNeverFinishesStarting,
+      PAST_OPERATION_EXPIRY
+    ],
+    ['nothing was recorded beyond the reservation', adapterThatNeverSpawns, 0],
+    [
+      'nothing was recorded, and its operation row has since expired',
+      adapterThatNeverSpawns,
+      PAST_OPERATION_EXPIRY
+    ]
+  ] as const)('starts an agent when %s', async (_case, dyingAdapter, elapsedMs) => {
+    const params = hostTestAttachParams(null)
+    const first = await openStore()
+    const dying = host(first, dyingAdapter())
+    void dying.attach(CALLER, params)
+    await vi.waitFor(() => expect(first.getRecord(SESSION)?.lease.claimStatus).toBe('reserved'))
+
+    const restarted = fakeCodex()
+    const store = await openStore()
+    const relaunched = host(
+      store,
+      Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
+      {
+        mintSpawnToken: () => 'spawn-b',
+        // A reservation with no pid probes indeterminate: no token scan off Linux.
+        probeOwner: async (record): Promise<AgentSessionOwnerProbe> =>
+          record.lease.ownerProcess
+            ? { outcome: 'pid-absent' }
+            : { outcome: 'indeterminate', reason: 'spawn token scan unavailable' },
+        now: () => NOW + elapsedMs
+      }
+    )
+    await relaunched.restoreReadableSessions()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2
+    })
+
+    await expect(relaunched.attach(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      value: { sessionId: SESSION, fence: 3 }
+    })
+    expect(restarted.connections).toHaveLength(1)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      runtimeFence: 3,
+      ownerProcess: { spawnToken: 'spawn-b' }
+    })
+    expect(
+      store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome
+    ).toEqual({ status: 'succeeded', sessionId: SESSION })
+
+    // Settled now: the same id replays that answer and never starts a second agent.
+    await expect(relaunched.attach(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: true
+    })
+    expect(restarted.connections).toHaveLength(1)
   })
 })

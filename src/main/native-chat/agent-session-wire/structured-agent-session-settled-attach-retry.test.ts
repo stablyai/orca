@@ -276,12 +276,8 @@ describe('settled attach retry', () => {
       now: () => NOW
     })
 
-    // The interrupted operation itself is never re-run: its outcome is unknown.
-    const refused = await host.attach(CALLER, params)
-    expect(refused.ok).toBe(false)
-    expect(acquire).toHaveBeenCalledTimes(1)
+    await host.restoreReadableSessions()
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)
-    expect(spawnTokens).toEqual(['spawn-1'])
     // No owner was recorded: released at restart, with no evidence, since nothing proved one.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
@@ -292,7 +288,8 @@ describe('settled attach retry', () => {
       deathEvidence: null
     })
 
-    await host.hold(SESSION, 'desktop-chat:retry')
+    // The interrupted operation's own retry continues it as a fresh reservation.
+    await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
     expect(mintSpawnToken).toHaveBeenCalledTimes(2)
     expect(spawnTokens).toEqual(['spawn-1', 'spawn-2'])
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

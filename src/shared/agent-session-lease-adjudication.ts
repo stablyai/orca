@@ -100,6 +100,11 @@ export function agentSessionLeaseOwnerVerdict(lease: AgentSessionLease): AgentSe
     : 'unverifiable'
 }
 
+/** Nothing holds this lease: released, no handoff in flight, and reconciled since the last restart. */
+export function agentSessionLeaseIsReleased(lease: AgentSessionLease): boolean {
+  return !lease.unreconciled && lease.claimStatus === 'released' && lease.handoffStage === null
+}
+
 /** True when the recorded owner may write right now. Used by every mutating path in later parts. */
 export function agentSessionLeaseAdmitsWriter(lease: AgentSessionLease): boolean {
   return (
