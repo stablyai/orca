@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentMainAgentStatus } from '../../../../shared/agent-status-types'
-import type { AppState } from '../types'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree
@@ -16,7 +15,7 @@ function storeWithSettledPane(mainAgent: AgentMainAgentStatus | undefined) {
   const store = createTestStore()
   store.setState({
     tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
-  } as Partial<AppState>)
+  })
   store.getState().setAgentStatus(
     PANE,
     {

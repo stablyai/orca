@@ -56,7 +56,9 @@ describe('OpenCode plugin root turn state', () => {
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     savedFetch = globalThis.fetch
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the plugin only awaits the response status, which this stub supplies.
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the plugin always posts a JSON body carrying `payload`.
       posts.push((JSON.parse(String(init?.body)) as { payload: RecordedPost }).payload)
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch

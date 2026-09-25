@@ -163,7 +163,9 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           className={cn(
             'block rounded-full',
             inner,
-            state === 'blocked' || state === 'interrupted' ? 'bg-red-500' : 'bg-neutral-500/40'
+            state === 'blocked' || state === 'interrupted'
+              ? 'bg-destructive'
+              : 'bg-muted-foreground/40'
           )}
         />
       </span>

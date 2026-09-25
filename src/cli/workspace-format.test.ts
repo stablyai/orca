@@ -140,6 +140,7 @@ describe('worktree ps display status', () => {
             agent({
               state: 'working',
               // A newer host's state arm.
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: models a wire value this build's type cannot name.
               mainAgent: { state: 'paused', stateStartedAt: 1 } as never
             })
           ]
@@ -177,6 +178,7 @@ describe('worktree ps --json', () => {
       _meta: { runtimeId: 'runtime-1' }
     })
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktree ps` reads only `flags`, `client.call` and `json`; RuntimeClient is a class a structural double cannot satisfy.
     await WORKTREE_HANDLERS['worktree ps']({
       flags: new Map(),
       client: { call },

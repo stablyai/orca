@@ -3,8 +3,8 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
 
 const PANE_KEY = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
-const store = vi.hoisted(() => ({
-  agentStatusByPaneKey: {} as Record<string, AgentStatusEntry>
+const store = vi.hoisted((): { agentStatusByPaneKey: Record<string, AgentStatusEntry> } => ({
+  agentStatusByPaneKey: {}
 }))
 
 vi.mock('@/store', () => ({
@@ -27,7 +27,9 @@ describe('automation dispatch completion on a failed turn', () => {
   it('completes the run when the agent turn ends in the provider error', async () => {
     const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
     const completion = createAutomationDispatchCompletion({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only the run id.
       run: { id: 'run-1' } as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only the worktree id and name.
       worktree: { id: 'wt-1', displayName: 'Automation worktree' } as never,
       precheckResult: null,
       markDispatchResult,

@@ -53,6 +53,7 @@ describe('orchestration worker-list display state', () => {
     }
     callMock.mockResolvedValue(response)
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worker-list` reads only `flags`, `client.call` and `json`; RuntimeClient is a class a structural double cannot satisfy.
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map<string, string | boolean>(),
       client: { call: callMock },
@@ -60,6 +61,7 @@ describe('orchestration worker-list display state', () => {
       json: false
     } as never)
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler passes its text formatter as printResult's third argument.
     const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
       | ((result: (typeof response)['result']) => string)
       | undefined
