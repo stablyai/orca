@@ -131,6 +131,10 @@ export function evaluateAgentSessionAcquisition(args: {
   if (!isAgentSessionFenceCurrent(lease, expectedFence)) {
     return { decision: 'refused', code: 'agent_session_checkpoint_stale' }
   }
+  if (lease.claimStatus === 'conflicted') {
+    // Why: the user's own terminal agent; restart adjudication and recovery retire it once gone.
+    return { decision: 'refused', code: 'agent_session_conflict' }
+  }
   if (lease.handoffStage === 'recovering' || lease.handoffStage === 'manual-recovery') {
     // Why: no stage expires into an owner; recovery resolution concludes about it first.
     return { decision: 'refused', code: 'agent_session_ownership_unknown' }

@@ -135,10 +135,11 @@ describe('acquisition compare-and-swap', () => {
     })
   })
 
-  it('grants past a claim an older record marked conflicted once its owner is proven gone', () => {
+  it('keeps a conflicted claim conflicted regardless of proof', () => {
+    // Restart adjudication and recovery resolution are what retire it, once its owner is gone.
     expect(acquire(lease({ claimStatus: 'conflicted' }), { outcome: 'exit-observed' })).toEqual({
-      decision: 'granted',
-      nextFence: 8
+      decision: 'refused',
+      code: 'agent_session_conflict'
     })
   })
 
@@ -190,7 +191,7 @@ describe('restart reconciliation', () => {
         probe: MATCHED,
         observedAt: 9_000
       })
-    ).toMatchObject({ disposition: 'conflicted' })
+    ).toMatchObject({ disposition: 'recovering', stage: 'recovering' })
   })
 
   it('routes a surviving native owner to recovery instead of readopting a dead transport', () => {

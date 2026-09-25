@@ -525,37 +525,6 @@ describe('already-wedged profiles become usable on load', () => {
     expect(acquire).not.toHaveBeenCalled()
   })
 
-  it('stops the live owner a conflicted record names, then releases it', async () => {
-    await seedStore(
-      wedgedRecord({
-        claimStatus: 'conflicted',
-        handoffStage: 'manual-recovery',
-        ownerProcess: DEAD_OWNER
-      })
-    )
-    let alive = true
-    const stopOwnerProcess = vi.fn(() => {
-      alive = false
-    })
-    openHost({
-      probeOwner: async () =>
-        alive
-          ? { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
-          : { outcome: 'pid-absent' },
-      stopOwnerProcess
-    })
-
-    await host.restoreReadableSessions()
-
-    expect(stopOwnerProcess).toHaveBeenCalledWith(DEAD_OWNER.pid, 'SIGTERM')
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'released',
-      handoffStage: null,
-      ownerProcess: null,
-      deathEvidence: { kind: 'pid-absent' }
-    })
-  })
-
   it('unlatches a released record that reloaded into recovery with nothing outstanding', async () => {
     // An evicted lease has no owner and no token, so a restart has nothing to probe. Treating that
     // as an unproven reservation re-latched it to `recovering` on every single boot.

@@ -214,7 +214,7 @@ describe('a record an older build left mid terminal handoff', () => {
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
+      handoffStage: 'recovering'
     })
     expect(await send('while the terminal still runs')).toMatchObject({
       ok: false,

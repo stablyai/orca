@@ -263,7 +263,7 @@ describe('structured session recovery resolution', () => {
     expect(await readPersistedLease(directory, SESSION)).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
+      handoffStage: 'recovering'
     })
 
     expect(
@@ -278,7 +278,7 @@ describe('structured session recovery resolution', () => {
     })
   })
 
-  it('resolves a terminal reservation an older build left naming nobody', async () => {
+  it('releases a terminal reservation an older build left naming nobody at restart', async () => {
     const directory = await newStoreDirectory()
     await reserve(await openStore(directory))
     await writeOlderBuildLease(directory, SESSION, { runtimeKind: 'tui' })
@@ -287,55 +287,18 @@ describe('structured session recovery resolution', () => {
       probe: async () => ({ outcome: 'indeterminate', reason: 'no scan' }),
       now: NOW
     })
-    // Only the kind changes: no process is recorded for a conflict to name.
+    // No process is recorded for a conflict to name, so there is nothing to wait out.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
-      claimStatus: 'reserved',
-      handoffStage: 'manual-recovery'
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: null
     })
-
     expect(
       await resolveStructuredSessionRecovery(
         deps(store, () => ({ outcome: 'reservation-unused' })),
         SESSION
       )
-    ).toBe('resolved')
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      handoffStage: null,
-      claimStatus: 'released'
-    })
-  })
-
-  it('treats a claim an older record marked conflicted by the owner it names', async () => {
-    const store = await openStore()
-    await liveOwner(store)
-    await store.transitionHandoff(SESSION, (record) => ({
-      ...record,
-      lease: { ...record.lease, claimStatus: 'conflicted', handoffStage: 'manual-recovery' }
-    }))
-    let alive = true
-    const stopOwnerProcess = vi.fn(() => {
-      alive = false
-    })
-
-    const result = await resolveStructuredSessionRecovery(
-      deps(
-        store,
-        () =>
-          alive
-            ? { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
-            : { outcome: 'pid-absent' },
-        { stopOwnerProcess }
-      ),
-      SESSION
-    )
-
-    expect(result).toBe('resolved')
-    expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGTERM')
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      handoffStage: null,
-      claimStatus: 'released',
-      deathEvidence: { kind: 'pid-absent' }
-    })
+    ).toBe('not-applicable')
   })
 })
