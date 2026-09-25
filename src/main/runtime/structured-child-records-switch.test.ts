@@ -154,11 +154,14 @@ describe('the chat strip and the session list read the same host child records',
       }
     })
     // Journal writes land asynchronously; let each frame's rows publish before the next.
-    const notify = async (method: string, params: Record<string, unknown>) => {
-      connections[0]?.onNotification?.(method, params)
+    const settle = async () => {
       for (let tick = 0; tick < 5; tick += 1) {
         await new Promise((resolve) => setTimeout(resolve, 0))
       }
+    }
+    const notify = async (method: string, params: Record<string, unknown>) => {
+      connections[0]?.onNotification?.(method, params)
+      await settle()
     }
     const item = (
       method: 'item/started' | 'item/completed',
@@ -280,9 +283,28 @@ describe('the chat strip and the session list read the same host child records',
     expect(summaries.at(-1)).not.toHaveProperty('children')
     expect(strip.at(-1)).toBeNull()
 
-    // The provider exits: the records go with the session, on both.
+    // The reviewer's next run is still going when the provider exits: it settles with an outcome
+    // nobody reported, and both keep listing it.
+    await notify('turn/started', { threadId: REVIEWER, turn: { id: 'r2', status: 'inProgress' } })
+    both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
     connections[0]?.onExit?.(new Error('scripted provider exit'))
-    expect(server.getStructuredChildWorkViews(parentSubject(summaries))).toEqual([])
+    await settle()
+    both([
+      {
+        kind: 'agent',
+        description: 'review',
+        state: 'done',
+        membership: 'settled',
+        outcome: 'unknown'
+      }
+    ])
+
+    // Letting go of the session drops its row, and every child record with it, from both.
+    const subject = parentSubject(summaries)
+    await host.close(SESSION)
+    expect(server.getStructuredChildWorkViews(subject)).toEqual([])
+    expect(summaries.at(-1)).not.toHaveProperty('children')
+    expect(summaries.at(-1)).not.toHaveProperty('backgroundTasks')
   })
 })
 

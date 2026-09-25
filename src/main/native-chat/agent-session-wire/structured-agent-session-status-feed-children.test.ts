@@ -282,4 +282,21 @@ describe('structured status summary child records', () => {
     expect(lastSummary(events)).not.toHaveProperty('children')
     expect(lastSummary(events)).not.toHaveProperty('backgroundTasks')
   })
+
+  it('stops listing children once the row leaves the sink, even with no close', async () => {
+    const { feed, events, views } = await feedWithChildren()
+    views.current = () => [
+      childView({ membership: 'settled', state: 'done', outcome: 'succeeded' })
+    ]
+    feed.publish(SESSION)
+    expect(lastSummary(events)?.children).toHaveLength(1)
+    feed.forget(SESSION)
+    expect(lastSummary(events)).not.toHaveProperty('children')
+    // A reload reads the retained projection: it must not list what the store no longer holds.
+    feed.subscribe({ id: 'list-2', emit: (event) => events.push(event) })
+    const snapshot = events.at(-1)
+    expect(snapshot?.type === 'snapshot' ? snapshot.sessions[0] : null).not.toHaveProperty(
+      'children'
+    )
+  })
 })

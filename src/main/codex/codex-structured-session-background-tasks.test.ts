@@ -242,7 +242,7 @@ describe("codex background tasks reach the host's child records", () => {
     expect(adapter.backgroundTaskState('session-1')).toEqual(running)
   })
 
-  it('clears the strip when the session closes', async () => {
+  it("hands the session's end to its child records when the session closes", async () => {
     const published: Published[] = []
     const { adapter, codex } = await adapterWithSession(published)
     const spawn = subagentNotification('started')
@@ -252,7 +252,7 @@ describe("codex background tasks reach the host's child records", () => {
 
     expect(await adapter.closeSession('session-1')).toBe(true)
 
-    // The records end with the session, so no surface keeps the child listed.
+    // The records hear the session end, which settles the child still running.
     expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
     expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
   })

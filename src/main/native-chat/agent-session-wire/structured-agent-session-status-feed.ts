@@ -122,13 +122,15 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   /** The host stopped holding the session: ownership leaves the retained projection, and the
-   *  row leaves the sink. `published` keeps the projection for reload history. */
+   *  row, with every child record under it, leaves the sink. `published` keeps the projection for
+   *  reload history. */
   close(sessionId: string): void {
     this.revokeLive(sessionId)
     this.forget(sessionId)
   }
 
-  /** The sink lists what is running; a forgotten session must not be in it. */
+  /** The sink lists what is running; a forgotten session must not be in it. Its child records
+   *  leave the store with its row, and the retained projection re-reads them like any summary. */
   forget(sessionId: string): void {
     this.rootTurns.delete(sessionId)
     try {
@@ -136,6 +138,14 @@ export class StructuredAgentSessionStatusFeed {
     } catch (error) {
       console.warn('[structured-session-status] status sink forget failed', error)
     }
+    const previous = this.published.get(sessionId)
+    if (!previous || (!previous.children && !previous.backgroundTasks)) {
+      return
+    }
+    const { children: _children, backgroundTasks: _backgroundTasks, ...rest } = previous
+    const retained = { ...rest, ...this.childWorkFields(sessionId, previous.agent) }
+    this.published.set(sessionId, retained)
+    this.broadcast({ type: 'status', session: retained })
   }
 
   unsubscribe(id: string): void {
@@ -157,15 +167,7 @@ export class StructuredAgentSessionStatusFeed {
     if (!previous) {
       return
     }
-    // The store forgets a closed session's child records with its row, so the retained
-    // projection must not keep listing them — settled ones included, or the session list would
-    // show rows the strip no longer has.
-    const {
-      hostExecutionOwned: _hostExecutionOwned,
-      children: _children,
-      backgroundTasks: _backgroundTasks,
-      ...retained
-    } = previous
+    const { hostExecutionOwned: _hostExecutionOwned, ...retained } = previous
     this.published.set(sessionId, retained)
     this.sink(retained)
     this.broadcast({
@@ -236,10 +238,12 @@ export class StructuredAgentSessionStatusFeed {
     return projection
   }
 
-  /** Finished children stay listed, with their outcome, until the session's own next turn at the
-   *  latest. Earlier deaths: the provider ending the session (its `session-ended` evidence removes
-   *  every record), the host closing or releasing the session (see `revokeLive`), and the per-session
-   *  cap on settled records (`STRUCTURED_CHILD_WORK_MAX_SETTLED`, oldest first). */
+  /** A finished child stays listed, with its outcome, until the session's own next turn begins,
+   *  unless it still owns live work. The provider ending the session removes nothing: children
+   *  still live settle `unknown`, and settled ones stay. Earlier deaths: the cap on settled records
+   *  (`STRUCTURED_CHILD_WORK_MAX_SETTLED`, oldest first), and the host letting go of the session,
+   *  whose row takes every child record with it (see `forget`). The summary and the strip both
+   *  re-read the store, so each step removes a child from both. */
   private retireSettledChildrenOnNewTurn(
     sessionId: string,
     session: StatusFeedSession,
@@ -265,13 +269,6 @@ export class StructuredAgentSessionStatusFeed {
     // The journal has no model: the record's acknowledged options are where a mid-session
     // switch lands, so the row follows whichever is in force.
     const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
-    // Usage is dropped here on purpose: a `task_progress` tick would otherwise fail the
-    // equality check and re-broadcast a full summary to every remote subscriber for a
-    // number no session list renders. Tokens stay live on the background-task channel.
-    const { children, backgroundTasks } = structuredStatusChildWork(
-      this.readChildWork(sessionId),
-      session.params.provider
-    )
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,
@@ -289,12 +286,29 @@ export class StructuredAgentSessionStatusFeed {
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),
       ...(model ? { model } : {}),
+      ...this.childWorkFields(sessionId, session.params.provider),
+      ...(providerSession ? { providerSession } : {}),
+      updatedAt: journal.lastActivityAt() || this.deps.now()
+    }
+  }
+
+  /** The summary's child fields, from the records the store holds for the session. Usage is
+   *  dropped on purpose: a `task_progress` tick would otherwise fail the equality check and
+   *  re-broadcast a full summary to every remote subscriber for a number no session list renders.
+   *  Tokens stay live on the background-task channel. */
+  private childWorkFields(
+    sessionId: string,
+    provider: StatusFeedSession['params']['provider']
+  ): Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'> {
+    const { children, backgroundTasks } = structuredStatusChildWork(
+      this.readChildWork(sessionId),
+      provider
+    )
+    return {
       ...(backgroundTasks && backgroundTasks.length > 0
         ? { backgroundTasks: backgroundTasks.map(({ totalTokens: _tokens, ...task }) => task) }
         : {}),
-      ...(children ? { children } : {}),
-      ...(providerSession ? { providerSession } : {}),
-      updatedAt: journal.lastActivityAt() || this.deps.now()
+      ...(children ? { children } : {})
     }
   }
 

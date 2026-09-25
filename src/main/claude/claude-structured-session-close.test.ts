@@ -131,7 +131,7 @@ describe('Claude published session close lifecycle', () => {
     expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
     expect(events.filter((event) => event.type === 'handle')).toHaveLength(0)
     expect(disposeTranslator).toHaveBeenCalledOnce()
-    // The host's child records hear the session end, so no surface keeps the child listed.
+    // The host's child records hear the session end, which settles the child still running.
     expect(childWork).toEqual(['live', 'session-ended'])
 
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
