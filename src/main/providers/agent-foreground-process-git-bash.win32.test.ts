@@ -106,9 +106,13 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
         await vi.waitFor(async () => expect(await confirm()).toBe(false), { timeout: 10_000 })
 
         proc.write('\x03')
-        await vi.waitFor(async () => expect(await confirm(), 'prompt after interrupt').toBe(true), {
-          timeout: 10_000
-        })
+        await vi.waitFor(
+          async () => {
+            expect(dead, 'terminal survived foreground interrupt').toBe(false)
+            expect(await confirm(), 'prompt after interrupt').toBe(true)
+          },
+          { timeout: 10_000 }
+        )
 
         proc.write('sleep 60 &\r')
         await vi.waitFor(async () => expect(await confirm()).toBe(false), { timeout: 10_000 })

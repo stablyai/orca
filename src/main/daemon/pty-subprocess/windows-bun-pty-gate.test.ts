@@ -13,6 +13,35 @@ const request: WindowsBunPtyGateRequest = {
 }
 
 describe('Windows Bun PTY job gate worker', () => {
+  it.each(['exit', 'error'] as const)(
+    'ignores Windows console interrupts only while supervising a child (%s)',
+    async (outcome) => {
+      const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+      const previousListeners = process.listeners('SIGINT')
+      const child = new EventEmitter()
+      try {
+        const result = runWindowsBunPtyGate(request, {
+          waitForGate: async () => {},
+          reportSpawnError: vi.fn(),
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture exposes only the child events the gate consumes.
+          spawn: () => child as ReturnType<typeof spawnProcess>
+        })
+        expect(process.listeners('SIGINT')).toHaveLength(previousListeners.length + 1)
+        await Promise.resolve()
+        if (outcome === 'exit') {
+          child.emit('exit', 17)
+          await expect(result).resolves.toBe(17)
+        } else {
+          child.emit('error', new Error('spawn denied'))
+          await expect(result).rejects.toThrow('spawn denied')
+        }
+        expect(process.listeners('SIGINT')).toEqual(previousListeners)
+      } finally {
+        platform.mockRestore()
+      }
+    }
+  )
+
   it('does not spawn before assignment and propagates the child exit code', async () => {
     let release!: () => void
     const waitForGate = vi.fn(

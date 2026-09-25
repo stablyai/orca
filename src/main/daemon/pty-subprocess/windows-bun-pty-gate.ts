@@ -126,6 +126,11 @@ export async function runWindowsBunPtyGate(
   } = {}
 ): Promise<number> {
   let spawned = false
+  // Preserve supervision when Ctrl-C reaches the entire Windows console.
+  const ignoreInterrupt = (): void => {}
+  if (process.platform === 'win32') {
+    process.on('SIGINT', ignoreInterrupt)
+  }
   try {
     await (deps.waitForGate ?? waitForWindowsBunPtyJobGate)(request.gatePath)
     return await new Promise<number>((resolve, reject) => {
@@ -161,5 +166,7 @@ export async function runWindowsBunPtyGate(
       }
     }
     throw error
+  } finally {
+    process.off('SIGINT', ignoreInterrupt)
   }
 }
