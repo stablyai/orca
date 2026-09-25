@@ -211,4 +211,79 @@ describe('useHostStatusGates', () => {
       renderer?.unmount()
     }
   })
+
+  it('re-reads a status that failed while the connection stayed up', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('request timed out'))
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
+      })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      // Settled closed rather than pending, so a failed read never traps the host screen.
+      expect(gates).toMatchObject({
+        hostCapabilities: [],
+        statusPending: false,
+        statusReadable: false
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(gates).toMatchObject({
+        hostCapabilities: ['browser.screencast.v1'],
+        statusPending: false,
+        statusReadable: true
+      })
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops re-reading once the host screen unmounts', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi.fn().mockRejectedValue(new Error('request timed out'))
+    const client = { sendRequest } as unknown as RpcClient
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      await act(async () => {
+        renderer?.unmount()
+        renderer = null
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      expect(sendRequest).toHaveBeenCalledOnce()
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
 })

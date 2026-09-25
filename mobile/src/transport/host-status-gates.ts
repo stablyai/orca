@@ -6,6 +6,8 @@ import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { HostStatusReply } from './host-status-reply-schema'
 import { normalizeHostAppVersion } from './host-app-version'
 import { recordHostAppVersion } from './host-app-version-store'
+import { RpcIncompatibleReplyError } from './rpc-incompatible-reply-error'
+import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 
 export type HostStatusGates = {
   hostCapabilities: string[]
@@ -45,6 +47,22 @@ const EMPTY_HOST_PROTOCOL_WINDOW: HostProtocolWindow = {
   minCompatibleMobileVersion: undefined
 }
 
+// Why the gate settles closed AND keeps asking: a timeout or relay→direct cutover fails status.get
+// without changing connState, and a one-shot read would latch capability-gated UI off until the host
+// screen remounts. Same backoff as runtime-capability-probe.ts.
+const CUTOVER_RETRY_DELAY_MS = 250
+const FAILURE_RETRY_BASE_DELAY_MS = 1_000
+const FAILURE_RETRY_MAX_DELAY_MS = 15_000
+
+const UNREADABLE_STATUS_GATES: Omit<HostStatusGates, 'statusPending'> = {
+  hostCapabilities: EMPTY_HOST_CAPABILITIES,
+  floatingWorkspaceEnabled: false,
+  desktopAppVersion: null,
+  compatVerdict: { kind: 'ok' },
+  hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
+  statusReadable: false
+}
+
 // Reads status.get on connect for capabilities, protocol-compat verdict, and the
 // floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
 export function useHostStatusGates(args: {
@@ -64,73 +82,88 @@ export function useHostStatusGates(args: {
       return
     }
     let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let failures = 0
     const requestClient = client
     const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
       setLoaded({ hostId, client: requestClient, ...gates })
       setUnverified(false)
     }
-    void (async () => {
-      try {
-        const reply = await hostStatusProbe.request(requestClient)
-        if (cancelled) {
-          return
-        }
-        const status = readHostStatusGates(reply)
-        if (!status) {
-          settle({
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            desktopAppVersion: null,
-            compatVerdict: { kind: 'ok' },
-            hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
-            statusReadable: false
-          })
-          return
-        }
-        const verdict = evaluateCompat({
-          desktopProtocolVersion: status.protocolVersion,
-          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-        })
-        const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
-        if (hostId && desktopAppVersion) {
-          void recordHostAppVersion(hostId, desktopAppVersion)
-        }
-        settle({
-          hostCapabilities: status.capabilities ?? [],
-          floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-          desktopAppVersion,
-          compatVerdict: verdict,
-          hostProtocolWindow: {
-            protocolVersion: status.protocolVersion,
-            minCompatibleMobileVersion: status.minCompatibleMobileVersion
-          },
-          statusReadable: true
-        })
-        if (verdict.kind === 'blocked') {
-          // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
-          console.warn('[protocol-compat] blocked', {
-            reason: verdict.reason,
-            desktopVersion: verdict.desktopVersion,
-            requiredMobileVersion: verdict.requiredMobileVersion,
-            requiredDesktopVersion: verdict.requiredDesktopVersion
-          })
-        }
-      } catch {
-        // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
-        if (!cancelled) {
-          settle({
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            desktopAppVersion: null,
-            compatVerdict: { kind: 'ok' },
-            hostProtocolWindow: EMPTY_HOST_PROTOCOL_WINDOW,
-            statusReadable: false
-          })
-        }
+    const settleUnreadable = (retry: 'cutover' | 'backoff' | null) => {
+      // Later failures keep the first one's answer rather than re-render the same closed gates.
+      if (failures === 0) {
+        settle(UNREADABLE_STATUS_GATES)
       }
-    })()
+      if (retry) {
+        const delay =
+          retry === 'cutover'
+            ? CUTOVER_RETRY_DELAY_MS
+            : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failures, FAILURE_RETRY_MAX_DELAY_MS)
+        retryTimer = setTimeout(read, delay)
+      }
+      failures += 1
+    }
+    const read = () => {
+      void (async () => {
+        try {
+          const reply = await hostStatusProbe.request(requestClient)
+          if (cancelled) {
+            return
+          }
+          const status = readHostStatusGates(reply)
+          if (!status) {
+            settleUnreadable('backoff')
+            return
+          }
+          const verdict = evaluateCompat({
+            desktopProtocolVersion: status.protocolVersion,
+            desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
+          })
+          const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+          if (hostId && desktopAppVersion) {
+            void recordHostAppVersion(hostId, desktopAppVersion)
+          }
+          settle({
+            hostCapabilities: status.capabilities ?? [],
+            floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+            desktopAppVersion,
+            compatVerdict: verdict,
+            hostProtocolWindow: {
+              protocolVersion: status.protocolVersion,
+              minCompatibleMobileVersion: status.minCompatibleMobileVersion
+            },
+            statusReadable: true
+          })
+          if (verdict.kind === 'blocked') {
+            // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
+            console.warn('[protocol-compat] blocked', {
+              reason: verdict.reason,
+              desktopVersion: verdict.desktopVersion,
+              requiredMobileVersion: verdict.requiredMobileVersion,
+              requiredDesktopVersion: verdict.requiredDesktopVersion
+            })
+          }
+        } catch (error) {
+          // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
+          if (!cancelled) {
+            // A reply this app cannot decode reads the same on every retry.
+            settleUnreadable(
+              error instanceof RpcIncompatibleReplyError
+                ? null
+                : isLogicalClientCutoverError(error)
+                  ? 'cutover'
+                  : 'backoff'
+            )
+          }
+        }
+      })()
+    }
+    read()
     return () => {
       cancelled = true
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+      }
     }
   }, [client, connState, hostId])
 
