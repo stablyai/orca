@@ -64,12 +64,13 @@ function rpcReply(result: unknown) {
   return { id: 'rpc', ok: true as const, result, _meta: { runtimeId: 'r' } }
 }
 
-function launchedReply(promptOutcome: 'handed-to-terminal' | 'not-delivered') {
+function launchedReply(promptOutcome: 'handed-to-terminal' | 'not-delivered', warning?: string) {
   return rpcReply({
     outcome: { kind: 'terminal', handle: 'term-1' },
     worktreeId: 'wt-1',
     receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'd' },
-    prompt: { delivery: 'submit', outcome: promptOutcome }
+    prompt: { delivery: 'submit', outcome: promptOutcome },
+    ...(warning ? { warning } : {})
   })
 }
 
@@ -314,6 +315,21 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(false)
     expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
     expect(setActionError).toHaveBeenLastCalledWith('Review notes sent')
+  })
+
+  it('keeps saying the notes were sent when the host adds a warning', async () => {
+    await mount(
+      launchClient('handed-to-terminal', async () =>
+        launchedReply('handed-to-terminal', 'the requested arguments were ignored.')
+      ).client
+    )
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
+    expect(setActionError).toHaveBeenLastCalledWith(
+      'Review notes sent. the requested arguments were ignored.'
+    )
   })
 
   it('keeps the notes unsent when the agent started without them', async () => {

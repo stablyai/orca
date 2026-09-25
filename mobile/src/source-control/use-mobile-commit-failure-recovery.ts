@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -23,6 +23,9 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
   const hostStatus = useHostProtocolGates()
   const { hostCapabilities } = hostStatus
   const [launching, setLaunching] = useState(false)
+  // `launching` commits on the next render; each tap is a new operation, so a second one in that gap
+  // would start a second agent.
+  const inFlightRef = useRef(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
   // The agent started without its prompt; kept so the user can paste it in themselves. Keyed by the
   // failure it was built for, so a new failure never shows the previous one's prompt.
@@ -31,6 +34,12 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
     prompt: string
   } | null>(null)
   const undeliveredPrompt = undelivered?.failure === failure ? undelivered.prompt : null
+  // The host's note on a launch that went ahead, keyed the same way.
+  const [warning, setWarning] = useState<{
+    failure: MobileCommitFailureRecovery
+    text: string
+  } | null>(null)
+  const launchWarning = warning?.failure === failure ? warning.text : null
   const summary = useMemo(() => (failure ? summarizeCommitFailure(failure.error) : null), [failure])
   const availability = resolveMobileAgentLaunchAvailability(hostStatus)
 
@@ -57,7 +66,7 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
   )
 
   const launch = useCallback(async (): Promise<boolean> => {
-    if (launching || !prompt) {
+    if (inFlightRef.current || launching || !prompt) {
       return false
     }
     if (!client || connState !== 'connected') {
@@ -65,8 +74,10 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
       triggerError()
       return false
     }
+    inFlightRef.current = true
     setLaunching(true)
     setLaunchError(null)
+    setWarning(null)
     setUndelivered(null)
     try {
       const result = await launchAgentWithPrompt({
@@ -84,6 +95,7 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
         triggerError()
       }
       setLaunchError(notice.error)
+      setWarning(failure && notice.warning ? { failure, text: notice.warning } : null)
       setUndelivered(
         failure && notice.undeliveredPrompt ? { failure, prompt: notice.undeliveredPrompt } : null
       )
@@ -93,6 +105,7 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
       setLaunchError(err instanceof Error ? err.message : 'Failed to launch agent')
       return false
     } finally {
+      inFlightRef.current = false
       setLaunching(false)
     }
   }, [client, connState, failure, hostCapabilities, launching, prompt, worktreeId])
@@ -103,6 +116,7 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
     launching,
     availability,
     launchError,
+    launchWarning,
     undeliveredPrompt,
     launch
   }

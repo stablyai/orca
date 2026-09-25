@@ -90,25 +90,31 @@ export async function launchAgentWithPrompt(args: {
   }
 }
 
-/** What the button shows after a launch; one mapping so every AI button reads the same. */
+/** What the button shows after a launch; one mapping so every AI button reads the same.
+ *  `warning` is the host's note on a launch that went ahead, so it is never shown as a failure. */
 export function promptedLaunchNotice(result: MobilePromptedAgentLaunch): {
   succeeded: boolean
   error: string | null
+  warning: string | null
   undeliveredPrompt: string | null
 } {
   switch (result.kind) {
     case 'sent':
-      return { succeeded: true, error: result.warning ?? null, undeliveredPrompt: null }
+      return {
+        succeeded: true,
+        error: null,
+        warning: result.warning ?? null,
+        undeliveredPrompt: null
+      }
     case 'prompt-not-sent':
       return {
         succeeded: false,
-        error: result.warning
-          ? `${AGENT_PROMPT_NOT_SENT_MESSAGE} ${result.warning}`
-          : AGENT_PROMPT_NOT_SENT_MESSAGE,
+        error: AGENT_PROMPT_NOT_SENT_MESSAGE,
+        warning: result.warning ?? null,
         undeliveredPrompt: result.prompt
       }
     case 'not-started':
     case 'unconfirmed':
-      return { succeeded: false, error: result.message, undeliveredPrompt: null }
+      return { succeeded: false, error: result.message, warning: null, undeliveredPrompt: null }
   }
 }

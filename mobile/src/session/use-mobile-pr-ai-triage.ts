@@ -33,6 +33,7 @@ export function useMobilePrAiTriage(input: Input) {
     input
   const [busyKey, setBusyKey] = useState<PrAiTriageKey | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   // The agent started without its prompt; kept so the user can paste it in themselves.
   const [undeliveredPrompt, setUndeliveredPrompt] = useState<string | null>(null)
   // Synchronous lock: setBusyKey commits async, so a fast double-tap could pass the
@@ -59,6 +60,7 @@ export function useMobilePrAiTriage(input: Input) {
       inFlightRef.current = true
       setBusyKey(key)
       setError(null)
+      setWarning(null)
       setUndeliveredPrompt(null)
       try {
         const prompt = buildPrompt()
@@ -76,6 +78,7 @@ export function useMobilePrAiTriage(input: Input) {
           triggerError()
         }
         setError(notice.error)
+        setWarning(notice.warning)
         setUndeliveredPrompt(notice.undeliveredPrompt)
         return notice.succeeded
       } catch (err) {
@@ -93,9 +96,11 @@ export function useMobilePrAiTriage(input: Input) {
   return {
     availability,
     error,
+    warning,
     undeliveredPrompt,
     clearError: useCallback(() => {
       setError(null)
+      setWarning(null)
       setUndeliveredPrompt(null)
     }, []),
     isBusy: useCallback((key: PrAiTriageKey) => busyKey === key, [busyKey]),

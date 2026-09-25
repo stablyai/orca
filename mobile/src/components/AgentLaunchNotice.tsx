@@ -11,29 +11,40 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 type Props = {
   availability: MobileAgentLaunchAvailability
   error: string | null
+  /** The host's note on a launch that went ahead; secondary text, not an error. */
+  warning: string | null
   /** The prompt of an agent that started without it, offered for the user to paste in. */
   undeliveredPrompt: string | null
   errorStyle: StyleProp<TextStyle>
 }
 
 /** The status line under an AI button that starts an agent with a prompt. */
-export function AgentLaunchNotice({ availability, error, undeliveredPrompt, errorStyle }: Props) {
+export function AgentLaunchNotice({
+  availability,
+  error,
+  warning,
+  undeliveredPrompt,
+  errorStyle
+}: Props) {
   const clipboard = useClipboardWriter()
   const [copyState, setCopyState] = useState<{ prompt: string; label: string } | null>(null)
-  const message =
+  const availabilityMessage =
     availability === 'update-required'
       ? AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE
       : availability === 'unverified'
         ? AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE
-        : error
-  if (!message) {
+        : null
+  const message = availabilityMessage ?? error
+  const note = availabilityMessage ? null : warning
+  if (!message && !note) {
     return null
   }
   const copyLabel =
     copyState && copyState.prompt === undeliveredPrompt ? copyState.label : 'Copy prompt'
   return (
     <View style={styles.notice}>
-      <Text style={errorStyle}>{message}</Text>
+      {message ? <Text style={errorStyle}>{message}</Text> : null}
+      {note ? <Text style={styles.warningText}>{note}</Text> : null}
       {undeliveredPrompt ? (
         <Pressable
           onPress={() => {
@@ -56,6 +67,10 @@ export function AgentLaunchNotice({ availability, error, undeliveredPrompt, erro
 const styles = StyleSheet.create({
   notice: {
     gap: spacing.xs
+  },
+  warningText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
   },
   copyText: {
     color: colors.accentBlue,

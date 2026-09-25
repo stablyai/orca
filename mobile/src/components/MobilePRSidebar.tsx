@@ -282,6 +282,7 @@ function PrSidebarSections({
     isBusy: triage.isBusy('fix-checks'),
     availability: triage.availability,
     error: triage.error,
+    warning: triage.warning,
     undeliveredPrompt: triage.undeliveredPrompt
   }
   const conflictsTriage = {
@@ -296,6 +297,7 @@ function PrSidebarSections({
     isBusy: triage.isBusy('resolve-conflicts'),
     availability: triage.availability,
     error: triage.error,
+    warning: triage.warning,
     undeliveredPrompt: triage.undeliveredPrompt
   }
   // One card for identity + actions so the ready PR isn't a stack of thin

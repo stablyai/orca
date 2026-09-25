@@ -161,7 +161,8 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       }
       await markNotesSent(comments)
       triggerSuccess()
-      setActionError(result.warning ?? 'Review notes sent')
+      // The warning is a note on a launch that went ahead, so it follows the success, not replaces it.
+      setActionError(result.warning ? `Review notes sent. ${result.warning}` : 'Review notes sent')
     },
     [client, connState, hostCapabilities, markNotesSent, setActionError, setSendSheet, worktreeId]
   )

@@ -257,17 +257,42 @@ describe('promptedLaunchNotice', () => {
     expect(promptedLaunchNotice({ kind: 'prompt-not-sent', prompt: 'p' })).toEqual({
       succeeded: false,
       error: AGENT_PROMPT_NOT_SENT_MESSAGE,
+      warning: null,
       undeliveredPrompt: 'p'
     })
     expect(promptedLaunchNotice({ kind: 'sent' })).toEqual({
       succeeded: true,
       error: null,
+      warning: null,
       undeliveredPrompt: null
     })
     expect(promptedLaunchNotice({ kind: 'unconfirmed', message: 'm' })).toEqual({
       succeeded: false,
       error: 'm',
+      warning: null,
       undeliveredPrompt: null
+    })
+  })
+
+  // A structured chat ignores any saved agent arguments, even '' from a template-only save, and says so.
+  it('never reports the host warning on a launch that went ahead as an error', () => {
+    expect(promptedLaunchNotice({ kind: 'sent', warning: 'arguments were ignored' })).toEqual({
+      succeeded: true,
+      error: null,
+      warning: 'arguments were ignored',
+      undeliveredPrompt: null
+    })
+    expect(
+      promptedLaunchNotice({
+        kind: 'prompt-not-sent',
+        prompt: 'p',
+        warning: 'arguments were ignored'
+      })
+    ).toEqual({
+      succeeded: false,
+      error: AGENT_PROMPT_NOT_SENT_MESSAGE,
+      warning: 'arguments were ignored',
+      undeliveredPrompt: 'p'
     })
   })
 })
