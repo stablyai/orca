@@ -19,8 +19,8 @@ import { closeProcessRegistry } from '../../shared/child-process/close-process-r
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 
-/** The root's own exit was seen first-hand. The lease follows the root, and the root is the
- *  conversation's only writer, so a descendant left unverified or seen alive does not hold it. */
+/** The root's own exit was seen first-hand. The lease follows the root, so a descendant
+ *  left unverified or seen alive does not hold it. */
 export function claudeRootExitObserved(
   connection: ClaudeStreamJsonConnection | null | undefined
 ): boolean {
