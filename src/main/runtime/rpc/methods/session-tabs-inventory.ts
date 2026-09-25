@@ -6,6 +6,7 @@ import { projectSessionTabAgentStatus } from './session-tab-agent-status-project
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
+import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -241,6 +242,14 @@ export async function subscribeSessionTabsInventory(
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
   try {
+    // Why: restore after registering, so an unsubscribe or socket close while it runs still finds the stream.
+    const restoring = restoreStructuredTabsIfSupported(context)
+    if (restoring) {
+      await restoring
+      if (closed) {
+        return
+      }
+    }
     for (let attempt = 1; !collected; attempt += 1) {
       censusInvalidated = false
       const candidate = await collectSessionTabsInventory(
