@@ -4,9 +4,13 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
-import { copyFile, open, readdir, rename, rm, stat } from 'node:fs/promises'
+import { copyFile, open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { publishFileWithoutOverwrite, renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
+import {
+  publishFileWithoutOverwrite,
+  renameFileWithWindowsRetry,
+  renameFileWithWindowsRetryAsync
+} from './codex-accounts/fs-utils'
 
 /**
  * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
@@ -64,7 +68,7 @@ export function publishFileDurableSync(tmpPath: string, finalPath: string): bool
  * themselves and need the rename made durable.
  */
 export async function renameDurable(tmpPath: string, finalPath: string): Promise<void> {
-  await rename(tmpPath, finalPath)
+  await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
   await syncDirectory(dirname(finalPath))
 }
 
@@ -112,7 +116,7 @@ export async function copyFileDurable(sourcePath: string, finalPath: string): Pr
     } finally {
       await handle.close()
     }
-    await rename(tmpPath, finalPath)
+    await renameFileWithWindowsRetryAsync(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true
@@ -148,10 +152,9 @@ export async function writeFileDurableIfCurrent(
   try {
     // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
     await writeTempFileDurable(tmpPath, payload)
-    if (!isCurrent()) {
+    if (!(await renameFileWithWindowsRetryAsync(tmpPath, finalPath, isCurrent))) {
       return false
     }
-    await rename(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
     return true

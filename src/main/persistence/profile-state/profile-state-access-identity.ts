@@ -1,9 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { runProcessSync } from '../../../shared/child-process/run-process'
-import {
-  getProcessStartedAtMs,
-  parseLinuxProcStartTicks
-} from '../../daemon/daemon-process-start-time'
+import { parseLinuxProcStartTicks } from '../../daemon/daemon-process-start-time'
+import { getPsProcessIdentity } from '../../daemon/daemon-process-identity-query'
 
 let bootIdentity: string | null | undefined
 let machineIdentity: string | null | undefined
@@ -77,6 +75,10 @@ function readProcessIdentity(pid: number): string | null {
       return null
     }
   }
-  const startedAtMs = getProcessStartedAtMs(pid)
-  return startedAtMs === null ? null : `wall-time-ms:${startedAtMs}`
+  if (process.platform !== 'darwin') {
+    return null
+  }
+  const startedAtMs = getPsProcessIdentity(pid, { utc: true })?.startedAtMs
+  // Local wall times are ambiguous during daylight-saving transitions.
+  return startedAtMs == null ? null : `darwin-utc-start-ms:${startedAtMs}`
 }

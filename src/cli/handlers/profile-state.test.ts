@@ -166,6 +166,32 @@ describe('profile-state CLI recovery', () => {
     expect(getCliStatusMock).toHaveBeenCalledOnce()
   })
 
+  it('adopts current JSON through CLI with an honest source description', async () => {
+    const profile = createProfile()
+    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    const original = readFileSync(profile.dataFile)
+    await main(['profile', 'state', 'rollback', '--current-json'], profile.userDataPath)
+    expect(readFileSync(profile.dataFile)).toEqual(original)
+    expect(existsSync(profile.databaseFile)).toBe(false)
+    const output = String(vi.mocked(console.log).mock.calls.at(-1)?.[0])
+    expect(output).toContain('source: current JSON')
+    expect(output).not.toContain('revision:')
+  })
+
+  it.each([
+    ['--current-json', '--revision', '1'],
+    ['--current-json', '--backup', '1'],
+    ['--current-json=false']
+  ])('rejects ambiguous current JSON arguments: %s', async (...flags) => {
+    getCliStatusMock.mockClear()
+    const profile = createProfile()
+    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+    await main(['profile', 'state', 'rollback', ...flags, '--json'], profile.userDataPath)
+    expect(process.exitCode).toBe(1)
+    expect(existsSync(profile.databaseFile)).toBe(true)
+    expect(getCliStatusMock).not.toHaveBeenCalled()
+  })
+
   it('keeps profile-state recovery local when remote selection is configured', async () => {
     const profile = createProfile()
     getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
@@ -312,28 +338,31 @@ describe('profile-state CLI recovery', () => {
     )
   })
 
-  it('refuses rollback while the runtime is reachable', async () => {
-    const profile = createProfile()
-    getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
-    getCliStatusMock.mockResolvedValueOnce({
-      id: 'status',
-      ok: true,
-      result: {
-        app: { running: true, pid: 123 },
-        runtime: { state: 'ready', reachable: true, runtimeId: 'desktop' },
-        graph: { state: 'ready' }
-      },
-      _meta: { runtimeId: 'test' }
-    })
+  it.each([['--revision', '1'], ['--current-json']])(
+    'refuses rollback while runtime is reachable: %s',
+    async (...flags) => {
+      const profile = createProfile()
+      getDefaultUserDataPathMock.mockReturnValue(profile.userDataPath)
+      getCliStatusMock.mockResolvedValueOnce({
+        id: 'status',
+        ok: true,
+        result: {
+          app: { running: true, pid: 123 },
+          runtime: { state: 'ready', reachable: true, runtimeId: 'desktop' },
+          graph: { state: 'ready' }
+        },
+        _meta: { runtimeId: 'test' }
+      })
 
-    await main(['profile', 'state', 'rollback', '--revision', '1'], profile.userDataPath)
+      await main(['profile', 'state', 'rollback', ...flags], profile.userDataPath)
 
-    expect(existsSync(profile.databaseFile)).toBe(true)
-    expect(readFileSync(profile.dataFile, 'utf8')).toBe(
-      JSON.stringify({ settings: { theme: 'old' } })
-    )
-    expect(vi.mocked(console.error).mock.calls.at(-1)?.[0]).toContain('Stop Orca')
-  })
+      expect(existsSync(profile.databaseFile)).toBe(true)
+      expect(readFileSync(profile.dataFile, 'utf8')).toBe(
+        JSON.stringify({ settings: { theme: 'old' } })
+      )
+      expect(vi.mocked(console.error).mock.calls.at(-1)?.[0]).toContain('Stop Orca')
+    }
+  )
 
   it('lists SQLite backups alongside JSON exports without opening the damaged primary', async () => {
     const profile = createProfile()

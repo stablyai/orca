@@ -49,7 +49,7 @@ function formatExports(result: ProfileStateExportsResult): string {
 function formatRollback(result: ProfileStateRollbackResult): string {
   return [
     `profileId: ${result.profileId}`,
-    `revision: ${result.revision}`,
+    result.revision === null ? 'source: current JSON' : `revision: ${result.revision}`,
     `storage: ${result.storage}`,
     `restored: ${result.restoredPath}`,
     `quarantine: ${result.quarantineDirectory}`,
@@ -97,12 +97,6 @@ export const PROFILE_STATE_HANDLERS: Record<string, CommandHandler> = {
   },
   'profile state rollback': async ({ client, flags, json }) => {
     rejectProfileStateRemoteSelection(flags)
-    if (flags.has('revision') && flags.has('backup')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Select exactly one of --revision or --backup.'
-      )
-    }
     const selector = parseSelector(flags)
     const userDataPath = getDefaultUserDataPath()
     let result: ProfileStateRollbackResult
@@ -125,6 +119,18 @@ export const PROFILE_STATE_HANDLERS: Record<string, CommandHandler> = {
 }
 
 function parseSelector(flags: Map<string, string | boolean>): ProfileStateRecoverySelector {
+  if (['revision', 'backup', 'current-json'].filter((flag) => flags.has(flag)).length !== 1) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Select exactly one of --revision, --backup, or --current-json.'
+    )
+  }
+  if (flags.has('current-json')) {
+    if (flags.get('current-json') !== true) {
+      throw new RuntimeClientError('invalid_argument', '--current-json does not take a value.')
+    }
+    return { kind: 'current-json' }
+  }
   if (!flags.has('backup')) {
     return { kind: 'json', revision: parseRevision(flags) }
   }

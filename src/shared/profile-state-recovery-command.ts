@@ -6,6 +6,7 @@ export const PROFILE_STATE_RECOVERY_RESULT_PREFIX = '[profile-state-recovery] '
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 const selectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('json'), revision: positiveInteger }).strict(),
+  z.object({ kind: z.literal('current-json') }).strict(),
   z.object({ kind: z.literal('sqlite'), backupId: z.string().min(1) }).strict()
 ])
 
@@ -26,7 +27,8 @@ const exportsSchema = z.object({
     .readonly()
 })
 const rollbackSchema = exportsSchema.extend({
-  revision: positiveInteger,
+  // Canonical JSON edited outside SQLite has no database revision.
+  revision: positiveInteger.nullable(),
   quarantineDirectory: z.string(),
   removedDatabaseFiles: z.array(z.string()).readonly(),
   storage: z.enum(['json', 'sqlite']),

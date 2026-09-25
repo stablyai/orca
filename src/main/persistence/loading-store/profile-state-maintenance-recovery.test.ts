@@ -16,9 +16,9 @@ vi.mock('../../ssh/ssh-config-parser', () => ({
 
 describe('failed maintenance recovery', () => {
   it.each(['maintenance', 'final', 'freeze'] as const)(
-    '%s cancels a backup awaited by an earlier admitted flush',
+    '%s cancels an active backup after a routine flush completes',
     async (kind) => {
-      const { store, authority } = await createWorkerMaintenanceFixture()
+      const { store } = await createWorkerMaintenanceFixture()
       const started = maintenanceBarrier()
       const canceled = maintenanceBarrier()
       vi.spyOn(backupWorker, 'runProfileStateBackupWorker').mockImplementationOnce(
@@ -36,14 +36,7 @@ describe('failed maintenance recovery', () => {
         return { value: undefined }
       })
       await started.promise
-      const draining = maintenanceBarrier()
-      const drain = authority.drainBackups.bind(authority)
-      vi.spyOn(authority, 'drainBackups').mockImplementationOnce((cancel) => {
-        draining.resolve()
-        return drain(cancel)
-      })
-      const earlier = store.flushPendingOrThrowAsync()
-      await draining.promise
+      await store.flushPendingOrThrowAsync()
       const stop =
         kind === 'maintenance'
           ? store.beginProfileMaintenance()
@@ -51,7 +44,7 @@ describe('failed maintenance recovery', () => {
             ? store.flushFinalOrThrowAsync()
             : store.freezeWritesAsync()
       await canceled.promise
-      await Promise.all([earlier, stop])
+      await stop
     }
   )
 

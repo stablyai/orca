@@ -1,7 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
-import { ProfileStateExportPreparationError } from './profile-state-authority-exports'
 import {
   encodeProfileStateWriterError,
   ProfileStateWriterError
@@ -116,14 +115,8 @@ async function accept(value: unknown): Promise<void> {
   try {
     reply(await execute(value))
   } catch (error) {
-    const failure = encodeProfileStateWriterError(
-      error,
-      !(error instanceof ProfileStateExportPreparationError) &&
-        (value.command === 'export-json' ||
-          value.command === 'export-latest' ||
-          value.command === 'export-compatibility' ||
-          value.command === 'close')
-    )
+    // Export staging accepts both JSON versions; only uncertain SQL outcomes retire the writer.
+    const failure = encodeProfileStateWriterError(error, value.command === 'close')
     reply({ id: value.id, ok: false, error: failure })
     stopping ||= failure.outcome === 'indeterminate'
   } finally {

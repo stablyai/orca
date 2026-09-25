@@ -196,10 +196,8 @@ export async function flushCurrentStateAsync(
           ? runtime.activeViewPreference.flushAsync()
           : runtime.activeViewPreference.flushPendingAsync(signal))
         await writeGithubCacheSnapshotAsync(owner, final, signal)
-        if (final || drainToStableGeneration) {
-          await runtime.profileStateAuthority?.drainBackups?.(
-            final || runtime.profileMaintenancePending
-          )
+        if (final || runtime.profileMaintenancePending) {
+          await runtime.profileStateAuthority?.drainBackups?.(true)
         }
       }
       if (signal?.aborted) {

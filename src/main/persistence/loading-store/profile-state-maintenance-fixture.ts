@@ -64,14 +64,20 @@ function paths(profile?: ProfileFixtureLocation) {
   }
 }
 
-export async function createWorkerMaintenanceFixture(profile?: ProfileFixtureLocation) {
+export async function createWorkerMaintenanceFixture(
+  profile?: ProfileFixtureLocation,
+  onFailure?: (error: Error) => void
+) {
   const input = paths(profile)
   const bootstrap = new ProfileStateSqliteAuthority(input.databaseFile, input.profileId)
   bootstrap.writeSerializedState(
     Buffer.from(JSON.stringify(buildProfileStateCutoverFixture(input.directory)))
   )
   const state = bootstrap.readInitialState().takeParsedState?.()
-  const authority = new ProfileStateWorkerAuthority(bootstrap.retireForWorker(), workerOptions)
+  const authority = new ProfileStateWorkerAuthority(bootstrap.retireForWorker(), {
+    ...workerOptions,
+    onFailure
+  })
   await authority.ready
   const store = new Store({
     dataFile: input.dataFile,

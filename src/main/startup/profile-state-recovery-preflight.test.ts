@@ -137,30 +137,41 @@ describe('Electron recovery preflight', () => {
     expect(mocks.exit).not.toHaveBeenCalled()
   })
 
-  it('restores under both locks with an explicit root even when ordinary singleton checks bypass', () => {
-    const item = fixture()
-    mocks.requestSingleInstanceLock.mockImplementation(() => {
-      expect(mocks.setPath).toHaveBeenCalledWith('userData', item.root)
-      expect(() => acquireProfileStateRuntimeAdmission(item.root)).toThrow()
-      expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
-      return true
-    })
-    expect(runProfileStateRecoveryPreflight(item.argv)).toBe(true)
-    expect(process.env.ORCA_USER_DATA_PATH).toBe(item.root)
-    expect(process.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
-    expect(mocks.background).toHaveBeenCalledOnce()
-    expect(mocks.requestSingleInstanceLock).toHaveBeenCalledOnce()
-    expect(response()).toMatchObject({
-      ok: true,
-      result: { storage: 'json', revision: 1, restoredPath: item.dataFile }
-    })
-    expect(JSON.parse(readFileSync(item.dataFile, 'utf8'))).toEqual(item.restored)
-    expect(existsSync(item.databaseFile)).toBe(false)
-    expect(existsSync(item.exportFile)).toBe(false)
-    expect(mocks.exit).toHaveBeenCalledWith(0)
-    const runtime = acquireProfileStateRuntimeAdmission(item.root)
-    runtime.release()
-  })
+  it.each(['json', 'current-json'] as const)(
+    'restores %s under both locks despite ordinary singleton bypasses',
+    (kind) => {
+      const item = fixture()
+      if (kind === 'current-json') {
+        writeFileSync(item.dataFile, JSON.stringify(item.restored))
+        item.argv[3] = JSON.stringify({ userDataPath: item.root, selector: { kind } })
+      }
+      mocks.requestSingleInstanceLock.mockImplementation(() => {
+        expect(mocks.setPath).toHaveBeenCalledWith('userData', item.root)
+        expect(() => acquireProfileStateRuntimeAdmission(item.root)).toThrow()
+        expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
+        return true
+      })
+      expect(runProfileStateRecoveryPreflight(item.argv)).toBe(true)
+      expect(process.env.ORCA_USER_DATA_PATH).toBe(item.root)
+      expect(process.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+      expect(mocks.background).toHaveBeenCalledOnce()
+      expect(mocks.requestSingleInstanceLock).toHaveBeenCalledOnce()
+      expect(response()).toMatchObject({
+        ok: true,
+        result: {
+          storage: 'json',
+          revision: kind === 'json' ? 1 : null,
+          restoredPath: item.dataFile
+        }
+      })
+      expect(JSON.parse(readFileSync(item.dataFile, 'utf8'))).toEqual(item.restored)
+      expect(existsSync(item.databaseFile)).toBe(false)
+      expect(existsSync(item.exportFile)).toBe(false)
+      expect(mocks.exit).toHaveBeenCalledWith(0)
+      const runtime = acquireProfileStateRuntimeAdmission(item.root)
+      runtime.release()
+    }
+  )
 
   it('refuses an old native singleton owner without modifying authority or exports', () => {
     const item = fixture()

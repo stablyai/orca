@@ -353,6 +353,52 @@ describe('profile state owner reclamation', () => {
     expect(fs.existsSync(owner)).toBe(true)
   })
 
+  it.each([
+    ['darwin-utc-start-ms:100000', 'darwin-utc-start-ms:101000', false],
+    ['darwin-utc-start-ms:100000', 'darwin-utc-start-ms:101501', true],
+    ['wall-time-ms:100000', 'darwin-utc-start-ms:3700000', false]
+  ] as const)('compares macOS start identities safely: %s / %s', (recorded, actual, exited) => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+    vi.spyOn(identity, 'profileStateAccessProcessIdentity').mockReturnValue(actual)
+    const owner = staleGate(path, process.pid, hostname(), {
+      bootIdentity: 'same-boot',
+      processStartIdentity: recorded
+    })
+    if (exited) {
+      acquireProfileStateMaintenance(path).release()
+      expect(fs.existsSync(owner)).toBe(false)
+    } else {
+      expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+      expect(fs.existsSync(owner)).toBe(true)
+    }
+  })
+
+  it('retries a transient Windows owner publication lock', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    if (!platform) {
+      throw new Error('Missing platform descriptor')
+    }
+    const path = root()
+    const rename = fs.renameSync
+    const publish = vi
+      .spyOn(fs, 'renameSync')
+      .mockImplementationOnce(() => {
+        throw Object.assign(new Error('scanner holds directory'), { code: 'EPERM' })
+      })
+      .mockImplementation(rename)
+    vi.spyOn(Atomics, 'wait').mockReturnValue('timed-out')
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const admission = acquireProfileStateRuntimeAdmission(path)
+      expect(publish).toHaveBeenCalledTimes(2)
+      admission.release()
+      expect(fs.readdirSync(profileStateAccessPaths(path).participants)).toEqual([])
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
   it('recognizes an exited owner after a hostname change on the same kernel boot', () => {
     const path = root()
     vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')

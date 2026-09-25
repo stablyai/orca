@@ -53,6 +53,7 @@ import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import { reconcileManagedWslCliRegistrations } from '../cli/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -145,7 +146,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     profileId: profile.profile.id,
     runtime: 'desktop',
     authorityMode: profileStateAuthorityMode,
-    storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
+    storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
+    onPersistenceFailure: reportProfileStateWriteFailure
   })
   state.profileStateStartup = {
     backend: profileState.backend,

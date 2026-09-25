@@ -50,13 +50,15 @@ it('can publish an updater JSON export at a reused revision after SQLite rollbac
   const profileId = 'rollback-export'
   const stores: Store[] = []
   try {
+    const originalAuthority = new ProfileStateSqliteAuthority(databasePath, profileId)
     const original = new Store({
       dataFile,
-      profileStateAuthority: new ProfileStateSqliteAuthority(databasePath, profileId)
+      profileStateAuthority: originalAuthority
     })
     stores.push(original)
     original.updateSettings({ theme: 'light' })
     await original.flushPendingOrThrowAsync()
+    await originalAuthority.drainBackups()
     const backup = profileStateDatabaseBackups(databasePath)[0]
     expect(backup).toBeDefined()
     original.updateSettings({ theme: 'dark' })

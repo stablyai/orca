@@ -27,6 +27,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
+    this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
     this.invalidatePtyControllerInventoryForLifecycle(ptyId, connectionId)
     const existingPty = this.ptysById.get(ptyId)
     const replacementHandle = binding?.terminalHandle?.trim()
@@ -143,6 +144,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
+      if (replacementHandle?.startsWith('term_')) {
+        this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
+      }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
     }
   }

@@ -116,6 +116,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
       await state.store.flushPendingOrThrowAsync()
     }
 
+    await state.authority.drainBackups()
     expect(scope === 'complete' ? fullWrite : selectiveWrite).toHaveBeenCalledOnce()
     expect(scope === 'complete' ? selectiveWrite : fullWrite).not.toHaveBeenCalled()
     const backups = profileStateDatabaseBackups(state.databasePath)
@@ -131,6 +132,34 @@ describe('Store automatic SQLite recovery snapshots', () => {
         .filter((name) => name.includes('.backup.'))
         .sort()
     ).toEqual(backups.map((backup) => basename(backup.path)).sort())
+  })
+
+  it('acknowledges a routine flush while the previous recovery backup is still running', async () => {
+    const state = await fixture()
+    const realSnapshot = backupExecution.runProfileStateBackup
+    const started = Promise.withResolvers<void>()
+    const gate = Promise.withResolvers<void>()
+    releases.push(gate.resolve)
+    vi.spyOn(backupExecution, 'runProfileStateBackup').mockImplementationOnce(async (job) => {
+      started.resolve()
+      await gate.promise
+      await realSnapshot(job)
+    })
+    state.store.updateSettings({ theme: 'dark' })
+    state.store.flushOrThrow()
+    await started.promise
+    state.store.patchWorkspaceSession({ activeWorktreeId: 'newer-than-backup' })
+    let settled = false
+    const flush = state.store.flushPendingOrThrowAsync().then(() => {
+      settled = true
+    })
+    await vi.waitFor(() => expect(settled).toBe(true))
+    expect(readSnapshot(state.databasePath).state.workspaceSession.activeWorktreeId).toBe(
+      'newer-than-backup'
+    )
+    expect(profileStateDatabaseBackups(state.databasePath)).toHaveLength(1)
+    gate.resolve()
+    await Promise.all([flush, state.authority.drainBackups()])
   })
 
   it.each(['quit', 'profile mutation'] as const)(
@@ -201,6 +230,7 @@ describe('Store automatic SQLite recovery snapshots', () => {
         await expect(state.store.flushPendingOrThrowAsync()).resolves.toBeUndefined()
       }
 
+      await state.authority.drainBackups()
       expect(snapshot).toHaveBeenCalledOnce()
       expect(log).toHaveBeenCalledWith(
         '[persistence] Failed to back up profile state database:',

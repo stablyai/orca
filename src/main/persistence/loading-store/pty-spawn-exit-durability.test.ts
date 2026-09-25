@@ -9,6 +9,16 @@ import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
 import type { PtySpawnIpcDeps } from '../../ipc/pty/ipc/spawn-types'
 import { registerPersistedPtySpawn } from '../../ipc/pty/pane/spawn-registration'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { clearProviderPtyState } from '../../ipc/pty/provider/state-cleanup'
+import { ptyOwnership, ptyIncarnationById } from '../../ipc/pty/provider/ownership-state'
+import { ptySizes } from '../../ipc/pty/delivery/visibility-state'
+import {
+  paneSpawnReservationsByOwnerKey,
+  reservePaneSpawn,
+  reserveIdlePaneSpawn,
+  resolvePaneSpawnReservation,
+  type PaneSpawnReservation
+} from '../../ipc/pty/pane/spawn-reservation'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -19,14 +29,19 @@ vi.mock('../../ssh/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 
-it.each([
-  { controller: 'runtime', connectionId: null, exitCode: 0 },
-  { controller: 'runtime', connectionId: 'test-host', exitCode: 0 },
-  { controller: 'ipc', connectionId: null, exitCode: -1 },
-  { controller: 'ipc', connectionId: 'test-host', exitCode: 0 }
-])(
-  'retires an exited $controller binding on $connectionId after disk finishes',
-  async ({ controller, connectionId, exitCode }) => {
+it.each(
+  [
+    { controller: 'runtime', connectionId: null, exitCode: 0 },
+    { controller: 'runtime', connectionId: 'test-host', exitCode: 0 },
+    { controller: 'ipc', connectionId: null, exitCode: -1 },
+    { controller: 'ipc', connectionId: 'test-host', exitCode: 0 }
+  ].flatMap((test) => [
+    { ...test, stableOwner: false },
+    { ...test, stableOwner: true }
+  ])
+)(
+  'retires an exited $controller binding on $connectionId after disk finishes (stable: $stableOwner)',
+  async ({ controller, connectionId, exitCode, stableOwner }) => {
     const { store, authority, readState } = await fixture()
     const runtime = new OrcaRuntimeService(store)
     const binding = {
@@ -38,15 +53,31 @@ it.each([
         : 'pty-exited-during-durable-bind',
       incarnationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     }
+    const owner = stableOwner
+      ? {
+          ...binding,
+          hasPersistedBinding: true as const,
+          persistedIncarnationId: 'previous-incarnation'
+        }
+      : null
+    if (owner) {
+      await store.persistPtyBinding(
+        { ...binding, incarnationId: owner.persistedIncarnationId },
+        connectionId ? toSshExecutionHostId(connectionId) : undefined
+      )
+    }
     runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
     runtime.beginPtyRegistration(binding.ptyId, binding.incarnationId)
     runtime.assertPtyRegistrationAllowed(binding.ptyId, binding.incarnationId)
     let commit: () => Promise<unknown>
+    const reservationKey = JSON.stringify([connectionId, binding.worktreeId, binding.leafId])
+    let reservation: PaneSpawnReservation | undefined
     if (controller === 'runtime') {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; its runtime/store are real and preflight-only dependencies are unreachable.
       const deps = { runtime, store, options: {} } as PtyRuntimeControllerDeps
       const ctx = createRuntimePtySpawnState(deps, { ...binding, connectionId, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
+      ctx.stablePaneOwner = owner
       ctx.hostSessionBinding = { store, ...binding }
       ctx.metadataLeafId = binding.leafId
       commit = () => commitRuntimePtySpawn(ctx)
@@ -55,18 +86,46 @@ it.each([
       const deps = { runtime, store } as PtySpawnIpcDeps
       const ctx = createPtyIpcSpawnState(deps, { ...binding, connectionId, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
+      ctx.stablePaneOwner = owner
       ctx.metadataLeafId = binding.leafId
       ctx.validatedLeafId = binding.leafId
+      reservation = reservePaneSpawn(reservationKey)
+      ctx.paneSpawnReservationKey = reservationKey
+      ctx.paneSpawnReservation = reservation
       commit = () => commitPtyIpcSpawn(ctx)
     }
     const gate = authority.pause()
-    const pending = expect(commit()).rejects.toThrow('agent_session_exited_during_start')
+    const pending =
+      controller === 'ipc'
+        ? expect(commit()).resolves.toMatchObject({
+            id: binding.ptyId,
+            incarnationId: binding.incarnationId
+          })
+        : expect(commit()).rejects.toThrow('agent_session_exited_during_start')
     await gate.started.promise
+    const nextReservation = reservation ? reserveIdlePaneSpawn(reservationKey) : undefined
+    clearProviderPtyState(binding.ptyId)
+    ptyOwnership.delete(binding.ptyId)
     await runtime.onPtyExit(binding.ptyId, exitCode, binding.incarnationId, {
       providerExitObserved: true
     })
     gate.finish.resolve()
     await pending
+    expect(ptyOwnership.has(binding.ptyId)).toBe(false)
+    expect(ptyIncarnationById.has(binding.ptyId)).toBe(false)
+    expect(ptySizes.has(binding.ptyId)).toBe(false)
+    expect(
+      store
+        .getSshRemotePtyLeases(connectionId ?? undefined)
+        .some((lease) => lease.ptyId.includes('pty-exited-during-durable-bind'))
+    ).toBe(false)
+    if (reservation) {
+      await expect(reservation.promise).resolves.toMatchObject({ id: binding.ptyId })
+      const next = await nextReservation
+      expect(next).not.toBe(reservation)
+      resolvePaneSpawnReservation(reservationKey, next, { id: 'next-spawn' })
+      expect(paneSpawnReservationsByOwnerKey.has(reservationKey)).toBe(false)
+    }
     const state = readState()
     const session = connectionId
       ? state.workspaceSessionsByHostId[toSshExecutionHostId(connectionId)]

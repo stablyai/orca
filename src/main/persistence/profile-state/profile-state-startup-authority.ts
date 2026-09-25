@@ -17,6 +17,7 @@ export type ProfileStateStartupAuthorityOptions = Omit<
   runtime: ProfileStateStartupRuntime
   authorityMode: ProfileStateStoreAuthorityMode
   storageAuthority: AutomationStorageAuthority
+  onPersistenceFailure?: (error: Error) => void
 }
 
 export class ProfileStateStartupAuthorityError extends Error {
@@ -58,5 +59,10 @@ export async function createProfileStateStoreForStartup(
   ) {
     throw new ProfileStateStartupAuthorityError()
   }
-  return createLiveProfileStateStore(options)
+  return createLiveProfileStateStore(options, {
+    onFailure:
+      options.onPersistenceFailure ??
+      ((error) =>
+        console.error('[persistence] Saving has stopped. Restart Orca before continuing.', error))
+  })
 }

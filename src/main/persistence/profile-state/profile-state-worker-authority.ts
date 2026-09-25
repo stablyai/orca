@@ -21,7 +21,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
 
   constructor(
     private readonly initialization: ProfileStateWriterInitialization,
-    private readonly options: { workerPath?: string; backupWorkerPath?: string } = {}
+    private readonly options: {
+      workerPath?: string
+      backupWorkerPath?: string
+      onFailure?: (error: Error) => void
+    } = {}
   ) {
     this.writer = new ProfileStateWriteWorkerClient(initialization, options)
     this.backups = this.createBackups()
@@ -117,7 +121,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         consumed = true
         this.writer = new ProfileStateWriteWorkerClient(
           { ...this.initialization, revision },
-          this.options
+          { ...this.options, reportInitializationFailure: true }
         )
         this.backups = this.createBackups()
         this.closing = undefined

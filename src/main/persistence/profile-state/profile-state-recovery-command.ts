@@ -54,9 +54,10 @@ export function rollbackProfileState(
   if (selector.kind === 'sqlite') {
     return restoreDatabaseBackup(userDataPath, result, selector.backupId, maintenance)
   }
-  const revision = selector.revision
-  const exportPath = profileStateJsonExportPath(result.dataFile, revision)
-  if (!result.exportPaths.includes(exportPath)) {
+  const revision = selector.kind === 'json' ? selector.revision : null
+  const exportPath =
+    revision === null ? result.dataFile : profileStateJsonExportPath(result.dataFile, revision)
+  if (revision !== null && !result.exportPaths.includes(exportPath)) {
     throw new ProfileStateRecoveryCommandError(
       'invalid_argument',
       `Profile-state export revision ${revision} is unavailable. Use profile state exports to inspect retained revisions.`
@@ -68,6 +69,7 @@ export function rollbackProfileState(
     dataFile: result.dataFile,
     exportPath,
     profileId: result.profileId,
+    ...(revision === null ? { reason: 'profile-state-adopt-current-json' } : {}),
     beforeRestore: () => invalidateHttp1CompatibilityMarker(userDataPath)
   })
   syncHttp1CompatibilityMarkerAfterRollback(userDataPath, result.dataFile, result.profileId)
