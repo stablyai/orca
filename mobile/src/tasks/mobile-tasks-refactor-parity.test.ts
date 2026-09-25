@@ -107,9 +107,11 @@ const hash = (parts: string[] | string): string =>
 // moves. The render-token stream gains the four tokens that one attribute is, 35,203 -> 35,207.
 // Nothing else in the family moves.
 
-const SCREEN_RPC_SCREEN_HOOKS = '0f66df2141117dfec2f8a0adb3f598312e6fda8e80833a365a645796f5ab48c3'
+// Naming the WSL distro on workspace-creation detection moves the hook and statement hashes and
+// nothing else: the local detection send gains a params argument. Counts hold.
+const SCREEN_RPC_SCREEN_HOOKS = '7ed2e52e3c33aad239dfbe3216195f2794159ad41bae0113b16c8672216081e1'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'dd8f33cb3cf96f5c39abac397cb77e35f59079291033a1866ead462b041ab979'
+const SCREEN_RPC_STATEMENTS = '9109d7adfcae424f5ac3af90720d4c9f9e95a36d64099df3bdb0c57a7f01a497'
 const MAIN_REBASED_DECLARATIONS = '920a1b66445d10e2a64fbdbe9d7138a4ebe21bbccde1b9ac9c89267cecc584b9'
 const SCREEN_RPC_SEMANTICS = 'e07a63387d57106483ee703ec6c19dea593e0eca5c651758f42bcb36254850b7'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
