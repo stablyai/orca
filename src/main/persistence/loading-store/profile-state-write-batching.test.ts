@@ -29,6 +29,92 @@ async function snapshotFixture() {
 }
 
 describe('queued worker snapshot batching', () => {
+  it.each(['explicit', 'debounce'] as const)(
+    'preserves getter-only edits when an explicit flush joins a dirty %s batch',
+    async (firstFlush) => {
+      const { store, authority, readState } = await fixture()
+      const gate = authority.pause()
+      vi.useFakeTimers()
+      try {
+        const mutation = store.runDurableMutation(() => {
+          store.updateSettings({ theme: 'dark' })
+          return { value: undefined }
+        })
+        await gate.started.promise
+        const first =
+          firstFlush === 'explicit'
+            ? store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+            : await vi.advanceTimersByTimeAsync(1_000)
+        store.getWorkspaceSession().activeTabId = 'getter-only-edit'
+        store.updateSettings({ theme: 'light' })
+        const second = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+        gate.finish.resolve()
+        await Promise.all([mutation, first, second])
+        expect(readState()).toMatchObject({
+          settings: { theme: 'light' },
+          workspaceSession: { activeTabId: 'getter-only-edit' }
+        })
+        expect(authority.captures).toHaveLength(2)
+      } finally {
+        gate.finish.resolve()
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('preserves a queued explicit capture when a later debounce joins it', async () => {
+    const { store, authority, readState } = await fixture()
+    const gate = authority.pause()
+    vi.useFakeTimers()
+    try {
+      const mutation = store.runDurableMutation(() => {
+        store.updateSettings({ theme: 'dark' })
+        return { value: undefined }
+      })
+      await gate.started.promise
+      store.getWorkspaceSession().activeTabId = 'getter-only-edit'
+      const explicit = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      store.updateSettings({ theme: 'light' })
+      await vi.advanceTimersByTimeAsync(1_000)
+      gate.finish.resolve()
+      await Promise.all([mutation, explicit])
+      expect(readState()).toMatchObject({
+        settings: { theme: 'light' },
+        workspaceSession: { activeTabId: 'getter-only-edit' }
+      })
+      expect(authority.captures).toHaveLength(2)
+    } finally {
+      gate.finish.resolve()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps batches of only debounced saves selective', async () => {
+    const { store, authority, readState } = await fixture()
+    const full = vi.spyOn(authority, 'writeCompleteSerializedDomains')
+    const gate = authority.pause()
+    vi.useFakeTimers()
+    try {
+      const mutation = store.runDurableMutation(() => {
+        store.updateSettings({ theme: 'dark' })
+        return { value: undefined }
+      })
+      await gate.started.promise
+      await vi.advanceTimersByTimeAsync(1_000)
+      store.updateSettings({ theme: 'light' })
+      await vi.advanceTimersByTimeAsync(1_000)
+      gate.finish.resolve()
+      await mutation
+      await store.waitForPendingWrite()
+      expect(readState().settings.theme).toBe('light')
+      expect(authority.captures).toHaveLength(2)
+      expect(full).not.toHaveBeenCalled()
+    } finally {
+      gate.finish.resolve()
+      vi.useRealTimers()
+    }
+  })
+
   it('captures getter-only edits in a flush requested after the preceding capture started', async () => {
     const { store, authority, readState } = await fixture()
     const fullCapture = vi.spyOn(
@@ -98,7 +184,9 @@ describe('queued worker snapshot batching', () => {
       store.flushPendingOrThrowAsync({ drainToStableGeneration: false }),
       store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     ].map((waiter) => expect(waiter).rejects.toThrow('disk refused'))
-    vi.spyOn(authority, 'writeSerializedDomains').mockRejectedValueOnce(new Error('disk refused'))
+    vi.spyOn(authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(
+      new Error('disk refused')
+    )
     gate.finish.resolve()
     await Promise.all([first, ...failed])
     await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
