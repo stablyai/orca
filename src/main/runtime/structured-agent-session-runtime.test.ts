@@ -191,17 +191,6 @@ describe('structured agent-session owner probe', () => {
 
     expect(result.outcome).toBe('indeterminate')
   })
-
-  it('releases only a reservation carrying durable pre-spawn proof', async () => {
-    const probe = deadProbe()
-    const result = await createStructuredAgentSessionOwnerProbe(
-      HOST_ID,
-      probe
-    )(record(null, { processlessAt: 1_800_000_000_000, claimStatus: 'reserved' }))
-
-    expect(probe).not.toHaveBeenCalled()
-    expect(result).toEqual({ outcome: 'reservation-unused' })
-  })
 })
 
 describe('structured agent-session runtime install', () => {

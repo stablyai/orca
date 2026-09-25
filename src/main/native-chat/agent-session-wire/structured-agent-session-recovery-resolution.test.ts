@@ -117,7 +117,7 @@ function deps(
 }
 
 describe('structured session recovery resolution', () => {
-  it('does not release an ownerless native reservation without processless proof', async () => {
+  it('releases an ownerless reservation: nothing it recorded can be holding it', async () => {
     const store = await openStore()
     await reserve(store)
     await latch(store, 'recovering')
@@ -127,12 +127,13 @@ describe('structured session recovery resolution', () => {
       SESSION
     )
 
-    expect(result).toBe('unresolved')
+    expect(result).toBe('resolved')
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'recovering',
-      runtimeFence: 1,
-      reservedSpawnToken: 'spawn-recovery'
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      reservedSpawnToken: null,
+      deathEvidence: null
     })
   })
 
@@ -188,7 +189,7 @@ describe('structured session recovery resolution', () => {
     })
   })
 
-  it('escalates the stop request but never evicts an owner that stays alive', async () => {
+  it('releases an owner that survives the stop ladder, with no death evidence', async () => {
     const store = await openStore()
     await liveOwner(store)
     await latch(store, 'recovering')
@@ -201,19 +202,22 @@ describe('structured session recovery resolution', () => {
       SESSION
     )
 
-    expect(result).toBe('unresolved')
-    expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGTERM')
-    expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGKILL')
-    // The latch is preserved verbatim: no fence move, no cleared owner, no lost state.
+    expect(result).toBe('resolved')
+    expect(stopOwnerProcess.mock.calls).toEqual([
+      [4242, 'SIGTERM'],
+      [4242, 'SIGKILL']
+    ])
+    // Its transport died with the runtime that held it; nothing proved it gone, so no evidence.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'live',
-      handoffStage: 'recovering',
-      runtimeFence: 1,
-      ownerProcess: { pid: 4242 }
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      ownerProcess: null,
+      deathEvidence: null
     })
   })
 
-  it('leaves an unverifiable owner latched and requests no stop', async () => {
+  it('releases an owner whose identity cannot be verified, and signals nothing', async () => {
     const store = await openStore()
     await liveOwner(store)
     await latch(store, 'recovering')
@@ -226,11 +230,15 @@ describe('structured session recovery resolution', () => {
       SESSION
     )
 
-    expect(result).toBe('unresolved')
+    expect(result).toBe('resolved')
+    // The pid may have been reused by an unrelated process.
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      handoffStage: 'recovering',
-      runtimeFence: 1
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      ownerProcess: null,
+      deathEvidence: null
     })
   })
 
@@ -298,44 +306,36 @@ describe('structured session recovery resolution', () => {
     })
   })
 
-  it('frees a conflicted claim once its named owner is proven gone', async () => {
+  it('treats a claim an older record marked conflicted by the owner it names', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await store.markClaimConflicted(SESSION, NOW)
+    await store.transitionHandoff(SESSION, (record) => ({
+      ...record,
+      lease: { ...record.lease, claimStatus: 'conflicted', handoffStage: 'manual-recovery' }
+    }))
+    let alive = true
+    const stopOwnerProcess = vi.fn(() => {
+      alive = false
+    })
 
-    expect(
-      await resolveStructuredSessionRecovery(
-        deps(store, () => ({ outcome: 'pid-absent' })),
-        SESSION
-      )
-    ).toBe('resolved')
+    const result = await resolveStructuredSessionRecovery(
+      deps(
+        store,
+        () =>
+          alive
+            ? { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
+            : { outcome: 'pid-absent' },
+        { stopOwnerProcess }
+      ),
+      SESSION
+    )
+
+    expect(result).toBe('resolved')
+    expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGTERM')
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
       claimStatus: 'released',
       deathEvidence: { kind: 'pid-absent' }
-    })
-  })
-
-  it('never stops the process a conflicted claim names, and keeps the conflict without proof', async () => {
-    const store = await openStore()
-    await liveOwner(store)
-    await store.markClaimConflicted(SESSION, NOW)
-    const stopOwnerProcess = vi.fn()
-
-    const result = await resolveStructuredSessionRecovery(
-      deps(store, () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] }), {
-        stopOwnerProcess
-      }),
-      SESSION
-    )
-
-    // Ownership was never settled, so the process on the other side of the conflict is not
-    // Orca's to kill; only the user can decide which claimant wins.
-    expect(stopOwnerProcess).not.toHaveBeenCalled()
-    expect(result).toBe('unresolved')
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
     })
   })
 })

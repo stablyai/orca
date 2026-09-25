@@ -406,21 +406,22 @@ describe('a structured Claude session over agentSession.*', () => {
     claude.setSelfExit(null)
   })
 
-  it('keeps a session reserved when a descendant of the failed start was seen alive', async () => {
+  it('releases a failed start that recorded no owner without claiming its tree exited', async () => {
     claude.setSelfExit({
       message: 'claude stream-json exited (code 1): claude: not signed in',
       exitVerdict: { root: 'exited', tree: 'live' }
     })
 
     await call('agentSession.create', createIntentParams())
-
-    // A live descendant still holds the provider session: releasing would hand a
-    // second writer to it.
-    expect(leaseOf(SESSION)).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'manual-recovery'
-    })
     claude.setSelfExit(null)
+
+    // The adapter closed the stdio of what it spawned, and no owner was recorded to stop. The next
+    // start goes ahead; with no death evidence nothing reads the failed start as exited.
+    expect(leaseOf(SESSION)).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: null
+    })
   })
 
   it('reopens a chat whose stop saw the Claude root exit but not its descendants', async () => {

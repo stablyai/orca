@@ -7,8 +7,10 @@ import {
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
-import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import {
+  settleStaleStructuredAgentSessionState,
+  unexpectedProviderExitOutcome
+} from './structured-agent-session-dead-generation-settlement'
 import {
   isStructuredAgentSessionRecoveryTicketCurrent,
   settleUnexpectedStructuredAgentSessionExit,
@@ -103,93 +105,97 @@ function mutableStore() {
 }
 
 describe('provider-exit recovery tickets', () => {
-  it.each([undefined, 2_000])('keeps exit receipt %s on retry', async (observedAt) => {
-    let now = observedAt === undefined ? 2_000 : 30_000
-    let record = {
-      lease: {
-        handoffStage: null,
-        runtimeFence: 7,
-        runtimeKind: 'native',
-        claimStatus: 'live',
-        ownerProcess: 'provider',
-        reservedSpawnToken: null,
-        processlessAt: null
+  it.each([undefined, 2_000])(
+    'keeps exit receipt %s for the settlement it could not write',
+    async (observedAt) => {
+      let now = observedAt === undefined ? 2_000 : 30_000
+      let record = {
+        lease: {
+          handoffStage: null,
+          runtimeFence: 7,
+          runtimeKind: 'native',
+          claimStatus: 'live',
+          ownerProcess: 'provider',
+          reservedSpawnToken: null
+        }
+      } as unknown as AgentSessionRecord
+      const store = {
+        getRecord: () => record,
+        transitionHandoff: async (
+          _sessionId: string,
+          transition: (current: AgentSessionRecord) => AgentSessionRecord
+        ) => (record = transition(record))
       }
-    } as unknown as AgentSessionRecord
-    const store = {
-      getRecord: () => record,
-      transitionHandoff: async (
-        _sessionId: string,
-        transition: (current: AgentSessionRecord) => AgentSessionRecord
-      ) => (record = transition(record))
-    }
-    const appendLifecycleBatch = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('journal unavailable'))
-      .mockResolvedValue({ epoch: 'epoch-1', sequence: 2 })
-    const session = {
-      hasProviderChild: true,
-      fence: 7,
-      acquisitionGeneration: GENERATION,
-      journal: {
-        snapshot: () => ({
-          items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
-        }),
-        appendLifecycleBatch,
-        markPendingSubmissionsUnknown: vi.fn(async () => [])
-      }
-    } as unknown as StructuredAgentSessionHostSession
-
-    await settleUnexpectedStructuredAgentSessionExit(
-      {
-        store,
-        sessions: new Map([[SESSION, session]]),
-        flushLifecycle: async () => {
-          now = 60_000
-          return { ok: false, error: new Error('sink unavailable') }
-        },
-        publishFence: vi.fn(),
-        hasResumeCapableHolder: () => true,
-        serialize: async (_sessionId, task) => task(),
-        now: () => now
-      } as never,
-      {
-        type: 'ended',
-        sessionId: SESSION,
-        reason: 'provider exited',
-        cause: 'unexpected-exit',
+      const appendLifecycleBatch = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('journal unavailable'))
+        .mockResolvedValue({ epoch: 'epoch-1', sequence: 2 })
+      const session = {
+        hasProviderChild: true,
         fence: 7,
         acquisitionGeneration: GENERATION,
-        observedAt
-      }
-    )
-    expect(record.lease.settlementRetryRequired).toBe(true)
-    expect(record.lease.deathEvidence?.observedAt).toBe(2_000)
-    expect(record.lease.lastRenewedAt).toBe(60_000)
-    expect(record.updatedAt).toBe(60_000)
-
-    now = 120_000
-    await expect(
-      retryLoadedStructuredAgentSessionSettlement({
-        deps: { store } as never,
-        sessionId: SESSION,
-        session: { journal: session.journal, fence: 8, acquisitionGeneration: null },
-        now: () => now
-      })
-    ).resolves.toBe(true)
-    expect(appendLifecycleBatch.mock.calls.at(-1)?.[0].mutations).toContainEqual(
-      expect.objectContaining({
-        body: {
-          kind: 'turn',
-          turnId: 'turn-1',
-          state: 'interrupted',
-          startedAt: 1_000,
-          completedAt: 2_000
+        journal: {
+          snapshot: () => ({
+            items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
+          }),
+          appendLifecycleBatch,
+          markPendingSubmissionsUnknown: vi.fn(async () => [])
         }
+      } as unknown as StructuredAgentSessionHostSession
+
+      await settleUnexpectedStructuredAgentSessionExit(
+        {
+          store,
+          sessions: new Map([[SESSION, session]]),
+          flushLifecycle: async () => {
+            now = 60_000
+            return { ok: false, error: new Error('sink unavailable') }
+          },
+          publishFence: vi.fn(),
+          hasResumeCapableHolder: () => true,
+          serialize: async (_sessionId, task) => task(),
+          now: () => now
+        } as never,
+        {
+          type: 'ended',
+          sessionId: SESSION,
+          reason: 'provider exited',
+          cause: 'unexpected-exit',
+          fence: 7,
+          acquisitionGeneration: GENERATION,
+          observedAt
+        }
+      )
+      // Released, not latched: the next acquire or read restore settles what this write left.
+      expect(record.lease).toMatchObject({
+        claimStatus: 'released',
+        handoffStage: null,
+        deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: 2_000 }
       })
-    )
-    expect(record.lease.settlementRetryRequired).toBeUndefined()
-  })
+      expect(record.lease.lastRenewedAt).toBe(60_000)
+      expect(record.updatedAt).toBe(60_000)
+
+      now = 120_000
+      await settleStaleStructuredAgentSessionState({
+        journal: session.journal,
+        sessionId: SESSION,
+        fence: 8,
+        acquisitionGeneration: 'generation-2',
+        deathEvidence: record.lease.deathEvidence
+      })
+      expect(appendLifecycleBatch.mock.calls.at(-1)?.[0].mutations).toContainEqual(
+        expect.objectContaining({
+          body: {
+            kind: 'turn',
+            turnId: 'turn-1',
+            state: 'interrupted',
+            startedAt: 1_000,
+            completedAt: 2_000
+          }
+        })
+      )
+    }
+  )
 
   it('uses the fallback when the one-shot translator admission was rejected, revising the running turn in place', async () => {
     const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 3 }))
@@ -215,8 +221,7 @@ describe('provider-exit recovery tickets', () => {
           runtimeKind: 'native',
           claimStatus: 'live',
           ownerProcess: 'provider',
-          reservedSpawnToken: null,
-          processlessAt: null
+          reservedSpawnToken: null
         }
       }),
       transitionHandoff: async () => ({ lease: { runtimeFence: 8 } })
@@ -238,8 +243,7 @@ describe('provider-exit recovery tickets', () => {
         reason: 'provider exited',
         cause: 'unexpected-exit',
         fence: 7,
-        acquisitionGeneration: GENERATION,
-        settlementRetryRequired: true
+        acquisitionGeneration: GENERATION
       }
     )
 
@@ -408,7 +412,7 @@ describe('provider-exit recovery tickets', () => {
     )
   })
 
-  it('does not release or reacquire while terminal settlement retry is still failing', async () => {
+  it('releases without offering a restart while terminal settlement is failing', async () => {
     const session: StructuredAgentSessionUnexpectedExitSession = {
       hasProviderChild: true,
       fence: 7,

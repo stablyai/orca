@@ -126,15 +126,9 @@ export async function settleUnexpectedStructuredAgentSessionExit<
           acquisitionGeneration: session.acquisitionGeneration,
           now: context.now(),
           exitObservedAt: observedAt,
-          ...(settlementFailed
-            ? {
-                settlementRetry: {
-                  settlementId: stableSettlementId,
-                  // Bare cause: the retry renders it, and `exit-observed` already says the rest.
-                  detail: unexpectedEvent.reason.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS)
-                }
-              }
-            : {})
+          // Bare cause: whatever this settlement could not write is settled from it later, by the
+          // next acquire or read restore, and `exit-observed` already says the rest.
+          exitReason: unexpectedEvent.reason.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS)
         })
       } catch (error) {
         context.onBarrierError?.(unexpectedEvent.sessionId, error)

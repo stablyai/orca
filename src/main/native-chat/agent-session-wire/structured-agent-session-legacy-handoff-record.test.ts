@@ -54,7 +54,13 @@ function openHost(): void {
 }
 
 /** Writes the lease an older build left behind, then starts a fresh app generation over it. */
-async function persistFromOlderBuild(lease: Partial<PersistedAgentSessionLease>): Promise<void> {
+/** Older builds also wrote the retired settlement latch fields. */
+type OlderBuildLease = Partial<PersistedAgentSessionLease> & {
+  settlementRetryRequired?: boolean
+  settlementRetryId?: string
+}
+
+async function persistFromOlderBuild(lease: OlderBuildLease): Promise<void> {
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const attached = store.getRecord(SESSION)?.lease
   await host.flushAllStreamedEvents()
@@ -134,9 +140,9 @@ describe('a record an older build left mid terminal handoff', () => {
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
-      handoffOperationId: null,
-      settlementRetryRequired: undefined
+      handoffOperationId: null
     })
+    expect(store.getRecord(SESSION)?.lease).not.toHaveProperty('settlementRetryRequired')
     expect(await send('after the upgrade')).toMatchObject({ ok: true })
     expect(acquire).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

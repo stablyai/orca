@@ -58,10 +58,6 @@ import {
 } from './agent-session-restart-reconciliation'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
 import {
-  setAgentSessionReservationProcesslessProof,
-  type AgentSessionReservationProcesslessProof
-} from './agent-session-processless-reservation'
-import {
   commitAgentSessionReservation,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
@@ -202,13 +198,6 @@ export class AgentSessionRecordStore {
     )
   }
 
-  setReservationProcesslessProof = (
-    args: AgentSessionReservationProcesslessProof & { processlessAt: number | null }
-  ): Promise<AgentSessionRecord> =>
-    this.mutate(args.sessionId, (record) =>
-      setAgentSessionReservationProcesslessProof({ ...args, record })
-    )
-
   async proveOwner(args: {
     sessionId: string
     fence: number
@@ -256,9 +245,7 @@ export class AgentSessionRecordStore {
     probe: AgentSessionOwnerProbe
     now: number
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) =>
-      evictAgentSessionOwner({ ...args, record, journalSettlement: 'required' })
-    )
+    return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
   async transitionHandoff(
@@ -320,16 +307,6 @@ export class AgentSessionRecordStore {
     outcome: AgentSessionOperationOutcome
   }): Promise<void> {
     await this.transact(() => settleAgentSessionOperationInto(this.state, args))
-  }
-
-  async markClaimConflicted(sessionId: string, now: number): Promise<AgentSessionRecord> {
-    return this.mutate(sessionId, (record) => ({
-      ...record,
-      updatedAt: now,
-      // Why: a conflicted key must stay conflicted across a restart; it cannot resolve to free
-      // merely because the process that observed the conflict is gone.
-      lease: { ...record.lease, claimStatus: 'conflicted', handoffStage: 'manual-recovery' }
-    }))
   }
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>

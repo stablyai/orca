@@ -207,7 +207,7 @@ describe('settled attach retry', () => {
     expect(spawnTokens).toEqual(['spawn-safe', 'spawn-safe'])
   })
 
-  it('fences a crash-interrupted reservation replay until positive recovery', async () => {
+  it('releases a reservation a crash left ownerless at restart, so the next start goes ahead', async () => {
     const spawnTokens: string[] = []
     acquire.mockImplementation(async ({ fence, spawnToken }) => {
       spawnTokens.push(spawnToken)
@@ -232,17 +232,17 @@ describe('settled attach retry', () => {
     })
     let token = 0
     const mintSpawnToken = vi.fn(() => `spawn-${++token}`)
-    let reservationUnused = false
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
       journalRoot: root,
       claimKeyId: 'key-1',
       mintSpawnToken,
-      probeOwner: async () =>
-        reservationUnused
-          ? { outcome: 'reservation-unused' }
-          : { outcome: 'indeterminate', reason: 'spawn token scan unavailable' },
+      // A host that cannot read another process's environment, so no scan can prove anything.
+      probeOwner: async () => ({
+        outcome: 'indeterminate',
+        reason: 'spawn token scan unavailable'
+      }),
       now: () => NOW
     })
     const params = hostTestAttachParams(null)
@@ -268,35 +268,30 @@ describe('settled attach retry', () => {
       journalRoot: root,
       claimKeyId: 'key-1',
       mintSpawnToken,
-      probeOwner: async () =>
-        reservationUnused
-          ? { outcome: 'reservation-unused' }
-          : { outcome: 'indeterminate', reason: 'spawn token scan unavailable' },
+      // A host that cannot read another process's environment, so no scan can prove anything.
+      probeOwner: async () => ({
+        outcome: 'indeterminate',
+        reason: 'spawn token scan unavailable'
+      }),
       now: () => NOW
     })
 
+    // The interrupted operation itself is never re-run: its outcome is unknown.
     const refused = await host.attach(CALLER, params)
-    if (refused.ok) {
-      throw new Error('expected the replayed reservation to stay fenced')
-    }
-    expect(refused.refusal.code).toBe('agent_session_ownership_unknown')
+    expect(refused.ok).toBe(false)
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)
-    expect(mintSpawnToken).toHaveBeenCalledTimes(1)
     expect(spawnTokens).toEqual(['spawn-1'])
+    // No owner was recorded: released at restart, with no evidence, since nothing proved one.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'manual-recovery',
-      runtimeFence: 1,
-      reservedSpawnToken: 'spawn-1',
-      ownerProcess: null
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      reservedSpawnToken: null,
+      ownerProcess: null,
+      deathEvidence: null
     })
-    expect(
-      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-        ?.outcome
-    ).toEqual({ status: 'pending' })
 
-    reservationUnused = true
     await host.hold(SESSION, 'desktop-chat:retry')
     expect(mintSpawnToken).toHaveBeenCalledTimes(2)
     expect(spawnTokens).toEqual(['spawn-1', 'spawn-2'])

@@ -31,7 +31,7 @@ import { AGENT_SESSION_STORE_FILE_NAME } from '../../runtime/agent-session-recor
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
@@ -265,9 +265,7 @@ describe('already-wedged profiles become usable on load', () => {
       expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
       expect(store.getRecord(SESSION)?.lease).toMatchObject({
         claimStatus: 'released',
-        handoffStage: null,
-        settlementRetryRequired: undefined,
-        settlementRetryId: undefined
+        handoffStage: null
       })
       expect(acquire).not.toHaveBeenCalled()
 
@@ -304,20 +302,25 @@ describe('already-wedged profiles become usable on load', () => {
     })
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
-      handoffStage: null,
-      settlementRetryRequired: undefined,
-      settlementRetryId: undefined
+      handoffStage: null
     })
   })
 
   it('settles an observed-exit latch through attach before the boot sweep', async () => {
     const record = wedgedRecord({ claimStatus: 'released', handoffStage: 'recovering' })
-    record.lease.settlementRetryRequired = true
-    record.lease.settlementRetryId = `provider-exit:${SESSION}:12:generation-1`
-    record.lease.deathEvidence = {
-      kind: 'exit-observed',
-      detail: 'provider exited: transport closed',
-      observedAt: NOW - 1_000
+    // The settlement latch an older build wrote; this build derives the settlement instead.
+    const olderBuildLatch = {
+      settlementRetryRequired: true,
+      settlementRetryId: `provider-exit:${SESSION}:12:generation-1`
+    }
+    record.lease = {
+      ...record.lease,
+      ...olderBuildLatch,
+      deathEvidence: {
+        kind: 'exit-observed',
+        detail: 'provider exited: transport closed',
+        observedAt: NOW - 1_000
+      }
     }
     await seedStore(record)
     await seedRunningTurn()
@@ -337,11 +340,114 @@ describe('already-wedged profiles become usable on load', () => {
     })
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
-      handoffStage: null,
-      settlementRetryRequired: undefined,
-      settlementRetryId: undefined
+      handoffStage: null
     })
+    // The older build's latch is dropped at load, so a downgrade never sees it again.
+    expect(store.getRecord(SESSION)?.lease).not.toHaveProperty('settlementRetryRequired')
+    expect(store.getRecord(SESSION)?.lease).not.toHaveProperty('settlementRetryId')
   })
+
+  it.each([
+    ['a restart eviction', false],
+    ['a proven eviction by recovery', true]
+  ] as const)(
+    'settles the turn %s left even when the handle it was restored with never writes',
+    async (_origin, ownerOutlivedRestart) => {
+      await seedStore(
+        wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
+      )
+      await seedRunningTurn()
+      let ownerAlive = ownerOutlivedRestart
+      const stopOwnerProcess = vi.fn(() => {
+        ownerAlive = false
+      })
+      openHost({
+        probeOwner: async () =>
+          ownerAlive
+            ? { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
+            : { outcome: 'pid-absent' },
+        stopOwnerProcess
+      })
+      // The read restore's settlement fails, and the handle it restored with never writes again.
+      const failing = vi
+        .spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch')
+        .mockRejectedValue(new Error('journal unavailable'))
+      await host.restoreReadableSessions()
+      failing.mockRestore()
+      vi.spyOn(restoredJournal(), 'appendLifecycleBatch').mockRejectedValue(
+        new Error('journal unavailable')
+      )
+      expect(stopOwnerProcess).toHaveBeenCalledTimes(ownerOutlivedRestart ? 1 : 0)
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({
+        claimStatus: 'released',
+        handoffStage: null,
+        deathEvidence: { kind: 'pid-absent' }
+      })
+
+      await host.hold(SESSION, 'desktop-chat:restart')
+
+      expect(acquire).toHaveBeenCalledOnce()
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'live' })
+      // A pid probe proved the owner gone; nobody saw it exit, so the turn has no end.
+      expect(turnLifecycle('turn-1')).toEqual({
+        turnId: 'turn-1',
+        state: 'unverifiable',
+        startedAt: NOW - 5_000,
+        recovered: true
+      })
+    }
+  )
+
+  it('releases an owner that survives every stop signal, and the chat starts again', async () => {
+    await seedStore(
+      wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
+    )
+    const stopOwnerProcess = vi.fn()
+    openHost({
+      probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] }),
+      stopOwnerProcess
+    })
+
+    await host.restoreReadableSessions()
+
+    expect(stopOwnerProcess.mock.calls).toEqual([
+      [DEAD_OWNER.pid, 'SIGTERM'],
+      [DEAD_OWNER.pid, 'SIGKILL']
+    ])
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      ownerProcess: null,
+      deathEvidence: null
+    })
+    expect(await host.attach(CALLER, hostTestAttachParams(14))).toMatchObject({ ok: true })
+    expect(acquire).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['a conflicted claim naming no process', { claimStatus: 'conflicted', ownerProcess: null }],
+    [
+      'an unproven reservation left in manual recovery',
+      { claimStatus: 'reserved', ownerProcess: null, reservedSpawnToken: 'spawn-lost' }
+    ]
+  ] as const)(
+    'releases %s an older build left, and the chat starts again',
+    async (_shape, lease) => {
+      await seedStore(wedgedRecord({ handoffStage: 'manual-recovery', ...lease }))
+      openHost({ probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no scan here' }) })
+
+      await host.restoreReadableSessions()
+
+      expect(store.getRecord(SESSION)?.lease).toMatchObject({
+        claimStatus: 'released',
+        handoffStage: null,
+        runtimeFence: 14,
+        deathEvidence: null
+      })
+      expect(await host.attach(CALLER, hostTestAttachParams(14))).toMatchObject({ ok: true })
+      expect(acquire).toHaveBeenCalledOnce()
+    }
+  )
 
   it('marks a running turn left behind by a released lease unverifiable on a cold acquire', async () => {
     // No settlement latch: the record was released cleanly, but the journal still says a turn is
@@ -419,7 +525,7 @@ describe('already-wedged profiles become usable on load', () => {
     expect(acquire).not.toHaveBeenCalled()
   })
 
-  it('leaves a conflicted record alone while its owner cannot be proven gone', async () => {
+  it('stops the live owner a conflicted record names, then releases it', async () => {
     await seedStore(
       wedgedRecord({
         claimStatus: 'conflicted',
@@ -427,16 +533,26 @@ describe('already-wedged profiles become usable on load', () => {
         ownerProcess: DEAD_OWNER
       })
     )
+    let alive = true
+    const stopOwnerProcess = vi.fn(() => {
+      alive = false
+    })
     openHost({
-      probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
+      probeOwner: async () =>
+        alive
+          ? { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
+          : { outcome: 'pid-absent' },
+      stopOwnerProcess
     })
 
     await host.restoreReadableSessions()
 
+    expect(stopOwnerProcess).toHaveBeenCalledWith(DEAD_OWNER.pid, 'SIGTERM')
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery',
-      ownerProcess: { pid: DEAD_OWNER.pid }
+      claimStatus: 'released',
+      handoffStage: null,
+      ownerProcess: null,
+      deathEvidence: { kind: 'pid-absent' }
     })
   })
 
@@ -528,7 +644,7 @@ describe('already-wedged profiles become usable on load', () => {
     expect(order).toEqual(['acquire'])
   })
 
-  it('names the missing evidence when a latched record still cannot be freed', async () => {
+  it('releases a conflicted record whose owner cannot be verified, signalling nothing', async () => {
     await seedStore(
       wedgedRecord({
         claimStatus: 'conflicted',
@@ -536,14 +652,15 @@ describe('already-wedged profiles become usable on load', () => {
         ownerProcess: DEAD_OWNER
       })
     )
-    openHost({ probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no answer' }) })
+    const stopOwnerProcess = vi.fn()
+    openHost({
+      probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no answer' }),
+      stopOwnerProcess
+    })
     await host.restoreReadableSessions()
 
-    const refused = await host.attach(CALLER, hostTestAttachParams(13))
-
-    expect(refused.ok).toBe(false)
-    const message = refused.ok ? '' : refused.refusal.message
-    expect(message).toContain('process 12546 on local')
-    expect(message).not.toContain('The session store refused this call')
+    expect(await host.attach(CALLER, hostTestAttachParams(14))).toMatchObject({ ok: true })
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
   })
 })
