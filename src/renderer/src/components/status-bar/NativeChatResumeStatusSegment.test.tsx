@@ -187,21 +187,19 @@ describe('NativeChatResumeStatusSegment', () => {
       Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
     })
 
-    it('offers chats that were working when the host holds structured chats', async () => {
-      hasLocalStructuredAgentSessions.mockResolvedValue(true)
+    it('asks the host, which owns the answer, without a separate local probe', async () => {
       rpc.mockResolvedValue({ sessions: candidates })
       await mount()
 
       expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
+      expect(rpc.mock.calls.map((call) => call[1])).toEqual(['agentSession.restartResumable'])
+      expect(hasLocalStructuredAgentSessions).not.toHaveBeenCalled()
     })
 
-    it('never asks the host, or starts it, when there is no structured chat', async () => {
-      hasLocalStructuredAgentSessions.mockResolvedValue(false)
-      rpc.mockResolvedValue({ sessions: candidates })
+    it('hides when the host holds no structured chat', async () => {
+      rpc.mockResolvedValue({ sessions: [], failed: [] })
       await mount()
 
-      expect(hasLocalStructuredAgentSessions).toHaveBeenCalledOnce()
-      expect(rpc).not.toHaveBeenCalled()
       expect(screen.queryByRole('button')).toBeNull()
     })
   })

@@ -6,7 +6,6 @@ import {
 } from '@/runtime/structured-agent-session-status-feed'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { useAppStore } from '../store'
-import { localStructuredSessionsMayExist } from '@/runtime/local-structured-session-presence'
 import {
   announceRestartDismissUnconfirmed,
   announceRestartResults,
@@ -317,13 +316,9 @@ export async function dismissNativeChatRestartOffer(sessionIds?: readonly string
  * an opted-in launch cannot dispatch twice.
  */
 async function loadLaunchOffer(): Promise<void> {
-  const settings = useAppStore.getState().settings
-  // A machine with no structured chat has nothing to resume, and asking would start the host.
-  if (!(await localStructuredSessionsMayExist(settings))) {
-    return
-  }
+  // Asked whatever Chat UI says: the host answers empty without starting when it holds no chat.
   // The preference belongs to this launch's request; later saves cannot dispatch another.
-  const autoResume = settings?.nativeChatResumeWorkOnRestart === true
+  const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
   let read = await readNativeChatRestartOffer()
   // Host startup can race the renderer. Retry only failed reads, never a confirmed empty result,
   // so a transient startup gap does not strand a durable offer or add steady-state polling.
@@ -350,7 +345,7 @@ async function loadLaunchOffer(): Promise<void> {
  * The offer, fetching it on first use.
  *
  * Waits for settings, which arrive after the first render, because the launch reads the resume
- * preference from them. Asked with Chat UI off too whenever the host holds a structured chat.
+ * preference from them.
  */
 export function useNativeChatRestartOffer(): NativeChatRestartOffer {
   const settingsLoaded = useAppStore((store) => store.settings !== null)
