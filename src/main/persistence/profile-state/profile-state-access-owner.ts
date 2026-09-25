@@ -131,14 +131,21 @@ function ownerExited(owner: AccessOwner): boolean {
   const currentMachine = profileStateAccessMachineIdentity()
   const sameBoot = Boolean(owner.bootIdentity && owner.bootIdentity === currentBoot)
   const sameMachine = Boolean(owner.machineIdentity && owner.machineIdentity === currentMachine)
+  const sameHost = owner.host === hostname()
   if (
-    (!sameBoot && !sameMachine && owner.host !== hostname()) ||
+    (!sameBoot && !sameHost) ||
     owner.platform !== process.platform ||
     (!sameBoot && owner.machineIdentity && currentMachine && !sameMachine)
   ) {
     return false
   }
-  if (sameMachine && owner.bootIdentity && currentBoot && owner.bootIdentity !== currentBoot) {
+  if (
+    sameHost &&
+    sameMachine &&
+    owner.bootIdentity &&
+    currentBoot &&
+    owner.bootIdentity !== currentBoot
+  ) {
     return true
   }
   // Windows/WSL and Linux PID namespaces cannot establish each other's process absence.

@@ -17,7 +17,8 @@ export function profileStateAccessMachineIdentity(): string | null {
   machineIdentity = null
   try {
     if (process.platform === 'linux') {
-      machineIdentity = readFileSync('/etc/machine-id', 'utf8').trim() || null
+      const value = readFileSync('/etc/machine-id', 'utf8').trim()
+      machineIdentity = /^[a-f0-9]{32}$/.test(value) && !/^0+$/.test(value) ? value : null
     } else if (process.platform === 'darwin') {
       const result = runProcessSync({
         program: '/usr/sbin/sysctl',

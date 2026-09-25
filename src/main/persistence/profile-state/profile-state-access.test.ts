@@ -9,7 +9,7 @@ import {
   assertProfileStateMaintenance,
   type ProfileStateMaintenance
 } from './profile-state-access'
-import { profileStateAccessPaths } from './profile-state-access-owner'
+import { profileStateAccessPaths, reclaimExitedOwner } from './profile-state-access-owner'
 import * as identity from './profile-state-access-identity'
 import * as processStart from '../../daemon/daemon-process-start-time'
 
@@ -230,6 +230,25 @@ describe('profile state owner reclamation', () => {
     expect(fs.existsSync(owner)).toBe(true)
   })
 
+  it.each(['current-boot', null])(
+    'does not reclaim another host with a cloned machine identity (current boot: %s)',
+    (currentBoot) => {
+      const path = root()
+      vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue(currentBoot)
+      vi.spyOn(identity, 'profileStateAccessMachineIdentity').mockReturnValue('cloned-machine')
+      const owner = staleGate(path, 12345, 'another-host', {
+        bootIdentity: 'another-boot',
+        machineIdentity: 'cloned-machine'
+      })
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+        throw Object.assign(new Error('absent on this host'), { code: 'ESRCH' })
+      })
+      expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+      expect(kill).not.toHaveBeenCalled()
+      expect(fs.existsSync(owner)).toBe(true)
+    }
+  )
+
   it('reclaims a reused PID only when its recorded process start differs on the same boot', () => {
     const path = root()
     vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
@@ -279,7 +298,10 @@ describe('profile state owner reclamation', () => {
         processStartIdentity
       })
       clock += 60_000
-      expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+      // Linux identity emulation must not change the host filesystem's publication/fsync flags.
+      expect(() => reclaimExitedOwner(profileStateAccessPaths(path).maintenance)).toThrow(
+        'unverifiable'
+      )
       expect(fs.existsSync(owner)).toBe(true)
       expect(wallStart).not.toHaveBeenCalled()
     } finally {
