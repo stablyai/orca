@@ -416,7 +416,7 @@ describe("a view's start that dies while a sent message waits on it", () => {
     expect(acquire).toHaveBeenCalledTimes(3)
   })
 
-  it('starts again for a message a proven child died under: only a start failed (R2)', async () => {
+  it('starts again for a message whose proven child crashed: only a failed start settles it (R2)', async () => {
     await restartHost()
     await host.hold(SESSION, 'surface-1')
     const params = sendParams('hello')
@@ -427,7 +427,8 @@ describe("a view's start that dies while a sent message waits on it", () => {
     await exited
     const id = params.envelope.clientOperationId
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
+    await eventually(() => expect(submission(id)?.dispatchState).not.toBe('pending'))
+    expect(submission(id)?.dispatchState).toBe('accepted')
     expect(acquire).toHaveBeenCalledTimes(3)
   })
 
@@ -447,7 +448,8 @@ describe("a view's start that dies while a sent message waits on it", () => {
     await held
     const id = params.envelope.clientOperationId
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
+    await eventually(() => expect(submission(id)?.dispatchState).not.toBe('pending'))
+    expect(submission(id)?.dispatchState).toBe('accepted')
     expect(acquire).toHaveBeenCalledTimes(3)
   })
 })
