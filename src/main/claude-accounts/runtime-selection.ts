@@ -41,6 +41,16 @@ export function normalizeClaudeRuntimeSelection(
   }
 }
 
+export function hasManagedClaudeSelection(
+  settings: Pick<
+    GlobalSettings,
+    'activeClaudeManagedAccountId' | 'activeClaudeManagedAccountIdsByRuntime'
+  >
+): boolean {
+  const selection = normalizeClaudeRuntimeSelection(settings)
+  return selection.host !== null || Object.values(selection.wsl ?? {}).some(Boolean)
+}
+
 export function getSelectedClaudeAccountIdForTarget(
   settings: Pick<
     GlobalSettings,

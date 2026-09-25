@@ -169,7 +169,8 @@ describe('RuntimeClient module-graph deferral', () => {
           `${argv.join(' ')} hook application`
         ).toHaveBeenCalledExactlyOnceWith(false, {
           agentCmdOverrides: {},
-          disabledTuiAgents: []
+          disabledTuiAgents: [],
+          isolateExternalAgentConfig: false
         })
       } else {
         expect(

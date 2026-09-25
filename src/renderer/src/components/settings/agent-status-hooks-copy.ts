@@ -39,3 +39,46 @@ export function getAgentStatusHooksSearchKeywords(): string[] {
     }
   ])
 }
+
+const AGENT_STATUS_HOOKS_PAUSED_DESCRIPTION_KEY =
+  'auto.components.settings.agent-status-hooks-copy.pausedByIsolationDescription'
+
+export function getAgentStatusHooksPausedDescription(): string {
+  return translate(
+    AGENT_STATUS_HOOKS_PAUSED_DESCRIPTION_KEY,
+    'Paused while external agent config is isolated. Turn off to remove hooks Orca installed earlier.'
+  )
+}
+
+const ISOLATE_AGENT_CONFIG_TITLE_KEY =
+  'auto.components.settings.agent-status-hooks-copy.isolateExternalAgentConfigTitle'
+const ISOLATE_AGENT_CONFIG_DESCRIPTION_KEY =
+  'auto.components.settings.agent-status-hooks-copy.isolateExternalAgentConfigDescription'
+
+export function getIsolateExternalAgentConfigTitle(): string {
+  return translate(ISOLATE_AGENT_CONFIG_TITLE_KEY, 'Isolate external agent config')
+}
+
+export function getIsolateExternalAgentConfigDescription(): string {
+  return translate(
+    ISOLATE_AGENT_CONFIG_DESCRIPTION_KEY,
+    "Don't write agent CLI config, folder trust files, or managed-account logins outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off, which removes them. Refreshed Codex tokens still sync to ~/.codex/auth.json so your own Codex login keeps working."
+  )
+}
+
+export function getIsolateExternalAgentConfigSearchKeywords(): string[] {
+  return searchKeywords([
+    { key: 'auto.components.settings.agents.search.isolateKeywordIsolate', fallback: 'isolate' },
+    {
+      key: 'auto.components.settings.agents.search.isolateKeywordIsolation',
+      fallback: 'isolation'
+    },
+    { key: 'auto.components.settings.agents.search.isolateKeywordDotfiles', fallback: 'dotfiles' },
+    { key: 'auto.components.settings.agents.search.isolateKeywordTrust', fallback: 'trust' },
+    {
+      key: 'auto.components.settings.agents.search.isolateKeywordCredentials',
+      fallback: 'credentials'
+    },
+    { key: 'auto.components.settings.agents.search.isolateKeywordConfig', fallback: 'config' }
+  ])
+}

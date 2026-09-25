@@ -60,6 +60,10 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     return this.getPreparation(target).configDir
   }
 
+  hasMaterializedManagedLogin(): boolean {
+    return this.lastSyncedAccountId !== null
+  }
+
   private initializeLastSyncedState(): void {
     const settings = this.store.getSettings()
     this.lastSyncedAccountId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })

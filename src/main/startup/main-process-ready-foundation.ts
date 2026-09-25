@@ -1,4 +1,5 @@
 import { app, session } from 'electron'
+import { configureAgentConfigIsolation } from '../agent-config-isolation'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
@@ -139,6 +140,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
   })
   state.store = store
+  // Why this early: account services sync credentials during construction, before any window.
+  configureAgentConfigIsolation(() => store.getSettings())
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
   // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —
@@ -232,7 +235,8 @@ export async function initializeReadyFoundation(): Promise<void> {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
-    if ('agentStatusHooksEnabled' in updates) {
+    // Why isolation too: it forces hooks off without changing agentStatusHooksEnabled.
+    if ('agentStatusHooksEnabled' in updates || 'isolateExternalAgentConfig' in updates) {
       // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
       // guest process and timers, and on must restart them — otherwise open WSL panes report no
       // status until their next spawn.

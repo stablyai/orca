@@ -1,4 +1,5 @@
 import type { AgentTrustPreset } from './agent-trust-presets'
+import { isExternalAgentConfigIsolated } from './agent-config-isolation'
 import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
 import { getActiveMultiplexer } from './ssh/ssh-target-registry'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
@@ -13,6 +14,10 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   connectionId: string
   workspacePath: string
 }): Promise<void> {
+  // Why: a remote user's agent trust files are as user-owned as local ones.
+  if (isExternalAgentConfigIsolated()) {
+    return
+  }
   const home = await resolveRemoteHome(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
   if (!home || !fsProvider) {

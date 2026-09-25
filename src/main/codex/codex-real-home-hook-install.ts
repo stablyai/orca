@@ -1,4 +1,5 @@
 import { statSync } from 'node:fs'
+import { isExternalAgentConfigIsolated } from '../agent-config-isolation'
 import {
   createManagedCommandMatcher,
   MANAGED_HOOK_TIMEOUT_SECONDS,
@@ -74,6 +75,10 @@ export function ensureRealHomeCodexHookState(args: {
   hooksEnabled: boolean
   userDataPath: string
 }): Promise<RealHomeCodexHookLane> {
+  // Why: install and sweep both rewrite the user's ~/.codex; isolation forbids either.
+  if (isExternalAgentConfigIsolated()) {
+    return Promise.resolve('unavailable')
+  }
   // Why: the grant client caches failed probes, but mutating and rolling back
   // hooks.json before consulting it still adds work to every pane launch.
   if (args.hooksEnabled && currentLane === 'unavailable' && Date.now() < installRetryAfterMs) {

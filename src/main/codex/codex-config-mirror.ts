@@ -1,4 +1,5 @@
 import { dirname, join } from 'node:path'
+import { isExternalAgentConfigIsolated } from '../agent-config-isolation'
 import { observeAgentStateFile } from './codex-path-observation'
 import {
   recoverInterruptedGuardedFileOperation,
@@ -36,6 +37,10 @@ export function syncSystemConfigIntoManagedCodexHome(
     systemHomePath: getSystemCodexHomePath()
   }
 ): void {
+  // Why skip the whole pass: write-back touches ~/.codex, and mirroring without it reverts runtime edits.
+  if (isExternalAgentConfigIsolated()) {
+    return
+  }
   // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
   // user made inside Orca-launched Codex (/model, /approvals) must be written
   // back to ~/.codex first or this very pass silently reverts them.

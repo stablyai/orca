@@ -16,6 +16,7 @@ import { kimiHookService } from '../kimi/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { isExternalAgentConfigIsolated } from '../agent-config-isolation'
 
 export type RemoteManagedHookInstallOptions = {
   /** Explicit CODEX_HOME dir for redirected runtimes (for example WSL's managed runtime home). */
@@ -93,7 +94,8 @@ export async function installRemoteManagedAgentHooks(
   // Why: omit/empty allowlist must never mean "install every agent" — that
   // recreates config homes for CLIs the user never installed (issue #11641).
   const allowedAgents = new Set(options?.agents ?? [])
-  if (allowedAgents.size === 0) {
+  // Why: a remote host's agent configs are just as user-owned as the local ones.
+  if (allowedAgents.size === 0 || isExternalAgentConfigIsolated()) {
     return []
   }
   const results: AgentHookInstallStatus[] = []

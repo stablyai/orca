@@ -13,7 +13,13 @@ import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
-import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
+import {
+  getAgentStatusHooksDescription,
+  getAgentStatusHooksPausedDescription,
+  getAgentStatusHooksTitle,
+  getIsolateExternalAgentConfigDescription,
+  getIsolateExternalAgentConfigTitle
+} from './agent-status-hooks-copy'
 import {
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
@@ -283,14 +289,24 @@ export function AgentsPane({
 
 export function AgentStatusHooksSetting({ settings, updateSettings }: AgentsPaneProps) {
   const enabled = settings.agentStatusHooksEnabled !== false
+  const isolated = settings.isolateExternalAgentConfig === true
   return (
     <section className="space-y-3">
       <SettingsSwitchRow
         label={getAgentStatusHooksTitle()}
-        description={getAgentStatusHooksDescription()}
+        description={
+          isolated ? getAgentStatusHooksPausedDescription() : getAgentStatusHooksDescription()
+        }
         checked={enabled}
         onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
         ariaLabel={getAgentStatusHooksTitle()}
+      />
+      <SettingsSwitchRow
+        label={getIsolateExternalAgentConfigTitle()}
+        description={getIsolateExternalAgentConfigDescription()}
+        checked={isolated}
+        onChange={() => updateSettings({ isolateExternalAgentConfig: !isolated })}
+        ariaLabel={getIsolateExternalAgentConfigTitle()}
       />
     </section>
   )

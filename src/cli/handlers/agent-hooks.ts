@@ -125,7 +125,10 @@ async function readHookSettings(
 
 function updateEnabledOnDisk(enabled: boolean): {
   settingsPath: string
-  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  settings: Pick<
+    GlobalSettings,
+    'agentCmdOverrides' | 'disabledTuiAgents' | 'isolateExternalAgentConfig'
+  >
 } {
   const dataPath = getDataPath()
   const state = readPersistedState(dataPath)
@@ -139,7 +142,9 @@ function updateEnabledOnDisk(enabled: boolean): {
     settingsPath: dataPath,
     settings: {
       agentCmdOverrides: state.settings.agentCmdOverrides ?? {},
-      disabledTuiAgents: state.settings.disabledTuiAgents ?? []
+      disabledTuiAgents: state.settings.disabledTuiAgents ?? [],
+      // Why: the offline install path has no live reader, so the gate needs the flag here.
+      isolateExternalAgentConfig: state.settings.isolateExternalAgentConfig === true
     }
   }
 }

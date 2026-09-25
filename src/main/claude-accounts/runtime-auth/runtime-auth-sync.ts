@@ -9,10 +9,16 @@ import {
 import { hasLiveClaudePtys } from '../live-pty-gate'
 import { isOauthTokenExpiring } from '../oauth-refresh'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
+import { isExternalAgentConfigIsolated } from '../../agent-config-isolation'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
 
 export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
   protected async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
+    // Why: every branch below (including "restore system default") rewrites the Claude CLI's own
+    // credentials; isolated users keep whatever login the CLI already has.
+    if (isExternalAgentConfigIsolated()) {
+      return
+    }
     const settings = this.store.getSettings()
     const effectiveTarget = this.resolveWslDefaultTarget(target)
     const normalizedTarget = normalizeClaudeAccountSelectionTarget(effectiveTarget)

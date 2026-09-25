@@ -1569,7 +1569,10 @@
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent status hooks",
-          "a68a642835": "Shows working, waiting, and done states in Orca. Turn off to remove Orca-managed hooks and stop reinstalling them."
+          "a68a642835": "Shows working, waiting, and done states in Orca. Turn off to remove Orca-managed hooks and stop reinstalling them.",
+          "isolateExternalAgentConfigDescription": "Don't write agent CLI config, folder trust files, or managed-account logins outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off, which removes them. Refreshed Codex tokens still sync to ~/.codex/auth.json so your own Codex login keeps working.",
+          "isolateExternalAgentConfigTitle": "Isolate external agent config",
+          "pausedByIsolationDescription": "Paused while external agent config is isolated. Turn off to remove hooks Orca installed earlier."
         },
         "agents": {
           "search": {
@@ -1612,7 +1615,13 @@
             "ef804b7337": "Agent Location",
             "f2932bf22b": "detected",
             "f412abbba5": "claude",
-            "ff8de8a2ad": "display"
+            "ff8de8a2ad": "display",
+            "isolateKeywordConfig": "config",
+            "isolateKeywordCredentials": "credentials",
+            "isolateKeywordDotfiles": "dotfiles",
+            "isolateKeywordIsolate": "isolate",
+            "isolateKeywordIsolation": "isolation",
+            "isolateKeywordTrust": "trust"
           }
         },
         "artifacts": {

@@ -6,6 +6,10 @@ import {
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { probeClaudeCliVersion } from '../claude/claude-session-end-hook-capability'
+import {
+  isAgentConfigIsolatedInSettings,
+  isExternalAgentConfigIsolated
+} from '../agent-config-isolation'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -21,7 +25,13 @@ export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
 
 type ManagedHookSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+  Pick<
+    GlobalSettings,
+    | 'agentCmdOverrides'
+    | 'agentStatusHooksEnabled'
+    | 'disabledTuiAgents'
+    | 'isolateExternalAgentConfig'
+  >
 > | null
 
 type InstallOptions = {
@@ -38,9 +48,30 @@ type RemoveOptions = {
 }
 
 export function isAgentStatusHooksEnabled(
-  settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
+  settings:
+    | Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'isolateExternalAgentConfig'>>
+    | null
+    | undefined
 ): boolean {
+  // Why: status hooks live in each agent's user-global config, so isolation always wins.
+  if (isAgentConfigIsolatedInSettings(settings)) {
+    return false
+  }
   return settings?.agentStatusHooksEnabled !== false
+}
+
+function isHookInstallIsolated(settings: ManagedHookSettings): boolean {
+  return isAgentConfigIsolatedInSettings(settings) || isExternalAgentConfigIsolated()
+}
+
+function isolatedStatuses(options: InstallOptions): AgentHookInstallStatus[] {
+  return selectedInstallers(options).map(([agent]) =>
+    skippedStatus(
+      agent,
+      'hooks_disabled',
+      'External agent config is isolated; Orca does not write agent hook files.'
+    )
+  )
 }
 
 export type StartupManagedHookAction = 'install' | 'skip'
@@ -152,6 +183,10 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  // Why before the script refresh: ~/.orca/agent-hooks sits outside userData too.
+  if (isHookInstallIsolated(settings)) {
+    return isolatedStatuses(options)
+  }
   await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
@@ -268,6 +303,9 @@ export async function applyAgentStatusHooksEnabled(
 ): Promise<AgentHookInstallStatus[]> {
   if (!enabled) {
     return await removeManagedAgentHooks()
+  }
+  if (isHookInstallIsolated(settings)) {
+    return isolatedStatuses(options)
   }
   const disabled = normalizeDisabledTuiAgents(settings?.disabledTuiAgents).filter(
     isManagedAgentHookTarget
