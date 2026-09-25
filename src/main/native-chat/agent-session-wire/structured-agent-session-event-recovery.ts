@@ -1,4 +1,7 @@
-import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
+import {
+  stopAgentSessionProviderRoot,
+  type StructuredAgentSessionLifecycleEvent
+} from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -46,7 +49,7 @@ export class StructuredAgentSessionEventRecovery {
           return null
         }
         const { fence, generation: acquisitionGeneration } = child
-        const stopped = await stop(sessionId)
+        const stopped = await stopAgentSessionProviderRoot(() => stop(sessionId))
         if (!stopped || !acquisitionGeneration) {
           return null
         }

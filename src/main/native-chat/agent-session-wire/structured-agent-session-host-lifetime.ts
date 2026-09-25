@@ -37,9 +37,8 @@ export type StructuredAgentSessionLifetimeContext = {
   now: () => number
   /** Drops the session's row from the agent-status store; see `forgetStructuredAgentSession`. */
   forgetStatus: (sessionId: string) => void
-  /** Re-projects the session's status and fence after its agent stopped and the chat stays. */
+  /** Re-projects the session's status after its agent stopped and the chat stays. */
   publishStatus?: (sessionId: string) => void
-  publishFence?: (sessionId: string) => void
   /** Quit-only snapshot taken immediately before the provider child is stopped. */
   restartWitness?: {
     beforeStop: (sessionId: string) => void
@@ -185,9 +184,8 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         context.forgetStatus(sessionId)
         return
       }
-      // The conversation stays open at the fence the release moved it to.
+      // The conversation stays: its readers keep their own fence, and only the status moves.
       context.publishStatus?.(sessionId)
-      context.publishFence?.(sessionId)
     }
   }
   await evictStructuredAgentSession(

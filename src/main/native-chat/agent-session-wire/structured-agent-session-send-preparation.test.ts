@@ -689,8 +689,6 @@ describe('a send with no live owner', () => {
 describe('a write fenced to an owner the pane has not seen replaced', () => {
   it('delivers a send fenced to the owner an idle release retired', async () => {
     const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    const frames: AgentSessionSubscribeEvent[] = []
-    host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => frames.push(event) })
     await loseOwner()
     const params = sendParams('after the release')
     params.envelope.expectedRuntimeFence = seenFence
@@ -700,10 +698,31 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(dispatch).toHaveBeenCalledOnce()
-    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    expect(fence).toBeGreaterThan(seenFence + 1)
-    // The pane learns the fence the host is at, not the one it subscribed under.
-    await eventually(() => expect(frames.at(-1)).toMatchObject({ fence }))
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
+  })
+
+  // Clients resend a refused message when the fence they hold moves. A failed start is a
+  // rejected message now, never a refused send, and the pane keeps the fence it subscribed under.
+  it("keeps the pane's fence on the rows a failed start publishes, and rejects the message", async () => {
+    const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    const frames: AgentSessionSubscribeEvent[] = []
+    host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => frames.push(event) })
+    await loseOwner()
+    acquire.mockRejectedValueOnce(new Error('Not signed in'))
+    const subscribed = frames.length
+
+    const id = await accept(sendParams('while signed out'))
+
+    expect(await settled(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: expect.stringContaining('Not signed in')
+    })
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
+    const published = frames.slice(subscribed)
+    expect(published.length).toBeGreaterThan(0)
+    for (const frame of published) {
+      expect(frame).toMatchObject({ fence: seenFence })
+    }
   })
 
   it('admits a Stop and a send queued behind the cold start that replaced their owner', async () => {

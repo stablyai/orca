@@ -46,9 +46,8 @@ export function observeClaudeSessionExit(
   lifecycle.exits.set(sessionId, exit)
   exit.publication = closePromise
     .then((proven) => {
-      // A failed startup keeps the failed-create bar: a first-hand root exit releases it.
-      const startupFailed = session.startup.state === 'failed'
-      if (!proven && !(startupFailed && claudeRootExitObserved(session.connection))) {
+      // A first-hand root exit is final like a proven one: the owner releases the lease on it.
+      if (!proven && !claudeRootExitObserved(session.connection)) {
         return undefined
       }
       return settleClaudeUnexpectedExit(lifecycle, sessionId, exit)

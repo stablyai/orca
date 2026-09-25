@@ -54,7 +54,7 @@ export function prepareStartingWorkerAuthority(
       .prepare(
         `UPDATE dispatch_contexts
          SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ?,
-             host_scope = ?,
+             assignee_orca_session_id = NULL, host_scope = ?,
              capability_hash = ?, launch_token_hash = COALESCE(launch_token_hash, ?),
              capability_revoked_at = NULL,
              consumer_generation = consumer_generation + 1

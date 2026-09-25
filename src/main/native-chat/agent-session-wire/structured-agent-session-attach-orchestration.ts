@@ -217,7 +217,7 @@ async function runAttach(
         )
         await recoverInterruptedCompaction(context.deps.store, sessionId, attached.journal, fence)
         if (fenceBefore !== null && fence !== fenceBefore) {
-          context.subscribers.snapshot(sessionId, attached.journal)
+          context.subscribers.snapshot(sessionId, attached.journal, fence)
         } else {
           context.subscribers.publish(sessionId, attached.journal)
         }

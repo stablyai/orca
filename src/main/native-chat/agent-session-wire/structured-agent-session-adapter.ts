@@ -298,7 +298,8 @@ export type StructuredAgentSessionAdapter = {
     accountHome: AgentSessionAccountHome
   }): Promise<ProviderHistoryWindow | null>
   /** Gracefully stops the structured owner after its event stream is drained. */
-  /** Returns true only after the provider child exit is proven. */
+  /** Returns true only after the provider child exit is proven. A root-exit or processless verdict
+   *  is thrown only once the session is finalized; read it through `stopAgentSessionProviderRoot`. */
   closeSession?(sessionId: string): Promise<boolean>
   /** Stops a provider after a sink failure; the resulting exit is recovered as unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
@@ -343,4 +344,21 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
     isAgentSessionPreSpawnError(cause) ||
     (cause instanceof Error && isAgentSessionWireRefusalCode(cause.message))
   return classified ? cause : new AgentSessionAcquisitionExitProvenError(cause)
+}
+
+/** Whether a stop left the provider root gone. The lease follows the root, so a first-hand root
+ *  exit or a processless child ends the session even with descendants unverified; any other
+ *  failure, including known-live descendants, still throws. */
+export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return (await stop()) === true
+  } catch (error) {
+    if (
+      error instanceof AgentSessionAcquisitionRootExitObservedError ||
+      isAgentSessionPreSpawnError(error)
+    ) {
+      return true
+    }
+    throw error
+  }
 }

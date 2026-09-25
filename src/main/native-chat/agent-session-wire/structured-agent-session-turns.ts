@@ -1,6 +1,6 @@
 // The effects behind send / cancel / respond / setOption.
 //
-// Admission (lease, fence, idempotency) has already passed by the time anything
+// Admission (writer lease, idempotency) has already passed by the time anything
 // here runs; these functions own only the journal writes and the adapter call,
 // in that order. Journal first is deliberate: a crash between the two leaves a
 // row the next attach settles as `unknown`, whereas the reverse would lose a

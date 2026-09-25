@@ -494,7 +494,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3087,6 +3088,14 @@
             "38c282a2c4": "분석기는 여기에서 직접 열립니다. 나중에 공간 분석기를 선택하여 왼쪽 하단 도구 상자 메뉴에서 열 수도 있습니다.",
             "e2fcf07c0d": "로컬 저장소가 가득 찼거나 쓸 수 없기 때문에 Orca가 이 terminal 세션을 저장할 수 없습니다. 디스크 공간 분석기를 열어 정리할 수 있는 워크스페이스 저장소를 찾으세요.",
             "678c780a2c": "디스크 공간을 사용할 수 없습니다."
+          },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
           },
           "osc52": {
             "clipboard": {
@@ -6154,7 +6163,6 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "Attach up to {count} screenshots",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },

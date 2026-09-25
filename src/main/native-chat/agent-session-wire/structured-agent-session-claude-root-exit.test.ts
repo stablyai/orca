@@ -135,7 +135,7 @@ describe('Claude root-exit eviction', () => {
     })
     expect(sessions.size).toBe(0)
     expect(close).toHaveBeenCalledOnce()
-    // Why: releasing the root-owned lease does not claim unverifiable descendants stopped.
-    await expect(adapter.closeSession('session-1')).rejects.toThrow('provider exited')
+    // The adapter agrees the session is over: nothing is left to refuse the next start.
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
   })
 })

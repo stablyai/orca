@@ -54,6 +54,7 @@ import {
 } from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionConversationDelivery } from './structured-agent-session-host-delivery'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -111,7 +112,13 @@ export class StructuredAgentSessionHost {
       // Quit drains a delivery start before it evicts, so the child it produces is stopped.
       trackStart: (start) => this.tasks.trackAttach(start),
       ensureProviderChild: (sessionId) => this.holds.ensureProviderChild(sessionId),
-      reset: (...args) => this.subscribers.reset(...args),
+      reset: (sessionId, journal, reset) =>
+        this.subscribers.reset(
+          sessionId,
+          journal,
+          reset,
+          structuredAgentSessionConversationFence(deps.store, sessionId)
+        ),
       publishRestored: this.clientDelivery.publishRestored
     })
     this.holds = createStructuredAgentSessionHolds(
@@ -133,7 +140,12 @@ export class StructuredAgentSessionHost {
       store: deps.store,
       sessions: this.sessions,
       flushLifecycle: (sessionId) => this.runtimeState.lifecycleBarrier(sessionId),
-      publishFence: (sessionId, session) => this.subscribers.snapshot(sessionId, session.journal),
+      publishFence: (sessionId, session) =>
+        this.subscribers.snapshot(
+          sessionId,
+          session.journal,
+          structuredAgentSessionConversationFence(deps.store, sessionId)
+        ),
       publishStatus: this.clientDelivery.publishStatusAndSettlement,
       hasResumeCapableHolder: (sessionId) => this.holds.hasResumeCapableHolder(sessionId),
       restartReleaseGrace: (sessionId) => this.holds.renew(sessionId),
@@ -177,13 +189,7 @@ export class StructuredAgentSessionHost {
       sessions: this.sessions,
       now: () => this.now(),
       forgetStatus: this.clientDelivery.forgetStatus,
-      publishStatus: this.clientDelivery.publishStatus,
-      publishFence: (sessionId) => {
-        const journal = this.sessions.get(sessionId)?.journal
-        if (journal) {
-          this.subscribers.snapshot(sessionId, journal)
-        }
-      }
+      publishStatus: this.clientDelivery.publishStatus
     }
   }
 

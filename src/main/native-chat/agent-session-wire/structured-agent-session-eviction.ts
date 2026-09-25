@@ -18,8 +18,7 @@
 // session in place is what makes the next close a real retry instead of a no-op.
 
 import {
-  AgentSessionAcquisitionRootExitObservedError,
-  AgentSessionPreSpawnError,
+  stopAgentSessionProviderRoot,
   type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -84,21 +83,11 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         }
         // An adapter with no close has nothing to stop; anything else must PROVE the exit.
         const stop = context.adapter.disposeSession ?? context.adapter.closeSession
-        if (stop) {
-          try {
-            const stopped = await stop.call(context.adapter, context.sessionId)
-            if (stopped !== true) {
-              throw new Error('provider child exit was not proven')
-            }
-          } catch (error) {
-            // Why: lease ownership follows the provider root; known-live descendants still throw unproven.
-            if (
-              !(error instanceof AgentSessionAcquisitionRootExitObservedError) &&
-              !(error instanceof AgentSessionPreSpawnError)
-            ) {
-              throw error
-            }
-          }
+        if (
+          stop &&
+          !(await stopAgentSessionProviderRoot(() => stop.call(context.adapter, context.sessionId)))
+        ) {
+          throw new Error('provider child exit was not proven')
         }
         context.onProviderChildStopped?.()
       }
