@@ -92,7 +92,8 @@ function declaredSessionAddress(request: RpcRequest): string | undefined {
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return undefined
   }
-  const declared: unknown = Reflect.get(params, name)
+  const values: Record<string, unknown> = { ...params }
+  const declared = values[name]
   return typeof declared === 'string' && parseOrcaSessionAddress(declared) ? declared : undefined
 }
 
