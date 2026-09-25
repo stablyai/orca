@@ -16,20 +16,13 @@ import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environ
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
-import {
-  describeOrcadBindExposure,
-  OrcadBindAddressError,
-  resolveOrcadBindHost
-} from './orcad-bind-address'
-import { OrcadInstanceLockError } from './orcad-instance-lock'
-import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
+import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
   startOrcadWithHost
 } from './orcad-lifecycle'
 import { parseArgs } from './orcad-command-arguments'
-import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
 import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
@@ -374,21 +367,15 @@ async function startOrcadRuntime(
  * supervision contract has to prevent, so systemd's `RestartPreventExitStatus` needs a code
  * that means "do not retry" and nothing else does.
  */
-export const ORCAD_EXIT_OK = 0
-export const ORCAD_EXIT_FAILED = 1
-export const ORCAD_EXIT_CONFIGURATION = 78
+export {
+  ORCAD_EXIT_OK,
+  ORCAD_EXIT_FAILED,
+  ORCAD_EXIT_CONFIGURATION,
+  resolveOrcadExitCode
+} from './orcad-exit-code'
 
 /** Bounded so a wedged transport cannot hold a supervisor's stop past its own deadline. */
 export { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
-
-export function resolveOrcadExitCode(error: unknown): number {
-  return error instanceof OrcadInstanceLockError ||
-    error instanceof OrcadBindAddressError ||
-    error instanceof OrcadBundledRuntimeError ||
-    error instanceof ProfileStateAccessError
-    ? ORCAD_EXIT_CONFIGURATION
-    : ORCAD_EXIT_FAILED
-}
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const startup = startOrcad(parseArgs(argv))

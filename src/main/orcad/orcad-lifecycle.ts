@@ -2,6 +2,7 @@ import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-com
 import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
+import { resolveOrcadExitCode } from './orcad-exit-code'
 import {
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
@@ -39,7 +40,7 @@ export function installOrcadShutdownSignals(
       .then(() => process.exit(0))
       .catch((error) => {
         console.error(`orcad: shutdown after ${signal} failed:`, error)
-        process.exit(1)
+        process.exit(resolveOrcadExitCode(error))
       })
   }
   process.on('SIGINT', () => shutdown('SIGINT'))

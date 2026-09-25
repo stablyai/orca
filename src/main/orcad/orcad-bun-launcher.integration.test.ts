@@ -24,18 +24,27 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
     await build({
       stdin: {
         contents: `
-          import {handoffToBundledOrcad} from './src/main/orcad/orcad-bundled-runtime'
+          import {handoffToBundledOrcad, OrcadBundledRuntimeError} from './src/main/orcad/orcad-bundled-runtime'
           import {installOrcadShutdownSignals} from './src/main/orcad/orcad-lifecycle'
+          import {resolveOrcadExitCode} from './src/main/orcad/orcad-exit-code'
           import {writeFile} from 'node:fs/promises'
           if (!process.versions.bun) {
             if (!handoffToBundledOrcad()) throw new Error('Missing bundled runtime')
+            process.on('message', signal => process.emit(signal))
           } else {
             console.log('booting:' + process.pid)
             console.log('runtime:' + process.versions.bun)
             console.log('channel-env:' + (process.env.ORCA_BUNDLED_LAUNCHER_CHANNEL ?? 'absent'))
             process.on('exit', code => console.log('runtime-exit:' + code))
             const keepalive = setInterval(() => {}, 1_000)
-            const install = () => {
+            const install = async () => {
+              if (process.env.ORCA_TEST_FAIL_STARTUP === '1') {
+                const startup = new Promise((_, reject) => setTimeout(() =>
+                  reject(new OrcadBundledRuntimeError('startup configuration failed')), 100))
+                installOrcadShutdownSignals(async () => (await startup).stop())
+                await startup
+                return
+              }
               installOrcadShutdownSignals(async () => {
                 console.log('flushing')
                 clearInterval(keepalive)
@@ -45,8 +54,11 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
               }, process.env.ORCA_TEST_STALL === '1' ? 100 : undefined)
               console.log('ready')
             }
-            if (process.env.ORCA_TEST_DELAY_INSTALL === '1') setTimeout(install, 300)
-            else install()
+            // Exercise the shutdown observer before the outer startup-failure reporter.
+            const start = () => Promise.resolve().then(install)
+              .catch(error => setImmediate(() => process.exit(resolveOrcadExitCode(error))))
+            if (process.env.ORCA_TEST_DELAY_INSTALL === '1') setTimeout(start, 300)
+            else start()
           }
         `,
         resolveDir: process.cwd(),
@@ -75,7 +87,13 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
   })
 
   function launch(
-    options: { direct?: boolean; nohup?: boolean; delay?: boolean; stall?: boolean } = {}
+    options: {
+      direct?: boolean
+      nohup?: boolean
+      delay?: boolean
+      stall?: boolean
+      failStartup?: boolean
+    } = {}
   ) {
     const runtime = options.direct
       ? join(directory, orcadBunRuntimeFilename(process.platform))
@@ -88,10 +106,11 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
         ORCA_BACKGROUND_LAUNCH: '1',
         ORCA_TEST_DONE: join(directory, 'done'),
         ORCA_TEST_DELAY_INSTALL: options.delay ? '1' : '0',
-        ORCA_TEST_STALL: options.stall ? '1' : '0'
+        ORCA_TEST_STALL: options.stall ? '1' : '0',
+        ORCA_TEST_FAIL_STARTUP: options.failStartup ? '1' : '0'
       },
       detached: process.platform !== 'win32',
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
     children.add(child)
     let closed = false
@@ -170,6 +189,32 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
     await h.exit
     await vi.waitFor(() => expect(h.output()).toContain('runtime-exit:1'))
     expect(h.output()).toContain('exceeded 100ms')
+    await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+  })
+
+  it.each(process.platform === 'win32' ? [false, true] : [false])(
+    'forwards launcher stop requests and drains once (startup pending: %s)',
+    async (delay) => {
+      const h = launch({ delay })
+      await vi.waitFor(() => expect(h.output()).toContain(delay ? 'booting:' : 'ready'), {
+        timeout: 5_000
+      })
+      h.child.send('SIGINT')
+      h.child.send('SIGTERM')
+      expect(await h.exit).toEqual({ code: 0, signal: null })
+      expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed')
+      expect(h.output().match(/flushing/g)).toHaveLength(1)
+      await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+    }
+  )
+
+  it('preserves a startup configuration verdict after early launcher loss', async () => {
+    const h = launch({ delay: true, failStartup: true })
+    await vi.waitFor(() => expect(h.output()).toContain('booting:'), { timeout: 5_000 })
+    h.child.kill('SIGKILL')
+    await h.exit
+    await vi.waitFor(() => expect(h.output()).toContain('runtime-exit:78'), { timeout: 5_000 })
+    expect(h.output()).toContain('shutdown after launcher disconnect failed')
     await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
   })
 })

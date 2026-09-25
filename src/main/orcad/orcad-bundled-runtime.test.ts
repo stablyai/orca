@@ -14,6 +14,8 @@ vi.mock('../../shared/child-process/run-process', () => ({ spawnProcess: fixture
 
 class RuntimeChild extends EventEmitter {
   kill = vi.fn()
+  disconnect = vi.fn()
+  connected = true
 }
 
 let child: RuntimeChild
@@ -97,7 +99,7 @@ describe('bundled Orca runtime handoff', () => {
         program: expect.stringMatching(/bun-runtime(?:\.exe)?$/),
         args: ['/slot/orcad.js', '--port', '0'],
         env: expect.objectContaining({ ORCA_BUNDLED_LAUNCHER_CHANNEL: '1' }),
-        detached: platform !== 'win32',
+        detached: true,
         stdio: ['inherit', 'inherit', 'inherit', 'ipc']
       })
       for (const signal of signalNames) {
@@ -116,6 +118,7 @@ describe('bundled Orca runtime handoff', () => {
           expect(child.kill).not.toHaveBeenCalledWith('SIGHUP')
         } else if (platform === 'win32') {
           expect(child.kill).not.toHaveBeenCalled()
+          expect(child.disconnect).toHaveBeenCalled()
         } else {
           expect(child.kill).toHaveBeenLastCalledWith(signal)
         }

@@ -44,7 +44,8 @@ export function handoffToBundledOrcad(): boolean {
     program: runtime,
     args: [entry, ...process.argv.slice(2)],
     env: { ...process.env, [ORCAD_BUNDLED_LAUNCHER_ENV]: '1' },
-    detached: process.platform !== 'win32',
+    // Windows' default child job kills Bun before it can drain on launcher disconnect.
+    detached: true,
     stdio: ['inherit', 'inherit', 'inherit', 'ipc']
   })
   // Node resets nohup's disposition; headless runtimes stop through INT/TERM or owner loss.
@@ -54,8 +55,12 @@ export function handoffToBundledOrcad(): boolean {
   }
   const forwards = (['SIGINT', 'SIGTERM'] as const).map((signal) => {
     const forward = (): void => {
-      // Windows consoles already signal the child; kill() would abort its durable shutdown.
-      if (process.platform !== 'win32') {
+      if (process.platform === 'win32') {
+        // Detached Windows children have a separate console; kill() skips durable shutdown.
+        if (child.connected) {
+          child.disconnect()
+        }
+      } else {
         child.kill(signal)
       }
     }
