@@ -60,6 +60,24 @@ export function selectRuntimeAwareSshError(
   return bucket.connectionStates.get(targetId)?.error ?? null
 }
 
+export function selectRuntimeAwareSshConnectionGeneration(
+  state: RuntimeAwareSshReadState,
+  environmentId: string | null,
+  targetId: string
+): number | null {
+  if (environmentId === null) {
+    return state.sshConnectionStates.get(targetId)?.connectionGeneration ?? null
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return null
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  if (!bucket?.targetsHydrated) {
+    return null
+  }
+  return bucket.connectionStates.get(targetId)?.connectionGeneration ?? null
+}
+
 export function selectRuntimeAwareSshTargetLabel(
   state: RuntimeAwareSshReadState,
   environmentId: string | null,

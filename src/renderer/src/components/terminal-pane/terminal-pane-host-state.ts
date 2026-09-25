@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveWorktreeSshTarget } from '@/lib/worktree-host-connection-phase'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import {
   selectRuntimeAwareSshError,
@@ -8,7 +8,6 @@ import {
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/runtime-environment-ssh'
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 
 export type TerminalPaneHostState = {
   nativeChatTranscriptIsLocalReadable: boolean
@@ -25,9 +24,8 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
   const connectionId = getConnectionIdFromState(state, worktreeId)
   const nativeChatTranscriptIsLocalReadableResult =
     isNativeChatTranscriptLocalReadable(connectionId)
-  const sshReconnectTargetId =
-    connectionId && !isRuntimeOwnedSshTargetId(connectionId) ? connectionId : null
-  if (!sshReconnectTargetId) {
+  const sshTarget = resolveWorktreeSshTarget(state, worktreeId, connectionId)
+  if (!sshTarget) {
     return {
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
       sshReconnectEnvironmentId: null,
@@ -38,7 +36,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
       sshReconnectTargetRemoved: false
     }
   }
-  const sshReconnectEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const { targetId: sshReconnectTargetId, environmentId: sshReconnectEnvironmentId } = sshTarget
   return {
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
     sshReconnectEnvironmentId,

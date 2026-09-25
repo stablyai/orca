@@ -1,5 +1,6 @@
-import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
+import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import {
   WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE,
@@ -79,13 +80,62 @@ export function useEditorPanelFileLoadRetry({
   const activeFileLoadErrorCode = activeFileLoadRetryId
     ? fileContents[activeFileLoadRetryId]?.loadErrorCode
     : undefined
+  const hostConnection = useWorktreeHostConnection(activeFile?.worktreeId ?? null)
+  const hostTargetId = hostConnection.targetId
+  const hostConnecting = hostConnection.phase === 'connecting'
+  const connectedHostEpoch =
+    hostConnection.phase === 'connected' ? `${hostConnection.connectionGeneration ?? ''}` : null
+  const seenHostRef = useRef({ targetId: hostTargetId, connectedEpoch: connectedHostEpoch })
 
   useEffect(() => {
+    // Why the same target: switching to a file on another host is not that host connecting.
+    const hostJustConnected =
+      connectedHostEpoch !== null &&
+      seenHostRef.current.targetId === hostTargetId &&
+      seenHostRef.current.connectedEpoch !== connectedHostEpoch
+    seenHostRef.current = { targetId: hostTargetId, connectedEpoch: connectedHostEpoch }
+    if (!activeFileLoadRetryId || !activeFileLoadError) {
+      return
+    }
+    const reload = (nextRetryCount: number): void => {
+      const currentFile = openFilesRef.current.find((file) => file.id === activeFileLoadRetryId)
+      if (
+        !currentFile ||
+        (currentFile.mode !== 'edit' && currentFile.mode !== 'markdown-preview')
+      ) {
+        return
+      }
+      fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] = nextRetryCount
+      setFileContents((prev) => {
+        if (prev[currentFile.id]?.loadError !== activeFileLoadError) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[currentFile.id]
+        return next
+      })
+      void loadFileContent(
+        currentFile.filePath,
+        currentFile.id,
+        currentFile.worktreeId,
+        currentFile.relativePath
+      )
+    }
+    // Why: the connected transition below re-arms the read, so waiting spends no budget.
+    if (hostConnecting) {
+      return
+    }
+    // Why: a host that just connected (or reconnected) can serve a read a lost connection
+    // failed — including one whose budget already ran out — so reload once on a fresh budget.
     if (
-      !activeFileLoadRetryId ||
-      !activeFileLoadError ||
-      !shouldRetryFileLoadError(activeFileLoadError, activeFileLoadErrorCode)
+      hostJustConnected &&
+      (activeFileLoadError === WORKTREE_OWNER_UNREACHABLE_ERROR ||
+        shouldRetryFileLoadError(activeFileLoadError, activeFileLoadErrorCode))
     ) {
+      reload(0)
+      return
+    }
+    if (!shouldRetryFileLoadError(activeFileLoadError, activeFileLoadErrorCode)) {
       return
     }
     const ownerNotReady = isOwnerNotReadyError(activeFileLoadError)
@@ -127,35 +177,15 @@ export function useEditorPanelFileLoadRetry({
     const delayMs = ownerNotReady
       ? OWNER_NOT_READY_RETRY_DELAY_MS
       : (FILE_LOAD_RETRY_DELAYS_MS[retryCount] ?? FILE_LOAD_RETRY_DELAYS_MS[0])
-    const timeoutId = window.setTimeout(() => {
-      const currentFile = openFilesRef.current.find((file) => file.id === activeFileLoadRetryId)
-      if (
-        !currentFile ||
-        (currentFile.mode !== 'edit' && currentFile.mode !== 'markdown-preview')
-      ) {
-        return
-      }
-      fileLoadRetryAttemptsRef.current[activeFileLoadRetryId] = retryCount + 1
-      setFileContents((prev) => {
-        if (prev[currentFile.id]?.loadError !== activeFileLoadError) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[currentFile.id]
-        return next
-      })
-      void loadFileContent(
-        currentFile.filePath,
-        currentFile.id,
-        currentFile.worktreeId,
-        currentFile.relativePath
-      )
-    }, delayMs)
+    const timeoutId = window.setTimeout(() => reload(retryCount + 1), delayMs)
     return () => window.clearTimeout(timeoutId)
   }, [
     activeFileLoadRetryId,
     activeFileLoadError,
     activeFileLoadErrorCode,
+    connectedHostEpoch,
+    hostConnecting,
+    hostTargetId,
     fileLoadRetryAttemptsRef,
     loadFileContent,
     openFilesRef,
