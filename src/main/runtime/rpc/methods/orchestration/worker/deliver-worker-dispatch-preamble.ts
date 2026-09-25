@@ -5,7 +5,7 @@ import {
   buildDispatchPreamble,
   dispatchPreambleSendOptions
 } from '../../../../orchestration/preamble'
-import { structuredSessionCliInvocation } from '../../../../orchestration/cli-command'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
 import { agentVisibleOrchestrationAddress } from '../../../../orchestration/structured-session-mail-address'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
@@ -43,19 +43,11 @@ export async function deliverWorkerDispatchPreamble(args: {
     dispatchId: args.dispatchId,
     taskSpec: args.taskSpec,
     coordinatorHandle: agentVisibleOrchestrationAddress(args.coordinatorHandle, args.db),
-    workerHandle: terminalHandle,
-    ...(structuredSession
-      ? {
-          structuredSession: {
-            sessionId: structuredSession.identity.sessionId,
-            cliInvocation: structuredSessionCliInvocation({
-              platform: process.platform,
-              // Registered with its agent at start; null only for an entry rehydrated later.
-              provider: structuredSession.identity.agent ?? 'claude'
-            })
-          }
-        }
-      : {}),
+    // Only the address differs by mode: a structured worker's minted handle is its mailbox key, and
+    // the host binds `session:<id>` to that same caller.
+    workerHandle: structuredSession
+      ? `${ORCA_SESSION_ADDRESS_PREFIX}${structuredSession.identity.sessionId}`
+      : terminalHandle,
     dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)

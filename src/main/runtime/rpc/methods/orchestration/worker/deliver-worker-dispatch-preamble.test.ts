@@ -69,32 +69,28 @@ describe('deliverWorkerDispatchPreamble tells each worker its own address', () =
     expect(prompts).toEqual([])
     expect(sent.preambles).toHaveLength(1)
     expect(sent.preambles[0]).toContain(`Your orchestration address is: session:${SESSION}\n`)
-    expect(sent.preambles[0]).toContain(
-      `"$ORCA_CLI_COMMAND" orchestration send --from session:${SESSION}`
-    )
+    expect(sent.preambles[0]).toContain(`orca orchestration send --from session:${SESSION}`)
     expect(sent.preambles[0]).not.toContain('structworker_1')
   })
 
-  it("renders the CLI in the worker's own shell: PowerShell for Codex on Windows", async () => {
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    try {
-      for (const agent of ['codex', 'claude'] as const) {
-        await deliverWorkerDispatchPreamble({
-          ...args,
-          runtime: runtime([]),
-          terminalHandle: 'structworker_1',
-          structuredSession: structuredSession(agent)
-        })
-      }
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
-      }
-    }
+  it('teaches a structured worker and a terminal worker the same text but for the address', async () => {
+    const prompts: string[] = []
+    await deliverWorkerDispatchPreamble({
+      ...args,
+      runtime: runtime(prompts),
+      terminalHandle: 'structworker_1',
+      structuredSession: structuredSession('codex')
+    })
+    await deliverWorkerDispatchPreamble({
+      ...args,
+      runtime: runtime(prompts),
+      terminalHandle: 'term_worker',
+      structuredSession: null
+    })
 
-    expect(sent.preambles[0]).toContain('& $env:ORCA_CLI_COMMAND orchestration send')
-    expect(sent.preambles[1]).toContain('"$ORCA_CLI_COMMAND" orchestration send')
+    expect(sent.preambles[0]!.split(`session:${SESSION}`).join('<self>')).toBe(
+      prompts[0]!.split('term_worker').join('<self>')
+    )
   })
 
   it('names a terminal worker by its handle and keeps its bare CLI', async () => {
@@ -109,6 +105,5 @@ describe('deliverWorkerDispatchPreamble tells each worker its own address', () =
     expect(sent.preambles).toEqual([])
     expect(prompts[0]).toContain('Your orchestration address is: term_worker\n')
     expect(prompts[0]).toContain('orca orchestration send --from term_worker')
-    expect(prompts[0]).not.toContain('ORCA_CLI_COMMAND')
   })
 })

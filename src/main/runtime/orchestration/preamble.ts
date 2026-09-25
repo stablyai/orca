@@ -1,7 +1,6 @@
-import type { OrchestrationCliCommand, StructuredSessionCliInvocation } from './cli-command'
+import type { OrchestrationCliCommand } from './cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 
 export type PreambleParams = {
   taskId: string
@@ -13,14 +12,9 @@ export type PreambleParams = {
   dispatchId: string
   dispatchCapability?: string
   taskSpec: string
-  /** The coordinator's orchestration address: a terminal handle, or `session:<id>` for a chat. */
+  /** Orchestration addresses are opaque to the worker; a terminal handle and `session:<id>` alike. */
   coordinatorHandle: string
   workerHandle: string
-  /**
-   * Set when the worker is a structured session. Its address is then `session:<id>`, and it runs
-   * the CLI through `ORCA_CLI_COMMAND`, which names this app's CLI by absolute path.
-   */
-  structuredSession?: { sessionId: string; cliInvocation: StructuredSessionCliInvocation }
   devMode?: boolean
   // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
   // other execution hosts keep their existing bare `orca` bridge.
@@ -59,22 +53,11 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
-  const cli = params.structuredSession
-    ? params.structuredSession.cliInvocation
-    : params.devMode
-      ? 'orca-dev'
-      : (params.cliCommand ?? 'orca')
-  const chat = params.structuredSession !== undefined
-  // Why one spelling: a structured worker's minted handle is only its mailbox key; the host binds
-  // `session:<id>` to that same caller, so every command names it the way its address line does.
-  const self = params.structuredSession
-    ? `${ORCA_SESSION_ADDRESS_PREFIX}${params.structuredSession.sessionId}`
-    : params.workerHandle
+  const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
-    workerKind: chat ? 'chat' : (params.workerKind ?? 'prompt-returning-agent')
+    workerKind: params.workerKind ?? 'prompt-returning-agent'
   })
-  const surface = chat ? 'chat' : 'terminal'
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
@@ -86,9 +69,10 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's address is: ${params.coordinatorHandle}
 Your task ID is: ${params.taskId}
-${buildWorkerAddressSection(params)}
-The coordinator cannot see this ${surface}, so reach it with the \`${cli} orchestration\`
-commands below; a question or result left only in this ${surface} never gets to it.
+Your orchestration address is: ${params.workerHandle}
+
+The coordinator cannot see this terminal, so reach it with the \`${cli} orchestration\`
+commands below; a question or result left only in this terminal never gets to it.
 Don't post to Slack, GitHub, or other channels during the run; report through these commands.
 
 === CLI COMMANDS ===
@@ -108,29 +92,41 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
-  ${cli} orchestration send --from ${self}${capabilityFlag} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 
   # Send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
   # while actively working on the task. The coordinator uses this to
-  # distinguish "still thinking" from "hung / crashed." ${chat ? 'Skip heartbeats only\n  # while your turn has ended waiting for an answer to `ask`.' : 'Skip heartbeats only\n  # while blocked inside `check --wait` or `ask` — those calls are\n  # themselves liveness signals.'}
+  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
+  # while blocked inside \`check --wait\` or \`ask\` — those calls are
+  # themselves liveness signals.
   #
   # Include BOTH taskId and dispatchId in the payload: the coordinator
   # attributes the heartbeat to the specific dispatch context, not just
   # the task, so a straggler heartbeat from a previously-failed dispatch
   # cannot mask a hung retry.
-  ${cli} orchestration send --from ${self}${capabilityFlag} --type heartbeat --subject "alive" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --phase "<short: investigating|implementing|reviewing|waiting>"
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type heartbeat --subject "alive" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --phase "<short: investigating|implementing|reviewing|waiting>"
 
-${buildAskRecipe({ chat, cli, self, capabilityFlag })}
+  # Ask the coordinator a question and block until it answers.
+  #
+  # Use this instead of AskUserQuestion: that opens a local prompt the
+  # coordinator cannot see or answer, so the task would stall until someone
+  # happened to look at this terminal. Send every question through \`ask\`.
+  #
+  # The \`ask\` verb durably records a question in this Dispatch's Run and
+  # blocks until the coordinator replies, then prints the reply body. If the
+  # call times out or disconnects, resume with the returned message ID instead
+  # of creating a duplicate question.
+  ${cli} orchestration ask --from ${params.workerHandle}${capabilityFlag} --question "<your question>" --options "<optional,comma,separated>" --timeout-ms 600000
 
   # Escalate a blocker or failure (pre-completion, when you need the
   # coordinator to do something before you can continue):
-  ${cli} orchestration send --from ${self}${capabilityFlag} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
   # Read coordinator follow-ups. Nothing interrupts you: a durable message only
   # arrives when you look, so run this at each natural checkpoint — before you
   # start a new file and after a test run — and once more immediately before
   # you send worker_done, so a redirect lands before the task settles.
-  ${cli} orchestration check --terminal ${self} --json
+  ${cli} orchestration check --terminal ${params.workerHandle} --json
 \`\`\`
 
 ${postDoneInstructions}`
@@ -143,7 +139,7 @@ ${postDoneInstructions}`
   const drift =
     params.baseDrift && params.baseDrift.behind > 0 ? buildDriftSection(params.baseDrift) : ''
 
-  const subDispatch = params.canDispatchSubWorkers ? buildSubDispatchSection(cli, chat) : ''
+  const subDispatch = params.canDispatchSubWorkers ? buildSubDispatchSection(cli) : ''
 
   return `${header}${drift}${subDispatch}
 
@@ -166,27 +162,12 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
   }
 }
 
-// Why: a structured worker is a chat, reached at `session:<id>` and woken by Orca rather than a PTY.
-function buildWorkerAddressSection(params: PreambleParams): string {
-  const session = params.structuredSession
-  if (!session) {
-    return `Your orchestration address is: ${params.workerHandle}
-`
-  }
-  return `Your orchestration address is: ${ORCA_SESSION_ADDRESS_PREFIX}${session.sessionId}
-Your coordinator reaches you there. Mail that arrives while you are idle starts a new turn in
-this chat; mid-task, read it with the check command below.
-Run every command below exactly as written: \`${session.cliInvocation}\` runs this Orca's CLI
-from ORCA_CLI_COMMAND, and a bare \`orca\` in a login shell can reach a different Orca.
-`
-}
-
 function buildPostWorkerDoneInstructions({
   cli,
   workerKind
 }: {
   cli: string
-  workerKind: NonNullable<PreambleParams['workerKind']> | 'chat'
+  workerKind: NonNullable<PreambleParams['workerKind']>
 }): string {
   // Why: re-dispatch reaches idle agents as terminal input; inbox polling
   // after completion cannot receive that new TASK block and looks hung.
@@ -204,11 +185,10 @@ prompt for Orca to reuse; if the coordinator has more for you it will
 dispatch or prompt another worker with a fresh TASK block.`
   }
 
-  const chat = workerKind === 'chat'
   return `=== AFTER YOU SEND worker_done ===
 
 worker_done ends your turn for this task. Your dispatched work is complete:
-stop, ${chat ? 'end your turn' : 'return to an idle prompt'}, and take no further actions — do NOT start
+stop, return to an idle prompt, and take no further actions — do NOT start
 new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
 \`${cli} orchestration check\`. The coordinator has already recorded your
 completion and expects no further output.
@@ -218,49 +198,10 @@ Treat it as new user-owned work: follow it without coordinator approval or a
 fresh Dispatch, and do not send lifecycle messages using the settled task or
 Dispatch IDs. Never refuse a direct user request because you were a worker.
 
-${
-  chat
-    ? `This chat stays available: if the coordinator has more for you, a fresh
-preamble + TASK block starts a new turn here.`
-    : `Do not exit the shell. Your terminal stays available, and if the
+Do not exit the shell. Your terminal stays available, and if the
 coordinator has more for you it will re-engage this terminal with a fresh
-preamble + TASK block, which arrives as new input.`
-} Treat that as supervised
+preamble + TASK block, which arrives as new input. Treat that as supervised
 work under the new Dispatch; ignore stale follow-ups from the settled task.`
-}
-
-// Why: a chat's shell tool kills a long blocking call, and the message ID `--resume` needs is printed
-// only when the call returns — so a chat asks with a wait shorter than any shell tool's timeout.
-const CHAT_ASK_TIMEOUT_MS = 5_000
-
-function buildAskRecipe(args: {
-  chat: boolean
-  cli: string
-  self: string
-  capabilityFlag: string
-}): string {
-  const lead = args.chat
-    ? `  # Ask the coordinator a question.`
-    : `  # Ask the coordinator a question and block until it answers.`
-  const semantics = args.chat
-    ? `  # The \`ask\` verb durably records a question in this Dispatch's Run and
-  # waits ${CHAT_ASK_TIMEOUT_MS / 1000} seconds, well inside your shell tool's timeout. With no reply
-  # by then it prints the question's message ID and a resume command: end
-  # your turn, and the reply starts a new turn in this chat. Run that resume
-  # command then instead of asking again.`
-    : `  # The \`ask\` verb durably records a question in this Dispatch's Run and
-  # blocks until the coordinator replies, then prints the reply body. If the
-  # call times out or disconnects, resume with the returned message ID instead
-  # of creating a duplicate question.`
-  const timeoutMs = args.chat ? CHAT_ASK_TIMEOUT_MS : 600_000
-  return `${lead}
-  #
-  # Use this instead of AskUserQuestion: that opens a local prompt the
-  # coordinator cannot see or answer, so the task would stall until someone
-  # happened to look at this ${args.chat ? 'chat' : 'terminal'}. Send every question through \`ask\`.
-  #
-${semantics}
-  ${args.cli} orchestration ask --from ${args.self}${args.capabilityFlag} --question "<your question>" --options "<optional,comma,separated>" --timeout-ms ${timeoutMs}`
 }
 
 // Why the whole section is omitted rather than softened when nesting is off: a
@@ -268,7 +209,7 @@ ${semantics}
 // as a blocker.
 // Why fenced + blank line before the closing `---`: unfenced `<placeholders>` are stripped as raw
 // HTML by the Chat UI, and a rule directly under a paragraph is a setext H2 (giant last sentence).
-function buildSubDispatchSection(cli: string, chat: boolean): string {
+function buildSubDispatchSection(cli: string): string {
   return `
 
 === SUB-DISPATCH ===
@@ -281,12 +222,7 @@ and start each one:
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 \`\`\`
 
-You own those sub-workers: ${
-    chat
-      ? `end your turn and handle their mail on the turns it starts,
-never in \`check --wait\`, and do not report your own worker_done`
-      : 'wait for their worker_done, and do not report your own'
-  }
+You own those sub-workers: wait for their worker_done, and do not report your own
 until they have settled. Nesting is capped, so a sub-worker of yours may not be
 able to dispatch further.
 
