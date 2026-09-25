@@ -14,12 +14,16 @@ import {
   setupFloatingTerminalPanelTest
 } from './floating-terminal-panel-test-harness'
 import {
-  findByProp,
   findByTypeName,
   flushAsyncWork,
   renderPanel,
   runEffects
 } from './floating-terminal-panel-render-probe'
+
+vi.mock('zustand/react/shallow', () => ({
+  // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
+  useShallow: (selector: unknown) => selector
+}))
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -224,20 +228,20 @@ describe('FloatingTerminalPanel close behavior', () => {
     setFloatingEditorTabs([makeFile({ id: 'notes' })])
 
     const element = await renderPanel(true)
-    const editorPanel = findByProp(element, 'activeFileId')
+    // The editor renders inside the shared group tree; the panel's contract is the policy
+    // it passes down (scratch markdown exposes no agent annotations).
+    const tree = findByTypeName(element, 'TabGroupSplitNodeTree')
 
-    expect(editorPanel.props.markdownAnnotationsEnabled).toBe(false)
-    expect(editorPanel.props.activeFileId).toBe('notes')
-    expect(editorPanel.props.isVisible).toBe(true)
+    expect(tree.props.markdownAnnotationsEnabled).toBe(false)
+    expect(tree.props.isWorktreeActive).toBe(true)
   })
 
   it('marks the retained floating editor hidden when the panel is closed', async () => {
     setFloatingEditorTabs([makeFile({ id: 'notes' })])
 
     const element = await renderPanel(false)
-    const editorPanel = findByProp(element, 'activeFileId')
 
-    expect(editorPanel.props.isVisible).toBe(false)
+    expect(findByTypeName(element, 'TabGroupSplitNodeTree').props.isWorktreeActive).toBe(false)
   })
 
   it('queues dirty editor closes from close-all-files instead of overwriting the dialog id', async () => {

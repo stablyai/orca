@@ -286,9 +286,10 @@ describe('holds', () => {
       graceMs: 1
     })
 
-    await expect(holds.hold('session-1', 'chat-1')).rejects.toThrow(
-      'agent_session_ownership_unknown'
-    )
+    await expect(holds.hold('session-1', 'chat-1')).rejects.toMatchObject({
+      code: 'agent_session_ownership_unknown',
+      message: 'The session attached without a provider child to write to.'
+    })
     expect(holds.isHeld('session-1')).toBe(false)
     holds.dispose()
   })

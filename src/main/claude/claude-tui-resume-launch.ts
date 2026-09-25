@@ -29,7 +29,8 @@ export type ClaudeTuiResumeLaunch = {
 }
 
 export type ClaudeTuiResumeLaunchBuilderDeps = {
-  resolveWorkspacePath: (workspaceId: string) => Promise<string>
+  /** Build with resolveAgentSessionLaunchDirectory, so a TUI resume lands where the chat ran. */
+  resolveLaunchDirectory: (record: AgentSessionRecord) => Promise<string>
   resolveCommand?: () => string
   resolveEnv?: () => Record<string, string>
   inheritedEnv?: NodeJS.ProcessEnv
@@ -92,7 +93,7 @@ export function createClaudeTuiResumeLaunchBuilder(
     return {
       command: spawnCmd,
       args: spawnArgs,
-      cwd: await deps.resolveWorkspacePath(record.location.workspaceId),
+      cwd: await deps.resolveLaunchDirectory(record),
       env: pairedEnv,
       providerSessionId: head.handle.sessionId,
       resumeLeafUuid: head.handle.leafUuid

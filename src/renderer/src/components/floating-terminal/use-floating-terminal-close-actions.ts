@@ -6,27 +6,27 @@ import {
   isFloatingWorkspacePanelFocused
 } from '@/lib/floating-workspace-terminal-actions'
 import { armFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
+import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import { useAppStore } from '@/store'
-import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 import type { Tab } from '../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { FloatingTerminalEditorCloseQueue } from './use-floating-terminal-editor-close-queue'
-import type { FloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
+import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
 
 type FloatingTerminalCloseActionsInput = Pick<
   FloatingTerminalPanelStoreState,
-  'closeTab' | 'closeBrowserTab' | 'closeFile' | 'closeUnifiedTab'
+  'closeTab' | 'closeFile' | 'closeUnifiedTab'
 > &
-  Pick<FloatingTerminalPanelItems, 'activeGroup' | 'groupTabs'> &
+  Pick<FloatingWorkspaceChromeModel, 'activeGroup' | 'groupTabs'> &
   Pick<FloatingTerminalPanelLocalState, 'pendingReclaimArmByFileIdRef'> &
   Pick<FloatingTerminalEditorCloseQueue, 'queueEditorCloseRequests'>
 
 export function useFloatingTerminalCloseActions({
   closeTab,
-  closeBrowserTab,
   closeFile,
   closeUnifiedTab,
   activeGroup,
@@ -52,9 +52,11 @@ export function useFloatingTerminalCloseActions({
       for (const item of items) {
         if (item.contentType === 'terminal') {
           closeTab(item.entityId, { reason: 'cleanup' })
+        } else if (item.contentType === 'agent-session') {
+          // Mirrors the shared workspace close: a structured chat closes by its unified tab.
+          closeUnifiedTab(item.id)
         } else if (item.contentType === 'browser') {
-          destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
-          closeBrowserTab(item.entityId)
+          closeWorkspaceBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, item.entityId, item.id)
         } else if (item.contentType === 'simulator') {
           closeUnifiedTab(item.id)
         } else {
@@ -70,7 +72,7 @@ export function useFloatingTerminalCloseActions({
         queueEditorCloseRequests(dirtyEditorFileIds)
       }
     },
-    [activeGroup, closeBrowserTab, closeFile, closeTab, closeUnifiedTab, queueEditorCloseRequests]
+    [activeGroup, closeFile, closeTab, closeUnifiedTab, queueEditorCloseRequests]
   )
 
   const closeFloatingItemConfirmed = useCallback(
@@ -94,6 +96,13 @@ export function useFloatingTerminalCloseActions({
         closeTerminalTab(item.entityId, { onClosed: armIfEmptying })
         return
       }
+      if (item.contentType === 'agent-session') {
+        dispatchWorkspaceTabCommand({
+          type: 'close',
+          target: { kind: 'tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID, tabId: item.id }
+        })
+        return
+      }
       const state = useAppStore.getState()
       guardPinnedTabClose({
         isPinned: item.isPinned === true,
@@ -101,8 +110,7 @@ export function useFloatingTerminalCloseActions({
         onClose: () => {
           const latest = useAppStore.getState()
           if (item.contentType === 'browser') {
-            destroyWorkspaceWebviews(latest.browserPagesByWorkspace, item.entityId)
-            closeBrowserTab(item.entityId)
+            closeWorkspaceBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, item.entityId, item.id)
           } else if (item.contentType === 'simulator') {
             closeUnifiedTab(item.id)
           } else {
@@ -118,14 +126,7 @@ export function useFloatingTerminalCloseActions({
         }
       })
     },
-    [
-      closeBrowserTab,
-      closeFile,
-      closeUnifiedTab,
-      groupTabs,
-      pendingReclaimArmByFileIdRef,
-      queueEditorCloseRequests
-    ]
+    [closeFile, closeUnifiedTab, groupTabs, pendingReclaimArmByFileIdRef, queueEditorCloseRequests]
   )
 
   const closeOthers = useCallback(

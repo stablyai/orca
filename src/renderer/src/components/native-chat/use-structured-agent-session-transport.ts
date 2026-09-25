@@ -13,7 +13,7 @@ export function useStructuredAgentSessionTransport(args: {
 }) {
   const { enabled, isVisible, sessionId, target } = args
   const providerVisible = isVisible && enabled
-  useStructuredAgentSessionHold({
+  const hold = useStructuredAgentSessionHold({
     sessionId,
     target,
     surface: 'desktop-chat',
@@ -40,5 +40,5 @@ export function useStructuredAgentSessionTransport(args: {
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  return { ...read, ...mutation, providerVisible }
+  return { ...read, ...mutation, providerVisible, holdError: hold.error }
 }

@@ -100,7 +100,8 @@ export function navigateBrowserPageToUrl({
       }
 
       try {
-        const activeWorktree = store.allWorktrees().find((w) => w.id === worktreeId)
+        // Why getKnownWorktreeById: folder and floating workspaces are absent from allWorktrees().
+        const activeWorktree = store.getKnownWorktreeById(worktreeId)
         const fileContext: RuntimeFileOperationArgs = {
           settings: store.settings,
           worktreeId,

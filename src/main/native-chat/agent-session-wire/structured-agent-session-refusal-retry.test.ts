@@ -24,7 +24,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
-  hostTestMessage
+  hostTestMessage,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
 
@@ -109,6 +110,7 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
     adapter,
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,
     ...(options.transport ? { handoffTransport: handoffTransport() } : {})

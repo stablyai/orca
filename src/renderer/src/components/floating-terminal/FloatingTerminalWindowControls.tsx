@@ -38,6 +38,8 @@ export function FloatingTerminalWindowControls({
   onMinimize
 }: FloatingTerminalWindowControlsProps): React.JSX.Element {
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
+  const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
+  const activateTab = useAppStore((s) => s.activateTab)
   const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
   const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
 
@@ -69,7 +71,11 @@ export function FloatingTerminalWindowControls({
     const result = launchAgentInNewTab({
       agent: defaultAgent,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      launchSource: 'shortcut'
+      launchSource: 'shortcut',
+      // Why: `agent-auto-ack-targets` relies on the floating panel's active tab never becoming the
+      // global `activeTabId`; activating here would also flip the main view off an open editor.
+      // This selects within the floating group below instead.
+      activate: false
     })
     if (!result) {
       toast.error(
@@ -84,8 +90,14 @@ export function FloatingTerminalWindowControls({
     if (result.surface.kind !== 'local-terminal') {
       return
     }
+    // Why: the floating panel renders its visible tab from the unified group's
+    // activeTabId. setActiveTabForWorktree only writes activeTabIdByWorktree, so
+    // the new agent tab would be appended but never selected/focused. activateTab
+    // selects it within the group, matching the empty-state tab creators.
+    setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, result.surface.tabId)
+    activateTab(result.surface.tabId)
     focusTerminalTabSurface(result.surface.tabId)
-  }, [defaultAgent, defaultAgentLabel])
+  }, [activateTab, defaultAgent, defaultAgentLabel, setActiveTabForWorktree])
 
   return (
     <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>

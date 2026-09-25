@@ -17,6 +17,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
+  hostTestLaunchDirectory,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 
@@ -56,6 +57,7 @@ beforeEach(async () => {
     },
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
   })

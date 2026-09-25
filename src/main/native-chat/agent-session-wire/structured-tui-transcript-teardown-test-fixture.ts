@@ -55,6 +55,7 @@ export async function createTuiTranscriptTeardownFixture() {
   const host = new StructuredAgentSessionHost({
     ...initial.host.deps,
     adapter: { ...adapter(), closeSession: vi.fn(async () => true) },
+    resolveLaunchDirectory: async () => '/workspace',
     handoffTransport: {
       hostLabel: 'Test host',
       launchTui,

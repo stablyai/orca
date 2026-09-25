@@ -19,7 +19,8 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestOperationId,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
@@ -130,6 +131,7 @@ beforeEach(async () => {
     adapter: adapter(),
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
   })

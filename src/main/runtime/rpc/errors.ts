@@ -7,6 +7,7 @@ import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
+import { AgentSessionRefusalError } from '../../native-chat/agent-session-wire/structured-agent-session-refusal-error'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
 import {
@@ -207,6 +208,15 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       (error as { code: string }).code,
       message,
       (error as { data?: unknown }).data
+    )
+  }
+  // Same code a bare-code throw of this refusal gets; the message is the refusal's own text.
+  if (error instanceof AgentSessionRefusalError) {
+    return errorResponse(
+      id,
+      meta,
+      RUNTIME_PASSTHROUGH_CODES.has(error.code) ? error.code : 'runtime_error',
+      message
     )
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {

@@ -18,6 +18,7 @@ import {
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import { ownsGlobalSelection } from '../../global-selection-owner'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -166,7 +167,7 @@ export function createTabsCloseActions(
                 }
               }
             : {}),
-          ...(!shouldDeactivateWorktree && current.activeWorktreeId === worktreeId
+          ...(!shouldDeactivateWorktree && ownsGlobalSelection(current, worktreeId)
             ? buildActiveSurfacePatch(
                 {
                   ...current,

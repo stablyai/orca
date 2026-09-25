@@ -23,6 +23,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { isFloatingWorkspaceId } from '../../shared/floating-workspace-worktree'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
@@ -98,7 +99,10 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     const repo = this.store?.getRepo(target.worktree.repoId)
     const folderScope = parseWorkspaceKey(target.worktree.id)
-    const folderWorkspace = folderScope?.type === 'folder'
+    // The floating workspace is a plain directory with no repo git options, which is exactly what
+    // `folder` denotes here — it describes how Orca manages the place, not whether git is in it.
+    const folderWorkspace =
+      folderScope?.type === 'folder' || isFloatingWorkspaceId(target.worktree.id)
     // WSL routing describes *this* machine; no remote or runtime host may inherit
     // it. Both branches key on executionHostId: the target no longer carries a
     // connectionId, which used to spell remote, unresolved and local alike.

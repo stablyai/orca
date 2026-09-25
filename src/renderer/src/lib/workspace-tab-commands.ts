@@ -3,14 +3,15 @@ import { toVisibleTabType, type Tab } from '../../../shared/tab-types'
 import { useAppStore } from '@/store'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
+import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
 import {
-  isEmptyFloatingWorkspacePanelVisible,
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
@@ -105,7 +106,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
   const state = useAppStore.getState()
   if (command.type === 'close') {
     if (!command.target) {
-      if (isEmptyFloatingWorkspacePanelVisible()) {
+      if (selectEmptyFloatingWorkspacePanelVisible(state)) {
         window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
         return true
       }
@@ -121,6 +122,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       if (!target.browserWorkspaceId) {
         return false
       }
+      const whenEmptied = captureWorkspaceEmptiedReaction(target.worktreeId)
       const plan = closeWorkspaceBrowserTab(target.worktreeId, target.browserWorkspaceId)
       if (
         plan.closesLocally &&
@@ -128,10 +130,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
         !command.skipEmptyCheck &&
         !command.bulk
       ) {
-        createWorkspaceTabCloseCommands({
-          worktreeId: target.worktreeId,
-          groupTabs: []
-        }).leaveWorktreeIfEmpty()
+        whenEmptied()
       }
       return true
     }
@@ -146,11 +145,13 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     if ((command.bulk || command.skipEmptyCheck) && tab.isPinned) {
       return true
     }
+    // Why before the pin guard: its prompt takes focus, and the floating panel's reaction reads focus.
+    const whenEmptied =
+      command.bulk || command.skipEmptyCheck
+        ? undefined
+        : captureWorkspaceEmptiedReaction(target.worktreeId)
     const close = () =>
-      commands.closeItem(tab.id, {
-        skipEmptyCheck: command.bulk || command.skipEmptyCheck,
-        skipRunningProcessConfirm: command.bulk
-      })
+      commands.closeItem(tab.id, { whenEmptied, skipRunningProcessConfirm: command.bulk })
     if (tab.contentType === 'terminal' || command.bulk) {
       close()
     } else {

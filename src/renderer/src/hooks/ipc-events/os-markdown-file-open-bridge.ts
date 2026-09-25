@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
 import { openMarkdownDocumentInFloatingWorkspace } from '@/lib/open-markdown-in-floating-workspace'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
@@ -39,11 +38,7 @@ async function openOsRequestedMarkdownFiles(documents: MarkdownDocument[]): Prom
     await store.updateSettings({ floatingTerminalEnabled: true })
   }
   // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
-  requestAnimationFrame(() => {
-    if (!isFloatingWorkspacePanelVisible()) {
-      window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-    }
-  })
+  requestAnimationFrame(() => revealFloatingWorkspacePanel(useAppStore.getState()))
 }
 
 function reportOsRequestedMarkdownFailure(error: unknown): void {

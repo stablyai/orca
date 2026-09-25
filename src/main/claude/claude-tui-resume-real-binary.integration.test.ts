@@ -242,7 +242,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
         ]
       } as AgentSessionRecord
       const launch = await createClaudeTuiResumeLaunchBuilder({
-        resolveWorkspacePath: async () => process.cwd(),
+        resolveLaunchDirectory: async () => process.cwd(),
         resolveCommand: () => command,
         // The real binary authenticates from the developer's own environment here,
         // which is the system-auth case: stripping it would sign the resume out.

@@ -1,6 +1,7 @@
 import { resolveActiveTabOwnerWorktreeId } from '../slices/active-tab-owner-worktree'
 import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { ownsGlobalSelection } from '../global-selection-owner'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,
@@ -63,7 +64,7 @@ export function createTerminalTabNavigationActions(
           tabId
         )
         const isActiveWorktreeTab =
-          tabOwnerWorktreeId !== null && tabOwnerWorktreeId === s.activeWorktreeId
+          tabOwnerWorktreeId !== null && ownsGlobalSelection(s, tabOwnerWorktreeId)
         const nextUnreadTerminalTabs =
           isActiveWorktreeTab && s.unreadTerminalTabs[tabId]
             ? (() => {

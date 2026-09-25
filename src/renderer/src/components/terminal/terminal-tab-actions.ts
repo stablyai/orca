@@ -237,7 +237,7 @@ export function closeTerminalTab(
     if (current.activeWorktreeId === owningWorktreeId) {
       // Why: agent-session and simulator tabs render without a terminal/editor/browser
       // entity, so only the unified renderable count can prove the worktree is empty
-      // (mirrors leaveWorktreeIfEmpty in useTabGroupTabCloseCommands).
+      // (mirrors leaveWorktreeIfEmpty in workspace-emptied-reaction.ts).
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
       if (renderableTabCount === 0) {
         const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)

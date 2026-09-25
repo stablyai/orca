@@ -38,7 +38,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
@@ -139,7 +140,8 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
     mintSpawnToken: () => 'spawn-new',
     now: () => NOW,
     probeOwner: async () => ({ outcome: 'pid-absent' }),
-    ...overrides
+    ...overrides,
+    resolveLaunchDirectory: overrides.resolveLaunchDirectory ?? hostTestLaunchDirectory
   })
 }
 

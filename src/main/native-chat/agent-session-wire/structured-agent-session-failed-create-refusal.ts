@@ -32,9 +32,9 @@ export function failedAcquisitionSettlement(error: unknown): {
     : error instanceof AgentSessionAcquisitionRootExitObservedError
       ? 'root-exit-observed'
       : 'exit-proven'
-  const message = error instanceof Error ? error.message : String(error)
-  const code =
-    error instanceof AgentSessionAcquisitionRefusal ? error.code : 'agent_session_operation_invalid'
+  const refusal = acquisitionRefusalOf(error)
+  const message = refusal?.message ?? (error instanceof Error ? error.message : String(error))
+  const code = refusal?.code ?? 'agent_session_operation_invalid'
   return { exitProof, outcome: { status: 'failed', code, message } }
 }
 
@@ -43,8 +43,9 @@ export function failedAcquisitionSettlement(error: unknown): {
 export function failedAcquisitionRefusal(
   error: unknown
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
-  if (error instanceof AgentSessionAcquisitionRefusal) {
-    return { ok: false, refusal: { code: error.code, message: error.message } }
+  const refusal = acquisitionRefusalOf(error)
+  if (refusal) {
+    return { ok: false, refusal: { code: refusal.code, message: refusal.message } }
   }
   // A proven exit is a settled fact; its message is the provider's own diagnostic.
   if (
@@ -57,6 +58,15 @@ export function failedAcquisitionRefusal(
     }
   }
   return null
+}
+
+function acquisitionRefusalOf(error: unknown): AgentSessionAcquisitionRefusal | null {
+  if (error instanceof AgentSessionAcquisitionRefusal) {
+    return error
+  }
+  return isAgentSessionPreSpawnError(error) && error.cause instanceof AgentSessionAcquisitionRefusal
+    ? error.cause
+    : null
 }
 
 /** Only a durably failed operation says anything about retrying under a new one. */

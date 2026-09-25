@@ -395,20 +395,17 @@ describe('delivering a launch prompt to a terminal agent', () => {
  * decided here rather than offered to a host probe that cannot answer for it.
  */
 describe('a launch into an existing workspace, by workspace kind', () => {
-  it('runs the floating workspace as a terminal, never a structured session', async () => {
+  it('opens a structured session in the floating workspace', async () => {
     const h = harness({})
     const result = await h.run({
       agent: 'claude',
       target: { kind: 'existing', worktree: FLOATING_TERMINAL_WORKTREE_ID }
     })
 
-    // The invariant, not the call order: the floating sentinel has no session store to open into.
-    expect(h.createStructuredSession).not.toHaveBeenCalled()
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    expect(result.receipt).toMatchObject({
-      mode: 'terminal',
-      reason: 'structured_unsupported_on_host'
-    })
+    // Why this changed: the floating workspace resolves to its configured directory, so a session
+    // has somewhere to run and be filed under. Kind alone no longer downgrades a launch.
+    expect(h.createStructuredSession).toHaveBeenCalled()
+    expect(result.outcome).toMatchObject({ kind: 'structured' })
   })
 
   it('still opens a structured session in a folder workspace', async () => {

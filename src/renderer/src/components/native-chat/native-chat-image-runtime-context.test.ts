@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Tab } from '../../../../shared/tab-types'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import {
   resolveNativeChatImageRuntimeContext,
   selectNativeChatImageOwnerState
@@ -91,6 +93,51 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       worktreePath: '/repo/worktree',
       expectedExecutionHostId: 'local',
       settings: { activeRuntimeEnvironmentId: 'owner-a' }
+    })
+  })
+
+  it('resolves a floating chat to its pinned folder on the local host, and nothing before the pin', () => {
+    const floatingTab: Tab = {
+      id: 'floating-chat-1',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      groupId: 'floating-group',
+      contentType: 'agent-session',
+      entityId: 'session-1',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      isPinned: false,
+      agentSessionAgent: 'codex'
+    }
+    const floatingState: AppState = {
+      ...state(),
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
+      getKnownWorktreeById: () => undefined,
+      worktreesByRepo: {},
+      // Why a focused runtime: floating must stay local even when one is selected.
+      settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'env-1' },
+      floatingWorkspacePath: '/home/me/changed-setting'
+    }
+
+    expect(resolveNativeChatImageRuntimeContext(floatingState, 'floating-chat-1')).toBeNull()
+    expect(
+      resolveNativeChatImageRuntimeContext(
+        {
+          ...floatingState,
+          structuredSessionWorkspacePathByTabId: {
+            'floating-chat-1': { sessionId: 'session-1', workspacePath: '/home/me/pinned' }
+          }
+        },
+        'floating-chat-1'
+      )
+    ).toMatchObject({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreePath: '/home/me/pinned',
+      expectedExecutionHostId: 'local',
+      settings: { activeRuntimeEnvironmentId: null }
     })
   })
 })

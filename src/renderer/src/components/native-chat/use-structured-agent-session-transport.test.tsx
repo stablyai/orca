@@ -20,6 +20,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsStructuredAgentSessionPromptCancel: vi.fn().mockResolvedValue(false)
 }))
 
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
 import {
@@ -123,6 +124,46 @@ describe('useStructuredAgentSessionTransport undelivered retention', () => {
       await Promise.resolve()
     })
     expect(mocks.subscribe).not.toHaveBeenCalled()
+    view.unmount()
+  })
+})
+
+describe('useStructuredAgentSessionTransport hold refusal', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    resetUndeliveredStructuredAgentSessionOutboxForTests()
+    localStorage.clear()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  it("returns the host's reason a visible session could not be held", async () => {
+    const message =
+      'The folder this chat ran in no longer exists: /gone/folder. Restore it to continue.'
+    mocks.call.mockImplementation((_target: unknown, method: string) =>
+      method === 'agentSession.hold'
+        ? Promise.reject(
+            new RuntimeRpcCallError({
+              id: 'hold',
+              ok: false,
+              error: { code: 'agent_session_operation_invalid', message }
+            })
+          )
+        : Promise.resolve({ ok: true, page: emptyPage() })
+    )
+
+    const view = renderHook(() =>
+      useStructuredAgentSessionTransport({
+        sessionId: 'session-gone',
+        target: LOCAL_TARGET,
+        isVisible: true,
+        enabled: true
+      })
+    )
+
+    await waitFor(() => expect(view.result.current.holdError).toBe(message))
     view.unmount()
   })
 })

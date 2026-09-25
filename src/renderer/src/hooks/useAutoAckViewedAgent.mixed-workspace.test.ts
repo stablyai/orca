@@ -82,9 +82,7 @@ function seedMixedWorkspace(seed: {
 
 /** The hook's scan loop: resolve what is on screen, then acknowledge each target in turn. */
 function runAutoAckScan(store: TestStore): void {
-  for (const target of resolveAutoAckTabTargets(store.getState(), {
-    floatingPanelVisible: false
-  })) {
+  for (const target of resolveAutoAckTabTargets(store.getState())) {
     acknowledgeViewedAutoAckTarget(store.getState(), target)
   }
 }
@@ -93,15 +91,13 @@ describe('auto-ack in a workspace holding both a terminal and a structured chat'
   it('sends the visible surface to the adapter that owns its address', () => {
     expect(
       resolveAutoAckTabTargets(
-        seedMixedWorkspace({ visible: 'terminal', unreadSubjectKeys: [] }).store.getState(),
-        { floatingPanelVisible: false }
+        seedMixedWorkspace({ visible: 'terminal', unreadSubjectKeys: [] }).store.getState()
       )
     ).toEqual([{ tabId: TERMINAL_TAB, worktreeId: WORKSPACE, surfaceKind: 'terminal' }])
 
     expect(
       resolveAutoAckTabTargets(
-        seedMixedWorkspace({ visible: 'chat', unreadSubjectKeys: [] }).store.getState(),
-        { floatingPanelVisible: false }
+        seedMixedWorkspace({ visible: 'chat', unreadSubjectKeys: [] }).store.getState()
       )
     ).toEqual([{ tabId: CHAT_TAB, worktreeId: WORKSPACE, surfaceKind: 'structured' }])
   })

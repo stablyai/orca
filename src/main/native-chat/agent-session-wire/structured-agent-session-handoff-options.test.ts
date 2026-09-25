@@ -204,6 +204,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-native',
     handoffTransport: handoffTransport(),
+    resolveLaunchDirectory: async () => '/workspace',
     now: () => NOW
   })
   const attached = await host.attach(

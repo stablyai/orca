@@ -34,7 +34,8 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
@@ -77,6 +78,7 @@ function openHost(
     now: () => NOW,
     onEventSinkError: ({ error }) => hostErrors.push(error),
     statusSink,
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     ...(probeOwner ? { probeOwner: probeOwner as never } : {}),
     ...(handoffTransport ? { handoffTransport } : {})
   })

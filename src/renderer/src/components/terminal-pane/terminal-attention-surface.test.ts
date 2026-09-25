@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import { createTestStore, makeTab } from '@/store/slices/store-test-helpers'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { resolveAgentAttention } from '@/attention/agent-attention-policy'
 
 const WORKSPACE = 'wt-1'
 const TAB = 'tab-1'
@@ -147,5 +149,102 @@ describe('createTerminalAttentionSurface', () => {
         surfaceKey: makePaneKey(TAB, OTHER_LEAF)
       })
     ).toBe(false)
+  })
+
+  describe('unread on a settled turn', () => {
+    const FLOATING_TAB = 'tab-floating'
+    const FLOATING_PANE = makePaneKey(FLOATING_TAB, LEAF)
+
+    function unreadFor(store: TestStore, workspaceId: string, surfaceKey: string): boolean {
+      const decision = resolveAgentAttention(
+        {
+          subject: { workspaceId, surfaceKey },
+          reason: 'agent-completion',
+          settlesTurn: true,
+          hasFreshActivityEvidence: false,
+          groupAttentionEnabled: true
+        },
+        createTerminalAttentionSurface(store.getState())
+      )
+      return decision.admitted && decision.unread !== null
+    }
+
+    function seedFloatingAgent(panelOpen: boolean): TestStore {
+      const store = createTestStore()
+      store.setState({
+        settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
+        floatingWorkspacePanelOpen: panelOpen,
+        activeView: 'terminal',
+        activeWorktreeId: WORKSPACE,
+        activeTabId: TAB,
+        activeTabIdByWorktree: { [WORKSPACE]: TAB, [FLOATING_TERMINAL_WORKTREE_ID]: FLOATING_TAB },
+        tabsByWorktree: {
+          [WORKSPACE]: [makeTab({ id: TAB, worktreeId: WORKSPACE })],
+          [FLOATING_TERMINAL_WORKTREE_ID]: [
+            makeTab({ id: FLOATING_TAB, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+          ]
+        },
+        ptyIdsByTabId: { [FLOATING_TAB]: ['pty-floating'] },
+        terminalLayoutsByTabId: {
+          [FLOATING_TAB]: {
+            root: { type: 'leaf', leafId: LEAF },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF]: 'pty-floating' }
+          }
+        }
+      })
+      return store
+    }
+
+    function seedMainSplit(): TestStore {
+      const store = seedLiveTab()
+      store.setState({
+        activeView: 'terminal',
+        activeWorktreeId: WORKSPACE,
+        activeTabId: TAB,
+        ptyIdsByTabId: { [TAB]: ['pty-1', 'pty-2'] },
+        terminalLayoutsByTabId: {
+          [TAB]: {
+            root: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: LEAF },
+              second: { type: 'leaf', leafId: OTHER_LEAF }
+            },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF]: 'pty-1', [OTHER_LEAF]: 'pty-2' }
+          }
+        }
+      })
+      return store
+    }
+
+    it('marks nothing for a floating agent pane shown in the open floating panel', () => {
+      expect(unreadFor(seedFloatingAgent(true), FLOATING_TERMINAL_WORKTREE_ID, FLOATING_PANE)).toBe(
+        false
+      )
+    })
+
+    it('marks a floating agent pane unread while the floating panel is closed', () => {
+      expect(
+        unreadFor(seedFloatingAgent(false), FLOATING_TERMINAL_WORKTREE_ID, FLOATING_PANE)
+      ).toBe(true)
+    })
+
+    it('marks the main active pane unread behind a non-terminal top-level view', () => {
+      const store = seedMainSplit()
+      store.setState({ activeView: 'tasks' })
+      expect(unreadFor(store, WORKSPACE, PANE)).toBe(true)
+    })
+
+    it('marks nothing for the active leaf of the viewed main tab', () => {
+      expect(unreadFor(seedMainSplit(), WORKSPACE, PANE)).toBe(false)
+    })
+
+    it('marks an inactive split leaf of the viewed main tab unread', () => {
+      expect(unreadFor(seedMainSplit(), WORKSPACE, makePaneKey(TAB, OTHER_LEAF))).toBe(true)
+    })
   })
 })

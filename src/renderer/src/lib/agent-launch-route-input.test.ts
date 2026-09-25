@@ -219,14 +219,17 @@ describe('buildAgentLaunchRouteInput', () => {
       workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
     })
     expect(input.workspaceKind).toBe('floating')
+    // Still skipped: floating has no project row, so there is no local runtime preference to read.
     expect(input.projectRuntime).toBeUndefined()
     expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
+    // Feasible now: the workspace resolves to its configured directory, so a session can be
+    // filed under it. Skipping the project runtime is about the missing repo row, not a refusal.
     expect(
       structuredFeasibleFor(store(), {
         agent: 'codex',
         workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('passes a draft prompt through and never turns it into a blocker', () => {

@@ -1,7 +1,7 @@
 import { constants as fsConstants } from 'node:fs'
 import { access, mkdir, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { Store } from '../persistence'
@@ -23,7 +23,8 @@ function expandHomePath(input: string, home: string): string {
 }
 
 function resolveFloatingWorkspaceInput(input: string): string {
-  const home = app.getPath('home')
+  // Why the environment port: the headless runtime resolves this too, and it has no Electron app.
+  const home = getAppEnvironment().getPath('home')
   const expanded = expandHomePath(input, home)
   return path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(home, expanded)
 }
@@ -69,7 +70,7 @@ function isTrustedFloatingWorkspaceDirectory(
 }
 
 export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
-  const cwd = path.join(app.getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
+  const cwd = path.join(getAppEnvironment().getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
   await mkdir(cwd, { recursive: true })
   // Why: the default floating workspace lives outside repo roots by design;
   // authorize only this app-owned directory instead of widening access to ~.

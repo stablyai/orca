@@ -8,7 +8,7 @@
  * store actions and 4 duplicate reads of one unified tab, all of which can never
  * change, plus a dispatch-status read left behind by the notice that consumed it.
  */
-import { act, createRef, type ReactNode } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
@@ -66,14 +66,14 @@ function listenerCount(): number {
 
 function PaneProbe({ tabId }: { tabId: string }): null {
   useTerminalPaneController(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the subscription budget reads only these props; every other pane prop is optional or unused while hidden.
     {
       tabId,
       worktreeId: 'repo-1::/repo/worktrees/budget',
       cwd: '/repo/worktrees/budget',
       isActive: false,
       isVisible: false
-    } as never,
-    createRef()
+    } as never
   )
   return null
 }

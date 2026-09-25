@@ -4,6 +4,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isSkillPickerTriggered } from './native-chat-composer-state'
 
 const mocks = vi.hoisted(() => ({
@@ -174,6 +175,40 @@ describe('useNativeChatSkills', () => {
 
     expect(mocks.snapshots.at(-1)?.status).toBe('error')
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('reports a floating chat awaiting its pinned folder as loading, then scans the pin', () => {
+    const floatingTab = {
+      id: 'tab-1',
+      contentType: 'agent-session',
+      entityId: 'session-1',
+      agentSessionAgent: 'codex'
+    }
+    mocks.state = {
+      ...stateForHost('local'),
+      tabsByWorktree: {},
+      floatingWorkspacePath: '/home/me/changed-setting',
+      structuredSessionWorkspacePathByTabId: {},
+      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] }
+    }
+    const view = render(<Probe enabled />)
+    expect(mocks.snapshots.at(-1)?.status).toBe('loading')
+    expect(mocks.snapshots.at(-1)?.error).toBeNull()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+
+    mocks.state = {
+      ...mocks.state,
+      structuredSessionWorkspacePathByTabId: {
+        'tab-1': { sessionId: 'session-1', workspacePath: '/home/me/pinned' }
+      }
+    }
+    view.rerender(<Probe enabled />)
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'skills.discover',
+      { cwd: '/home/me/pinned', worktreeId: FLOATING_TERMINAL_WORKTREE_ID },
+      { timeoutMs: 10_000 }
+    )
   })
 
   it('shares one in-flight request between sibling panes', async () => {

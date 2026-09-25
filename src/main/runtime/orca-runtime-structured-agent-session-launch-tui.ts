@@ -10,7 +10,7 @@ import { StructuredTuiLaunchCleanupError } from '../native-chat/agent-session-wi
 
 export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   protected createStructuredAgentSessionLaunchTuiCallback() {
-    return async ({ record, fence, spawnToken, onSpawned }) => {
+    return async ({ record, cwd, fence, spawnToken, onSpawned }) => {
       const head = record.providerHandleChain.at(-1)
       if (!head || (head.handle.provider !== 'codex' && head.handle.provider !== 'claude')) {
         throw new Error('agent_session_identity_required')
@@ -32,6 +32,7 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
           spawnToken,
           providerRoot: record.accountHome.path,
           sessionId: record.sessionId,
+          cwd,
           ...(record.launchArgs !== undefined ? { launchArgs: record.launchArgs } : {})
         }
       )

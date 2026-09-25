@@ -8,17 +8,22 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  AgentSessionPreSpawnError,
+  type StructuredAgentSessionAdapter
+} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AgentSessionWorkspaceMissingError } from '../../agent-session-launch-directory'
 import { AgentSessionRecordStore } from '../../agent-session-record-store'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcResponse } from '../core'
@@ -43,6 +48,7 @@ let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let requests = 0
 let structuredNativeChatEnabled = true
+let acquireRefusal: Error | null = null
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -60,6 +66,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   requests = 0
   structuredNativeChatEnabled = true
+  acquireRefusal = null
   closeSession = vi.fn(async () => true)
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
@@ -77,7 +84,12 @@ beforeEach(async () => {
   host = new StructuredAgentSessionHost({
     store,
     adapter: {
-      acquire,
+      acquire: async (input) => {
+        if (acquireRefusal) {
+          throw acquireRefusal
+        }
+        return acquire(input)
+      },
       // A failed acquisition is proven gone, as the real adapters prove it; without this an
       // acquire that throws leaves an unverifiable owner nothing may replace.
       releaseAcquisition: vi.fn(async () => true),
@@ -89,6 +101,7 @@ beforeEach(async () => {
     },
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     releaseGraceMs: GRACE_MS,
     now: () => NOW
@@ -165,6 +178,25 @@ describe('a client that holds a session', () => {
       error: { code: 'agent_session_identity_required' }
     })
     expect(host.isHeld('session-missing')).toBe(false)
+  })
+
+  it('tells the client why a refused resume failed, not just its code', async () => {
+    await host.close(SESSION)
+    await host.restoreReadableSessions()
+    const gone = join(root, 'deleted-floating')
+    // Launch resolution refuses before anything spawns, as the provider adapters report it.
+    acquireRefusal = new AgentSessionPreSpawnError(new AgentSessionWorkspaceMissingError(gone))
+
+    const response = await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'agent_session_operation_invalid',
+        message: `The folder this chat ran in no longer exists: ${gone}. Restore it to continue.`
+      }
+    })
+    expect(host.isHeld(SESSION)).toBe(false)
   })
 })
 

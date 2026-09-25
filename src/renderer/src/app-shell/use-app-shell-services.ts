@@ -25,7 +25,7 @@ import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/br
  * the component that consumes its result unmounts (right sidebar, explorer, terminal) or is
  * absent entirely on the landing path.
  */
-export function useAppShellServices(options: { floatingPanelVisible: boolean }): void {
+export function useAppShellServices(): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const primarySelectionMiddleClickPaste = useAppStore((s) =>
@@ -45,7 +45,7 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
   useGlobalFileDrop()
-  useAutoAckViewedAgent(options.floatingPanelVisible)
+  useAutoAckViewedAgent()
   useAppMenuPaste()
   useAppMenuSelectionActions()
   useLargeTextControlPaste()

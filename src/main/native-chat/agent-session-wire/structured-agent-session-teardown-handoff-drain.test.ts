@@ -109,6 +109,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-native',
     handoffTransport: gatedTransport(),
+    resolveLaunchDirectory: async () => '/workspace',
     now: () => NOW
   })
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })

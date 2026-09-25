@@ -24,7 +24,6 @@ export type NativeChatDefaultSettings = Pick<
 export type StructuredNativeChatBlocker =
   | 'reused-terminal'
   | 'agent-without-structured-session'
-  | 'floating-workspace'
   /** The agent's launch command is overridden, or the launch names its own working directory:
    *  a process shape only a PTY can produce. The configured *arguments* are not read here —
    *  they are a terminal concern the structured transports do not share a vocabulary with. */
@@ -82,9 +81,6 @@ export function resolveStructuredNativeChatSupport(
   }
   if (!isAgentSessionHandleProvider(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
-  }
-  if (input.workspaceKind === 'floating') {
-    return { supported: false, blocker: 'floating-workspace' }
   }
   if (input.requiresTuiLaunchCommand === true) {
     return { supported: false, blocker: 'tui-launch-command' }

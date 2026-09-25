@@ -80,7 +80,7 @@ function renderSlot(): void {
         activityTerminalPortal={null}
         onFocusOwningGroup={vi.fn()}
         consumeSuppressedPtyExit={() => false}
-        leaveWorktreeIfEmpty={vi.fn()}
+        captureEmptiedReaction={() => vi.fn()}
       />
     )
   })

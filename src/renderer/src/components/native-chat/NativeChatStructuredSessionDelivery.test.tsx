@@ -127,6 +127,10 @@ vi.mock('./use-native-chat-file-link-context', () => ({
   })
 }))
 
+vi.mock('./use-native-chat-tab-owner', () => ({
+  useNativeChatTabOwnerWorktreeId: () => 'wt-1'
+}))
+
 vi.mock('./use-native-chat-file-link-click', () => ({
   useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.fileLinkClick : undefined)
 }))

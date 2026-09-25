@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from '../claude-accounts/live-pty-gate'
@@ -6,7 +6,6 @@ import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
   CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE
 } from '../claude-accounts/environment'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createClaudeStructuredLaunchResolver } from './claude-structured-launch-resolution'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import {
@@ -42,7 +41,7 @@ function resolverFor(options: {
   authSwitchSettleTimeoutMs?: number
 }): ReturnType<typeof createClaudeStructuredLaunchResolver> {
   return createClaudeStructuredLaunchResolver({
-    store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+    store: { getRecord: () => record(), pinWorkspacePath: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv: options.stripAuthEnv }),
@@ -68,7 +67,7 @@ function realResolverAdapter(
   } as unknown as AgentSessionRecord
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({
-      store: { getRecord: () => resumable } as unknown as AgentSessionRecordStore,
+      store: { getRecord: () => resumable, pinWorkspacePath: vi.fn() },
       resolveWorkspacePath: async (id) => `/repos/${id}`,
       resolveCommand: () => '/usr/local/bin/claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),

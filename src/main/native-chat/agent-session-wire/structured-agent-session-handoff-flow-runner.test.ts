@@ -8,6 +8,7 @@ import { AgentSessionRecordStore } from '../../runtime/agent-session-record-stor
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { StructuredAgentSessionHandoffFlowRunner } from './structured-agent-session-handoff-flow-runner'
 import { StructuredAgentSessionHandoffOperationGuard } from './structured-agent-session-handoff-operation-guard'
+import { hostTestLaunchDirectory } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHandoffFlowContext } from './structured-agent-session-handoff-types'
 
 const NOW = 1_800_000_000_000
@@ -64,6 +65,7 @@ async function failingFlowRunner(
     deps: {
       store,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       session: () => ({ journal, fence: 1 }),
       suspendNative: async () => ({ state: 'stopped' as const }),
       acquireNative: async () => {

@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -16,6 +17,7 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
 vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
@@ -75,6 +77,17 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
     expect(screen.queryByText(/Starting (Claude|Codex) chat/i)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(mocks.retryLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
+  })
+
+  it('keys a floating chat launch by its owner even before any path context exists', () => {
+    mocks.ownerWorktreeId = FLOATING_TERMINAL_WORKTREE_ID
+    mocks.fileLinkContext = null
+    mocks.launchLifecycle = 'failed'
+    render(sessionView())
+
+    expect(mocks.lifecycleLookup).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'session-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mocks.retryLaunch).toHaveBeenCalledWith(FLOATING_TERMINAL_WORKTREE_ID, 'session-1')
   })
 
   it('shows why a failed launch failed beside Retry', () => {

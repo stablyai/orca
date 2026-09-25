@@ -2,12 +2,15 @@ import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { isPinnedActiveEditorTab } from './terminal-workspace-model'
+import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
 import type { TerminalEditorCloseFoundation } from './use-terminal-editor-close-foundation'
 
 export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFoundation) {
   const {
     activeWorktreeId,
     closeFile,
+    closedReactionsRef,
     inFlightSaveFileIdRef,
     pendingEditorCloseQueueRef,
     proceedToNativeWindowClose,
@@ -42,6 +45,16 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     })
   }, [])
 
+  const settleQueuedClose = useCallback((fileId: string) => {
+    pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+      (queuedId) => queuedId !== fileId
+    )
+    const onClosed = closedReactionsRef.current.get(fileId)
+    closedReactionsRef.current.delete(fileId)
+    onClosed?.()
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
+  }, [])
+
   const getNextQueuedEditorClose = useCallback((): string | null => {
     while (pendingEditorCloseQueueRef.current.length > 0) {
       const fileId = pendingEditorCloseQueueRef.current[0]
@@ -50,26 +63,30 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       }
       const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
       if (!file) {
-        pendingEditorCloseQueueRef.current.shift()
+        settleQueuedClose(fileId)
         continue
       }
       if (!file.isDirty) {
         closeFile(fileId)
-        pendingEditorCloseQueueRef.current.shift()
+        settleQueuedClose(fileId)
         continue
       }
       return fileId
     }
     return null
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
-  }, [closeFile])
+  }, [closeFile, settleQueuedClose])
 
   const advanceEditorCloseQueue = useCallback(() => {
     const nextFileId = getNextQueuedEditorClose()
     if (nextFileId) {
       const state = useAppStore.getState()
       const file = state.openFiles.find((candidate) => candidate.id === nextFileId)
-      if (file && file.worktreeId !== state.activeWorktreeId) {
+      // Why: the prompt names the file, so show it where it lives. The floating panel is never the
+      // active worktree; activating it would take the main window over.
+      if (file && isFloatingWorkspaceId(file.worktreeId)) {
+        revealFloatingWorkspacePanel(state)
+      } else if (file && file.worktreeId !== state.activeWorktreeId) {
         setActiveWorktree(file.worktreeId)
       }
       setActiveFile(nextFileId)
@@ -126,6 +143,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
 
   return {
     waitForFileClosed,
+    settleQueuedClose,
     getNextQueuedEditorClose,
     advanceEditorCloseQueue,
     queueEditorCloseRequests,

@@ -20,10 +20,8 @@ import {
   isCurrentKnownPaneKey,
   isCurrentLivePaneKey
 } from './terminal-notification-state'
-import {
-  isOrcaWindowForegroundFocused,
-  isVisibleForegroundPaneKey
-} from './terminal-notification-pane-visibility'
+import { isOrcaWindowForegroundFocused } from './terminal-notification-pane-visibility'
+import { isTabOnVisibleSurface } from '@/hooks/agent-auto-ack-targets'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -70,6 +68,18 @@ function resolveViewedPaneKey(state: StoreSnapshot, tabId: string): string | nul
   return leafId !== null && isTerminalLeafId(leafId) ? makePaneKey(tabId, leafId) : null
 }
 
+// Why: split panes hide their inactive leaves, so only the active leaf of a visible tab is viewed —
+// the same pane auto-ack resolves as the one to acknowledge.
+function isViewedTerminalPane(state: StoreSnapshot, workspaceId: string, paneKey: string): boolean {
+  const tabId = getPaneKeyTabId(paneKey)
+  return (
+    tabId !== null &&
+    isOrcaWindowForegroundFocused() &&
+    isTabOnVisibleSurface(state, workspaceId, tabId, 'terminal') &&
+    resolveViewedPaneKey(state, tabId) === paneKey
+  )
+}
+
 /** Binds the neutral surface contract to one store snapshot. */
 export function createTerminalAttentionSurface(state: StoreSnapshot): AgentAttentionSurface {
   return {
@@ -79,10 +89,8 @@ export function createTerminalAttentionSurface(state: StoreSnapshot): AgentAtten
     hasLiveSession: (subject: AgentAttentionSubject) =>
       hasLivePtyForNotification(state, subject.workspaceId, subject.surfaceKey),
     admitSurface: (subject, liveness) => admitTerminalPane(state, subject, liveness),
-    // Why: a focused workspace can still hide other tabs and split panes; only the exact
-    // active leaf counts as already viewed.
     isSurfaceViewed: (subject) =>
-      isVisibleForegroundPaneKey(state, subject.workspaceId, subject.surfaceKey),
+      isViewedTerminalPane(state, subject.workspaceId, subject.surfaceKey),
     // Why: activeWorktreeId is in-app selection only. A backgrounded Orca still needs unread.
     isWorkspaceViewed: (workspaceId) =>
       state.activeWorktreeId === workspaceId && isOrcaWindowForegroundFocused(),

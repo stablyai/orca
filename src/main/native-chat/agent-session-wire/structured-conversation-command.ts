@@ -133,6 +133,8 @@ export function runStructuredConversationCommand(
               agent: record.provider,
               runtimeKind: 'native',
               launchArgs: record.launchArgs,
+              // The cleared chat continues in the same tab, so it stays in the folder it ran in.
+              ...(record.workspacePath ? { workspacePath: record.workspacePath } : {}),
               // The options the user chose, which any restart of this chat would replay too.
               options: record.options
             }

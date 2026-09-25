@@ -17,7 +17,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
@@ -78,7 +79,8 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,
-    ...overrides
+    ...overrides,
+    resolveLaunchDirectory: overrides.resolveLaunchDirectory ?? hostTestLaunchDirectory
   })
 }
 

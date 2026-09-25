@@ -21,7 +21,8 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestOperationId,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const journals = createTrackedJournalOpener()
@@ -146,6 +147,7 @@ beforeEach(async () => {
     journalRoot: root,
     recoveryCapsule: new AgentSessionRecoveryCapsule(root),
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
   })

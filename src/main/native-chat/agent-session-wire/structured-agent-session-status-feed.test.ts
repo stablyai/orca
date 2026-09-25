@@ -359,6 +359,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
   it('carries the record model and the running tool line the sidebar row shows', async () => {
     const journal = await openJournal()
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), {
+      location: indexed({ journal }).params.location,
       options: { model: 'gpt-5-codex' },
       providerHandleChain: []
     })
@@ -673,7 +674,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
       { fence: 1 }
     )
-    const record = { options: { model: 'first-model' }, providerHandleChain: [] }
+    const record = {
+      location: indexed({ journal }).params.location,
+      options: { model: 'first-model' },
+      providerHandleChain: []
+    }
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), record)
     record.options.model = 'second-model'
     feed.publish(SESSION)

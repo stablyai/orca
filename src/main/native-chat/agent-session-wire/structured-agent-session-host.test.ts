@@ -23,7 +23,8 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
-  hostTestMessage
+  hostTestMessage,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 let root: string
@@ -133,6 +134,7 @@ describe('attach', () => {
       adapter: { ...adapter(), acquire },
       journalRoot: root,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
     })
@@ -555,6 +557,7 @@ describe('restart', () => {
       adapter: adapter(),
       journalRoot: root,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       mintSpawnToken: () => 'spawn-b',
       probeOwner,
       now: () => NOW

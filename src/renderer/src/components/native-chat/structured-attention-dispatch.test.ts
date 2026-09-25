@@ -20,6 +20,7 @@ import {
 } from '@/store/slices/store-test-helpers'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { isStructuredTab, type StructuredTab } from './structured-agent-session-tabs'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
 // The two client-side follow-ups of a delivery are leaf side effects with their own tests; this
@@ -46,9 +47,12 @@ const CHAT_TAB = 'chat-tab'
 const SESSION = 'session-1'
 
 function settingsWith(groupAttention: boolean): GlobalSettings {
-  // The dispatcher reads exactly one settings field and GlobalSettings has no test factory.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only field read.
-  return { experimentalTerminalAttention: groupAttention } as GlobalSettings
+  // The dispatcher reads only these settings fields and GlobalSettings has no test factory.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only fields read.
+  return {
+    experimentalTerminalAttention: groupAttention,
+    floatingTerminalEnabled: true
+  } as GlobalSettings
 }
 
 function completion(overrides?: Partial<AgentSessionTurnCompletion>): AgentSessionTurnCompletion {
@@ -78,6 +82,7 @@ function seed(overrides?: {
   workspaceId?: string
   folderWorkspaces?: FolderWorkspace[]
   tabs?: boolean
+  floatingPanelOpen?: boolean
 }): void {
   const workspaceId = overrides?.workspaceId ?? WORKSPACE
   store.setState({
@@ -110,6 +115,7 @@ function seed(overrides?: {
       ]
     },
     activeGroupIdByWorktree: { [workspaceId]: GROUP },
+    activeView: 'terminal',
     // Default: the user is looking somewhere else, which is when unread is owed.
     activeWorktreeId:
       overrides?.activeWorktreeId === undefined ? 'other-workspace' : overrides.activeWorktreeId,
@@ -117,6 +123,7 @@ function seed(overrides?: {
     unreadTerminalPanes: {},
     unreadAgentCompletionPanes: {},
     settings: settingsWith(overrides?.groupAttention ?? true),
+    floatingWorkspacePanelOpen: overrides?.floatingPanelOpen ?? false,
     // Persistence is not what this test is about; the folder path would otherwise call out to IPC.
     updateFolderWorkspace: async () => true
   })
@@ -226,6 +233,33 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
 
   it('still earns unread when the workspace is selected but the chat is hidden behind another tab', () => {
     seed({ activeWorktreeId: WORKSPACE, activeTabId: 'other-tab' })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators().paneDot).toBe('agent-completion')
+  })
+
+  it('earns no unread for a floating chat selected in the open floating panel', () => {
+    // The main window is on another workspace; the floating panel is what the user is reading.
+    seed({ workspaceId: FLOATING_TERMINAL_WORKTREE_ID, floatingPanelOpen: true })
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(FLOATING_TERMINAL_WORKTREE_ID),
+      completion()
+    )
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
+    expect(store.getState().unreadTerminalTabs).toEqual({})
+  })
+
+  it('earns unread for a floating chat while the floating panel is closed', () => {
+    seed({ workspaceId: FLOATING_TERMINAL_WORKTREE_ID })
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(FLOATING_TERMINAL_WORKTREE_ID),
+      completion()
+    )
+    expect(indicators(FLOATING_TERMINAL_WORKTREE_ID).paneDot).toBe('agent-completion')
+  })
+
+  it('earns unread when the workspace chat is behind another top-level view', () => {
+    seed({ activeWorktreeId: WORKSPACE })
+    store.setState({ activeView: 'tasks' })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(indicators().paneDot).toBe('agent-completion')
   })

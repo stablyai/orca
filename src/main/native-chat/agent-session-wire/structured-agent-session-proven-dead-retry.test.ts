@@ -10,6 +10,7 @@ import { recoverStoredDeadTuiOwnerForHandoff } from '../../runtime/agent-session
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
 import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
+import { hostTestLaunchDirectory } from './structured-agent-session-host-test-data'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 const NOW = 1_800_000_000_000
@@ -105,6 +106,7 @@ describe('structured session proven-dead TUI retry', () => {
     const coordinator = new StructuredAgentSessionHandoffCoordinator({
       store,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       transport: {
         hostLabel: 'Test host',
         launchTui: vi.fn(),

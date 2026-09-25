@@ -1,7 +1,10 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
 import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
 
@@ -43,7 +46,7 @@ function resolverFor(
   agentDefaultArgs: Record<string, string> = { codex: '' }
 ) {
   return createCodexStructuredLaunchResolver({
-    store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
+    store: { getRecord: () => value, pinWorkspacePath: vi.fn() },
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout,
@@ -53,6 +56,35 @@ function resolverFor(
 }
 
 describe('codex structured launch resolution', () => {
+  it('resumes a floating session in its pinned folder, not the current floating setting', async () => {
+    const pinned = mkdtempSync(join(tmpdir(), 'orca-codex-floating-'))
+    const resolveWorkspacePath = vi.fn(async () => '/floating/current-setting')
+    const floating = record({
+      location: { ...record().location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
+      workspacePath: pinned
+    })
+
+    const launch = await resolverFor(floating, resolveWorkspacePath)({ identity: IDENTITY })
+
+    expect(launch.cwd).toBe(pinned)
+    expect(resolveWorkspacePath).not.toHaveBeenCalled()
+  })
+
+  it('pins the first launch directory of a new session', async () => {
+    const pinWorkspacePath = vi.fn()
+    const resolveLaunch = createCodexStructuredLaunchResolver({
+      store: { getRecord: () => record(), pinWorkspacePath },
+      resolveWorkspacePath: async (id) => `/repos/${id}`,
+      resolveCommand: () => '/usr/local/bin/codex',
+      isWindowsProcessStartTimeAvailable: () => true
+    })
+
+    await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
+      cwd: '/repos/workspace-1'
+    })
+    expect(pinWorkspacePath).toHaveBeenCalledExactlyOnceWith(SESSION_ID, '/repos/workspace-1')
+  })
+
   it('launches the app server in the workspace and account home the record pinned', async () => {
     const launch = await resolverFor(record())({ identity: IDENTITY })
 
@@ -72,7 +104,7 @@ describe('codex structured launch resolution', () => {
 
     await withPlatform('win32', async () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
-        store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+        store: { getRecord: () => record(), pinWorkspacePath: vi.fn() },
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
         resolveCommand: () => command,
         isWindowsProcessStartTimeAvailable: () => true
@@ -89,7 +121,7 @@ describe('codex structured launch resolution', () => {
     await withPlatform('win32', async () => {
       const resolveWorkspacePath = vi.fn(async () => String.raw`C:\workspaces\orca`)
       const resolveLaunch = createCodexStructuredLaunchResolver({
-        store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+        store: { getRecord: () => record(), pinWorkspacePath: vi.fn() },
         resolveWorkspacePath,
         isWindowsProcessStartTimeAvailable: () => false
       })

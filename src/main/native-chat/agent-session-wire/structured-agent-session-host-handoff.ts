@@ -74,6 +74,7 @@ export function createStructuredAgentSessionHostHandoff(
     store: deps.store,
     claimKeyId: deps.claimKeyId,
     ...(deps.handoffTransport ? { transport: deps.handoffTransport } : {}),
+    resolveLaunchDirectory: deps.resolveLaunchDirectory,
     session: host.session,
     suspendNative: async (sessionId) => {
       if (!deps.adapter.closeSession) {

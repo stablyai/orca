@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { setStoredAgentSessionHandoffStage } from '../../runtime/agent-session-handoff-record-transitions'
+import { hostTestLaunchDirectory } from './structured-agent-session-host-test-data'
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
 
 const NOW = 1_800_000_000_000
@@ -78,6 +79,7 @@ describe('structured session live TUI restart survival', () => {
     const coordinator = new StructuredAgentSessionHandoffCoordinator({
       store,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       transport: {
         hostLabel: 'Test host',
         launchTui: vi.fn(),
@@ -206,6 +208,7 @@ describe('structured session live TUI restart survival', () => {
     const coordinator = new StructuredAgentSessionHandoffCoordinator({
       store,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       transport: {
         hostLabel: 'Test host',
         launchTui: vi.fn(),

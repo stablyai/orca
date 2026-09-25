@@ -386,8 +386,11 @@ describe('useStructuredAgentSession options', () => {
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
     })
+    // Only the option write fails; a refused hold would surface on `error` for its own reason.
     mocks.call.mockImplementation((_target, method) =>
-      method === 'agentSession.options' ? Promise.resolve(OPTIONS) : pending
+      method === 'agentSession.options' || method === 'agentSession.hold'
+        ? Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
+        : pending
     )
     const { result, rerender } = renderHook(() =>
       useStructuredAgentSession({

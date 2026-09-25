@@ -163,7 +163,14 @@ export function handleTerminalWorkspaceKeyDown(
     void handleNewFile()
     return
   }
-  if (handleEmptyFloatingWorkspacePanelCloseShortcut(event, shortcutPlatform, keybindings)) {
+  if (
+    handleEmptyFloatingWorkspacePanelCloseShortcut(
+      useAppStore.getState(),
+      event,
+      shortcutPlatform,
+      keybindings
+    )
+  ) {
     return
   }
   if (!event.repeat && matchShortcut('tab.close')) {

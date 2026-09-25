@@ -12,8 +12,12 @@ export const PANE_KEY = `tab-1:${LIVE_LEAF_ID}`
 export const STALE_PANE_KEY = `tab-1:${STALE_LEAF_ID}`
 
 export type NotificationDispatchMockState = {
+  activeView: string
   activeWorktreeId: string | null
   activeTabId: string | null
+  activeTabIdByWorktree: Record<string, string | null>
+  floatingWorkspacePanelOpen: boolean
+  getActiveTab: (worktreeId: string) => null
   tabsByWorktree: Record<string, { id: string; ptyId?: string | null }[]>
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, boolean>
@@ -58,8 +62,12 @@ export function getNotificationDispatchMockState(): NotificationDispatchMockStat
 
 function buildNotificationDispatchMockState(): NotificationDispatchMockState {
   return {
+    activeView: 'terminal',
     activeWorktreeId: 'wt-secondary',
     activeTabId: 'tab-1',
+    activeTabIdByWorktree: {},
+    floatingWorkspacePanelOpen: false,
+    getActiveTab: () => null,
     tabsByWorktree: { 'wt-primary': [{ id: 'tab-1', ptyId: 'pty-1' }] },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     suppressedPtyExitIds: {},

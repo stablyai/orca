@@ -21,7 +21,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
-/** Throws its refusal as the code itself, matching `resumeHeldStructuredAgentSession`. */
+/** Throws its refusal as the code itself. */
 export async function revealStructuredAgentSession(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter'>,
   sessionId: string,

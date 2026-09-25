@@ -1,4 +1,4 @@
-import type { TerminalPaneHandle, TerminalPaneProps } from './terminal-pane-types'
+import type { TerminalPaneProps } from './terminal-pane-types'
 import { useTerminalPaneFoundation } from './use-terminal-pane-foundation'
 import { useTerminalPaneTitleState } from './use-terminal-pane-title-state'
 import { useTerminalPaneChatState } from './use-terminal-pane-chat-state'
@@ -16,11 +16,8 @@ import { useTerminalPaneContextActions } from './use-terminal-pane-context-actio
 import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'
 import { useTerminalPaneProjection } from './use-terminal-pane-projection'
 
-export function useTerminalPaneController(
-  props: TerminalPaneProps,
-  ref: React.ForwardedRef<TerminalPaneHandle>
-) {
-  const foundation = useTerminalPaneFoundation(props, ref)
+export function useTerminalPaneController(props: TerminalPaneProps) {
+  const foundation = useTerminalPaneFoundation(props)
   const title = Object.assign(foundation, useTerminalPaneTitleState(foundation))
   const chat = Object.assign(title, useTerminalPaneChatState(title))
   const store = Object.assign(chat, useTerminalPaneStoreBindings(chat))

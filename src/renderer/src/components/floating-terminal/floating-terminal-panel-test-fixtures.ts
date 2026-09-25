@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from '../../../../shared/keybindings'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '@/store/slices/editor'
 
@@ -14,7 +14,17 @@ export type FloatingPanelStoreState = {
   openFiles: OpenFile[]
   activeGroupIdByWorktree: Record<string, string | null>
   activeTabIdByWorktree: Record<string, string | null>
+  layoutByWorktree: Record<string, TabGroupLayoutNode>
   expandedPaneByTabId: Record<string, boolean>
+  focusGroup: (worktreeId: string, groupId: string) => void
+  setActiveTabType: (type: string, worktreeId?: string) => void
+  setActiveFile: (fileId: string, worktreeId?: string) => void
+  setActiveBrowserTab: (tabId: string, worktreeId?: string) => void
+  setActiveWorktree: (worktreeId: string | null) => void
+  createEmptySplitGroup: (worktreeId: string, groupId: string, direction: string) => string | null
+  openNewBrowserTabInActiveWorkspace: (groupId?: string) => Promise<void>
+  openNewMarkdownInActiveWorkspace: (groupId?: string) => Promise<void>
+  openNewTerminalTabInActiveWorkspace: (groupId?: string) => Promise<void>
   createTab: (
     worktreeId: string,
     groupId?: string,
@@ -49,6 +59,8 @@ export type FloatingPanelStoreState = {
   browserDefaultUrl: string
   keybindings?: KeybindingOverrides
   tabBarOrderByWorktree: Record<string, string[]>
+  floatingWorkspacePath: string | null
+  setFloatingWorkspacePath: (path: string) => void
   settings: {
     activeRuntimeEnvironmentId?: string | null
     floatingTerminalCwd?: string
@@ -130,6 +142,32 @@ export function setFloatingTabs(tabs: TerminalTab[]): void {
   state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
   state.activeTabIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: tabs[0]?.id ?? null }
   state.tabBarOrderByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.map((tab) => tab.id) }
+  state.layoutByWorktree =
+    tabs.length > 0 ? { [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId } } : {}
+}
+
+/** Appends the unified strip entry a real createBrowserTab always writes beside the entity. */
+export function attachFloatingBrowserUnifiedTab(browserTabId: string): void {
+  const state = storeBox.state as FloatingPanelStoreState
+  const groupId = 'floating-group'
+  const unified = state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+  const tab: Tab = {
+    id: `tab-${browserTabId}`,
+    entityId: browserTabId,
+    groupId,
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    contentType: 'browser',
+    label: browserTabId,
+    customLabel: null,
+    color: null,
+    sortOrder: unified.length,
+    createdAt: unified.length
+  }
+  state.unifiedTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [...unified, tab] }
+  const group = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
+  if (group) {
+    group.tabOrder = [...group.tabOrder, tab.id]
+  }
 }
 
 export function setFloatingEditorTabs(files: OpenFile[]): void {
@@ -161,6 +199,8 @@ export function setFloatingEditorTabs(files: OpenFile[]): void {
     ]
   }
   state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+  state.layoutByWorktree =
+    files.length > 0 ? { [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId } } : {}
 }
 
 export function setFloatingSimulatorTab(): Tab {
@@ -192,5 +232,6 @@ export function setFloatingSimulatorTab(): Tab {
   }
   state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
   state.tabBarOrderByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [tab.id] }
+  state.layoutByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId } }
   return tab
 }

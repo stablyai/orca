@@ -16,7 +16,7 @@ import type { AgentSessionContinuationRequest } from '@/lib/agent-session-contin
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { useDaemonActions } from '@/components/shared/useDaemonActions'
 import { useMobileOverlayTicks } from './use-mobile-overlay-ticks'
-import type { TerminalPaneHandle, TerminalPaneProps } from './terminal-pane-types'
+import type { TerminalPaneProps } from './terminal-pane-types'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import type { VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
 import type { PaneProcessExit } from './pty-connection-types'
@@ -24,10 +24,7 @@ import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalErrorsByPaneId } from './terminal-error-accumulation'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 
-export function useTerminalPaneFoundation(
-  props: TerminalPaneProps,
-  ref: React.ForwardedRef<TerminalPaneHandle>
-) {
+export function useTerminalPaneFoundation(props: TerminalPaneProps) {
   const {
     tabId,
     worktreeId,
@@ -155,7 +152,6 @@ export function useTerminalPaneFoundation(
 
   return {
     ...props,
-    ref,
     tabId,
     worktreeId,
     cwd,

@@ -49,7 +49,7 @@ afterEach(() => {
 })
 
 it('leaves the focused pane unread while desktop is away, then acknowledges on user return', async () => {
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => {
     await Promise.resolve()
   })
@@ -73,14 +73,14 @@ it('does not acknowledge when the presence query fails or the hook unmounts', as
         resolve = r
       })
   )
-  const hook = renderHook(() => useAutoAckViewedAgent(false))
+  const hook = renderHook(() => useAutoAckViewedAgent())
   hook.unmount()
   await act(async () => {
     resolve(false)
   })
   expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   readAway.mockRejectedValue(new Error('unavailable'))
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => {
     await Promise.resolve()
   })
@@ -91,7 +91,7 @@ it('does not acknowledge when the presence query fails or the hook unmounts', as
 it('acknowledges focused web completions despite unsupported native presence', async () => {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
   readAway.mockImplementation(createNotificationsApi().getDesktopAwayState)
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => {})
   expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBeUndefined()
   expect(dismiss).toHaveBeenCalledTimes(1)
@@ -100,7 +100,7 @@ it('acknowledges focused web completions despite unsupported native presence', a
 
 it('keeps native unknown presence conservative', async () => {
   readAway.mockResolvedValue(undefined)
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => {})
   act(() => window.dispatchEvent(new Event('focus')))
   await act(async () => {})
@@ -113,7 +113,7 @@ it.each(['focus', 'visibilitychange'])('rescans pending web attention on %s', as
   readAway.mockImplementation(createNotificationsApi().getDesktopAwayState)
   const focus = vi.mocked(document.hasFocus).mockReturnValue(false)
   const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => {})
   expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
   expect(dismiss).not.toHaveBeenCalled()
@@ -125,7 +125,7 @@ it.each(['focus', 'visibilitychange'])('rescans pending web attention on %s', as
 })
 
 it('ignores unrelated writes while away but queries for a new completion', async () => {
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => {})
   expect(readAway).toHaveBeenCalledTimes(1)
   for (let i = 0; i < 20; i++) {
@@ -148,7 +148,7 @@ it('ignores unrelated writes while away but queries for a new completion', async
 
 it('does not query presence for a visible pane without attention', async () => {
   useAppStore.setState({ agentStatusByPaneKey: {}, unreadAgentCompletionPanes: {} })
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => window.dispatchEvent(new Event('focus')))
   expect(readAway).not.toHaveBeenCalled()
 })
@@ -161,7 +161,7 @@ it('rechecks focus after a pending presence query resolves', async () => {
         resolve = r
       })
   )
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   vi.mocked(document.hasFocus).mockReturnValue(false)
   await act(async () => resolve(false))
   expect(useAppStore.getState().unreadAgentCompletionPanes[pane]).toBe('agent-completion')
@@ -180,7 +180,7 @@ it('rechecks the selected pane after a coalesced presence query resolves', async
         resolve = r
       })
   )
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   act(() => useAppStore.setState({ activeTabId: 'other-tab' }))
   expect(readAway).toHaveBeenCalledTimes(1)
   await act(async () => resolve(false))
@@ -194,7 +194,7 @@ it('rechecks the selected pane after a coalesced presence query resolves', async
 it.each([false, true])('preserves manual unread across return signals (web=%s)', async (web) => {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', web)
   readAway.mockResolvedValue(false)
-  renderHook(() => useAutoAckViewedAgent(false))
+  renderHook(() => useAutoAckViewedAgent())
   await act(async () => {})
   act(() => useAppStore.getState().unacknowledgeAgents([pane]))
   const turn = useAppStore.getState().agentStatusByPaneKey[pane]!.stateStartedAt

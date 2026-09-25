@@ -17,7 +17,8 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestOperationId,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 import type {
   StructuredAgentSessionHandoffTransport,
@@ -198,6 +199,7 @@ beforeEach(async () => {
     adapter: router,
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-native',
     handoffTransport: handoffTransport(),
     now: () => NOW

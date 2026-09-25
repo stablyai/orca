@@ -26,6 +26,7 @@ import { structuredAgentSessionAgentStatus } from '../../../shared/structured-ag
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionProviderChildPhase } from './structured-agent-session-adapter'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
+import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-workspace-path'
 import {
   StructuredAgentSessionStatusOwnership,
   type StructuredAgentSessionStatusSink
@@ -81,6 +82,7 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
+    a.workspacePath === b.workspacePath &&
     a.turnOutcome === b.turnOutcome &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
@@ -267,6 +269,7 @@ export class StructuredAgentSessionStatusFeed {
     // The journal has no model: the record's acknowledged options are where an owner
     // handoff or a mid-session switch lands, so the row follows whichever is in force.
     const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
+    const workspacePath = record ? agentSessionPinnedLaunchDirectory(record) : undefined
     // Usage is dropped here on purpose: a `task_progress` tick would otherwise fail the
     // equality check and re-broadcast a full summary to every remote subscriber for a
     // number no session list renders. Tokens stay live on the background-task channel.
@@ -292,6 +295,7 @@ export class StructuredAgentSessionStatusFeed {
       ...(model ? { model } : {}),
       ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
+      ...(workspacePath ? { workspacePath } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
     }
   }

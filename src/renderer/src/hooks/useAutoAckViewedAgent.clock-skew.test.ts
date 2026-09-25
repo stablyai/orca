@@ -94,7 +94,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
     seedFutureStampedTurn(NOW + SKEW_MS)
     const calls = instrumentAcknowledgeAgents()
 
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
 
     expect(calls).toEqual([[PANE_KEY]])
     const ackAt = useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY] ?? 0
@@ -103,7 +103,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
 
   it('leaves nothing to re-scan for a future-stamped turn on the next store write', () => {
     seedFutureStampedTurn(NOW + SKEW_MS)
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
 
     const calls = instrumentAcknowledgeAgents()
     useAppStore.getState().markTerminalTabUnread('tab-unrelated', 'terminal-bell')
@@ -115,7 +115,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
     seedFutureStampedTurn(NOW - 5_000)
     const calls = instrumentAcknowledgeAgents()
 
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
 
     expect(calls).toEqual([[PANE_KEY]])
   })
@@ -124,7 +124,7 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
     seedFutureStampedTurn(NOW - 5_000)
     useAppStore.getState().acknowledgeAgents([PANE_KEY])
 
-    renderHook(() => useAutoAckViewedAgent(false))
+    renderHook(() => useAutoAckViewedAgent())
     useAppStore.getState().unacknowledgeAgents([PANE_KEY])
 
     expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBeUndefined()

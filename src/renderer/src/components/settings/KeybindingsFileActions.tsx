@@ -3,8 +3,7 @@ import { ChevronDown, Code2, ExternalLink, FileText, FolderOpen, RefreshCw } fro
 import { toast } from 'sonner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../lib/floating-terminal'
-import { isFloatingWorkspacePanelVisible } from '../../lib/floating-workspace-terminal-actions'
+import { revealFloatingWorkspacePanel } from '../../lib/floating-workspace-terminal-actions'
 import { detectLanguage } from '../../lib/language-detect'
 import { Button } from '../ui/button'
 import {
@@ -104,9 +103,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
       cancelFloatingTerminalToggleFrame()
       floatingTerminalToggleFrameRef.current = requestAnimationFrame(() => {
         floatingTerminalToggleFrameRef.current = null
-        if (!isFloatingWorkspacePanelVisible()) {
-          window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-        }
+        revealFloatingWorkspacePanel(useAppStore.getState())
       })
     } catch (error) {
       toast.error(

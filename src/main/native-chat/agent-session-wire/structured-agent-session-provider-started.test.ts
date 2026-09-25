@@ -19,6 +19,7 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
+  hostTestLaunchDirectory,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 
@@ -68,6 +69,7 @@ beforeEach(async () => {
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
   })

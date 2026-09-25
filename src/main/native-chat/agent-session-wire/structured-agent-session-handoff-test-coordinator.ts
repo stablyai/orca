@@ -7,6 +7,7 @@ import type {
   StructuredAgentSessionHandoffTransport,
   StructuredTuiOwner
 } from './structured-agent-session-handoff-types'
+import { hostTestLaunchDirectory } from './structured-agent-session-host-test-data'
 
 type TestCoordinatorInput = {
   store: AgentSessionRecordStore
@@ -41,6 +42,7 @@ export function createStructuredAgentSessionHandoffTestCoordinator(
   return new StructuredAgentSessionHandoffCoordinator({
     store: input.store,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     transport: {
       hostLabel: 'Test host',
       launchTui: input.launchTui,

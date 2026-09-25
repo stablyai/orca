@@ -29,10 +29,14 @@ describe('native chat layering', () => {
   })
 
   it('owns structured session panes at the retained worktree overlay layer', () => {
+    // The retained overlay stack is extracted so every tree host (main surface, floating
+    // panel) mounts the same pane lifecycle; the structured pane stays owned there.
+    const overlayStack = source('src/renderer/src/components/WorkspacePaneOverlayLayers.tsx')
     const terminal = source('src/renderer/src/components/TerminalWorktreeSplitSurface.tsx')
     const tabGroup = source('src/renderer/src/components/tab-group/TabGroupPanel.tsx')
 
-    expect(terminal).toContain('<StructuredAgentSessionPaneOverlayLayer')
+    expect(overlayStack).toContain('<StructuredAgentSessionPaneOverlayLayer')
+    expect(terminal).toContain('<WorkspacePaneOverlayLayers')
     expect(tabGroup).not.toContain('<NativeChatView')
   })
 })

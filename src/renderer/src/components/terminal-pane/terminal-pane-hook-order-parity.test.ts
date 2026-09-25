@@ -22,10 +22,14 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // foundation (search input ref, focus-search-input) (211 hooks, still 8 useMemo).
 // Then the pending split-close admission added one `useRef` in close-actions
 // (the confirmed-close continuation) (212 hooks, still 8 useMemo).
+// Then the active-pane close request added a `useCallback` and a `useEffect` in close-actions
+// (the shared close body, and the request listener) (214 hooks, still 8 useMemo).
+// Then the imperative close handle went with its last consumer, the floating panel's own pane
+// registry, which the request listener replaced (213 hooks, still 8 useMemo).
 // Then the dead adopted-structured-session portal went with its local target `useMemo`
-// in projection (211 hooks, 7 useMemo).
+// in projection (212 hooks, 7 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  '8293793dd40900d869b110ddbe8b4412080f8f505da0baeb4337102147886053'
+  '8002aca45d826dae3e43a462c9d21b07507d60ba413aa34b135b990492d7fc47'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
@@ -90,7 +94,7 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(211)
+    expect(hooks).toHaveLength(212)
     expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(7)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256

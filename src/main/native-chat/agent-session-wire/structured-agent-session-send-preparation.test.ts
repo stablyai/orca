@@ -15,6 +15,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
+  hostTestLaunchDirectory,
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
@@ -74,6 +75,7 @@ beforeEach(async () => {
     },
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     releaseGraceMs: GRACE_MS,
     now: () => NOW,

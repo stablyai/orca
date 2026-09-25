@@ -3,16 +3,14 @@ import type { AppState } from '@/store/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   settingsForWorktreeOperationRoute,
-  resolveWorktreeOperationRouteResult
+  resolveWorktreeOperationRouteResult,
+  type WorktreeOperationRouteResolution
 } from '@/lib/worktree-operation-route'
 import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import {
-  parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -26,6 +24,8 @@ type OwnerState = Pick<
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
   | 'folderWorkspaces'
+  | 'floatingWorkspacePath'
+  | 'structuredSessionWorkspacePathByTabId'
   | 'projectGroups'
   | 'runtimeEnvironments'
   | 'runtimeEnvironmentCatalogHydrated'
@@ -49,6 +49,8 @@ export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
     worktreesByRepo: state.worktreesByRepo,
     detectedWorktreesByRepo: state.detectedWorktreesByRepo,
     folderWorkspaces: state.folderWorkspaces,
+    floatingWorkspacePath: state.floatingWorkspacePath,
+    structuredSessionWorkspacePathByTabId: state.structuredSessionWorkspacePathByTabId,
     projectGroups: state.projectGroups,
     runtimeEnvironments: state.runtimeEnvironments,
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
@@ -62,6 +64,12 @@ export function selectNativeChatImageOwnerState(state: AppState): OwnerState {
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree
   }
+}
+
+// Why: floating has no catalog row for the route resolver to find, and it always runs locally.
+const FLOATING_WORKSPACE_ROUTE: WorktreeOperationRouteResolution = {
+  kind: 'resolved',
+  route: { executionHostId: 'local', runtimeEnvironmentId: null }
 }
 
 // Route settings are cloned for the runtime operation contract. Reuse that
@@ -98,33 +106,6 @@ function stableSettingsForRoute(
   return resolved
 }
 
-function resolvePath(
-  state: OwnerState,
-  worktreeId: string,
-  hostId: ExecutionHostId | null
-): string | null {
-  const known = state.getKnownWorktreeById(worktreeId, hostId ?? undefined)
-  if (known?.path) {
-    return known.path
-  }
-  const workspace = parseWorkspaceKey(worktreeId)
-  if (workspace?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find((entry) => entry.id === workspace.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
-  }
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
-    const match = worktrees.find(
-      (entry) => entry.id === worktreeId && (!hostId || entry.hostId === hostId)
-    )
-    if (match?.path) {
-      return match.path
-    }
-  }
-  return null
-}
-
 export function resolveNativeChatImageRuntimeContext(
   state: OwnerState,
   tabId: string
@@ -133,7 +114,9 @@ export function resolveNativeChatImageRuntimeContext(
   if (!linkContext) {
     return null
   }
-  const routeResolution = resolveWorktreeOperationRouteResult(state, linkContext.worktreeId)
+  const routeResolution = isFloatingWorkspaceId(linkContext.worktreeId)
+    ? FLOATING_WORKSPACE_ROUTE
+    : resolveWorktreeOperationRouteResult(state, linkContext.worktreeId)
   if (routeResolution.kind !== 'resolved') {
     return null
   }
@@ -144,7 +127,12 @@ export function resolveNativeChatImageRuntimeContext(
   if (!executionHostId) {
     return null
   }
-  const worktreePath = resolvePath(state, linkContext.worktreeId, executionHostId)
+  const worktreePath = resolveNativeChatTabDirectory(
+    state,
+    tabId,
+    linkContext.worktreeId,
+    executionHostId
+  )
   if (!worktreePath) {
     return null
   }

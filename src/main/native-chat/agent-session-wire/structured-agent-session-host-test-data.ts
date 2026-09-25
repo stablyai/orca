@@ -61,3 +61,6 @@ export function hostTestAttachParams(
     }
   }
 }
+
+/** The launch folder for hosts under test; no test here opens a real terminal in it. */
+export const hostTestLaunchDirectory = async (): Promise<string> => '/workspace'

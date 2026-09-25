@@ -3,10 +3,10 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { clearFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
 import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
 import { reportFloatingFocus } from './floating-terminal-focus-reporting'
-import type { FloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
+import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 
-type FloatingTerminalFocusLifecycleInput = Pick<FloatingTerminalPanelItems, 'activeTerminalId'> &
+type FloatingTerminalFocusLifecycleInput = Pick<FloatingWorkspaceChromeModel, 'activeTerminalId'> &
   Pick<
     FloatingTerminalPanelLocalState,
     'pendingReclaimArmByFileIdRef' | 'panelRef' | 'reclaimTerminalInputOnWindowFocusRef'

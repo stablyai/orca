@@ -4,6 +4,7 @@ import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agen
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { OrcaRuntimeService } from './orca-runtime'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const {
   probeAgentSessionProcessIdentity,
@@ -453,6 +454,67 @@ describe('structured TUI launch tab binding', () => {
     agentSessionPtyWriteGate.unbindPty('pty-restored')
   })
 
+  it('opens a floating chat terminal in the directory it is handed, not the current setting', async () => {
+    const markTrusted = vi.fn()
+    class FloatingLaunchRuntime extends OrcaRuntimeService {
+      protected override async resolveTerminalWorkspaceLaunchScope() {
+        return {
+          id: FLOATING_TERMINAL_WORKTREE_ID,
+          path: '/tmp/floating-current-setting',
+          connectionId: null,
+          repo: null,
+          folderWorkspace: null
+        }
+      }
+      protected override async markLocalWorkspaceTrustedForAgent(agent: string, path: string) {
+        markTrusted(agent, path)
+      }
+      handoffTransport(): StructuredAgentSessionHandoffTransport {
+        return this.createStructuredAgentSessionHandoffTransport()
+      }
+    }
+    const runtime = new FloatingLaunchRuntime(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resume launch reads only these settings before spawn.
+      {
+        getSettings: () => ({
+          disabledTuiAgents: [],
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: {}
+        })
+      } as never
+    )
+    const spawn = vi.fn().mockRejectedValue(new Error('spawn refused by test'))
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(
+      runtime.handoffTransport().launchTui({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launchTui reads only these record fields.
+        record: {
+          sessionId: 'session-floating',
+          location: { workspaceId: FLOATING_TERMINAL_WORKTREE_ID, executionHostId: 'local' },
+          accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex-home' },
+          workspacePath: '/tmp/floating-pinned',
+          providerHandleChain: [
+            { handle: { provider: 'codex', threadId: 'thread-1' }, observedAt: 1 }
+          ]
+        } as never,
+        cwd: '/tmp/floating-pinned',
+        fence: 3,
+        spawnToken: 'spawn-token'
+      })
+    ).rejects.toThrow('spawn refused by test')
+
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0]?.[0]?.cwd).toBe('/tmp/floating-pinned')
+    expect(markTrusted).toHaveBeenCalledWith('codex', '/tmp/floating-pinned')
+  })
+
   it('proves the published launch tab before returning its revealed renderer binding', async () => {
     let explicitStatus: {
       state: 'working' | 'done'
@@ -568,6 +630,7 @@ describe('structured TUI launch tab binding', () => {
           { handle: { provider: 'codex', threadId: 'thread-1' }, observedAt: 1 }
         ]
       } as never,
+      cwd: '/tmp/structured-handoff',
       fence: 3,
       spawnToken: 'spawn-token',
       onSpawned
@@ -599,6 +662,7 @@ describe('structured TUI launch tab binding', () => {
     expect(waitForAdoptedStructuredTuiProof.mock.invocationCallOrder[0]).toBeLessThan(
       revealTerminalSession.mock.invocationCallOrder[0]!
     )
+    expect(spawn.mock.calls[0]?.[0]?.cwd).toBe('/tmp/structured-handoff')
     const launchCommand = spawn.mock.calls[0]?.[0]?.command
     expect(launchCommand).toContain("'-m' 'gpt-5.6-terra'")
     expect(launchCommand).toContain("'-c' 'model_reasoning_effort=medium'")

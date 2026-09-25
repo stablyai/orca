@@ -68,6 +68,8 @@ export type AgentSessionAttachParams = {
    *  the attach fingerprint: which tab shows the chat is not which conversation it attaches to. */
   surfaceTabId?: string
   launchArgs?: string[]
+  /** Host-resolved only: the directory a replacement session inherits from the one it continues. */
+  workspacePath?: string
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
   /**
@@ -317,6 +319,7 @@ export function reserveRequestFor(input: {
     provider: params.provider,
     accountHome: params.accountHome,
     ...(params.options ? { options: params.options } : {}),
+    ...(params.workspacePath ? { workspacePath: params.workspacePath } : {}),
     // Create path only: an existing record keeps its own. Unreserved, it is the id every client
     // still derives, so nothing keyed by it moves until those readers copy the recorded one.
     ...(params.envelope.expectedRuntimeFence === null

@@ -11,7 +11,7 @@ import { createTerminalAttentionSurface } from '@/components/terminal-pane/termi
 import { createTestStore, makeTab } from '../store/slices/store-test-helpers'
 import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
 import type { RetainedAgentEntry } from '../store/slices/agent-status'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const CODEX_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -413,11 +413,14 @@ describe('resolveAutoAckTabTargets', () => {
       'wt-1': 'tab-1',
       [FLOATING_TERMINAL_WORKTREE_ID]: FLOATING_TAB_ID
     },
-    getActiveTab: () => null
+    getActiveTab: () => null,
+    settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
+    floatingWorkspacePanelOpen: true
   }
+  const panelClosed = { floatingWorkspacePanelOpen: false }
 
   it('scans the floating tab alongside the main tab while the panel is visible', () => {
-    expect(resolveAutoAckTabTargets(baseState, { floatingPanelVisible: true })).toEqual([
+    expect(resolveAutoAckTabTargets(baseState)).toEqual([
       {
         tabId: FLOATING_TAB_ID,
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -428,38 +431,32 @@ describe('resolveAutoAckTabTargets', () => {
   })
 
   it('skips the floating tab while the panel is closed', () => {
-    expect(resolveAutoAckTabTargets(baseState, { floatingPanelVisible: false })).toEqual([
+    expect(resolveAutoAckTabTargets({ ...baseState, ...panelClosed })).toEqual([
+      { tabId: 'tab-1', worktreeId: 'wt-1', surfaceKind: 'terminal' }
+    ])
+  })
+
+  it('skips the floating tab while the feature is disabled, even with the panel left open', () => {
+    const disabled = { ...baseState.settings, floatingTerminalEnabled: false }
+    expect(resolveAutoAckTabTargets({ ...baseState, settings: disabled })).toEqual([
       { tabId: 'tab-1', worktreeId: 'wt-1', surfaceKind: 'terminal' }
     ])
   })
 
   it('scans the floating tab outside the terminal view because the panel overlays every view', () => {
-    expect(
-      resolveAutoAckTabTargets(
-        { ...baseState, activeView: 'activity' },
-        { floatingPanelVisible: true }
-      )
-    ).toEqual([
+    expect(resolveAutoAckTabTargets({ ...baseState, activeView: 'activity' })).toEqual([
       { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID, surfaceKind: 'terminal' }
     ])
   })
 
   it('scans nothing outside the terminal view with the panel closed', () => {
     expect(
-      resolveAutoAckTabTargets(
-        { ...baseState, activeView: 'activity' },
-        { floatingPanelVisible: false }
-      )
+      resolveAutoAckTabTargets({ ...baseState, ...panelClosed, activeView: 'activity' })
     ).toEqual([])
   })
 
   it('prefers the visible floating worktree when both worktrees claim one tab id', () => {
-    expect(
-      resolveAutoAckTabTargets(
-        { ...baseState, activeTabId: FLOATING_TAB_ID },
-        { floatingPanelVisible: true }
-      )
-    ).toEqual([
+    expect(resolveAutoAckTabTargets({ ...baseState, activeTabId: FLOATING_TAB_ID })).toEqual([
       { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID, surfaceKind: 'terminal' }
     ])
   })
@@ -493,8 +490,11 @@ describe('floating workspace auto-ack against the attention dot', () => {
   }
 
   function runAutoAckScan(store: TestStore, floatingPanelVisible: boolean): void {
-    const state = store.getState()
-    for (const target of resolveAutoAckTabTargets(state, { floatingPanelVisible })) {
+    store.setState({
+      settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
+      floatingWorkspacePanelOpen: floatingPanelVisible
+    })
+    for (const target of resolveAutoAckTabTargets(store.getState())) {
       const current = store.getState()
       const surface = createTerminalAttentionSurface(current)
       const viewedUnreadSubjectKey = resolveViewedUnreadSubjectKey(

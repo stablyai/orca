@@ -23,6 +23,7 @@ import {
 import { StructuredAgentSessionHolders } from './structured-agent-session-holders'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-hold-resume'
 import type { StructuredAgentSessionAttachOptions } from './structured-agent-session-attach-orchestration'
+import { AgentSessionRefusalError } from './structured-agent-session-refusal-error'
 
 export type StructuredAgentSessionHoldsDeps = {
   /** Attaches a provider child, for a caller already inside `serialize`. */
@@ -84,8 +85,7 @@ export class StructuredAgentSessionHolds {
     }
     if (!resumed.ok) {
       this.releaseFailedHold(sessionId, holderId, alreadyHeld, incarnation)
-      // The RPC surface raises a refusal as its code.
-      throw new Error(resumed.refusal.code)
+      throw new AgentSessionRefusalError(resumed.refusal)
     }
   }
 

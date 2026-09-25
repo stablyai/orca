@@ -143,7 +143,9 @@ export type BrowserSlice = {
   closeBrowserTab: (tabId: string, options?: { reason?: 'cleanup' }) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
-  setActiveBrowserTab: (tabId: string) => void
+  /** Activation uses the tab's workspace unless a target is supplied; global selection
+   *  moves only when that workspace is active. */
+  setActiveBrowserTab: (tabId: string, targetWorktreeId?: string) => void
   createBrowserPage: (
     workspaceId: string,
     url: string,

@@ -20,6 +20,7 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
+  hostTestLaunchDirectory,
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
@@ -83,6 +84,7 @@ beforeEach(async () => {
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     releaseGraceMs: GRACE_MS,
     now: () => NOW

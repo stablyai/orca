@@ -29,6 +29,7 @@ import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { resolveAgentSessionLaunchDirectory } from '../runtime/agent-session-launch-directory'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -105,7 +106,7 @@ export type ClaudeStructuredLaunch = {
 }
 
 export type ClaudeStructuredLaunchResolverDeps = {
-  store: AgentSessionRecordStore
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinWorkspacePath'>
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCommand?: () => string
   resolveEnv?: () =>
@@ -276,7 +277,7 @@ export function createClaudeStructuredLaunchResolver(
         // Claude owns where a resumed conversation continues; the stored leaf is Orca's bookkeeping.
         ...(resumesTranscript ? { resume: providerSessionId } : { sessionId: providerSessionId })
       },
-      cwd: await deps.resolveWorkspacePath(record.location.workspaceId),
+      cwd: await resolveAgentSessionLaunchDirectory(deps, record),
       env,
       claudeConfigDir: record.accountHome.path,
       providerSessionId,

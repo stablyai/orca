@@ -95,6 +95,8 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       spawnToken: string
       providerRoot: string
       sessionId: string
+      /** The session's launch directory; the workspace id only names its surface. */
+      cwd: string
       launchArgs?: AgentSessionLaunchArgs
     }
   ): Promise<RuntimeEnsureAgentSessionResult> {
@@ -166,12 +168,14 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
-    await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, workspace.path)
+    const cwd = handoffAuthority?.cwd ?? workspace.path
+    await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, cwd)
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
+      ...(handoffAuthority ? { cwd: handoffAuthority.cwd } : {}),
       env: startup.env,
       launchConfig: startup.launchConfig,
       startupCommandDelivery: startup.startupCommandDelivery,

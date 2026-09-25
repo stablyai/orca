@@ -133,6 +133,7 @@ function createCoordinator(): StructuredAgentSessionHandoffCoordinator {
   return new StructuredAgentSessionHandoffCoordinator({
     store,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: async () => '/workspace',
     transport: {
       hostLabel: 'Test host',
       launchTui,
@@ -254,6 +255,7 @@ describe('structured session handoff failure handling', () => {
       deps: {
         store,
         claimKeyId: 'key-1',
+        resolveLaunchDirectory: async () => '/workspace',
         transport: {
           hostLabel: 'Test host',
           launchTui,

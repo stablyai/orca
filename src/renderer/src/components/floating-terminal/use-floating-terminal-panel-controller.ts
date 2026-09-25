@@ -12,7 +12,7 @@ import { useFloatingTerminalOrchestrationDismissal } from './use-floating-termin
 import { useFloatingTerminalOrchestrationVisibility } from './use-floating-terminal-orchestration-visibility'
 import { useFloatingTerminalPanelFocusReclaim } from './use-floating-terminal-panel-focus-reclaim'
 import { useFloatingTerminalPanelGeometry } from './use-floating-terminal-panel-geometry'
-import { useFloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
+import { useFloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import { useFloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import { useFloatingTerminalPanelMaximize } from './use-floating-terminal-panel-maximize'
 import { useFloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
@@ -27,7 +27,7 @@ export function useFloatingTerminalPanelController({
   const storeState = useFloatingTerminalPanelStoreState()
   const shortcutDetails = useFloatingTerminalShortcutDetails()
   const localState = useFloatingTerminalPanelLocalState()
-  const items = useFloatingTerminalPanelItems({ ...storeState, open })
+  const items = useFloatingWorkspaceChromeModel()
 
   useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,

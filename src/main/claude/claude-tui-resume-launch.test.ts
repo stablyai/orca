@@ -43,7 +43,7 @@ function makeExecutable(path: string): void {
 describe('Claude TUI resume launch', () => {
   it('pins the workspace, account home, setting sources, and launch identity', async () => {
     const build = createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async (workspaceId) => `/workspaces/${workspaceId}`,
+      resolveLaunchDirectory: async (record) => `/workspaces/${record.location.workspaceId}`,
       resolveCommand: () => '/usr/local/bin/claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),
       resolveEnv: () => ({
@@ -98,7 +98,7 @@ describe('Claude TUI resume launch', () => {
     makeExecutable(nodeCommand)
 
     const build = createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async () => '/workspace',
+      resolveLaunchDirectory: async () => '/workspace',
       resolveCommand: () => claudeCommand,
       resolveAuthPolicy: () => ({ stripAuthEnv: true }),
       resolveEnv: () => ({ PATH: '/usr/bin' }),
@@ -112,7 +112,7 @@ describe('Claude TUI resume launch', () => {
 
   it('uses the durable session environment instead of current account settings', async () => {
     const build = createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async () => '/workspace',
+      resolveLaunchDirectory: async () => '/workspace',
       resolveCommand: () => 'claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),
       resolveEnv: () => ({ ANTHROPIC_AUTH_TOKEN: 'pinned-token' }),
@@ -138,7 +138,7 @@ describe('Claude TUI resume launch', () => {
       ]
     })
     const build = createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async () => '/workspace',
+      resolveLaunchDirectory: async () => '/workspace',
       resolveCommand: () => 'claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: true }),
       inheritedEnv: {}
@@ -152,7 +152,7 @@ describe('Claude TUI resume launch', () => {
 
   it('preserves durable Claude launch arguments before resume defaults', async () => {
     const build = createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async () => '/workspace',
+      resolveLaunchDirectory: async () => '/workspace',
       resolveCommand: () => 'claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: true }),
       inheritedEnv: {}
@@ -168,7 +168,7 @@ describe('Claude TUI resume launch', () => {
 
   it('rejects missing Claude handles and unpinned account homes', async () => {
     const build = createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async () => '/workspace',
+      resolveLaunchDirectory: async () => '/workspace',
       resolveCommand: () => 'claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: true }),
       inheritedEnv: {}
@@ -193,7 +193,7 @@ describe('Claude TUI resume launch', () => {
 describe('structured-to-TUI handoff auth', () => {
   it('carries a system-auth user their own inherited credential', async () => {
     const launch = await createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async () => '/repos/workspace-1',
+      resolveLaunchDirectory: async () => '/repos/workspace-1',
       resolveCommand: () => '/usr/local/bin/claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: false }),
       inheritedEnv: { ANTHROPIC_API_KEY: 'sk-ant-SHELL', PATH: '/usr/bin' }
@@ -204,7 +204,7 @@ describe('structured-to-TUI handoff auth', () => {
 
   it('still strips it once a managed account owns the credential', async () => {
     const launch = await createClaudeTuiResumeLaunchBuilder({
-      resolveWorkspacePath: async () => '/repos/workspace-1',
+      resolveLaunchDirectory: async () => '/repos/workspace-1',
       resolveCommand: () => '/usr/local/bin/claude',
       resolveAuthPolicy: () => ({ stripAuthEnv: true }),
       inheritedEnv: { ANTHROPIC_API_KEY: 'sk-ant-SHELL', PATH: '/usr/bin' }
@@ -216,7 +216,7 @@ describe('structured-to-TUI handoff auth', () => {
   it('refuses a configured override of a pinned managed account, as the terminal path does', async () => {
     await expect(
       createClaudeTuiResumeLaunchBuilder({
-        resolveWorkspacePath: async () => '/repos/workspace-1',
+        resolveLaunchDirectory: async () => '/repos/workspace-1',
         resolveCommand: () => '/usr/local/bin/claude',
         resolveAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveEnv: () => ({ ANTHROPIC_API_KEY: 'sk-ant-CONFIGURED' }),

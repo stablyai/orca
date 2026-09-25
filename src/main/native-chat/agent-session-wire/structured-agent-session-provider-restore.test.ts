@@ -9,7 +9,8 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestAttachParams,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const CLAUDE_SESSION = 'claude-session'
@@ -50,6 +51,7 @@ function createHost(
     adapter: claudeAdapter(),
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     probeOwner,
     now: () => HOST_TEST_NOW

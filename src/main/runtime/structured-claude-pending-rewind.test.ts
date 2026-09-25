@@ -17,6 +17,7 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   hostTestAttachParams,
+  hostTestLaunchDirectory,
   hostTestOperationId,
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -128,6 +129,7 @@ beforeEach(async () => {
     journalRoot: directory,
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     probeOwner: async () => ({ outcome: 'exit-observed' })
   })
   expect(await host.attach(caller, attachParams(null))).toMatchObject({ ok: true })

@@ -8,6 +8,7 @@ import {
   type CustomPet
 } from '../../../../../shared/pet-types'
 import { clampPetSize } from './ui-slice-hydration-sanitizers'
+import { readPersistedFloatingTerminalPanelViewState } from '../../../components/floating-terminal/floating-terminal-panel-view-state'
 
 export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {
@@ -173,6 +174,20 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
     clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
     clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
     scrollToDiffCommentId: null,
-    setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id })
+    setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
+    floatingWorkspacePath: null,
+    setFloatingWorkspacePath: (path) =>
+      set((state) =>
+        state.floatingWorkspacePath === (path || null)
+          ? state
+          : { floatingWorkspacePath: path || null }
+      ),
+    // Why restored: leaving the panel closed forces the user to reopen and re-maximize it,
+    // and that size jump reflows a live TUI's buffer (see floating-terminal-panel-view-state).
+    floatingWorkspacePanelOpen: readPersistedFloatingTerminalPanelViewState()?.open === true,
+    setFloatingWorkspacePanelOpen: (open) =>
+      set((state) =>
+        state.floatingWorkspacePanelOpen === open ? state : { floatingWorkspacePanelOpen: open }
+      )
   }
 }

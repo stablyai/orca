@@ -1,6 +1,7 @@
 import { setVisibleSessionId } from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
+import { pinAgentSessionRecordWorkspacePath } from './agent-session-record-workspace-path'
 /** Durable single-writer session records and their operation ledger. */
 
 import {
@@ -161,6 +162,12 @@ export class AgentSessionRecordStore {
   setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
     this.mutate(sessionId, (record) =>
       setAgentSessionRecordConversationName(record, name, Date.now())
+    )
+
+  /** Unfenced like the name: it records where a launch ran and never contends with the lease. */
+  pinWorkspacePath = (sessionId: string, workspacePath: string): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      pinAgentSessionRecordWorkspacePath(record, workspacePath, Date.now())
     )
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */

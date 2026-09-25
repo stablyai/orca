@@ -93,4 +93,6 @@ export type StructuredAgentSessionHostDeps = {
    *  every reader of that store simply lists no structured session. */
   statusSink?: StructuredAgentSessionStatusSink
   handoffTransport?: StructuredAgentSessionHandoffTransport
+  /** See `StructuredAgentSessionHandoffDeps.resolveLaunchDirectory`. */
+  resolveLaunchDirectory: (record: AgentSessionRecord) => Promise<string>
 }

@@ -179,6 +179,21 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
   useEffect(() => {
     projectStatus(tab, summary, observation)
   }, [summary, observation, tab])
+  const workspacePath = summary?.workspacePath
+  useEffect(() => {
+    // Why local only: a remote host's path is in its syntax, and floating chats only run locally.
+    useAppStore
+      .getState()
+      .setStructuredSessionWorkspacePath(
+        tab.id,
+        tab.entityId,
+        target.kind === 'local' ? workspacePath : undefined
+      )
+  }, [workspacePath, target.kind, tab.id, tab.entityId])
+  useEffect(
+    () => () => useAppStore.getState().clearStructuredSessionWorkspacePath(tab.id, tab.entityId),
+    [tab.entityId, tab.id]
+  )
   useEffect(
     () => () =>
       useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),

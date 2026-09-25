@@ -18,6 +18,7 @@ import {
 import { getBrowserSessionProfileHostId } from './browser-host-state'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { ownsGlobalSelection } from '../../global-selection-owner'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -95,7 +96,7 @@ export function createBrowserTabActions(
         })()
 
         const shouldActivate = options?.activate ?? true
-        const shouldUpdateGlobalActiveSurface = shouldActivate && s.activeWorktreeId === worktreeId
+        const shouldUpdateGlobalActiveSurface = shouldActivate && ownsGlobalSelection(s, worktreeId)
         const shouldFocusFloatingTab =
           shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
         const shouldFocusAddressBar =

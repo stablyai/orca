@@ -33,22 +33,6 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
     why: 'Mirrors a page the host already retired; a plan-driven close would echo it back.'
   },
   {
-    path: 'src/renderer/src/components/floating-terminal/use-floating-terminal-close-actions.ts',
-    closeBrowserTabMentions: 6,
-    reasonCarryingCloseCalls: 0,
-    planReasonForwardings: 0,
-    routesThroughPlan: false,
-    why: 'Floating workspace tabs are local-only and have no remote owner to reconcile.'
-  },
-  {
-    path: 'src/renderer/src/components/floating-terminal/use-floating-terminal-panel-store-state.ts',
-    closeBrowserTabMentions: 3,
-    reasonCarryingCloseCalls: 0,
-    planReasonForwardings: 0,
-    routesThroughPlan: false,
-    why: 'Passes the local floating-panel close action through its controller.'
-  },
-  {
     path: 'src/renderer/src/components/use-terminal-bulk-close-actions.ts',
     closeBrowserTabMentions: 3,
     reasonCarryingCloseCalls: 1,

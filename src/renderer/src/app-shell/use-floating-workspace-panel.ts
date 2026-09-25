@@ -1,28 +1,22 @@
-import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type SetStateAction } from 'react'
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
 } from '@/lib/floating-terminal'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
-import {
-  persistFloatingTerminalPanelOpen,
-  readPersistedFloatingTerminalPanelViewState
-} from '../components/floating-terminal/floating-terminal-panel-view-state'
+import { persistFloatingTerminalPanelOpen } from '../components/floating-terminal/floating-terminal-panel-view-state'
 import { useAppStore } from '../store'
 import { selectFloatingVisibleTabCount } from '../store/selectors'
 
 export type FloatingWorkspacePanelState = ReturnType<typeof useFloatingWorkspacePanel>
 
 /**
- * Owns the floating workspace overlay's open state: persistence, the focus it hands back on
- * close, and the toggle/disable paths that can flip it from outside React.
+ * Drives the floating workspace overlay's open state (held in the store): persistence, the focus
+ * it hands back on close, and the toggle/disable paths that can flip it from outside React.
  */
 export function useFloatingWorkspacePanel() {
-  // Why restored: leaving the panel closed forces the user to reopen and re-maximize it,
-  // and that size jump reflows a live TUI's buffer (see floating-terminal-panel-view-state).
-  const [open, setOpen] = useState(
-    () => readPersistedFloatingTerminalPanelViewState()?.open === true
-  )
+  const open = useAppStore((s) => s.floatingWorkspacePanelOpen)
+  const setOpen = useAppStore((s) => s.setFloatingWorkspacePanelOpen)
   const tourInteractionSnapshotRef = useRef<{
     wasPreviouslyInteracted?: boolean
     persisted?: Promise<void>
@@ -103,7 +97,7 @@ export function useFloatingWorkspacePanel() {
         persistFloatingTerminalPanelOpen(resolvedOpen)
       }
     },
-    [enabled, open, rememberReturnFocus, restoreReturnFocus]
+    [enabled, open, setOpen, rememberReturnFocus, restoreReturnFocus]
   )
 
   const openMaximized = useCallback((): void => {

@@ -52,6 +52,9 @@ export type AgentSessionReserveRequest = {
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
   launchArgs?: AgentSessionLaunchArgs
+  /** Only a create that continues another session's conversation in place carries its directory;
+   *  every other record is pinned at its first launch. */
+  workspacePath?: string
   /** Current launch input validated here but never written to the durable record. */
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
@@ -276,6 +279,7 @@ function createAgentSessionRecord(
     // record's current fence — so an adopted link must be minted at that same fence.
     providerHandleChain: request.adoptedHandleLink ? [request.adoptedHandleLink] : [],
     accountHome: request.accountHome,
+    ...(request.workspacePath ? { workspacePath: request.workspacePath } : {}),
     ...(request.options ? { options: { ...request.options } } : {}),
     ...(request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
     ...(request.surfaceTabId ? { surfaceTabId: request.surfaceTabId } : {}),

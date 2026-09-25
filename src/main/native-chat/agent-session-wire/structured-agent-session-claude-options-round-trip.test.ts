@@ -135,6 +135,7 @@ beforeEach(async () => {
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-claude',
     handoffTransport: transport(),
+    resolveLaunchDirectory: async () => '/workspace',
     now: () => NOW
   })
   expect(

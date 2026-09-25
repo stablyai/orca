@@ -22,7 +22,8 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
@@ -114,6 +115,7 @@ beforeEach(async () => {
     adapter: adapter(),
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
   })
@@ -136,6 +138,7 @@ describe('settled attach retry', () => {
       adapter: { ...adapter(), historyFilePath },
       journalRoot: root,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
     })
@@ -193,6 +196,7 @@ describe('settled attach retry', () => {
       adapter: adapter(),
       journalRoot: root,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       mintSpawnToken,
       now: () => NOW
     })
@@ -238,6 +242,7 @@ describe('settled attach retry', () => {
       adapter: adapter(),
       journalRoot: root,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       mintSpawnToken,
       probeOwner: async () =>
         reservationUnused
@@ -267,6 +272,7 @@ describe('settled attach retry', () => {
       adapter: adapter(),
       journalRoot: root,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       mintSpawnToken,
       probeOwner: async () =>
         reservationUnused
@@ -330,6 +336,7 @@ describe('settled attach retry', () => {
       adapter: adapter(),
       journalRoot: root,
       claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory,
       mintSpawnToken: () => 'spawn-restarted',
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       now: () => NOW

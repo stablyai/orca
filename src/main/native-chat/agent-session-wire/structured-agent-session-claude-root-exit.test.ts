@@ -14,6 +14,7 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 import { evictHeldStructuredAgentSession } from './structured-agent-session-host-lifetime'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import { hostTestLaunchDirectory } from './structured-agent-session-host-test-data'
 
 const NOW = 1_788_727_031_330
 const roots: string[] = []
@@ -111,7 +112,13 @@ describe('Claude root-exit eviction', () => {
         }
       ]
     ])
-    const deps = { store, adapter, journalRoot: root, claimKeyId: 'key-1' }
+    const deps = {
+      store,
+      adapter,
+      journalRoot: root,
+      claimKeyId: 'key-1',
+      resolveLaunchDirectory: hostTestLaunchDirectory
+    }
     const runtimeState = new StructuredAgentSessionHostRuntimeState(deps)
 
     claude.connections[0]!.handlers.onExit?.(new Error('provider exited'))

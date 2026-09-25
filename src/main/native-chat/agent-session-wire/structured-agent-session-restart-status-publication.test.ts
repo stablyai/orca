@@ -23,7 +23,8 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId,
-  resetHostTestOperationIds
+  resetHostTestOperationIds,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
@@ -59,6 +60,7 @@ function createHost(store: AgentSessionRecordStore): StructuredAgentSessionHost 
     adapter: adapter(),
     journalRoot: root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-a',
     probeOwner: async () => ({
       outcome: 'indeterminate',

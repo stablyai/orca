@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { consumeFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
+import {
+  armFloatingPanelReclaimIntent,
+  consumeFloatingPanelReclaimIntent
+} from '@/lib/floating-workspace-focus-reclaim'
 import {
   makeFile,
   makeTab,
@@ -18,6 +21,11 @@ import {
   renderPanel,
   runEffects
 } from './floating-terminal-panel-render-probe'
+
+vi.mock('zustand/react/shallow', () => ({
+  // Why: zustand resolves the real react (unmocked in node_modules); the memo wrapper is inert here.
+  useShallow: (selector: unknown) => selector
+}))
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
@@ -333,9 +341,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
     runEffects()
 
-    // The last-pane close authority (L3 → onCloseTab) closes the tab while the panel owns focus.
-    const terminalPane = findByTypeName(element, 'TerminalPane')
-    ;(terminalPane.props.onCloseTab as () => void)()
+    // The last-tab close authority (strip close → confirmed close) runs while the panel owns focus.
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({ onClosed: expect.any(Function) })
@@ -370,8 +378,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
     runEffects()
 
-    const terminalPane = findByTypeName(element, 'TerminalPane')
-    ;(terminalPane.props.onCloseTab as () => void)()
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
     // Emptying schedules the reclaim frame (id 42, callback not yet run); unmounting cancels it.
     setFloatingTabs([])
@@ -479,8 +487,38 @@ describe('FloatingTerminalPanel close behavior', () => {
     attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
     runEffects()
 
+    // The probe reads external-store snapshots on render; React re-renders on the arm notification.
+    const afterArm = await renderPanel(true)
+    attachRef(findByProp(afterArm, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+
     expect(window.requestAnimationFrame).toHaveBeenCalled()
     expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('reclaims focus when intent arms after the empty panel has rendered', async () => {
+    setFloatingTabs([])
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
+    vi.stubGlobal('document', {
+      activeElement,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+
+    const emptyElement = await renderPanel(true)
+    attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+    vi.mocked(window.requestAnimationFrame).mockClear()
+
+    armFloatingPanelReclaimIntent()
+    const afterArm = await renderPanel(true)
+    attachRef(findByProp(afterArm, 'data-floating-terminal-panel').props.ref, panelElement)
+    runEffects()
+
+    expect(window.requestAnimationFrame).toHaveBeenCalled()
+    expect(consumeFloatingPanelReclaimIntent()).toBe(false)
   })
 
   it('drops the deferred dirty-editor arm when the save dialog is cancelled', async () => {

@@ -25,7 +25,8 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
-  hostTestMessage
+  hostTestMessage,
+  hostTestLaunchDirectory
 } from './structured-agent-session-host-test-data'
 
 export const GRACE = 15_000
@@ -74,6 +75,7 @@ export async function interruptedRestart(
     },
     journalRoot: previous.root,
     claimKeyId: 'key-1',
+    resolveLaunchDirectory: hostTestLaunchDirectory,
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => ({ outcome: 'pid-absent' }),
     recoveryCapsule: new AgentSessionRecoveryCapsule(previous.root),

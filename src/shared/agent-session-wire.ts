@@ -233,6 +233,9 @@ export type AgentSessionStatusSummary = {
    *  mixed-version hosts. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   providerSession?: AgentProviderSessionMetadata
+  /** Host-path directory the session is held to regardless of its workspace's current directory
+   *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
+  workspacePath?: string
   updatedAt: number
   /** When the session's own agent entered `status`, dated by its own lifecycle edges and never by
    *  row activity: `updatedAt` also moves for a subagent's rows. Absent from older hosts, and when
