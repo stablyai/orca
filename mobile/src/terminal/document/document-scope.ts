@@ -181,6 +181,8 @@ export type TerminalDocumentState = {
   removeWebglRecovery: (() => void) | null
   /** `fit-scale`: the generation of the retry loop; a bump abandons the one in flight. */
   fitRetryToken: number
+  /** `fit-scale`: the viewport box the last fit was committed for, or null before one. */
+  fittedBox: { width: number; height: number } | null
   /** `mouse-click-drag`: the mouse gesture in progress, or null. */
   mouseGesture: TerminalMouseGesture | null
   /** `tap-dispatch`: what the document-level dispatcher has latched onto. */
@@ -306,6 +308,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     removeTapDispatch: null,
     removeWebglRecovery: null,
     fitRetryToken: 0,
+    fittedBox: null,
     mouseGesture: null,
     touchDispatch: {
       mode: 'idle',

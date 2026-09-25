@@ -65,6 +65,12 @@ export function adjustRowsForViewport() {}
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
 
+function isFittedBox(scope: TerminalDocumentScope) {
+  const { width, height } = scope.viewportRect()
+  const fitted = scope.fittedBox
+  return fitted !== null && fitted.width === width && fitted.height === height
+}
+
 function hasViewportWidth(scope: TerminalDocumentScope) {
   const width = scope.viewportRect().width
   return Number.isFinite(width) && width > 0
@@ -126,6 +132,8 @@ export function commitFitScale(
     return
   }
   const preSnapScale = computeFitScale(scope)
+  const { width, height } = scope.viewportRect()
+  scope.fittedBox = { width, height }
   scope.currentScale = preSnapScale
   // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
   // sub-pixels) snap to 1 to avoid imperceptible shrinkage that prevents
@@ -172,8 +180,9 @@ export function commitFitScale(
  */
 export function startFitScale(scope: TerminalDocumentScope) {
   const refit = () => {
-    // Why: a hidden screen's host reports 0x0; refitting then would drop the pan it comes back to.
-    if (!hasViewportWidth(scope)) {
+    // Why: a hidden screen reports 0x0 and then its old box again; native never refits on that, so
+    // only a box other than the one last fitted refits, and the user's pan and zoom survive.
+    if (!hasViewportWidth(scope) || isFittedBox(scope)) {
       return
     }
     applyFitScale(scope, 'window-resize')

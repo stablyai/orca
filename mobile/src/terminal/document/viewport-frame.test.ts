@@ -50,7 +50,18 @@ function startedWithGrid(host: TerminalDocumentHost): TerminalDocumentScope {
   return scope
 }
 
-const frames = () => new Promise((resolve) => setTimeout(resolve, 100))
+/** One frame after everything already queued: happy-dom runs frames in order. */
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+/** Frame by frame until the document has done what the case waits on; init chains a few. */
+async function framesUntil(done: () => boolean) {
+  for (let frame = 0; frame < 30 && !done(); frame++) {
+    await nextFrame()
+  }
+  expect(done()).toBe(true)
+}
+
+const FIT_390 = 390 / (7.5 * 55)
 
 const pageHost = (): TerminalDocumentHost => ({
   viewportRect: () => ({ left: 0, top: HEADER, width: 412, height: 600 })
@@ -82,9 +93,13 @@ describe("the document's frame on the page", () => {
 
   it('commits no fit while the host is hidden, and one once it has a box', async () => {
     let box = { left: 0, top: 0, width: 0, height: 0 }
+    const widthsRead: number[] = []
     const changes: (() => void)[] = []
     const scope = startedWithGrid({
-      viewportRect: () => box,
+      viewportRect: () => {
+        widthsRead.push(box.width)
+        return box
+      },
       observeViewport: (onChange) => {
         changes.push(onChange)
         return () => {}
@@ -96,13 +111,15 @@ describe("the document's frame on the page", () => {
       set: (value: string) => scales.push(/scale\(([^)]*)\)/.exec(value)?.[1] ?? value),
       get: () => ''
     })
-    await frames()
+    // The fit's attempt ran and read the hidden host, and committed nothing.
+    await framesUntil(() => widthsRead.includes(0))
+    await nextFrame()
     expect(scales).toEqual([])
     box = { left: 0, top: 0, width: 390, height: 600 }
     changes.forEach((onChange) => onChange())
-    await frames()
+    await framesUntil(() => scales.length === 2)
     // The refit repaints at the scale it has, then the fit commits once: 390 / (7.5 x 55).
-    expect(scales).toEqual(['1', String(390 / (7.5 * 55))])
+    expect(scales).toEqual(['1', String(FIT_390)])
   })
 
   it("edge-scrolls at the host's own edges, not the window's", () => {
@@ -122,9 +139,9 @@ describe("the document's frame on the page", () => {
     expect(edge(120)).toBe(-1)
   })
 
-  it('keeps pan and zoom while a hidden host reports 0x0, and refits once it has a box', async () => {
-    // react-native-screens hides the session when another screen covers it; coming back must
-    // find the pan the user left, as native does, since native never refits on navigation.
+  it('keeps pan and zoom across hide and show, and refits when the box really changes', async () => {
+    // react-native-screens hides the session when another screen covers it and shows it again at
+    // the same size; native never refits on navigation, so the pan the user left must survive.
     let box = { left: 0, top: 0, width: 390, height: 600 }
     const changes: (() => void)[] = []
     const scope = startedWithGrid({
@@ -134,26 +151,30 @@ describe("the document's frame on the page", () => {
         return () => {}
       }
     })
-    await frames()
+    const resize = async (width: number, height: number) => {
+      box = { left: 0, top: 0, width, height }
+      changes.forEach((onChange) => onChange())
+      await nextFrame()
+      await nextFrame()
+    }
+    await framesUntil(() => scope.currentScale === FIT_390)
     scope.panX = -40
     scope.panY = -30
     scope.userScale = 1.5
     const kept = { panX: -40, panY: -30, userScale: 1.5, currentScale: scope.currentScale }
-    box = { left: 0, top: 0, width: 0, height: 0 }
-    changes.forEach((onChange) => onChange())
-    await frames()
-    const { panX, panY, userScale, currentScale } = scope
-    expect({ panX, panY, userScale, currentScale }).toEqual(kept)
+    const view = () => {
+      const { panX, panY, userScale, currentScale } = scope
+      return { panX, panY, userScale, currentScale }
+    }
 
-    box = { left: 0, top: 0, width: 390, height: 600 }
-    const scales: string[] = []
-    Object.defineProperty(scope.surface!.style, 'transform', {
-      set: (value: string) => scales.push(/scale\(([^)]*)\)/.exec(value)?.[1] ?? value),
-      get: () => ''
-    })
+    await resize(0, 0)
+    expect(view()).toEqual(kept)
+    await resize(390, 600)
+    expect(view()).toEqual(kept)
+
+    box = { left: 0, top: 0, width: 300, height: 600 }
     changes.forEach((onChange) => onChange())
-    await frames()
-    expect(scope.userScale).toBe(1)
-    expect(scales.at(-1)).toBe(String(390 / (7.5 * 55)))
+    await framesUntil(() => scope.currentScale === 300 / (7.5 * 55))
+    expect(view()).toEqual({ panX: 0, panY: 0, userScale: 1, currentScale: 300 / (7.5 * 55) })
   })
 })
