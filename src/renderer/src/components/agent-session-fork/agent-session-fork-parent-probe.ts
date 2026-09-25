@@ -66,16 +66,16 @@ function countWorkingTreeChanges(status: GitStatusResult): ParentWorkingTreeChan
   }
 }
 
-/** Starts the parent's status and carry-capability reads; neither promise rejects. */
-export function probeParentWorkingTree(
+/** Reads the parent's HEAD and change counts on its host; resolves null instead of rejecting. */
+export function readParentWorkingTreeChanges(
   source: ForkSourceSnapshot,
   signal: AbortSignal
-): ParentProbe {
+): Promise<ParentWorkingTreeChanges | null> {
   const { worktree } = source
   if (!worktree) {
-    return { changes: Promise.resolve(null), carrySupported: Promise.resolve(false) }
+    return Promise.resolve(null)
   }
-  const changes = getRuntimeGitStatus(
+  return getRuntimeGitStatus(
     {
       settings: source.settings,
       worktreeId: worktree.id,
@@ -90,8 +90,18 @@ export function probeParentWorkingTree(
       console.warn('[agent-session-fork] reading parent changes failed', statusError)
       return null
     })
+}
+
+/** Starts the parent's status and carry-capability reads; neither promise rejects. */
+export function probeParentWorkingTree(
+  source: ForkSourceSnapshot,
+  signal: AbortSignal
+): ParentProbe {
+  if (!source.worktree) {
+    return { changes: Promise.resolve(null), carrySupported: Promise.resolve(false) }
+  }
   const carrySupported = isWorkingTreeCarrySupported(source.settings).catch(() => false)
-  return { changes, carrySupported }
+  return { changes: readParentWorkingTreeChanges(source, signal), carrySupported }
 }
 
 export function resolveCarryAvailability(

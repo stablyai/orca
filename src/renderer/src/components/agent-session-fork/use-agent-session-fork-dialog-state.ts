@@ -21,6 +21,7 @@ import {
 import {
   probeParentWorkingTree,
   readForkSource,
+  readParentWorkingTreeChanges,
   resolveCarryAvailability,
   type ParentProbe,
   type ParentWorkingTreeChanges
@@ -97,11 +98,13 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
   const closedRef = useRef(false)
   const mountedRef = useMountedRef()
   const probeRef = useRef<ParentProbe | null>(null)
+  const probeSignalRef = useRef<AbortSignal | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
     const probe = probeParentWorkingTree(source, controller.signal)
     probeRef.current = probe
+    probeSignalRef.current = controller.signal
     void probe.changes.then((probed) => {
       if (!controller.signal.aborted) {
         setChanges(probed)
@@ -143,18 +146,18 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     busyRef.current = true
     setBusy(true)
     setError(null)
-    // Why: a fast Enter must wait for the parent's HEAD instead of silently forking from its branch.
     setStage('preparing')
-    const probe = probeRef.current
+    // Why: the parent may have committed since the dialog opened; fork from its HEAD as of submit.
     const [probedChanges, probedCarrySupported] = await Promise.all([
-      probe?.changes ?? null,
-      probe?.carrySupported ?? false
+      readParentWorkingTreeChanges(source, probeSignalRef.current ?? new AbortController().signal),
+      probeRef.current?.carrySupported ?? false
     ])
     // Why: nothing exists yet, so a cancel (or another modal) during the wait must not create a fork.
     if (closedRef.current || !mountedRef.current || !isForkDialogActive()) {
       resetBusy()
       return
     }
+    setChanges(probedChanges)
     const probedCarry = resolveCarryAvailability(probedChanges, probedCarrySupported, base)
     const request: AgentSessionForkRequest = {
       sourceWorktreeId: data.sourceWorktreeId,
@@ -198,6 +201,7 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     nameInvalid,
     resetBusy,
     selectedOption,
+    source,
     trimmedName
   ])
 

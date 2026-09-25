@@ -462,6 +462,19 @@ describe('AgentSessionForkDialog', () => {
     )
   })
 
+  it("re-reads the parent's HEAD on submit so a commit made after opening is kept", async () => {
+    const movedHead = 'b'.repeat(40)
+    await renderDialog()
+    expect(mocks.getRuntimeGitStatus).toHaveBeenCalledTimes(1)
+    mocks.getRuntimeGitStatus.mockResolvedValue({ ...statusWith(DIRTY_ENTRIES), head: movedHead })
+    await submitWithEnter()
+    expect(mocks.getRuntimeGitStatus).toHaveBeenCalledTimes(2)
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ sourceHeadOid: movedHead, carryChanges: true }),
+      expect.any(Function)
+    )
+  })
+
   it('forks from the parent branch when the status read fails', async () => {
     mocks.getRuntimeGitStatus.mockRejectedValue(new Error('offline'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
