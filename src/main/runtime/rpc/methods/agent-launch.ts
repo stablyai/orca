@@ -40,6 +40,7 @@ import {
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
 } from '../../../../shared/agent-launch-session-already-exists'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
+import { isAgentLaunchNotStarted } from '../../../agent-launch/agent-launch-not-started'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
@@ -219,6 +220,9 @@ function launchFailureWithoutEffectsCode(
   }
   if (error instanceof AgentLaunchSessionAlreadyExistsError && targetKind === 'existing') {
     return AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE
+  }
+  if (isAgentLaunchNotStarted(error) && targetKind === 'existing') {
+    return agentLaunchFailureCode(error)
   }
   return null
 }
