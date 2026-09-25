@@ -187,13 +187,24 @@ describe.each(['sync', 'async'] as const)('%s compatibility export recovery', (m
 
   it('refuses an unrelated edit even while a previous export remains staged', async () => {
     const state = fixture()
-    vi.spyOn(
-      durableFiles,
-      mode === 'sync' ? 'writeFileDurableSync' : 'writeFileDurable'
-    ).mockImplementationOnce(() => {
-      throw new Error('injected publication failure')
-    })
+    if (mode === 'sync') {
+      const write = durableFiles.writeFileDurableSync
+      vi.spyOn(durableFiles, 'writeFileDurableSync').mockImplementation((...args) => {
+        if (args[1] === state.paths.dataFile) {
+          throw new Error('injected publication failure')
+        }
+        write(...args)
+      })
+    } else {
+      vi.spyOn(durableFiles, 'writeFileDurable').mockRejectedValueOnce(
+        new Error('injected publication failure')
+      )
+    }
     await expect(state.publish(mode)).rejects.toThrow('injected')
+    expect(state.acceptance()?.pending).toEqual({
+      jsonHash: hashProfileStateJson('{"settings":{"theme":"dark"}}'),
+      acceptedRevision: 2
+    })
     const unrelatedJson = '{"settings":{"theme":"system"},"unrelatedEdit":true}'
     writeFileSync(state.paths.dataFile, unrelatedJson)
 
