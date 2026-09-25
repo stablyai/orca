@@ -39,10 +39,13 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
       let spawnedOwner: StructuredTuiOwner | null = null
       let ptyId: string | undefined
       try {
+        // Why before the guard: a launch this guard rejects still has a PTY to close, and
+        // cleanup that cannot name it reports an unprovable stop - which latches an ownerless
+        // reservation in manual-recovery that no probe can leave.
+        ptyId = terminal.ptyId
         if (!terminal.processId || !terminal.paneKey || !terminal.tabId || !terminal.ptyId) {
           throw new Error('The resumed terminal did not publish a process identity.')
         }
-        ptyId = terminal.ptyId
         spawnedOwner = this.refreshStructuredTuiOwnerBinding({
           terminal: {
             handle: terminal.handle,
