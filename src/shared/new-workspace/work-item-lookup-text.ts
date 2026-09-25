@@ -7,8 +7,14 @@ const GITHUB_ITEM_URL_IN_TEXT_RE =
   /https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/(?:issues|pull)\/\d+[^\s]*/i
 const TRAILING_URL_PUNCTUATION_RE = /[),.;:!?]+$/
 
+/** Name fields treat a bare number as a deliberate name; only "#123" marks a lookup. */
+function isHashPrefixedGitHubIssueOrPRNumber(value: string): boolean {
+  return value.startsWith('#') && parseGitHubIssueOrPRNumber(value) !== null
+}
+
+/** Matches "#123", a whole issue/PR URL, or one embedded in longer text. */
 function hasGitHubLookup(value: string): boolean {
-  if (parseGitHubIssueOrPRNumber(value) !== null || parseGitHubIssueOrPRLink(value) !== null) {
+  if (isHashPrefixedGitHubIssueOrPRNumber(value) || parseGitHubIssueOrPRLink(value) !== null) {
     return true
   }
   const embedded = GITHUB_ITEM_URL_IN_TEXT_RE.exec(value)?.[0]
