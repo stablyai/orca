@@ -8,6 +8,7 @@ import {
   type LayoutChangeEvent
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../src/layout/screen-edge-padding'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
@@ -49,6 +50,7 @@ export default function PairScanScreen() {
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const [permission, requestPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
@@ -196,7 +198,7 @@ export default function PairScanScreen() {
   // home-indicator areas that would otherwise overlap the 'Or paste
   // pairing code' button at the bottom of the scan screen.
   const containerPadding = {
-    paddingTop: insets.top + spacing.sm,
+    ...screenPadding,
     paddingBottom: insets.bottom + spacing.sm
   }
   // Why: iPad camera previews are often rectangular, but QR guides should

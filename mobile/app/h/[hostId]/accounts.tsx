@@ -34,10 +34,12 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+import { useHorizontalEdgePadding } from '../../../src/layout/screen-edge-padding'
 
 export default function AccountsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const horizontalPadding = useHorizontalEdgePadding()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
@@ -327,7 +329,7 @@ export default function AccountsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, horizontalPadding]} edges={['top']}>
       <View style={styles.topRow}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textPrimary} />

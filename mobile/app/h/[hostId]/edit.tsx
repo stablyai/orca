@@ -11,6 +11,7 @@ import {
   ScrollView
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../../../src/layout/screen-edge-padding'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
@@ -23,6 +24,7 @@ import type { HostProfile } from '../../../src/transport/types'
 export default function EditHostScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const primeHosts = usePrimeHosts()
   const forceReconnectHost = useForceReconnect()
@@ -138,7 +140,7 @@ export default function EditHostScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           style={styles.backButton}

@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import {
   ChevronLeft,
   ChevronDown,
@@ -51,14 +51,14 @@ export function TroubleshootView({
   /** Slot the route fills in a development build and in an OTA build; null in a native build. */
   developerRow?: ReactNode
 }) {
-  const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const toggleSection = useCallback(
     (id: string) => setExpandedId((prev) => (prev === id ? null : id)),
     []
   )
   return (
-    <View ref={rootRef} style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View ref={rootRef} style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"

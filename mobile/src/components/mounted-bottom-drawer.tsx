@@ -25,6 +25,7 @@ import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
+import { getHorizontalEdgePadding } from '../layout/screen-edge-padding-metrics'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
@@ -379,7 +380,14 @@ export function MountedBottomDrawer({
           {interactive ? <Pressable style={styles.backdropPressable} onPress={dismiss} /> : null}
         </Animated.View>
 
-        <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
+        <View
+          style={[
+            styles.anchor,
+            isWideLayout && styles.anchorWide,
+            getHorizontalEdgePadding(insets)
+          ]}
+          pointerEvents="box-none"
+        >
           <Animated.View
             // Why: remount per window hand-back — see the windowEpoch effect.
             key={windowEpoch}

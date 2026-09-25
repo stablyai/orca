@@ -32,10 +32,12 @@ import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 
 export function MobileHomeScreen() {
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
+  const horizontalPadding = useHorizontalEdgePadding()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
@@ -112,7 +114,7 @@ export function MobileHomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, horizontalPadding]} edges={['top']}>
       <MobileHomeTopBar onOpenSettings={() => data.router.push('/settings')} />
       {data.hostCatalog.length === 0 ? (
         <MobileHomeEmptyState

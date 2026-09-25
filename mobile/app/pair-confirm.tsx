@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../src/layout/screen-edge-padding'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
@@ -29,7 +29,7 @@ const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 export default function PairConfirmScreen() {
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
-  const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const params = useLocalSearchParams<{ code?: string }>()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
@@ -139,10 +139,8 @@ export default function PairConfirmScreen() {
     }
   }
 
-  const containerPadding = { paddingTop: insets.top + spacing.sm }
-
   return (
-    <View ref={setPairConfirmRootRef} style={[styles.container, containerPadding]}>
+    <View ref={setPairConfirmRootRef} style={[styles.container, screenPadding]}>
       <Pressable style={styles.backButton} onPress={cancel}>
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>

@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import { ChevronLeft, Copy, Check, Send } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { ConnectionLog } from '../components/ConnectionLog'
 import { connectionDiagnosticsScreenStyles as styles } from './connection-diagnostics-screen-styles'
 import type { ConnectionLogEntry, ConnectionState } from '../transport/types'
@@ -36,9 +36,9 @@ export function ConnectionDiagnosticsView({
   entries: readonly ConnectionLogEntry[]
   onBack: () => void
 }) {
-  const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"

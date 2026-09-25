@@ -169,8 +169,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // 530 -> 529: `'hardwareBackPress'` left with the Markdown actions' registration for `useBackClaim`.
 const HEAD_RUNTIME_STRING_SHA256 =
   '9b76ff573df10cf370d53f82e4c5864379298fdc3b2c1f607c86bf80c20f2a78'
+// The session root now carries landscape safe-area padding, so its style prop moved from a bare
+// style reference to an array. Host element count and the leaf tree are unchanged.
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
-const HEAD_HOST_JSX_SHA256 = 'ac7547dd0e25be2339111ac01ce5e1ec20f00b05bf59dde85664039308cf8593'
+const HEAD_HOST_JSX_SHA256 = '930679b52532310c8a52636da09b25b880de3aefcf9fa45547af3046501278c6'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'

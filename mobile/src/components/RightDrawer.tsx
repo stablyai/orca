@@ -18,6 +18,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { getHorizontalEdgePadding } from '../layout/screen-edge-padding-metrics'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -179,7 +180,7 @@ function MountedRightDrawer({
                   width: panelWidth,
                   paddingTop: insets.top + spacing.md,
                   paddingBottom: insets.bottom + spacing.lg,
-                  paddingRight: insets.right
+                  ...getHorizontalEdgePadding(insets)
                 },
                 drawerStyle
               ]}

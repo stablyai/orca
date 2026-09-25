@@ -28,6 +28,7 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
 
 type Props = {
@@ -36,6 +37,7 @@ type Props = {
 
 export function MobileFilePreviewScreen({ route }: Props) {
   const router = useRouteHandoff()
+  const horizontalPadding = useHorizontalEdgePadding()
   const previewParams = route.ok ? route.params : null
   const { client, state: connState } = useHostClient(previewParams?.hostId)
   const forceReconnect = useForceReconnect()
@@ -227,7 +229,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
   })
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, horizontalPadding]}>
       <SafeAreaView style={styles.header} edges={['top']}>
         <View style={styles.topBar}>
           <Pressable

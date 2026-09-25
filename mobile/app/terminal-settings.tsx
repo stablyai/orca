@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Pressable, Switch } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../src/layout/screen-edge-padding'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useAnimatedRef,
@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
-import { colors, spacing } from '../src/theme/mobile-theme'
+import { colors } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
@@ -123,7 +123,7 @@ function HostFitRow({
 
 export default function TerminalSettingsScreen() {
   const router = useRouter()
-  const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const [hosts, setHosts] = useState<HostProfile[]>([])
   useEffect(() => {
     void loadHosts().then(setHosts)
@@ -256,7 +256,7 @@ export default function TerminalSettingsScreen() {
   )
 
   return (
-    <GestureHandlerRootView style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <GestureHandlerRootView style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />

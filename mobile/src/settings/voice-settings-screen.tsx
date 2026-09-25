@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useScreenEdgePadding } from '../layout/screen-edge-padding'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
 import { voiceSettingsStyles as styles } from './voice-settings-styles'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { VoiceModelList } from '../components/VoiceModelList'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
@@ -32,7 +32,7 @@ export default function VoiceSettingsScreen({
   focused: boolean
   onBack: () => void
 }): React.JSX.Element {
-  const insets = useSafeAreaInsets()
+  const screenPadding = useScreenEdgePadding()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -168,7 +168,7 @@ export default function VoiceSettingsScreen({
   const selectedModelLabel = selectedModel?.label ?? 'None selected'
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View style={[styles.container, screenPadding]}>
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"

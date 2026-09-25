@@ -20,6 +20,7 @@ import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-c
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
@@ -47,6 +48,7 @@ export function MobileSourceControlPanel({
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
+  const horizontalPadding = useHorizontalEdgePadding()
   // Track first visit so Changes/History stay mounted (keep scroll) after first open; PR still unmounts when inactive.
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
     () => new Set<SourceControlHubTab>([initialTab])
@@ -279,7 +281,7 @@ export function MobileSourceControlPanel({
   const conflictAborting = isMobileConflictAborting(busyAction, conflictOperation)
 
   return (
-    <View ref={setRootRef} style={styles.container}>
+    <View ref={setRootRef} style={[styles.container, embedded ? null : horizontalPadding]}>
       {embedded ? (
         <View style={styles.header}>{header}</View>
       ) : (

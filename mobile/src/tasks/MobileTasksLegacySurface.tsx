@@ -75,8 +75,10 @@ import {
   renderMobileTasksProjectDetailDrawer
 } from './mobile-tasks-project-detail-drawer'
 import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
+  const horizontalPadding = useHorizontalEdgePadding()
   const {
     error,
     githubMode,
@@ -105,7 +107,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     toggleGitLabStatus
   } = model
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, horizontalPadding]} edges={['top']}>
       {renderMobileTasksChrome(model)}
 
       {error ? (

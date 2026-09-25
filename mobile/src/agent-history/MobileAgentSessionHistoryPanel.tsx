@@ -47,6 +47,8 @@ import {
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import { useNow } from '../hooks/use-now'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
+import { createMobileAiVaultResumeMutationId } from './agent-history-resume-mutation-id'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -68,6 +70,7 @@ export function MobileAgentSessionHistoryPanel({
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
   // screen, and the session it resumes into is a native route the shell has to push.
   const router = useRouteHandoff()
+  const horizontalPadding = useHorizontalEdgePadding()
   const { client, state: connState } = useHostClient(hostId)
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
@@ -257,7 +260,7 @@ export function MobileAgentSessionHistoryPanel({
   )
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, horizontalPadding]}>
       <SafeAreaView style={styles.header} edges={['top']}>
         <View style={styles.topBar}>
           <Pressable
@@ -426,10 +429,4 @@ async function loadMobileResumeMetadata(client: RpcClient): Promise<{
     settings: settings ?? null,
     worktrees: readAcceptedResumeList(worktreeResult, 'worktrees') ?? null
   }
-}
-
-function createMobileAiVaultResumeMutationId(sessionId: string): string {
-  const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'
-  const randomPart = Math.random().toString(36).slice(2, 10)
-  return `ai-vault-resume:${sessionPart}:${Date.now().toString(36)}:${randomPart}`
 }
