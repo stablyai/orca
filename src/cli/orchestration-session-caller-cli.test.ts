@@ -279,7 +279,7 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
   })
 
   it.runIf(verb.callerFlag !== undefined)(
-    'refuses a caller flag naming another actor, before any request',
+    'refuses a caller flag naming another caller, before any request',
     async () => {
       const flags = flagMap({ ...verb.flags, [verb.callerFlag ?? 'from']: 'term_sibling' })
 
@@ -320,7 +320,7 @@ describe.each([
 ])('orchestration $command --run run as an agent session', ({ command, method, callerParam }) => {
   beforeEach(asSessionInTerminalView)
 
-  it('needs no caller, but refuses a --from naming another actor, before any request', async () => {
+  it('needs no caller, but refuses a --from naming another caller, before any request', async () => {
     await invoke(command, flagMap({ run: 'run_1' }))
     expect(callsTo(method)[0]).toMatchObject({ run: 'run_1' })
     expect(callsTo(method)[0]?.[callerParam]).toBeUndefined()
@@ -537,7 +537,7 @@ describe('which flag names the caller, declared on every spec', () => {
   })
 
   it.each(callerFlagVerbs)(
-    '$command refuses --$flag naming another actor, before any request',
+    '$command refuses --$flag naming another caller, before any request',
     async ({ command, flag }) => {
       asSessionInTerminalView()
       await expect(

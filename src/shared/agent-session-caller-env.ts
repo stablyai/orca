@@ -1,7 +1,7 @@
 /**
  * The Orca-minted agent session id, injected into a structured session's own child processes, in
  * native chat and in terminal view alike. When it is present it IS the orchestration caller: the
- * CLI sends it in the orchestration envelope and the host resolves it to the session's actor, so no
+ * CLI sends it in the orchestration envelope and the host resolves the session it names, so no
  * terminal is resolved or guessed on its behalf.
  *
  * Identity by session id assumes one machine and one user. A host boundary (SSH, a paired peer,

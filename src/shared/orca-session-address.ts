@@ -1,5 +1,6 @@
 import { isAgentSessionId } from './agent-session-record'
 import { STRUCTURED_WORKER_HANDLE_PREFIX } from './structured-worker-handle'
+import { ORCA_SESSION_ADDRESS_PREFIX } from './orca-session-address-prefix'
 
 /**
  * The Orca session id is the id Orca minted for a structured session (its session record id, the
@@ -12,7 +13,7 @@ import { STRUCTURED_WORKER_HANDLE_PREFIX } from './structured-worker-handle'
  * agents have none today, and never a pane-keyed one: a pane outlives the agent in it, so such an id
  * would be inherited by the pane's next occupant.
  */
-export const ORCA_SESSION_ADDRESS_PREFIX = 'session:'
+export { ORCA_SESSION_ADDRESS_PREFIX }
 
 declare const orcaSessionIdBrand: unique symbol
 declare const orcaSessionAddressBrand: unique symbol
