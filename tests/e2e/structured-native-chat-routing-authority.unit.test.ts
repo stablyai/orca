@@ -23,7 +23,6 @@ vi.mock('../../src/shared/structured-native-chat-launch-route', async (importOri
 
 const settings = {
   experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 }
 const predicate = vi.mocked(resolveStructuredNativeChatSupport)

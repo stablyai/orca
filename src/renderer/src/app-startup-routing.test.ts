@@ -367,12 +367,15 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('skips startup structured tab projection while the host setting is off', () => {
-    const source = readSource(STARTUP_HYDRATION_PATH)
+    const source = readSource('src/renderer/src/runtime/local-structured-session-tabs-sync.ts')
     const projectIndex = source.indexOf("timeRendererStartupStep('project-structured-session-tabs'")
 
+    expect(readSource(STARTUP_HYDRATION_PATH)).toContain(
+      'await restoreLocalStructuredSessionTabsAtStartup()'
+    )
     expect(projectIndex).toBeGreaterThanOrEqual(0)
     expect(source.slice(projectIndex - 180, projectIndex)).toContain(
-      'settings?.experimentalStructuredNativeChat === true'
+      'isNativeChatEnabled(useAppStore.getState().settings)'
     )
   })
 
@@ -391,7 +394,7 @@ describe('renderer startup runtime routing', () => {
     expect(probeIndex).toBeLessThan(chainStart)
     expect(probeIndex).toBeLessThan(source.indexOf('await ', effectStart))
     expect(source.slice(effectStart, probeIndex)).not.toContain('if (')
-    expect(source.slice(effectStart, probeIndex)).not.toContain('experimentalStructuredNativeChat')
+    expect(source.slice(effectStart, probeIndex)).not.toContain('isNativeChatEnabled')
   })
 
   it('orders packaged restoration before adoption, projection, and default creation', () => {
@@ -410,9 +413,7 @@ describe('renderer startup runtime routing', () => {
       "timeRendererStartupStep('prepare-terminal-startup-restoration'"
     )
     const reconnectIndex = appSource.indexOf("timeRendererStartupStep('reconnect-terminals'")
-    const projectIndex = appSource.indexOf(
-      "timeRendererStartupStep('project-structured-session-tabs'"
-    )
+    const projectIndex = appSource.indexOf('await restoreLocalStructuredSessionTabsAtStartup()')
     const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
     const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
     const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)

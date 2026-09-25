@@ -53,7 +53,6 @@ const structuredFeasibleFor = (appStore: AgentLaunchRouteStore, args: AgentLaunc
 const STRUCTURED_SETTINGS = {
   experimentalNativeChat: true,
   openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}

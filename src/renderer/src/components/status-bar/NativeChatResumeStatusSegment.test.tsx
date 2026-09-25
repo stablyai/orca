@@ -59,7 +59,7 @@ describe('NativeChatResumeStatusSegment', () => {
     consumeNativeChatResumeOnRestartDialogRequest()
     useAppStore.setState({
       ...useAppStore.getInitialState(),
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
     })
   })
 
@@ -171,7 +171,7 @@ describe('NativeChatResumeStatusSegment', () => {
   it('hides when the feature is disabled or the host offers nothing', async () => {
     rpc.mockResolvedValue({ sessions: candidates })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: false }
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
     })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()
@@ -181,7 +181,7 @@ describe('NativeChatResumeStatusSegment', () => {
     cleanup()
     rpc.mockResolvedValue({ sessions: [] })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
     })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()

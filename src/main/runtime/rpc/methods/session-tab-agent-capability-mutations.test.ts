@@ -127,9 +127,10 @@ describe('session tab structured capability mutations', () => {
     async (method) => {
       const snapshot = agentSnapshot()
       const closeMobileSessionTab = vi.fn().mockResolvedValue({ closed: true })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close path reads only these members; any other would throw on call.
       const runtime = {
         getRuntimeId: () => 'test-runtime',
-        getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
+        getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
         listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
         closeMobileSessionTab
       } as unknown as OrcaRuntimeService
@@ -176,13 +177,14 @@ function createFixture(
     moveMobileSessionTab: vi.fn().mockResolvedValue({ moved: true }),
     setMobileSessionTabProps: vi.fn().mockResolvedValue({ updated: true })
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tab mutation methods read only these members; any other would throw on call.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
     getClientSettings: () => ({
       // Why: defaults on, so a fixture that says nothing about the setting exercises capability
       // gating alone; callers opt into the off case explicitly.
-      experimentalStructuredNativeChat: options.structuredNativeChatEnabled !== false
+      experimentalNativeChat: options.structuredNativeChatEnabled !== false
     }),
     ...calls
   } as unknown as OrcaRuntimeService

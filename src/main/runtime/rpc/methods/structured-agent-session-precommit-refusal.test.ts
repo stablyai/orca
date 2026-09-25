@@ -73,7 +73,7 @@ async function create(
     getRuntimeId: () => 'runtime-1',
     // The structured surface is settings-gated for every caller; these fixtures probe the
     // pre-commit boundary, which only runs once the gate admits the call.
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),

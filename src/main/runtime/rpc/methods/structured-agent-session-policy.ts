@@ -2,6 +2,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
+import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 
@@ -14,7 +15,7 @@ export function isStructuredNativeChatEnabled(
   runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
 ): boolean {
   try {
-    return runtime.getClientSettings().experimentalStructuredNativeChat === true
+    return isNativeChatEnabled(runtime.getClientSettings())
   } catch {
     return false
   }

@@ -223,7 +223,6 @@ describe('a replay answers from the record', () => {
     const movedSettings = runtimeStub({
       settings: {
         experimentalNativeChat: false,
-        experimentalStructuredNativeChat: false,
         openAgentTabsInChatByDefault: false
       }
     })

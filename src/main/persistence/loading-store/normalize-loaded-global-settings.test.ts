@@ -36,6 +36,17 @@ describe('retired Agents sidebar setting', () => {
   })
 })
 
+describe('retired structured chat opt-in', () => {
+  it('drops the old key and leaves Chat UI as saved', () => {
+    const normalized = normalizeLegacyProfile({
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: false
+    })
+    expect('experimentalStructuredNativeChat' in normalized).toBe(false)
+    expect(normalized.experimentalNativeChat).toBe(true)
+  })
+})
+
 describe('structured chat shell environment settings', () => {
   it('keeps a valid saved list and an explicit opt-out', () => {
     const normalized = normalizeLegacyProfile({

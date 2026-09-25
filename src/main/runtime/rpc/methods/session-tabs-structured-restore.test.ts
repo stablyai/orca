@@ -10,10 +10,11 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
-function makeRuntime(experimentalStructuredNativeChat: boolean): OrcaRuntimeService {
+function makeRuntime(experimentalNativeChat: boolean): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restoration reads only these members; any other would throw on call.
   return {
     getRuntimeId: () => 'test-runtime',
-    getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat })),
+    getClientSettings: vi.fn(() => ({ experimentalNativeChat })),
     restoreStructuredAgentSessionTabs: vi.fn(),
     listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot())
   } as unknown as OrcaRuntimeService

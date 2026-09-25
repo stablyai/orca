@@ -4,10 +4,11 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
 
 function runtimeWithSetting(
-  experimentalStructuredNativeChat: boolean
+  experimentalNativeChat: boolean
 ): Pick<OrcaRuntimeService, 'getClientSettings'> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only the Chat UI setting.
   return {
-    getClientSettings: () => ({ experimentalStructuredNativeChat })
+    getClientSettings: () => ({ experimentalNativeChat })
   } as unknown as Pick<OrcaRuntimeService, 'getClientSettings'>
 }
 
@@ -56,9 +57,9 @@ describe('supportsStructuredAgentSessions', () => {
   })
 
   it('leaves desktop launch admission unchanged, because launches require the setting anyway', () => {
-    // `agent-launch-routing.ts` refuses to route a structured launch unless
-    // `experimentalStructuredNativeChat` is on, so the only state a desktop launch can
-    // reach the host in is setting-on — which admits exactly as it did before.
+    // `agent-launch-routing.ts` refuses to route a structured launch unless Chat UI is on
+    // (`isNativeChatEnabled`), so the only state a desktop launch can reach the host in is
+    // setting-on — which admits exactly as it did before.
     expect(
       supportsStructuredAgentSessions({
         clientKind: 'runtime',

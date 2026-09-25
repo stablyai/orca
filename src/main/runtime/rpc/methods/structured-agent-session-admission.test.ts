@@ -28,7 +28,7 @@ afterEach(() => {
 describe('admission revoked while a session is still open', () => {
   // The host setting is admission control. Turning it off must not strand a chat that was opened
   // while it was on: the pane is still mounted, so its close has to land.
-  const SETTING_OFF = { getClientSettings: () => ({ experimentalStructuredNativeChat: false }) }
+  const SETTING_OFF = { getClientSettings: () => ({ experimentalNativeChat: false }) }
 
   it.each(CLEANUP_METHODS)(
     'still serves $method after the host setting is turned off',

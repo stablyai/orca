@@ -15,7 +15,7 @@ describe('structured native chat settings', () => {
     settingsListeners[0]?.({ compactWorktreeCards: true })
     expect(notify).not.toHaveBeenCalled()
 
-    settingsListeners[0]?.({ experimentalStructuredNativeChat: true })
+    settingsListeners[0]?.({ experimentalNativeChat: true })
     expect(notify).toHaveBeenCalledTimes(1)
   })
 })

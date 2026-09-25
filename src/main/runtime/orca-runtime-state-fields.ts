@@ -122,7 +122,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.machineName.start()
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     store?.onSettingsChanged?.((updates) => {
-      if ('experimentalStructuredNativeChat' in updates) {
+      if ('experimentalNativeChat' in updates) {
         this.notifyMobileSessionTabsChanged()
       }
     })

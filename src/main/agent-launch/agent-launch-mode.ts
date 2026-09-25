@@ -26,7 +26,7 @@ import type {
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import {
-  prefersStructuredNativeChatByDefault,
+  agentTabsDefaultToNativeChat,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -130,7 +130,7 @@ export function decideAgentLaunchMode(args: {
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (!agentTabsDefaultToNativeChat(settings)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',
