@@ -33,7 +33,7 @@ import {
   confirmTerminalHostShellForeground,
   getSettledTerminalHostSnapshot,
   getTerminalHostAppliedSize,
-  getTerminalHostPartialEscapeTail,
+  getTerminalHostStreamScanState,
   getTerminalHostSnapshot,
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
@@ -289,9 +289,9 @@ export class TerminalHost {
     return getSettledTerminalHostSnapshot(this.sessions.get(sessionId), opts)
   }
 
-  // Why: scan-authority handoff seed (null-not-throw like getSnapshot) — emulator's dangling incomplete escape at the stream position.
-  getPartialEscapeTailAnsi(sessionId: string): string {
-    return getTerminalHostPartialEscapeTail(this.sessions.get(sessionId))
+  // Why: live-only scan-authority handoff; restored emulator history is not current-source evidence.
+  getStreamScanState(sessionId: string): { partialEscapeTailAnsi: string; incarnationId?: string } {
+    return getTerminalHostStreamScanState(this.sessions.get(sessionId))
   }
 
   // Why: renderer diffs this against xterm to detect a dropped/coerced daemon-side resize; null-not-throw like getSnapshot.

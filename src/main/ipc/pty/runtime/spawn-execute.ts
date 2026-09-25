@@ -49,6 +49,9 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     if (expectedPtyId) {
       ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
       ctx.pendingRegistrationPtyId = expectedPtyId
+      // Why before the provider spawn: candidate observations can precede the control reply.
+      ctx.observationAdmissionToken =
+        ctx.deps.runtime?.beginPtyObservationAdmission?.(expectedPtyId) ?? null
     }
     if (ctx.isDaemonHostSpawn && expectedPtyId) {
       ctx.preparedProvisionalExecutionContext =
@@ -79,6 +82,11 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           ptyIncarnationById.get(recoveredOwner.ptyId)
         )
         ctx.pendingRegistrationPtyId = recoveredOwner.ptyId
+        ctx.observationAdmissionToken =
+          ctx.deps.runtime?.transferPtyObservationAdmission?.(
+            ctx.observationAdmissionToken,
+            recoveredOwner.ptyId
+          ) ?? null
       }
       let providerResult: PtySpawnResult | null = null
       const ensured = await agentSessionOwners.ensure({
@@ -171,6 +179,13 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       }
       ctx.deps.runtime?.beginPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
       ctx.pendingRegistrationPtyId = ctx.result.id
+      // Why: claim adoption rewrites the requested id to the canonical owner only
+      // after the reply; observation ownership follows the same transfer.
+      ctx.observationAdmissionToken =
+        ctx.deps.runtime?.transferPtyObservationAdmission?.(
+          ctx.observationAdmissionToken,
+          ctx.result.id
+        ) ?? null
     }
     // Why: admission precedes sequence/context state and every durable publication below.
     ctx.deps.runtime?.assertPtyRegistrationAllowed?.(ctx.result.id, ctx.result.incarnationId)
@@ -222,6 +237,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       )
       ctx.pendingRegistrationPtyId = null
     }
+    ctx.deps.runtime?.cancelPtyObservationAdmission?.(ctx.observationAdmissionToken)
+    ctx.observationAdmissionToken = null
     const spawnError = normalizeNodePtySpawnError(err)
     const isIdentityMismatch =
       isSshPtyIdentityMismatchError(spawnError) || isSshPtyIdentityMismatchError(rawMessage)

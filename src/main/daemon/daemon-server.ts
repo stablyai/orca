@@ -60,14 +60,14 @@ export class DaemonServer {
       }
     })
     this.attachments = new DaemonSessionAttachments(this.host)
-    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
+    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact, incarnationId) => {
       const clientId = this.attachments.clientIdForSession(sessionId)
       if (clientId) {
         this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
           type: 'event',
           event: 'transientFact',
           sessionId,
-          payload: fact
+          payload: { ...fact, ...(incarnationId === undefined ? {} : { incarnationId }) }
         })
       }
     })

@@ -46,13 +46,18 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           payload.id,
           payload.background,
           payload.scanSeedAnsi,
-          payload.mode2031PendingSubscribe
+          payload.mode2031PendingSubscribe,
+          payload.incarnationId
         )
         return
       }
       if (payload.kind === 'dataGap') {
         providerSnapshotRequiredPtys.add(payload.id)
-        session.runtime?.notePtyDataGap(payload.id, payload.sequenceChars ?? payload.droppedChars)
+        session.runtime?.notePtyDataGap(
+          payload.id,
+          payload.sequenceChars ?? payload.droppedChars,
+          payload.incarnationId
+        )
         session.sendModelRestoreNeededMarker(
           payload.id,
           'hidden-drop',
@@ -60,7 +65,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
         )
         return
       }
-      session.runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact)
+      session.runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact, payload.incarnationId)
     }) ?? null
   )
 
@@ -72,12 +77,17 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       const rawLength = payload.sequenceChars ?? payload.data.length
       const outputSeq = isLocalProvider
         ? session.runtime?.getPtyOutputSequence(payload.id)
-        : session.runtime?.onPtyData(
+        : // Observation source rides the existing positional contract as trailing
+          // optional arguments, so the runtime selects its parser capsule before parsing.
+          session.runtime?.onPtyData(
             payload.id,
             payload.data,
             Date.now(),
             rawLength,
-            payload.transformed
+            payload.transformed,
+            undefined,
+            undefined,
+            payload.incarnationId
           )
       session.acceptPtyDataForRenderer(payload, outputSeq)
     })

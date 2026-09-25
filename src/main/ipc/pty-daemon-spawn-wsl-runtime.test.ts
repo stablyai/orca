@@ -145,7 +145,10 @@ describe('registerPtyHandlers', () => {
           'wt-runtime',
           null,
           { tabId: 'tab-1', leafId },
-          false
+          false,
+          // No prepared observation admission: this runtime stub exposes no
+          // admission surface, so registration promotes no candidate.
+          null
         )
       })
       it('restores daemon launch identity for a runtime-created reattach', async () => {
@@ -197,7 +200,8 @@ describe('registerPtyHandlers', () => {
             incarnationId,
             providerReattachLaunchIdentity: { incarnationId, launchAgent: 'codex' }
           },
-          false
+          false,
+          null
         )
       })
       it('uses the owning project WSL runtime for runtime-created daemon PTYs', async () => {
@@ -257,7 +261,8 @@ describe('registerPtyHandlers', () => {
             'repo-1::C:\\repo',
             null,
             undefined,
-            true
+            true,
+            null
           )
         })
       })

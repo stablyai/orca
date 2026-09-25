@@ -176,7 +176,13 @@ describe('TerminalHost agent-session claims', () => {
     await expect(competing).rejects.toThrow('agent_session_claim_unavailable')
 
     subprocess?.emitData('winner-only')
-    expect(winningData).toHaveBeenCalledExactlyOnceWith('winner-only')
+    expect(winningData).toHaveBeenCalledExactlyOnceWith(
+      'winner-only',
+      undefined,
+      undefined,
+      undefined,
+      (await winning).incarnationId
+    )
     expect(competingData).not.toHaveBeenCalled()
   })
 
@@ -218,7 +224,13 @@ describe('TerminalHost agent-session claims', () => {
     await expect(adopter).rejects.toThrow('Attach canceled for session reservation-owner')
 
     subprocess?.emitData('winner-only')
-    expect(winningData).toHaveBeenCalledExactlyOnceWith('winner-only')
+    expect(winningData).toHaveBeenCalledExactlyOnceWith(
+      'winner-only',
+      undefined,
+      undefined,
+      undefined,
+      (await winning).incarnationId
+    )
     expect(canceledData).not.toHaveBeenCalled()
   })
 })

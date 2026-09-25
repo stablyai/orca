@@ -227,7 +227,9 @@ describe('registerPtyHandlers', () => {
       'wt-1',
       null,
       { tabId: 'tab-1', leafId, incarnationId: expect.any(String) },
-      false
+      false,
+      // No prepared observation admission: this runtime stub exposes no admission surface.
+      null
     )
   })
   it.each([
@@ -366,7 +368,8 @@ describe('registerPtyHandlers', () => {
       'wt-1',
       null,
       undefined,
-      false
+      false,
+      null
     )
   })
   it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
@@ -488,7 +491,8 @@ describe('registerPtyHandlers', () => {
         incarnationId,
         providerReattachLaunchIdentity: { incarnationId, launchAgent: 'codex' }
       }),
-      undefined
+      undefined,
+      null
     )
   })
   it('reuses the runtime background handle in local PTY spawn env', async () => {

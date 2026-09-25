@@ -31,6 +31,7 @@ export type PtyIpcSpawnState = {
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
+  observationAdmissionToken: string | null
   reconciledSnapshotSeq: number | null
   snapshotKittyFlagsCoverReconciledSeq: boolean
   preparedProvisionalExecutionContext: boolean
@@ -109,6 +110,7 @@ export function createPtyIpcSpawnState(
     stablePaneBindingPersisted: false,
     rejectedRegistrationCandidate: null,
     pendingRegistrationPtyId: null,
+    observationAdmissionToken: null,
     reconciledSnapshotSeq: null,
     snapshotKittyFlagsCoverReconciledSeq: true,
     preparedProvisionalExecutionContext: false,

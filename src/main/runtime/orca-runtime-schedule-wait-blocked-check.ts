@@ -20,6 +20,7 @@ import { ownRetainedString } from '../../shared/own-retained-string'
 import type { ProcessedAgentStatusChunk } from '../../shared/agent-status-osc'
 import { createAgentStatusOscProcessor } from '../../shared/agent-status-osc'
 import type { RuntimePtyTitleTrackerEntry } from './runtime-terminal-state-records'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPtyData {
   protected scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void {
@@ -172,9 +173,19 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
     ptyId: string,
     delegated: boolean,
     scanSeedAnsi?: string,
-    mode2031PendingSubscribe?: true
+    mode2031PendingSubscribe?: true,
+    incarnationId?: PtyIncarnationId
   ): void {
-    const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
+    const observationRoute = this.resolvePtyObservationRoute(ptyId, incarnationId)
+    if (observationRoute.kind === 'refused') {
+      // Why: the marker hands scan authority for a refused source; the accepted source's own
+      // scanners keep running either way.
+      return
+    }
+    const entry =
+      observationRoute.kind === 'capsule'
+        ? observationRoute.capsule.entry
+        : this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.tracker.setTransientFactScanningSuppressed(delegated)
     if (!delegated && scanSeedAnsi) {
       // Prime the freshly reset scanner carry with the emulator's dangling
