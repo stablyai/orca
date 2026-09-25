@@ -41,6 +41,7 @@ export class StoreRuntimeState {
   inFlightAsyncTmpFile: string | null = null
   backupRotationInFlight = false
   writesFrozen = false
+  codexAccountSettingsPreviewActive = false
   quitFlushStarted = false
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null

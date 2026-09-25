@@ -128,7 +128,8 @@ export class CodexAccountService {
       lifecycle,
       resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
       removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
-      discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
+      persistAccountRemoval: (accountId, updates) =>
+        this.resetCredits.persistAccountRemoval(accountId, updates)
     })
     this.registration = new CodexAccountRegistration({
       store,

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { existsSync } from 'node:fs'
 import type { RateLimitState } from '../../shared/rate-limit-types'
 import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import {
@@ -502,7 +503,21 @@ describe('CodexAccountService config sync', () => {
   })
 
   it('fails only reset operations closed when the durable ledger is corrupt', async () => {
-    const settings = createSettings()
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'user@example.com',
+          managedHomePath,
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
     const store = createStore(settings)
     store.getCodexResetCreditAttemptLedger.mockImplementation(() => {
       throw new Error('Codex reset-credit attempt ledger is corrupt')
@@ -518,7 +533,9 @@ describe('CodexAccountService config sync', () => {
       createRuntimeHome() as never
     )
 
-    expect(service.listAccounts()).toMatchObject({ accounts: [] })
+    expect(service.listAccounts()).toMatchObject({
+      accounts: [expect.objectContaining({ id: 'account-1' })]
+    })
     await expect(
       service.consumeRateLimitResetCredit('dddddddd-dddd-4ddd-8ddd-dddddddddddd', {
         target: { runtime: 'host', wslDistro: null },
@@ -531,6 +548,14 @@ describe('CodexAccountService config sync', () => {
       'Codex reset-credit attempt ledger is corrupt'
     )
     expect(consume).not.toHaveBeenCalled()
+
+    await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
+    expect(existsSync(managedHomePath)).toBe(false)
+    expect(store.updateCodexAccountSettingsAndFlush).toHaveBeenCalledOnce()
+    expect(store.updateCodexAccountSettingsAndResetLedgerAndFlush).not.toHaveBeenCalled()
+    expect(() => store.getCodexResetCreditAttemptLedger()).toThrow(
+      'Codex reset-credit attempt ledger is corrupt'
+    )
   })
 
   it('rejects a stale offer scope before calling the provider and permits a corrected retry key', async () => {

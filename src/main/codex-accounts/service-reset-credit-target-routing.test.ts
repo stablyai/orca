@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { existsSync } from 'node:fs'
 import { buildCodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import {
   createManagedHome,
+  failNextAccountRemovalPersistence,
   createRateLimits,
   createRuntimeHome,
   createSettings,
@@ -414,7 +416,7 @@ describe('CodexAccountService config sync', () => {
     expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
   })
 
-  it('keeps reset attempts fail-closed when removal cannot persist their purge', async () => {
+  it('keeps account removal retryable when reset-attempt purge cannot persist', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
     const account = {
       id: 'account-1',
@@ -459,13 +461,22 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
-    vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
+    failNextAccountRemovalPersistence(store)
 
     await expect(service.removeAccount('account-1')).rejects.toThrow('disk full')
+    expect(store.getSettings().codexManagedAccounts.map(({ id }) => id)).toEqual(['account-1'])
+    expect(existsSync(managedHomePath)).toBe(true)
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
     expect(consume).not.toHaveBeenCalled()
+
+    await expect(service.removeAccount('account-1')).resolves.toMatchObject({ accounts: [] })
+    expect(existsSync(managedHomePath)).toBe(false)
+    expect(store.getCodexResetCreditAttemptLedger().attempts).toEqual([])
+    await expect(service.consumeCurrentRateLimitResetCredit()).resolves.toEqual({
+      outcome: 'reset',
+      state
+    })
+    expect(consume).toHaveBeenCalledTimes(1)
   })
 
   it('does not reset a different system-default target after waiting in the mutation queue', async () => {

@@ -1,4 +1,8 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import {
+  parseCodexResetCreditAttemptLedger,
+  type CodexResetCreditAttemptLedger
+} from '../../../shared/codex-reset-credit-attempt-ledger'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/constants'
@@ -22,6 +26,9 @@ import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-gener
 type ProfilePreferencesRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'codexAccountSettingsPreviewActive'
+  | 'flushOrThrow'
+  | 'writesFrozen'
   | 'githubCacheDirty'
   | 'githubCacheGeneration'
   | 'protectedSecrets'
@@ -31,6 +38,10 @@ type ProfilePreferencesRuntime = Pick<
 >
 
 const profilePreferencesContext = Symbol('ProfilePreferences')
+type CodexAccountSettingsUpdate = Pick<
+  GlobalSettings,
+  'codexManagedAccounts' | 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+>
 type ProfilePreferencesContext = {
   runtime: ProfilePreferencesRuntime
   scheduling: WriteSchedulingOperations
@@ -71,7 +82,51 @@ export class ProfilePreferences {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
+    if (this[profilePreferencesContext].runtime.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot update settings during a Codex account settings preview')
+    }
     return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
+  }
+
+  updateCodexAccountSettingsAndFlush(updates: CodexAccountSettingsUpdate): void {
+    updateCodexAccountStateAndFlush(this, updates)
+  }
+
+  withCodexAccountSettingsPreview<T>(updates: CodexAccountSettingsUpdate, action: () => T): T {
+    const runtime = this[profilePreferencesContext].runtime
+    if (runtime.writesFrozen) {
+      throw new Error('Cannot preview Codex account removal while writes are frozen')
+    }
+    if (runtime.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot nest Codex account settings previews')
+    }
+    const previousSettings = runtime.state.settings
+    runtime.codexAccountSettingsPreviewActive = true
+    runtime.state.settings = { ...previousSettings, ...updates }
+    try {
+      const result = action()
+      if (
+        result !== null &&
+        (typeof result === 'object' || typeof result === 'function') &&
+        'then' in result &&
+        typeof result.then === 'function'
+      ) {
+        // Consume rejected callbacks before reporting the synchronous contract violation.
+        void Promise.resolve(result).catch(() => {})
+        throw new Error('Codex account settings preview callback must be synchronous')
+      }
+      return result
+    } finally {
+      runtime.state.settings = previousSettings
+      runtime.codexAccountSettingsPreviewActive = false
+    }
+  }
+
+  updateCodexAccountSettingsAndResetLedgerAndFlush(
+    updates: CodexAccountSettingsUpdate,
+    ledger: CodexResetCreditAttemptLedger
+  ): void {
+    updateCodexAccountStateAndFlush(this, updates, ledger)
   }
 
   getUI(): PersistedState['ui'] {
@@ -128,6 +183,33 @@ export class ProfilePreferences {
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
     this[profilePreferencesContext].runtime.githubCacheGeneration += 1
+  }
+}
+
+function updateCodexAccountStateAndFlush(
+  owner: ProfilePreferences,
+  updates: CodexAccountSettingsUpdate,
+  ledger?: CodexResetCreditAttemptLedger
+): void {
+  const runtime = owner[profilePreferencesContext].runtime
+  if (runtime.writesFrozen) {
+    throw new Error('Cannot persist Codex account removal while writes are frozen')
+  }
+  const nextLedger = ledger ? parseCodexResetCreditAttemptLedger(ledger) : undefined
+  const previousSettings = runtime.state.settings
+  const previousLedger = runtime.state.codexResetCreditAttemptLedger
+    ? structuredClone(runtime.state.codexResetCreditAttemptLedger)
+    : undefined
+  try {
+    owner.updateSettings(updates)
+    if (nextLedger !== undefined) {
+      runtime.state.codexResetCreditAttemptLedger = nextLedger
+    }
+    runtime.flushOrThrow()
+  } catch (error) {
+    runtime.state.settings = previousSettings
+    runtime.state.codexResetCreditAttemptLedger = previousLedger
+    throw error
   }
 }
 

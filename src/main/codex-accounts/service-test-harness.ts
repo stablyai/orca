@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Store } from '../persistence'
 import { createCodexAccountSettings } from './codex-account-settings-fixture'
 import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexRateLimitHomeResolution } from './runtime-home-service'
@@ -42,24 +43,73 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
 
 export function createStore(settings: GlobalSettings) {
   let resetLedger: CodexResetCreditAttemptLedger = { version: 1, attempts: [] }
+  let settingsPreviewActive = false
+  const applySettings = (updates: Partial<GlobalSettings>) => {
+    settings = {
+      ...settings,
+      ...updates,
+      notifications: {
+        ...settings.notifications,
+        ...updates.notifications
+      }
+    }
+    return settings
+  }
+  const updateSettings = (updates: Partial<GlobalSettings>) => {
+    if (settingsPreviewActive) {
+      throw new Error('Cannot update settings during a Codex account settings preview')
+    }
+    return applySettings(updates)
+  }
+  const withSettingsPreview: Store['withCodexAccountSettingsPreview'] = <T>(
+    updates: Partial<GlobalSettings>,
+    action: () => T
+  ): T => {
+    if (settingsPreviewActive) {
+      throw new Error('Cannot nest Codex account settings previews')
+    }
+    const previousSettings = settings
+    applySettings(updates)
+    settingsPreviewActive = true
+    try {
+      const result = action()
+      if (
+        result !== null &&
+        (typeof result === 'object' || typeof result === 'function') &&
+        'then' in result &&
+        typeof result.then === 'function'
+      ) {
+        void Promise.resolve(result).catch(() => {})
+        throw new Error('Codex account settings preview callback must be synchronous')
+      }
+      return result
+    } finally {
+      settings = previousSettings
+      settingsPreviewActive = false
+    }
+  }
   return {
     getSettings: vi.fn(() => settings),
-    updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
-      settings = {
-        ...settings,
-        ...updates,
-        notifications: {
-          ...settings.notifications,
-          ...updates.notifications
-        }
-      }
-      return settings
-    }),
+    updateSettings: vi.fn(updateSettings),
+    updateCodexAccountSettingsAndFlush: vi.fn(updateSettings),
+    withCodexAccountSettingsPreview: withSettingsPreview,
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
     replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn((next: CodexResetCreditAttemptLedger) => {
       resetLedger = structuredClone(next)
-    })
-  }
+    }),
+    updateCodexAccountSettingsAndResetLedgerAndFlush: vi.fn(
+      (updates: Partial<GlobalSettings>, next: CodexResetCreditAttemptLedger) => {
+        updateSettings(updates)
+        resetLedger = structuredClone(next)
+      }
+    )
+  } satisfies Partial<Store>
+}
+
+export function failNextAccountRemovalPersistence(store: ReturnType<typeof createStore>): void {
+  store.updateCodexAccountSettingsAndResetLedgerAndFlush.mockImplementationOnce(() => {
+    throw new Error('disk full')
+  })
 }
 
 /** Rate-limit collaborator surface the accounts service calls into. */

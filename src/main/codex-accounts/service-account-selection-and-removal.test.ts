@@ -255,6 +255,7 @@ describe('CodexAccountService config sync', () => {
     expect(result.activeAccountId).toBe(null)
     expect(existsSync(managedHomePath)).toBe(false)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalled()
+    expect(store.updateCodexAccountSettingsAndResetLedgerAndFlush).toHaveBeenCalledOnce()
   })
 
   it('refuses to remove a managed home owned by a different account', async () => {

@@ -28,7 +28,10 @@ type CodexAccountSelectionDependencies = {
   lifecycle: CodexAccountServiceLifecycle
   resolveSystemDefault: () => CodexSystemDefaultIdentity
   removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
-  discardResetAttempts: (accountId: string) => void
+  persistAccountRemoval: (
+    accountId: string,
+    updates: Parameters<Store['updateCodexAccountSettingsAndFlush']>[0]
+  ) => void
 }
 
 export class CodexAccountSelection {
@@ -63,31 +66,54 @@ export class CodexAccountSelection {
 
   async remove(accountId: string): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    const accountTarget = getCodexSelectionTargetForAccount(account)
     const settings = this.dependencies.store.getSettings()
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
-    const nextSelection = removeCodexAccountIdFromSelection(
-      normalizeCodexRuntimeSelection(settings),
-      accountId
+    const nextSelection = pruneInvalidCodexRuntimeSelection(
+      removeCodexAccountIdFromSelection(normalizeCodexRuntimeSelection(settings), accountId),
+      nextAccounts
     )
-    const nextActiveId =
-      settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
 
-    this.dependencies.store.updateSettings({
+    const settingsUpdate = {
       codexManagedAccounts: nextAccounts,
-      activeCodexManagedAccountId: nextActiveId,
+      activeCodexManagedAccountId: nextSelection.host,
       activeCodexManagedAccountIdsByRuntime: nextSelection
-    })
-    this.dependencies.runtimeHome.syncForCurrentSelection()
+    }
+    try {
+      this.dependencies.store.withCodexAccountSettingsPreview(settingsUpdate, () => {
+        this.dependencies.runtimeHome.syncForCurrentSelection(accountTarget)
+      })
+      this.dependencies.persistAccountRemoval(accountId, settingsUpdate)
+    } catch (error) {
+      try {
+        this.dependencies.runtimeHome.syncForCurrentSelection(accountTarget)
+      } catch (rollbackError) {
+        console.error(
+          '[codex-accounts] Failed to restore runtime after account removal rollback:',
+          rollbackError
+        )
+      }
+      throw error
+    }
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
-      this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      try {
+        this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
+      } catch (error) {
+        console.error(
+          '[codex-accounts] Failed to reconcile host lifecycle after account removal:',
+          error
+        )
+      }
     }
 
     this.dependencies.removeManagedHome(account.managedHomePath, account.id)
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
-    this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
-    this.dependencies.discardResetAttempts(accountId)
-    const accountTarget = getCodexSelectionTargetForAccount(account)
+    try {
+      this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
+    } catch (error) {
+      console.error('[codex-accounts] Failed to evict removed account quota cache:', error)
+    }
     this.startQuotaRefresh(
       getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
         ? accountId
@@ -167,10 +193,15 @@ export class CodexAccountSelection {
     outgoingAccountId: string | null | undefined,
     target: CodexAccountSelectionTarget | undefined
   ): void {
-    void this.dependencies.rateLimits
-      .refreshForCodexAccountChange(outgoingAccountId, target)
-      .catch((error) => {
-        console.error('[codex-accounts] Quota refresh after account change failed:', error)
-      })
+    const logFailure = (error: unknown): void => {
+      console.error('[codex-accounts] Quota refresh after account change failed:', error)
+    }
+    try {
+      void this.dependencies.rateLimits
+        .refreshForCodexAccountChange(outgoingAccountId, target)
+        .catch(logFailure)
+    } catch (error) {
+      logFailure(error)
+    }
   }
 }

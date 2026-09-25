@@ -148,29 +148,27 @@ export class CodexResetCreditLedger {
     }
   }
 
-  // Why: a removed account's managed home is gone, so its unresolved providerPending
-  // attempt can never validate or be replayed; drop it so a target-scoped default reset
-  // is not wedged forever by hasPendingResetForTarget matching the orphan.
-  discardForRemovedAccount(accountId: string): void {
+  persistAccountRemoval(
+    accountId: string,
+    updates: Parameters<Store['updateCodexAccountSettingsAndFlush']>[0]
+  ): void {
+    if (!this.durableLedger) {
+      // Reset stays fail-closed, but a corrupt ledger must not trap managed credentials on disk.
+      this.store.updateCodexAccountSettingsAndFlush(updates)
+      return
+    }
     const staleAttempts = [...this.attemptsByKey].filter(
       ([, attempt]) => attempt.expectedScope.accountId === accountId
     )
-    if (staleAttempts.length === 0) {
-      return
-    }
-    const staleKeySet = new Set(staleAttempts.map(([idempotencyKey]) => idempotencyKey))
-    if (this.durableLedger) {
-      const attempts = this.durableLedger.attempts.filter(
-        (attempt) => !staleKeySet.has(attempt.idempotencyKey)
+    const nextLedger: CodexResetCreditAttemptLedger = {
+      version: 1,
+      attempts: this.durableLedger.attempts.filter(
+        (attempt) => attempt.expectedScope.accountId !== accountId
       )
-      if (attempts.length !== this.durableLedger.attempts.length) {
-        const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
-        // Persist first so a failed durability barrier leaves the in-memory
-        // fail-closed guards aligned with the ledger that will reload.
-        this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
-        this.durableLedger = structuredClone(nextLedger)
-      }
     }
+    // Account removal and reset guards must commit together before deleting the managed home.
+    this.store.updateCodexAccountSettingsAndResetLedgerAndFlush(updates, nextLedger)
+    this.durableLedger = structuredClone(nextLedger)
     for (const [idempotencyKey, attempt] of staleAttempts) {
       this.attemptsByKey.delete(idempotencyKey)
       if (this.attemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {

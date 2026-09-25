@@ -817,6 +817,10 @@ describe('CodexAccountService config sync', () => {
       expect(existsSync(wslManagedHomePath)).toBe(false)
       expect(existsSync(join(testState.userDataDir, 'wsl-account'))).toBe(false)
       expect(rateLimits.evictInactiveCodexCache).toHaveBeenCalledWith('account-1')
+      expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,

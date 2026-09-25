@@ -15,6 +15,7 @@ type PrimaryStateWriteOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
   | 'backupRotationInFlight'
+  | 'codexAccountSettingsPreviewActive'
   | 'dataFile'
   | 'flushOrThrow'
   | 'firstPendingSaveAt'
@@ -51,6 +52,9 @@ export class PrimaryStateWriteOperations {
   }
 
   flushOrThrow(): void {
+    if (this[primaryStateWriteOperationsContext].runtime.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot persist during a Codex account settings preview')
+    }
     if (this[primaryStateWriteOperationsContext].runtime.quitFlushStarted) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
