@@ -65,6 +65,7 @@ describe('check --wait from an agent session', () => {
     await vi.advanceTimersByTimeAsync(CODEX_CAP_MS - 1)
     expect(settled).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
+    await vi.waitFor(() => expect(settled).toBe(true), { timeout: 2_000 })
 
     expect(resultOf(await pending)).toMatchObject({ runId, count: 0, timedOut: true })
   })
