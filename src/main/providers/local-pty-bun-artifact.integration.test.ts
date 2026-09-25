@@ -1,12 +1,13 @@
 import { build } from 'esbuild'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { copyFile, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '../../shared/child-process/run-process'
 import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 const runtime =
   process.env.BUN_EXECUTABLE ?? resolve('out/orcad', orcadBunRuntimeFilename(process.platform))
@@ -100,7 +101,7 @@ describe.skipIf(!existsSync(runtime))('isolated Bun in-process PTY artifact', ()
         retired: true
       })
     } finally {
-      await rm(directory, { recursive: true, force: true })
+      removeTreeSync(directory)
     }
   }, 20_000)
 })
