@@ -294,8 +294,11 @@ describe('NativeChatQuestionCard', () => {
     typeAnswer('two spaces')
     clickOption('Tabs')
     renderCard(true)
+    // Chromium still delivers pointer events to a disabled input.
+    const input = container.querySelector('input')!
     act(() => {
-      container.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      input.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      input.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(optionPressed('Tabs')).toBe('true')
