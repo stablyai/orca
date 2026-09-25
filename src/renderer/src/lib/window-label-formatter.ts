@@ -41,11 +41,11 @@ export function formatWindowLabel(windowMinutes: number): string {
  * when no reset timestamp is available.
  */
 export function formatRateLimitWindowChipLabel(
-  window: { windowMinutes: number; resetsAt: number | null },
+  window: { windowMinutes: number; resetsAt: number | null; windowLabel?: string },
   now: number = Date.now()
 ): string {
   if (window.resetsAt != null) {
     return formatResetDuration(window.resetsAt - now)
   }
-  return formatWindowLabel(window.windowMinutes)
+  return window.windowLabel ?? formatWindowLabel(window.windowMinutes)
 }

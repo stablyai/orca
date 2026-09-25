@@ -5,7 +5,7 @@ import { SettingsSegmentedControl } from '@/components/settings/SettingsFormCont
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import {
   clampUsedPercent,
   getDisplayedUsagePercentage,
@@ -16,9 +16,14 @@ import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import {
+  getTightestUsageSectionFromSections,
+  getUsageGroupShortLabel,
+  groupUsageSections,
+  type UsageSection
+} from './usage-section-selection'
 
 type ProviderId = ProviderRateLimits['provider']
-export type UsageSection = { label: string; window: RateLimitWindow }
 
 // Windows/buckets that actually carry data — absent limits arrive as null, but a
 // partial/rehydrated provider can also carry an undefined window; both must be
@@ -39,7 +44,8 @@ function providerMaxUsed(sections: UsageSection[]): number {
 function shortLabel(
   p: ProviderRateLimits,
   section: UsageSection,
-  useRemainingDuration = false
+  useRemainingDuration = false,
+  now = Date.now()
 ): string {
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
@@ -50,23 +56,20 @@ function shortLabel(
     return 'Fable'
   }
   return useRemainingDuration
-    ? formatRateLimitWindowChipLabel(section.window)
-    : formatWindowLabel(section.window.windowMinutes)
+    ? formatRateLimitWindowChipLabel(section.window, now)
+    : (section.window.windowLabel ?? formatWindowLabel(section.window.windowMinutes))
+}
+
+// Why: the compact summary promises one quiet figure per quota pool (one for ungrouped providers).
+export function getCompactUsageSections(p: ProviderRateLimits, now?: number): UsageSection[] {
+  return groupUsageSections(usedSections(p)).flatMap(({ entries }) => {
+    const tightest = getTightestUsageSectionFromSections(entries)
+    return tightest ? [{ ...tightest, label: shortLabel(p, tightest, true, now) }] : []
+  })
 }
 
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
-  const sections = usedSections(p)
-  if (sections.length === 0) {
-    return null
-  }
-  // Why: the footer promises one quiet summary per provider; choose urgency by
-  // consumption even when the user displays the complementary “% left” value.
-  const tightest = sections.reduce((current, candidate) =>
-    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
-      ? candidate
-      : current
-  )
-  return { ...tightest, label: shortLabel(p, tightest, true) }
+  return getTightestUsageSectionFromSections(getCompactUsageSections(p))
 }
 
 // The soonest-resetting window summarizes the agent's next reset in one line.
@@ -130,7 +133,7 @@ export function UsageRow({
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
+  const compactSections = mode === 'compact' ? getCompactUsageSections(p, now) : []
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -153,28 +156,44 @@ export function UsageRow({
               </span>
             ) : null}
           </>
-        ) : tightest ? (
-          <span className="ml-auto">
-            <UsageMetric
-              section={tightest}
-              label={tightest.label}
-              display={display}
-              showBar={false}
-            />
+        ) : compactSections.length > 0 ? (
+          <span className="ml-auto flex items-center gap-2.5">
+            {compactSections.map((section) => (
+              <UsageMetric
+                key={section.groupName ?? ''}
+                section={section}
+                label={
+                  section.groupName
+                    ? `${getUsageGroupShortLabel(section.groupName)} ${section.label}`
+                    : section.label
+                }
+                display={display}
+                showBar={false}
+              />
+            ))}
           </span>
         ) : reset ? (
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
         ) : null}
       </div>
       {hasUsage && mode === 'verbose' ? (
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
-          {sections.map((section) => (
-            <UsageMetric
-              key={section.label}
-              section={section}
-              label={shortLabel(p, section)}
-              display={display}
-            />
+        <div className="space-y-1 pl-[30px]">
+          {groupUsageSections(sections).map(({ groupName, entries }) => (
+            <div key={groupName ?? ''} className="space-y-0.5">
+              {groupName ? (
+                <div className="text-[11px] font-medium text-muted-foreground">{groupName}</div>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                {entries.map((section) => (
+                  <UsageMetric
+                    key={section.label}
+                    section={section}
+                    label={shortLabel(p, section)}
+                    display={display}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : null}

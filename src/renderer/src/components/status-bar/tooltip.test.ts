@@ -327,6 +327,41 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('preserves Antigravity bucket group metadata for grouped rendering', () => {
+    const p: ProviderRateLimits = {
+      provider: 'antigravity',
+      session: null,
+      weekly: null,
+      buckets: [
+        {
+          id: 'gemini-5h',
+          name: 'Five Hour Limit Remaining',
+          groupName: 'Gemini Models',
+          usedPercent: 0,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          id: '3p-weekly',
+          name: 'Weekly Limit Remaining',
+          groupName: 'Claude and GPT models',
+          usedPercent: 0,
+          windowMinutes: 10080,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    expect(getWindowSections(p).slice(0, 2)).toMatchObject([
+      { label: 'Session', groupName: 'Gemini Models' },
+      { label: 'Weekly', groupName: 'Claude and GPT models' }
+    ])
+  })
+
   it('returns session and weekly when buckets are absent', () => {
     const p: ProviderRateLimits = {
       provider: 'claude',
@@ -422,6 +457,32 @@ describe('getWindowSections', () => {
     expect(labels).not.toContain('Session')
   })
 
+  it('keeps unknown Antigravity source window labels instead of rendering 0m', () => {
+    const p: ProviderRateLimits = {
+      provider: 'antigravity',
+      session: null,
+      weekly: null,
+      buckets: [
+        {
+          id: 'daily',
+          name: 'Daily',
+          groupName: 'New pool',
+          usedPercent: 50,
+          windowMinutes: 0,
+          windowLabel: 'daily',
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    const sections = getWindowSections(p)
+    expect(sections[0]).toMatchObject({ label: 'daily' })
+    expect(sections[0]?.label).not.toBe('0m')
+  })
+
   it('preserves reset metadata inside bucket windows', () => {
     const p: ProviderRateLimits = {
       provider: 'gemini',
@@ -449,6 +510,101 @@ describe('getWindowSections', () => {
 })
 
 describe('ProviderPanel reset rendering', () => {
+  it('keeps non-Antigravity window ordering unchanged', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ProviderPanel, {
+        p: provider({
+          provider: 'claude',
+          status: 'ok',
+          session: {
+            usedPercent: 10,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 20,
+            windowMinutes: 10080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        })
+      })
+    )
+    expect(markup.indexOf('Session')).toBeLessThan(markup.indexOf('Weekly'))
+  })
+
+  it('groups Antigravity windows and uses native labels in both display modes', () => {
+    const p = provider({
+      provider: 'antigravity',
+      status: 'ok',
+      buckets: [
+        {
+          id: 'gemini-5h',
+          name: 'Five Hour Limit Remaining',
+          groupName: 'Gemini Models',
+          usedPercent: 0,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          id: 'gemini-weekly',
+          name: 'Weekly Limit Remaining',
+          groupName: 'Gemini Models',
+          usedPercent: 1,
+          windowMinutes: 10080,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          id: '3p-5h',
+          name: 'Five Hour Limit Remaining',
+          groupName: 'Claude and GPT models',
+          usedPercent: 0,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          id: '3p-weekly',
+          name: 'Weekly Limit Remaining',
+          groupName: 'Claude and GPT models',
+          usedPercent: 0,
+          windowMinutes: 10080,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          id: 'gemini-daily',
+          name: 'Daily Limit Remaining',
+          groupName: 'Gemini Models',
+          usedPercent: 2,
+          windowMinutes: 0,
+          windowLabel: 'daily',
+          resetsAt: null,
+          resetDescription: null
+        }
+      ]
+    })
+
+    const usedMarkup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
+    expect(usedMarkup).toContain('Gemini Models')
+    expect(usedMarkup).toContain('Claude and GPT models')
+    expect(usedMarkup).toContain('Session')
+    expect(usedMarkup).toContain('Weekly')
+    expect(usedMarkup).toContain('1% used')
+    expect(usedMarkup).not.toContain('Limit Remaining')
+    expect(usedMarkup.indexOf('Session')).toBeLessThan(usedMarkup.indexOf('Weekly'))
+    expect(usedMarkup.indexOf('Weekly')).toBeLessThan(usedMarkup.indexOf('daily'))
+
+    const remainingMarkup = renderToStaticMarkup(
+      createElement(ProviderPanel, { p, usagePercentageDisplay: 'remaining' })
+    )
+    expect(remainingMarkup).toContain('100% left')
+    expect(remainingMarkup).toContain('99% left')
+  })
+
   it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 3, 20, 0))

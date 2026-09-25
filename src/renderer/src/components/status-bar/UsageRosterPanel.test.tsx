@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+    Object.entries(values ?? {}).reduce(
+      (result, [key, value]) => result.replace(`{{${key}}}`, value),
+      fallback
+    )
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-icon={agent} />
@@ -85,6 +89,94 @@ describe('UsageRow', () => {
     expect(markup).toContain('75%')
     expect(markup).toContain('width:75%')
     expect(markup).not.toContain('width:25%')
+  })
+
+  it.each([
+    ['5h', 70, 20, '2h'],
+    ['weekly', 20, 70, '5d']
+  ] as const)(
+    'compact Antigravity chooses the %s window by consumption',
+    (expectedWindow, fiveHour, weekly, reset) => {
+      const markup = renderToStaticMarkup(
+        <UsageRow
+          p={{
+            provider: 'antigravity',
+            session: null,
+            weekly: null,
+            status: 'ok',
+            error: null,
+            updatedAt: 0,
+            buckets: [
+              {
+                name: '5h',
+                groupName: 'Gemini Models',
+                windowMinutes: 300,
+                usedPercent: fiveHour,
+                resetsAt: mocks.now + 2 * 60 * 60_000,
+                resetDescription: null
+              },
+              {
+                name: 'wk',
+                groupName: 'Gemini Models',
+                windowMinutes: 10080,
+                usedPercent: weekly,
+                resetsAt: mocks.now + 5 * 24 * 60 * 60_000,
+                resetDescription: null
+              }
+            ]
+          }}
+          display="used"
+          state={{ kind: 'usage', statusLabel: null }}
+          showSignInAction={false}
+          now={mocks.now}
+          mode="compact"
+        />
+      )
+      expect(markup).toContain(`${Math.max(fiveHour, weekly)}%`)
+      expect(markup).toContain(reset)
+      expect(markup).not.toContain(`${expectedWindow === '5h' ? weekly : fiveHour}%`)
+      expect(markup).not.toContain(' used')
+    }
+  )
+
+  it('uses session-first Codex tie semantics for compact Antigravity', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          provider: 'antigravity',
+          session: null,
+          weekly: null,
+          status: 'ok',
+          error: null,
+          updatedAt: 0,
+          buckets: [
+            {
+              name: '5h',
+              groupName: 'Gemini Models',
+              windowMinutes: 300,
+              usedPercent: 0,
+              resetsAt: mocks.now + 2 * 60 * 60_000,
+              resetDescription: null
+            },
+            {
+              name: 'wk',
+              groupName: 'Gemini Models',
+              windowMinutes: 10080,
+              usedPercent: 0,
+              resetsAt: mocks.now + 5 * 24 * 60 * 60_000,
+              resetDescription: null
+            }
+          ]
+        }}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+        mode="compact"
+      />
+    )
+    expect(markup).toContain('2h')
+    expect(markup).not.toContain('5d')
   })
 
   it('uses one shared clock for live reset labels across the roster', () => {
@@ -246,6 +338,132 @@ describe('UsageRow', () => {
     expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
     expect(markup).toContain('25%')
     expect(markup).toContain('60%')
+  })
+
+  it('renders Antigravity windows with native labels and selected semantics', () => {
+    const provider: ProviderRateLimits = {
+      provider: 'antigravity',
+      session: null,
+      weekly: null,
+      buckets: [
+        {
+          id: 'gemini-5h',
+          name: 'Five Hour Limit Remaining',
+          groupName: 'Gemini Models',
+          usedPercent: 0,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          id: 'gemini-weekly',
+          name: 'Weekly Limit Remaining',
+          groupName: 'Gemini Models',
+          usedPercent: 1,
+          windowMinutes: 10080,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: mocks.now,
+      error: null,
+      status: 'ok'
+    }
+
+    const usedMarkup = renderToStaticMarkup(
+      <UsageRow
+        p={provider}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+    expect(usedMarkup).toContain('5h')
+    expect(usedMarkup).toContain('wk')
+    expect(usedMarkup).toContain('0%')
+    expect(usedMarkup).toContain('1%')
+    expect(usedMarkup).not.toContain('0% used')
+    expect(usedMarkup).not.toContain('1% used')
+    expect(usedMarkup).not.toContain('Limit Remaining')
+
+    const remainingMarkup = renderToStaticMarkup(
+      <UsageRow
+        p={provider}
+        display="remaining"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+    expect(remainingMarkup).toContain('100%')
+    expect(remainingMarkup).toContain('99%')
+    expect(remainingMarkup).not.toContain('100% left')
+    expect(remainingMarkup).not.toContain('99% left')
+
+    const compactMarkup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          ...provider,
+          buckets: [
+            ...provider.buckets!.map((bucket) => ({
+              ...bucket,
+              resetsAt: mocks.now + 2 * 60 * 60_000
+            })),
+            {
+              id: '3p-5h',
+              name: 'Five Hour Limit Remaining',
+              groupName: 'Claude and GPT models',
+              usedPercent: 0,
+              windowMinutes: 300,
+              resetsAt: null,
+              resetDescription: null
+            },
+            {
+              id: '3p-weekly',
+              name: 'Weekly Limit Remaining',
+              groupName: 'Claude and GPT models',
+              usedPercent: 0,
+              windowMinutes: 10080,
+              resetsAt: null,
+              resetDescription: null
+            }
+          ]
+        }}
+        display="used"
+        mode="compact"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+    expect(compactMarkup).toContain('G')
+    expect(compactMarkup).toContain('C/G')
+    // Why: a pool without a reset time names its window, as ungrouped chips do.
+    expect(compactMarkup).toContain('C/G 5h')
+    expect(compactMarkup).not.toContain('wk')
+    expect(compactMarkup).toContain('1%')
+    expect(compactMarkup).not.toContain('1% used')
+    expect(compactMarkup).toContain('G 2h')
+
+    const remainingCompactMarkup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          ...provider,
+          buckets: provider.buckets!.map((bucket) => ({
+            ...bucket,
+            groupName: bucket.groupName ?? 'Gemini Models'
+          }))
+        }}
+        display="remaining"
+        mode="compact"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+    expect(remainingCompactMarkup).toContain('99%')
+    expect(remainingCompactMarkup).not.toContain('99% left')
   })
 })
 

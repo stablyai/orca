@@ -79,8 +79,9 @@ export function hasUsageProviderSettings(
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.opencodeGoApiKeyConfigured === true ||
-    // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
-    // already covered by the gemini term above.
+    // Antigravity's usage now comes from its own agy CLI probe, which does not
+    // need the Gemini OAuth opt-in, so this is a durable signal of its own.
+    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true
@@ -110,10 +111,7 @@ export function hasUsageProviderSettingsForProvider(
     )
   }
   if (providerId === 'antigravity') {
-    // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
-    // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
-    // gate the default-on checked item would pin a permanently dead bar.
-    return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
+    return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true

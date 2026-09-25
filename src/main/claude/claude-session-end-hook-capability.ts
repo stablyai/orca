@@ -1,17 +1,12 @@
-import { hasReachedAppVersion, isValidAppVersion } from '../../shared/app-version'
+import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
 import { runProcess } from '../../shared/child-process/run-process'
 import path from 'node:path'
 
 // 2.1.261 is the only version measured, not an established minimum.
 export const CLAUDE_SESSION_END_CAPABILITY_FLOOR = '2.1.261'
 
-export function parseClaudeCliVersion(output: string | null | undefined): string | null {
-  const version = output?.match(/\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\b/)?.[0]
-  return version && isValidAppVersion(version) ? version : null
-}
-
 export function claudeVersionSupportsSessionEnd(version: string | null | undefined): boolean {
-  const parsed = parseClaudeCliVersion(version)
+  const parsed = parseCliVersion(version)
   return parsed !== null && hasReachedAppVersion(parsed, CLAUDE_SESSION_END_CAPABILITY_FLOOR)
 }
 
@@ -34,7 +29,7 @@ export async function probeClaudeCliVersion(executablePath: string): Promise<str
       timeoutMs: 5_000,
       maxOutputBytes: 4_096
     })
-    return result.code === 0 ? parseClaudeCliVersion(`${result.stdout}\n${result.stderr}`) : null
+    return result.code === 0 ? parseCliVersion(`${result.stdout}\n${result.stderr}`) : null
   } catch {
     return null
   }

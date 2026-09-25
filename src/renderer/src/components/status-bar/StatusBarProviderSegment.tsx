@@ -7,10 +7,12 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { ProviderIcon, clampUsedPercent, getProviderUsageStatusLabel } from './tooltip'
-import { getTightestUsageSection } from './UsageRosterPanel'
+import { getCompactUsageSections, getTightestUsageSection } from './UsageRosterPanel'
+import { getUsageGroupShortLabel, groupUsageSections } from './usage-section-selection'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 
 function MiniBar({
   usedPct,
@@ -94,29 +96,54 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
+function GroupLabel({ groupName }: { groupName: string | undefined }): React.JSX.Element | null {
+  return groupName ? (
+    <span className="text-muted-foreground">{getUsageGroupShortLabel(groupName)}</span>
+  ) : null
+}
+
 function VerboseProviderUsage({
   p,
-  display
+  display,
+  now
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
+  now: number
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+    // Why: every grouped quota pool matters; only Gemini's ungrouped extras are filtered.
+    const visibleBuckets = p.buckets.filter(
+      (bucket) => bucket.groupName || STATUS_BAR_BUCKET_NAMES.has(bucket.name)
+    )
     return (
       <>
-        {visibleBuckets.map((bucket, index) => (
-          <React.Fragment key={bucket.name}>
-            {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-            <span className="tabular-nums">
-              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
-            </span>
+        {groupUsageSections(visibleBuckets).map(({ groupName, entries }, groupIndex) => (
+          <React.Fragment key={groupName ?? ''}>
+            {groupIndex > 0 ? <span className="text-muted-foreground">|</span> : null}
+            <GroupLabel groupName={groupName} />
+            {entries.map((bucket, index) => (
+              <React.Fragment key={bucket.name}>
+                {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+                {groupName ? (
+                  <WindowLabel
+                    w={bucket}
+                    label={formatRateLimitWindowChipLabel(bucket, now)}
+                    display={display}
+                  />
+                ) : (
+                  <span className="tabular-nums">
+                    {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+                  </span>
+                )}
+              </React.Fragment>
+            ))}
           </React.Fragment>
         ))}
         {visibleBuckets.length === 0 && p.session ? (
           <WindowLabel
             w={p.session}
-            label={formatRateLimitWindowChipLabel(p.session)}
+            label={formatRateLimitWindowChipLabel(p.session, now)}
             display={display}
           />
         ) : null}
@@ -129,14 +156,14 @@ function VerboseProviderUsage({
       ? {
           key: 'session',
           window: p.session,
-          label: formatRateLimitWindowChipLabel(p.session)
+          label: formatRateLimitWindowChipLabel(p.session, now)
         }
       : null,
     p.weekly
       ? {
           key: 'weekly',
           window: p.weekly,
-          label: formatRateLimitWindowChipLabel(p.weekly)
+          label: formatRateLimitWindowChipLabel(p.weekly, now)
         }
       : null,
     p.fableWeekly
@@ -151,7 +178,7 @@ function VerboseProviderUsage({
       ? {
           key: 'monthly',
           window: p.monthly,
-          label: formatRateLimitWindowChipLabel(p.monthly)
+          label: formatRateLimitWindowChipLabel(p.monthly, now)
         }
       : null
   ].filter((window): window is { key: string; window: RateLimitWindow; label: string } => {
@@ -183,6 +210,15 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
+  // Why: labels below are remaining-time text, so they must re-render on the countdown
+  // boundary instead of waiting for an unrelated state update.
+  const now = useResetCountdownClock([
+    p?.session?.resetsAt,
+    p?.weekly?.resetsAt,
+    p?.fableWeekly?.resetsAt,
+    p?.monthly?.resetsAt,
+    ...(p?.buckets ?? []).map((bucket) => bucket.resetsAt)
+  ])
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -237,16 +273,22 @@ export function ProviderSegment({
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
-          <VerboseProviderUsage p={p} display={display} />
+          <VerboseProviderUsage p={p} display={display} now={now} />
         </>
-      ) : tightest ? (
-        <WindowLabel
-          w={tightest.window}
-          label={tightest.label}
-          display={display}
-          showLabel={!compact}
-        />
-      ) : null}
+      ) : (
+        getCompactUsageSections(p, now).map((section, index) => (
+          <React.Fragment key={section.groupName ?? ''}>
+            {index > 0 ? <span className="text-muted-foreground">|</span> : null}
+            <GroupLabel groupName={section.groupName} />
+            <WindowLabel
+              w={section.window}
+              label={section.label}
+              display={display}
+              showLabel={!compact}
+            />
+          </React.Fragment>
+        ))
+      )}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )

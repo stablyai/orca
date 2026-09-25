@@ -1,5 +1,4 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
@@ -34,7 +33,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      antigravityPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -78,9 +78,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
               geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
-
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -156,7 +153,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.trackActiveFailureStreak('codex', codex)
     }
     this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -183,7 +179,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
@@ -210,6 +205,16 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+
+    const antigravity = await antigravityPromise
+    if (signal.aborted) {
+      return
+    }
+    this.trackActiveFailureStreak('antigravity', antigravity)
+    this.updateState({
+      ...this.state,
+      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
     })
   }
 }

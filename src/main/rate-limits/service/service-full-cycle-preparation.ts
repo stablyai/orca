@@ -1,5 +1,6 @@
 import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
+import { fetchAntigravityRateLimits } from '../antigravity-usage-fetcher'
 import { fetchGeminiRateLimits } from '../gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
@@ -42,6 +43,7 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<
     { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
   >
+  antigravityPromise: Promise<ProviderRateLimits>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -139,6 +141,17 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+    // Why: a slow agy CLI must not hold back the other providers, so it applies on its own like Grok.
+    const antigravityPromise = fetchAntigravityRateLimits(signal).catch(
+      (error): ProviderRateLimits => ({
+        provider: 'antigravity',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status: 'error'
+      })
+    )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
@@ -215,7 +228,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      antigravityPromise
     }
   }
 }
