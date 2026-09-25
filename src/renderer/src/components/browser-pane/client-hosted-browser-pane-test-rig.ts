@@ -54,6 +54,11 @@ export function installClientHostedPaneApi(overrides?: {
         openDevTools: vi.fn(async () => true),
         proceedCertificate: vi.fn(async () => ({ ok: true })),
         publishClientPageMetadata: vi.fn(async () => ({ status: 'published', accepted: true })),
+        onGrabModeToggle: inert,
+        onGrabActionShortcut: inert,
+        setGrabMode: vi.fn(async () => ({ ok: true })),
+        cancelGrab: vi.fn(async () => {}),
+        setAnnotationViewportBridge: vi.fn(async () => ({ ok: true })),
         ...overrides?.browser
       },
       ui: {
