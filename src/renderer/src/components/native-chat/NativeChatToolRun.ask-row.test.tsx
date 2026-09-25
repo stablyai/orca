@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatToolRun } from './NativeChatToolRun'
@@ -80,7 +80,36 @@ describe('NativeChatToolRun awaiting-input row', () => {
     expect(screen.getByText('Asked:')).not.toHaveClass('animate-pulse')
     expect(screen.getByText(QUESTION)).toBeInTheDocument()
     // A run that is only the ask has no work left to head, so it draws no header.
-    expect(container.querySelector('button')).toBeNull()
+    expect(container.querySelector('[data-native-chat-tool-run-state]')).toBeNull()
+  })
+
+  it('unfolds the clipped question in place and folds it back', () => {
+    render(
+      <NativeChatToolRun blocks={askBlocks('completed')} expandSignal activeTurnIsWorking={false} />
+    )
+    const row = screen.getByRole('button', { name: /Asked:/ })
+    expect(row).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByText(QUESTION)).toHaveClass('truncate')
+
+    fireEvent.click(row)
+    expect(row).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText(QUESTION)).not.toHaveClass('truncate')
+
+    fireEvent.click(row)
+    expect(screen.getByText(QUESTION)).toHaveClass('truncate')
+  })
+
+  it('offers no expansion when the row names only a question count', () => {
+    const input = { questions: [{ question: 'First?' }, { question: 'Second?' }] }
+    render(
+      <NativeChatToolRun
+        blocks={[{ type: 'tool-call', name: 'AskUserQuestion', input, state: 'completed' }]}
+        expandSignal
+        activeTurnIsWorking={false}
+      />
+    )
+    expect(screen.getByText('2 questions')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Asked:/ })).toBeNull()
   })
 
   it('counts only the work that ran in the header beside the ask', () => {
