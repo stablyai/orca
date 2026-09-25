@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/terminal-input'
 import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
 import { notePtyInput } from '../../../memory/pty-registry'
+import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import {
@@ -34,6 +35,20 @@ export function isMainWindowPtyIpcEvent(
 
 export type PtyWritePayload = { id: string; data: string }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
+
+/**
+ * Record input against a PTY for the OpenCode session binder. Only called once
+ * a provider write is actually about to be issued, so an oversized or
+ * undispatched payload cannot age a pane into winning a same-directory tie.
+ * Terminal query replies (DA1/DECRQM/CPR …) are written by xterm with nobody
+ * typing, so they must not count as input either.
+ */
+function stampPtyInput(id: string, data: string): void {
+  if (isTerminalQueryReply(data)) {
+    return
+  }
+  notePtyInput(id, Date.now())
+}
 
 export function createPtyWriteInput(deps: {
   mainWindow: BrowserWindow
@@ -92,6 +107,9 @@ export function createPtyWriteInput(deps: {
     data: string,
     admitted: AgentSessionPtyWriteAdmittance
   ): boolean | Promise<boolean> => {
+    // Reached only after the oversized-input check, so this is the first point
+    // where bytes are genuinely on their way to the PTY.
+    stampPtyInput(id, data)
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
     if (first.done) {
@@ -207,7 +225,6 @@ export function createPtyWriteInput(deps: {
     try {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
-      notePtyInput(args.id, Date.now())
       interactiveOutputCharsByPty.set(args.id, 0)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
@@ -237,7 +254,6 @@ export function createPtyWriteInput(deps: {
     try {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
-      notePtyInput(args.id, Date.now())
       interactiveOutputCharsByPty.set(args.id, 0)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)

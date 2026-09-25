@@ -186,13 +186,21 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
   const paneByKey = new Map<string, CorrelatedPane>()
   for (const pane of deps.panes) {
     const previous = paneByKey.get(pane.paneKey)
+    // Why the directory check: a pane that moved (detached into another tab,
+    // reminted against a different root) must not inherit input recorded under
+    // its old directory, or a session in the new one could win a tie on
+    // keystrokes that never happened there.
+    const carriedInput =
+      previous && previous.directory === pane.directory
+        ? mostRecentInput(previous.lastInputAtMs, pane.lastInputAtMs)
+        : pane.lastInputAtMs
     paneByKey.set(pane.paneKey, {
       paneKey: pane.paneKey,
       directory: pane.directory,
       // Why most-recent instead of the current row's own value: a reminted
       // PTY re-registers with no input history, so the replaced row's
       // observation is the only record of what the human typed there.
-      lastInputAtMs: mostRecentInput(previous?.lastInputAtMs, pane.lastInputAtMs)
+      lastInputAtMs: carriedInput
     })
   }
   const panes = [...paneByKey.values()]

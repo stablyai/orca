@@ -239,7 +239,10 @@ describe('correlateOpenCodeSessionOwners', () => {
     expect(results).toEqual([])
   })
 
-  it('ignores input that arrived after the session was created', () => {
+  it('abstains when a pane was typed into after the session was created', () => {
+    // lastInputAtMs holds only the newest write, so pane-b's pre-creation
+    // evidence has been overwritten by later typing. Skipping it would let
+    // pane-a win as the unique in-window leader and reproduce #22838.
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_1', NOW - 60_000)],
       panes: [
@@ -249,8 +252,52 @@ describe('correlateOpenCodeSessionOwners', () => {
       clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
       knownOwners: new Map()
     })
+    expect(results).toEqual([])
+  })
+
+  it('binds an Orca-launched session to the pane whose client just booted', () => {
+    // Orca passes the first prompt with --prompt, so the creating pane writes
+    // nothing and input alone would hand the session to the bystander in
+    // pane-b, which was typed into a second before creation.
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 61_000 }
+      ],
+      clients: [client('pane-a', NOW - 65_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
     expect(results).toEqual([
       { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'creation-correlation' }
+    ])
+  })
+
+  it('stays unbound when two panes booted together', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        { paneKey: 'pane-b', directory: DIR }
+      ],
+      clients: [client('pane-a', NOW - 65_000), client('pane-b', NOW - 65_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
+  })
+
+  it('ignores a client that started after the session was created', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 65_000 }
+      ],
+      clients: [client('pane-a', NOW - 40_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-b', basis: 'creation-correlation' }
     ])
   })
 

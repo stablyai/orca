@@ -150,6 +150,31 @@ describe('runOpenCodeBinderRound', () => {
     ])
   })
 
+  it('does not carry input across a directory change', () => {
+    // The remint row now points at DIR, but the input recorded under it
+    // happened while the pane sat in /elsewhere. Carrying it forward would let
+    // a session in DIR win a tie on keystrokes that never happened there.
+    const { ownerships } = runOpenCodeBinderRound({
+      nowMs: NOW,
+      sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
+      panes: [
+        { ...pane(PANE_A, 100, NOW - 65_000), directory: '/elsewhere' },
+        { ...pane(PANE_A, 101, null), directory: DIR },
+        pane(PANE_B, 200, NOW - 3_600_000)
+      ],
+      processes: [
+        proc(100, 1, ['zsh']),
+        proc(101, 1, ['zsh']),
+        proc(200, 1, ['zsh']),
+        proc(102, 101, ['opencode'], NOW - 86_400_000),
+        proc(201, 200, ['opencode'], NOW - 86_400_000)
+      ],
+      knownOwners: new Map(),
+      parentBySessionId: new Map()
+    })
+    expect(ownerships).toEqual([])
+  })
+
   it('advances the cursor past handled rows only', () => {
     const fresh = [
       { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },

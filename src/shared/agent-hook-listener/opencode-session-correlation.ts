@@ -70,6 +70,23 @@ export const OPENCODE_CREATE_SKEW_MS = 2 * 60 * 1000
  */
 export const OPENCODE_INPUT_TIEBREAK_WINDOW_MS = 60 * 1000
 
+/**
+ * How long before a session's creation a pane's OpenCode client must have
+ * started for that start to identify the pane as the creator. Orca-launched
+ * agents pass their first prompt on the command line (`--prompt`), so the pane
+ * that created the session never writes a keystroke of its own — which is why
+ * launch recency is consulted before input recency: a client that booted
+ * seconds before the row appeared explains the session's existence, whereas a
+ * bystander's keystroke does not. Opening an OpenCode pane is a deliberate,
+ * rare act, so this is far higher precision than typing, which is constant.
+ *
+ * 20s is ~2x the startup Orca already measures for this binary (paste-ready
+ * ~4.8s, composer ~10s — see `draftPasteReadyTimeoutMs`), and stays tight
+ * enough that a pane merely *opened* this minute while another pane prompted
+ * does not read as the launcher.
+ */
+export const OPENCODE_LAUNCH_TIEBREAK_WINDOW_MS = 20 * 1000
+
 import { normalizeRuntimePathForComparison } from '../cross-platform-path'
 
 /**
@@ -159,6 +176,53 @@ function clientCouldCreate(client: CorrelatedClient, createdAtMs: number): boole
 }
 
 /**
+ * Break a same-directory tie on the pane whose OpenCode client had just
+ * started. This is the only signal available when the creator was launched by
+ * Orca with `--prompt`, since that prompt rides on the spawn command and the
+ * creating pane never writes to its PTY. The freshest qualifying client wins,
+ * and two panes booted together tie and are both rejected.
+ */
+function tieBreakByFreshLaunch(
+  evidencing: readonly CorrelatedPane[],
+  clients: readonly CorrelatedClient[],
+  createdAtMs: number
+): string | null {
+  let best: CorrelatedPane | null = null
+  let bestStart = Number.NEGATIVE_INFINITY
+  let tied = false
+  for (const pane of evidencing) {
+    let newest = Number.NEGATIVE_INFINITY
+    for (const client of clients) {
+      if (client.paneKey !== pane.paneKey || !clientCouldCreate(client, createdAtMs)) {
+        continue
+      }
+      if (client.startedAtMs > newest) {
+        newest = client.startedAtMs
+      }
+    }
+    if (newest === Number.NEGATIVE_INFINITY) {
+      continue
+    }
+    // A client that started after the row appeared cannot have created it; the
+    // 2s allowance absorbs `ps etime`'s whole-second granularity.
+    if (newest > createdAtMs + 2_000) {
+      continue
+    }
+    if (createdAtMs - newest > OPENCODE_LAUNCH_TIEBREAK_WINDOW_MS) {
+      continue
+    }
+    if (newest > bestStart) {
+      best = pane
+      bestStart = newest
+      tied = false
+    } else if (newest === bestStart) {
+      tied = true
+    }
+  }
+  return best && !tied ? best.paneKey : null
+}
+
+/**
  * Break a same-directory tie by who was actually typing. Submitting the prompt
  * that creates a session writes to that pane's PTY immediately beforehand, so
  * the candidate with the most recent pre-creation input is the creator. A
@@ -178,11 +242,13 @@ function tieBreakByRecentInput(
     if (typeof at !== 'number' || Number.isNaN(at)) {
       continue
     }
-    // The record is written before the keystroke reaches the PTY, so input
-    // postdating the row cannot have submitted it; rejecting it outright is
-    // what keeps a pane that was merely typed into afterwards from winning.
+    // Why abstain rather than skip: lastInputAtMs holds only the newest write,
+    // so a pane that typed the prompt and was then typed into again has had its
+    // pre-creation evidence overwritten. Skipping it would let a bystander
+    // become the unique in-window leader — the exact wrong-pane result this
+    // tie-break exists to prevent.
     if (at > createdAtMs) {
-      continue
+      return null
     }
     if (createdAtMs - at > OPENCODE_INPUT_TIEBREAK_WINDOW_MS) {
       continue
@@ -204,10 +270,13 @@ function tieBreakByRecentInput(
  * immediately; otherwise exactly one pane must have both the directory and a
  * client that brackets the creation. When several panes qualify — the normal
  * case for split panes or sibling folder workspaces, which share a directory —
- * the pane whose PTY received input just before the session appeared wins, but
- * only when that pane is an unambiguous in-window leader. Anything still
- * undecided stays unbound rather than guessed: a wrong owner shows the wrong
- * pane spinning, which is the bug this resolves, not a milder version of it.
+ * two signals decide, in order: the pane whose client had just booted (which
+ * covers Orca-launched agents, whose prompt rides on the spawn command and
+ * leaves their pane no keystroke), then the pane whose PTY received input just
+ * before the session appeared. Each must yield an unambiguous in-window
+ * leader. Anything still undecided stays unbound rather than guessed: a wrong
+ * owner shows the wrong pane spinning, which is the bug this resolves, not a
+ * milder version of it.
  */
 export function correlateOpenCodeSessionOwners(args: {
   sessions: readonly CorrelatedSession[]
@@ -299,9 +368,14 @@ export function correlateOpenCodeSessionOwners(args: {
     )
     const [only] = evidencing
     if (evidencing.length !== 1 || !only) {
-      const recent = tieBreakByRecentInput(evidencing, session.createdAtMs)
-      if (recent) {
-        claim(session.id, recent, 'creation-correlation')
+      // Launch recency is consulted first: an Orca-launched agent carries its
+      // first prompt on the spawn command, so the creating pane never writes a
+      // keystroke and input alone would hand the session to a bystander.
+      const owner =
+        tieBreakByFreshLaunch(evidencing, clients, session.createdAtMs) ??
+        tieBreakByRecentInput(evidencing, session.createdAtMs)
+      if (owner) {
+        claim(session.id, owner, 'creation-correlation')
       }
       continue
     }

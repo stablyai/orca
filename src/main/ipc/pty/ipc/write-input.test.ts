@@ -53,6 +53,15 @@ describe('writePtyInput registry stamp', () => {
     expect(stamped).toBeGreaterThanOrEqual(before)
   })
 
+  it('does not stamp for an automatic terminal query reply', () => {
+    // xterm answers CPR/DA1 queries on its own; a reply must never age a pane
+    // into winning a same-directory session tie.
+    expect(writePtyInput('\x1b[3;1R')).toBe(true)
+
+    expect(stamp()).toBeUndefined()
+    expect(provider.write).toHaveBeenCalled()
+  })
+
   it('leaves the pty unstamped when the write is refused', () => {
     vi.spyOn(agentSessionPtyWriteGate, 'admit').mockReturnValue({
       admitted: false,
