@@ -127,10 +127,8 @@ export type StructuredAgentSessionEndedEvent = {
   cause: 'unexpected-exit' | 'requested-close'
   fence: number
   acquisitionGeneration: string
-  /** Host receipt of the child exit, retained across settlement retries. */
+  /** Host receipt of the child exit: the end time of a turn it interrupted. */
   observedAt?: number
-  /** Translator could not admit terminal rows; host recovery must append its bounded fallback. */
-  settlementRetryRequired?: boolean
   /** The provider ended before it finished starting, so resuming it would repeat the failure. */
   startupUnproven?: true
 }
@@ -165,6 +163,9 @@ export type StructuredAgentSessionAcquireInput = {
   /** Provider events may begin before acquisition returns. */
   events?: StructuredAgentSessionEventSink
   recordPhase?: AgentSessionCreatePhaseRecorder
+  /** Durably records the child's identity the moment it exists, before any handshake, so a crash
+   *  mid-start leaves an owner recovery can stop. The acquisition's `process` must match it. */
+  onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
 }
 
 export type StructuredAgentSessionSetOptionInput = {

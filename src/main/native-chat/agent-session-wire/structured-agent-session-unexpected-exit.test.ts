@@ -7,8 +7,10 @@ import {
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
-import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import {
+  settleStaleStructuredAgentSessionState,
+  unexpectedProviderExitOutcome
+} from './structured-agent-session-dead-generation-settlement'
 import {
   isStructuredAgentSessionRecoveryTicketCurrent,
   settleUnexpectedStructuredAgentSessionExit,
@@ -110,19 +112,11 @@ function mutableStore() {
 }
 
 describe('provider-exit recovery tickets', () => {
-  it.each([undefined, 2_000])('keeps exit receipt %s on retry', async (observedAt) => {
+  it.each([undefined, 2_000])('keeps exit receipt %s when settling fails', async (observedAt) => {
     let now = observedAt === undefined ? 2_000 : 30_000
-    let record = {
-      lease: {
-        handoffStage: null,
-        runtimeFence: 7,
-        runtimeKind: 'native',
-        claimStatus: 'live',
-        ownerProcess: 'provider',
-        reservedSpawnToken: null,
-        processlessAt: null
-      }
-    } as unknown as AgentSessionRecord
+    let record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({ runtimeKind: 'native', reservedSpawnToken: null })
+    )
     const store = {
       getRecord: () => record,
       transitionHandoff: async (
@@ -170,20 +164,23 @@ describe('provider-exit recovery tickets', () => {
         observedAt
       }
     )
-    expect(record.lease.settlementRetryRequired).toBe(true)
-    expect(record.lease.deathEvidence?.observedAt).toBe(2_000)
+    // Released, not latched: the next acquire or read restore settles what this write left.
+    expect(record.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: 2_000 }
+    })
     expect(record.lease.lastRenewedAt).toBe(60_000)
     expect(record.updatedAt).toBe(60_000)
 
     now = 120_000
-    await expect(
-      retryLoadedStructuredAgentSessionSettlement({
-        deps: { store } as never,
-        sessionId: SESSION,
-        journal: session.journal,
-        now: () => now
-      })
-    ).resolves.toBe(true)
+    await settleStaleStructuredAgentSessionState({
+      journal: session.journal,
+      sessionId: SESSION,
+      fence: 8,
+      acquisitionGeneration: 'generation-2',
+      deathEvidence: record.lease.deathEvidence
+    })
     expect(appendLifecycleBatch.mock.calls.at(-1)?.[0].mutations).toContainEqual(
       expect.objectContaining({
         body: {
@@ -195,7 +192,6 @@ describe('provider-exit recovery tickets', () => {
         }
       })
     )
-    expect(record.lease.settlementRetryRequired).toBeUndefined()
   })
 
   it('uses the fallback when the one-shot translator admission was rejected, revising the running turn in place', async () => {
@@ -222,8 +218,7 @@ describe('provider-exit recovery tickets', () => {
           runtimeKind: 'native',
           claimStatus: 'live',
           ownerProcess: 'provider',
-          reservedSpawnToken: null,
-          processlessAt: null
+          reservedSpawnToken: null
         }
       }),
       transitionHandoff: async () => ({ lease: { runtimeFence: 8 } })
@@ -245,8 +240,7 @@ describe('provider-exit recovery tickets', () => {
         reason: 'provider exited',
         cause: 'unexpected-exit',
         fence: 7,
-        acquisitionGeneration: GENERATION,
-        settlementRetryRequired: true
+        acquisitionGeneration: GENERATION
       }
     )
 
@@ -413,7 +407,7 @@ describe('provider-exit recovery tickets', () => {
     )
   })
 
-  it('does not release or reacquire while terminal settlement retry is still failing', async () => {
+  it('releases without offering a restart while terminal settlement is failing', async () => {
     const session: StructuredAgentSessionUnexpectedExitSession = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {

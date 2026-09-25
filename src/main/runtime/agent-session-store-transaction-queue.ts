@@ -1,5 +1,5 @@
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
 import { raiseAgentSessionFencesAfterBackupRecovery } from './agent-session-backup-recovery-fence'
 import {
   AGENT_SESSION_STORE_SCHEMA_VERSION,
@@ -12,11 +12,26 @@ import {
 } from './agent-session-record-store-file'
 import { withFileTransactionLock } from '../file-transaction-lock'
 
+/** Latch fields older builds wrote. Nothing reads them, and dropping them keeps a lease this build
+ *  writes back from carrying a stale latch to an older build after a downgrade. */
+type RetiredAgentSessionLeaseFields = {
+  processlessAt?: unknown
+  settlementRetryRequired?: unknown
+  settlementRetryId?: unknown
+}
+
 function markLoadedLeasesUnreconciled(state: AgentSessionStoreState): void {
   for (const [sessionId, record] of state.records) {
+    const lease: AgentSessionLease & RetiredAgentSessionLeaseFields = record.lease
+    const {
+      processlessAt: _processlessAt,
+      settlementRetryRequired: _settlementRetryRequired,
+      settlementRetryId: _settlementRetryId,
+      ...current
+    } = lease
     state.records.set(sessionId, {
       ...record,
-      lease: { ...record.lease, unreconciled: true }
+      lease: { ...current, unreconciled: true }
     })
   }
 }

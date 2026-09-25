@@ -34,17 +34,13 @@ export function handleCodexSessionExit(input: {
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt: session.exitObservedAt
   } as const
-  // A synchronous sink rejection (usually backpressure) is handed to host
-  // recovery, which appends the bounded fallback before reacquisition.
+  // A synchronous sink rejection (usually backpressure) leaves the terminal rows to the host's
+  // exit settlement, which writes its own bounded fallback.
   const admission = session.translator?.handle(event) ?? { accepted: true }
-  if (!admission.accepted) {
-    // The connection invokes onExit exactly once. Forward a flagged event so
-    // host recovery can append its no-new-blob fallback even when admission is
-    // backpressured; waiting for a second callback would strand the lease.
-    if (event.cause !== 'unexpected-exit' && !input.allowFailedSettlement) {
-      return false
-    }
-    event.settlementRetryRequired = true
+  // The connection invokes onExit exactly once, so an unexpected exit is forwarded even when
+  // admission is backpressured; waiting for a second callback would strand the lease.
+  if (!admission.accepted && event.cause !== 'unexpected-exit' && !input.allowFailedSettlement) {
+    return false
   }
   session.ended = true
   // Nothing can echo for this child any more; the journal's pending-submission

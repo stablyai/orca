@@ -60,7 +60,13 @@ function openHost(): void {
 }
 
 /** Writes the lease an older build left behind, then starts a fresh app generation over it. */
-async function persistFromOlderBuild(lease: Partial<PersistedAgentSessionLease>): Promise<void> {
+/** Older builds also wrote the retired settlement latch fields. */
+type OlderBuildLease = Partial<PersistedAgentSessionLease> & {
+  settlementRetryRequired?: boolean
+  settlementRetryId?: string
+}
+
+async function persistFromOlderBuild(lease: OlderBuildLease): Promise<void> {
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const attached = store.getRecord(SESSION)?.lease
   await host.flushAllStreamedEvents()
@@ -159,9 +165,9 @@ describe('a record an older build left mid terminal handoff', () => {
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
-      handoffOperationId: null,
-      settlementRetryRequired: undefined
+      handoffOperationId: null
     })
+    expect(store.getRecord(SESSION)?.lease).not.toHaveProperty('settlementRetryRequired')
     expect(await delivered('after the upgrade')).toMatchObject({ dispatchState: 'pending' })
     expect(dispatch).toHaveBeenCalledOnce()
     expect(acquire).toHaveBeenCalledOnce()
@@ -236,17 +242,26 @@ describe('a record an older build left mid terminal handoff', () => {
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
+      handoffStage: 'recovering'
     })
+    // Sending and opening the chat both say what frees it: quitting that terminal agent.
+    const quitTerminal =
+      'This chat is still open in a terminal agent (process 4242). Quit that agent to continue the chat here.'
     // Accepted, then rejected by the start that cannot take the lease: the chat says why.
     expect(await delivered('while the terminal still runs')).toMatchObject({
       dispatchState: 'rejected'
+    })
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_conflict', message: quitTerminal }
     })
     expect(
       host
         .journalSnapshot(SESSION)
         .items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
-    ).toHaveLength(1)
+        .map((item) => item.body.kind === 'status' && item.body.text)
+    ).toEqual([expect.stringContaining(quitTerminal)])
     expect(dispatch).not.toHaveBeenCalled()
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(acquire).not.toHaveBeenCalled()

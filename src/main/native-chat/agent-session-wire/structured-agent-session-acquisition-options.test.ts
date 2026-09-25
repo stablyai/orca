@@ -108,7 +108,7 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
   expect(record).not.toBeNull()
   const lease = record!.lease
   const durableState = lease.handoffStage ?? lease.claimStatus
-  expect(['live', 'released', 'recovering', 'manual-recovery']).toContain(durableState)
+  expect(['live', 'released', 'recovering']).toContain(durableState)
   expect(lease.handoffStage).not.toBe('new-owner-proving')
 }
 
@@ -563,14 +563,12 @@ describe('structured session acquisition options', () => {
         })
         await expect(perform(reopened, RESUME_OPERATION, 2)).resolves.toMatchObject({ ok: true })
         expectSettledAttachLease(reopened.getRecord(SESSION))
-      } else {
+      } else if (failurePoint === 'proof' || failurePoint === 'journal') {
+        // A recorded owner goes to recovery, which concludes about it before the next start.
         expect(failedRecord?.lease).toMatchObject({
           runtimeFence: 1,
           claimStatus: failurePoint === 'journal' ? 'live' : 'reserved',
-          handoffStage:
-            failurePoint === 'proof' || failurePoint === 'journal'
-              ? 'recovering'
-              : 'manual-recovery',
+          handoffStage: 'recovering',
           // The settled operation must not stay named by the lease as an in-flight transfer.
           handoffOperationId: null,
           reservedSpawnToken: 'spawn-a'
@@ -579,6 +577,19 @@ describe('structured session acquisition options', () => {
           ok: false,
           refusal: { code: 'agent_session_ownership_unknown' }
         })
+      } else {
+        // No owner was recorded, and the adapter closed the stdio of anything it spawned: released,
+        // with no death evidence, since nothing proved one.
+        expect(failedRecord?.lease).toMatchObject({
+          runtimeFence: 2,
+          claimStatus: 'released',
+          handoffStage: null,
+          handoffOperationId: null,
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          deathEvidence: null
+        })
+        await expect(perform(reopened, RESUME_OPERATION, 2)).resolves.toMatchObject({ ok: true })
       }
     })
   })

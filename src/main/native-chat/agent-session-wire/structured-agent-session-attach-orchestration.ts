@@ -21,8 +21,7 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
-import { settleStaleSessionStateOnAcquire } from './structured-agent-session-stale-turn-verdict'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type {
   StructuredAgentSessionProviderChild,
@@ -121,22 +120,6 @@ async function runAttach(
   await withAgentSessionCreatePhase('resolve_recovery', recordPhase, () =>
     context.runtimeState.resolveRecovery(sessionId)
   )
-  // Retries a durable provider-exit journal settlement before a new owner is reserved. Answers
-  // settled when the record has none pending, so every attach can ask unconditionally.
-  const settled = await withAgentSessionCreatePhase('settlement_retry', recordPhase, () =>
-    retryPendingStructuredAgentSessionSettlement({
-      deps: context.deps,
-      sessionId,
-      openJournal: async () => (await context.openConversation(sessionId))?.journal ?? null,
-      now: () => context.now()
-    })
-  )
-  if (!settled) {
-    return refuseAgentSessionMutation({
-      code: 'agent_session_ownership_unknown',
-      message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
-    })
-  }
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
     context.runtimeState.probeOwner(sessionId)
   )
@@ -144,6 +127,9 @@ async function runAttach(
   // attach makes the child and its sink the session's; any other exit closes the sink with
   // whatever the child queued, and leaves the conversation's child as it was.
   const attemptSink = context.runtimeState.mintEventSink(sessionId)
+  // Read before the reserve clears it: how the previous generation ended decides how whatever it
+  // left running is settled.
+  const priorDeathEvidence = context.deps.store.getRecord(sessionId)?.lease.deathEvidence ?? null
   const attempt: { candidate: AttachCandidate | null; committed: boolean } = {
     candidate: null,
     committed: false
@@ -192,11 +178,12 @@ async function runAttach(
           : (context.runtimeState.currentEventSink(sessionId) ?? attemptSink)
         if (acquiredOwner) {
           // Before the drain: the buffered events are the new child's, never a stale row's.
-          await settleStaleSessionStateOnAcquire({
+          await settleStaleStructuredAgentSessionState({
             journal: attached.journal,
             sessionId,
             fence,
-            acquisitionGeneration
+            acquisitionGeneration,
+            deathEvidence: priorDeathEvidence
           })
         }
         await bindAndDrain(eventSink, attached.journal, fence, (activity) =>

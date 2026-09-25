@@ -296,30 +296,6 @@ describe('Stop on a child still proving its start', () => {
   })
 })
 
-describe('a settlement retry for an earlier child inside the attach for the next one', () => {
-  it('settles the earlier child and leaves the queued message to the new child (R1)', async () => {
-    // The earlier child's settlement is still owed; the lease is otherwise released.
-    await store.transitionHandoff(SESSION, (record) => ({
-      ...record,
-      lease: {
-        ...record.lease,
-        settlementRetryRequired: true,
-        settlementRetryId: `provider-exit:${SESSION}:1:generation-1`
-      }
-    }))
-    const retryFence = store.getRecord(SESSION)!.lease.runtimeFence
-    const id = await accept('for the next child')
-
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
-    expect(store.getRecord(SESSION)?.lease.settlementRetryRequired).toBeUndefined()
-    // Handed over at the new child's fence, which the attach reserved after the retry.
-    const newFence = store.getRecord(SESSION)!.lease.runtimeFence
-    expect(newFence).toBeGreaterThan(retryFence)
-    expect(submission(id)?.fence).toBe(newFence)
-    expect(conversation()?.child).toMatchObject({ generation: generation(), fence: newFence })
-  })
-})
-
 describe('a published child that dies while it proves its start', () => {
   const EXIT = 'claude stream-json exited (code 1)'
   const TEXT = providerStartupFailureOutcome(EXIT)

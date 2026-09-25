@@ -8,6 +8,7 @@ import { AgentSessionRecordStore } from '../../runtime/agent-session-record-stor
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   adapter,
   attach,
@@ -547,7 +548,8 @@ describe('restart', () => {
    *  them. Every lease loads unreconciled, so this is the state that decides
    *  whether a persisted session is reachable at all. */
   async function reboot(
-    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>,
+    stopOwnerProcess?: StructuredAgentSessionHostDeps['stopOwnerProcess']
   ) {
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
     host = new StructuredAgentSessionHost({
@@ -557,6 +559,7 @@ describe('restart', () => {
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
       probeOwner,
+      ...(stopOwnerProcess ? { stopOwnerProcess } : {}),
       now: () => NOW
     })
     replaceHostTestState({ store, host })
@@ -615,7 +618,7 @@ describe('restart', () => {
         ...record.lease,
         // How a terminal owner an older build recorded loads.
         claimStatus: 'conflicted',
-        handoffStage: 'manual-recovery'
+        handoffStage: 'recovering'
       }
     }))
     await reboot(async () => ({ outcome: 'pid-absent' }))
@@ -665,15 +668,22 @@ describe('restart', () => {
     await expect(status).resolves.toMatchObject({ owner: 'native', stage: null })
   })
 
-  it("keeps a session whose owner cannot be probed out of a live writer's hands", async () => {
+  it('releases a session whose owner can never be probed, signalling nothing, and starts over', async () => {
     await attach()
     const held = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    await reboot(async () => ({ outcome: 'indeterminate', reason: 'no probe on this host' }))
+    const stopOwnerProcess = vi.fn()
+    await reboot(
+      async () => ({ outcome: 'indeterminate', reason: 'no probe on this host' }),
+      stopOwnerProcess
+    )
+    acquire.mockClear()
 
-    expect(await host.attach(CALLER, ensureParams(held))).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
+    expect(await host.attach(CALLER, ensureParams(await staleFenceFrom(held)))).toMatchObject({
+      ok: true
     })
+    expect(acquire).toHaveBeenCalledOnce()
+    // An unverifiable pid may already belong to an unrelated process.
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
   })
 
   it('does not remember a failed adjudication as done', async () => {
