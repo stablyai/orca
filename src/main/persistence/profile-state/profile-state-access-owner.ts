@@ -12,9 +12,11 @@ import {
   writeFileSync
 } from 'node:fs'
 import { hostname } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
 import {
   profileStateAccessBootIdentity,
+  profileStateAccessMachineIdentity,
   profileStateAccessProcessIdentity
 } from './profile-state-access-identity'
 
@@ -53,6 +55,7 @@ type AccessOwner = {
   platform: string
   pidNamespace: string | null
   bootIdentity?: string | null
+  machineIdentity?: string | null
   processStartIdentity?: string | null
 }
 
@@ -101,6 +104,10 @@ function readOwner(path: string): AccessOwner | undefined {
           'bootIdentity' in owner && typeof owner.bootIdentity === 'string'
             ? owner.bootIdentity
             : null,
+        machineIdentity:
+          'machineIdentity' in owner && typeof owner.machineIdentity === 'string'
+            ? owner.machineIdentity
+            : null,
         processStartIdentity:
           'processStartIdentity' in owner &&
           typeof owner.processStartIdentity === 'string' &&
@@ -120,11 +127,19 @@ function readOwner(path: string): AccessOwner | undefined {
 }
 
 function ownerExited(owner: AccessOwner): boolean {
-  const sameBoot = Boolean(
-    owner.bootIdentity && owner.bootIdentity === profileStateAccessBootIdentity()
-  )
-  if ((!sameBoot && owner.host !== hostname()) || owner.platform !== process.platform) {
+  const currentBoot = profileStateAccessBootIdentity()
+  const currentMachine = profileStateAccessMachineIdentity()
+  const sameBoot = Boolean(owner.bootIdentity && owner.bootIdentity === currentBoot)
+  const sameMachine = Boolean(owner.machineIdentity && owner.machineIdentity === currentMachine)
+  if (
+    (!sameBoot && !sameMachine && owner.host !== hostname()) ||
+    owner.platform !== process.platform ||
+    (!sameBoot && owner.machineIdentity && currentMachine && !sameMachine)
+  ) {
     return false
+  }
+  if (sameMachine && owner.bootIdentity && currentBoot && owner.bootIdentity !== currentBoot) {
+    return true
   }
   // Windows/WSL and Linux PID namespaces cannot establish each other's process absence.
   if (
@@ -224,6 +239,7 @@ export function publishAccessOwner(paths: ProfileStateAccessPaths, exclusive: bo
         platform: process.platform,
         pidNamespace: profileStateAccessPidNamespace(),
         bootIdentity: profileStateAccessBootIdentity(),
+        machineIdentity: profileStateAccessMachineIdentity(),
         processStartIdentity: profileStateAccessProcessIdentity(process.pid)
       }),
       {
@@ -231,6 +247,8 @@ export function publishAccessOwner(paths: ProfileStateAccessPaths, exclusive: bo
         mode: 0o600
       }
     )
+    fsyncFileSync(join(candidate, entry))
+    bestEffortFsyncDirectorySync(candidate)
     for (let attempt = 0; ; attempt += 1) {
       try {
         renameSync(candidate, target)
@@ -243,6 +261,14 @@ export function publishAccessOwner(paths: ProfileStateAccessPaths, exclusive: bo
         reclaimExitedOwner(target)
       }
     }
+    bestEffortFsyncDirectorySync(dirname(target))
+    bestEffortFsyncDirectorySync(paths.candidates)
+  } catch (error) {
+    if (published) {
+      removeOwnerEntry(join(target, entry))
+      removeEmptyOwnerDirectory(target)
+    }
+    throw error
   } finally {
     if (!published) {
       removeOwnerEntry(join(candidate, entry))

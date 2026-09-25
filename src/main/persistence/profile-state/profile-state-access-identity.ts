@@ -6,7 +6,32 @@ import {
 } from '../../daemon/daemon-process-start-time'
 
 let bootIdentity: string | null | undefined
+let machineIdentity: string | null | undefined
 let ownProcessIdentity: string | null | undefined
+
+/** A boot change proves exit only when the record belongs to this machine. */
+export function profileStateAccessMachineIdentity(): string | null {
+  if (machineIdentity !== undefined) {
+    return machineIdentity
+  }
+  machineIdentity = null
+  try {
+    if (process.platform === 'linux') {
+      machineIdentity = readFileSync('/etc/machine-id', 'utf8').trim() || null
+    } else if (process.platform === 'darwin') {
+      const result = runProcessSync({
+        program: '/usr/sbin/sysctl',
+        args: ['-n', 'kern.hostuuid'],
+        timeoutMs: 1_000,
+        maxOutputBytes: 1024
+      })
+      machineIdentity = result.code === 0 ? result.stdout.trim() || null : null
+    }
+  } catch {
+    // Missing machine identity cannot establish ownership across a reboot.
+  }
+  return machineIdentity
+}
 
 /** A kernel boot UUID survives hostname changes without conflating machines sharing a profile. */
 export function profileStateAccessBootIdentity(): string | null {

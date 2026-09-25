@@ -1,21 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import type { ProfileProjectMoveIdentity } from './profile-project-move-intent'
+import type { ProfileProjectDomainMoveIntent } from './profile-project-move-record'
+export type { ProfileProjectDomainMoveIntent } from './profile-project-move-record'
 import {
   profileProjectDomainDigests,
   profileProjectDomainFingerprint,
-  validateProfileProjectDomainChanges,
   type ProfileProjectDomainChanges
 } from './profile-project-domain-changes'
 import {
   readProfileProjectTransferState,
   type ReadProfileProjectTransferResult
 } from './profile-project-domain-state'
-
-export type ProfileProjectDomainMoveIntent = ProfileProjectMoveIdentity & {
-  version: 2
-  source: ProfileProjectDomainChanges
-  target: ProfileProjectDomainChanges
-}
 
 export function createProfileProjectDomainMoveIntent(args: {
   sourceProfileId: string
@@ -61,14 +55,4 @@ function matches(
     snapshot.documents !== undefined &&
     profileProjectDomainFingerprint(profileProjectDomainDigests(snapshot.documents)) === hash
   )
-}
-
-export function validateProfileProjectDomainMoveIntent(
-  value: ProfileProjectMoveIdentity & Record<string, unknown>
-): asserts value is ProfileProjectDomainMoveIntent {
-  if (value.version !== 2) {
-    throw new Error('Profile move intent is malformed')
-  }
-  validateProfileProjectDomainChanges(value.source)
-  validateProfileProjectDomainChanges(value.target)
 }

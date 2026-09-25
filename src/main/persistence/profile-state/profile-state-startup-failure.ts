@@ -16,6 +16,8 @@ export type ProfileStateStartupFailureClass =
   | 'ambiguous-authority'
   | 'revision-conflict'
   | 'writer-unavailable'
+  | 'newer-schema'
+  | 'publication-unavailable'
 
 /** Return the bounded failure class used by startup breadcrumbs and support diagnostics. */
 export function profileStateStartupFailureClass(
@@ -28,6 +30,12 @@ export function profileStateStartupFailureClass(
     return 'ambiguous-authority'
   }
   if (isRecord(error) && typeof error.code === 'string') {
+    if (error.code === 'profile-state-publication-unavailable') {
+      return 'publication-unavailable'
+    }
+    if (error.code === 'newer-schema') {
+      return 'newer-schema'
+    }
     if (error.code === 'profile-state-revision-conflict') {
       return 'revision-conflict'
     }
@@ -73,6 +81,16 @@ export function formatProfileStateStartupFailure(error: unknown): string | undef
   }
 
   const failureClass = profileStateStartupFailureClass(error)
+  if (
+    failureClass === 'publication-unavailable' &&
+    isRecord(error) &&
+    typeof error.message === 'string'
+  ) {
+    return error.message
+  }
+  if (failureClass === 'newer-schema') {
+    return 'This profile was saved by a newer version of Orca. Open it with that version or a newer release. Your profile has not been changed.'
+  }
   if (failureClass === 'revision-conflict') {
     return 'The active profile changed while Orca was starting. Close other Orca processes using this profile, then restart Orca.'
   }

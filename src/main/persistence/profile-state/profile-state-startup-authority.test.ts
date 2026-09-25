@@ -250,7 +250,14 @@ describe('profile-state startup authority boundary', () => {
         }
       }
       const before = readFileSync(options.databaseFile)
-      await expect(createProfileStateStoreForStartup(options)).rejects.toThrow()
+      await expect(createProfileStateStoreForStartup(options)).rejects.toMatchObject({
+        code:
+          kind === 'future-schema'
+            ? 'newer-schema'
+            : kind === 'ambiguous'
+              ? 'ambiguous-profile-state'
+              : 'profile-state-recovery-required'
+      })
       expect(readFileSync(options.databaseFile)).toEqual(before)
       if (kind === 'ambiguous') {
         expect(readFileSync(options.dataFile, 'utf8')).toBe('{"settings":{"theme":"dark"}}')

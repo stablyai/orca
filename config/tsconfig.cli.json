@@ -64,6 +64,8 @@
     "../src/main/persistence/profile-state/profile-state-recovery.ts",
     "../src/main/persistence/profile-state/profile-state-recovery-copy.ts",
     "../src/main/persistence/profile-state/profile-state-recovery-command.ts",
+    "../src/main/orca-profiles/profile-project-move-record.ts",
+    "../src/main/orca-profiles/profile-project-domain-changes.ts",
     "../src/main/persistence/profile-state/profile-state-active-location.ts",
     "../src/main/persistence/profile-state/profile-state-access.ts",
     "../src/main/persistence/profile-state/profile-state-access-owner.ts",

@@ -2,6 +2,7 @@ export type ProfileStateDatabaseOpenErrorCode =
   | 'unreadable'
   | 'identity-mismatch'
   | 'invalid-profile-id'
+  | 'newer-schema'
 
 export class ProfileStateDatabaseOpenError extends Error {
   readonly code: ProfileStateDatabaseOpenErrorCode

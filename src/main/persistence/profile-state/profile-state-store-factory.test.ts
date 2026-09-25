@@ -108,7 +108,7 @@ describe('profile state Store authority factory', () => {
 
       expect(() =>
         createProfileStateStore({ ...options, authorityMode: 'sqlite-established' })
-      ).toThrow(ProfileStateRecoveryRequiredError)
+      ).toThrow(expect.objectContaining({ code: 'newer-schema' }))
       expect(readFileSync(options.databaseFile)).toEqual(databaseBefore)
       expect(existsSync(options.dataFile)).toBe(keepJson)
       if (keepJson) {

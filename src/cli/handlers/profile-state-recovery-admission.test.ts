@@ -123,6 +123,18 @@ function state(databasePath: string) {
 }
 
 describe('offline recovery excludes runtime admission', () => {
+  it('refuses rollback without changing the database when a move journal is unresolved', async () => {
+    const profile = await fixture()
+    const before = readFileSync(profile.databasePath)
+    const intents = join(profile.root, 'profile-move-intents')
+    mkdirSync(intents)
+    const intentPath = join(intents, '00000000-0000-0000-0000-000000000001.json')
+    writeFileSync(intentPath, '{"partial":true}')
+    await expect(rollback(profile)).rejects.toThrow('pending project move')
+    expect(readFileSync(profile.databasePath)).toEqual(before)
+    expect(readFileSync(intentPath, 'utf8')).toBe('{"partial":true}')
+  })
+
   it('refuses recovery before any mutation when a runtime has already entered', async () => {
     const profile = await fixture()
     const original = readFileSync(profile.databasePath)

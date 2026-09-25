@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { publishFileDurableSync } from '../../durable-file-write'
+import { publishProfileStateDatabase } from './profile-state-database-publication'
 import { openProfileStateDatabase } from './profile-state-database'
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
@@ -47,7 +47,7 @@ export function migrateProfileStateToSqlite(options: ProfileStateMigrationOption
 
     // Closing checkpoints the temporary database before its canonical path becomes visible.
     assertMigrationSourceUnchanged(options)
-    if (!publishFileDurableSync(temporaryDatabaseFile, options.databaseFile)) {
+    if (!publishProfileStateDatabase(temporaryDatabaseFile, options.databaseFile)) {
       throw new Error('Profile state storage changed while importing legacy JSON')
     }
     published = true

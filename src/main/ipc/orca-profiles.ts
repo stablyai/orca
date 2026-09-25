@@ -35,7 +35,10 @@ import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
 import { transferActiveProfileProject } from '../orca-profiles/profile-active-transfer'
 import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-presence'
-import { flushActiveProfileBeforeFileMutation } from '../orca-profiles/profile-persistence-deadline'
+import {
+  flushActiveProfileBeforeFileMutation,
+  flushActiveProfileBeforeRelaunch
+} from '../orca-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
   createCloudLinkedOrcaProfile,
@@ -200,13 +203,9 @@ export function registerOrcaProfileHandlers(
       }
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
-      const maintenance = await flushActiveProfileBeforeFileMutation(store)
-      try {
-        setActiveOrcaProfile(profileId)
-      } catch (error) {
-        await maintenance.resume()
-        throw error
-      }
+      // Switching leaves source files intact; relaunch cleanup still needs its live writer.
+      await flushActiveProfileBeforeRelaunch(store)
+      setActiveOrcaProfile(profileId)
       await runBeforeProfileRelaunch(options.onBeforeRelaunch)
 
       scheduleProfileRelaunch('profile-switch', event.sender)

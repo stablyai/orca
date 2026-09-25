@@ -1,4 +1,5 @@
 import { unlinkSync } from 'node:fs'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
@@ -205,27 +206,13 @@ export function enqueueWrite(
     if (capture.fullCheckpoint) {
       runtime.dirtyProfileStateDomains = null
     }
-    const authority = runtime.profileStateAuthority
-    const abort = () => {
-      if (authority?.asynchronous) {
-        void authority
-          .abort()
-          .catch((error) =>
-            console.error('[persistence] Failed to stop aborted profile writer:', error)
-          )
-      }
-    }
-    signal?.addEventListener('abort', abort, { once: true })
-    try {
-      await writeToDiskAsync(owner)
-    } finally {
-      signal?.removeEventListener('abort', abort)
-    }
+    await writeToDiskAsync(owner)
   })
   if (batchable) {
     context.queuedSnapshot = { completion, capture }
   }
-  return completion
+  // A caller may stop waiting; the admitted write must retain its acknowledgement and ordering.
+  return waitForPromiseWithSignal(completion, options.signal)
 }
 
 export function enqueuePrimaryStateOperation<T>(

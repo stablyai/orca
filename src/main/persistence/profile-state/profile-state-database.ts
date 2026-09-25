@@ -68,7 +68,10 @@ export function openWritableProfileStateDatabase(
   const opened = openProfileStateDatabase(databasePath, profileId)
   if (opened.readOnly) {
     opened.db.close()
-    throw new Error('Cannot write a future profile state schema')
+    throw new ProfileStateDatabaseOpenError(
+      'newer-schema',
+      'This profile requires a newer version of Orca'
+    )
   }
   return opened
 }
@@ -197,7 +200,7 @@ export function openProfileStateDatabaseReadOnly(
     verifyProfileStateIntegrity(db)
     if (storedVersion > PROFILE_STATE_DATABASE_SCHEMA_VERSION) {
       throw new ProfileStateDatabaseOpenError(
-        'unreadable',
+        'newer-schema',
         `Profile state database schema is newer than this runtime: ${storedVersion}`
       )
     }
