@@ -73,6 +73,10 @@ export class Store {
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
       registerPersistedPaneKeyAlias(entry)
     }
+    // Why this single-slot registration needs no detach above the replay loops: normalization
+    // retires these rows into aliases and returns none, so the loop that would fire a previous
+    // Store's listener is unreachable. persistence-migration-unsupported-replay-guard.test.ts
+    // reddens if that stops being true.
     setMigrationUnsupportedPtyPersistenceListener((entries) => {
       this.state.migrationUnsupportedPtyEntries = entries
       scheduleSave(this.domains.scheduling)
