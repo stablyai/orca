@@ -301,6 +301,29 @@ describe('correlateOpenCodeSessionOwners', () => {
     ])
   })
 
+  it('keeps a pane whose later client postdates the session', () => {
+    // clientCouldCreate admits starts up to CREATE_SKEW after the row, so a
+    // client spawned inside the pane (e.g. `opencode run`) must not mask the
+    // earlier client that actually launched this session — and must not let
+    // the bystander in pane-b inherit it on input alone.
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 61_000 }
+      ],
+      clients: [
+        client('pane-a', NOW - 65_000),
+        client('pane-a', NOW - 40_000),
+        client('pane-b', NOW - 86_400_000)
+      ],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'creation-correlation' }
+    ])
+  })
+
   it('ignores input when only one pane has client evidence', () => {
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_1', NOW - 60_000)],

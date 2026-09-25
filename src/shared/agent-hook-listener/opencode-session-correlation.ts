@@ -146,6 +146,20 @@ function normalizeDir(directory: string): string {
   )
 }
 
+/**
+ * True when two pane directories name the same place after the normalization
+ * session containment uses (macOS /private alias, Windows case and backslash
+ * folding, dot segments). Raw equality here would discard a reminted pane's
+ * input history whenever only the path's spelling changed, handing the
+ * session to a pane with older activity — the opposite of the guard's intent.
+ */
+export function openCodeDirectoryMatches(left: string | null, right: string | null): boolean {
+  if (!left || !right) {
+    return false
+  }
+  return normalizeDir(left) === normalizeDir(right)
+}
+
 /** `--session <id>`, `-s <id>`, `--session=<id>` or a trailing attach target. */
 export function sessionIdFromArgv(argv: readonly string[]): string | null {
   for (let i = 0; i < argv.length; i += 1) {
@@ -197,16 +211,19 @@ function tieBreakByFreshLaunch(
       if (client.paneKey !== pane.paneKey || !clientCouldCreate(client, createdAtMs)) {
         continue
       }
+      // Reject here rather than on the pane's newest: clientCouldCreate allows
+      // starts up to CREATE_SKEW after the row, so testing only the max would
+      // let a later client (an `opencode run` spawned inside the pane) mask an
+      // earlier one that really was the launch. A pane holding only
+      // post-creation clients still ends at -Infinity and is skipped below.
+      if (client.startedAtMs > createdAtMs + 2_000) {
+        continue
+      }
       if (client.startedAtMs > newest) {
         newest = client.startedAtMs
       }
     }
     if (newest === Number.NEGATIVE_INFINITY) {
-      continue
-    }
-    // A client that started after the row appeared cannot have created it; the
-    // 2s allowance absorbs `ps etime`'s whole-second granularity.
-    if (newest > createdAtMs + 2_000) {
       continue
     }
     if (createdAtMs - newest > OPENCODE_LAUNCH_TIEBREAK_WINDOW_MS) {

@@ -5,6 +5,7 @@ import {
 } from '../../shared/agent-hook-listener/opencode-session-registry'
 import {
   correlateOpenCodeSessionOwners,
+  openCodeDirectoryMatches,
   type CorrelatedClient,
   type CorrelatedPane,
   type CorrelatedSession,
@@ -192,7 +193,7 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
     // its old directory, or a session in the new one could win a tie on
     // keystrokes that never happened there.
     const carriedInput =
-      previous && previous.directory === pane.directory
+      previous && openCodeDirectoryMatches(previous.directory, pane.directory)
         ? mostRecentInput(previous.lastInputAtMs, pane.lastInputAtMs)
         : pane.lastInputAtMs
     paneByKey.set(pane.paneKey, {
