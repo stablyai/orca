@@ -94,6 +94,44 @@ describe('descendant exit verification across partial process-table reads', () =
     expect(sendSignal).not.toHaveBeenCalled()
   })
 
+  it('keeps the latest sighting when an earlier-started read that matches resolves later', async () => {
+    const target = row(20)
+    const snapshot = collectDescendantRows(10, [row(10, 1), target], CAPTURED_AT)
+    const readTable = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [target], capturedAtMs: CAPTURED_AT + 300 })
+      .mockResolvedValueOnce({ rows: [target], capturedAtMs: CAPTURED_AT + 100 })
+      // Began between the two sightings, so it cannot prove the later one gone.
+      .mockResolvedValue({ rows: [], capturedAtMs: CAPTURED_AT + 200 })
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
+      readTable,
+      sendSignal: vi.fn(),
+      requireIdentityBeforeSignal: true,
+      graceMs: 10_000,
+      verifyMs: 300
+    })
+    await vi.advanceTimersByTimeAsync(400)
+
+    await expect(pending).resolves.toBe('unverifiable')
+  })
+
+  it('counts the read after the deadline as an absence', async () => {
+    const snapshot = collectDescendantRows(10, [row(10, 1), row(20)], CAPTURED_AT)
+    const readTable = vi.fn().mockImplementation(async () => capture([]))
+    // One poll fits in the window; the final read supplies the second absence.
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
+      readTable,
+      sendSignal: vi.fn(),
+      requireIdentityBeforeSignal: true,
+      graceMs: 0,
+      verifyMs: 50
+    })
+    await vi.advanceTimersByTimeAsync(100)
+
+    await expect(pending).resolves.toBe('exited')
+    expect(readTable).toHaveBeenCalledTimes(2)
+  })
+
   it('escalates a survivor omitted at the first force-kill read when it reappears', async () => {
     const first = row(20)
     const later = row(30)

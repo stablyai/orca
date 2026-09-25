@@ -133,6 +133,21 @@ export async function terminateDescendantSnapshotWithVerdict(
       snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
     ])
   )
+  const recordIdentityObservation = (
+    capture: ProcessTableCapture,
+    live: readonly ProcessTableRow[]
+  ): void => {
+    for (const row of snapshot.descendants) {
+      const lastSeen = lastSeenAtMs.get(row.pid) ?? Infinity
+      if (live.some((current) => current.pid === row.pid)) {
+        missingObservations.set(row.pid, 0)
+        // A read that started earlier but resolved later must not move the sighting back.
+        lastSeenAtMs.set(row.pid, Math.max(lastSeen, capture.capturedAtMs))
+      } else if (capture.capturedAtMs > lastSeen) {
+        missingObservations.set(row.pid, (missingObservations.get(row.pid) ?? 0) + 1)
+      }
+    }
+  }
   const provenAbsent = (): boolean =>
     snapshot.descendants.every((row) => (missingObservations.get(row.pid) ?? 0) >= 2)
   if (!deps.requireIdentityBeforeSignal) {
@@ -158,14 +173,7 @@ export async function terminateDescendantSnapshotWithVerdict(
       }
       const live = matchingSnapshotRows(snapshot, capture.rows, deps.requireIdentityBeforeSignal)
       if (deps.requireIdentityBeforeSignal) {
-        for (const row of snapshot.descendants) {
-          if (live.some((current) => current.pid === row.pid)) {
-            missingObservations.set(row.pid, 0)
-            lastSeenAtMs.set(row.pid, capture.capturedAtMs)
-          } else if (capture.capturedAtMs > (lastSeenAtMs.get(row.pid) ?? Infinity)) {
-            missingObservations.set(row.pid, (missingObservations.get(row.pid) ?? 0) + 1)
-          }
-        }
+        recordIdentityObservation(capture, live)
       }
       if (live.length === 0) {
         // Before a signal has been sent, an empty identity match means the
@@ -236,6 +244,7 @@ export async function terminateDescendantSnapshotWithVerdict(
     return 'live'
   }
   if (deps.requireIdentityBeforeSignal) {
+    recordIdentityObservation(finalCapture, finalLive)
     return provenAbsent() ? 'exited' : 'unverifiable'
   }
   return 'exited'
