@@ -14,6 +14,7 @@ import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
+import { getElectronUpdaterSession } from '../electron-updater-loader'
 import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
@@ -212,15 +213,19 @@ export function registerSettingsHandlers(
         browserSessionRegistry.listProfiles(),
         result
       )
-      const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        defaultSessionApply,
-        browserSessionsApply
-      ])
+      const updaterSessionApply = applyElectronProxySettings(result, {
+        proxySession: getElectronUpdaterSession()
+      })
+      const [defaultSessionResult, browserSessionsResult, updaterSessionResult] =
+        await Promise.allSettled([defaultSessionApply, browserSessionsApply, updaterSessionApply])
       if (defaultSessionResult.status === 'rejected') {
         console.warn('[settings] failed to apply network proxy settings')
       }
       if (browserSessionsResult.status === 'rejected') {
         console.warn('[settings] failed to apply network proxy settings to browser sessions')
+      }
+      if (updaterSessionResult.status === 'rejected') {
+        console.warn('[settings] failed to apply network proxy settings to updater session')
       }
     }
     if (

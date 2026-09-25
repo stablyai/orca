@@ -3,8 +3,10 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import { isTrustedUIRenderer } from '../ipc/ui'
+import { applyElectronProxySettings } from '../network/proxy-settings'
 import type { Store } from '../persistence'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { getElectronUpdaterSession } from '../electron-updater-loader'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,
@@ -20,12 +22,14 @@ import {
 } from '../updater'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
+const UPDATER_SETUP_RETRY_LIMIT = 3
+const UPDATER_SETUP_RETRY_MS = 1_000
 
 // Why: a manual check can arrive before deferred setup runs, so entry points force this pending setup to configure the updater first.
-let pendingAutoUpdaterSetup: (() => void) | null = null
+let pendingAutoUpdaterSetup: (() => Promise<void>) | null = null
 
-export function ensureAutoUpdaterConfigured(): void {
-  pendingAutoUpdaterSetup?.()
+export function ensureAutoUpdaterConfigured(): Promise<void> {
+  return pendingAutoUpdaterSetup?.() ?? Promise.resolve()
 }
 
 export function scheduleMainWindowAutoUpdaterSetup(
@@ -37,45 +41,75 @@ export function scheduleMainWindowAutoUpdaterSetup(
   }
 ): void {
   // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
-  let updaterSetupDone = false
-  const setupAutoUpdaterDeferred = (): void => {
-    if (updaterSetupDone || mainWindow.isDestroyed()) {
-      return
+  let updaterSetupPromise: Promise<void> | null = null
+  let updaterSetupRetryCount = 0
+  const setupAutoUpdaterDeferred = (): Promise<void> => {
+    if (mainWindow.isDestroyed()) {
+      return Promise.resolve()
     }
-    updaterSetupDone = true
-    setupAutoUpdater(mainWindow, {
-      getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-      onBeforeQuit: async () => {
-        try {
-          await options?.onBeforeUpdateQuit?.()
-        } finally {
-          await store.flushPendingAsync()
-        }
-      },
-      setLastUpdateCheckAt: (timestamp) => {
-        store.updateUI({ lastUpdateCheckAt: timestamp })
-      },
-      getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
-      getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
-      setPendingUpdateNudgeId: (id) => {
-        // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
-        if (id) {
-          store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
-        } else {
-          store.updateUI({ pendingUpdateNudgeId: null })
-        }
-      },
-      setDismissedUpdateNudgeId: (id) => {
-        store.updateUI({ dismissedUpdateNudgeId: id })
-      },
-      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
-      installMode: options?.updateInstallMode
+    if (updaterSetupPromise) {
+      return updaterSetupPromise
+    }
+    updaterSetupPromise = (async () => {
+      const updaterSession = getElectronUpdaterSession()
+      await applyElectronProxySettings(store.getSettings(), { proxySession: updaterSession })
+      setupAutoUpdater(mainWindow, {
+        getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+        onBeforeQuit: async () => {
+          try {
+            await options?.onBeforeUpdateQuit?.()
+          } finally {
+            await store.flushPendingAsync()
+          }
+        },
+        setLastUpdateCheckAt: (timestamp) => {
+          store.updateUI({ lastUpdateCheckAt: timestamp })
+        },
+        getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+        getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+        setPendingUpdateNudgeId: (id) => {
+          // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
+          if (id) {
+            store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+          } else {
+            store.updateUI({ pendingUpdateNudgeId: null })
+          }
+        },
+        setDismissedUpdateNudgeId: (id) => {
+          store.updateUI({ dismissedUpdateNudgeId: id })
+        },
+        getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
+        installMode: options?.updateInstallMode
+      })
+      logStartupMilestone('updater-setup-done')
+      updaterSetupRetryCount = 0
+    })().catch((error: unknown) => {
+      updaterSetupPromise = null
+      throw error
     })
-    logStartupMilestone('updater-setup-done')
+    return updaterSetupPromise
   }
   pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
-  mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
-  const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
+  const startDeferredSetup = (): void => {
+    void setupAutoUpdaterDeferred().catch((error: unknown) => {
+      console.error('[updater] Failed to prepare updater proxy session:', error)
+      if (mainWindow.isDestroyed()) {
+        return
+      }
+      if (updaterSetupRetryCount < UPDATER_SETUP_RETRY_LIMIT) {
+        updaterSetupRetryCount += 1
+        setTimeout(startDeferredSetup, UPDATER_SETUP_RETRY_MS * updaterSetupRetryCount)
+        return
+      }
+      mainWindow.webContents.send('updater:status', {
+        state: 'error',
+        message: 'Update checks are unavailable until the network proxy is ready.',
+        retryable: true
+      })
+    })
+  }
+  mainWindow.once('ready-to-show', () => setImmediate(startDeferredSetup))
+  const updaterSetupFallback = setTimeout(startDeferredSetup, UPDATER_SETUP_FALLBACK_MS)
   updaterSetupFallback.unref?.()
 }
 
@@ -93,8 +127,8 @@ export function registerUpdaterHandlers(_store: Store): void {
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
-  ipcMain.handle('updater:check', (_event, options?: UpdateCheckOptions) => {
-    ensureAutoUpdaterConfigured()
+  ipcMain.handle('updater:check', async (_event, options?: UpdateCheckOptions) => {
+    await ensureAutoUpdaterConfigured()
     return checkForUpdatesFromMenu(options)
   })
   ipcMain.handle('updater:download', () => downloadUpdate())
