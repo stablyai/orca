@@ -3,7 +3,7 @@
   "family": "session.diff-review-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "514ab7f868d2236663dd304a58bf7179e9bc48b5",
+  "baseline": "6f3018576d92afe300051a1567d71ac3c40f43de",
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "56419c5e22fb384e5d5b0475f28db6505ecefe12c38aafac9fd6d26c1a9f260a",
@@ -18,55 +18,10 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "2fc890e4b748": {
-      "actionError": {
-        "$rpc": "null"
-      },
-      "busyAction": {
-        "$rpc": "null"
-      },
-      "screenState": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "needs a test",
-            "createdAt": 0,
-            "filePath": "src/app.ts",
-            "id": "note-1",
-            "lineNumber": 4,
-            "side": "modified",
-            "worktreeId": "workspace-1"
-          }
-        ],
-        "kind": "ready",
-        "reviewState": {
-          "files": {},
-          "version": 1
-        },
-        "status": {
-          "entries": []
-        }
-      },
-      "sendSheet": {
-        "$rpc": "null"
-      }
-    },
     "5ee9e7b49320": {
       "name": "agent.launchReplay#1",
       "ordinal": 8,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"claude\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:workspace-1\"},\"prompt\":{\"text\":\"You are reviewing the current worktree. Address the following mobile review notes.\\n\\nFile: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\\n\\nAfter applying fixes:\\n1. Summarize changed files.\\n2. Run relevant tests.\\n3. Tell me if anything remains risky.\",\"delivery\":\"submit\"},\"launchSource\":\"notes_send\"}}"
-    },
-    "7955df1635be": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Workspace not found",
-        "isRpcDeliveryUnknown": false
-      }
     },
     "9239a4f232b8": {
       "name": "repo.list#1",
@@ -195,10 +150,51 @@
       "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
     "f49d184679d1": {
       "name": "preflight.detectAgents#1",
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    },
+    "fc1691a7deca": {
+      "actionError": "Workspace not found",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
     },
     "fc3974e714de": {
       "name": "preflight.detectAgents#1",
@@ -242,9 +238,9 @@
           "sender": ["9239a4f232b8", "96a9a954e28f", "fc3974e714de", "bcb5111e6012"],
           "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "5ee9e7b49320"],
           "settlements": {
-            "create-and-send": "7955df1635be"
+            "create-and-send": "eb79a9b3682a"
           },
-          "state": "2fc890e4b748",
+          "state": "fc1691a7deca",
           "effects": []
         }
       }
