@@ -40,7 +40,7 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(true)
-    expect(sendInput).toHaveBeenCalledWith('git status\r')
+    expect(sendInput).toHaveBeenCalledWith('git status\r', { userInput: true })
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
   })
@@ -62,7 +62,7 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(false)
-    expect(sendInput).toHaveBeenCalledWith('npm test')
+    expect(sendInput).toHaveBeenCalledWith('npm test', { userInput: true })
     expect(pane.terminal.focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
   })
@@ -85,7 +85,9 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(true)
-    expect(sendInput).toHaveBeenCalledWith('cd packages; bun run build; cd ..\r')
+    expect(sendInput).toHaveBeenCalledWith('cd packages; bun run build; cd ..\r', {
+      userInput: true
+    })
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
 
@@ -107,7 +109,7 @@ describe('sendTerminalQuickCommandToPane', () => {
     })
 
     expect(sent).toBe(true)
-    expect(sendInput).toHaveBeenCalledWith('echo one; echo two')
+    expect(sendInput).toHaveBeenCalledWith('echo one; echo two', { userInput: true })
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
   })
 

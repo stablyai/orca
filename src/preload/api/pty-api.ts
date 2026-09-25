@@ -75,8 +75,9 @@ export type PtyApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
-  write: (id: string, data: string) => void
-  writeAccepted: (id: string, data: string) => Promise<boolean>
+  /** `userInput` marks bytes a person produced, so main can record the run's first input. */
+  write: (id: string, data: string, options?: { userInput?: true }) => void
+  writeAccepted: (id: string, data: string, options?: { userInput?: true }) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void

@@ -370,7 +370,7 @@ describe('terminal send RPC', () => {
     expect(runtime.sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: '\x1b[3;4R', enter: false, interrupt: false },
-      { beforeWrite: undefined }
+      { beforeWrite: undefined, inputKind: 'query-reply' }
     )
     expect(runtime.mobileTookFloor).not.toHaveBeenCalled()
   })

@@ -5,6 +5,7 @@ import {
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import type { PtyTransport } from './pty-transport-types'
 
 type QuickCommandPane = {
   leafId: string
@@ -13,9 +14,7 @@ type QuickCommandPane = {
   }
 }
 
-type QuickCommandTransport = {
-  sendInput: (data: string) => boolean
-}
+type QuickCommandTransport = Pick<PtyTransport, 'sendInput'>
 
 export function sendTerminalQuickCommandToPane({
   command,
@@ -36,7 +35,8 @@ export function sendTerminalQuickCommandToPane({
   }
 
   const sent = transport.sendInput(
-    buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command))
+    buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command)),
+    { userInput: true }
   )
   if (sent) {
     recordTerminalUserInputForLeaf(tabId, pane.leafId)

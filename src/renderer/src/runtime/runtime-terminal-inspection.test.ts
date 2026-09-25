@@ -475,7 +475,7 @@ describe('runtime terminal owner routing', () => {
       sendRuntimePtyInputVerified({ activeRuntimeEnvironmentId: null }, 'local-pty', 'x')
     ).resolves.toBe(true)
 
-    expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x')
+    expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x', { userInput: true })
     expect(localWrite).not.toHaveBeenCalled()
   })
 
@@ -511,7 +511,7 @@ describe('runtime terminal owner routing', () => {
 
       await vi.advanceTimersByTimeAsync(0)
 
-      expect(localWrite).toHaveBeenCalledWith('local-pty', text)
+      expect(localWrite).toHaveBeenCalledWith('local-pty', text, { userInput: true })
       expect(localWriteAccepted).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -563,7 +563,7 @@ describe('runtime terminal owner routing', () => {
       await vi.advanceTimersByTimeAsync(0)
 
       await expect(accepted).resolves.toBe(true)
-      expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', text)
+      expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', text, { userInput: true })
       expect(localWrite).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -832,7 +832,7 @@ describe('runtime terminal owner routing', () => {
       sendRuntimePtyInputVerified({ activeRuntimeEnvironmentId: null }, 'local-pty', 'x')
     ).resolves.toBe(true)
 
-    expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x')
-    expect(localWrite).toHaveBeenCalledWith('local-pty', 'x')
+    expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x', { userInput: true })
+    expect(localWrite).toHaveBeenCalledWith('local-pty', 'x', { userInput: true })
   })
 })

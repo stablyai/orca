@@ -62,6 +62,8 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
       const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
+      // Why: a dispatched prompt is input to the run, recorded before the write can end it.
+      this.terminalRunFacts.recordUserInput(ptyId)
       if (!this.ptyController?.write(ptyId, initialWrite)) {
         throw new Error('terminal_not_writable')
       }

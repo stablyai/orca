@@ -40,6 +40,8 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
+  // Why here: every IPC spawn commits once through this point, whichever binding write it makes.
+  ctx.deps.runtime?.terminalRunFacts?.recordSpawnCommit(ctx.result)
   ctx.spawnTiming.log(ctx.result.id, {
     daemon: ctx.isDaemonHostSpawn,
     reattach: ctx.result.isReattach ?? false

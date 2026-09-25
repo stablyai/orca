@@ -100,6 +100,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
+    // Why xterm's provenance: its own focus reports reach onData too, and no person typed them.
+    const userInputArgs: [{ userInput: true }] | [] = wasUserInput ? [{ userInput: true }] : []
     const intent = session.pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
@@ -123,7 +125,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       }
       session.clearPendingTerminalInputIntent()
       const writePromise = session.transport
-        .sendInputAccepted(data)
+        .sendInputAccepted(data, ...userInputArgs)
         .then((accepted): boolean | Promise<boolean> | null => {
           if (accepted) {
             // Why: rejected writes use transport recovery and must not arm a parser probe.
@@ -152,7 +154,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     if (intent) {
       session.claimViewportForUserActivity()
-      if (session.transport.sendInput(data)) {
+      if (session.transport.sendInput(data, ...userInputArgs)) {
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
         session.observeAcceptedTerminalInput(data, intent)
@@ -163,7 +165,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     session.claimViewportForUserActivity()
-    if (session.transport.sendInput(data)) {
+    if (session.transport.sendInput(data, ...userInputArgs)) {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
       session.observeAcceptedTerminalInput(data)

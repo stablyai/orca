@@ -1,10 +1,11 @@
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import type { TerminalIntentionalStopKind } from '../../../runtime/terminal-intentional-stops'
 import type { IPtyProvider } from '../../../providers/types'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
-import { ptyOwnership } from '../provider/ownership-state'
+import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, sshProviders, tryGetProviderForPty } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
@@ -31,25 +32,47 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
   )
 }
 
-/** Stops a pane's PTY for the spawn replacing it. `markReplaced` labels the exit so the renderer
- *  reads it as a handoff, not the pane dying; a failed stop removes the label with nothing sent. */
-export async function stopReplacedPanePty(
-  deps: PtyKillIpcDeps,
-  id: string,
-  markReplaced: (id: string) => (stopped: boolean) => void
-): Promise<void> {
-  const settle = markReplaced(id)
-  try {
-    await stopRendererOwnedPty(deps, { id })
-  } catch (err) {
-    settle(false)
-    throw err
-  }
-  settle(true)
+/** Stops a pane's PTY for the spawn replacing it. The stop register labels the exit so the
+ *  renderer reads it as a handoff, not the pane dying; a failed stop leaves no label. */
+export async function stopReplacedPanePty(deps: PtyKillIpcDeps, id: string): Promise<void> {
+  await stopRendererOwnedPtyAs(deps, { id }, 'replaced')
 }
 
 /** Stops a renderer-owned PTY and settles only once its shutdown has been observed or synthesized. */
 export async function stopRendererOwnedPty(
+  deps: PtyKillIpcDeps,
+  args: { id: string; keepHistory?: boolean }
+): Promise<void> {
+  // Why: only hibernation passes keepHistory, and its exit must keep the pane's wake binding.
+  await stopRendererOwnedPtyAs(deps, args, args?.keepHistory === true ? 'reversible' : null)
+}
+
+async function stopRendererOwnedPtyAs(
+  deps: PtyKillIpcDeps,
+  args: { id: string; keepHistory?: boolean },
+  intentionalStop: TerminalIntentionalStopKind | null
+): Promise<void> {
+  if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+    // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
+    throw new Error('Invalid PTY provider id')
+  }
+  const settleStop = intentionalStop
+    ? deps.runtime?.intentionalPtyStops?.mark(
+        args.id,
+        intentionalStop,
+        ptyIncarnationById.get(args.id) ?? null
+      )
+    : undefined
+  let stopped = false
+  try {
+    await stopRendererOwnedPtyProcess(deps, args)
+    stopped = true
+  } finally {
+    settleStop?.(stopped)
+  }
+}
+
+async function stopRendererOwnedPtyProcess(
   deps: PtyKillIpcDeps,
   args: { id: string; keepHistory?: boolean }
 ): Promise<void> {
@@ -61,10 +84,6 @@ export async function stopRendererOwnedPty(
     rememberSyntheticKillExit,
     sendPtyExitToRenderer
   } = deps
-  if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
-    // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
-    throw new Error('Invalid PTY provider id')
-  }
   runtime?.markPtyStopRequested?.(args.id)
   const ownedConnectionId = ptyOwnership.get(args.id)
   const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null

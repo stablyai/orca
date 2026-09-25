@@ -106,7 +106,6 @@ export type RuntimePtyController = {
     ptyId: string,
     opts?: { keepHistory?: boolean; deadlineMs?: number }
   ): Promise<boolean>
-  markReversibleStops?(ptyIds: readonly string[]): () => void
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(

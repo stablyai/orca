@@ -234,6 +234,7 @@ export const TERMINAL_SEND_METHODS = [
               {
                 beforeWrite,
                 signal,
+                ...(params.inputKind ? { inputKind: params.inputKind } : {}),
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

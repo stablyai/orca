@@ -3,6 +3,7 @@ import { setupPtyIpcSuite, type PtyIpcSuiteFixtures } from './pty-ipc-test-harne
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
+import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -160,7 +161,8 @@ function installRestartHarness(
     seedHeadlessTerminal: vi.fn(),
     onPtySpawned: vi.fn(),
     onPtyExit: vi.fn(),
-    onPtyData: vi.fn()
+    onPtyData: vi.fn(),
+    intentionalPtyStops: new TerminalIntentionalStops()
   }
   return { providerSpawn, shutdown, store, runtime, control }
 }

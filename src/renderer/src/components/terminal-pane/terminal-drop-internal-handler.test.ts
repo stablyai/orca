@@ -116,7 +116,10 @@ describe('handleInternalTerminalFileDrop', () => {
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 2 })
-    expect(sendInput.mock.calls).toEqual([['/repo/a.ts '], ["'/repo/my file.ts' "]])
+    expect(sendInput.mock.calls).toEqual([
+      ['/repo/a.ts ', { userInput: true }],
+      ["'/repo/my file.ts' ", { userInput: true }]
+    ])
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(focus).toHaveBeenCalled()
   })
@@ -155,7 +158,7 @@ describe('handleInternalTerminalFileDrop', () => {
 
     expect(result).toEqual({ status: 'cancelled', reason: 'target-stale', pathCount: 1 })
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', { userInput: true })
     expect(sendInput).not.toHaveBeenCalled()
     expect(replacementSendInput).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
@@ -187,7 +190,7 @@ describe('handleInternalTerminalFileDrop', () => {
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', { userInput: true })
     expect(sendInput).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(focus).toHaveBeenCalled()
@@ -254,7 +257,7 @@ describe('handleInternalTerminalFileDrop', () => {
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInput).toHaveBeenCalledWith('"C:\\repo\\a&b.txt" ')
+    expect(sendInput).toHaveBeenCalledWith('"C:\\repo\\a&b.txt" ', { userInput: true })
   })
 
   it('uses SSH remote platform metadata for Windows internal file drops', async () => {
@@ -293,7 +296,7 @@ describe('handleInternalTerminalFileDrop', () => {
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ')
+    expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ', { userInput: true })
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(focus).toHaveBeenCalled()
   })
@@ -334,7 +337,7 @@ describe('handleInternalTerminalFileDrop', () => {
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInput).toHaveBeenCalledWith("'/remote/repo/it'\\''s here.txt' ")
+    expect(sendInput).toHaveBeenCalledWith("'/remote/repo/it'\\''s here.txt' ", { userInput: true })
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(focus).toHaveBeenCalled()
   })
@@ -387,7 +390,7 @@ describe('handleInternalTerminalFileDrop', () => {
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
     expect(activeSendInput).not.toHaveBeenCalled()
     expect(activeFocus).not.toHaveBeenCalled()
-    expect(targetSendInput).toHaveBeenCalledWith('/repo/drop-target.ts ')
+    expect(targetSendInput).toHaveBeenCalledWith('/repo/drop-target.ts ', { userInput: true })
     expect(targetFocus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-target')
   })
