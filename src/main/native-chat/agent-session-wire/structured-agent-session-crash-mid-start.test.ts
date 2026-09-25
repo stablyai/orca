@@ -179,10 +179,10 @@ describe('a create replayed after the host that ran it died', () => {
       runtimeFence: 2
     })
 
-    await expect(relaunched.attach(CALLER, params)).resolves.toMatchObject({
-      ok: true,
-      value: { sessionId: SESSION, fence: 3 }
-    })
+    const replayed = await relaunched.attach(CALLER, params)
+    // Before, `agent_session_ownership_unknown` while the row was pending, then `_operation_expired`.
+    expect(replayed.ok ? null : replayed.refusal.code).toBeNull()
+    expect(replayed).toMatchObject({ ok: true, value: { sessionId: SESSION, fence: 3 } })
     expect(restarted.connections).toHaveLength(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
