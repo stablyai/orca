@@ -12,6 +12,18 @@ describe('addSample', () => {
     assert.deepEqual(res, [sample]);
   });
 
+  it('mẫu có timestamp bằng mẫu cuối cùng (s.at === last.at) vẫn được giữ lại', () => {
+    const history: ResourceSample[] = [
+      { at: 5000, freeMemBytes: 8 * 1024 ** 3 }
+    ];
+    const sameTimeSample: ResourceSample = { at: 5000, freeMemBytes: 7 * 1024 ** 3 };
+    const res = addSample(history, sameTimeSample, 60_000);
+
+    assert.equal(res.length, 2);
+    assert.equal(res[0]?.freeMemBytes, 8 * 1024 ** 3);
+    assert.equal(res[1]?.freeMemBytes, 7 * 1024 ** 3);
+  });
+
   it('bỏ qua mẫu nếu thời gian bị lùi (s.at < mẫu cuối) mà không ném lỗi', () => {
     const history: ResourceSample[] = [
       { at: 5000, freeMemBytes: 8 * 1024 ** 3 },

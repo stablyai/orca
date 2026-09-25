@@ -5,16 +5,28 @@
 
 import type { ResourceSample } from './resource-history.ts';
 
-export const DEFAULT_LIMITS = {
-  /** Bộ nhớ RAM trống tối thiểu: 4 GiB */
-  minFreeMemBytes: 4 * 1024 ** 3,
-  /** Ngưỡng CPU tối đa: 85% */
-  cpuPercentLimit: 85,
-  /** Cửa sổ thời gian CPU cao liên tục: 2 phút (120,000 ms) */
-  cpuWindowMs: 120_000
-} as const;
+export interface ResourceLimits {
+  /** Bộ nhớ RAM trống tối thiểu (bytes) */
+  readonly minFreeMemBytes: number;
+  /** Ngưỡng CPU tối đa (0..100) */
+  readonly cpuPercentLimit: number;
+  /** Cửa sổ thời gian CPU cao liên tục (ms) */
+  readonly cpuWindowMs: number;
+}
 
-export type ResourceLimits = typeof DEFAULT_LIMITS;
+export const DEFAULT_LIMITS: ResourceLimits = {
+  minFreeMemBytes: 4 * 1024 ** 3,
+  cpuPercentLimit: 85,
+  cpuWindowMs: 120_000
+};
+
+export function resolveLimits(custom?: Partial<ResourceLimits>): ResourceLimits {
+  return {
+    minFreeMemBytes: custom?.minFreeMemBytes ?? DEFAULT_LIMITS.minFreeMemBytes,
+    cpuPercentLimit: custom?.cpuPercentLimit ?? DEFAULT_LIMITS.cpuPercentLimit,
+    cpuWindowMs: custom?.cpuWindowMs ?? DEFAULT_LIMITS.cpuWindowMs
+  };
+}
 
 export type DeferReason =
   | { readonly type: 'no-samples' }
@@ -42,11 +54,7 @@ export function evaluateResources(
   now: number,
   customLimits?: Partial<ResourceLimits>
 ): ResourceVerdict {
-  const limits: ResourceLimits = {
-    minFreeMemBytes: customLimits?.minFreeMemBytes ?? DEFAULT_LIMITS.minFreeMemBytes,
-    cpuPercentLimit: customLimits?.cpuPercentLimit ?? DEFAULT_LIMITS.cpuPercentLimit,
-    cpuWindowMs: customLimits?.cpuWindowMs ?? DEFAULT_LIMITS.cpuWindowMs
-  };
+  const limits = resolveLimits(customLimits);
 
   // Nếu chưa có mẫu nào: fail-closed vì chưa biết trạng thái RAM
   if (history.length === 0) {

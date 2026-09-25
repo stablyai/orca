@@ -7,7 +7,8 @@ export type { ResourceSample } from './resource-history.ts';
 export {
   DEFAULT_LIMITS,
   evaluateResources,
-  formatDeferReason
+  formatDeferReason,
+  resolveLimits
 } from './resource-guard.ts';
 export type {
   DeferReason,

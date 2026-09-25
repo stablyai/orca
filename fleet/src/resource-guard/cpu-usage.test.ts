@@ -13,6 +13,13 @@ describe('toCpuTimes', () => {
     assert.equal(times.total, 1000 + 1000);
   });
 
+  it('chỉ lấy đúng trường idle cho thời gian idle, các trường khác tính vào total (không gộp irq vào idle)', () => {
+    const cpu = [{ times: { user: 100, nice: 20, sys: 30, idle: 800, irq: 50 } }];
+    const res = toCpuTimes(cpu);
+    assert.equal(res.idle, 800);
+    assert.equal(res.total, 1000);
+  });
+
   it('danh sách cpus rỗng trả về idle=0 và total=0', () => {
     const times = toCpuTimes([]);
     assert.equal(times.idle, 0);
@@ -50,6 +57,13 @@ describe('computeCpuPercent', () => {
   it('CPU hoạt động 100% khi idle không tăng', () => {
     const prev = { idle: 1000, total: 2000 };
     const curr = { idle: 1000, total: 3000 };
+    assert.equal(computeCpuPercent(prev, curr), 100);
+  });
+
+  it('kẹp kết quả tối đa 100% khi số liệu tính ra > 100%', () => {
+    const prev = { idle: 100, total: 100 };
+    const curr = { idle: 50, total: 200 };
+    // totalDelta = 100, idleDelta = -50, usedDelta = 150 -> 150% -> kẹp về 100
     assert.equal(computeCpuPercent(prev, curr), 100);
   });
 });

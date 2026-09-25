@@ -9,6 +9,7 @@ import { addSample, type ResourceSample } from './resource-history.ts';
 import {
   DEFAULT_LIMITS,
   evaluateResources,
+  resolveLimits,
   type ResourceLimits,
   type ResourceVerdict
 } from './resource-guard.ts';
@@ -49,11 +50,7 @@ export interface ResourceGuard {
  */
 export function createResourceGuard(options: ResourceGuardOptions = {}): ResourceGuard {
   const probe = options.probe ?? nodeSystemProbe;
-  const limits: ResourceLimits = {
-    minFreeMemBytes: options.limits?.minFreeMemBytes ?? DEFAULT_LIMITS.minFreeMemBytes,
-    cpuPercentLimit: options.limits?.cpuPercentLimit ?? DEFAULT_LIMITS.cpuPercentLimit,
-    cpuWindowMs: options.limits?.cpuWindowMs ?? DEFAULT_LIMITS.cpuWindowMs
-  };
+  const limits = resolveLimits(options.limits);
 
   let history: ResourceSample[] = [];
   let prevCpuTimes: CpuTimes | undefined = undefined;

@@ -125,6 +125,20 @@ describe('evaluateResources', () => {
       ]
     });
   });
+
+  it('chấp nhận ngưỡng tuỳ chỉnh (ví dụ CPU limit 90%, RAM min 2 GiB)', () => {
+    const history: ResourceSample[] = [
+      { at: NOW - 120_000, freeMemBytes: 2.5 * GIB, cpuPercent: 90 },
+      { at: NOW, freeMemBytes: 2.5 * GIB, cpuPercent: 90 }
+    ];
+    // Với ngưỡng mặc định (RAM 4 GiB, CPU 85%), history này sẽ bị hoãn cả hai.
+    // Với ngưỡng tuỳ chỉnh (RAM 2 GiB, CPU 90%), RAM 2.5 GiB >= 2 GiB và CPU 90% <= 90% -> dispatch: true!
+    const verdict = evaluateResources(history, NOW, {
+      minFreeMemBytes: 2 * GIB,
+      cpuPercentLimit: 90
+    });
+    assert.deepEqual(verdict, { dispatch: true });
+  });
 });
 
 describe('formatDeferReason', () => {
