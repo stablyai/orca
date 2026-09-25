@@ -38,6 +38,7 @@ export type RegisteredTerminalTab = {
   getManager: () => PaneManager | null
   getContainer: () => HTMLDivElement | null
   getPtyIdForPane: (paneId: number) => string | null
+  getIsVisible?: () => boolean
   getTabWideAgentHintLeafId: () => string | null
 }
 

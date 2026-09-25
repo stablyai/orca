@@ -558,7 +558,8 @@ function terminal(handle: string): RuntimeTerminalSummary {
     connected: true,
     writable: true,
     lastOutputAt: null,
-    preview: ''
+    preview: '',
+    surface: 'visible'
   }
 }
 

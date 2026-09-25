@@ -23,6 +23,7 @@ function summary(overrides: Partial<RuntimeTerminalSummary>): RuntimeTerminalSum
     writable: true,
     lastOutputAt: 1,
     preview: '',
+    surface: 'visible',
     ...overrides
   }
 }
