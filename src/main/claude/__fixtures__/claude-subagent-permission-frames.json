@@ -1,5 +1,5 @@
 {
-  "capturedWith": "Claude Code 2.1.280, @anthropic-ai/claude-agent-sdk 0.3.251, permission mode default",
+  "capturedWith": "Claude Code 2.1.280, @anthropic-ai/claude-agent-sdk 0.3.251, permission mode default; fg-fail ran its subagent on a model that does not exist (CLAUDE_CODE_SUBAGENT_MODEL)",
   "order": "SDK delivery order as the session consumer receives it; stream deltas, thinking, hooks and init dropped; paths, session ids and message ids scrubbed; prose over 400 characters trimmed",
   "scenarios": {
     "fg-allow": [
@@ -74,7 +74,7 @@
           "session_id": "capture-fg-allow",
           "uuid": "b148ef89-3bf3-494c-bf8c-f5f0137851d1",
           "timestamp": "2026-09-24T08:03:40.940Z",
-          "request_id": "req_011CfMv6nRFPafDSM4QqGt3y",
+          "request_id": "req_capture",
           "wire_tool_inputs": {
             "toolu_01DF3UWnLKgEKcujFQZDvLHD": {
               "description": "Touch probe file",
@@ -182,7 +182,7 @@
           "session_id": "capture-fg-allow",
           "uuid": "a1247640-3aa1-4c61-8d65-ba240b0fb41a",
           "timestamp": "2026-09-24T08:03:43.135Z",
-          "request_id": "req_011CfMv6zfSq5hQPssAFuqkQ",
+          "request_id": "req_capture",
           "subagent_type": "general-purpose",
           "task_description": "Touch probe file"
         }
@@ -422,7 +422,7 @@
           "session_id": "capture-fg-allow",
           "uuid": "aec9e17a-d6f2-45e9-afec-4caa67845883",
           "timestamp": "2026-09-24T08:03:54.528Z",
-          "request_id": "req_011CfMv7o8SH4bev2PZZ1N1J"
+          "request_id": "req_capture"
         }
       },
       {
@@ -581,7 +581,7 @@
           "session_id": "capture-fg-deny",
           "uuid": "84de137f-271a-4f91-bd2a-e903adb1b988",
           "timestamp": "2026-09-24T08:04:21.918Z",
-          "request_id": "req_011CfMv9mTnF5GT1xY2U677i",
+          "request_id": "req_capture",
           "wire_tool_inputs": {
             "toolu_01G9Jz5nJz2CPmx1fXLpR8zH": {
               "description": "Run touch probe command",
@@ -689,7 +689,7 @@
           "session_id": "capture-fg-deny",
           "uuid": "2e840282-d8e5-4f5a-af40-f97f37139dab",
           "timestamp": "2026-09-24T08:04:24.498Z",
-          "request_id": "req_011CfMvA23d53dqgnARcKJ3M",
+          "request_id": "req_capture",
           "subagent_type": "general-purpose",
           "task_description": "Run touch probe command"
         }
@@ -927,7 +927,7 @@
           "session_id": "capture-fg-deny",
           "uuid": "bb4fb591-c33d-41b5-b5a4-8ce492986c87",
           "timestamp": "2026-09-24T08:04:33.585Z",
-          "request_id": "req_011CfMvAe73a2jU7WMG7yJMY"
+          "request_id": "req_capture"
         }
       },
       {
@@ -1095,7 +1095,7 @@
           "session_id": "capture-fg-interrupt",
           "uuid": "f6bd9cf4-5983-4925-9063-b6fc33a51c58",
           "timestamp": "2026-09-24T08:05:15.472Z",
-          "request_id": "req_011CfMvDjW4xwGu3hBu2sKRq",
+          "request_id": "req_capture",
           "wire_tool_inputs": {
             "toolu_01AEVbS15nHcnLDLvVHW83xf": {
               "description": "Touch probe file",
@@ -1203,7 +1203,7 @@
           "session_id": "capture-fg-interrupt",
           "uuid": "463e16a7-f4c0-4680-baf6-ba5821cef5ab",
           "timestamp": "2026-09-24T08:05:18.389Z",
-          "request_id": "req_011CfMvDxjZ5yTqDn9ayfuoa",
+          "request_id": "req_capture",
           "subagent_type": "general-purpose",
           "task_description": "Touch probe file"
         }
@@ -1503,7 +1503,7 @@
           "session_id": "capture-bg-allow",
           "uuid": "33feb122-6c11-4040-bb3a-e499b68f2fee",
           "timestamp": "2026-09-24T08:04:39.527Z",
-          "request_id": "req_011CfMvB2RDwP7xUTMmYHyRh",
+          "request_id": "req_capture",
           "wire_tool_inputs": {
             "toolu_0113cofGsD2kJXoxmbapdZbE": {
               "description": "Touch probe file",
@@ -1626,7 +1626,7 @@
           "session_id": "capture-bg-allow",
           "uuid": "4cee533a-af52-46c8-84c6-ac1865f5804c",
           "timestamp": "2026-09-24T08:04:41.926Z",
-          "request_id": "req_011CfMvBKPgq3Q1ZZHBaWSbx",
+          "request_id": "req_capture",
           "subagent_type": "general-purpose",
           "task_description": "Touch probe file"
         }
@@ -1728,7 +1728,7 @@
           "session_id": "capture-bg-allow",
           "uuid": "f75f0115-9aa9-4238-a926-a7b33d674d5a",
           "timestamp": "2026-09-24T08:04:42.309Z",
-          "request_id": "req_011CfMvBKRvBnA1AzX2ahZey"
+          "request_id": "req_capture"
         }
       },
       {
@@ -1903,7 +1903,7 @@
           "session_id": "capture-bg-allow",
           "uuid": "ad300589-6429-4df2-bcba-337b652664ab",
           "timestamp": "2026-09-24T08:04:49.549Z",
-          "request_id": "req_011CfMvBpfpZbwhTG2wSJNYt",
+          "request_id": "req_capture",
           "subagent_type": "general-purpose",
           "task_description": "Touch probe file"
         }
@@ -1982,7 +1982,7 @@
           "session_id": "capture-bg-allow",
           "uuid": "5ac306a9-7da0-4c29-a808-cf143fb266ff",
           "timestamp": "2026-09-24T08:04:54.559Z",
-          "request_id": "req_011CfMvC5ZmQny94vTuqDBqY"
+          "request_id": "req_capture"
         }
       },
       {
@@ -2137,7 +2137,7 @@
           "session_id": "capture-main-allow",
           "uuid": "939578d5-6c3f-43b1-9a2d-5532c966d679",
           "timestamp": "2026-09-24T08:08:47.284Z",
-          "request_id": "req_011CfMvVNpKHsKTCA9F67r2M",
+          "request_id": "req_capture",
           "wire_tool_inputs": {
             "toolu_01KuiHdA5oEvqmDscU2NznKr": {
               "command": "touch c9-probe-main.txt",
@@ -2278,7 +2278,7 @@
           "session_id": "capture-main-allow",
           "uuid": "b19d9ccb-edf9-473e-8354-3ead6e17cb54",
           "timestamp": "2026-09-24T08:08:49.646Z",
-          "request_id": "req_011CfMvVf6Md1HkcG3eeKrS6"
+          "request_id": "req_capture"
         }
       },
       {
@@ -2360,6 +2360,295 @@
           "ttft_stream_ms": 2508,
           "time_to_request_ms": 54,
           "first_content_frame_ms": 2508,
+          "queued_turn_count": 0,
+          "result_index": 0
+        }
+      }
+    ],
+    "fg-fail": [
+      {
+        "from": "cli",
+        "frame": {
+          "type": "system",
+          "subtype": "session_state_changed",
+          "state": "running",
+          "uuid": "c392ab93-3969-4165-b308-2e933a4e84f0",
+          "session_id": "capture-fg-fail"
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": "Use the Agent tool exactly once to launch a general-purpose subagent in the foreground (not in the background). Instruct it to reply with the single word hello. Do not run any tool yourself other than that one Agent call. After it returns, whatever happened, reply with one word: done."
+          },
+          "session_id": "capture-fg-fail",
+          "parent_tool_use_id": null,
+          "uuid": "06863406-25ed-4d13-9c43-4998c28a2f47",
+          "timestamp": "2026-09-24T09:07:26.748Z",
+          "isReplay": true
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "assistant",
+          "message": {
+            "model": "claude-opus-5-5",
+            "id": "msg_capture_16",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "toolu_01SzUEUHDtcsX6QEB7LVbPEL",
+                "name": "Agent",
+                "input": {
+                  "description": "Reply with hello",
+                  "subagent_type": "general-purpose",
+                  "run_in_background": false,
+                  "prompt": "Reply with the single word: hello. Do not use any tools."
+                },
+                "caller": { "type": "direct" }
+              }
+            ],
+            "container": null,
+            "stop_reason": null,
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 24364,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 24364,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 16,
+              "service_tier": "standard",
+              "inference_geo": "not_available"
+            },
+            "diagnostics": null,
+            "context_management": null
+          },
+          "parent_tool_use_id": null,
+          "session_id": "capture-fg-fail",
+          "uuid": "7a8fa10e-8ac8-4e0b-b978-fd86c7777690",
+          "timestamp": "2026-09-24T09:07:31.208Z",
+          "request_id": "req_capture",
+          "wire_tool_inputs": {
+            "toolu_01SzUEUHDtcsX6QEB7LVbPEL": {
+              "description": "Reply with hello",
+              "subagent_type": "general-purpose",
+              "run_in_background": false,
+              "prompt": "Reply with the single word: hello. Do not use any tools."
+            }
+          }
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "system",
+          "subtype": "task_started",
+          "task_id": "a72432d7ceb6d8516",
+          "tool_use_id": "toolu_01SzUEUHDtcsX6QEB7LVbPEL",
+          "description": "Reply with hello",
+          "subagent_type": "general-purpose",
+          "is_backgrounded": false,
+          "spawn_depth": 1,
+          "task_type": "local_agent",
+          "prompt": "Reply with the single word: hello. Do not use any tools.",
+          "uuid": "f197e408-9224-4f1d-8d05-794e14294c4f",
+          "session_id": "capture-fg-fail"
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": [
+              { "type": "text", "text": "Reply with the single word: hello. Do not use any tools." }
+            ]
+          },
+          "parent_tool_use_id": "toolu_01SzUEUHDtcsX6QEB7LVbPEL",
+          "session_id": "capture-fg-fail",
+          "uuid": "bdffee49-cb81-4b03-956c-fc2adc061ef2",
+          "timestamp": "2026-09-24T09:07:31.245Z",
+          "subagent_type": "general-purpose",
+          "task_description": "Reply with hello"
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "system",
+          "subtype": "task_updated",
+          "task_id": "a72432d7ceb6d8516",
+          "patch": {
+            "status": "failed",
+            "end_time": 1790240851963,
+            "error": "Agent terminated early due to an API error: There's an issue with the selected model (claude-c9-does-not-exist). It may not exist or you may not have access to it. Run --model to pick a different model. (error type model_not_found, HTTP 404, request id req_capture, model sent to the API: claude-c9-does-not-exist)"
+          },
+          "uuid": "122a15dd-a284-4135-a00e-f74e198cb8e4",
+          "session_id": "capture-fg-fail"
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "system",
+          "subtype": "task_notification",
+          "task_id": "a72432d7ceb6d8516",
+          "tool_use_id": "toolu_01SzUEUHDtcsX6QEB7LVbPEL",
+          "status": "failed",
+          "output_file": "/private/tmp/claude-uid/-Users-user-orca-qa-c9-capture-work/48bfe37c-ef00-4923-b63c-bc7d08d266cf/tasks/a72432d7ceb6d8516.output",
+          "summary": "Agent terminated early due to an API error: There's an issue with the selected model (claude-c9-does-not-exist). It may not exist or you may not have access to it. Run --model to pick a different model. (error type model_not_found, HTTP 404, request id req_capture, model sent to the API: claude-c9-does-not-exist)",
+          "uuid": "227ba149-7d6c-4202-b80f-693c5caaf44c",
+          "session_id": "capture-fg-fail"
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "user",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "content": "Agent terminated early due to an API error: There's an issue with the selected model (claude-c9-does-not-exist). It may not exist or you may not have access to it. Run --model to pick a different model. (error type model_not_found, HTTP 404, request id req_capture, model sent to the API: claude-c9-does-not-exist)",
+                "is_error": true,
+                "tool_use_id": "toolu_01SzUEUHDtcsX6QEB7LVbPEL"
+              }
+            ]
+          },
+          "parent_tool_use_id": null,
+          "session_id": "capture-fg-fail",
+          "uuid": "bf81d27c-745a-47a6-ae55-6b6c76a0fde6",
+          "timestamp": "2026-09-24T09:07:31.999Z",
+          "tool_use_result": "Error: Agent terminated early due to an API error: There's an issue with the selected model (claude-c9-does-not-exist). It may not exist or you may not have access to it. Run --model to pick a different model. (error type model_not_found, HTTP 404, request id req_capture, model sent to the API: claude-c9-does-not-exist)"
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "type": "assistant",
+          "message": {
+            "model": "claude-opus-5-5",
+            "id": "msg_capture_17",
+            "type": "message",
+            "role": "assistant",
+            "content": [{ "type": "text", "text": "done" }],
+            "container": null,
+            "stop_reason": null,
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+              "input_tokens": 2,
+              "cache_creation_input_tokens": 282,
+              "cache_read_input_tokens": 24364,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 282,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 3,
+              "service_tier": "standard",
+              "inference_geo": "not_available"
+            },
+            "diagnostics": null,
+            "context_management": null
+          },
+          "parent_tool_use_id": null,
+          "session_id": "capture-fg-fail",
+          "uuid": "7b6be6b4-98d2-4cca-967e-957f29a3c010",
+          "timestamp": "2026-09-24T09:07:33.589Z",
+          "request_id": "req_capture"
+        }
+      },
+      {
+        "from": "cli",
+        "frame": {
+          "duration_api_ms": 7411,
+          "stop_reason": "end_turn",
+          "session_id": "capture-fg-fail",
+          "total_cost_usd": 0.13650679999999998,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 24646,
+            "cache_read_input_tokens": 24364,
+            "output_tokens": 150,
+            "output_tokens_details": { "thinking_tokens": 0 },
+            "server_tool_use": { "web_search_requests": 0, "web_fetch_requests": 0 },
+            "service_tier": "standard",
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 24646
+            },
+            "inference_geo": "not_available",
+            "iterations": [
+              {
+                "input_tokens": 2,
+                "output_tokens": 3,
+                "cache_read_input_tokens": 24364,
+                "cache_creation_input_tokens": 282,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 282,
+                  "ephemeral_1h_input_tokens": 0
+                },
+                "type": "message"
+              }
+            ],
+            "speed": "standard"
+          },
+          "modelUsage": {
+            "claude-opus-5-5[1m]": {
+              "inputTokens": 1256,
+              "outputTokens": 169,
+              "cacheReadInputTokens": 24364,
+              "cacheCreationInputTokens": 24646,
+              "webSearchRequests": 0,
+              "costUSD": 0.13650679999999998,
+              "contextWindow": 1000000,
+              "maxOutputTokens": 128000,
+              "thinkingTokens": 0,
+              "canonicalModel": "claude-opus-5-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            }
+          },
+          "permission_denials": [],
+          "terminal_reason": "completed",
+          "fast_mode_state": "off",
+          "fast_mode_disabled_reason": "sdk_opt_in_required",
+          "subagent_stats": {
+            "spawned": 1,
+            "requested": { "background": 0, "foreground": 1, "unset": 0 },
+            "started_in_background": 0,
+            "max_depth": 1,
+            "spawned_by_subagents": 0,
+            "completed": 0,
+            "failed": 1,
+            "killed": { "parent": 0, "user": 0, "system": 0 },
+            "refused": { "depth_limit": 0, "concurrency_limit": 0, "budget": 0 },
+            "by_type": { "general-purpose": 1 }
+          },
+          "is_error": false,
+          "num_turns": 2,
+          "subtype": "success",
+          "api_error_status": null,
+          "result": "done",
+          "ttft_ms": 4475,
+          "type": "result",
+          "duration_ms": 6899,
+          "uuid": "b23c9e81-f3b2-4b8e-93f1-7238b9510887",
+          "ttft_stream_ms": 3640,
+          "time_to_request_ms": 90,
+          "first_content_frame_ms": 3640,
           "queued_turn_count": 0,
           "result_index": 0
         }

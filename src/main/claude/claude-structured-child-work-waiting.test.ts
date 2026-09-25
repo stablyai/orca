@@ -166,7 +166,7 @@ describe('a Claude subagent waiting on a permission request', () => {
     expect(timeline.at(-1)).toBe('success -> settled done')
   })
 
-  it('stops waiting when an interrupt cancels the request, then settles', async () => {
+  it('stops waiting when an interrupt cancels the request, then settles cancelled', async () => {
     const { timeline, subagent } = await replay('fg-interrupt')
     expect(aroundRequest(timeline)).toEqual([
       'session_state_changed -> live working',
@@ -174,7 +174,29 @@ describe('a Claude subagent waiting on a permission request', () => {
       'interrupt -> live waiting',
       'control_cancel_request -> live working'
     ])
-    expect(subagent()?.membership).toBe('settled')
+    // The spawn call's error result lands first and ends nothing; the child's own `killed` status
+    // is what settles it, and names how it ended.
+    expect(
+      timeline.slice(timeline.indexOf('control_cancel_request -> live working') + 1, -1)
+    ).toEqual([
+      'session_state_changed -> live working',
+      'user -> live working',
+      'task_updated -> settled done',
+      'task_notification -> settled done',
+      'user -> settled done'
+    ])
+    expect(subagent()).toMatchObject({ membership: 'settled', outcome: 'cancelled' })
+  })
+
+  it('settles a subagent that genuinely failed as failed', async () => {
+    // Captured with the subagent on a model that does not exist: its own status arrives first.
+    const { timeline, subagent } = await replay('fg-fail')
+    expect(timeline.find((entry) => !entry.endsWith('none'))).toBe('task_started -> live working')
+    expect(subagent()).toMatchObject({
+      membership: 'settled',
+      outcome: 'failed',
+      lastMessage: expect.stringContaining('Agent terminated early due to an API error')
+    })
   })
 
   it('keeps a background subagent waiting after the parent turn ends, until it is allowed', async () => {
