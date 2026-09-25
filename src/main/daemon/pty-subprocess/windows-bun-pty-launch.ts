@@ -1,13 +1,21 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
-import { buildWindowsCmdShimCommandLine } from '../../../shared/child-process/windows-command-line'
+import {
+  buildWindowsCmdShimCommandLine,
+  validateWindowsCmdArguments
+} from '../../../shared/child-process/windows-command-line'
 import { getCmdExePath } from '../../../shared/windows-batch-spawn'
 import {
   WINDOWS_BUN_PTY_GATE_ENV,
   WINDOWS_BUN_PTY_RUNTIME_OPTION_KEYS,
   type WindowsBunPtyGateRequest
 } from './windows-bun-pty-gate'
+import {
+  readWindowsBunPtySpawnReceipt,
+  waitForWindowsBunPtySpawn,
+  type WindowsBunPtySpawnReceipt
+} from './windows-bun-pty-spawn-receipt'
 
 const CLEAR_SEQUENCE = '\x1b[3J\x1b[2J\x1b[H'
 const CLEANUP_MAX_RETRIES = 5
@@ -25,7 +33,7 @@ export function resolveWindowsBunPtyGateEntry(
   return candidates.find(pathExists) ?? candidates[0]!
 }
 
-function removeLaunchDirectory(directory: string): void {
+function removeLaunchDirectory(directory: string): boolean {
   try {
     rmSync(directory, {
       recursive: true,
@@ -33,8 +41,10 @@ function removeLaunchDirectory(directory: string): void {
       maxRetries: CLEANUP_MAX_RETRIES,
       retryDelay: CLEANUP_RETRY_DELAY_MS
     })
+    return true
   } catch (error) {
     console.warn(`[pty] failed to remove Windows Bun launch directory ${directory}:`, error)
+    return false
   }
 }
 
@@ -44,6 +54,7 @@ export type WindowsBunPtyLaunch = {
   env: Record<string, string>
   windowsVerbatimArguments: boolean
   readShellProcessId(): number | undefined
+  waitForSpawn(wrapperExited: Promise<number>): Promise<void>
   release(): void
   dispose(): void
 }
@@ -58,7 +69,7 @@ export function createWindowsBunPtyLaunch(
   deps: { workerPath?: string; runtimePath?: string } = {}
 ): WindowsBunPtyLaunch {
   if (win32.basename(args.file).toLowerCase() === 'cmd.exe') {
-    buildWindowsCmdShimCommandLine(args.file, args.args)
+    validateWindowsCmdArguments([args.file, ...args.args])
   }
   const workerPath = deps.workerPath ?? resolveWindowsBunPtyGateEntry()
   if (!existsSync(workerPath)) {
@@ -73,7 +84,13 @@ export function createWindowsBunPtyLaunch(
   const cmdExe = getCmdExePath()
   let released = false
   let disposed = false
-  let shellPid: number | undefined
+  let spawnReceipt: WindowsBunPtySpawnReceipt | undefined
+  const readSpawnReceipt = (): WindowsBunPtySpawnReceipt | undefined => {
+    if (!disposed) {
+      spawnReceipt ??= readWindowsBunPtySpawnReceipt(shellPidPath)
+    }
+    return spawnReceipt
+  }
   const env: Record<string, string> = { ...args.env, [WINDOWS_BUN_PTY_GATE_ENV]: gatePath }
   const runtimeOptions: WindowsBunPtyGateRequest['runtimeOptions'] = {}
   for (const key of WINDOWS_BUN_PTY_RUNTIME_OPTION_KEYS) {
@@ -120,20 +137,10 @@ export function createWindowsBunPtyLaunch(
     env,
     windowsVerbatimArguments: false,
     readShellProcessId() {
-      if (shellPid !== undefined || disposed) {
-        return shellPid
-      }
-      try {
-        const receipt = readFileSync(shellPidPath, 'utf8')
-        const pid = Number(receipt)
-        if (/^[1-9][0-9]{0,9}$/.test(receipt) && Number.isSafeInteger(pid) && pid <= 0xffff_ffff) {
-          shellPid = pid
-        }
-      } catch {
-        // Missing or unreadable identity is never evidence of an idle shell.
-      }
-      return shellPid
+      const receipt = readSpawnReceipt()
+      return receipt && 'pid' in receipt ? receipt.pid : undefined
     },
+    waitForSpawn: (wrapperExited) => waitForWindowsBunPtySpawn(readSpawnReceipt, wrapperExited),
     release() {
       if (released) {
         return
@@ -145,8 +152,8 @@ export function createWindowsBunPtyLaunch(
       if (disposed) {
         return
       }
-      disposed = true
-      removeLaunchDirectory(directory)
+      readSpawnReceipt()
+      disposed = removeLaunchDirectory(directory)
     }
   }
 }

@@ -92,6 +92,7 @@ type HostScript = {
   snapshotResult?: string
   comparisonResult?: string
   candidateStopResult?: string
+  readinessAtMs?: number
 }
 
 function scriptHost(script: HostScript): void {
@@ -101,6 +102,9 @@ function scriptHost(script: HostScript): void {
       return script.activationRecord
     }
     if (text.includes('.orcad-readiness') && text.startsWith('cat ')) {
+      if (script.readinessAtMs !== undefined && Date.now() < script.readinessAtMs) {
+        return ''
+      }
       const version = Object.keys(script.readiness).find((v) => text.includes(v))
       return version ? script.readiness[version] : ''
     }
@@ -304,13 +308,15 @@ describe('deployOrcad', () => {
 
   it('does not run chmod on a Windows remote', async () => {
     scriptHost({ activationRecord: '', readiness: {}, log: [] })
-    await deployOrcad(
-      options({
-        host: getRemoteHostPlatform('win32-x64'),
-        remoteHome: 'C:/Users/u',
-        census: { liveSessions: 1, startedSinceActivation: 0 }
-      })
-    )
+    await expect(
+      deployOrcad(
+        options({
+          host: getRemoteHostPlatform('win32-x64'),
+          remoteHome: 'C:/Users/u',
+          census: { liveSessions: 1, startedSinceActivation: 0 }
+        })
+      )
+    ).rejects.toThrow('not supported')
     expect(mockExec.mock.calls.some(([, command]) => String(command).startsWith('chmod '))).toBe(
       false
     )
@@ -325,6 +331,31 @@ describe('deployOrcad', () => {
     })
     await expect(deployOrcad(options())).rejects.toThrow('chmod failed')
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+  })
+
+  it('allows startup time after a slow bundled preflight', async () => {
+    let elapsedMs = 0
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => elapsedMs)
+    scriptHost({
+      activationRecord: '',
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      readinessAtMs: 100_000,
+      log: []
+    })
+    try {
+      const result = await deployOrcad(
+        options({
+          readinessTimeoutMs: undefined,
+          sleep: async () => {
+            elapsedMs += 50_000
+          }
+        })
+      )
+      expect(result.outcome).toBe('installed-and-activated')
+      expect(elapsedMs).toBe(100_000)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('activates a healthy candidate and records the outgoing version as the rollback target', async () => {

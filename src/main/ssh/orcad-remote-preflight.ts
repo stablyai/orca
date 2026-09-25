@@ -3,6 +3,7 @@ import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
 import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
+  ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
   parseOrcadProfilePreflight
 } from '../../shared/orcad-profile-preflight'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
@@ -38,7 +39,7 @@ export async function preflightInstalledOrcad(options: {
   const output = await execCommand(
     options.conn,
     orcadProfilePreflightCommand(options.host, options.remoteInstallDir, nonce),
-    { signal: options.signal, timeoutMs: 90_000 }
+    { signal: options.signal, timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS }
   )
   parseOrcadProfilePreflight(output, nonce, ORCAD_BUN_VERSION, options.fullVersion)
 }

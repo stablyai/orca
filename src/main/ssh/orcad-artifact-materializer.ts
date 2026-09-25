@@ -17,6 +17,7 @@ import {
   orcadTemplateCommonFilenames
 } from '../../shared/orcad-artifacts'
 import type { OrcadBunTarget } from '../../shared/orcad-bun-runtime'
+import { findOrcadCachePath } from './orcad-cache-path'
 import {
   materializeCachedOrcadBunRuntime,
   verifyFileSha256,
@@ -97,12 +98,13 @@ export async function assembleOrcadArtifact(args: {
   const sources = artifactSources(args.templateDir, args.target, args.runtimePath, manifest)
   const { fullVersion, sourceHashes } = await computeArtifactIdentity(sources, args.target)
   const targetRoot = join(args.cacheRoot, args.target)
-  const targetDir = join(targetRoot, fullVersion)
-  if (await isCompleteArtifact(targetDir, fullVersion, sources, sourceHashes)) {
+  const cached = await findOrcadCachePath(
+    (attempt) => join(targetRoot, `${fullVersion}${attempt ? `.repair-${attempt}` : ''}`),
+    (path) => isCompleteArtifact(path, fullVersion, sources, sourceHashes)
+  )
+  const targetDir = cached.path
+  if (cached.verified) {
     return targetDir
-  }
-  if (existsSync(targetDir)) {
-    throw new Error(`Orcad artifact cache entry is unavailable or corrupted: ${targetDir}`)
   }
   await mkdir(targetRoot, { recursive: true })
   const stagingDir = join(targetRoot, `.staging-${process.pid}-${randomUUID()}`)

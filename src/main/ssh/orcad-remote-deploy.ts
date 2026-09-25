@@ -4,6 +4,7 @@
  * preserve current state and the prelaunch snapshot for explicit recovery.
  */
 import type { SshConnection } from './ssh-connection'
+import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../shared/orcad-profile-preflight'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { writeRelayFile } from './ssh-relay-install-transfers'
@@ -72,7 +73,6 @@ export type OrcadDeployResult =
   | { outcome: 'already-active'; fullVersion: string }
   | { outcome: 'installed-not-activated'; fullVersion: string; code: string; reason: string }
 
-const DEFAULT_READINESS_TIMEOUT_MS = 90_000
 const READINESS_POLL_MS = 500
 const STOP_WAIT_SECONDS = 20
 
@@ -136,7 +136,7 @@ async function launchAndAwaitReadiness(
     options,
     orcadLaunchCommand(options.host, { ...options, remoteInstallDir, fullVersion })
   )
-  const deadline = Date.now() + (options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS)
+  const deadline = Date.now() + (options.readinessTimeoutMs ?? ORCAD_STARTUP_READINESS_TIMEOUT_MS)
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   let last = parseOrcadReadinessOutput('')
   while (Date.now() < deadline) {

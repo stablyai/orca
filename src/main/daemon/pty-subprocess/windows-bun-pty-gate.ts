@@ -1,7 +1,11 @@
-import { readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { readFileSync, statSync, unlinkSync } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { win32 } from 'node:path'
 import { spawnProcess, type ProcessSpec } from '../../../shared/child-process/run-process'
+import {
+  publishWindowsBunPtyShellPid,
+  publishWindowsBunPtySpawnError
+} from './windows-bun-pty-spawn-receipt'
 
 export const WINDOWS_BUN_PTY_GATE_ENV = 'ORCA_BUN_PTY_JOB_GATE'
 export const WINDOWS_BUN_PTY_RUNTIME_OPTION_KEYS = ['NODE_OPTIONS', 'BUN_OPTIONS'] as const
@@ -68,13 +72,6 @@ export function readWindowsBunPtyGateRequest(path: string): WindowsBunPtyGateReq
   }
 }
 
-export function publishWindowsBunPtyShellPid(path: string, pid: number): void {
-  const pending = `${path}.pending`
-  writeFileSync(pending, String(pid), { flag: 'wx', mode: 0o600 })
-  // ConPTY cannot inherit Bun IPC; an atomic receipt prevents reading a partial PID.
-  renameSync(pending, path)
-}
-
 export async function waitForWindowsBunPtyJobGate(gatePath: string): Promise<void> {
   const deadline = Date.now() + 30_000
   while (true) {
@@ -125,26 +122,44 @@ export async function runWindowsBunPtyGate(
     spawn?: typeof spawnProcess
     env?: NodeJS.ProcessEnv
     reportShellPid?: (pid: number) => void
+    reportSpawnError?: (error: unknown) => void
   } = {}
 ): Promise<number> {
-  await (deps.waitForGate ?? waitForWindowsBunPtyJobGate)(request.gatePath)
-  return new Promise((resolve, reject) => {
-    const child = (deps.spawn ?? spawnProcess)(
-      windowsBunPtyChildSpec(request, deps.env ?? process.env)
-    )
-    child.once('spawn', () => {
-      if (child.pid !== undefined) {
-        const report =
-          deps.reportShellPid ?? ((pid) => publishWindowsBunPtyShellPid(request.shellPidPath, pid))
-        try {
-          report(child.pid)
-        } catch (error) {
-          // Keep supervising the shell; absent identity must remain unverifiable.
-          console.warn('[pty] Failed to publish Windows shell identity:', error)
+  let spawned = false
+  try {
+    await (deps.waitForGate ?? waitForWindowsBunPtyJobGate)(request.gatePath)
+    return await new Promise<number>((resolve, reject) => {
+      const child = (deps.spawn ?? spawnProcess)(
+        windowsBunPtyChildSpec(request, deps.env ?? process.env)
+      )
+      child.once('spawn', () => {
+        spawned = true
+        if (child.pid !== undefined) {
+          const report =
+            deps.reportShellPid ??
+            ((pid) => publishWindowsBunPtyShellPid(request.shellPidPath, pid))
+          try {
+            report(child.pid)
+          } catch (error) {
+            // Keep supervising the shell; absent identity must remain unverifiable.
+            console.warn('[pty] Failed to publish Windows shell identity:', error)
+          }
         }
-      }
+      })
+      child.once('error', reject)
+      child.once('exit', (code) => resolve(code ?? 1))
     })
-    child.once('error', reject)
-    child.once('exit', (code) => resolve(code ?? 1))
-  })
+  } catch (error) {
+    if (!spawned) {
+      try {
+        const report =
+          deps.reportSpawnError ??
+          ((error) => publishWindowsBunPtySpawnError(request.shellPidPath, error))
+        report(error)
+      } catch (receiptError) {
+        console.warn('[pty] Failed to publish Windows shell spawn error:', receiptError)
+      }
+    }
+    throw error
+  }
 }

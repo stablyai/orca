@@ -1,19 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { recordSelfInitiatedTreeKillMock } = vi.hoisted(() => ({
-  recordSelfInitiatedTreeKillMock: vi.fn()
+const { recordSelfInitiatedTreeKillMock, runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
+  recordSelfInitiatedTreeKillMock: vi.fn(),
+  runProcessMock: vi.fn(),
+  runProcessSyncMock: vi.fn()
 }))
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
 }))
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: runProcessMock,
+  runProcessSync: runProcessSyncMock
+}))
 
 import {
   forceKillPosixPtyProcessGroups,
-  getPosixPtyProcessGroups
+  getPosixPtyProcessGroups,
+  readPosixPtyProcessTable
 } from './posix-pty-process-groups'
 
 beforeEach(() => {
   recordSelfInitiatedTreeKillMock.mockReset()
+  runProcessMock.mockReset()
+  runProcessSyncMock.mockReset()
 })
 
 const TABLE = `
@@ -24,6 +33,57 @@ const TABLE = `
   200  200 ttys002
   300  300 ??
 `
+
+describe('asynchronous PTY process discovery', () => {
+  it('bounds each lookup and selects the root terminal without synchronous subprocesses', async () => {
+    const controller = new AbortController()
+    runProcessMock
+      .mockResolvedValueOnce({ code: 0, stdout: '100 100 ttys001' })
+      .mockResolvedValueOnce({ code: 0, stdout: TABLE })
+
+    expect(await readPosixPtyProcessTable(100, controller.signal)).toBe(`100 100 ttys001\n${TABLE}`)
+    expect(runProcessMock.mock.calls).toEqual([
+      [
+        {
+          program: 'ps',
+          args: ['-p', '100', '-o', 'pid=,pgid=,tty='],
+          timeoutMs: 1000,
+          maxOutputBytes: 1048576,
+          signal: controller.signal
+        }
+      ],
+      [
+        {
+          program: 'ps',
+          args: ['-t', 'ttys001', '-o', 'pid=,pgid=,tty='],
+          timeoutMs: 1000,
+          maxOutputBytes: 1048576,
+          signal: controller.signal
+        }
+      ]
+    ])
+    expect(runProcessSyncMock).not.toHaveBeenCalled()
+  })
+
+  it.each([{ code: 1 }, { code: 0, timedOut: true }, { code: 0, outputTruncated: true }])(
+    'rejects incomplete process evidence: %j',
+    async (result) => {
+      runProcessMock.mockResolvedValue({ stdout: TABLE, ...result })
+      await expect(readPosixPtyProcessTable(100)).rejects.toThrow('unavailable')
+      expect(runProcessMock).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('does not start the second lookup after cancellation', async () => {
+    const controller = new AbortController()
+    runProcessMock.mockImplementation(async () => {
+      controller.abort()
+      return { code: 0, stdout: '100 100 ttys001' }
+    })
+    await readPosixPtyProcessTable(100, controller.signal)
+    expect(runProcessMock).toHaveBeenCalledOnce()
+  })
+})
 
 describe('POSIX PTY process-group termination', () => {
   it('returns every group attached to the root PTY with the root group last', () => {

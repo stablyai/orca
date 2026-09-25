@@ -49,7 +49,6 @@ type Kernel32 = {
   ): number
   TerminateJobObject(job: WindowsNativeHandle, exitCode: number): number
   CloseHandle(handle: WindowsNativeHandle): number
-  GetLastError(): number
 }
 
 type Ntdll = {
@@ -62,8 +61,36 @@ const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
 const JOB_OBJECT_BASIC_PROCESS_ID_LIST = 3
 const JOB_LIMIT_FLAGS_OFFSET = 16
 const JOB_EXTENDED_LIMITS_BYTES = 144
-const ERROR_MORE_DATA = 234
 const MAX_JOB_PROCESS_IDS = 16_384
+
+export function queryWindowsBunPtyProcessIds(
+  query: (buffer: Uint8Array) => boolean
+): readonly number[] | null {
+  for (let capacity = 64; capacity <= MAX_JOB_PROCESS_IDS; capacity *= 4) {
+    const bytes = new Uint8Array(8 + capacity * 8)
+    const queried = query(bytes)
+    const view = new DataView(bytes.buffer)
+    const assigned = view.getUint32(0, true)
+    const count = view.getUint32(4, true)
+    // These output counts survive the FFI boundary; thread-local GetLastError may not.
+    if (assigned > count) {
+      continue
+    }
+    if (!queried || count > capacity) {
+      return null
+    }
+    const pids: number[] = []
+    for (let index = 0; index < count; index += 1) {
+      const pid = Number(view.getBigUint64(8 + index * 8, true))
+      if (!Number.isSafeInteger(pid) || pid <= 0 || pid > 0xffff_ffff) {
+        return null
+      }
+      pids.push(pid)
+    }
+    return pids
+  }
+  return null
+}
 
 let cachedNative: WindowsBunPtyJobNative | null | undefined
 
@@ -90,15 +117,13 @@ export function loadWindowsBunPtyJobNative(): WindowsBunPtyJobNative | null {
         returns: 'i32'
       },
       TerminateJobObject: { args: ['ptr', 'u32'], returns: 'i32' },
-      CloseHandle: { args: ['ptr'], returns: 'i32' },
-      GetLastError: { args: [], returns: 'u32' }
+      CloseHandle: { args: ['ptr'], returns: 'i32' }
     })
     const ntdll = ffi.dlopen<Ntdll>('ntdll.dll', {
       NtSuspendProcess: { args: ['ptr'], returns: 'i32' },
       NtResumeProcess: { args: ['ptr'], returns: 'i32' }
     })
     const { symbols } = kernel
-    const readLastSystemError = symbols.GetLastError
     cachedNative = {
       createJob: () => symbols.CreateJobObjectW(null, null),
       configureJob(job, flags) {
@@ -121,36 +146,16 @@ export function loadWindowsBunPtyJobNative(): WindowsBunPtyJobNative | null {
         return symbols.IsProcessInJob(process, job, ffi.ptr(result)) !== 0 && result[0] !== 0
       },
       queryProcessIds(job) {
-        for (let capacity = 64; capacity <= MAX_JOB_PROCESS_IDS; capacity *= 4) {
-          const bytes = new Uint8Array(8 + capacity * 8)
-          const queried = symbols.QueryInformationJobObject(
-            job,
-            JOB_OBJECT_BASIC_PROCESS_ID_LIST,
-            ffi.ptr(bytes),
-            bytes.byteLength,
-            null
-          )
-          const view = new DataView(bytes.buffer)
-          if (queried === 0) {
-            if (readLastSystemError() !== ERROR_MORE_DATA) {
-              return null
-            }
-            continue
-          }
-          const count = view.getUint32(4, true)
-          if (count > capacity) {
-            return null
-          }
-          const pids: number[] = []
-          for (let index = 0; index < count; index += 1) {
-            const pid = Number(view.getBigUint64(8 + index * 8, true))
-            if (Number.isInteger(pid) && pid > 0) {
-              pids.push(pid)
-            }
-          }
-          return pids
-        }
-        return null
+        return queryWindowsBunPtyProcessIds(
+          (bytes) =>
+            symbols.QueryInformationJobObject(
+              job,
+              JOB_OBJECT_BASIC_PROCESS_ID_LIST,
+              ffi.ptr(bytes),
+              bytes.byteLength,
+              null
+            ) !== 0
+        )
       },
       suspendProcess: (process) => ntdll.symbols.NtSuspendProcess(process) >= 0,
       resumeProcess: (process) => ntdll.symbols.NtResumeProcess(process) >= 0,

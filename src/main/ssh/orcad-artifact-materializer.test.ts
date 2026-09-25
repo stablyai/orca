@@ -193,7 +193,7 @@ describe('assembleOrcadArtifact', () => {
     ).rejects.toThrow('target identity does not match')
   })
 
-  it('refuses a corrupted published cache entry without replacing files a reader may hold', async () => {
+  it('repairs corrupt artifacts beside the old entry and reuses the repair', async () => {
     const fixture = createTemplate()
     const first = await assembleOrcadArtifact({
       templateDir: fixture.templateDir,
@@ -203,9 +203,12 @@ describe('assembleOrcadArtifact', () => {
     })
     write(join(first, 'orcad.js'), 'corrupted-cache-entry')
 
-    await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
-      'cache entry is unavailable or corrupted'
+    const repaired = await assembleOrcadArtifact({ ...fixture, target: TARGET })
+    expect(repaired).not.toBe(first)
+    expect(readFileSync(join(repaired, 'orcad.js'))).toEqual(
+      readFileSync(join(fixture.templateDir, 'orcad.js'))
     )
+    expect(await assembleOrcadArtifact({ ...fixture, target: TARGET })).toBe(repaired)
     expect(readFileSync(join(first, 'orcad.js'), 'utf8')).toBe('corrupted-cache-entry')
   })
 

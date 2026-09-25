@@ -36,6 +36,34 @@ function fixture(wal = true): string {
 }
 
 describe('readonly WAL initialization', () => {
+  it.each(['EACCES', 'EPERM', 'EROFS'])(
+    'lets SQLite decide read access when WAL creation fails with %s',
+    async (code) => {
+      const file = fixture()
+      const { openSync: open } = await vi.importActual<typeof fs>('node:fs')
+      vi.mocked(fs.openSync).mockImplementation((path, flags, ...rest) => {
+        if (path === `${file}-wal` && flags === 'wx') {
+          throw Object.assign(new Error('read-only directory'), { code })
+        }
+        return open(path, flags, ...rest)
+      })
+      expect(() => initializeBunReadonlyWal(file)).not.toThrow()
+      expect(fs.existsSync(`${file}-wal`)).toBe(false)
+    }
+  )
+
+  it('still reports unexpected WAL creation failures', async () => {
+    const file = fixture()
+    const { openSync: open } = await vi.importActual<typeof fs>('node:fs')
+    vi.mocked(fs.openSync).mockImplementation((path, flags, ...rest) => {
+      if (path === `${file}-wal` && flags === 'wx') {
+        throw Object.assign(new Error('disk failure'), { code: 'EIO' })
+      }
+      return open(path, flags, ...rest)
+    })
+    expect(() => initializeBunReadonlyWal(file)).toThrow('disk failure')
+  })
+
   it('allows a clean WAL database to reopen without changing its bytes or admitting SQL writes', () => {
     const file = fixture()
     const bytes = fs.readFileSync(file)

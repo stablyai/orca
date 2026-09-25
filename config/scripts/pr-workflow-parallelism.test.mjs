@@ -210,9 +210,7 @@ describe('PR workflow parallelism', () => {
       (step) => step.name === 'Build package inputs'
     )
 
-    expect(buildStep.run).toContain(
-      'scripts=(build:relay build:orcad-template build:electron-vite:parallel)'
-    )
+    expect(buildStep.run).toContain('scripts=(build:relay build:electron-vite:parallel)')
     expect(buildStep.run).toContain('pnpm run "$script" &')
     expect(
       workflow.jobs.package.steps.find(

@@ -43,7 +43,13 @@ export async function installOrcadBundle(
       signal: options.signal
     })
     if (options.host.os !== 'win32') {
-      const binaryPath = joinRemotePath(options.host, remoteDir, 'ripgrep', options.host.relayPlatform, 'rg')
+      const binaryPath = joinRemotePath(
+        options.host,
+        remoteDir,
+        'ripgrep',
+        options.host.relayPlatform,
+        'rg'
+      )
       await execCommand(options.conn, `chmod 755 ${shellEscape(binaryPath)}`, {
         wrapCommand: options.host.commandDialect !== 'powershell',
         signal: options.signal

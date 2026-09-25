@@ -14,7 +14,7 @@ export function initializeBunReadonlyWal(path: string): void {
       typeof error !== 'object' ||
       error === null ||
       !('code' in error) ||
-      error.code !== 'EEXIST'
+      !['EEXIST', 'EACCES', 'EPERM', 'EROFS'].includes(String(error.code))
     ) {
       throw error
     }

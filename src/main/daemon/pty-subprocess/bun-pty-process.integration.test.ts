@@ -25,7 +25,7 @@ async function runTerminalScript(script: string): Promise<unknown> {
         script
       ].join('\n')
     )
-    const result = await runProcess({ program: runtimePath, args: [entry], timeoutMs: 15_000 })
+    const result = await runProcess({ program: runtimePath, args: [entry], timeoutMs: 30_000 })
     expect(result.timedOut).toBe(false)
     expect(result.code, result.stderr).toBe(0)
     return JSON.parse(result.stdout)
@@ -79,11 +79,22 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
       expect(result).toEqual({ exitCode: 143, signal: 15 })
     })
 
-    it('stops a flooding producer and resumes without losing output', async () => {
-      const result = await runTerminalScript(`
+    it.skipIf(!existsSync('/bin/bash'))(
+      'stops foreground and background floods and resumes without losing output',
+      async () => {
+        const result = await runTerminalScript(`
       const expected = 16 * 1024 * 1024
-      const proc = spawnBunPty({...args,args:['-e','let count=0;const timer=setInterval(()=>{process.stdout.write("x".repeat(65536));if(++count===256)clearInterval(timer)},1)']})
+      const producer = require('node:path').join(args.cwd, 'producer.cjs')
+      require('node:fs').writeFileSync(producer, 'let count=0;const timer=setInterval(()=>{process.stdout.write("x".repeat(65536));if(++count===128)clearInterval(timer)},1)')
+      const groups = new Set()
+      const proc = spawnBunPty({
+        ...args, file:'/bin/bash',
+        args:['--noprofile','--norc','-i','-c','exec 2>/dev/null; "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER" & "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER"; wait'],
+        env:{...args.env,ORCA_TEST_RUNTIME:process.execPath,ORCA_TEST_PRODUCER:producer}
+      },{signalProcessGroup:(pgid,signal)=>{groups.add(pgid);process.kill(-pgid,signal)}})
       let bytes = 0, paused = false, settledBytes = 0, stable = false
+      let beats = 0
+      const heartbeat = setInterval(() => beats++, 5)
       proc.onData(data => {
         bytes += data.length
         if (!paused) {
@@ -96,23 +107,100 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
         }
       })
       proc.onExit(event => {
-        console.log(JSON.stringify({event,stable,exact:bytes===expected,pausedBeforeExit:settledBytes<expected}))
+        clearInterval(heartbeat)
+        console.log(JSON.stringify({event,stable,exact:bytes===expected,pausedBeforeExit:settledBytes<expected,responsive:beats>10,jobControlGroups:groups.size>=3}))
         proc.destroy()
       })
     `)
-      expect(result).toEqual({
-        event: { exitCode: 0 },
-        stable: true,
-        exact: true,
-        pausedBeforeExit: true
-      })
-    })
+        expect(result).toEqual({
+          event: { exitCode: 0 },
+          stable: true,
+          exact: true,
+          pausedBeforeExit: true,
+          responsive: true,
+          jobControlGroups: true
+        })
+      }
+    )
   }
 )
 
 describe.skipIf(!existsSync(runtimePath) || process.platform !== 'win32')(
   'native Windows Bun terminal',
   () => {
+    it('falls back after actual shell spawn rejection and cleans each private launch directory', async () => {
+      const result = await runTerminalScript(`
+      const {spawnNativeDaemonPty} = require(${JSON.stringify(join(__dirname, 'native-pty-spawn.ts'))})
+      const {createWindowsBunPtyLaunch} = require(${JSON.stringify(join(__dirname, 'windows-bun-pty-launch.ts'))})
+      const {existsSync} = require('node:fs')
+      const {dirname,join} = require('node:path')
+      const directories = []
+      const attempts = [join(args.cwd,'missing-pwsh.exe'),join(args.cwd,'missing-powershell.exe'),process.execPath].map(shellPath=>({
+        shellPath,shellArgs:['-e','process.exitCode=17'],effectiveCwd:args.cwd,validationCwd:args.cwd,startupCommandDeliveredInShellArgs:true
+      }))
+      spawnNativeDaemonPty({
+        shellPath:attempts[0].shellPath,shellArgs:attempts[0].shellArgs,spawnCwd:args.cwd,
+        env:args.env,cols:80,rows:24,windowsFallbackAttempts:attempts
+      }, {canUseBunPty:()=>true, spawnBunPty:options=>spawnBunPty(options, {
+        createWindowsLaunch:launchArgs=>{
+          const launch = createWindowsBunPtyLaunch(launchArgs, {
+            runtimePath:process.execPath,workerPath:${JSON.stringify(join(__dirname, 'windows-bun-pty-gate-entry.ts'))}
+          })
+          directories.push(dirname(launch.command.at(-1)))
+          return launch
+        }
+      })}).then(({process:proc,shellPath})=>{
+        proc.onExit(event=>{
+          console.log(JSON.stringify({event,fallback:shellPath===process.execPath,attempts:directories.length,cleaned:directories.every(path=>!existsSync(path))}))
+          proc.destroy()
+        })
+      }).catch(error=>{console.error(error);process.exitCode=1})
+    `)
+      expect(result).toEqual({
+        event: { exitCode: 17 },
+        fallback: true,
+        attempts: 3,
+        cleaned: true
+      })
+    }, 35_000)
+
+    it('enumerates and suspends a native job with more than 64 processes', async () => {
+      const result = await runTerminalScript(`
+      const {createWindowsBunPtyLaunch} = require(${JSON.stringify(join(__dirname, 'windows-bun-pty-launch.ts'))})
+      const script = 'for(let i=0;i<65;i++)Bun.spawn([process.execPath,"-e","setInterval(()=>{},1000)"],{stdin:"ignore",stdout:"ignore",stderr:"ignore"});setInterval(()=>console.log("tick"),10)'
+      const proc = spawnBunPty({...args,args:['-e',script]}, {
+        createWindowsLaunch:launch => createWindowsBunPtyLaunch(launch, {
+          runtimePath:process.execPath,workerPath:${JSON.stringify(join(__dirname, 'windows-bun-pty-gate-entry.ts'))}
+        })
+      })
+      let bytes=0,started=false,evidence
+      proc.onData(data=>{
+        bytes+=data.length
+        if(started || !data.includes('tick'))return
+        const members=proc.listOwnedProcessIds()
+        if(!members || members.length<67)return
+        started=true
+        proc.pause()
+        setTimeout(()=>{
+          const pausedBytes=bytes
+          setTimeout(()=>{
+            const stopped=bytes===pausedBytes
+            proc.resume()
+            setTimeout(()=>{
+              evidence={members:members.length,stopped,resumed:bytes>pausedBytes}
+              proc.kill()
+            },150)
+          },150)
+        },150)
+      })
+      proc.onExit(()=>{
+        console.log(JSON.stringify(evidence))
+        proc.destroy()
+      })
+    `)
+      expect(result).toEqual({ members: 67, stopped: true, resumed: true })
+    }, 35_000)
+
     it('opens ConPTY without IPC and identifies the shell inside its job', async () => {
       const result = await runTerminalScript(`
       const {createWindowsBunPtyLaunch} = require(${JSON.stringify(join(__dirname, 'windows-bun-pty-launch.ts'))})

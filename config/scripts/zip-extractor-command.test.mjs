@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -18,6 +18,7 @@ function extract(bytes) {
   const archive = join(directory, "source '$.zip")
   const destination = join(directory, "output '$")
   writeFileSync(archive, bytes)
+  mkdirSync(destination)
   const command = getZipExtractorCommand(archive, destination)
   const result = runProcessSync({ program: command.file, args: command.args, timeoutMs: 120_000 })
   return { result, destination }

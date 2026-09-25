@@ -1,8 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream, existsSync, readdirSync } from 'node:fs'
+import { createReadStream, readdirSync } from 'node:fs'
 import { chmod, link, mkdir, open, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import extractZip from 'extract-zip'
+import { runProcess } from '../../shared/child-process/run-process'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { getZipExtractorCommand } from '../../shared/zip-extractor-command'
+import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
+import { findOrcadCachePath } from './orcad-cache-path'
 import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
 import {
   ORCAD_BUN_RELEASE_ASSETS,
@@ -14,7 +18,7 @@ import {
 const MAX_BUN_ARCHIVE_BYTES = 200 * 1024 * 1024
 
 export type OrcadBunRuntimeMaterializeOptions = {
-  fetcher?: typeof fetch
+  fetcher?: MainHttpClient['fetch']
   signal?: AbortSignal
 }
 
@@ -26,17 +30,18 @@ export async function materializeCachedOrcadBunRuntime(
   options.signal?.throwIfAborted()
   const asset = ORCAD_BUN_RELEASE_ASSETS[target]
   const runtimeDir = join(cacheRoot, 'bun', `v${ORCAD_BUN_VERSION}`, target)
-  const runtimePath = join(runtimeDir, orcadBunRuntimeFilename(target))
   await mkdir(runtimeDir, { recursive: true })
-  if ((await fileSha256(runtimePath)) === asset.executableSha256) {
+  const runtime = await findOrcadCachePath(
+    (attempt) =>
+      join(runtimeDir, `${attempt ? `repair-${attempt}-` : ''}${orcadBunRuntimeFilename(target)}`),
+    async (path) => (await fileSha256(path)) === asset.executableSha256
+  )
+  const runtimePath = runtime.path
+  if (runtime.verified) {
     if (!target.startsWith('win32-')) {
       await chmod(runtimePath, 0o755)
     }
     return runtimePath
-  }
-  // A published inode may be in use by another deployment.
-  if (existsSync(runtimePath)) {
-    throw new Error(`Bun runtime cache entry is unavailable or corrupted: ${runtimePath}`)
   }
   const temporaryDir = join(runtimeDir, `.download-${process.pid}-${randomUUID()}`)
   await mkdir(temporaryDir, { recursive: true })
@@ -46,15 +51,23 @@ export async function materializeCachedOrcadBunRuntime(
       orcadBunReleaseUrl(asset),
       archivePath,
       asset.sha256,
-      options.fetcher ?? fetch,
+      options.fetcher ?? getMainHttpClient().fetch,
       options.signal
-        ? AbortSignal.any([options.signal, AbortSignal.timeout(120_000)])
-        : AbortSignal.timeout(120_000)
     )
     options.signal?.throwIfAborted()
     const extractedDir = join(temporaryDir, 'extracted')
     await mkdir(extractedDir)
-    await extractZip(archivePath, { dir: extractedDir })
+    const command = getZipExtractorCommand(archivePath, extractedDir)
+    const result = await runProcess({
+      program: command.file,
+      args: command.args,
+      timeoutMs: 120_000,
+      signal: options.signal
+    })
+    options.signal?.throwIfAborted()
+    if (result.code !== 0) {
+      throw new Error(`Bun archive extraction failed: ${result.stderr || result.stdout}`)
+    }
     const executable = findExtractedBun(extractedDir, target)
     await verifyFileSha256(executable, asset.executableSha256, `${target} Bun executable`)
     if (!target.startsWith('win32-')) {
@@ -81,46 +94,59 @@ async function downloadVerifiedArchive(
   url: string,
   destination: string,
   expectedSha256: string,
-  fetcher: typeof fetch,
+  fetcher: MainHttpClient['fetch'],
   signal?: AbortSignal
 ): Promise<void> {
-  const response = await fetcher(url, { redirect: 'follow', signal })
-  if (!response.ok || !response.body) {
-    await response.body?.cancel().catch(() => undefined)
-    throw new Error(`Bun download failed: ${response.status} ${response.statusText}`)
-  }
-  const declaredLength = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BUN_ARCHIVE_BYTES) {
-    await response.body.cancel().catch(() => undefined)
-    throw new Error('Bun download exceeded the archive size limit')
-  }
-  const handle = await open(destination, 'wx', 0o600)
-  const reader = response.body.getReader()
-  const hash = createHash('sha256')
-  let total = 0
+  const stall = new AbortController()
+  const downloadSignal = signal ? AbortSignal.any([signal, stall.signal]) : stall.signal
+  const stallTimer = setTimeout(() => stall.abort(new Error('Bun download stalled')), 120_000)
   try {
-    for (;;) {
-      signal?.throwIfAborted()
-      const chunk = await reader.read()
-      if (chunk.done) {
-        break
-      }
-      total += chunk.value.byteLength
-      if (total > MAX_BUN_ARCHIVE_BYTES) {
-        throw new Error('Bun download exceeded the archive size limit')
-      }
-      hash.update(chunk.value)
-      await writeAll(handle, chunk.value)
+    const response = await fetcher(url, { redirect: 'follow', signal: downloadSignal })
+    if (!response.ok || !response.body) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`Bun download failed: ${response.status} ${response.statusText}`)
     }
-  } catch (error) {
-    await reader.cancel().catch(() => undefined)
-    throw error
+    const declaredLength = Number(response.headers.get('content-length'))
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BUN_ARCHIVE_BYTES) {
+      await response.body.cancel().catch(() => undefined)
+      throw new Error('Bun download exceeded the archive size limit')
+    }
+    const handle = await open(destination, 'wx', 0o600).catch(async (error) => {
+      await response.body?.cancel().catch(() => undefined)
+      throw error
+    })
+    const reader = response.body.getReader()
+    const hash = createHash('sha256')
+    let total = 0
+    try {
+      for (;;) {
+        downloadSignal.throwIfAborted()
+        const chunk = await waitForPromiseWithSignal(reader.read(), downloadSignal)
+        if (chunk.done) {
+          break
+        }
+        if (chunk.value.byteLength > 0) {
+          stallTimer.refresh()
+        }
+        total += chunk.value.byteLength
+        if (total > MAX_BUN_ARCHIVE_BYTES) {
+          throw new Error('Bun download exceeded the archive size limit')
+        }
+        hash.update(chunk.value)
+        await writeAll(handle, chunk.value)
+      }
+    } catch (error) {
+      await reader.cancel().catch(() => undefined)
+      throw error
+    } finally {
+      await handle.close()
+    }
+    const actual = hash.digest('hex')
+    if (actual !== expectedSha256) {
+      throw new Error(`Bun archive checksum mismatch: expected ${expectedSha256}, got ${actual}`)
+    }
   } finally {
-    await handle.close()
-  }
-  const actual = hash.digest('hex')
-  if (actual !== expectedSha256) {
-    throw new Error(`Bun archive checksum mismatch: expected ${expectedSha256}, got ${actual}`)
+    clearTimeout(stallTimer)
   }
 }
 

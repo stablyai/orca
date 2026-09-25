@@ -21,6 +21,7 @@ import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browse
 import { ORCAD_TEMPLATE_TARGETS } from '../../src/shared/orcad-bun-runtime.ts'
 import { runProcessSync } from './script-child-process.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
+import { verifyPackagedOrcadTemplate } from './verify-packaged-orcad-template.cjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const outputDir = join(root, 'out', 'orcad-template')
@@ -108,6 +109,7 @@ async function main() {
     join(outputDir, ORCAD_TEMPLATE_MANIFEST_FILENAME),
     `${JSON.stringify({ schemaVersion: 2, commonSha256, targets }, null, 2)}\n`
   )
+  verifyPackagedOrcadTemplate(join(root, 'out'))
   rmSync(buildDir, { recursive: true, force: true })
   process.stdout.write(`[build-orcad-template] ok — ${ORCAD_TEMPLATE_TARGETS.length} targets\n`)
 }

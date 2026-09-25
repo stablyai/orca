@@ -22,7 +22,11 @@ import {
   resolveOrcadBindHost
 } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
-import { flushOrcadProfileStoreForShutdown, startOrcadWithHost } from './orcad-lifecycle'
+import {
+  flushOrcadProfileStoreForShutdown,
+  installOrcadShutdownSignals,
+  startOrcadWithHost
+} from './orcad-lifecycle'
 import { parseArgs } from './orcad-command-arguments'
 import { ProfileStateAccessError } from '../persistence/profile-state/profile-state-access'
 import {
@@ -374,7 +378,7 @@ export const ORCAD_EXIT_FAILED = 1
 export const ORCAD_EXIT_CONFIGURATION = 78
 
 /** Bounded so a wedged transport cannot hold a supervisor's stop past its own deadline. */
-export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
+export { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
 
 export function resolveOrcadExitCode(error: unknown): number {
   return error instanceof OrcadInstanceLockError ||
@@ -386,35 +390,5 @@ export function resolveOrcadExitCode(error: unknown): number {
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const handle = await startOrcad(parseArgs(argv))
-  let stopping = false
-  const shutdown = (signal: NodeJS.Signals): void => {
-    if (stopping) {
-      // Why escalate rather than ignore: a supervisor's second signal means the first
-      // deadline elapsed. Continuing to wait silently is what makes a stop hang until
-      // SIGKILL, which is the one teardown that skips the daemon handoff entirely.
-      console.error(`orcad: second ${signal} during shutdown — exiting immediately`)
-      process.exit(ORCAD_EXIT_FAILED)
-    }
-    stopping = true
-    // Why a self-imposed deadline as well: the supervisor's SIGKILL leaves no exit code and
-    // no log line. Exiting ourselves keeps the failure attributable.
-    const deadline = setTimeout(() => {
-      console.error(
-        `orcad: shutdown after ${signal} exceeded ${ORCAD_SHUTDOWN_DEADLINE_MS}ms — exiting`
-      )
-      process.exit(ORCAD_EXIT_FAILED)
-    }, ORCAD_SHUTDOWN_DEADLINE_MS)
-    deadline.unref()
-    handle
-      .stop()
-      .then(() => process.exit(ORCAD_EXIT_OK))
-      // Why not rethrow: we are already tearing down on a signal, and an exit code is
-      // the only thing a supervisor can act on.
-      .catch((error) => {
-        console.error(`orcad: shutdown after ${signal} failed:`, error)
-        process.exit(ORCAD_EXIT_FAILED)
-      })
-  }
-  process.on('SIGINT', () => shutdown('SIGINT'))
-  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  installOrcadShutdownSignals(() => handle.stop())
 }

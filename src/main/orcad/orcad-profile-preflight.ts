@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { preflightProfileStateRuntime } from '../persistence/profile-state/profile-state-runtime-preflight'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
+  ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
   parseOrcadProfilePreflight,
   type OrcadProfilePreflightResponse
 } from '../../shared/orcad-profile-preflight'
@@ -31,7 +32,7 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
     program: join(directory, orcadBunRuntimeFilename(process.platform)),
     args: [join(directory, 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
-    timeoutMs: 90_000,
+    timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,
     terminationBarrier: true
   })

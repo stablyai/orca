@@ -81,24 +81,32 @@ describe('bundled Orca runtime handoff', () => {
     expect(() => handoffToBundledOrcad()).toThrow(`must be Bun ${ORCAD_BUN_VERSION}`)
   })
 
-  it('hands off the full argument vector and forwards each shutdown signal', () => {
-    expect(handoffToBundledOrcad()).toBe(true)
-    expect(fixture.spawn).toHaveBeenCalledWith({
-      program: expect.stringMatching(/bun-runtime(?:\.exe)?$/),
-      args: ['/slot/orcad.js', '--port', '0'],
-      stdio: 'inherit'
-    })
-    for (const signal of signalNames) {
-      const listener = process
-        .rawListeners(signal)
-        .find((candidate) => !oldListeners.get(signal)?.includes(candidate))
-      expect(listener).toBeDefined()
-      if (listener) {
-        listener.call(process, signal)
+  it.each(['linux', 'darwin', 'win32'] as const)(
+    'hands off arguments and respects %s signal delivery',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      expect(handoffToBundledOrcad()).toBe(true)
+      expect(fixture.spawn).toHaveBeenCalledWith({
+        program: expect.stringMatching(/bun-runtime(?:\.exe)?$/),
+        args: ['/slot/orcad.js', '--port', '0'],
+        stdio: 'inherit'
+      })
+      for (const signal of signalNames) {
+        const listener = process
+          .rawListeners(signal)
+          .find((candidate) => !oldListeners.get(signal)?.includes(candidate))
+        expect(listener).toBeDefined()
+        if (listener) {
+          listener.call(process, signal)
+        }
+        if (platform === 'win32') {
+          expect(child.kill).not.toHaveBeenCalled()
+        } else {
+          expect(child.kill).toHaveBeenLastCalledWith(signal)
+        }
       }
-      expect(child.kill).toHaveBeenLastCalledWith(signal)
     }
-  })
+  )
 
   it('propagates a child exit code and removes every signal listener', () => {
     handoffToBundledOrcad()

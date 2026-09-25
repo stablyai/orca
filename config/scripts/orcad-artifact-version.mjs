@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ORCAD_VERSION, orcadArtifactFilenames, orcadArtifactHashPrefix } from '../../src/shared/orcad-artifacts.ts'
+import {
+  ORCAD_VERSION,
+  orcadArtifactFilenames,
+  orcadArtifactHashPrefix
+} from '../../src/shared/orcad-artifacts.ts'
 
 export function computeOrcadFullVersion(artifactDir, { target = '', agentBrowserFilename } = {}) {
   const hash = createHash('sha256').update(orcadArtifactHashPrefix(target))

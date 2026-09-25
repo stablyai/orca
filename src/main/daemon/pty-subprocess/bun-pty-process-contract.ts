@@ -45,6 +45,7 @@ export type BunPtyProcess = pty.IPty & {
   destroy(): void
   jobRootProcessIsWrapper?: true
   shellProcessId?: number
+  waitForSpawn?(): Promise<void>
   terminateOwnedTree?(): JobTerminationOutcome
   listOwnedProcessIds?(): readonly number[] | null
   signalProcess?(signal: string): void

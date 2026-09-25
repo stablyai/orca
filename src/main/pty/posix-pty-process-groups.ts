@@ -1,5 +1,9 @@
-import { execFileSync } from 'node:child_process'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import {
+  runProcess,
+  runProcessSync,
+  type ProcessResult
+} from '../../shared/child-process/run-process'
 
 const PROCESS_TABLE_TIMEOUT_MS = 1_000
 const PROCESS_TABLE_MAX_BYTES = 1024 * 1024
@@ -17,12 +21,22 @@ export type PosixPtyProcessGroupTerminationDeps = {
   signalProcessGroup?: (pgid: number) => void
 }
 
+function readProcessTableResult(result: ProcessResult): string {
+  if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+    throw new Error('PTY process table is unavailable')
+  }
+  return result.stdout
+}
+
 function runPs(args: string[]): string {
-  return execFileSync('ps', args, {
-    encoding: 'utf8',
-    timeout: PROCESS_TABLE_TIMEOUT_MS,
-    maxBuffer: PROCESS_TABLE_MAX_BYTES
-  })
+  return readProcessTableResult(
+    runProcessSync({
+      program: 'ps',
+      args,
+      timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
+      maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+    })
+  )
 }
 
 function readPtyProcessTable(rootPid: number): string {
@@ -34,6 +48,28 @@ function readPtyProcessTable(rootPid: number): string {
   // Why: a whole-host `ps -ax` takes nearly a second on large machines. TTY
   // selection keeps forced terminal teardown proportional to one terminal.
   return `${root}\n${runPs(['-t', rootRow.tty, '-o', 'pid=,pgid=,tty='])}`
+}
+
+export async function readPosixPtyProcessTable(
+  rootPid: number,
+  signal?: AbortSignal
+): Promise<string> {
+  const read = async (args: string[]): Promise<string> => {
+    const result = await runProcess({
+      program: 'ps',
+      args,
+      timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
+      maxOutputBytes: PROCESS_TABLE_MAX_BYTES,
+      signal
+    })
+    return readProcessTableResult(result)
+  }
+  const root = await read(['-p', String(rootPid), '-o', 'pid=,pgid=,tty='])
+  const rootRow = parseProcessRows(root).find((row) => row.pid === rootPid)
+  if (!rootRow || rootRow.tty === '?' || rootRow.tty === '??' || signal?.aborted) {
+    return root
+  }
+  return `${root}\n${await read(['-t', rootRow.tty, '-o', 'pid=,pgid=,tty='])}`
 }
 
 function parseProcessRows(output: string): ProcessRow[] {

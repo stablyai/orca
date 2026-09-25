@@ -22,8 +22,18 @@ export async function resolveOrcadDeploymentTarget(options: {
   if (host.os !== 'linux') {
     return `${host.os}-${host.arch}`
   }
-  const output = await execCommand(options.conn, 'ldd --version 2>&1 || true', {
+  let output = await execCommand(options.conn, 'ldd --version 2>&1 || true', {
     signal: options.signal
   })
+  try {
+    return `linux-${host.arch}-${parseOrcadLinuxLibc(output)}`
+  } catch {
+    output = await execCommand(
+      options.conn,
+      'getconf GNU_LIBC_VERSION 2>/dev/null || ' +
+        'for loader in /lib/ld-musl-*.so.1; do [ ! -e "$loader" ] || { echo musl; break; }; done',
+      { signal: options.signal }
+    )
+  }
   return `linux-${host.arch}-${parseOrcadLinuxLibc(output)}`
 }

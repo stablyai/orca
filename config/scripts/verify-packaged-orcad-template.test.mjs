@@ -12,7 +12,6 @@ import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs
 const require = createRequire(import.meta.url)
 const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
 const builderConfig = require('../electron-builder.config.cjs')
-const { getFileMatchers, copyFiles } = require('app-builder-lib/out/fileMatcher.js')
 const roots = []
 
 async function createFixture() {
@@ -27,27 +26,6 @@ afterEach(async () => {
 })
 
 describe('verifyPackagedOrcadTemplate', () => {
-  it.each(['mac', 'linux', 'win'])(
-    'preserves the template through the actual %s resource copier',
-    async (platform) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-template-copy-'))
-      roots.push(root)
-      await writeOrcadTemplateTestFixture(join(root, 'out'))
-      const resourcesDir = join(root, 'resources')
-      const extraResources = builderConfig[platform].extraResources.filter(
-        (resource) => typeof resource === 'object' && resource.to.startsWith('orcad-template')
-      )
-      const matchers = getFileMatchers({ extraResources }, 'extraResources', resourcesDir, {
-        macroExpander: (value) => value,
-        customBuildOptions: {},
-        defaultSrc: root,
-        globalOutDir: join(root, 'dist')
-      })
-      await copyFiles(matchers, undefined, false)
-      expect(() => verifyPackagedOrcadTemplate(resourcesDir)).not.toThrow()
-    }
-  )
-
   it('accepts the exact six-target packaged template', async () => {
     const fixture = await createFixture()
 
@@ -99,19 +77,17 @@ describe('verifyPackagedOrcadTemplate', () => {
     )
   })
 
-  it('keeps the verifier connected to every packaged platform', async () => {
-    const configSource = await readFile(
-      join(process.cwd(), 'config', 'electron-builder.config.cjs'),
-      'utf8'
-    )
-    const config = require('../electron-builder.config.cjs')
-
-    expect(configSource).toContain("require('./scripts/verify-packaged-orcad-template.cjs')")
-    expect(configSource).toContain('verifyPackagedOrcadTemplate(resourcesDir)')
+  it('does not ship the unused deployment template in desktop packages', async () => {
     for (const platform of ['win', 'mac', 'linux']) {
-      expect(config[platform].extraResources).toEqual(
-        expect.arrayContaining([expect.objectContaining({ to: 'orcad-template' })])
-      )
+      expect(
+        builderConfig[platform].extraResources.some(
+          (resource) => typeof resource === 'object' && resource.to.startsWith('orcad-template')
+        )
+      ).toBe(false)
+    }
+    const { scripts } = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8'))
+    for (const name of ['build:desktop', 'build:release', 'build:release:parallel']) {
+      expect(scripts[name]).not.toContain('build:orcad-template')
     }
   })
 })

@@ -50,6 +50,7 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
   }
   const onProcessExit = (code: number): void => {
     processExitCode = code
+    windowsLaunch?.dispose()
     if (!windowsTerminal || terminalFinished) {
       emitExit(code)
       return
@@ -76,8 +77,7 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
     }
     for (const dispose of [
       () => (processHandle.terminal.closed ? undefined : processHandle.terminal.close()),
-      () => windowsJob?.close(),
-      () => windowsLaunch?.dispose()
+      () => windowsJob?.close()
     ]) {
       try {
         dispose()
@@ -154,7 +154,9 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
       }
       windowsJob?.close()
       windowsLaunch.dispose()
-      void processHandle.exited.catch(() => {})
+      // A running gate can temporarily lock its private working directory on Windows.
+      const disposeLaunch = (): void => windowsLaunch?.dispose()
+      void processHandle.exited.then(disposeLaunch, disposeLaunch)
       throw error
     }
   }
@@ -171,6 +173,7 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
 
   const windowsCapabilities = windowsJob
     ? {
+        waitForSpawn: () => windowsLaunch?.waitForSpawn(processHandle.exited) ?? Promise.resolve(),
         terminateOwnedTree: () => windowsJob?.terminate() ?? 'unavailable',
         listOwnedProcessIds: () => windowsJob?.listProcessIds() ?? null,
         jobRootProcessIsWrapper: true as const,
@@ -291,18 +294,18 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
       }
     },
     destroy() {
-      if (!processHandle.terminal.closed) {
+      if (!exited) {
         producerFlowControl.resumeForShutdown()
         const treeTerminated = windowsJob?.terminate() === 'terminated'
         try {
-          if (!exited) {
-            processHandle.kill(platform === 'win32' ? 'SIGTERM' : 'SIGHUP')
-          }
+          processHandle.kill(platform === 'win32' ? 'SIGTERM' : 'SIGHUP')
         } catch (error) {
-          if (!treeTerminated && !exited) {
+          if (!treeTerminated) {
             throw error
           }
         }
+      }
+      if (!processHandle.terminal.closed) {
         processHandle.terminal.close()
       }
     }

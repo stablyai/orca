@@ -2,11 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createWindowsBunPtyLaunch, resolveWindowsBunPtyGateEntry } from './windows-bun-pty-launch'
-import {
-  publishWindowsBunPtyShellPid,
-  readWindowsBunPtyGateRequest,
-  windowsBunPtyChildSpec
-} from './windows-bun-pty-gate'
+import { readWindowsBunPtyGateRequest, windowsBunPtyChildSpec } from './windows-bun-pty-gate'
+import { publishWindowsBunPtyShellPid } from './windows-bun-pty-spawn-receipt'
 
 const workerPath = join(__dirname, 'windows-bun-pty-launch.test.ts')
 

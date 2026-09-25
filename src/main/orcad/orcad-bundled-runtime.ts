@@ -37,7 +37,10 @@ export function handoffToBundledOrcad(): boolean {
   })
   const forwards = (['SIGINT', 'SIGTERM', 'SIGHUP'] as const).map((signal) => {
     const forward = (): void => {
-      child.kill(signal)
+      // Windows consoles already signal the child; kill() would abort its durable shutdown.
+      if (process.platform !== 'win32') {
+        child.kill(signal)
+      }
     }
     process.on(signal, forward)
     return { signal, forward }

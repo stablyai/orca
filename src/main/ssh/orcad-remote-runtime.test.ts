@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '../../shared/child-process/run-process'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
+import { stopOrcadCommand } from './orcad-remote-process-control'
 
 const directories: string[] = []
 const host = getRemoteHostPlatform('linux-x64')
@@ -33,6 +34,20 @@ function launch(directory: string, nodePath: string) {
 }
 
 describe.skipIf(process.platform === 'win32')('POSIX slot runtime selection', () => {
+  it('returns an unverifiable stop result when a bundled runtime cannot execute', () => {
+    const directory = fixture()
+    writeFileSync(join(directory, '.build-target'), 'linux-x64-glibc')
+    writeFileSync(join(directory, '.orcad-pid'), String(process.pid))
+    const result = runProcessSync({
+      program: '/bin/sh',
+      args: [
+        '-c',
+        stopOrcadCommand(host, directory, { waitSeconds: 1, nodePath: process.execPath })
+      ]
+    })
+    expect(result).toMatchObject({ code: 0, stdout: 'UNKNOWN\n' })
+  })
+
   it('uses the bundled executable when host Node does not exist', () => {
     const directory = fixture()
     writeFileSync(join(directory, '.build-target'), 'linux-x64-glibc')

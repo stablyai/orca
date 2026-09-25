@@ -56,9 +56,31 @@ describe.skipIf(!available)('bundled Windows job gate under Bun', () => {
         expect(result.timedOut).toBe(false)
         expect(result.code, result.stderr).toBe(0)
         expect(JSON.parse(result.stdout)).toEqual(argv)
+        await expect(launch.waitForSpawn(Promise.resolve(result.code!))).resolves.toBeUndefined()
         expect(existsSync(launch.command.at(-1)!)).toBe(false)
       } finally {
         launch.dispose()
+      }
+      const failedLaunch = createWindowsBunPtyLaunch(
+        { file: join(directory, 'missing-shell.exe'), args: [], cwd: directory, env },
+        { runtimePath, workerPath }
+      )
+      try {
+        failedLaunch.release()
+        const result = await runProcess({
+          program: failedLaunch.command[0]!,
+          args: failedLaunch.command.slice(1),
+          cwd: directory,
+          env: failedLaunch.env,
+          timeoutMs: 10_000
+        })
+        expect(result.timedOut).toBe(false)
+        expect(result.code).toBe(1)
+        await expect(failedLaunch.waitForSpawn(Promise.resolve(1))).rejects.toThrow(
+          /missing-shell|ENOENT|not found/
+        )
+      } finally {
+        failedLaunch.dispose()
       }
     } finally {
       rmSync(directory, { recursive: true, force: true })

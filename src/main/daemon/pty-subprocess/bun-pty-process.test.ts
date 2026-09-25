@@ -211,6 +211,15 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(harness.terminal.close).toHaveBeenCalledOnce()
   })
 
+  it('destroys a still-running process even if its terminal has already closed', () => {
+    const harness = createBunHarness()
+    const proc = spawn()
+    harness.terminal.closed = true
+    proc.destroy()
+    expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGHUP')
+    expect(harness.terminal.close).not.toHaveBeenCalled()
+  })
+
   it('contains a native terminal write failure and suppresses later writes', () => {
     const harness = createBunHarness()
     harness.terminal.write = vi.fn(() => {
@@ -237,7 +246,7 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(harness.terminal.resize).toHaveBeenCalledOnce()
   })
 
-  it('pauses and resumes the POSIX producer process group once per transition', () => {
+  it('pauses and resumes the POSIX producer process group once per transition', async () => {
     createBunHarness()
     const signalProcessGroup = vi.fn()
     const proc = spawn({
@@ -247,8 +256,10 @@ describe('Bun.Terminal PTY adapter', () => {
 
     proc.pause()
     proc.pause()
+    await vi.waitFor(() => expect(signalProcessGroup).toHaveBeenCalledTimes(2))
     proc.resume()
     proc.resume()
+    await vi.waitFor(() => expect(signalProcessGroup).toHaveBeenCalledTimes(4))
 
     expect(signalProcessGroup.mock.calls).toEqual([
       [4322, 'SIGSTOP'],
@@ -258,7 +269,7 @@ describe('Bun.Terminal PTY adapter', () => {
     ])
   })
 
-  it('resumes a paused process group before graceful shutdown', () => {
+  it('resumes a paused process group before graceful shutdown', async () => {
     const harness = createBunHarness()
     const signalProcessGroup = vi.fn()
     const proc = spawn({
@@ -267,6 +278,7 @@ describe('Bun.Terminal PTY adapter', () => {
     })
 
     proc.pause()
+    await vi.waitFor(() => expect(signalProcessGroup).toHaveBeenCalledTimes(2))
     proc.kill()
 
     expect(signalProcessGroup.mock.calls).toEqual([
@@ -278,15 +290,17 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGTERM')
   })
 
-  it('falls back to Bun process signals when group signaling is unavailable', () => {
+  it('falls back to Bun process signals when group signaling is unavailable', async () => {
     const harness = createBunHarness()
     vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('not supported'), { code: 'EINVAL' })
     })
-    const proc = spawn()
+    const proc = spawn({ readProcessTable: () => '' })
 
     proc.pause()
+    await vi.waitFor(() => expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGSTOP'))
     proc.resume()
+    await vi.waitFor(() => expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGCONT'))
 
     expect(harness.processHandle.kill.mock.calls).toEqual([['SIGSTOP'], ['SIGCONT']])
   })
@@ -296,6 +310,7 @@ describe('Bun.Terminal PTY adapter', () => {
     const assignHostJob = vi.fn(() => true)
     const release = vi.fn()
     const dispose = vi.fn()
+    const waitForSpawn = vi.fn(async () => {})
     let reportedShellPid: number | undefined
     const job = {
       listProcessIds: vi.fn(() => [4321, 4322]),
@@ -312,6 +327,7 @@ describe('Bun.Terminal PTY adapter', () => {
       windowsVerbatimArguments: true as const,
       release,
       dispose,
+      waitForSpawn,
       readShellProcessId: () => reportedShellPid
     }))
     const proc = spawn({
@@ -332,6 +348,8 @@ describe('Bun.Terminal PTY adapter', () => {
     )
     expect(createJob).toHaveBeenCalledWith(4321)
     expect(createJob.mock.invocationCallOrder[0]).toBeLessThan(release.mock.invocationCallOrder[0])
+    await proc.waitForSpawn?.()
+    expect(waitForSpawn).toHaveBeenCalledWith(harness.processHandle.exited)
 
     proc.pause()
     proc.pause()
@@ -382,7 +400,7 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(dispose).toHaveBeenCalledOnce()
   })
 
-  it('does not release a Windows gate without exact job ownership', () => {
+  it('does not release a Windows gate without exact job ownership', async () => {
     const harness = createBunHarness()
     const release = vi.fn()
     const dispose = vi.fn()
@@ -397,6 +415,7 @@ describe('Bun.Terminal PTY adapter', () => {
           clearCommand: ['cmd.exe', '/d /c clear.cmd'],
           env: {},
           windowsVerbatimArguments: true,
+          waitForSpawn: async () => {},
           readShellProcessId: () => undefined,
           release,
           dispose
@@ -408,6 +427,9 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGTERM')
     expect(harness.terminal.close).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
+    harness.resolveExit(1)
+    await harness.processHandle.exited
+    expect(dispose).toHaveBeenCalledTimes(2)
   })
 
   it('does not spawn a Windows PTY without host crash ownership', () => {
@@ -426,11 +448,11 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(harness.spawn).not.toHaveBeenCalled()
   })
 
-  it('fails closed when a flooding Windows PTY tree cannot be suspended', () => {
+  it('preserves a Windows PTY after a failed suspension and allows a retry', () => {
     const harness = createBunHarness()
     const job = {
       listProcessIds: vi.fn(() => [4321]),
-      pause: vi.fn(() => false),
+      pause: vi.fn(() => true).mockReturnValueOnce(false),
       resume: vi.fn(() => true),
       terminate: vi.fn(() => 'terminated' as const),
       close: vi.fn()
@@ -444,6 +466,7 @@ describe('Bun.Terminal PTY adapter', () => {
         clearCommand: ['cmd.exe', '/d /c clear.cmd'],
         env: {},
         windowsVerbatimArguments: true,
+        waitForSpawn: async () => {},
         readShellProcessId: () => undefined,
         release: vi.fn(),
         dispose: vi.fn()
@@ -451,9 +474,15 @@ describe('Bun.Terminal PTY adapter', () => {
     })
 
     proc.pause()
+    proc.write('still usable')
+    proc.pause()
+    proc.resume()
 
-    expect(job.terminate).toHaveBeenCalledOnce()
-    expect(harness.terminal.close).toHaveBeenCalledOnce()
+    expect(job.pause).toHaveBeenCalledTimes(2)
+    expect(job.resume).toHaveBeenCalledOnce()
+    expect(job.terminate).not.toHaveBeenCalled()
+    expect(harness.terminal.close).not.toHaveBeenCalled()
+    expect(harness.terminal.write).toHaveBeenCalledWith('still usable')
   })
 
   it('delivers Windows exit after cleanup failures', async () => {
@@ -477,6 +506,7 @@ describe('Bun.Terminal PTY adapter', () => {
         clearCommand: ['cmd.exe', '/d /c clear.cmd'],
         env: {},
         windowsVerbatimArguments: true,
+        waitForSpawn: async () => {},
         readShellProcessId: () => undefined,
         release: vi.fn(),
         dispose: vi.fn()
@@ -514,6 +544,7 @@ describe('Bun.Terminal PTY adapter', () => {
           clearCommand: ['cmd.exe', '/d /c clear.cmd'],
           env: {},
           windowsVerbatimArguments: true,
+          waitForSpawn: async () => {},
           readShellProcessId: () => undefined,
           release() {
             throw new Error('gate release failed')

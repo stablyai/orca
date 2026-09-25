@@ -841,7 +841,7 @@ jobs:
           status=0
           pnpm run build:cli || status=1
 
-          scripts=(build:relay build:orcad-template build:electron-vite:parallel)
+          scripts=(build:relay build:electron-vite:parallel)
           pids=()
           for script in "${scripts[@]}"; do
             pnpm run "$script" &

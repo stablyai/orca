@@ -12,8 +12,6 @@ const {
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
-const { verifyPackagedOrcadTemplate } = require('./scripts/verify-packaged-orcad-template.cjs')
-const { signMacAppWithOrcadTemplate } = require('./scripts/sign-mac-orcad-template.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
 const {
@@ -114,9 +112,6 @@ const emojiShortcodeDatasetResource = {
 const commonExtraResources = [
   relayExtraResource,
   ...bundledRipgrepExtraResources,
-  { from: 'out/orcad-template', to: 'orcad-template' },
-  // electron-builder skips a source directory's root node_modules during traversal.
-  { from: 'out/orcad-template/node_modules', to: 'orcad-template/node_modules' },
   bundledPluginResources,
   skillFreshnessResources,
   emojiShortcodeDatasetResource
@@ -330,7 +325,6 @@ module.exports = {
     if (!existsSync(resourcesDir)) {
       throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
     }
-    verifyPackagedOrcadTemplate(resourcesDir)
     // FpmTarget replaces this with deb/rpm while building those artifacts from the shared app tree.
     if (context.electronPlatformName === 'linux') {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
@@ -429,18 +423,6 @@ module.exports = {
       )
     }
   },
-  afterSign: (context) => {
-    if (context.electronPlatformName === 'darwin') {
-      verifyPackagedOrcadTemplate(
-        join(
-          context.appOutDir,
-          `${context.packager.appInfo.productFilename}.app`,
-          'Contents',
-          'Resources'
-        )
-      )
-    }
-  },
   win: {
     executableName: 'Orca',
     // Why: Windows installers are signed after electron-builder packaging by
@@ -501,7 +483,6 @@ module.exports = {
     include: resolve(__dirname, 'nsis', 'orca-installer-hooks.nsh')
   },
   mac: {
-    sign: (options) => signMacAppWithOrcadTemplate(options),
     // Why rank Alternate: Orca joins Finder's "Open With" list for Markdown without claiming
     // LSHandlerRank ownership, so whichever editor the user already prefers stays the default.
     // Why one entry per extension: app-builder-lib globs `*.${ext}`, which an array would break.

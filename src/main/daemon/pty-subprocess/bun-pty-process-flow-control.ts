@@ -1,5 +1,8 @@
 import type { WindowsBunPtyJob } from './windows-bun-pty-job'
-import { signalPosixPtyProcessGroups } from '../../pty/posix-pty-process-groups'
+import {
+  readPosixPtyProcessTable,
+  signalPosixPtyProcessGroups
+} from '../../pty/posix-pty-process-groups'
 
 type BunPtyProcessHandle = Readonly<{
   pid: number
@@ -20,12 +23,16 @@ export function createBunPtyProducerFlowControl(
     windowsJob: WindowsBunPtyJob | null
     isExited: () => boolean
     readProcessTable?: () => string
+    readProcessTableAsync?: (signal: AbortSignal) => Promise<string>
     signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void
   }>
 ): BunPtyProducerFlowControl {
   let paused = false
+  let pauseRequested = false
+  let shuttingDown = false
+  let pendingRead: AbortController | undefined
 
-  const signalProcessGroup = (signal: 'SIGSTOP' | 'SIGCONT'): void => {
+  const signalProcessGroup = (signal: 'SIGSTOP' | 'SIGCONT', table?: string): void => {
     signalPosixPtyProcessGroups(
       options.processHandle.pid,
       signal,
@@ -34,7 +41,11 @@ export function createBunPtyProducerFlowControl(
       },
       {
         platform: options.platform,
-        ...(options.readProcessTable ? { readProcessTable: options.readProcessTable } : {}),
+        ...(table !== undefined
+          ? { readProcessTable: () => table }
+          : options.readProcessTable
+            ? { readProcessTable: options.readProcessTable }
+            : {}),
         ...(options.signalProcessGroup
           ? { signalProcessGroup: (pgid: number) => options.signalProcessGroup?.(pgid, signal) }
           : {})
@@ -42,32 +53,53 @@ export function createBunPtyProducerFlowControl(
     )
   }
 
-  const resume = (): void => {
-    if (options.isExited() || !paused) {
+  const reconcile = (): void => {
+    if (shuttingDown || options.isExited() || pauseRequested === paused || pendingRead) {
       return
     }
-    signalProcessGroup('SIGCONT')
-    paused = false
+    const controller = new AbortController()
+    pendingRead = controller
+    // Process groups change as the shell runs jobs; revalidate them without blocking PTY output.
+    void Promise.resolve()
+      .then(() =>
+        options.readProcessTableAsync
+          ? options.readProcessTableAsync(controller.signal)
+          : options.readProcessTable
+            ? options.readProcessTable()
+            : readPosixPtyProcessTable(options.processHandle.pid, controller.signal)
+      )
+      .catch(() => '')
+      .then((table) => {
+        pendingRead = undefined
+        if (shuttingDown || options.isExited() || pauseRequested === paused) {
+          return
+        }
+        const nextPaused = pauseRequested
+        // A partially successful stop still needs a later resume.
+        if (nextPaused) {
+          paused = true
+        }
+        signalProcessGroup(nextPaused ? 'SIGSTOP' : 'SIGCONT', table)
+        paused = nextPaused
+      })
+      .catch(() => {
+        // PTY ownership can disappear during a scan; flow control is best-effort.
+      })
   }
 
   return {
     pause() {
-      if (options.isExited() || paused) {
+      if (shuttingDown || options.isExited()) {
         return
       }
       if (options.platform === 'win32') {
-        if (options.windowsJob?.pause()) {
+        if (!paused && options.windowsJob?.pause()) {
           paused = true
-        } else {
-          options.windowsJob?.terminate()
-          if (!options.processHandle.terminal.closed) {
-            options.processHandle.terminal.close()
-          }
         }
         return
       }
-      signalProcessGroup('SIGSTOP')
-      paused = true
+      pauseRequested = true
+      reconcile()
     },
     resume() {
       if (options.platform === 'win32') {
@@ -76,7 +108,8 @@ export function createBunPtyProducerFlowControl(
         }
         return
       }
-      resume()
+      pauseRequested = false
+      reconcile()
     },
     resumeForShutdown() {
       if (options.platform === 'win32') {
@@ -84,11 +117,17 @@ export function createBunPtyProducerFlowControl(
         paused = false
         return
       }
+      shuttingDown = true
+      pendingRead?.abort()
       try {
-        resume()
+        if (!options.isExited() && paused) {
+          // Teardown must release stopped jobs before the root receives its exit signal.
+          signalProcessGroup('SIGCONT')
+        }
       } catch {
-        paused = false
+        // A failed resume must not prevent the caller from terminating the PTY.
       }
+      paused = false
     }
   }
 }

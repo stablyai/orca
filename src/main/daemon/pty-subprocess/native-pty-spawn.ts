@@ -7,6 +7,7 @@ import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fal
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 
 import { canUseBunPty, spawnBunPty } from './bun-pty-process'
+import { WindowsBunPtySpawnUnconfirmedError } from './windows-bun-pty-spawn-receipt'
 
 async function loadNodePty(): Promise<typeof pty> {
   return import('node-pty')
@@ -56,6 +57,16 @@ export async function spawnNativeDaemonPty(
         cols: args.cols,
         rows: args.rows
       })
+      try {
+        await proc.waitForSpawn?.()
+      } catch (error) {
+        try {
+          proc.destroy()
+        } catch (cleanupError) {
+          console.warn('[daemon/pty] Failed shell launch cleanup failed:', cleanupError)
+        }
+        throw error
+      }
       args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
       return proc
     }
@@ -87,7 +98,7 @@ export async function spawnNativeDaemonPty(
       reportsChildExitStatus
     }
   } catch (primaryErr) {
-    if (process.platform !== 'win32') {
+    if (process.platform !== 'win32' || primaryErr instanceof WindowsBunPtySpawnUnconfirmedError) {
       throw primaryErr
     }
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
@@ -104,7 +115,10 @@ export async function spawnNativeDaemonPty(
           startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs,
           reportsChildExitStatus
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof WindowsBunPtySpawnUnconfirmedError) {
+          throw error
+        }
         // This fallback shell also failed -- try the next link in the chain.
       }
     }

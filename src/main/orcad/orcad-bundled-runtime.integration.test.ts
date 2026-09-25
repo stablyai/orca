@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,11 +15,27 @@ beforeEach(async () => {
     stdin: {
       contents: `
         import { handoffToBundledOrcad } from './src/main/orcad/orcad-bundled-runtime'
+        import { installOrcadShutdownSignals, flushOrcadProfileStoreForShutdown } from './src/main/orcad/orcad-lifecycle'
+        import { writeFile } from 'node:fs/promises'
         if (process.env.ORCA_TEST_HANDOFF_CHILD === '1') {
+          if (process.env.ORCA_TEST_HANDOFF_DURABLE === '1') {
+            installOrcadShutdownSignals(() => flushOrcadProfileStoreForShutdown({
+              flushFinalOrThrowAsync: async () => {
+                console.log('flushing')
+                await new Promise(resolve => setTimeout(resolve, 250))
+                await writeFile(process.env.ORCA_TEST_SHUTDOWN_FILE, 'flushed')
+              },
+              freezeWritesAsync: async () => console.log('closed')
+            }))
+          }
           for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-            process.on(signal, () => { console.log('received:' + signal); process.exit(29) })
+            process.on(signal, () => {
+              console.log('received:' + signal)
+              if (process.env.ORCA_TEST_HANDOFF_DURABLE !== '1') process.exit(29)
+            })
           }
           console.log('ready:' + JSON.stringify(process.argv.slice(2)))
+          console.log('child-pid:' + process.pid)
           setTimeout(() => process.exit(99), 4_000)
         } else if (!handoffToBundledOrcad()) {
           throw new Error('handoff failed')
@@ -51,6 +67,34 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
+function launch(args: string[], env: NodeJS.ProcessEnv = {}) {
+  const child = spawnProcess({
+    program: process.execPath,
+    args: [join(directory, 'orcad.js'), ...args],
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true
+  })
+  children.add(child)
+  let output = ''
+  child.stdout.on('data', (data: Buffer) => {
+    output += data.toString()
+  })
+  child.stderr.on('data', (data: Buffer) => {
+    output += data.toString()
+  })
+  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolve, reject) => {
+      child.once('error', reject)
+      child.once('exit', (code, signal) => {
+        children.delete(child)
+        resolve({ code, signal })
+      })
+    }
+  )
+  return { child, output: () => output, exit }
+}
+
 describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle', () => {
   it('refuses a partial installation before launching its adjacent runtime', async () => {
     await rm(join(directory, '.build-target'))
@@ -69,33 +113,51 @@ describe.skipIf(process.platform === 'win32')('bundled handoff process lifecycle
     'forwards %s to the actual child and mirrors its exit',
     async (signal) => {
       const args = ['--label', 'two words', 'quote"$literal']
-      const child = spawnProcess({
-        program: process.execPath,
-        args: [join(directory, 'orcad.js'), ...args],
-        env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-      children.add(child)
-      let output = ''
-      child.stdout.on('data', (data: Buffer) => {
-        output += data.toString()
-      })
-      child.stderr.on('data', (data: Buffer) => {
-        output += data.toString()
-      })
-      const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-        (resolve, reject) => {
-          child.once('error', reject)
-          child.once('exit', (code, exitSignal) => resolve({ code, signal: exitSignal }))
-        }
-      )
-      await vi.waitFor(() => expect(output).toContain(`ready:${JSON.stringify(args)}`), {
+      const { child, output, exit } = launch(args)
+      await vi.waitFor(() => expect(output()).toContain(`ready:${JSON.stringify(args)}`), {
         timeout: 2_000
       })
       child.kill(signal)
       expect(await exit).toEqual({ code: 29, signal: null })
-      children.delete(child)
-      expect(output).toContain(`received:${signal}`)
+      expect(output()).toContain(`received:${signal}`)
+    }
+  )
+
+  it.each(
+    (['SIGINT', 'SIGTERM', 'SIGHUP'] as const).flatMap((signal) =>
+      (['process group', 'separate service deliveries'] as const).map((delivery) => ({
+        signal,
+        delivery
+      }))
+    )
+  )(
+    'finishes a pending durable flush after duplicate $signal from $delivery',
+    async ({ signal, delivery }) => {
+      const shutdownFile = join(directory, 'shutdown-complete')
+      const { child, output, exit } = launch([], {
+        ORCA_TEST_HANDOFF_DURABLE: '1',
+        ORCA_TEST_SHUTDOWN_FILE: shutdownFile
+      })
+      await vi.waitFor(() => expect(output()).toContain('child-pid:'), { timeout: 2_000 })
+      const runtimePid = Number(output().match(/child-pid:(\d+)/)?.[1])
+      expect(runtimePid).toBeGreaterThan(0)
+      if (!child.pid) {
+        throw new Error('Launcher has no process ID')
+      }
+      if (delivery === 'process group') {
+        process.kill(-child.pid, signal)
+      } else {
+        process.kill(runtimePid, signal)
+        await vi.waitFor(() => expect(output()).toContain('flushing'))
+        child.kill(signal)
+      }
+      expect(await exit).toEqual({ code: 0, signal: null })
+      expect(await readFile(shutdownFile, 'utf8')).toBe('flushed')
+      expect(output().match(/flushing/g)).toHaveLength(1)
+      expect(output()).toContain('closed')
+      if (delivery === 'separate service deliveries') {
+        expect(output().match(new RegExp(`received:${signal}`, 'g'))).toHaveLength(2)
+      }
     }
   )
 })

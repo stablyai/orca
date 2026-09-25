@@ -57,6 +57,7 @@ describe('Windows Bun PTY job gate worker', () => {
         waitForGate: async () => {
           throw new Error('gate missing')
         },
+        reportSpawnError: vi.fn(),
         spawn
       })
     ).rejects.toThrow('gate missing')
@@ -66,8 +67,10 @@ describe('Windows Bun PTY job gate worker', () => {
   it('keeps supervising the shell when its identity receipt cannot be published', async () => {
     const child = Object.assign(new EventEmitter(), { pid: 1234 })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const reportSpawnError = vi.fn()
     const result = runWindowsBunPtyGate(request, {
       waitForGate: async () => {},
+      reportSpawnError,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture exposes only the child events and pid consumed by the gate.
       spawn: () => child as ReturnType<typeof spawnProcess>,
       reportShellPid() {
@@ -79,18 +82,40 @@ describe('Windows Bun PTY job gate worker', () => {
     expect(warn).toHaveBeenCalledOnce()
     child.emit('exit', 17)
     await expect(result).resolves.toBe(17)
+    expect(reportSpawnError).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 
   it('reports a child spawn error instead of a successful wrapper exit', async () => {
     const child = new EventEmitter()
+    const reportSpawnError = vi.fn()
     const result = runWindowsBunPtyGate(request, {
       waitForGate: async () => {},
+      reportSpawnError,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture exposes the error/exit events the gate consumes.
       spawn: () => child as ReturnType<typeof spawnProcess>
     })
     await Promise.resolve()
     child.emit('error', new Error('spawn denied'))
     await expect(result).rejects.toThrow('spawn denied')
+    expect(reportSpawnError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'spawn denied' })
+    )
+  })
+
+  it('reports synchronous native spawn rejection without requiring a child event', async () => {
+    const reportSpawnError = vi.fn()
+    await expect(
+      runWindowsBunPtyGate(request, {
+        waitForGate: async () => {},
+        spawn: () => {
+          throw new Error('invalid executable')
+        },
+        reportSpawnError
+      })
+    ).rejects.toThrow('invalid executable')
+    expect(reportSpawnError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'invalid executable' })
+    )
   })
 })

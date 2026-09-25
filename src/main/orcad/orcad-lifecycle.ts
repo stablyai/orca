@@ -14,6 +14,35 @@ function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promi
   }
 }
 
+export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
+
+/** A launcher and its child can both receive the same process-group or service stop signal. */
+export function installOrcadShutdownSignals(stop: () => Promise<void>): void {
+  let stopping = false
+  const shutdown = (signal: NodeJS.Signals): void => {
+    if (stopping) {
+      return
+    }
+    stopping = true
+    const deadline = setTimeout(() => {
+      console.error(
+        `orcad: shutdown after ${signal} exceeded ${ORCAD_SHUTDOWN_DEADLINE_MS}ms — exiting`
+      )
+      process.exit(1)
+    }, ORCAD_SHUTDOWN_DEADLINE_MS)
+    deadline.unref()
+    stop()
+      .then(() => process.exit(0))
+      .catch((error) => {
+        console.error(`orcad: shutdown after ${signal} failed:`, error)
+        process.exit(1)
+      })
+  }
+  process.on('SIGINT', () => shutdown('SIGINT'))
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGHUP', () => shutdown('SIGHUP'))
+}
+
 export async function startOrcadWithLifecycle<T extends object>(
   start: (registerRuntimeCleanup: (cleanup: () => Promise<void>) => void) => Promise<T>,
   cleanupHost: (runtimeCleanupSucceeded: boolean) => Promise<void>
