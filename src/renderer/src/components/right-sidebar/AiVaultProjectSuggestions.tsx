@@ -104,7 +104,12 @@ export function AiVaultProjectSuggestions({
       // Why per item: one repo that can't be added must not stop the rest.
       for (const suggestion of selected) {
         try {
-          if (!(await addRepoPath(suggestion.path, 'git'))) {
+          if (
+            !(
+              // Why pinned local: suggestions are this desktop's folders even when a remote runtime is focused.
+              (await addRepoPath(suggestion.path, 'git', { runtimeEnvironmentId: null }))
+            )
+          ) {
             failed.push(suggestion.name)
           }
         } catch {
@@ -118,11 +123,16 @@ export function AiVaultProjectSuggestions({
   }
 
   const dismissSelected = async (): Promise<void> => {
-    await updateSettings({
-      dismissedSessionProjectSuggestions: [
-        ...new Set([...(dismissed ?? []), ...selected.map((s) => s.path)])
-      ]
-    })
+    setBusy(true)
+    try {
+      await updateSettings({
+        dismissedSessionProjectSuggestions: [
+          ...new Set([...(dismissed ?? []), ...selected.map((s) => s.path)])
+        ]
+      })
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

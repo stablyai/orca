@@ -41,9 +41,13 @@ type EligibilityRoots = { home: string; excluded: string[]; homeExcluded: string
 
 function eligibilityRoots(input: SessionProjectSuggestionInput): EligibilityRoots {
   const home = canonicalDir(input.homeDir) ?? input.homeDir
-  const homeExcluded = [join(home, '.cache'), join(home, '.config')].map(
-    (dir) => canonicalDir(dir) ?? dir
-  )
+  // Why Library too: macOS keeps tool caches and app data there, not in ~/.cache or ~/.config.
+  const homeExcluded = [
+    join(home, '.cache'),
+    join(home, '.config'),
+    join(home, 'Library', 'Caches'),
+    join(home, 'Library', 'Application Support')
+  ].map((dir) => canonicalDir(dir) ?? dir)
   const excluded = [...input.tempDirs.map((dir) => canonicalDir(dir) ?? dir), ...homeExcluded]
   return { home, excluded, homeExcluded }
 }

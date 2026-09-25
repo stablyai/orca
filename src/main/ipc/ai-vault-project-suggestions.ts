@@ -7,6 +7,14 @@ import type {
 } from '../../shared/ai-vault-project-suggestions'
 import { gitExecFileAsync } from '../git/runner'
 import { suggestProjectsFromSessions } from '../ai-vault/session-project-suggestions'
+import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../shared/ai-vault-types'
+
+const KNOWN_AGENTS: ReadonlySet<string> = new Set(AI_VAULT_AGENTS)
+
+// Why: renderer input is untrusted; only known agents may flow back typed as AiVaultAgent.
+function isAiVaultAgent(value: unknown): value is AiVaultAgent {
+  return typeof value === 'string' && KNOWN_AGENTS.has(value)
+}
 
 const MAX_SOURCES = 5_000
 const MAX_PATH_LENGTH = 4_096
@@ -23,7 +31,7 @@ function parseSources(raw: unknown): AiVaultProjectSuggestionSource[] {
         typeof source?.cwd === 'string' &&
         source.cwd.length > 0 &&
         source.cwd.length <= MAX_PATH_LENGTH &&
-        typeof source.agent === 'string'
+        isAiVaultAgent(source.agent)
     )
 }
 
@@ -53,7 +61,10 @@ export function registerAiVaultProjectSuggestionHandler(store: Store): void {
             .map((repo) => repo.path),
           dismissedPaths: settings.dismissedSessionProjectSuggestions ?? [],
           homeDir: homedir(),
-          tempDirs: [...new Set([tmpdir(), '/tmp', '/var/tmp'])]
+          // Why POSIX-only: on Windows a rooted '/tmp' resolves to C:\tmp and would hide real repos.
+          tempDirs: [
+            ...new Set([tmpdir(), ...(process.platform === 'win32' ? [] : ['/tmp', '/var/tmp'])])
+          ]
         },
         resolveGitRoot
       )

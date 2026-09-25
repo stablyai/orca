@@ -4,11 +4,11 @@ export function projectSuggestionsTitle(count: number): string {
   return count === 1
     ? translate(
         'auto.components.right-sidebar.ai-vault-project-suggestions.titleOne',
-        '1 project found in your agent sessions'
+        '1 project found in your recent agent sessions'
       )
     : translate(
         'auto.components.right-sidebar.ai-vault-project-suggestions.titleMany',
-        '{{count}} projects found in your agent sessions',
+        '{{count}} projects found in your recent agent sessions',
         { count }
       )
 }

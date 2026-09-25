@@ -98,12 +98,14 @@ describe('AiVaultProjectSuggestions', () => {
     ])
     render(<AiVaultProjectSuggestions sessions={[makeSession()]} />)
 
-    expect(await screen.findByText('2 projects found in your agent sessions')).toBeTruthy()
+    expect(await screen.findByText('2 projects found in your recent agent sessions')).toBeTruthy()
     fireEvent.click(screen.getByRole('checkbox', { name: 'web' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add 1 project' }))
 
     await waitFor(() => expect(store.state.addRepoPath).toHaveBeenCalledOnce())
-    expect(store.state.addRepoPath).toHaveBeenCalledWith('/home/me/Projects/app', 'git')
+    expect(store.state.addRepoPath).toHaveBeenCalledWith('/home/me/Projects/app', 'git', {
+      runtimeEnvironmentId: null
+    })
   })
 
   it('keeps adding after one project fails and names the failure', async () => {
