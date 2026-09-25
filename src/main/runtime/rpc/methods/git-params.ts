@@ -2,6 +2,7 @@ export {
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
+  GitCarryWorkingTreeChanges,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,

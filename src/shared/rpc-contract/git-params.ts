@@ -2,11 +2,13 @@ import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
 
+const RuntimeWorktreeSelectorValue = z
+  .unknown()
+  .transform((v) => (typeof v === 'string' ? v : ''))
+  .pipe(z.string().min(1, 'Missing worktree selector'))
+
 export const WorktreeSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
+  worktree: RuntimeWorktreeSelectorValue
 })
 
 export const GitStatusParams = WorktreeSelector.extend({
@@ -206,6 +208,11 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
 
 export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
+})
+
+export const GitCarryWorkingTreeChanges = z.object({
+  sourceWorktree: RuntimeWorktreeSelectorValue,
+  targetWorktree: RuntimeWorktreeSelectorValue
 })
 
 export const GitPushTargetParam = z.object({

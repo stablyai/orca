@@ -31,6 +31,7 @@ type RuntimeGitCommandName =
   | 'stageRuntimeGitPath'
   | 'unstageRuntimeGitPath'
   | 'bulkStageRuntimeGitPaths'
+  | 'carryRuntimeWorkingTreeChanges'
   | 'bulkUnstageRuntimeGitPaths'
   | 'bulkDiscardRuntimeGitPaths'
   | 'discardRuntimeGitPath'
@@ -75,6 +76,7 @@ export function installRuntimeGitCommandSurface(
     stageRuntimeGitPath: commands.stageRuntimeGitPath.bind(commands),
     unstageRuntimeGitPath: commands.unstageRuntimeGitPath.bind(commands),
     bulkStageRuntimeGitPaths: commands.bulkStageRuntimeGitPaths.bind(commands),
+    carryRuntimeWorkingTreeChanges: commands.carryRuntimeWorkingTreeChanges.bind(commands),
     bulkUnstageRuntimeGitPaths: commands.bulkUnstageRuntimeGitPaths.bind(commands),
     bulkDiscardRuntimeGitPaths: commands.bulkDiscardRuntimeGitPaths.bind(commands),
     discardRuntimeGitPath: commands.discardRuntimeGitPath.bind(commands),

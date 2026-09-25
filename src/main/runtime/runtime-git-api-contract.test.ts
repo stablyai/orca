@@ -33,6 +33,7 @@ const RPC_TO_RUNTIME_COMMAND = {
   'git.cancelGeneratePullRequestFields': 'cancelRuntimeGeneratePullRequestFields',
   'git.stage': 'stageRuntimeGitPath',
   'git.bulkStage': 'bulkStageRuntimeGitPaths',
+  'git.carryWorkingTreeChanges': 'carryRuntimeWorkingTreeChanges',
   'git.unstage': 'unstageRuntimeGitPath',
   'git.bulkUnstage': 'bulkUnstageRuntimeGitPaths',
   'git.discard': 'discardRuntimeGitPath',
