@@ -89,4 +89,18 @@ describe('prompt response parameters', () => {
     await rejects('agentSession.respondToApproval', { ...base, answers })
     await rejects('agentSession.respondToApproval', { ...base, optionId: 'x'.repeat(1025) })
   })
+
+  it('takes a question id exactly as the agent wrote it, including edge spaces', async () => {
+    const answers = [{ questionId: 'scope ', optionIds: [], other: 'mine' }]
+    const response = await call(
+      'agentSession.respondToQuestion',
+      { envelope: envelope(), itemId: 'item-1', expectedRevision: 1, answers },
+      STRUCTURED_CLIENT
+    )
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.respondToPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ kind: 'question', answers })
+    )
+  })
 })

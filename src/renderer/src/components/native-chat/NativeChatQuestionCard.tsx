@@ -239,7 +239,9 @@ export function NativeChatQuestionCard({
                     disabled={isSubmitting}
                     value={otherText[index]}
                     onChange={(e) => setOther(index, e.target.value)}
-                    onFocus={() => {
+                    // Pointer, not focus: tabbing through the field toward Submit must not
+                    // replace the option the user just picked.
+                    onPointerDown={() => {
                       if ((otherText[index] ?? '').trim().length > 0) {
                         chooseTypedAnswer(index)
                       }

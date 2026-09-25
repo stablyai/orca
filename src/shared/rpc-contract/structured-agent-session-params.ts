@@ -215,7 +215,11 @@ export const RespondParams = z
 
 const QuestionAnswer = z
   .object({
-    questionId: Identifier('Invalid question id', MAX_RESPONSE_OPTION_ID_LENGTH),
+    // Codex question ids are model-written and untrimmed; the host matches them exactly.
+    questionId: z
+      .string()
+      .min(1, 'Invalid question id')
+      .max(MAX_RESPONSE_OPTION_ID_LENGTH, 'Invalid question id'),
     optionIds: z
       .array(Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH))
       .max(MAX_QUESTION_ANSWER_OPTIONS),

@@ -262,19 +262,35 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
   })
 
-  it('chooses the kept typed text again when its field is focused', () => {
+  it('chooses the kept typed text again when its field is clicked', () => {
     const onAnswer = vi.fn()
     render(tabsOrSpaces, onAnswer)
 
     typeAnswer('two spaces')
     clickOption('Tabs')
-    act(() =>
-      container.querySelector('input')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
-    )
+    act(() => {
+      container
+        .querySelector('input')!
+        .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    })
     expect(optionPressed('Tabs')).toBe('false')
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'two spaces' }])
+  })
+
+  it('keeps the picked option when keyboard focus passes through the field', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    act(() => {
+      container.querySelector('input')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    })
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
   })
 
   it('sends picked options and typed text together on a multi-select question', () => {
