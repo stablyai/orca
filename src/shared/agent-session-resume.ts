@@ -18,7 +18,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'prime-agent',
   'copilot',
   'kimi',
-  'muse'
+  'muse',
+  'mistral-vibe'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -247,6 +248,11 @@ export function extractAgentProviderSession(
     case 'command-code':
     case 'hermes':
       return null
+    // Why: Vibe posts session_id + transcript_path in every hook's session context; resume by id via `vibe --resume`.
+    case 'mistral-vibe': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
+    }
   }
 }
 
@@ -305,5 +311,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
     case 'muse':
       return providerSession.key === 'session_id' ? ['muse', 'resume', id] : null
+    // Why: Vibe resumes by id with --resume; sessions are work-dir-scoped (enforced by callers).
+    case 'mistral-vibe':
+      return providerSession.key === 'session_id' ? ['vibe', '--resume', id] : null
   }
 }

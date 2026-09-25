@@ -18,7 +18,8 @@ export const AGENT_HOOK_TARGETS = [
   'hermes',
   'devin',
   'kimi',
-  'muse'
+  'muse',
+  'mistral-vibe'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 
@@ -29,6 +30,7 @@ export type AgentHookInstallSkipReason =
   | 'cli_not_found'
   | 'cli_presence_unknown'
   | 'hooks_disabled'
+  | 'platform_unsupported'
 
 export type AgentHookInstallStatus = {
   agent: AgentHookTarget

@@ -23,6 +23,7 @@ import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
+import { normalizeVibeEvent } from './providers/vibe-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -152,6 +153,9 @@ export function normalizeProviderEvent(input: {
       break
     case 'muse':
       payload = normalizeMuseEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'mistral-vibe':
+      payload = normalizeVibeEvent(state, eventName, promptText, paneKey, hookPayload)
       break
   }
 
