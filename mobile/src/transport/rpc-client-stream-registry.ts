@@ -19,6 +19,7 @@ import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
 export type RpcStreamingListener = (result: unknown) => void
 
 export type RpcStreamSubscribeOptions = {
+  onResponse?: (response: RpcResponse) => void
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
 }
 
@@ -26,6 +27,7 @@ type StreamRequest = {
   method: string
   params: unknown
   listener: RpcStreamingListener
+  onResponse?: (response: RpcResponse) => void
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
   subscriptionId?: string
   cancelled?: boolean
@@ -58,6 +60,7 @@ export class RpcClientStreamRegistry {
       method,
       params,
       listener,
+      onResponse: subscribeOptions?.onResponse,
       onBinaryFrame: subscribeOptions?.onBinaryFrame
     }
     this.streams.set(id, stream)
@@ -113,6 +116,7 @@ export class RpcClientStreamRegistry {
   }
 
   handleResponse(response: RpcResponse): boolean {
+    this.streams.get(response.id)?.onResponse?.(response)
     if (isStreamingOpenerReply(response)) {
       this.handleStreamingResponse(response)
       return true

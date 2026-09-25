@@ -14,6 +14,11 @@ import { RelayPendingRequests } from './relay-pending-requests'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
+import {
+  requireBinarySubscription,
+  type RpcBinaryClient,
+  type RpcBinaryChannelOptions
+} from './rpc-binary-channel'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
@@ -33,6 +38,7 @@ export type MobileRelayRpcSession = RpcClient &
   }
 
 export function connectMobileRelayRpcSession(args: {
+  binaryChannel?: RpcBinaryChannelOptions
   relay: MobileRelayEndpoint
   resumeToken: string
   resumeCredentialVersion: number
@@ -43,7 +49,7 @@ export function connectMobileRelayRpcSession(args: {
   createSocket?: (url: string) => WebSocket
   onHostCloseReason?: (reason: RelayHostCloseReason) => void
   onLog?: ConnectionLogSink
-}): MobileRelayRpcSession {
+}): MobileRelayRpcSession & RpcBinaryClient {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
   const pending = new RelayPendingRequests()
   const stateListeners = new Set<(state: ConnectionState) => void>()
@@ -64,6 +70,8 @@ export function connectMobileRelayRpcSession(args: {
     waitForConnected: () => waitForConnected()
   })
 
+  const handleBinary =
+    args.binaryChannel?.onBinary ?? ((bytes: Uint8Array) => streams.handleBinary(bytes))
   const link = new MobileRelayE2eeLink({
     endpoint: args.relay,
     credential: args.resumeToken,
@@ -71,6 +79,7 @@ export function connectMobileRelayRpcSession(args: {
     deviceToken: args.deviceToken,
     desktopPublicKeyB64: args.desktopPublicKeyB64,
     createSocket: args.createSocket,
+    claimQueuedBytes: args.binaryChannel?.claimQueuedBytes,
     onHostCloseReason: args.onHostCloseReason,
     onOpen: () => dialStage.advance('awaiting-hello'),
     onHello: (hello) => {
@@ -98,14 +107,16 @@ export function connectMobileRelayRpcSession(args: {
     onError: fail
   })
 
-  const client: MobileRelayRpcSession = {
+  const client: MobileRelayRpcSession & RpcBinaryClient = {
     async sendRequest(method, params, options) {
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
       return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
     },
 
+    sendBinary: (bytes) => !!args.binaryChannel && state === 'connected' && link.sendBinary(bytes),
     subscribe(method, params, listener, options) {
+      requireBinarySubscription(method, !!args.binaryChannel)
       if (closed) {
         return () => {}
       }
@@ -190,8 +201,9 @@ export function connectMobileRelayRpcSession(args: {
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
       // Why: an unanswered advisory must not keep a slow relay from ever reaching connected.
-      await settleMobileRuntimeCapabilities((method, params) =>
-        sendRpc(method, params, requestTimeoutMs, true)
+      await settleMobileRuntimeCapabilities(
+        (method, params) => sendRpc(method, params, requestTimeoutMs, true),
+        args.binaryChannel?.clientCapabilities
       )
       livenessWatchdog.start(livenessIdentity)
       publishState('connected')
@@ -245,10 +257,6 @@ export function connectMobileRelayRpcSession(args: {
       return
     }
     streams.handleResponse(value)
-  }
-
-  function handleBinary(bytes: Uint8Array): void {
-    streams.handleBinary(bytes)
   }
 
   function waitForConnected(timeoutMs = requestTimeoutMs): Promise<void> {

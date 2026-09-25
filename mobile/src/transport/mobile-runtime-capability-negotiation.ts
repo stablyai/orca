@@ -14,14 +14,17 @@ type CapabilityRequest = (method: string, params: unknown) => Promise<RpcRespons
  * unavailable, proceed. Rejects for the unsent case alone.
  */
 export async function settleMobileRuntimeCapabilities(
-  sendRequest: CapabilityRequest
+  sendRequest: CapabilityRequest,
+  additionalCapabilities: readonly string[] = []
 ): Promise<void> {
   let response: RpcResponse
   try {
-    response = await sendRequest(
-      MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD,
-      mobileRuntimeClientCapabilityUpdateParams()
-    )
+    response = await sendRequest(MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD, {
+      clientCapabilities: [
+        ...mobileRuntimeClientCapabilityUpdateParams().clientCapabilities,
+        ...additionalCapabilities
+      ]
+    })
   } catch (error) {
     if (!isRpcDeliveryUnknown(error)) {
       throw error
@@ -36,11 +39,12 @@ export async function settleMobileRuntimeCapabilities(
 
 export function negotiateMobileRuntimeCapabilities(args: {
   sendRequest: CapabilityRequest
+  additionalCapabilities?: readonly string[]
   current: () => boolean
   onReady: () => void
   onFailure: () => void
 }): void {
-  void settleMobileRuntimeCapabilities(args.sendRequest)
+  void settleMobileRuntimeCapabilities(args.sendRequest, args.additionalCapabilities)
     .then(() => {
       if (args.current()) {
         args.onReady()

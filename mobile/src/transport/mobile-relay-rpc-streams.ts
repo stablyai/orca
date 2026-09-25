@@ -16,6 +16,7 @@ import type { RpcResponse, RpcSuccess } from './types'
 type StreamRecord = {
   method: string
   params: unknown
+  onResponse?: (response: RpcResponse) => void
   listener: (result: unknown) => void
   onBinaryFrame?: Parameters<RpcClient['subscribe']>[3] extends
     | { onBinaryFrame?: infer Listener }
@@ -73,6 +74,7 @@ export class MobileRelayRpcStreams {
       method,
       params,
       listener,
+      onResponse: subscribeOptions?.onResponse,
       onBinaryFrame: subscribeOptions?.onBinaryFrame,
       streamIds: new Set(),
       cancelled: false,
@@ -101,6 +103,7 @@ export class MobileRelayRpcStreams {
   }
 
   handleResponse(response: RpcResponse): boolean {
+    this.streams.get(response.id)?.onResponse?.(response)
     const cancelled = this.cancelledSubscriptions.get(response.id)
     if (cancelled) {
       if (!response.ok) {

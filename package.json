@@ -202,6 +202,7 @@
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron/rebuild": "^4.2.0",
     "@monaco-editor/react": "^4.7.0",
+    "@noble/hashes": "1.8.0",
     "@oxlint/plugins": "1.80.0",
     "@playwright/test": "^1.59.1",
     "@sanity/diff-match-patch": "^3.2.0",

@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ALL_RPC_METHODS } from './rpc/methods'
 
@@ -75,29 +75,47 @@ function listSourceFiles(root: string): string[] {
   return files
 }
 
-function mobileLiteralRpcMethods(): string[] {
+// The opt-in transport has a real scope-denial regression in mobile-browser-tunnel.unit.test.ts.
+const GATED_MOBILE_RPC_CALL = {
+  file: 'mobile/src/transport/mobile-browser-tunnel-connection.ts',
+  method: 'network.browserTunnel'
+}
+
+function isGatedMobileRpcCall(file: string, method: string): boolean {
+  return file === GATED_MOBILE_RPC_CALL.file && method === GATED_MOBILE_RPC_CALL.method
+}
+
+function mobileLiteralRpcMethods(includeGated = false): string[] {
   const roots = [join(process.cwd(), 'mobile/app'), join(process.cwd(), 'mobile/src')]
   const methods = new Set<string>()
   for (const file of roots.flatMap(listSourceFiles)) {
     const source = readFileSync(file, 'utf8')
+    const sourcePath = relative(process.cwd(), file).split(/[/\\]/).join('/')
+    const add = (method: string) => {
+      if (includeGated || !isGatedMobileRpcCall(sourcePath, method)) {
+        methods.add(method)
+      }
+    }
     for (const match of source.matchAll(/sendRequest\(\s*['"]([^'"]+)/g)) {
-      methods.add(match[1]!)
+      add(match[1]!)
     }
     for (const match of source.matchAll(/subscribe\(\s*['"]([^'"]+)/g)) {
-      methods.add(match[1]!)
+      add(match[1]!)
     }
     for (const match of source.matchAll(/method:\s*['"]([^'"]+)/g)) {
       const method = match[1]!
       if (method.includes('.')) {
-        methods.add(method)
+        add(method)
       }
     }
   }
   return [...methods].sort()
 }
 
-function mobileRpcMethods(): string[] {
-  return [...new Set([...mobileLiteralRpcMethods(), ...MOBILE_DYNAMIC_RPC_METHODS])].sort()
+function mobileRpcMethods(includeGated = false): string[] {
+  return [
+    ...new Set([...mobileLiteralRpcMethods(includeGated), ...MOBILE_DYNAMIC_RPC_METHODS])
+  ].sort()
 }
 
 function mobileRpcAllowlist(): Set<string> {
@@ -126,11 +144,27 @@ describe('mobile RPC allowlist', () => {
     expect(missing).toEqual([])
   })
 
+  it('keeps the opt-in tunnel call outside the universal mobile grant', () => {
+    expect(mobileLiteralRpcMethods(true)).toContain(GATED_MOBILE_RPC_CALL.method)
+    expect(mobileLiteralRpcMethods()).not.toContain(GATED_MOBILE_RPC_CALL.method)
+    expect(mobileRpcAllowlist().has(GATED_MOBILE_RPC_CALL.method)).toBe(false)
+  })
+
+  it('does not exempt ordinary forbidden calls or tunnel calls from other modules', () => {
+    expect(isGatedMobileRpcCall(GATED_MOBILE_RPC_CALL.file, 'updater.install')).toBe(false)
+    expect(
+      isGatedMobileRpcCall('mobile/src/session/session.ts', GATED_MOBILE_RPC_CALL.method)
+    ).toBe(false)
+    expect(isGatedMobileRpcCall(GATED_MOBILE_RPC_CALL.file, GATED_MOBILE_RPC_CALL.method)).toBe(
+      true
+    )
+  })
+
   it('registers every RPC method used by the mobile app', () => {
     // Why: the allowlist check runs before dispatch, but an allowlisted mobile
     // method still fails at runtime if it was never added to ALL_RPC_METHODS.
     const registered = registeredRuntimeMethods()
-    const missing = mobileRpcMethods().filter((method) => !registered.has(method))
+    const missing = mobileRpcMethods(true).filter((method) => !registered.has(method))
 
     expect(missing).toEqual([])
   })

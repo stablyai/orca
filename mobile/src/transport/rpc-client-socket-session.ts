@@ -1,11 +1,5 @@
-import {
-  decrypt,
-  decryptBytes,
-  deriveSharedKey,
-  encrypt,
-  generateKeyPair,
-  publicKeyToBase64
-} from './e2ee'
+import { decrypt, decryptBytes, deriveSharedKey, generateKeyPair, publicKeyToBase64 } from './e2ee'
+import { RpcClientSocketSender } from './rpc-client-socket-sender'
 import { isRpcResponse } from './rpc-response-shape'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
@@ -17,6 +11,8 @@ const HANDSHAKE_TIMEOUT_MS = 5_000
 const WEBSOCKET_CONNECTING_STATE = 0
 
 type SocketSessionOptions = {
+  claimQueuedBytes?: (bytes: number) => (() => void) | null
+  clientCapabilities?: readonly string[]
   endpoint: string
   deviceToken: string
   serverPublicKey: Uint8Array
@@ -39,6 +35,7 @@ type SocketSessionOptions = {
 export class RpcClientSocketSession {
   readonly socket: WebSocket
   readonly constructedAt = Date.now()
+  private readonly sender: RpcClientSocketSender
   private sharedKey: Uint8Array | null = null
   private authenticated = false
   private lastInboundAt: number | null = null
@@ -47,42 +44,29 @@ export class RpcClientSocketSession {
 
   constructor(private readonly options: SocketSessionOptions) {
     this.socket = new WebSocket(options.endpoint)
+    this.sender = new RpcClientSocketSender({
+      socket: this.socket,
+      claimQueuedBytes: options.claimQueuedBytes,
+      getKey: () => this.sharedKey,
+      isAuthenticated: () => this.authenticated,
+      getCurrentSocket: options.getCurrentSocket,
+      getState: options.getState,
+      forceClose: () => options.onForcedClose(this)
+    })
     this.attachHandlers()
     this.armConnectTimeout()
   }
 
   sendEncrypted(request: unknown): boolean {
-    if (this.socket.readyState === WebSocket.OPEN && this.sharedKey) {
-      try {
-        this.socket.send(encrypt(JSON.stringify(request), this.sharedKey))
-        return true
-      } catch {
-        if (this.options.getCurrentSocket() === this.socket) {
-          this.options.onForcedClose(this)
-        }
-        return false
-      }
-    }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: this.options.getCurrentSocket() !== null,
-      readyState: this.socket.readyState,
-      hasKey: this.sharedKey !== null,
-      state: this.options.getState()
-    })
-    if (
-      this.options.getState() === 'connected' &&
-      this.options.getCurrentSocket() === this.socket &&
-      this.socket.readyState !== WebSocket.OPEN
-    ) {
-      console.log('[net] sendEncrypted detected ws desync — forcing reconnect', {
-        readyState: this.socket.readyState
-      })
-      this.options.onForcedClose(this)
-    }
-    return false
+    return this.sender.sendEncrypted(request)
+  }
+
+  sendBinary(bytes: Uint8Array): boolean {
+    return this.sender.sendBinary(bytes)
   }
 
   close(): void {
+    this.sender.dispose()
     this.socket.close()
   }
 
@@ -98,6 +82,7 @@ export class RpcClientSocketSession {
   }
 
   clearKey(): void {
+    this.sender.dispose()
     this.sharedKey = null
   }
 
@@ -208,7 +193,13 @@ export class RpcClientSocketSession {
       const message = JSON.parse(raw) as { type?: unknown }
       if (message.type === 'e2ee_ready') {
         this.options.emitLog('success', 'Received e2ee_ready', 'Sending device token')
-        this.sendEncrypted({ type: 'e2ee_auth', deviceToken: this.options.deviceToken })
+        this.sendEncrypted({
+          type: 'e2ee_auth',
+          deviceToken: this.options.deviceToken,
+          ...(this.options.clientCapabilities
+            ? { clientCapabilities: this.options.clientCapabilities }
+            : {})
+        })
         return
       }
     } catch {

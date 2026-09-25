@@ -21,6 +21,7 @@ export class RelayOuterError extends Error {
 }
 
 type MobileRelayE2eeLinkOptions = {
+  claimQueuedBytes?: (bytes: number) => (() => void) | null
   endpoint: { cellUrl: string; relayHostId: string }
   credential: string
   expectedCredentialKind: 'invite' | 'resume'
@@ -63,6 +64,7 @@ export class MobileRelayE2eeLink {
     })
     this.channel = new MobileE2EEV2PhysicalChannel({
       session,
+      claimQueuedBytes: options.claimQueuedBytes,
       socket: this.socket,
       deviceToken: options.deviceToken,
       decodeBinary: websocketPayloadToUint8,

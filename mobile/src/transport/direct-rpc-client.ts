@@ -1,3 +1,5 @@
+import { sendDirectRpcRequest } from './rpc-client-socket-sender'
+import { requireBinarySubscription } from './rpc-binary-channel'
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
 import { DirectConnectionLog } from './direct-connection-log'
 import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
@@ -81,6 +83,8 @@ export class DirectRpcClient implements RpcClient {
       onTimeout: this.connectionLog.livenessTimeout
     })
     this.socketFactory = new RpcClientSocketFactory({
+      clientCapabilities: options.binaryChannel?.clientCapabilities,
+      claimQueuedBytes: options.binaryChannel?.claimQueuedBytes,
       endpoint,
       deviceToken,
       serverPublicKeyB64,
@@ -94,7 +98,7 @@ export class DirectRpcClient implements RpcClient {
       onAuthenticated: (session) => this.handleAuthenticated(session),
       onAuthRejected: (reason) => this.authenticationRetry.reject(reason),
       onRpcResponse: (response) => this.handleRpcResponse(response),
-      onBinary: (bytes) => this.streams.handleBinary(bytes),
+      onBinary: options.binaryChannel?.onBinary ?? ((bytes) => this.streams.handleBinary(bytes)),
       onAuthenticatedInbound: (session) => this.liveness.noteAuthenticatedInbound(session),
       onClosed: (session, closeCode) => this.socketClose.handle(session, closeCode),
       onForcedClose: (session) => this.socketClose.forceClose(session)
@@ -143,8 +147,14 @@ export class DirectRpcClient implements RpcClient {
     onData: RpcStreamingListener,
     options?: RpcStreamSubscribeOptions
   ): () => void {
+    requireBinarySubscription(method, !!this.options.binaryChannel)
     return this.streams.subscribe(method, params, onData, options)
   }
+
+  sendBinary = (bytes: Uint8Array): boolean =>
+    !!this.options.binaryChannel &&
+    this.getState() === 'connected' &&
+    (this.socketSession?.sendBinary(bytes) ?? false)
 
   updateTerminalSubscriptionViewport(
     terminal: string,
@@ -153,13 +163,9 @@ export class DirectRpcClient implements RpcClient {
     this.streams.updateTerminalViewport(terminal, viewport)
   }
 
-  getState(): ConnectionState {
-    return this.connectionState.get()
-  }
+  getState = (): ConnectionState => this.connectionState.get()
 
-  getReconnectAttempt(): number {
-    return this.reconnect.getAttempt()
-  }
+  getReconnectAttempt = (): number => this.reconnect.getAttempt()
 
   getLastConnectedAt(): number | null {
     return this.connectionState.getLastConnectedAt()
@@ -231,6 +237,7 @@ export class DirectRpcClient implements RpcClient {
     this.liveness.start(session)
     const generation = ++this.authenticationGeneration
     negotiateMobileRuntimeCapabilities({
+      additionalCapabilities: this.options.binaryChannel?.clientCapabilities,
       sendRequest: (method, params) =>
         this.requests.sendAuthenticatedRequest(method, params, 5_000),
       current: () => this.socketSession === session && this.authenticationGeneration === generation,
@@ -274,7 +281,9 @@ export class DirectRpcClient implements RpcClient {
     this.requests.rejectAll(reason, { deliveryUnknown: true })
     closing?.close()
     this.connectionState.publish('reconnecting')
-    this.reconnect.schedule()
+    if (!this.intentionallyClosed) {
+      this.reconnect.schedule()
+    }
   }
 
   private latchAuthenticationFailure(reason: string): void {
@@ -286,15 +295,7 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private sendEncrypted(request: unknown): boolean {
-    if (this.socketSession) {
-      return this.socketSession.sendEncrypted(request)
-    }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: false,
-      hasKey: false,
-      state: this.getState()
-    })
-    return false
+    return sendDirectRpcRequest(this.socketSession, this.getState(), request)
   }
 
   private sendLivenessProbe(): boolean {

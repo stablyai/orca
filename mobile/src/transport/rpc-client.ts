@@ -1,6 +1,12 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
-import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
+import type {
+  ConnectionLogSink,
+  ConnectionState,
+  ForegroundNudgeReason,
+  RpcResponse
+} from './types'
+import type { RpcBinaryChannelOptions } from './rpc-binary-channel'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
 // Re-export shim: the options type moved to the port module with the sender it belongs to,
@@ -8,6 +14,7 @@ import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 export type { SendRequestOptions } from './unvalidated-rpc-request-port'
 
 type SubscribeOptions = {
+  onResponse?: (response: RpcResponse) => void
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
 }
 
@@ -55,6 +62,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
 }
 
 export type ConnectOptions = {
+  binaryChannel?: RpcBinaryChannelOptions
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
 }

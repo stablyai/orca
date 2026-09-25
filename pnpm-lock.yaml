@@ -214,6 +214,9 @@ importers:
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@noble/hashes':
+        specifier: 1.8.0
+        version: 1.8.0
       '@oxlint/plugins':
         specifier: 1.80.0
         version: 1.80.0

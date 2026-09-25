@@ -92,6 +92,8 @@ export class RpcClientSocketCloseController {
     )
     this.options.requests.rejectAll('Connection interrupted', { deliveryUnknown: true })
     this.options.connectionState.publish('reconnecting')
-    this.options.reconnect.schedule()
+    if (!this.options.isIntentionallyClosed()) {
+      this.options.reconnect.schedule()
+    }
   }
 }

@@ -4,6 +4,8 @@ import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
 
 type SocketFactoryOptions = {
+  claimQueuedBytes?: (bytes: number) => (() => void) | null
+  clientCapabilities?: readonly string[]
   endpoint: string
   deviceToken: string
   serverPublicKeyB64: string
@@ -55,6 +57,8 @@ export class RpcClientSocketFactory {
       redactSocketEndpoint(this.options.endpoint)
     )
     return new RpcClientSocketSession({
+      clientCapabilities: this.options.clientCapabilities,
+      claimQueuedBytes: this.options.claimQueuedBytes,
       endpoint: this.options.endpoint,
       deviceToken: this.options.deviceToken,
       serverPublicKey: this.serverPublicKey,

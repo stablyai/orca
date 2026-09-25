@@ -967,6 +967,21 @@ describe('mobile rpc-client connection timeout', () => {
     })
   })
 
+  it('does not leave a reconnect timer after a route owner closes in the state callback', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    client.onStateChange((state) => {
+      if (state === 'reconnecting') {
+        client.close()
+      }
+    })
+    socket.close()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('rejects requests waiting for reconnect after the retry cap', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!

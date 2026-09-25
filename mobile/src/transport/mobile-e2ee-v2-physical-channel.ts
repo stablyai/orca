@@ -28,6 +28,7 @@ export class MobileE2EEV2PhysicalChannel {
 
   constructor(
     private readonly args: {
+      claimQueuedBytes?: (bytes: number) => (() => void) | null
       session: MobileE2EEV2ClientSession
       socket: MobileE2EEV2Socket
       deviceToken: string
@@ -52,6 +53,7 @@ export class MobileE2EEV2PhysicalChannel {
         (item.kind === 'text'
           ? new TextEncoder().encode(item.plaintext).length
           : item.plaintext.length) + 82,
+      claimQueuedBytes: args.claimQueuedBytes,
       getBufferedAmount: () => args.socket.bufferedAmount,
       isWritable: () => args.socket.readyState === args.socket.OPEN,
       onOverflow: () => args.onError(new Error('E2EE v2 outbound buffer overflow'))
@@ -170,8 +172,7 @@ export class MobileE2EEV2PhysicalChannel {
     if (this.state !== 'ready') {
       return false
     }
-    this.outboundQueue.enqueue(item)
-    return true
+    return this.outboundQueue.enqueue(item)
   }
 }
 
