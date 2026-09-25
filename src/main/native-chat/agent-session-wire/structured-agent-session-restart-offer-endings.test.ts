@@ -1,5 +1,5 @@
-// The ways an offer ends. Every ending is the user's own act, and every ending DELETES the
-// durable record — nothing stays behind to be re-filtered on every later read.
+// The ways an offer ends. Every ending DELETES the durable record — nothing stays behind to be
+// re-filtered on every later read.
 
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
@@ -13,8 +13,8 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 
-// The user answering the chat themselves is the one signal the offer is moot. The next listing
-// notices and deletes the durable record, not merely hides it.
+// The user's own message starts the chat's agent again, which ends the offer: the durable record
+// is deleted, not merely hidden (R-04).
 it('deletes the offer once the user sends their own message in that chat', async () => {
   const { host, root, dispatch } = await interruptedRestart()
   const capsule = new AgentSessionRecoveryCapsule(root)
@@ -24,13 +24,13 @@ it('deletes the offer once the user sends their own message in that chat', async
   const body = hostTestMessage('Never mind, do this instead')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
 
-  expect(await host.restartResume.list()).toEqual([])
   await vi.waitFor(async () => {
     expect(await capsule.list(NOW)).toEqual([])
   })
+  expect(await host.restartResume.list()).toEqual([])
 })
 
-// A journal this host cannot read says nothing about the user moving on, so it must not end the offer.
+// A journal this host cannot read decides nothing, so it must not end the offer.
 it('keeps the offer when the chat cannot be read on this host', async () => {
   const { host, root, store } = await interruptedRestart('submission')
   const capsule = new AgentSessionRecoveryCapsule(root)

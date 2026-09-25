@@ -12,8 +12,28 @@ import type {
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
-import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-host'
 import type { SendSettlementWaitOptions } from './structured-agent-session-send-settlement'
+
+export type StructuredAgentSessionRestartResumeSurfaces = {
+  revealSession: (sessionId: string) => Promise<{ readable: boolean }>
+  send: (input: {
+    envelope: AgentSessionMutationEnvelope
+    body: AgentJournalMessageItem
+    beforeRun?: () => void
+  }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
+  awaitSendSettlement: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  awaitSendHandedOver: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  onNoteFailed: (sessionId: string, error: unknown) => void
+  now: () => number
+  /** Quit has begun; see the offer withdrawal. */
+  isDisposed: () => boolean
+}
 
 /** The caller key the continuation sends under, so its writes are attributable to Orca itself. */
 export const STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER =
@@ -42,7 +62,7 @@ type RestartResumeHostBindings = {
 export function structuredAgentSessionRestartResumeSurfaces(
   host: RestartResumeHostBindings,
   now: () => number
-): StructuredAgentSessionRestartResumeSurfaces {
+): Omit<StructuredAgentSessionRestartResumeSurfaces, 'isDisposed'> {
   return {
     revealSession: host.revealSession,
     send: (params) =>

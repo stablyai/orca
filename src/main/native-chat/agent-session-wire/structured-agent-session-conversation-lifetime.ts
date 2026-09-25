@@ -80,6 +80,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   return {
     idleSweep,
     stopAgent,
+    isDisposed: (): boolean => disposed,
     /** Quit has begun: nothing opens a conversation or sweeps one after this. */
     dispose: (): void => {
       disposed = true

@@ -7,8 +7,6 @@ import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-res
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { pendingApproval } from './structured-agent-session-restart-resume-test-harness'
-import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
@@ -91,29 +89,8 @@ it.each(['turn', 'submission'] as const)(
   }
 )
 
-it('preserves the offer when the original submission receives its provider echo', async () => {
-  const { host, acquire, dispatch } = await interruptedRestart('submission', false)
-  expect(await host.restartResume.list()).toHaveLength(1)
-  await startAgent(hostTestState())
-  const events = acquire.mock.calls[0]?.[0].events
-  if (!events) {
-    throw new Error('missing resumed provider event sink')
-  }
-  events.appendItem(
-    { provider: 'codex', threadId: THREAD, turnId: 'original-turn', ordinal: 1 },
-    hostTestMessage('Perform the original task')
-  )
-  await host.flushStreamedEvents(SESSION)
-  expect((await host.journalSnapshot(SESSION)).submissions[0]?.dispatchState).toBe('accepted')
-  expect(
-    (await host.restartResume.continueAfterRestart([SESSION], 'modal')).continued
-  ).toMatchObject([{ outcome: 'continued' }])
-  expect(acquire).toHaveBeenCalledTimes(1)
-  expect(dispatch).toHaveBeenCalledTimes(1)
-})
-
-// Teardown judged the chat working, and only the user moving on withdraws that. A send the
-// provider proves it never received is still the chat Orca stopped; the continuation asks the agent
+// Teardown judged the chat working. A send the provider proves it never received is still the chat
+// Orca stopped; the continuation asks the agent
 // to check what finished rather than refusing.
 it('still continues a chat whose last send acquisition proves was never delivered', async () => {
   const { host, acquire, dispatch } = await interruptedRestart('submission')
@@ -128,215 +105,49 @@ it('still continues a chat whose last send acquisition proves was never delivere
   expect(result.continued).toMatchObject([{ outcome: 'continued' }])
 })
 
-/** Holds the continuation at send admission while `during` runs, then lets it proceed. */
-async function continueAcross(
-  state: Awaited<ReturnType<typeof interruptedRestart>>,
-  during: (events: NonNullable<ReturnType<typeof resumedEvents>>) => void
-) {
-  const { host, store } = state
-  expect(await host.restartResume.list()).toHaveLength(1)
-  await startAgent(hostTestState())
-  const events = resumedEvents(state)
-  if (!events) {
-    throw new Error('missing resumed provider event sink')
-  }
-  const admitting = Promise.withResolvers<void>()
-  const proceed = Promise.withResolvers<void>()
-  const admit = store.admitMutationOperation
-  vi.spyOn(store, 'admitMutationOperation').mockImplementationOnce(async (input) => {
-    admitting.resolve()
-    await proceed.promise
-    return admit(input)
-  })
-  const continuing = host.restartResume.continueAfterRestart([SESSION], 'modal')
-  await admitting.promise
-  during(events)
-  await host.flushStreamedEvents(SESSION)
-  proceed.resolve()
-  return continuing
-}
-
-function resumedEvents(state: Awaited<ReturnType<typeof interruptedRestart>>) {
-  return state.acquire.mock.calls[0]?.[0].events
-}
-
-it('refuses at send admission once the user has sent a newer message', async () => {
-  const state = await interruptedRestart()
-  const { host, dispatch } = state
-  const result = await continueAcross(state, (events) =>
-    events.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'newer-turn', ordinal: 1 },
-      hostTestMessage('A newer task from another client')
-    )
-  )
-  expect(result.resumed).toMatchObject([
-    { outcome: 'refused', reason: 'agent_session_restart_work_superseded' }
-  ])
-  expect(dispatch).not.toHaveBeenCalled()
-  // Refused where it would have been accepted, so the chat records no continuation at all.
-  expect((await host.journalSnapshot(SESSION)).submissions).toEqual([])
-})
-
-// Claude opens a turn of its own on reattach to say the last session did not finish. Resume is
-// pressed while that turn still runs: the continuation is sent and the provider queues it.
-it('sends the continuation while a turn the provider opened is still running', async () => {
-  const state = await interruptedRestart()
-  const { dispatch } = state
-  const result = await continueAcross(state, (events) =>
-    events.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'notice-turn', ordinal: 1 },
-      { kind: 'turn', turnId: 'notice-turn', state: 'running' }
-    )
-  )
-  expect(result.continued).toMatchObject([{ outcome: 'continued' }])
-  expect(dispatch).toHaveBeenCalledTimes(1)
-})
-
-// The send the user made just before quitting, after an earlier exchange had finished. Neither
-// that finished turn nor the provider completing the send's own turn after the restart withdraws it.
+// The send the user made just before quitting, after an earlier exchange had finished: that
+// finished turn does not withdraw it.
 it('offers and continues a send made after an earlier completed turn', async () => {
-  const state = await interruptedRestart('send-after-reply', false)
-  const { dispatch, marker } = state
+  const { host, dispatch, marker } = await interruptedRestart('send-after-reply', false)
   expect(marker?.work.kind).toBe('submission')
-  const result = await continueAcross(state, (events) =>
-    events.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'original-turn', ordinal: 1 },
-      { kind: 'turn', turnId: 'original-turn', state: 'completed' }
-    )
-  )
+  const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(result.continued).toMatchObject([{ outcome: 'continued' }])
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
-
-it.each([false, true])(
-  'refuses a queued newer message before dispatch even if later settlement fails: %s',
-  async (settlementFails) => {
-    const { host, store, acquire, dispatch } = await interruptedRestart('submission', false)
-    expect(await host.restartResume.list()).toHaveLength(1)
-    await startAgent(hostTestState())
-    const events = acquire.mock.calls[0]?.[0].events
-    if (!events) {
-      throw new Error('missing resumed provider event sink')
-    }
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const settle = store.recordOperationOutcome.bind(store)
-    let admitted = false
-    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
-      if (admitted) {
-        if (settlementFails) {
-          throw new Error('operation outcome could not be persisted')
-        }
-        return settle(input)
-      }
-      await settle(input)
-      admitted = true
-      events.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'original-turn', ordinal: 2 },
-        { kind: 'status', text: 'Provider finished its last action' }
-      )
-      events.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'original-turn', ordinal: 1 },
-        hostTestMessage('A newer task from another client'),
-        { lifecycle: true }
-      )
-      // Journaled before the continuation's acceptance asks whether its offer still stands.
-      await host.flushStreamedEvents(SESSION)
-    })
-
-    const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-
-    expect(result.continued).toMatchObject([
-      { outcome: 'refused', reason: 'agent_session_restart_work_superseded' }
-    ])
-    expect(dispatch).not.toHaveBeenCalled()
-    // Refused before acceptance: only the interrupted send is in the journal.
-    expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
-    // The offer is spent, but the refusal is kept as a durable failure: a retry finds it, and the
-    // superseded chat is still not eligible, so nothing runs and the record stays for the user.
-    expect(await host.restartResume.continueAfterRestart([SESSION], 'retry')).toMatchObject({
-      resumed: [],
-      continued: [],
-      sessions: [],
-      failed: [
-        { sessionId: SESSION, outcome: 'refused', reason: 'agent_session_restart_work_superseded' }
-      ]
-    })
-    expect(dispatch).not.toHaveBeenCalled()
-    if (settlementFails) {
-      expect(store.recordOperationOutcome).toHaveBeenCalledOnce()
-      expect(warning).not.toHaveBeenCalled()
-    }
-    warning.mockRestore()
-  }
-)
-
-// What the provider says after reattaching does not re-judge the offer.
-it.each(['completed', 'approval', 'question'] as const)(
-  'continues past provider %s evidence accepted while recording the continuation',
-  async (event) => {
-    const { host, acquire, dispatch } = await interruptedRestart()
-    await host.restartResume.list()
-    await startAgent(hostTestState())
-    const events = acquire.mock.calls[0]?.[0].events
-    if (!events) {
-      throw new Error('missing resumed provider event sink')
-    }
-    const append = AgentSessionJournal.prototype.appendSubmission
-    const writing = vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission')
-    writing.mockImplementationOnce(async function (this: AgentSessionJournal, input) {
-      const cursor = await append.call(this, input)
-      events.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'interrupted-turn', ordinal: 1 },
-        event === 'completed'
-          ? { kind: 'turn', turnId: 'interrupted-turn', state: 'completed' }
-          : { ...pendingApproval().body, question: 'Which action?', kind: event },
-        { lifecycle: true }
-      )
-      return cursor
-    })
-    try {
-      const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-      expect(result.continued).toMatchObject([{ outcome: 'continued' }])
-      expect(dispatch).toHaveBeenCalledTimes(1)
-    } finally {
-      writing.mockRestore()
-    }
-  }
-)
 
 it('replays the same logical continuation through the durable send ledger', async () => {
-  const { host, store, dispatch, marker } = await interruptedRestart()
-  if (!marker) {
-    throw new Error('missing interrupted restart marker')
-  }
+  const { host, dispatch } = await interruptedRestart()
+  const sending = vi.spyOn(host, 'send')
   await host.restartResume.continueAfterRestart([SESSION], 'modal')
-  const fence = store.getRecord(SESSION)?.lease.runtimeFence
-  if (fence === undefined) {
-    throw new Error('missing resumed lease')
+  const sent = sending.mock.calls[0]?.[1]
+  sending.mockRestore()
+  if (!sent) {
+    throw new Error('the continuation was not sent')
   }
   const replay = await host.send(
     { callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER },
-    restartContinuationEnvelope(SESSION, fence, marker)
+    { envelope: sent.envelope, body: sent.body }
   )
   expect(replay).toMatchObject({ ok: true, replayed: true })
   expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
+// A send that throws after Orca may have taken it is not proof it was not delivered.
 it.each([false, true])(
-  'keeps dispatched delivery unconfirmed when settlement fails (uncertainty write fails: %s)',
+  'keeps a continuation unconfirmed when its acceptance cannot be recorded (uncertainty write fails: %s)',
   async (uncertaintyFails) => {
-    const { host, store, dispatch } = await interruptedRestart()
+    const { host, store } = await interruptedRestart()
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(await host.restartResume.list()).toHaveLength(1)
-    await startAgent(hostTestState())
     const settle = store.recordOperationOutcome.bind(store)
-    let dispatched = false
-    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
-      if (input.outcome.status === 'succeeded') {
-        dispatched = true
-      }
-      if (dispatched && (input.outcome.status === 'succeeded' || uncertaintyFails)) {
+    const recording = vi.spyOn(store, 'recordOperationOutcome')
+    recording.mockImplementation(async (input) => {
+      // Only the continuation's own record: the start it makes records its attach as usual.
+      if (
+        input.callerKey === STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER &&
+        (input.outcome.status === 'succeeded' || uncertaintyFails)
+      ) {
         throw new Error('operation outcome could not be persisted')
       }
       return settle(input)
@@ -344,35 +155,32 @@ it.each([false, true])(
 
     const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
 
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    expect((await host.journalSnapshot(SESSION)).submissions[0]?.dispatchState).toBe('accepted')
     expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'unknown' }])
-    // Filed as unconfirmed, with a warning in the chat; the continuation's own message is part of
-    // the filed state, so it does not retire the record it caused.
+    // Filed as unconfirmed, with a warning in the chat.
     expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
     expect(await statusNotes(host)).toContainEqual({
       text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
       tone: 'warning'
     })
-    await host.restartResume.continueAfterRestart([SESSION], 'retry')
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(await host.restartResume.listFailures()).toMatchObject([{ outcome: 'unconfirmed' }])
-    expect(warning.mock.calls.flat()).not.toContainEqual(
-      expect.objectContaining({ message: 'operation outcome could not be persisted' })
-    )
+    recording.mockRestore()
     warning.mockRestore()
   }
 )
 
 // The continuation is accepted, then its start fails: the message is rejected with the cause and
 // the failure is filed, and nothing is stopped because nothing started.
-it('rejects the continuation when its start fails, and files the refusal', async () => {
+it('rejects the continuation when its start fails, and files a retryable refusal', async () => {
   const { host, acquire, dispatch, closeSession } = await interruptedRestart()
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(result.resumed).toMatchObject([{ outcome: 'refused' }])
   expect(result.continued).toMatchObject([{ outcome: 'refused' }])
-  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused' }])
+  // Nothing ran, so the offer stands as a failure a retry can act on.
+  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused', retryable: true }])
+  expect(await statusNotes(host)).toContainEqual({
+    text: AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
+    tone: 'error'
+  })
   expect((await host.journalSnapshot(SESSION)).submissions).toMatchObject([
     { dispatchState: 'rejected' }
   ])
@@ -381,32 +189,25 @@ it('rejects the continuation when its start fails, and files the refusal', async
   expect(closeSession).not.toHaveBeenCalled()
 })
 
-it.each([false, true])(
-  'admits one durable continuation under concurrent calls (pane already live: %s)',
-  async (alreadyLive) => {
-    const { host, root, acquire, dispatch } = await interruptedRestart()
-    if (alreadyLive) {
-      expect(await host.restartResume.list()).toHaveLength(1)
-      await startAgent(hostTestState())
-    }
-    const results = await Promise.all([
-      host.restartResume.continueAfterRestart([SESSION], 'window-one'),
-      host.restartResume.continueAfterRestart([SESSION], 'window-two')
-    ])
-    expect(
-      results.flatMap((result) => result.resumed).filter((r) => r.outcome === 'resumed')
-    ).toHaveLength(1)
-    expect(
-      results.flatMap((result) => result.continued).filter((r) => r.outcome === 'continued')
-    ).toHaveLength(1)
-    expect(acquire).toHaveBeenCalledTimes(1)
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
-    expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
-    await host.restartResume.continueAfterRestart([SESSION], 'later-click')
-    expect(dispatch).toHaveBeenCalledTimes(1)
-  }
-)
+it('admits one durable continuation under concurrent calls', async () => {
+  const { host, root, acquire, dispatch } = await interruptedRestart()
+  const results = await Promise.all([
+    host.restartResume.continueAfterRestart([SESSION], 'window-one'),
+    host.restartResume.continueAfterRestart([SESSION], 'window-two')
+  ])
+  expect(
+    results.flatMap((result) => result.resumed).filter((r) => r.outcome === 'resumed')
+  ).toHaveLength(1)
+  expect(
+    results.flatMap((result) => result.continued).filter((r) => r.outcome === 'continued')
+  ).toHaveLength(1)
+  expect(acquire).toHaveBeenCalledTimes(1)
+  expect(dispatch).toHaveBeenCalledTimes(1)
+  expect((await host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
+  await host.restartResume.continueAfterRestart([SESSION], 'later-click')
+  expect(dispatch).toHaveBeenCalledTimes(1)
+})
 
 // The batch counts a chat done once its agent took the continuation; the provider's slow answer is
 // awaited after, and decides the outcome.
@@ -523,70 +324,51 @@ it('fails closed on corrupt recovery storage while an ordinary send still works'
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
   ).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-  // list; the action's read of offers and of failures; the post-action refresh of both.
-  expect(warning).toHaveBeenCalledTimes(5)
+  // list; the action's read of offers and of failures; the post-action refresh of both; and the
+  // send's start, which cannot withdraw an offer it cannot read.
+  expect(warning).toHaveBeenCalledTimes(6)
+  expect(warning).toHaveBeenLastCalledWith(
+    '[structured-agent-session] withdrawing a restart offer failed'
+  )
   warning.mockRestore()
 })
 
-// The toast is gone in seconds and the offer is spent by the reattach, so without this record
-// nothing on any surface would still name the chat the user has to continue by hand.
-it('keeps a refused continuation as a durable failure that names the chat and the reason', async () => {
-  const { host, root, result } = await supersededRefusal()
-  const failure = {
-    sessionId: SESSION,
-    outcome: 'refused',
-    reason: 'agent_session_restart_work_superseded',
-    latestPrompt: expect.any(String),
-    agent: 'codex',
-    retryable: false
-  }
-  expect(result).toMatchObject({ sessions: [], failed: [failure] })
-  // The chat itself says what happened and what to do.
-  expect(await statusNotes(host)).toContainEqual({
-    text: AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
-    tone: 'error'
+// The user's own message was accepted first: the continuation is refused, and since nothing the
+// user did failed, the chat says nothing and no failure is kept.
+it("refuses a continuation quietly when the user's own message was accepted first", async () => {
+  const { host, root, dispatch, result } = await supersededRefusal()
+  expect(result).toMatchObject({
+    continued: [{ outcome: 'refused', reason: 'agent_session_restart_work_superseded' }],
+    sessions: [],
+    failed: []
   })
-  expect(await host.restartResume.list()).toEqual([])
-  expect(await host.restartResume.listFailures()).toMatchObject([failure])
-  // Durable: a fresh reader of the same file sees it too.
-  expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toMatchObject([
-    { marker: { sessionId: SESSION }, outcome: 'refused' }
-  ])
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+  expect(await statusNotes(host)).toEqual([])
+  expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
+  expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
 })
 
-// The failure asked the user to continue the chat themselves; their own message is that
-// continuation. Nothing on the send path clears it: the listing sees the newer message.
+/** A continuation whose start failed, filed as a retryable failure. */
+async function failedContinuation() {
+  const state = await interruptedRestart()
+  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  const result = await state.host.restartResume.continueAfterRestart([SESSION], 'modal')
+  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused' }])
+  return state
+}
+
+// Starting the chat's agent again answers a failure, as it ends an offer.
 it('retires a recorded failure once the user sends in that chat, with no send hook', async () => {
-  const { host, root } = await supersededRefusal()
+  const { host, root, dispatch } = await failedContinuation()
   const body = hostTestMessage('Carry on from where you stopped')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
-  expect(await host.restartResume.listFailures()).toEqual([])
-  // Pruned from the file too, not only hidden.
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+  // Pruned from the file, not only hidden.
   await vi.waitFor(async () => {
     expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
   })
+  expect(await host.restartResume.listFailures()).toEqual([])
 })
-
-// The user can reply in a chat while other chats in the same action are still being continued,
-// before its turn in the batch or after its own note asks them to. Either reply answers the failure.
-it.each(['before', 'after'] as const)(
-  'retires a failure the user answered %s its own attempt, before the action settled',
-  async (userAnswers) => {
-    const { host, root, result } = await supersededRefusal(userAnswers)
-    expect(result.resumed).toMatchObject([
-      userAnswers === 'before' ? { reason: 'agent_session_resume_not_eligible' } : {}
-    ])
-    expect(
-      (await statusNotes(host)).some(
-        (note) => note.text === AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE
-      )
-    ).toBe(userAnswers === 'after')
-    expect(result.failed).toEqual([])
-    await vi.waitFor(async () => {
-      expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
-    })
-  }
-)
 
 it('removes a failure when a named retry succeeds', async () => {
   const { host, root, dispatch } = await interruptedRestart()
@@ -603,7 +385,7 @@ it('removes a failure when a named retry succeeds', async () => {
         outcome: 'refused',
         reason: 'agent_session_conflict',
         latestPrompt: '',
-        latestUserItemId: pending!.latestUserItemId
+        latestUserItemId: pending!.latestUserItemId ?? null
       }
     ],
     NOW
@@ -619,7 +401,7 @@ it('removes a failure when a named retry succeeds', async () => {
 })
 
 it('dismisses one failure by name and leaves the rest of the durable records alone', async () => {
-  const { host, root } = await supersededRefusal()
+  const { host, root } = await failedContinuation()
   const capsule = new AgentSessionRecoveryCapsule(root)
   const other = parseAgentSessionResumeMarker({
     sessionId: 'session-other',

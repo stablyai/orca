@@ -53,7 +53,7 @@ it('reports an accepted continuation and records its note', async () => {
   const deps = dependencies('accepted')
 
   await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
   ).resolves.toEqual({
     sessionId: SESSION,
     outcome: 'continued'
@@ -75,20 +75,20 @@ it.each([
     const deps = dependencies(settled)
 
     await expect(
-      continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+      continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
     ).resolves.toEqual(expected)
     expect(deps.note).toHaveBeenCalledExactlyOnceWith(...note)
   }
 )
 
-it('notes a superseded continuation in the chat and still reports the refusal', async () => {
+it("writes nothing in the chat when the user's own message came first, and still refuses", async () => {
   const deps = dependencies('accepted')
   deps.send.mockRejectedValue(new RestartContinuationSupersededError())
 
   await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
   ).rejects.toBeInstanceOf(RestartContinuationSupersededError)
-  expect(deps.note).toHaveBeenCalledExactlyOnceWith(...REFUSED)
+  expect(deps.note).not.toHaveBeenCalled()
 })
 
 // An ownership refusal would meet the user's own message too, so the note gives no advice to send one.
@@ -100,7 +100,7 @@ it.each([
   deps.send.mockResolvedValue({ ok: false, refusal: { code } })
 
   await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
   ).resolves.toEqual({
     sessionId: SESSION,
     outcome: 'refused',
@@ -115,7 +115,7 @@ it('reports an unattached chat without sending', async () => {
   deps.currentFence = () => null
 
   await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
   ).resolves.toEqual({
     sessionId: SESSION,
     outcome: 'refused',
@@ -129,7 +129,7 @@ it('reports a continuation rejected at handover without waiting for the provider
   const deps = dependencies('accepted', 'rejected')
 
   await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
   ).resolves.toEqual({ sessionId: SESSION, outcome: 'refused', reason: 'Codex could not start.' })
   expect(deps.awaitSettlement).not.toHaveBeenCalled()
   expect(deps.note).toHaveBeenCalledExactlyOnceWith(...REFUSED)
@@ -139,7 +139,12 @@ it('reports a continuation rejected at handover without waiting for the provider
 it('returns at handover and leaves the provider verdict to be awaited', async () => {
   const deps = dependencies('accepted')
 
-  const started = await startStructuredAgentSessionContinuation(deps, SESSION, marker())
+  const started = await startStructuredAgentSessionContinuation(
+    deps,
+    SESSION,
+    marker(),
+    'operation-1'
+  )
 
   expect(deps.awaitHandedOver).toHaveBeenCalledOnce()
   expect(deps.awaitSettlement).not.toHaveBeenCalled()
@@ -156,7 +161,7 @@ it('still awaits the verdict when the handover wait ends unanswered', async () =
   const deps = dependencies('unknown', undefined)
 
   await expect(
-    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker())
+    continueStructuredAgentSessionAfterRestart(deps, SESSION, marker(), 'operation-1')
   ).resolves.toEqual({ sessionId: SESSION, outcome: 'unknown' })
   expect(deps.note).toHaveBeenCalledExactlyOnceWith(...UNCONFIRMED)
 })

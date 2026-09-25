@@ -27,9 +27,15 @@ export class StructuredAgentSessionClientDelivery {
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
     deps: () => StructuredAgentSessionHostDeps,
-    private readonly onJournalActivity?: (sessionId: string) => void
+    private readonly onJournalActivity?: (sessionId: string) => void,
+    onOwnedEdge?: (sessionId: string) => void
   ) {
-    this.statusFeed = createStructuredAgentSessionHostStatusFeed({ sessions, now, deps })
+    this.statusFeed = createStructuredAgentSessionHostStatusFeed({
+      sessions,
+      now,
+      deps,
+      ...(onOwnedEdge ? { onOwnedEdge } : {})
+    })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({ sessions, now })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.requireJournal(sessionId)

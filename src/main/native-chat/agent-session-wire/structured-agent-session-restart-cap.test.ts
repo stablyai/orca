@@ -47,7 +47,8 @@ it('holds each slot from accept until handover or rejection, and frees it when t
         const started = await startStructuredAgentSessionContinuation(
           deps(sessionId),
           sessionId,
-          marker()
+          marker(),
+          'operation-1'
         )
         if ('done' in started && started.done.outcome === 'refused') {
           throw new Error(started.done.reason ?? 'refused')

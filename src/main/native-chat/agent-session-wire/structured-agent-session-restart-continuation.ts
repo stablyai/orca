@@ -13,16 +13,14 @@ import type {
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE,
-  restartContinuationMessage
+  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
 } from '../../../shared/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
-import { createHash } from 'node:crypto'
+import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 
 /**
@@ -64,13 +62,9 @@ export type StructuredAgentSessionContinuationHost = {
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   onNoteFailed: (sessionId: string, error: unknown) => void
   now: () => number
-  /** Whether the marker is still an offer, with the continuation's own submission set aside.
-   *  Re-asked right before dispatch, so a newer user message refuses the send; a provider turn
-   *  running then does not, since both providers queue a message sent mid-turn. */
-  stillResumable: (
-    marker: AgentSessionResumeMarker,
-    options: { pendingContinuationId: string }
-  ) => boolean
+  /** Whether the marker is still an offer. Asked at acceptance, inside the session lock, so the
+   *  first message accepted since the restart decides: the user's, or this continuation. */
+  stillResumable: (marker: AgentSessionResumeMarker) => boolean
 }
 
 /** Binds one continuation to the host: the superseded check before dispatch, the settlement
@@ -85,11 +79,7 @@ export function restartContinuationDeps(
       host.send({
         ...input,
         beforeRun: () => {
-          if (
-            !host.stillResumable(marker, {
-              pendingContinuationId: input.envelope.clientOperationId
-            })
-          ) {
+          if (!host.stillResumable(marker)) {
             throw new RestartContinuationSupersededError()
           }
         }
@@ -128,54 +118,14 @@ const OWNERSHIP_REFUSALS = new Set([
   'execution_owner_reconciling'
 ])
 
+/** The user's own message was accepted first; the offer is spent, and nothing failed. */
+export const RESTART_CONTINUATION_SUPERSEDED = 'agent_session_restart_work_superseded'
+
 /** Only this pre-dispatch failure proves a thrown send did not deliver. */
 export class RestartContinuationSupersededError extends AgentSessionPreDispatchError {
   constructor() {
-    super('agent_session_restart_work_superseded')
+    super(RESTART_CONTINUATION_SUPERSEDED)
     this.name = 'RestartContinuationSupersededError'
-  }
-}
-
-/** The message body, built once so both the send and any test read the same text. */
-export function restartContinuationBody(marker: AgentSessionResumeMarker): AgentJournalMessageItem {
-  return {
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text: restartContinuationMessage(marker) }]
-  }
-}
-
-/** The fence only fills the envelope: admission names this send by its operation id, not a fence. */
-export function restartContinuationEnvelope(
-  sessionId: string,
-  fence: number,
-  marker: AgentSessionResumeMarker
-): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
-  const body = restartContinuationBody(marker)
-  return {
-    body,
-    envelope: {
-      sessionId,
-      // The same interrupted work must reach the durable ledger with the same message identity.
-      clientOperationId: `${marker.recordedAt.toString().padStart(13, '0')}-${createHash('sha256')
-        .update(
-          JSON.stringify([
-            marker.teardownId,
-            sessionId,
-            marker.work.kind,
-            marker.work.id,
-            marker.providerHandleRoot
-          ])
-        )
-        .digest('hex')
-        .slice(0, 32)}`,
-      expectedRuntimeFence: fence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.send',
-        sessionId,
-        fields: { body }
-      })
-    }
   }
 }
 
@@ -231,13 +181,17 @@ export type StartedStructuredAgentSessionContinuation =
 export async function startStructuredAgentSessionContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: AgentSessionResumeMarker
+  marker: AgentSessionResumeMarker,
+  operationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   let started: StartedStructuredAgentSessionContinuation
   try {
-    started = await sendContinuation(deps, sessionId, marker)
+    started = await sendContinuation(deps, sessionId, marker, operationId)
   } catch (error) {
-    await noteNotContinued(deps, sessionId, 'refused')
+    // The user's own message came first: nothing failed, so the chat says nothing.
+    if (!(error instanceof RestartContinuationSupersededError)) {
+      await noteNotContinued(deps, sessionId, 'refused')
+    }
     throw error
   }
   if ('done' in started) {
@@ -305,13 +259,14 @@ async function noteNotContinued(
 async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: AgentSessionResumeMarker
+  marker: AgentSessionResumeMarker,
+  operationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   const fence = deps.currentFence(sessionId)
   if (fence === null) {
     return { done: { sessionId, outcome: 'refused', reason: 'agent_session_not_attached' } }
   }
-  const { envelope, body } = restartContinuationEnvelope(sessionId, fence, marker)
+  const { envelope, body } = restartContinuationEnvelope(sessionId, fence, marker, operationId)
   const sent = await deps.send({ envelope, body }).catch((error: unknown) => {
     if (error instanceof AgentSessionPreDispatchError) {
       throw error

@@ -130,7 +130,8 @@ export async function interruptedRestart(
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => ({ outcome: 'pid-absent' }),
     recoveryCapsule: new AgentSessionRecoveryCapsule(previous.root),
-    now: () => NOW
+    // The relaunch comes after the quit that recorded the offer.
+    now: () => NOW + 1
   })
   replaceHostTestState({ store, host })
   previous.acquire.mockClear()
@@ -149,35 +150,25 @@ export async function statusNotes(host: StructuredAgentSessionHost) {
   )
 }
 
-/** A reattach that succeeds and a continuation the host refuses: a message from another client
- *  lands while the continuation is being recorded. `userAnswers` has the user reply in the chat
- *  just before or after its own attempt, while the rest of a batch would still be running. */
+/** A continuation the host refuses because the user's own message was accepted first: another
+ *  client's send lands after the action reserved the offer, just before the continuation is
+ *  accepted. `userAnswers` instead has the user send before or after the whole attempt. */
 export async function supersededRefusal(userAnswers?: 'before' | 'after') {
   const { host, store, acquire, dispatch, root } = await interruptedRestart()
   await host.restartResume.list()
-  // Started ahead of the continuation, so a newer message can land from the provider.
-  await startAgent({ host, store })
-  const events = acquire.mock.calls[0]?.[0].events
-  if (!events) {
-    throw new Error('missing resumed provider event sink')
-  }
-  // The newer message lands after the reattach and just before the continuation is accepted,
-  // which is where a send asks whether its offer still stands.
-  const send = host.send
-  const writing = vi.spyOn(host, 'send')
-  writing.mockImplementationOnce(async (caller, params) => {
-    events.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'newer-turn', ordinal: 1 },
-      hostTestMessage('A newer task from another client')
-    )
-    await host.flushStreamedEvents(SESSION)
-    return send(caller, params)
-  })
-  const admit = StructuredAgentSessionResumeAdmission.prototype.run
-  const admitting = vi.spyOn(StructuredAgentSessionResumeAdmission.prototype, 'run')
-  const body = hostTestMessage('Carry on from where you stopped')
+  const body = hostTestMessage('A newer task from another client')
   const answer = () =>
     host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  const send = host.send
+  const writing = vi.spyOn(host, 'send')
+  if (!userAnswers) {
+    writing.mockImplementationOnce(async (caller, params) => {
+      await answer()
+      return send(caller, params)
+    })
+  }
+  const admit = StructuredAgentSessionResumeAdmission.prototype.run
+  const admitting = vi.spyOn(StructuredAgentSessionResumeAdmission.prototype, 'run')
   if (userAnswers) {
     admitting.mockImplementationOnce(async function (this, ...args) {
       await (userAnswers === 'before' ? answer() : null)
@@ -190,9 +181,7 @@ export async function supersededRefusal(userAnswers?: 'before' | 'after') {
   }
   try {
     const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-    expect(result.continued).toMatchObject([{ outcome: 'refused' }])
-    expect(dispatch).toHaveBeenCalledTimes(userAnswers ? 1 : 0)
-    return { host, root, result }
+    return { host, store, acquire, dispatch, root, result }
   } finally {
     writing.mockRestore()
     admitting.mockRestore()

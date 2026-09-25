@@ -13,8 +13,8 @@ describe('structured agent-session host teardown', () => {
       recordResumeMarkers: noop
     })
     expect(phases.map((phase) => phase.name)).toEqual([
-      'begin-resume-markers',
       'dispose-idle-sweep',
+      'begin-resume-markers',
       'stop-lease-renewal',
       'drain-attaches',
       'evict-owned-sessions',

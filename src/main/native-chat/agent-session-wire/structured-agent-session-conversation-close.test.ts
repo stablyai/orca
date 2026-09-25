@@ -2,6 +2,8 @@
 // list and a send each see only the one that happened. Ticks are driven by hand.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { readStructuredSessionGateFacts } from '../../runtime/orchestration/structured-mailbox-pointer-host'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -22,6 +24,8 @@ import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
 
 let rig: RestTestRig
+
+const COLD_START = { timeout: 10_000 }
 
 beforeEach(async () => {
   rig = await createRestTestRig({ idleSweep: { intervalMs: 3_600_000 } })
@@ -55,7 +59,9 @@ describe('a stop that fails', () => {
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)
-    expect(openSession()?.owesProviderChildWindDown).toMatchObject({ generation: expect.any(String) })
+    expect(openSession()?.owesProviderChildWindDown).toMatchObject({
+      generation: expect.any(String)
+    })
     await sweepOnce(rig.host)
 
     expect(rig.adapter.closeSession).toHaveBeenCalledTimes(2)
@@ -104,7 +110,8 @@ describe('closing the handle', () => {
 
     const sent = await rig.host.send(CALLER, restTestSend('after the close', fence()))
     expect(sent.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
+    // A cold start: reopen, reconcile and acquire.
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2), COLD_START)
     // The reader opened on the first handle is fed by the second.
     await vi.waitFor(() => expect(readerSaw(reader.events).texts).toContain('after the close'))
   })
@@ -172,7 +179,8 @@ describe('closing the handle', () => {
     // And the handle a write finds is a live one.
     const sent = await rig.host.send(CALLER, restTestSend('after the close', fence()))
     expect(sent.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
+    // A cold start: reopen, reconcile and acquire.
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2), COLD_START)
   })
 
   it('never re-enters the session lock: a send and a Stop right after still finish (P2-28)', async () => {
@@ -223,9 +231,12 @@ describe('the sweep and the lease (P2-20)', () => {
 })
 
 describe('a start that never finishes (P2-15)', () => {
-  it('is stopped by the sweep, its queued message rejected with why, and the chat still sends', async () => {
+  it('is stopped by the sweep, and the delivery loop alone writes its one row and rejection', async () => {
+    const stopReason = 'Codex never finished starting, so Orca stopped it.'
+    const order: string[] = []
     const started = Promise.withResolvers<void>()
     rig.adapter.closeSession.mockImplementation(async () => {
+      order.push('stopped')
       started.resolve()
       return true
     })
@@ -234,8 +245,17 @@ describe('a start that never finishes (P2-15)', () => {
       ...(await spawn(input)),
       providerChildPhase: 'starting' as const
     }))
-    Object.assign(rig.host.deps.adapter, {
-      awaitStarted: () => started.promise
+    Object.assign(rig.host.deps.adapter, { awaitStarted: () => started.promise })
+    const reject = AgentSessionJournal.prototype.rejectQueuedSubmissions
+    vi.spyOn(AgentSessionJournal.prototype, 'rejectQueuedSubmissions').mockImplementation(function (
+      this: AgentSessionJournal,
+      ...args
+    ) {
+      // Not the open's sweep of an earlier process's leftovers.
+      if (args[1] !== DISPATCH_REJECTED_HOST_RESTARTED) {
+        order.push(`rejected: ${args[1]}`)
+      }
+      return reject.apply(this, args)
     })
     const reader = collectSubscriber()
     const attached = await rig.host.attach(CALLER, hostTestAttachParams(null))
@@ -249,17 +269,26 @@ describe('a start that never finishes (P2-15)', () => {
     expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     await vi.waitFor(() =>
       expect(readerSaw(reader.events).submissions).toContainEqual(
-        expect.objectContaining({
-          dispatchState: 'rejected',
-          reason: 'Codex never finished starting, so Orca stopped it.'
-        })
+        expect.objectContaining({ dispatchState: 'rejected', reason: stopReason })
       )
     )
+    // One rejection, written after the stop by the loop, with the stop's own words.
+    expect(order).toEqual(['stopped', `rejected: ${stopReason}`])
+    const errorRows = reader.events.flatMap((event) =>
+      event.type === 'batch'
+        ? event.batch.items.filter(
+            (item) => item.body.kind === 'status' && item.body.tone === 'error'
+          )
+        : []
+    )
+    expect(errorRows.map((item) => (item.body.kind === 'status' ? item.body.text : null))).toEqual([
+      stopReason
+    ])
     expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 
     const again = await rig.host.send(CALLER, restTestSend('try again', fence()))
     expect(again.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce(), COLD_START)
     await expect(sweepOnce(rig.host)).resolves.toBeUndefined()
   })
 })

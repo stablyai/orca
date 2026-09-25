@@ -74,7 +74,8 @@ export class StructuredAgentSessionHost {
     this.sessions,
     () => this.now(),
     () => this.deps,
-    (sessionId) => this.sessions.touch(sessionId)
+    (sessionId) => this.sessions.touch(sessionId),
+    (sessionId) => this.restartResume.onOwnedEdge(sessionId)
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -151,11 +152,10 @@ export class StructuredAgentSessionHost {
       now: () => this.now(),
       onBarrierError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
     })
-    this.restartResume = createStructuredAgentSessionRestartResume(
-      deps,
-      this.sessions,
-      structuredAgentSessionRestartResumeSurfaces(this, this.now)
-    )
+    this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
+      ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
+      isDisposed: () => this.lifetime.isDisposed()
+    })
     this.lifetime = createStructuredAgentSessionConversationLifetime({
       context: () => this.lifetimeContext(),
       sessions: this.sessions,

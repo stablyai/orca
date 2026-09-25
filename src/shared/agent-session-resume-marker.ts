@@ -6,8 +6,9 @@
 // the stop, because that fact exists only in memory at that moment — the provider rewrites the
 // journal in its own words on reattach.
 //
-// A marker has no expiry. It ends only by the user's own actions: a newer message in that chat, a
-// successful resume, a dismissal, or closing the chat — each of which deletes it.
+// A marker has no expiry. It ends when the chat's agent is started again other than by its own
+// continuation, or by a successful resume, a dismissal, or closing the chat — each of which
+// deletes it.
 
 import { z } from 'zod'
 import { AGENT_STATUS_STATES } from './agent-status-types'
@@ -48,8 +49,9 @@ export type AgentSessionResumeMarker = {
   /** The work in flight when teardown observed it — a running turn, or a send that had not yet
    *  become one. */
   work: AgentSessionResumeWork
-  /** The user message observed at teardown; a newer one supersedes this offer before its turn opens. */
-  latestUserItemId: string | null
+  /** The user message observed at teardown. Nothing reads it; still written for one release so the
+   *  previous build, whose parser requires it, can read this marker after a downgrade. */
+  latestUserItemId?: string | null
   /** Execution host's clock at teardown. */
   recordedAt: number
   trigger: AgentSessionResumeTrigger
@@ -114,7 +116,7 @@ const agentSessionRestartActivitySchema = z.object({
 const agentSessionResumeMarkerSchema = z.object({
   sessionId: markerField,
   work: agentSessionResumeWorkSchema,
-  latestUserItemId: markerField.nullable(),
+  latestUserItemId: markerField.nullable().optional(),
   recordedAt: z.number().int().nonnegative(),
   trigger: z.enum(AGENT_SESSION_RESUME_TRIGGERS),
   providerHandleRoot: markerField,
