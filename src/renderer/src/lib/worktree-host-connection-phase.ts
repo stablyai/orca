@@ -29,8 +29,12 @@ export type WorktreeHostConnection = {
   targetId: string | null
   /** The remote runtime whose mirrored SSH state owns the target; null for this client's own. */
   environmentId: string | null
-  /** The status behind `phase`; null when local or unverifiable. */
-  status: SshConnectionStatus | null
+  /**
+   * The status as published, before `phase` reads an undialed startup target as connecting.
+   * Surfaces that name the status itself (the terminal's reconnect overlay) read this; null
+   * when local or unverifiable.
+   */
+  publishedStatus: SshConnectionStatus | null
   /** Names the live connection: null unless connected, and new on every reconnect. */
   connectedEpoch: string | null
 }
@@ -39,15 +43,25 @@ const LOCAL_HOST_CONNECTION: WorktreeHostConnection = {
   phase: 'local',
   targetId: null,
   environmentId: null,
-  status: null,
+  publishedStatus: null,
   connectedEpoch: null
 }
 
-function selectTargetStatus(
+function derivePhase(
   state: AppState,
   targetId: string,
-  environmentId: string | null
-): SshConnectionStatus | null {
+  environmentId: string | null,
+  publishedStatus: SshConnectionStatus | null
+): WorktreeHostConnectionPhase {
+  if (publishedStatus === null) {
+    return 'unverifiable'
+  }
+  if (publishedStatus === 'connected') {
+    return 'connected'
+  }
+  if (isConnectingSshStatus(publishedStatus)) {
+    return 'connecting'
+  }
   // Why: startup restoration dials the targets that were live at shutdown; until it publishes,
   // a missing entry means "not dialed yet", not "disconnected". Restoration finishing (or
   // degrading) ends this on its own.
@@ -58,17 +72,7 @@ function selectTargetStatus(
   ) {
     return 'connecting'
   }
-  return selectRuntimeAwareSshStatus(state, environmentId, targetId)
-}
-
-function phaseForStatus(status: SshConnectionStatus | null): WorktreeHostConnectionPhase {
-  if (status === null) {
-    return 'unverifiable'
-  }
-  if (status === 'connected') {
-    return 'connected'
-  }
-  return isConnectingSshStatus(status) ? 'connecting' : 'unavailable'
+  return 'unavailable'
 }
 
 /** The shared signal for a caller that already resolved the worktree's connection id. */
@@ -81,14 +85,14 @@ export function resolveWorktreeHostConnection(
     return LOCAL_HOST_CONNECTION
   }
   const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
-  const status = selectTargetStatus(state, targetId, environmentId)
+  const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
   const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)
   return {
-    phase: phaseForStatus(status),
+    phase: derivePhase(state, targetId, environmentId, publishedStatus),
     targetId,
     environmentId,
-    status,
-    connectedEpoch: status === 'connected' ? `${targetId}:${generation ?? ''}` : null
+    publishedStatus,
+    connectedEpoch: publishedStatus === 'connected' ? `${targetId}:${generation ?? ''}` : null
   }
 }
 

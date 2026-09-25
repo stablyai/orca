@@ -16,7 +16,7 @@ export type TerminalPaneHostState = {
   sshReconnectEnvironmentId: string | null
   /** The failure detail behind the status; the overlay shows only a canned sentence without it. */
   sshReconnectError: string | null
-  sshReconnectStatus: WorktreeHostConnection['status']
+  sshReconnectStatus: WorktreeHostConnection['publishedStatus']
   sshReconnectTargetId: string | null
   sshReconnectTargetLabel: string
   sshReconnectTargetRemoved: boolean
@@ -47,7 +47,7 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
       sshReconnectEnvironmentId,
       sshReconnectTargetId
     ),
-    sshReconnectStatus: host.status,
+    sshReconnectStatus: host.publishedStatus,
     sshReconnectTargetId,
     sshReconnectTargetLabel: selectRuntimeAwareSshTargetLabel(
       state,

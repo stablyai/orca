@@ -61,7 +61,7 @@ describe('selectWorktreeHostConnectionPhase', () => {
       phase: 'local',
       targetId: null,
       environmentId: null,
-      status: null,
+      publishedStatus: null,
       connectedEpoch: null
     }
     expect(selectWorktreeHostConnectionPhase(state, 'wt-local')).toEqual(local)
@@ -83,11 +83,11 @@ describe('selectWorktreeHostConnectionPhase', () => {
         makeSshState(null, { terminalStartupRestorationReady: false }),
         'wt-ssh'
       )
-    ).toMatchObject({ phase: 'connecting', targetId: 'ssh-a', status: 'connecting' })
+    ).toMatchObject({ phase: 'connecting', targetId: 'ssh-a', publishedStatus: 'disconnected' })
     expect(selectWorktreeHostConnectionPhase(makeSshState(null), 'wt-ssh')).toMatchObject({
       phase: 'unavailable',
       targetId: 'ssh-a',
-      status: 'disconnected'
+      publishedStatus: 'disconnected'
     })
   })
 
@@ -96,7 +96,7 @@ describe('selectWorktreeHostConnectionPhase', () => {
       phase: 'connecting',
       targetId: 'ssh-a',
       environmentId: null,
-      status: 'connecting',
+      publishedStatus: 'connecting',
       connectedEpoch: null
     })
     expect(selectWorktreeHostConnectionPhase(makeSshState('reconnecting'), 'wt-ssh').phase).toBe(
@@ -109,7 +109,7 @@ describe('selectWorktreeHostConnectionPhase', () => {
       phase: 'connected',
       targetId: 'ssh-a',
       environmentId: null,
-      status: 'connected',
+      publishedStatus: 'connected',
       connectedEpoch: 'ssh-a:7'
     })
   })
@@ -176,7 +176,7 @@ describe('selectWorktreeHostConnectionPhase', () => {
       phase: 'connected',
       targetId: 'ssh-nested',
       environmentId: 'env-a',
-      status: 'connected',
+      publishedStatus: 'connected',
       connectedEpoch: 'ssh-nested:3'
     })
   })
@@ -221,7 +221,7 @@ describe('selectWorktreeHostConnectionPhase', () => {
     expect(selectWorktreeHostConnectionPhase(state, 'wt-runtime')).toMatchObject({
       phase: 'unverifiable',
       targetId: 'ssh-nested',
-      status: null
+      publishedStatus: null
     })
   })
 })

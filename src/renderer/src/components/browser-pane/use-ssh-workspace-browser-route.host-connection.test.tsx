@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
     phase: 'connecting',
     targetId: 'target-a',
     environmentId: null,
-    status: 'connecting',
+    publishedStatus: 'connecting',
     connectedEpoch: null
   }
   return { hostConnection, prepare: vi.fn() }
@@ -48,7 +48,7 @@ function setHost(
     phase,
     targetId: 'target-a',
     environmentId: null,
-    status: STATUS_BY_PHASE[phase],
+    publishedStatus: STATUS_BY_PHASE[phase],
     connectedEpoch: phase === 'connected' ? `target-a:${connectionGeneration}` : null
   }
 }
@@ -136,6 +136,15 @@ describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
 
     setHost('connected', 2)
     rerender()
+    await settle()
+    expect(mocks.prepare).toHaveBeenCalledOnce()
+    expect(result.current.state.kind).toBe('ready')
+  })
+
+  it('prepares normally for a host it cannot verify instead of waiting on it', async () => {
+    setHost('unverifiable')
+    mocks.prepare.mockResolvedValue({ partition: READY_PARTITION })
+    const { result } = renderHook(() => useSshWorkspaceBrowserRoute('wt-1', null))
     await settle()
     expect(mocks.prepare).toHaveBeenCalledOnce()
     expect(result.current.state.kind).toBe('ready')

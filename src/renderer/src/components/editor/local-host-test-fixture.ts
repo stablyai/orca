@@ -5,7 +5,7 @@ const LOCAL_HOST_CONNECTION: WorktreeHostConnection = {
   phase: 'local',
   targetId: null,
   environmentId: null,
-  status: null,
+  publishedStatus: null,
   connectedEpoch: null
 }
 

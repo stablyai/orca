@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
     phase: 'connecting',
     targetId: 'ssh-a',
     environmentId: null,
-    status: 'connecting',
+    publishedStatus: 'connecting',
     connectedEpoch: null
   }
   return { hostConnection, readRuntimeFileContent: vi.fn() }
@@ -65,7 +65,7 @@ function setHost(
     phase,
     targetId: 'ssh-a',
     environmentId: null,
-    status: STATUS_BY_PHASE[phase],
+    publishedStatus: STATUS_BY_PHASE[phase],
     connectedEpoch: phase === 'connected' ? `ssh-a:${connectionGeneration}` : null
   }
 }
@@ -214,6 +214,44 @@ describe('editor file loads while the SSH host connects', () => {
     setHost('connected', 2)
     render()
     expect(loadFileContent).toHaveBeenCalledOnce()
+    expect(attemptsRef.current[file.id]).toBe(0)
+  })
+
+  it('keeps retrying for a host it cannot verify, then reloads once it connects', () => {
+    setHost('unverifiable')
+    const attemptsRef: { current: Record<string, number> } = { current: {} }
+    let fileContents: Record<string, FileContent> = {
+      [file.id]: { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
+    }
+    const setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>> = (updater) => {
+      fileContents = typeof updater === 'function' ? updater(fileContents) : updater
+    }
+    const loadFileContent = vi.fn(async () => {
+      fileContents = {
+        [file.id]: { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
+      }
+    })
+    const render = (): void =>
+      act(() =>
+        root.render(
+          <RetryHarness
+            fileContents={fileContents}
+            attemptsRef={attemptsRef}
+            loadFileContent={loadFileContent}
+            setFileContents={setFileContents}
+          />
+        )
+      )
+
+    // Unverifiable is not "connecting": the ordinary owner-not-ready poll keeps running.
+    render()
+    act(() => vi.advanceTimersByTime(OWNER_NOT_READY_RETRY_DELAY_MS))
+    expect(loadFileContent).toHaveBeenCalledOnce()
+    expect(attemptsRef.current[file.id]).toBe(1)
+
+    setHost('connected', 1)
+    render()
+    expect(loadFileContent).toHaveBeenCalledTimes(2)
     expect(attemptsRef.current[file.id]).toBe(0)
   })
 })

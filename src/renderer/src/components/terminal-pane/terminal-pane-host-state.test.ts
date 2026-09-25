@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
+import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 
 function makeState(overrides: Record<string, unknown>): AppState {
@@ -162,22 +163,70 @@ describe('selectTerminalPaneHostState', () => {
     })
   })
 
-  // Shares the workspace host signal with the other panes: a target startup restoration has
-  // not dialed yet reads as connecting, then follows the published status once it connects.
-  it('follows the shared host signal from connecting to connected', () => {
+  // The terminal reads the shared host signal but names the published status: an undialed
+  // target during startup restoration stays "disconnected" here (the overlay and error
+  // ownership are unchanged) even though the other panes read that window as connecting.
+  it('reports the published status through the shared signal, across startup and connect', () => {
     const repos = [{ id: 'repo-ssh', connectionId: 'ssh-a' }]
     const worktreesByRepo = { 'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' }] }
-    const undialed = makeState({ repos, worktreesByRepo, terminalStartupRestorationReady: false })
-    const connected = makeState({
-      repos,
-      worktreesByRepo,
-      terminalStartupRestorationReady: false,
-      sshConnectionStates: new Map([
-        ['ssh-a', { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }]
-      ])
+    const withStatus = (status: string | null): AppState =>
+      makeState({
+        repos,
+        worktreesByRepo,
+        terminalStartupRestorationReady: false,
+        sshConnectionStates: new Map(
+          status ? [['ssh-a', { targetId: 'ssh-a', status, error: null, reconnectAttempt: 0 }]] : []
+        )
+      })
+
+    expect(selectWorktreeHostConnectionPhase(withStatus(null), 'wt-ssh').phase).toBe('connecting')
+    expect(selectTerminalPaneHostState(withStatus(null), 'wt-ssh').sshReconnectStatus).toBe(
+      'disconnected'
+    )
+    expect(selectTerminalPaneHostState(withStatus('connecting'), 'wt-ssh').sshReconnectStatus).toBe(
+      'connecting'
+    )
+    expect(selectTerminalPaneHostState(withStatus('connected'), 'wt-ssh').sshReconnectStatus).toBe(
+      'connected'
+    )
+  })
+
+  // An owning runtime that has not published its SSH state is unverifiable, not down: the
+  // terminal keeps reporting no status, so it shows no reconnect overlay for it.
+  it('reports no status for a nested target whose runtime has not published its SSH state', () => {
+    const state = makeState({
+      repos: [{ id: 'repo-runtime', connectionId: 'ssh-nested', executionHostId: 'runtime:env-a' }],
+      runtimeStatusByEnvironmentId: new Map([
+        ['env-a', { status: { runtimeId: 'runtime-a' }, checkedAt: 1 }]
+      ]),
+      sshStateByEnvironment: new Map([
+        [
+          'env-a',
+          {
+            connectionStates: new Map(),
+            targetLabels: new Map(),
+            removedTargetLabels: new Map(),
+            targetsHydrated: false
+          }
+        ]
+      ]),
+      worktreesByRepo: {
+        'repo-runtime': [
+          {
+            id: 'wt-runtime',
+            repoId: 'repo-runtime',
+            hostId: 'runtime:env-a',
+            runtimeOwnerEnvironmentId: 'env-a'
+          }
+        ]
+      }
     })
 
-    expect(selectTerminalPaneHostState(undialed, 'wt-ssh').sshReconnectStatus).toBe('connecting')
-    expect(selectTerminalPaneHostState(connected, 'wt-ssh').sshReconnectStatus).toBe('connected')
+    expect(selectWorktreeHostConnectionPhase(state, 'wt-runtime').phase).toBe('unverifiable')
+    expect(selectTerminalPaneHostState(state, 'wt-runtime')).toMatchObject({
+      sshReconnectEnvironmentId: 'env-a',
+      sshReconnectStatus: null,
+      sshReconnectTargetId: 'ssh-nested'
+    })
   })
 })
