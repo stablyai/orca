@@ -16,6 +16,7 @@ export type NativeChatOptionPickerRequest = {
 }
 
 export type NativeChatStructuredComposerTransport = {
+  promptSuggestion?: string | null
   conversationCommands?: readonly AgentSessionConversationCommand[]
   send: (text: string, attachments: readonly NativeChatComposerImageAttachment[]) => boolean
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
@@ -62,6 +63,7 @@ export type NativeChatComposerProps = {
   onSwitchToTerminal?: () => void
   /** Reads the hosted TUI's current rendered screen when chat is entered. */
   readTerminalScreen?: () => string | null
+  readTerminalPromptSuggestion?: () => string | null
   /** The tab's launch seed as this pane sees it. */
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */

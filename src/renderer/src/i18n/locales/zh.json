@@ -17280,6 +17280,7 @@
         "skillScopePlugin": "插件",
         "skillsLoaded": "技能已加载",
         "noCommands": "没有匹配的命令",
+        "acceptPromptSuggestion": "使用建议的提示词",
         "imageSaving": "保存粘贴的图像...",
         "pendingAttachmentLimit": "太多附件正在等待。在附加更多内容之前先完成创作。",
         "viewAttachment": "查看图片",

@@ -70,6 +70,7 @@ export function NativeChatResolvedView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
+  readTerminalPromptSuggestion,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
@@ -442,6 +443,7 @@ export function NativeChatResolvedView({
           onSlashCommand={onSlashCommand}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
+          readTerminalPromptSuggestion={isVisible ? readTerminalPromptSuggestion : undefined}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}
         />
       )}

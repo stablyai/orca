@@ -17315,6 +17315,7 @@
         "skillScopePlugin": "プラグイン",
         "skillsLoaded": "スキルを読み込みました",
         "noCommands": "一致するコマンドがありません",
+        "acceptPromptSuggestion": "提案されたプロンプトを使用",
         "imageSaving": "貼り付けた画像を保存中…",
         "pendingAttachmentLimit": "待機中の添付ファイルが多すぎます。さらに添付する前に、作成を完了してください。",
         "viewAttachment": "画像を見る",

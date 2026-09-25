@@ -1,6 +1,6 @@
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import type { HistoryState } from './native-chat-composer-state'
+import { applyMentionSuggestion, type HistoryState } from './native-chat-composer-state'
 
 /** Imperative text insertion and focus for the composer textarea, used by the
  *  paste pipeline and the composer's imperative handle. */
@@ -12,7 +12,14 @@ export function useNativeChatTypedInsertion(args: {
   setCaret: Dispatch<SetStateAction<number>>
   setHistory: Dispatch<SetStateAction<HistoryState>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
-}): { insertTypedText: (text: string) => boolean; focus: () => boolean } {
+  onDraftOrCaretChange: (value: string, caret: number) => void
+}): {
+  insertTypedText: (text: string) => boolean
+  focus: () => boolean
+  handleDraftChange: (value: string, input: NativeChatComposerInput) => void
+  handleSelect: (input: NativeChatComposerInput) => void
+  acceptMention: (query: string) => void
+} {
   const { textareaRef, caret, draft, setDraft, setCaret, setHistory, setActiveSuggestion } = args
 
   const insertTypedText = useCallback(
@@ -47,5 +54,24 @@ export function useNativeChatTypedInsertion(args: {
     return true
   }, [textareaRef])
 
-  return { insertTypedText, focus }
+  const handleSelect = (input: NativeChatComposerInput): void => {
+    const position = input.selectionStart ?? input.value.length
+    setCaret(position)
+    args.onDraftOrCaretChange(input.value, position)
+    setActiveSuggestion(0)
+  }
+  const handleDraftChange = (value: string, input: NativeChatComposerInput): void => {
+    setDraft(value)
+    setHistory((previous) => ({ entries: previous.entries, index: null }))
+    handleSelect(input)
+  }
+  const acceptMention = (query: string): void => {
+    const result = applyMentionSuggestion(draft, caret, query)
+    setDraft(result.draft)
+    setCaret(result.caret)
+    const input = textareaRef.current
+    input?.focus()
+    requestAnimationFrame(() => input?.setSelectionRange(result.caret, result.caret))
+  }
+  return { insertTypedText, focus, handleDraftChange, handleSelect, acceptMention }
 }

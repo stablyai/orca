@@ -1,3 +1,4 @@
+import { clearClaudePromptSuggestion } from './claude-prompt-suggestion'
 import { randomUUID } from 'node:crypto'
 import {
   forgetRetiredWaiter,
@@ -258,6 +259,7 @@ export async function dispatchClaudeTurn(
   const sentUuid = randomUUID()
   const arm = () => {
     ++session.dispatchSequence
+    clearClaudePromptSuggestion(session)
     // A context report asked for before this send may land after it and misstate the context.
     session.translator?.markContextActivity()
     return waitForReplay(

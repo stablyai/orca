@@ -1,3 +1,4 @@
+import { observeClaudePromptSuggestion } from './claude-prompt-suggestion'
 import { compactClaudeSession, observeClaudeCompaction } from './claude-structured-compaction'
 import type {
   AgentSessionAcquisition,
@@ -130,6 +131,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
 
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
+    if (session) {
+      observeClaudePromptSuggestion(session, event)
+    }
     const backgroundTasksChanged =
       event.type === 'ended'
         ? (session?.backgroundTasks.clear() ?? false)
@@ -207,6 +211,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
+  readPromptSuggestion = (sessionId: string): string | null =>
+    this.sessions.get(sessionId)?.promptSuggestion ?? null
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     answerClaudeStructuredPrompt({ request, sessions: this.sessions })
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>

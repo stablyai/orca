@@ -25,6 +25,12 @@ function mergeBatch(
   }
   return {
     type: 'batch',
+    ...(right.promptSuggestion !== undefined || left.promptSuggestion !== undefined
+      ? {
+          promptSuggestion:
+            right.promptSuggestion !== undefined ? right.promptSuggestion : left.promptSuggestion
+        }
+      : {}),
     ...(right.commands !== undefined || left.commands !== undefined
       ? { commands: right.commands !== undefined ? right.commands : left.commands }
       : {}),

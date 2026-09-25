@@ -174,6 +174,8 @@ export type ClaudeSession = {
   commands: ClaudeSlashCommandCatalog
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
+  promptSuggestion?: string | null
+  promptSuggestionResultSequence?: number
   /** Fences overlapping option writes so a late completion cannot restore stale state. */
   optionMutationSequence: number
   /** Latest resume point written at a turn end; close and exit persist after it settles. */

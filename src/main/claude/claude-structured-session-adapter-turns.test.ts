@@ -224,14 +224,14 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       models: [
         {
           id: 'opus',
-          label: 'Opus',
+          label: 'Opus 5',
           isDefault: true,
           efforts: [
             { value: 'low', label: 'Low' },
             { value: 'high', label: 'High' }
           ]
         },
-        { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
+        { id: 'sonnet', label: 'Sonnet 5', isDefault: false, efforts: [] }
       ],
       current: { model: 'sonnet', effort: 'high', confirmed: ['model', 'effort'] }
     })

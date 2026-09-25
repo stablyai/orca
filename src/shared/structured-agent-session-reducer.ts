@@ -36,6 +36,7 @@ export type StructuredAgentSessionState = {
   handoff: AgentSessionHandoffStatus | null
   backgroundTasks?: AgentSessionBackgroundTaskState | null
   commands?: AgentSessionSlashCommand[] | null
+  promptSuggestion?: string | null
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
@@ -199,6 +200,7 @@ export function reduceStructuredAgentSession(
         state.activity
       ),
       commands: state.commands,
+      promptSuggestion: state.promptSuggestion,
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -232,6 +234,7 @@ export function reduceStructuredAgentSession(
     return {
       ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
       commands: event.commands,
+      promptSuggestion: event.promptSuggestion,
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
@@ -255,6 +258,7 @@ export function reduceStructuredAgentSession(
     (event.fence === undefined || event.fence === state.fence) &&
     (event.handoff === undefined || event.handoff === state.handoff) &&
     (event.commands === undefined || event.commands === state.commands) &&
+    (event.promptSuggestion === undefined || event.promptSuggestion === state.promptSuggestion) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
@@ -289,6 +293,8 @@ export function reduceStructuredAgentSession(
     error: undefined,
     handoff: event.handoff ?? state.handoff,
     commands: event.commands !== undefined ? event.commands : state.commands,
+    promptSuggestion:
+      event.promptSuggestion !== undefined ? event.promptSuggestion : state.promptSuggestion,
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
     ...(activity !== undefined ? { activity } : {}),
     ...(lostTurnRow ? { unloadedTurnRevisions: (state.unloadedTurnRevisions ?? 0) + 1 } : {}),

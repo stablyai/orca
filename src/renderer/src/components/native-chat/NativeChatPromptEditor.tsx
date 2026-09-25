@@ -130,6 +130,12 @@ export function NativeChatPromptEditor({
     editor?.setEditable(!disabled, false)
   }, [disabled, editor])
 
+  useLayoutEffect(() => {
+    if (editor) {
+      editor.view.dispatch(editor.state.tr.setMeta('addToHistory', false))
+    }
+  }, [editor, placeholder])
+
   const input = useMemo<NativeChatComposerInput | null>(
     () =>
       editor

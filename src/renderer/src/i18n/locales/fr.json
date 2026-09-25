@@ -17379,6 +17379,7 @@
           "max": "Max",
           "ultra": "Ultra"
         },
+        "acceptPromptSuggestion": "Utiliser le message suggéré",
         "imageSaving": "Enregistrement de l'image collée…",
         "pendingAttachmentLimit": "Trop de pièces jointes sont en attente. Terminez de composer avant d’en attacher davantage.",
         "viewAttachment": "Voir l'image",

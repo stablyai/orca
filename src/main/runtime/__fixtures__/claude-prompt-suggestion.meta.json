@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-09-22T19:26:58.332Z",
+  "platform": "win32",
+  "command": [
+    "C:\\Users\\xxxxxxx\\.local\\bin\\claude.exe",
+    "--no-chrome",
+    "--permission-mode",
+    "default",
+    "--setting-sources",
+    "",
+    "--tools",
+    "",
+    "--strict-mcp-config",
+    "--disable-slash-commands",
+    "--system-prompt",
+    "You are a concise programming tutor. Answer in English. Do not use tools.",
+    "Show a two-line JavaScript add function. Offer to add a test next."
+  ],
+  "cols": 100,
+  "rows": 30,
+  "note": "Claude Code 2.1.280, Windows, FORCE_COLOR=3; text-only capture with no tools, Chrome or MCP.",
+  "exitCode": 1
+}

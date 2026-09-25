@@ -36,6 +36,7 @@ export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_E
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
   | 'includePartialMessages'
+  | 'promptSuggestions'
   | 'systemPrompt'
   | 'settingSources'
   | 'supportedDialogKinds'
@@ -58,6 +59,7 @@ export type ClaudeStructuredSdkOptions = Pick<
  */
 export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
   includePartialMessages: true,
+  promptSuggestions: true,
   // Keep the SDK on Claude Code's own system-prompt contract.
   systemPrompt: { type: 'preset', preset: 'claude_code' },
   settingSources: [...CLAUDE_DEFAULT_SETTING_SOURCES],

@@ -113,6 +113,8 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
+  readPromptSuggestion = (sessionId: string): string | null =>
+    this.liveOwnerOrNull(sessionId)?.readPromptSuggestion?.(sessionId) ?? null
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.owner(input.sessionId).answerPrompt(input)

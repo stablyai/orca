@@ -1,4 +1,5 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import { NativeChatPromptSuggestion } from './NativeChatPromptSuggestion'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useLayoutEffect, useRef } from 'react'
@@ -26,6 +27,8 @@ export type NativeChatComposerFieldProps = {
   composerScopeKey: string
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
+  promptSuggestion?: string | null
+  onAcceptPromptSuggestion?: () => void
   disabled: boolean
   hasPty: boolean
   canSend: boolean
@@ -100,6 +103,8 @@ export function NativeChatComposerField({
   composerScopeKey,
   textareaRef,
   draft,
+  promptSuggestion,
+  onAcceptPromptSuggestion,
   disabled,
   hasPty,
   canSend,
@@ -221,65 +226,76 @@ export function NativeChatComposerField({
                 ))}
               </div>
             ) : null}
-            <NativeChatPromptEditor
-              key={composerScopeKey}
-              scopeKey={composerScopeKey}
-              inputRef={textareaRef}
-              initialValue={draft}
-              disabled={disabled}
-              onChange={(input) => onDraftChange(input.value, input)}
-              onKeyDownCapture={(event) => {
-                if (!imeEnterGesture.ownsKeyDown(event)) {
-                  onKeyDown(event)
+            <div className="relative">
+              <NativeChatPromptEditor
+                key={composerScopeKey}
+                scopeKey={composerScopeKey}
+                inputRef={textareaRef}
+                initialValue={draft}
+                disabled={disabled}
+                onChange={(input) => onDraftChange(input.value, input)}
+                onKeyDownCapture={(event) => {
+                  if (!imeEnterGesture.ownsKeyDown(event)) {
+                    onKeyDown(event)
+                  }
+                }}
+                onKeyUp={imeEnterGesture.onKeyUp}
+                onBlur={() => {
+                  const compositionWasActive = imeEnterGesture.isComposing()
+                  imeEnterGesture.reset()
+                  if (compositionWasActive) {
+                    settleImeValue(textareaRef.current!)
+                  }
+                }}
+                onCompositionStart={() => {
+                  compositionBaseRef.current = textareaRef.current!.value
+                  imeEnterGesture.setComposing(true)
+                }}
+                onCompositionEnd={() => {
+                  const compositionWasActive = imeEnterGesture.isComposing()
+                  imeEnterGesture.setComposing(false)
+                  if (compositionWasActive) {
+                    settleImeValue(textareaRef.current!)
+                  }
+                }}
+                onPasteCapture={onPaste}
+                onSelect={onTextareaSelect}
+                aria-expanded={autocomplete.mode === 'slash'}
+                aria-controls={autocomplete.mode === 'slash' ? pickerListboxId : undefined}
+                aria-activedescendant={
+                  autocomplete.mode === 'slash' && autocomplete.items.length > 0
+                    ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
+                    : undefined
                 }
-              }}
-              onKeyUp={imeEnterGesture.onKeyUp}
-              onBlur={() => {
-                const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.reset()
-                if (compositionWasActive) {
-                  settleImeValue(textareaRef.current!)
+                placeholder={
+                  promptSuggestion
+                    ? ''
+                    : goalMode?.active
+                      ? translate(
+                          'components.native-chat.goal.placeholder',
+                          'Describe your goal, define measurable outcomes for best results'
+                        )
+                      : nativeChatComposerPlaceholder(hasPty, canSend)
                 }
-              }}
-              onCompositionStart={() => {
-                compositionBaseRef.current = textareaRef.current!.value
-                imeEnterGesture.setComposing(true)
-              }}
-              onCompositionEnd={() => {
-                const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.setComposing(false)
-                if (compositionWasActive) {
-                  settleImeValue(textareaRef.current!)
-                }
-              }}
-              onPasteCapture={onPaste}
-              onSelect={onTextareaSelect}
-              aria-expanded={autocomplete.mode === 'slash'}
-              aria-controls={autocomplete.mode === 'slash' ? pickerListboxId : undefined}
-              aria-activedescendant={
-                autocomplete.mode === 'slash' && autocomplete.items.length > 0
-                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
-                  : undefined
-              }
-              placeholder={
-                goalMode?.active
-                  ? translate(
-                      'components.native-chat.goal.placeholder',
-                      'Describe your goal, define measurable outcomes for best results'
-                    )
-                  : nativeChatComposerPlaceholder(hasPty, canSend)
-              }
-              // Why: coarse-pointer min-height follows the app's touch target convention.
-              // Editable content grows naturally; the 8lh cap (plus
-              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
-              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
-              // so re-wrap on window/pane resize is handled without a measure pass.
-              className={cn(
-                'min-h-12 w-full bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
-                'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
-              )}
-            />
+                aria-label={nativeChatComposerPlaceholder(hasPty, canSend)}
+                // Why: coarse-pointer min-height follows the app's touch target convention.
+                // Editable content grows naturally; the 8lh cap (plus
+                // py-1) turns further growth into internal scrolling, and scrollbar-sleek
+                // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
+                // so re-wrap on window/pane resize is handled without a measure pass.
+                className={cn(
+                  'min-h-12 w-full bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                  'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
+                  'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+              />
+              {promptSuggestion ? (
+                <NativeChatPromptSuggestion
+                  text={promptSuggestion}
+                  onAccept={onAcceptPromptSuggestion}
+                />
+              ) : null}
+            </div>
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
                 attachDisabled={attachDisabled}

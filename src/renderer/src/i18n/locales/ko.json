@@ -17315,6 +17315,7 @@
         "skillScopePlugin": "플러그인",
         "skillsLoaded": "스킬 로드 완료",
         "noCommands": "일치하는 명령어가 없습니다",
+        "acceptPromptSuggestion": "추천 프롬프트 사용",
         "imageSaving": "붙여넣은 이미지를 저장하는 중…",
         "pendingAttachmentLimit": "대기 중인 첨부파일이 너무 많습니다. 더 첨부하기 전에 작성을 완료하세요.",
         "viewAttachment": "이미지 보기",

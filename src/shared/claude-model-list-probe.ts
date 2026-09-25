@@ -1,3 +1,4 @@
+import { claudeModelPickerLabel } from './claude-model-picker-label'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 // Why: the Claude CLI has no model-listing subcommand (`claude models` starts a
@@ -47,6 +48,7 @@ type RawControlResponse = {
 }
 
 type RawListedModel = {
+  resolvedModel?: unknown
   value?: unknown
   displayName?: unknown
   description?: unknown
@@ -77,7 +79,7 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
       : []
   return {
     id,
-    label,
+    label: claudeModelPickerLabel(label, raw.resolvedModel, description),
     ...(description ? { description } : {}),
     effortLevels,
     supportsFastMode: raw.supportsFastMode === true

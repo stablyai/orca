@@ -37,6 +37,7 @@ export class StructuredAgentSessionClientDelivery {
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
       readCommands: (sessionId) => deps().adapter.readCommands?.(sessionId),
+      readPromptSuggestion: (sessionId) => deps().adapter.readPromptSuggestion?.(sessionId) ?? null,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal)
     })
   }

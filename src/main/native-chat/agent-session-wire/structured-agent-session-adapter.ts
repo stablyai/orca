@@ -263,6 +263,7 @@ export type StructuredAgentSessionAdapter = {
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
+  readPromptSuggestion?(sessionId: string): string | null
   /** Claims the live callback, commits the journal CAS while that claim is held, then answers it.
    *  A prompt cancel claims the same callback, so only one operation can commit. */
   answerPrompt(input: {

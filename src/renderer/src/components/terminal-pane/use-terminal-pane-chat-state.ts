@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { readClaudeTerminalPromptSuggestion } from '../../../../shared/claude-terminal-prompt-suggestion'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
@@ -231,7 +232,14 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- managerRef is a stable ref container.
   }, [chatLeafId])
 
+  const readNativeChatPromptSuggestion = useCallback((): string | null => {
+    const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
+    return pane ? readClaudeTerminalPromptSuggestion(pane.terminal) : null
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- managerRef is a stable ref container.
+  }, [chatLeafId])
+
   return {
+    readNativeChatPromptSuggestion,
     setTabPaneExpanded,
     setTabCanExpandPane,
     suppressPtyExit,

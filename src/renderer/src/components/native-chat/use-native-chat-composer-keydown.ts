@@ -18,6 +18,8 @@ export type UseNativeChatComposerKeyDownArgs = {
   dismissPicker: (triggerKey: string) => void
   interrupt: () => void
   send: () => void
+  acceptPromptSuggestion?: () => boolean
+  dismissPromptSuggestion?: () => boolean
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
@@ -35,6 +37,8 @@ export function useNativeChatComposerKeyDown({
   dismissPicker,
   interrupt,
   send,
+  acceptPromptSuggestion,
+  dismissPromptSuggestion,
   setActiveSuggestion,
   setDraft,
   setCaret,
@@ -88,7 +92,21 @@ export function useNativeChatComposerKeyDown({
 
       if (event.key === 'Escape') {
         event.preventDefault()
+        if (dismissPromptSuggestion?.()) {
+          return
+        }
         interrupt()
+        return
+      }
+      if (
+        (event.key === 'Tab' || event.key === 'ArrowRight') &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        acceptPromptSuggestion?.()
+      ) {
+        event.preventDefault()
         return
       }
       if (event.key === 'Enter' && !event.shiftKey) {
@@ -127,6 +145,8 @@ export function useNativeChatComposerKeyDown({
       interrupt,
       isComposing,
       send,
+      acceptPromptSuggestion,
+      dismissPromptSuggestion,
       setActiveSuggestion,
       setCaret,
       setDraft,

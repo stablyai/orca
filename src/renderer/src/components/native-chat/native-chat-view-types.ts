@@ -26,6 +26,7 @@ export type NativeChatBridgeViewProps = {
   onSwitchToTerminal?: () => void
   /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
+  readTerminalPromptSuggestion?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
@@ -55,6 +56,7 @@ export type NativeChatResolvedViewProps = {
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
+  readTerminalPromptSuggestion?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 

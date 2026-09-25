@@ -1,3 +1,9 @@
+import {
+  composerMetadataChanged,
+  withComposerMetadata,
+  type AgentSessionComposerMetadata,
+  type AgentSessionComposerMetadataHooks
+} from './structured-agent-session-composer-metadata'
 // Per-subscriber cursors over one session's journal.
 //
 // Each subscriber advances independently: a client that connected two epochs
@@ -11,7 +17,6 @@ import type {
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionBackgroundTaskState,
-  type AgentSessionSlashCommand,
   type AgentSessionHandoffStatus,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
@@ -32,17 +37,15 @@ export type AgentSessionSubscribeInput = {
   cursor?: AgentJournalCursor
 }
 
-type Subscriber = {
+type Subscriber = AgentSessionComposerMetadata & {
   id: string
   sessionId: string
   emit: AgentSessionSubscriberEmit
   cursor: AgentJournalCursor
   fence: number
-  commands?: AgentSessionSlashCommand[] | null
 }
 
-export type AgentSessionSubscribersHooks = {
-  readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
+export type AgentSessionSubscribersHooks = AgentSessionComposerMetadataHooks & {
   /** Fires after publications that can change journal content. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   now?: () => number
@@ -259,10 +262,12 @@ export class AgentSessionSubscribers {
       const page = result.page
       const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
       if (!advanced) {
-        const commandsChanged =
-          this.hooks.readCommands !== undefined &&
-          (this.hooks.readCommands(subscriber.sessionId) ?? null) !== subscriber.commands
-        if (handoff || emitCheckpoint || publishedActivity !== undefined || commandsChanged) {
+        if (
+          handoff ||
+          emitCheckpoint ||
+          publishedActivity !== undefined ||
+          composerMetadataChanged(subscriber, this.hooks)
+        ) {
           this.emit(subscriber, {
             type: 'batch',
             sessionId: subscriber.sessionId,
@@ -307,13 +312,7 @@ export class AgentSessionSubscribers {
    *  unknown outcome or poison every later publication. */
   private emit(subscriber: Subscriber, event: AgentSessionSubscribeEvent): void {
     try {
-      const commands = this.hooks.readCommands?.(subscriber.sessionId) ?? null
-      const includeCommands =
-        this.hooks.readCommands !== undefined &&
-        event.type !== 'end' &&
-        (event.type !== 'batch' || commands !== subscriber.commands)
-      subscriber.emit(includeCommands ? { ...event, commands: commands ?? null } : event)
-      subscriber.commands = commands
+      subscriber.emit(withComposerMetadata(subscriber, event, this.hooks))
     } catch {
       this.drop(subscriber)
     }
