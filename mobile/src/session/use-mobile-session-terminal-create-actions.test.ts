@@ -15,6 +15,10 @@ vi.mock('../platform/haptics', () => ({
   triggerError: vi.fn()
 }))
 
+function noPendingSelection(): { current: PendingSessionSelection | null } {
+  return { current: null }
+}
+
 function clientReturning(...responses: unknown[]): RpcClient {
   let responseIndex = 0
   return {
@@ -60,7 +64,7 @@ function createScope(client: RpcClient) {
     initializedHandlesRef: { current: new Set<string>() },
     activeHandleRef: { current: 'existing-terminal' },
     activeSessionTabTypeRef: { current: 'terminal' },
-    pendingSelectionRef: { current: null as PendingSessionSelection | null },
+    pendingSelectionRef: noPendingSelection(),
     scheduleDelayedAction: vi.fn(),
     showToast: vi.fn(),
     unsubscribeTerminal: vi.fn(),

@@ -165,7 +165,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 }
 
 /**
- * What this tree measures, per class, over all 790 goldens.
+ * What this tree measures, per class, over all 794 goldens.
  *
  * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
  * in both directions, and this module's test pins their sum to the size of the corpus. A class that
@@ -179,7 +179,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
  * same story — both numbers move, and both moves are edits here rather than a quiet pass.
  */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 397,
+  identical: 401,
   // Closed by the `_meta` widening: the page's reader is `isRpcResponse` itself.
   'reply-meta-required': 0,
   // Settling a refused reply moved three goldens here out of `write-ordinal`: a rejection that

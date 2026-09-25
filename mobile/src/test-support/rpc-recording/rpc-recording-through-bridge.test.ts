@@ -74,9 +74,9 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * `BRIDGED_PARITY_MEMBERS` pins which goldens are in it — a count alone cannot see one golden
  * leaving a class as another arrives.
  *
- * 397 of the 790 replay byte for byte. The other 393 fall in five classes, 343 / 3 / 6 / 33 / 8,
+ * 401 of the 794 replay byte for byte. The other 393 fall in five classes, 343 / 3 / 6 / 33 / 8,
  * and none of them is a reason to re-record anything. `c1-page-closure.ts` then pins, golden by
- * golden, the 103 recorded at a call site the C1 page owns, because a count over 790 cannot tell a
+ * golden, the 103 recorded at a call site the C1 page owns, because a count over 794 cannot tell a
  * domain's regression from another domain's improvement.
  *
  * 1. **result-absent-settlement, 343** and **2. result-absent-observation, 3.**

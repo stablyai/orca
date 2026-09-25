@@ -13,7 +13,7 @@ import {
 } from './pending-session-selection'
 
 function terminalTab(id: string, terminal: string): MobileSessionTab {
-  return {
+  const tab: MobileSessionTab = {
     type: 'terminal',
     id,
     parentTabId: id,
@@ -21,18 +21,20 @@ function terminalTab(id: string, terminal: string): MobileSessionTab {
     title: 'Terminal',
     terminal,
     isActive: false
-  } as MobileSessionTab
+  }
+  return tab
 }
 
 function chatTab(id: string, sessionId: string): MobileSessionTab {
-  return {
+  const tab: MobileSessionTab = {
     type: 'agent-session',
     id,
     title: 'Claude Chat',
     sessionId,
     agent: 'claude',
     isActive: false
-  } as MobileSessionTab
+  }
+  return tab
 }
 
 describe('resolveLaunchedSelection', () => {

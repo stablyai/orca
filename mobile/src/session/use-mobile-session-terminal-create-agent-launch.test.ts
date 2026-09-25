@@ -49,6 +49,10 @@ function scriptedClient(...replies: RpcResponse[]) {
   return { client: requestPortRpcClient(sendRequest), sendRequest }
 }
 
+function mutableRef<T>(current: T): { current: T } {
+  return { current }
+}
+
 function scope(client: RpcClient, hostCapabilities: string[] = LAUNCH_CAPABILITIES) {
   return {
     worktreeId: 'workspace-1',
@@ -69,9 +73,9 @@ function scope(client: RpcClient, hostCapabilities: string[] = LAUNCH_CAPABILITI
     setCreateError: vi.fn(),
     deviceTokenRef: { current: null },
     initializedHandlesRef: { current: new Set<string>() },
-    activeHandleRef: { current: 'existing-terminal' as string | null },
+    activeHandleRef: mutableRef<string | null>('existing-terminal'),
     activeSessionTabTypeRef: { current: 'terminal' },
-    pendingSelectionRef: { current: null as PendingSessionSelection | null },
+    pendingSelectionRef: mutableRef<PendingSessionSelection | null>(null),
     scheduleDelayedAction: vi.fn(),
     showToast: vi.fn(),
     unsubscribeTerminal: vi.fn(),
