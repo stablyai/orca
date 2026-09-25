@@ -42,11 +42,11 @@ describe('the C3 page closure', () => {
    * *family* entering the closure is invisible until someone re-derives it by hand — which
    * `config/scripts/mobile-web-app-page-closure-families.test.mjs` now does for both files routes.
    */
-  it('is the census the design named: 26 families, 116 goldens', () => {
+  it('is the census the design named: 26 families, 117 goldens', () => {
     const goldens = Object.values(C3_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C3_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
       families: 26,
-      goldens: 116
+      goldens: 117
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
@@ -62,7 +62,7 @@ describe('the C3 page closure', () => {
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
     expect(pageClosureTotals(C3_PAGE_CLOSURE)).toEqual({
       identical: 60,
-      'result-absent-settlement': 44,
+      'result-absent-settlement': 45,
       'params-undefined': 7,
       'result-absent-stream-release': 3,
       'write-ordinal': 2
@@ -96,7 +96,7 @@ describe('the C3 page closure', () => {
     expect({
       families: Object.keys(committed).length,
       pins: Object.values(committed).flatMap(Object.keys).length
-    }).toEqual({ families: 20, pins: 94 })
+    }).toEqual({ families: 20, pins: 95 })
     for (const [family, pinned] of Object.entries(committed)) {
       expect(C3_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
@@ -165,7 +165,7 @@ describe('the C3 page closure', () => {
 
   it('excludes a closure golden only into a class that has a reason', () => {
     const exclusions = pageClosureExclusions(C3_PAGE_CLOSURE)
-    expect(exclusions.length).toBe(56)
+    expect(exclusions.length).toBe(57)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
     )

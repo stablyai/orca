@@ -236,7 +236,7 @@ describe('what the pin still admits', () => {
   it('goes red on a golden that stopped diverging, which every other check lets through', () => {
     // The direction the rest of the suite cannot see. One `result-absent-settlement` golden
     // reported `identical` instead: nothing is unclassified, every diverging golden is still in an
-    // excluded class, and the corpus is still 787. Only these two numbers moved.
+    // excluded class, and the corpus is still 789. Only these two numbers moved.
     const tally = asCounted()
     const moved: BridgedParityTally = {
       identical: tally.identical + 1,
@@ -250,7 +250,7 @@ describe('what the pin still admits', () => {
     expect(drift.join('\n')).toContain(
       `identical: pinned ${tally.identical}, ran ${moved.identical}`
     )
-    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 341, ran 340')
+    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 343, ran 342')
   })
 
   it('goes red on a class that grew and on the corpus losing a golden', () => {

@@ -137,6 +137,8 @@ export function taskListMountAdapters(
           githubMode: 'items',
           gitlabFilter: 'opened',
           gitlabView: 'project',
+          jiraConnection: { connected: false, sites: [], selection: null, credentialError: null },
+          jiraFilter: 'assigned',
           linearConnected: true,
           linearFilter: 'all',
           linearOrderBy: 'priority',

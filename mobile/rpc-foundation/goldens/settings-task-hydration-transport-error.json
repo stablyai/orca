@@ -7,7 +7,7 @@
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
-  "scenarioSha256": "d4a2fef3aefb78bdb4aed94fda982124f24a3af3832227654d324735f44aaeeb",
+  "scenarioSha256": "c01d21c37d8922895a3602eba64e1ba859978930a43e8ddeb8ae74b597d4f3e9",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -24,6 +24,11 @@
       "name": "showGitHubKindPicker",
       "ordinal": 11,
       "value": false
+    },
+    "09f5676323bc": {
+      "name": "preflight.check#1",
+      "ordinal": 50,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
     },
     "0cff3cfd4bb2": {
       "name": "preflight.check#1",
@@ -56,6 +61,40 @@
       "ordinal": 4,
       "value": false
     },
+    "0fcbf1e4c52c": {
+      "name": "jira.status#1",
+      "ordinal": 47,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
+    },
     "1221fd1c3ae9": {
       "name": "mergeMethodProjectRow",
       "ordinal": 37,
@@ -70,6 +109,32 @@
         "$rpc": "null"
       }
     },
+    "1f26b7c3f9eb": {
+      "name": "jira.status#1",
+      "ordinal": 47,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "1f75fb0d92bd": {
       "name": "projectRowItem",
       "ordinal": 26,
@@ -81,11 +146,6 @@
       "name": "error",
       "ordinal": 42,
       "value": ""
-    },
-    "2ae77d454712": {
-      "name": "ui.get#1",
-      "ordinal": 48,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     },
     "2d1b83d7dc85": {
       "name": "mergeMethodTaskItem",
@@ -110,6 +170,11 @@
       "name": "showLinearViewPicker",
       "ordinal": 5,
       "value": false
+    },
+    "3b07c2f7af57": {
+      "name": "ui.get#1",
+      "ordinal": 49,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     },
     "3b5e5f172050": {
       "name": "linear.status#1",
@@ -221,11 +286,6 @@
         "$rpc": "null"
       }
     },
-    "558df6e44ef7": {
-      "name": "settings.get#1",
-      "ordinal": 47,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
     "5f1ccfa1d4a0": {
       "name": "settings.get#1",
       "ordinal": 43,
@@ -257,11 +317,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "6be6eaa0cf4d": {
-      "name": "error",
-      "ordinal": 51,
-      "value": "settings disconnected"
     },
     "6ffbb1794410": {
       "name": "showLinearFilterPicker",
@@ -319,10 +374,10 @@
         "$rpc": "null"
       }
     },
-    "8515b9b6e08f": {
-      "name": "linear.status#1",
-      "ordinal": 50,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    "8413a71cd880": {
+      "name": "error",
+      "ordinal": 53,
+      "value": "settings disconnected"
     },
     "8616eb8e398b": {
       "name": "showGitHubProjectSortPicker",
@@ -445,6 +500,16 @@
         }
       }
     },
+    "92f796e77624": {
+      "name": "jira.status#1",
+      "ordinal": 52,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"jira.status\"}"
+    },
+    "9792eb12d563": {
+      "name": "taskStateHydrated",
+      "ordinal": 54,
+      "value": false
+    },
     "ace3d3315687": {
       "name": "showGitLabFilterPicker",
       "ordinal": 14,
@@ -498,6 +563,11 @@
       "ordinal": 8,
       "value": false
     },
+    "c15da9b5667c": {
+      "name": "settings.get#1",
+      "ordinal": 48,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
     "c4b6b5ed0b10": {
       "name": "showCreateTargetPicker",
       "ordinal": 31,
@@ -514,6 +584,11 @@
         "$rpc": "null"
       }
     },
+    "d64b04e46db0": {
+      "name": "linear.status#1",
+      "ordinal": 51,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    },
     "d83b362e2ad1": {
       "name": "showGitHubIssueSourcePicker",
       "ordinal": 18,
@@ -525,16 +600,6 @@
       "value": {
         "$rpc": "null"
       }
-    },
-    "e0887f269af4": {
-      "name": "preflight.check#1",
-      "ordinal": 49,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-    },
-    "e0da5ae2a468": {
-      "name": "taskStateHydrated",
-      "ordinal": 52,
-      "value": false
     },
     "e5a4abb9d94f": {
       "name": "showGitHubPagePicker",
@@ -578,14 +643,16 @@
             "8a1c7137714e",
             "b3f3f6a6069b",
             "0cff3cfd4bb2",
-            "7d496ccb65c6"
+            "7d496ccb65c6",
+            "1f26b7c3f9eb"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -643,14 +710,16 @@
             "5f1ccfa1d4a0",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "3b5e5f172050"
+            "3b5e5f172050",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -697,8 +766,8 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "6be6eaa0cf4d",
-            "e0da5ae2a468"
+            "8413a71cd880",
+            "9792eb12d563"
           ]
         }
       }

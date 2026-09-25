@@ -41,11 +41,11 @@ describe('the C2 page closure', () => {
    * *family* entering the closure — a scenario recorded at a site the route newly imports — is
    * invisible until someone re-derives the closure by hand, as C1's and C5's pins are too.
    */
-  it('is the census the design named: 68 families, 257 goldens', () => {
+  it('is the census the design named: 68 families, 259 goldens', () => {
     const goldens = Object.values(C2_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C2_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
       families: 68,
-      goldens: 257
+      goldens: 259
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
@@ -61,7 +61,7 @@ describe('the C2 page closure', () => {
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
     expect(pageClosureTotals(C2_PAGE_CLOSURE)).toEqual({
       identical: 108,
-      'result-absent-settlement': 115,
+      'result-absent-settlement': 117,
       'params-undefined': 29,
       'result-absent-stream-release': 3,
       'write-ordinal': 2
@@ -89,7 +89,7 @@ describe('the C2 page closure', () => {
     expect({
       families: Object.keys(committed).length,
       pins: Object.values(committed).flatMap(Object.keys).length
-    }).toEqual({ families: 20, pins: 94 })
+    }).toEqual({ families: 20, pins: 95 })
     for (const [family, pinned] of Object.entries(committed)) {
       expect(C2_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
@@ -160,7 +160,7 @@ describe('the C2 page closure', () => {
 
   it('excludes a closure golden only into a class that has a reason', () => {
     const exclusions = pageClosureExclusions(C2_PAGE_CLOSURE)
-    expect(exclusions.length).toBe(149)
+    expect(exclusions.length).toBe(151)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
     )
@@ -221,7 +221,7 @@ describe('reading a run against the C2 pin', () => {
     expect(pageClosureRunTotals(C2_PAGE_CLOSURE, run)).not.toEqual(
       pageClosureTotals(C2_PAGE_CLOSURE)
     )
-    expect([...run].filter(([, seen]) => seen.family in C2_PAGE_CLOSURE).length).toBe(256)
+    expect([...run].filter(([, seen]) => seen.family in C2_PAGE_CLOSURE).length).toBe(258)
   })
 
   it('ignores every golden outside the closure, which is most of the corpus', () => {

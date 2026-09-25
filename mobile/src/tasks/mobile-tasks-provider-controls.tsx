@@ -12,6 +12,7 @@ import { styles } from './mobile-tasks-legacy-styles'
 import { getRepoBadgeColor } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksGitHubViewControls } from './mobile-tasks-github-view-controls'
 import { renderMobileTasksLinearViewControls } from './mobile-tasks-linear-view-controls'
+import { renderMobileTasksJiraViewControls } from './mobile-tasks-jira-view-controls'
 
 export function renderMobileTasksProviderControls(model: ConnectionPresentationModel) {
   const {
@@ -115,6 +116,8 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
       )}
 
       {renderMobileTasksLinearViewControls(model)}
+
+      {renderMobileTasksJiraViewControls(model)}
 
       {provider !== 'linear' && !(provider === 'github' && githubMode === 'project') ? (
         <Pressable

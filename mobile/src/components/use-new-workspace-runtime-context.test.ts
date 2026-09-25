@@ -78,10 +78,12 @@ describe('useNewWorkspaceRuntimeContext', () => {
     ['absent', undefined],
     ['without a settings member', {}]
   ])('degrades a %s settings result to absent settings', async (_label, settingsResult) => {
+    // Jira rides the default provider list: unlike GitLab and Linear it has no
+    // availability gate here, so an absent settings result still offers it.
     expect(await answer(settingsResult, UI_WITH_TRUST)).toEqual({
       runtimeSettings: null,
       trustedOrcaHooks: TRUSTED_HOOKS,
-      availableProviders: ['github']
+      availableProviders: ['github', 'jira']
     })
   })
 

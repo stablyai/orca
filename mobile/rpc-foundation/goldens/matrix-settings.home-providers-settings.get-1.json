@@ -274,6 +274,9 @@
         }
       }
     },
+    "868d9c7eed63": {
+      "host-1": ["github", "jira"]
+    },
     "8fce29bab175": {
       "name": "settings.get#1",
       "ordinal": 1,
@@ -398,6 +401,13 @@
             "ok": false
           }
         }
+      }
+    },
+    "a940d6fc7d14": {
+      "name": "providers",
+      "ordinal": 7,
+      "value": {
+        "host-1": ["github", "jira"]
       }
     },
     "aa3490f8f6f8": {
@@ -635,8 +645,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "79b8c1b0d1d1",
-          "effects": ["9037ac778ace"]
+          "state": "868d9c7eed63",
+          "effects": ["a940d6fc7d14"]
         }
       },
       {
@@ -647,8 +657,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "79b8c1b0d1d1",
-          "effects": ["9037ac778ace"]
+          "state": "868d9c7eed63",
+          "effects": ["a940d6fc7d14"]
         }
       },
       {
@@ -659,8 +669,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "79b8c1b0d1d1",
-          "effects": ["9037ac778ace"]
+          "state": "868d9c7eed63",
+          "effects": ["a940d6fc7d14"]
         }
       },
       {
@@ -671,8 +681,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "79b8c1b0d1d1",
-          "effects": ["9037ac778ace"]
+          "state": "868d9c7eed63",
+          "effects": ["a940d6fc7d14"]
         }
       },
       {
@@ -683,8 +693,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "79b8c1b0d1d1",
-          "effects": ["9037ac778ace"]
+          "state": "868d9c7eed63",
+          "effects": ["a940d6fc7d14"]
         }
       },
       {
@@ -695,8 +705,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "79b8c1b0d1d1",
-          "effects": ["9037ac778ace"]
+          "state": "868d9c7eed63",
+          "effects": ["a940d6fc7d14"]
         }
       },
       {

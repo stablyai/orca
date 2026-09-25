@@ -21,6 +21,7 @@ import {
   GITHUB_KIND_OPTIONS
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 
 export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
   const {
@@ -34,6 +35,7 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
     setGithubPreset,
     setItems,
     setLinearFilter,
+    setJiraFilter,
     setProvider,
     setQuery,
     setShowProviderPicker,
@@ -76,6 +78,11 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
         } else if (next === 'linear') {
           const nextQuery = resume.linearQuery ?? ''
           setLinearFilter(normalizeLinearFilter(resume.linearPreset))
+          setQuery(nextQuery)
+          setAppliedQuery(nextQuery.trim())
+        } else if (next === 'jira') {
+          const nextQuery = resume.jiraQuery ?? ''
+          setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
           setQuery(nextQuery)
           setAppliedQuery(nextQuery.trim())
         } else {

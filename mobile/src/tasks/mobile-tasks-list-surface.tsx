@@ -11,11 +11,15 @@ import { styles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksGitHubProjectList } from './mobile-tasks-github-project-list'
 import { renderMobileTasksLinearList } from './mobile-tasks-linear-list'
 import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-list'
+import { JiraConnectPrompt } from '../components/JiraConnectPrompt'
 
 export function renderMobileTasksListSurface(model: ConnectionPresentationModel) {
   const {
     githubMode,
     linearConnected,
+    jiraConnection,
+    refreshJiraConnection,
+    setError,
     provider,
     setLinearApiKeyDraft,
     setLinearConnectError,
@@ -38,6 +42,16 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
         <ActivityIndicator size="small" color={colors.textSecondary} />
       </View>
     )
+  ) : provider === 'jira' && !jiraConnection.connected ? (
+    <JiraConnectPrompt
+      credentialError={jiraConnection.credentialError}
+      disabled={!taskUiReady}
+      onCheckAgain={() => {
+        void refreshJiraConnection().catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : 'Failed to read Jira status')
+        })
+      }}
+    />
   ) : provider === 'linear' && !linearConnected ? (
     <View style={styles.centered}>
       <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />

@@ -7,7 +7,7 @@
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
-  "scenarioSha256": "f5033a7a3567cc9e016bf09ac8bcd8ff381c3054c041dbccc773f7011918bf1d",
+  "scenarioSha256": "29894b0c92cefd0f8212a5dcbcba561c4747ecd8847f40b889565b14f45c8e31",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -57,20 +57,15 @@
         "$rpc": "null"
       }
     },
-    "04391aac001c": {
-      "name": "error",
-      "ordinal": 51,
-      "value": "transport failure"
-    },
-    "06945c581b21": {
-      "name": "defaultGitHubPreset",
-      "ordinal": 62,
-      "value": "issues"
-    },
     "08c3599aa1ff": {
       "name": "showGitHubKindPicker",
       "ordinal": 11,
       "value": false
+    },
+    "09f5676323bc": {
+      "name": "preflight.check#1",
+      "ordinal": 50,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
     },
     "0cff3cfd4bb2": {
       "name": "preflight.check#1",
@@ -102,6 +97,40 @@
       "name": "showLinearTeamPicker",
       "ordinal": 4,
       "value": false
+    },
+    "0fcbf1e4c52c": {
+      "name": "jira.status#1",
+      "ordinal": 47,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": {
+            "connected": false
+          }
+        }
+      }
     },
     "109edb44f0e4": {
       "name": "linear.status#1",
@@ -152,6 +181,32 @@
         "$rpc": "null"
       }
     },
+    "1f26b7c3f9eb": {
+      "name": "jira.status#1",
+      "ordinal": 47,
+      "args": [
+        {
+          "name": "method",
+          "value": "jira.status"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "1f75fb0d92bd": {
       "name": "projectRowItem",
       "ordinal": 26,
@@ -193,11 +248,6 @@
           }
         }
       }
-    },
-    "25a174d07c0f": {
-      "name": "error",
-      "ordinal": 51,
-      "value": ""
     },
     "281c23abda8b": {
       "name": "settings.get#1",
@@ -244,16 +294,6 @@
       "ordinal": 42,
       "value": ""
     },
-    "2ae77d454712": {
-      "name": "ui.get#1",
-      "ordinal": 48,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
-    },
-    "2ae9c5d06de2": {
-      "name": "linearConnected",
-      "ordinal": 54,
-      "value": false
-    },
     "2d1b83d7dc85": {
       "name": "mergeMethodTaskItem",
       "ordinal": 36,
@@ -268,15 +308,30 @@
         "$rpc": "null"
       }
     },
+    "2db932a72b8a": {
+      "name": "trustedOrcaHooks",
+      "ordinal": 54,
+      "value": {}
+    },
     "301bdbdf1dec": {
       "name": "taskStateHydrated",
       "ordinal": 1,
       "value": false
     },
+    "3186562055fb": {
+      "name": "provider",
+      "ordinal": 63,
+      "value": "github"
+    },
     "37580b6fcf9d": {
       "name": "showLinearViewPicker",
       "ordinal": 5,
       "value": false
+    },
+    "3b07c2f7af57": {
+      "name": "ui.get#1",
+      "ordinal": 49,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
     },
     "3b5e5f172050": {
       "name": "linear.status#1",
@@ -398,10 +453,10 @@
       "ordinal": 23,
       "value": false
     },
-    "494f3c869f37": {
-      "name": "taskStateHydrated",
+    "47d8fb4dc2fa": {
+      "name": "jiraFilter",
       "ordinal": 69,
-      "value": true
+      "value": "assigned"
     },
     "506d5254f01c": {
       "name": "pendingHostedStateChange",
@@ -456,21 +511,6 @@
         "$rpc": "null"
       }
     },
-    "542593b21c22": {
-      "name": "appliedQuery",
-      "ordinal": 68,
-      "value": "is:issue is:open"
-    },
-    "558df6e44ef7": {
-      "name": "settings.get#1",
-      "ordinal": 47,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "575605e669c4": {
-      "name": "selectedLinearTeamIds",
-      "ordinal": 57,
-      "value": []
-    },
     "58c52d8b7c76": {
       "hydrated": true,
       "settings": {
@@ -479,6 +519,18 @@
         "hostSettingOverrides": {},
         "prBotAuthorOverrides": ["bot-user"],
         "visibleTaskProviders": ["github", "linear"]
+      }
+    },
+    "59d693e0473a": {
+      "name": "githubProjectSettings",
+      "ordinal": 70,
+      "value": {
+        "activeProject": {
+          "$rpc": "null"
+        },
+        "lastViewByProject": {},
+        "pinned": [],
+        "recent": []
       }
     },
     "5c284553e240": {
@@ -515,10 +567,34 @@
         }
       }
     },
-    "644df42439c4": {
-      "name": "linearWorkspaces",
-      "ordinal": 55,
-      "value": []
+    "6060d4b9b1d3": {
+      "name": "error",
+      "ordinal": 53,
+      "value": "transport failure"
+    },
+    "61a76d6ea8f3": {
+      "name": "jiraConnection",
+      "ordinal": 57,
+      "value": {
+        "connected": false,
+        "credentialError": {
+          "$rpc": "null"
+        },
+        "selection": {
+          "$rpc": "null"
+        },
+        "sites": []
+      }
+    },
+    "621ae182351f": {
+      "name": "error",
+      "ordinal": 53,
+      "value": ""
+    },
+    "632b3eba0010": {
+      "name": "visibleProviders",
+      "ordinal": 62,
+      "value": ["github", "linear"]
     },
     "64a500bc048a": {
       "name": "linear.status#1",
@@ -555,6 +631,11 @@
         }
       }
     },
+    "6e72b23e9d56": {
+      "name": "linearWorkspaces",
+      "ordinal": 58,
+      "value": []
+    },
     "6ffbb1794410": {
       "name": "showLinearFilterPicker",
       "ordinal": 15,
@@ -565,9 +646,9 @@
       "ordinal": 16,
       "value": false
     },
-    "737d03a180a4": {
+    "71ac87a5a2f4": {
       "name": "githubMode",
-      "ordinal": 61,
+      "ordinal": 64,
       "value": "items"
     },
     "796a64aabbc9": {
@@ -616,15 +697,20 @@
         "$rpc": "null"
       }
     },
-    "8515b9b6e08f": {
-      "name": "linear.status#1",
-      "ordinal": 50,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+    "85ed8bfeb710": {
+      "name": "selectedLinearTeamIds",
+      "ordinal": 60,
+      "value": []
     },
     "8616eb8e398b": {
       "name": "showGitHubProjectSortPicker",
       "ordinal": 22,
       "value": false
+    },
+    "86cfb41d0cb8": {
+      "name": "linearFilter",
+      "ordinal": 68,
+      "value": "all"
     },
     "89a5d2a4b349": {
       "name": "showProviderPicker",
@@ -657,10 +743,25 @@
         "startedAt": 0
       }
     },
+    "8a48acc3bcf6": {
+      "name": "query",
+      "ordinal": 71,
+      "value": "is:issue is:open"
+    },
+    "8b6f54f81646": {
+      "name": "linearConnected",
+      "ordinal": 56,
+      "value": false
+    },
     "8d124d8922c8": {
       "name": "showGitHubProjectViewPicker",
       "ordinal": 21,
       "value": false
+    },
+    "8ef027c71140": {
+      "name": "githubKind",
+      "ordinal": 67,
+      "value": "issues"
     },
     "9055388dbe30": {
       "name": "preflight.check#1",
@@ -742,10 +843,15 @@
         }
       }
     },
-    "9490fcb6d06d": {
-      "name": "trustedOrcaHooks",
+    "92f796e77624": {
+      "name": "jira.status#1",
       "ordinal": 52,
-      "value": {}
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"jira.status\"}"
+    },
+    "9792eb12d563": {
+      "name": "taskStateHydrated",
+      "ordinal": 54,
+      "value": false
     },
     "987c36f4beca": {
       "name": "linear.status#1",
@@ -781,15 +887,10 @@
         }
       }
     },
-    "a5110db5951d": {
-      "name": "linearTeams",
-      "ordinal": 56,
-      "value": []
-    },
-    "ac6cda1d7c7a": {
-      "name": "githubKind",
-      "ordinal": 64,
-      "value": "issues"
+    "a57d68d030ff": {
+      "name": "appliedQuery",
+      "ordinal": 72,
+      "value": "is:issue is:open"
     },
     "ace3d3315687": {
       "name": "showGitLabFilterPicker",
@@ -864,6 +965,17 @@
         "startedAt": 0
       }
     },
+    "b789d794a9ca": {
+      "name": "runtimeTaskSettings",
+      "ordinal": 53,
+      "value": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      }
+    },
     "b7c96dd7bb6a": {
       "name": "pendingGitHubProjectViewSelection",
       "ordinal": 24,
@@ -871,20 +983,22 @@
         "$rpc": "null"
       }
     },
-    "b8f36c62d60b": {
-      "name": "githubPreset",
-      "ordinal": 63,
-      "value": "issues"
-    },
     "b99d5f718523": {
       "name": "showLinearDisplayPicker",
       "ordinal": 8,
       "value": false
     },
-    "bb8650c59a0f": {
-      "name": "visibleProviders",
-      "ordinal": 59,
-      "value": ["github", "linear"]
+    "bc8fcdfcfcb7": {
+      "name": "selectedLinearWorkspaceId",
+      "ordinal": 61,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "c15da9b5667c": {
+      "name": "settings.get#1",
+      "ordinal": 48,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "c4b6b5ed0b10": {
       "name": "showCreateTargetPicker",
@@ -895,29 +1009,17 @@
       "hydrated": false,
       "settings": {}
     },
-    "cb9416350e8d": {
-      "name": "linearFilter",
-      "ordinal": 65,
-      "value": "all"
-    },
-    "cff6ef7f2791": {
-      "name": "githubProjectSettings",
-      "ordinal": 66,
-      "value": {
-        "activeProject": {
-          "$rpc": "null"
-        },
-        "lastViewByProject": {},
-        "pinned": [],
-        "recent": []
-      }
-    },
     "d4db291a4c50": {
       "name": "pendingProjectGitHubMerge",
       "ordinal": 34,
       "value": {
         "$rpc": "null"
       }
+    },
+    "d64b04e46db0": {
+      "name": "linear.status#1",
+      "ordinal": 51,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
     },
     "d83b362e2ad1": {
       "name": "showGitHubIssueSourcePicker",
@@ -931,15 +1033,10 @@
         "$rpc": "null"
       }
     },
-    "e0887f269af4": {
-      "name": "preflight.check#1",
-      "ordinal": 49,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-    },
-    "e0da5ae2a468": {
+    "dc148a8a8aa1": {
       "name": "taskStateHydrated",
-      "ordinal": 52,
-      "value": false
+      "ordinal": 73,
+      "value": true
     },
     "e5a4abb9d94f": {
       "name": "showGitHubPagePicker",
@@ -951,22 +1048,6 @@
       "ordinal": 20,
       "value": false
     },
-    "e715718a7e8c": {
-      "name": "githubProjectHiddenFieldIdsByView",
-      "ordinal": 53,
-      "value": {}
-    },
-    "e7538ac5908a": {
-      "name": "runtimeTaskSettings",
-      "ordinal": 51,
-      "value": {
-        "defaultTuiAgent": "codex",
-        "disabledTuiAgents": ["claude"],
-        "hostSettingOverrides": {},
-        "prBotAuthorOverrides": ["bot-user"],
-        "visibleTaskProviders": ["github", "linear"]
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -974,6 +1055,16 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ed9151884cb7": {
+      "name": "defaultGitHubPreset",
+      "ordinal": 65,
+      "value": "issues"
+    },
+    "ee147ac0c45d": {
+      "name": "linearTeams",
+      "ordinal": 59,
+      "value": []
     },
     "ef693d2d47bb": {
       "name": "linear.status#1",
@@ -1017,22 +1108,15 @@
         "$rpc": "null"
       }
     },
-    "f48548c0c512": {
-      "name": "query",
-      "ordinal": 67,
-      "value": "is:issue is:open"
+    "f4841617ad9d": {
+      "name": "githubPreset",
+      "ordinal": 66,
+      "value": "issues"
     },
-    "f7c2d2661209": {
-      "name": "selectedLinearWorkspaceId",
-      "ordinal": 58,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "fa73b8d70b9b": {
-      "name": "provider",
-      "ordinal": 60,
-      "value": "github"
+    "f54965c37b48": {
+      "name": "githubProjectHiddenFieldIdsByView",
+      "ordinal": 55,
+      "value": {}
     },
     "fe7472dae00e": {
       "name": "showGitHubPresetPicker",
@@ -1051,14 +1135,16 @@
             "8a1c7137714e",
             "b3f3f6a6069b",
             "0cff3cfd4bb2",
-            "7d496ccb65c6"
+            "7d496ccb65c6",
+            "1f26b7c3f9eb"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1116,14 +1202,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "3b5e5f172050"
+            "3b5e5f172050",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1170,25 +1258,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1200,14 +1290,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "41f045867f52"
+            "41f045867f52",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1254,25 +1346,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1284,14 +1378,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "987c36f4beca"
+            "987c36f4beca",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1338,25 +1434,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1368,14 +1466,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "5c284553e240"
+            "5c284553e240",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1422,25 +1522,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1452,14 +1554,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "227351b2e1c3"
+            "227351b2e1c3",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1506,25 +1610,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1536,14 +1642,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "002332616f26"
+            "002332616f26",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1590,25 +1698,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1620,14 +1730,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "64a500bc048a"
+            "64a500bc048a",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1674,25 +1786,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1704,14 +1818,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "109edb44f0e4"
+            "109edb44f0e4",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1758,25 +1874,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1788,14 +1906,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "ef693d2d47bb"
+            "ef693d2d47bb",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1842,25 +1962,27 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "e7538ac5908a",
-            "9490fcb6d06d",
-            "e715718a7e8c",
-            "2ae9c5d06de2",
-            "644df42439c4",
-            "a5110db5951d",
-            "575605e669c4",
-            "f7c2d2661209",
-            "bb8650c59a0f",
-            "fa73b8d70b9b",
-            "737d03a180a4",
-            "06945c581b21",
-            "b8f36c62d60b",
-            "ac6cda1d7c7a",
-            "cb9416350e8d",
-            "cff6ef7f2791",
-            "f48548c0c512",
-            "542593b21c22",
-            "494f3c869f37"
+            "b789d794a9ca",
+            "2db932a72b8a",
+            "f54965c37b48",
+            "8b6f54f81646",
+            "61a76d6ea8f3",
+            "6e72b23e9d56",
+            "ee147ac0c45d",
+            "85ed8bfeb710",
+            "bc8fcdfcfcb7",
+            "632b3eba0010",
+            "3186562055fb",
+            "71ac87a5a2f4",
+            "ed9151884cb7",
+            "f4841617ad9d",
+            "8ef027c71140",
+            "86cfb41d0cb8",
+            "47d8fb4dc2fa",
+            "59d693e0473a",
+            "8a48acc3bcf6",
+            "a57d68d030ff",
+            "dc148a8a8aa1"
           ]
         }
       },
@@ -1872,14 +1994,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "44d89224b56c"
+            "44d89224b56c",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1926,8 +2050,8 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "04391aac001c",
-            "e0da5ae2a468"
+            "6060d4b9b1d3",
+            "9792eb12d563"
           ]
         }
       },
@@ -1939,14 +2063,16 @@
             "281c23abda8b",
             "50e8f8e79bbf",
             "9055388dbe30",
-            "afec1a652c6e"
+            "afec1a652c6e",
+            "0fcbf1e4c52c"
           ],
           "payloads": [
             "b1714fb6ea51",
-            "558df6e44ef7",
-            "2ae77d454712",
-            "e0887f269af4",
-            "8515b9b6e08f"
+            "c15da9b5667c",
+            "3b07c2f7af57",
+            "09f5676323bc",
+            "d64b04e46db0",
+            "92f796e77624"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
@@ -1993,8 +2119,8 @@
             "da3527bc5f58",
             "3d60f87d082e",
             "294741680522",
-            "25a174d07c0f",
-            "e0da5ae2a468"
+            "621ae182351f",
+            "9792eb12d563"
           ]
         }
       }

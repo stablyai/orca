@@ -107,18 +107,23 @@ const hash = (parts: string[] | string): string =>
 // moves. The render-token stream gains the four tokens that one attribute is, 35,203 -> 35,207.
 // Nothing else in the family moves.
 
-const SCREEN_RPC_SCREEN_HOOKS = '0f66df2141117dfec2f8a0adb3f598312e6fda8e80833a365a645796f5ab48c3'
+// Adding Jira as a mobile task provider necessarily changes hook count, statements, declarations,
+// render tokens and styles, so the counts and hashes below are re-captured rather than left
+// failing. GitHubPrFileDiff's hash is deliberately unchanged — Jira touched no code outside the
+// Tasks surface.
+
+const SCREEN_RPC_SCREEN_HOOKS = '309742a0d2b84106c331277bceac2675112607a6b964e1e76fe16d3522a18ecf'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const SCREEN_RPC_STATEMENTS = 'dd8f33cb3cf96f5c39abac397cb77e35f59079291033a1866ead462b041ab979'
-const MAIN_REBASED_DECLARATIONS = '920a1b66445d10e2a64fbdbe9d7138a4ebe21bbccde1b9ac9c89267cecc584b9'
-const SCREEN_RPC_SEMANTICS = 'e07a63387d57106483ee703ec6c19dea593e0eca5c651758f42bcb36254850b7'
-const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
-const SCREEN_RPC_RENDER_TREE = '086742f95f1e87fb89d8c67ffd9f7a229799ae05115f9f4bcc1a925e56dcc8bb'
+const SCREEN_RPC_STATEMENTS = 'f51c2564dcde169a55d7687624ade19be76ab781b053594e8f2a25d0a90e46e2'
+const MAIN_REBASED_DECLARATIONS = '8e7de3454d1121929c7929ea548b0dad428881b7bbb07266ae46467b51bb8cd8'
+const SCREEN_RPC_SEMANTICS = 'c2142a20c0d10aaca03bcc8e5e8e4eefffd44ddba3263bbfc34eee0d0d74d673'
+const PRE_REFACTOR_STYLES = '03787649f5e97089b07779886a920f68a0dfc27f7409c81ae9711530c78975e6'
+const SCREEN_RPC_RENDER_TREE = '0692ae65fd0d01d9bb3b675c3008f8e17a4340b0637eb2e00a24ebca2183d5ed'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
-    expect(screenHooks).toHaveLength(351)
+    expect(screenHooks).toHaveLength(359)
     expect(hash(screenHooks)).toBe(SCREEN_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
@@ -128,25 +133,25 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
-    expect(statements).toHaveLength(418)
+    expect(statements).toHaveLength(429)
     expect(hash(statements)).toBe(SCREEN_RPC_STATEMENTS)
   })
 
   it('preserves every moved top-level declaration', () => {
     const declarations = readMobileTasksDeclarationSignatures()
-    expect(declarations).toHaveLength(194)
+    expect(declarations).toHaveLength(196)
     expect(hash(declarations)).toBe(MAIN_REBASED_DECLARATIONS)
   })
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_274)
+    expect(semantics.split('\n')).toHaveLength(3_317)
     expect(hash(semantics)).toBe(SCREEN_RPC_SEMANTICS)
   })
 
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_207)
+    expect(tokens).toHaveLength(35_766)
     expect(hash(tokens)).toBe(SCREEN_RPC_RENDER_TREE)
   })
 

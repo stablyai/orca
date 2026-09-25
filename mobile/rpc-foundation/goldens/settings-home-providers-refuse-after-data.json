@@ -122,13 +122,6 @@
         }
       }
     },
-    "2bb81a9fc867": {
-      "name": "providers",
-      "ordinal": 14,
-      "value": {
-        "host-1": ["github"]
-      }
-    },
     "44136fa355b3": {},
     "44e1776d841d": {
       "name": "settings.get#2",
@@ -206,6 +199,13 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
+      }
+    },
+    "56227393d82f": {
+      "name": "providers",
+      "ordinal": 14,
+      "value": {
+        "host-1": ["github", "jira"]
       }
     },
     "58995bbfcb17": {
@@ -333,6 +333,9 @@
     },
     "79b8c1b0d1d1": {
       "host-1": ["github"]
+    },
+    "868d9c7eed63": {
+      "host-1": ["github", "jira"]
     },
     "8fce29bab175": {
       "name": "settings.get#1",
@@ -530,8 +533,8 @@
             "load": "eb79a9b3682a",
             "reload": "eb79a9b3682a"
           },
-          "state": "79b8c1b0d1d1",
-          "effects": ["9037ac778ace", "2bb81a9fc867"]
+          "state": "868d9c7eed63",
+          "effects": ["9037ac778ace", "56227393d82f"]
         }
       }
     ]
