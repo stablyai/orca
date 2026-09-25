@@ -1035,7 +1035,9 @@
         "artifactsDescription": "팀과 HTML 및 Markdown 파일을 공유하고 공개 링크를 관리하세요.",
         "shareSkillsTitle": "스킬 공유",
         "shareSkillsDescription": "비공개 링크로 기술을 공유하세요. 가지고 있는 사람이라면 누구나 설치할 수 있습니다.",
-        "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭."
+        "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭.",
+        "chatTitle": "Chat UI",
+        "chatDescription": "지원되는 에이전트 세션을 위한 채팅 보기입니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -7013,6 +7015,30 @@
           "connectionTestRunning": "테스트 중...",
           "connectionTestAction": "연결 테스트"
         },
+        "ChatPane": {
+          "title": "Chat UI",
+          "description": "지원되는 에이전트 세션을 위한 채팅 보기입니다.",
+          "copy": "지원되는 에이전트 세션에 채팅 보기를 추가합니다. 에이전트 창에서 채팅과 터미널 간에 전환할 수 있습니다.",
+          "toggleLabel": "Chat UI 전환",
+          "defaultTitle": "기본 보기",
+          "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
+          "defaultViewLabel": "기본 Chat UI 보기",
+          "defaultViewTerminal": "Terminal 채팅",
+          "defaultViewNative": "Chat UI",
+          "structuredScopeLocalOnly": "현재는 로컬 세션만 가능합니다. WSL 및 원격 실행 호스트(SSH 포함)는 계속해서 터미널 채팅을 사용합니다.",
+          "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
+          "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
+          "resumeToggleLabel": "다시 시작한 후 자동 재개 전환",
+          "shellEnvNamesLabel": "셸에서 전달할 변수",
+          "shellEnvNamePlaceholder": "변수 이름",
+          "shellEnvNameAdd": "추가",
+          "shellEnvNameRemove": "{{value0}} 제거",
+          "shellEnvNamesEmpty": "아직 추가된 변수가 없습니다.",
+          "shellEnvNamesAlwaysPassed": "PATH, 로캘, SSH_AUTH_SOCK은 항상 전달됩니다. 다음에 채팅을 시작하거나 재개할 때 적용됩니다.",
+          "shellEnvTitle": "셸 환경 사용",
+          "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
+          "shellEnvToggleLabel": "셸 환경 사용 전환"
+        },
         "ExperimentalPane": {
           "9762364929": "가능하면 macOS에서 APFS clone-copy를 사용하고, 그렇지 않으면 구성된 폴더나 파일을 생성된 작업 트리에 심볼릭 링크합니다.",
           "24416f42cd": "작업 트리의 공유 경로",
@@ -7040,30 +7066,6 @@
             "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
             "title": "새 카드 스타일",
             "toggleLabel": "새 카드 스타일 전환"
-          },
-          "nativeChat": {
-            "title": "Chat UI",
-            "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
-            "copy": "지원되는 에이전트 터미널 창에서 전환할 수 있는 Chat UI 보기를 추가합니다. 대화 기록 충실도, 스트리밍, 터미널 동작 일치를 조정하는 동안 실험적으로 제공됩니다.",
-            "toggleLabel": "Chat UI 전환",
-            "defaultTitle": "기본 보기",
-            "defaultCopy": "지원되는 에이전트의 새 터미널 탭을 여는 방식을 선택합니다.",
-            "defaultViewLabel": "기본 Chat UI 보기",
-            "defaultViewTerminal": "Terminal 채팅",
-            "defaultViewNative": "Chat UI",
-            "shellEnvNamesLabel": "셸에서 전달할 변수",
-            "shellEnvNamePlaceholder": "변수 이름",
-            "shellEnvNameAdd": "추가",
-            "shellEnvNameRemove": "{{value0}} 제거",
-            "shellEnvNamesEmpty": "아직 추가된 변수가 없습니다.",
-            "shellEnvNamesAlwaysPassed": "PATH, 로캘, SSH_AUTH_SOCK은 항상 전달됩니다. 다음에 채팅을 시작하거나 재개할 때 적용됩니다.",
-            "shellEnvTitle": "셸 환경 사용",
-            "shellEnvCopy": "Codex 및 Claude 채팅은 터미널과 마찬가지로 로그인 셸이 내보내는 모든 변수를 가지고 시작합니다. 끄면 전달할 변수를 선택할 수 있습니다.",
-            "shellEnvToggleLabel": "셸 환경 사용 전환",
-            "structuredScopeLocalOnly": "현재는 로컬 세션만 가능합니다. WSL 및 원격 실행 호스트(SSH 포함)는 계속해서 터미널 채팅을 사용합니다.",
-            "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
-            "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
-            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",
@@ -8206,7 +8208,9 @@
           "devDescription": "UI 상태를 시험해 보기 위한 개발 전용 도구입니다.",
           "linearTitle": "Linear",
           "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
-          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+          "chatTitle": "Chat UI",
+          "chatDescription": "지원되는 에이전트 세션을 위한 채팅 보기입니다."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -9379,6 +9383,20 @@
             }
           }
         },
+        "chat": {
+          "search": {
+            "native": "네이티브",
+            "chat": "채팅",
+            "claude": "claude",
+            "codex": "codex",
+            "openclaude": "개방형",
+            "grok": "grok",
+            "omp": "펌프",
+            "terminal": "터미널",
+            "agent": "에이전트",
+            "variables": "변수"
+          }
+        },
         "experimental": {
           "search": {
             "44c7f209d5": "node_modules",
@@ -9440,19 +9458,6 @@
               "title": "새 카드 스타일",
               "worktree": "worktree",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
-              "grok": "grok",
-              "native": "네이티브",
-              "chat": "채팅",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "개방형",
-              "omp": "펌프",
-              "terminal": "터미널",
-              "agent": "에이전트"
             },
             "agentDashboard": {
               "title": "에이전트 대시보드",
@@ -17029,7 +17034,7 @@
         "untitled": "제목 없는 채팅",
         "listLabel": "재개될 채팅",
         "dontAskAgain": "다시 묻지 않음(자동으로 재개)",
-        "dontAskAgainHint": "설정 → 실험적 → 채팅 UI에서 이 기능을 끌 수 있습니다.",
+        "dontAskAgainSettingsHint": "설정 → Chat UI에서 이 기능을 끌 수 있습니다.",
         "continuedOne": "채팅 1개를 재개하고 계속하도록 요청했습니다.",
         "continuedMany": "{{value0}} 채팅을 재개하고 계속하도록 요청했습니다.",
         "selectAgent": "{{value2}}에서 {{value0}} 채팅 \"{{value1}}\" 재개",

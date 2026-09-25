@@ -3,15 +3,13 @@ title: Chat UI (native chat)
 description: Optional chat surface for supported agent sessions — skills, model pickers, and transcript view.
 ---
 
-import { Callout } from '@/components/docs/prose'
-
-Chat UI is an experimental chat surface for supported agent sessions. New local **Claude** and **Codex** chats run as chat sessions Orca drives directly, with no terminal behind them. Other agents, and Claude or Codex chats Orca can't start that way (for example on WSL, over SSH, or on a remote server), show chat over their agent terminal, which stays the source of truth. Transcript decoding covers **Claude**, **Codex**, **Grok**, and **OMP** — OMP sessions open in Chat UI like the others instead of staying raw-terminal-only.
+Chat UI is a chat surface for supported agent sessions. New local **Claude** and **Codex** chats run as chat sessions Orca drives directly, with no terminal behind them. Other agents, and Claude or Codex chats Orca can't start that way (for example on WSL, over SSH, or on a remote server), show chat over their agent terminal, which stays the source of truth. Transcript decoding covers **Claude**, **Codex**, **Grok**, and **OMP** — OMP sessions open in Chat UI like the others instead of staying raw-terminal-only.
 
 ## Enable
 
-1. Open **Settings → Experimental → Chat UI**.
+1. Open **Settings → Chat UI** (under **AI Capabilities**).
 1. Turn **Chat UI** on.
-1. Optionally set **Default view** to **Chat UI** so new supported agent tabs open in chat; keep **Terminal** to open the TUI first.
+1. Optionally set **Default view** to **Chat UI** so new supported agent tabs open in chat; keep **Terminal chat** to open the TUI first.
 
 For chats shown over an agent terminal, toggle Chat UI ↔ terminal from the agent pane.
 
@@ -28,8 +26,3 @@ When Claude shows an **AskUserQuestion** (or similar structured permission/quest
 ## Availability
 
 Chat UI ships on desktop for supported local and remote (paired server) agent sessions. The [mobile companion](/docs/mobile) reuses chat-style transcript patterns for the same paired sessions.
-
-<Callout title="Experimental">
-  Transcript fidelity, streaming, and terminal parity are still under active tuning. Prefer the raw
-  TUI when you need every OSC/status detail.
-</Callout>

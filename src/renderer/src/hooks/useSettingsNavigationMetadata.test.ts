@@ -33,8 +33,9 @@ function ids(
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 10)).toEqual([
+    expect(ids().slice(0, 11)).toEqual([
       'agents',
+      'chat',
       'accounts',
       'orchestration',
       'computer-use',
@@ -61,6 +62,30 @@ describe('settings navigation metadata', () => {
     expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
       'Nested worker depth'
     )
+  })
+
+  it('places Chat UI under AI Capabilities with its rows searchable', () => {
+    const chat = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    }).find((section) => section.id === 'chat')
+
+    expect(chat).toMatchObject({ title: 'Chat UI', group: 'capabilities' })
+    expect(chat?.searchEntries.map((entry) => entry.title)).toEqual([
+      'Chat UI',
+      'Default view',
+      'Resume working chats automatically after a restart',
+      'Use your shell environment'
+    ])
+    const experimental = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    }).find((section) => section.id === 'experimental')
+    expect(experimental?.searchEntries.map((entry) => entry.title)).not.toContain('Chat UI')
   })
 
   it('adds the Linear capability section right after Orchestration only when connected', () => {
@@ -136,8 +161,9 @@ describe('settings navigation metadata', () => {
   })
 
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
       'agents',
+      'chat',
       'accounts',
       'orchestration',
       'setup-guide',
@@ -179,6 +205,9 @@ describe('settings navigation metadata', () => {
     expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
       'Nested worker depth'
     )
+    // Host-owned structured-chat rows would only write browser storage on web.
+    const chat = webSections.find((section) => section.id === 'chat')
+    expect(chat?.searchEntries.map((entry) => entry.title)).toEqual(['Chat UI', 'Default view'])
   })
 
   it('keeps the Browser shortcut searchable for a capable web runtime', () => {

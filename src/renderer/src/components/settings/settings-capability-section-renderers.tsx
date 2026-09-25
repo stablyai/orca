@@ -1,5 +1,6 @@
 import { AccountsPane } from './AccountsPane'
 import { AgentsPane } from './AgentsPane'
+import { ChatPane } from './ChatPane'
 import { ComputerUsePane } from './ComputerUsePane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { OrchestrationPane } from './OrchestrationPane'
@@ -29,6 +30,25 @@ export function renderAgentsSettingsSection(context: SettingsRenderContext): Rea
           wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
           wslCapabilitiesLoading={terminal.localWindowsRuntimeCapabilities.isLoading}
         />
+      ) : null}
+    </SettingsSection>
+  )
+}
+
+export function renderChatSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+  const { model, navigation, view } = context
+  return (
+    <SettingsSection
+      id="chat"
+      title={translate('auto.components.settings.Settings.chatTitle', 'Chat UI')}
+      description={translate(
+        'auto.components.settings.Settings.chatDescription',
+        'Chat view for supported agent sessions.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('chat')}
+    >
+      {view.isSectionMounted('chat') ? (
+        <ChatPane settings={model.settings} updateSettings={model.updateSettings} />
       ) : null}
     </SettingsSection>
   )

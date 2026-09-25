@@ -13,7 +13,7 @@ export { isNativeChatSupportedAgent }
  *  unit-testable; call sites resolve `launchAgent`/`detectedAgent` from the
  *  terminal tab + agent-status before calling. */
 export type NativeChatAvailabilityInput = {
-  /** Feature flag: hidden unless enabled from Settings > Experimental. */
+  /** Feature flag: hidden unless enabled from Settings > Chat UI. */
   experimentalNativeChatEnabled?: boolean
   contentType: Tab['contentType']
   /** The coding-agent Orca launched in this terminal, if any (from TerminalTab). */

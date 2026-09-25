@@ -1,6 +1,7 @@
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
+import { getChatPaneSearchEntries } from '@/components/settings/chat-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
@@ -16,6 +17,7 @@ import {
   Blocks,
   Bot,
   CircleUserRound,
+  MessageSquare,
   Mic,
   MousePointerClick,
   Network,
@@ -44,6 +46,17 @@ export function buildCapabilitySettingsSections({
         includeAgentAwake: !isWebClient,
         includeAgentRuntime: isLocalWindowsHost
       }),
+      group: 'capabilities'
+    },
+    {
+      id: 'chat',
+      title: translate('auto.hooks.useSettingsNavigationMetadata.chatTitle', 'Chat UI'),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.chatDescription',
+        'Chat view for supported agent sessions.'
+      ),
+      icon: MessageSquare,
+      searchEntries: getChatPaneSearchEntries({ includeHostOwnedRows: showDesktopOnlySettings }),
       group: 'capabilities'
     },
     {

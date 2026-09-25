@@ -48,7 +48,7 @@ function ShellEnvironmentNamesField({
     <div className="space-y-2">
       <Label htmlFor={NAME_INPUT_ID}>
         {translate(
-          'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamesLabel',
+          'auto.components.settings.ChatPane.shellEnvNamesLabel',
           'Variables to pass from your shell'
         )}
       </Label>
@@ -66,7 +66,7 @@ function ShellEnvironmentNamesField({
             add()
           }}
           placeholder={translate(
-            'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamePlaceholder',
+            'auto.components.settings.ChatPane.shellEnvNamePlaceholder',
             'Variable name'
           )}
           autoCapitalize="none"
@@ -77,13 +77,13 @@ function ShellEnvironmentNamesField({
         />
         <Button type="button" variant="outline" size="sm" disabled={!canAdd} onClick={add}>
           <Plus className="size-3.5" />
-          {translate('auto.components.settings.ExperimentalPane.nativeChat.shellEnvNameAdd', 'Add')}
+          {translate('auto.components.settings.ChatPane.shellEnvNameAdd', 'Add')}
         </Button>
       </div>
       {savedNames.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {translate(
-            'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamesEmpty',
+            'auto.components.settings.ChatPane.shellEnvNamesEmpty',
             'No variables added yet.'
           )}
         </p>
@@ -101,7 +101,7 @@ function ShellEnvironmentNamesField({
                 variant="ghost"
                 onClick={() => remove(savedName)}
                 aria-label={translate(
-                  'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNameRemove',
+                  'auto.components.settings.ChatPane.shellEnvNameRemove',
                   'Remove {{value0}}',
                   { value0: savedName }
                 )}
@@ -115,7 +115,7 @@ function ShellEnvironmentNamesField({
       )}
       <p className="text-xs text-muted-foreground">
         {translate(
-          'auto.components.settings.ExperimentalPane.nativeChat.shellEnvNamesAlwaysPassed',
+          'auto.components.settings.ChatPane.shellEnvNamesAlwaysPassed',
           'PATH, locale, and SSH_AUTH_SOCK are always passed. Applies the next time a chat starts or resumes.'
         )}
       </p>
@@ -136,13 +136,13 @@ export function NativeChatShellEnvironmentSetting({
         <div className="min-w-0 shrink space-y-0.5">
           <Label>
             {translate(
-              'auto.components.settings.ExperimentalPane.nativeChat.shellEnvTitle',
+              'auto.components.settings.ChatPane.shellEnvTitle',
               'Use your shell environment'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.ExperimentalPane.nativeChat.shellEnvCopy',
+              'auto.components.settings.ChatPane.shellEnvCopy',
               'Codex and Claude chats start with every variable your login shell exports, the same as a terminal. Turn off to choose which ones they get.'
             )}
           </p>
@@ -150,7 +150,7 @@ export function NativeChatShellEnvironmentSetting({
         <SettingsSwitch
           checked={inheritAll}
           ariaLabel={translate(
-            'auto.components.settings.ExperimentalPane.nativeChat.shellEnvToggleLabel',
+            'auto.components.settings.ChatPane.shellEnvToggleLabel',
             'Toggle using your shell environment'
           )}
           onChange={() => updateSettings({ nativeChatInheritShellEnvironment: !inheritAll })}
