@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { FilterAgentIds } from '../../../../shared/workspace-agent-filter'
 
 /**
  * Mirror-shaped snapshot of the fields the debounced persisted-UI writer owns.
@@ -28,6 +29,7 @@ export type PersistedUIWriteBaseline = {
   alwaysShowDefaultBranchWorkspace: boolean
   showDotfilesByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
+  filterAgentIds: FilterAgentIds
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
   manuallyUnreadTurnsByPaneKey: Record<string, number>
@@ -57,6 +59,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   alwaysShowDefaultBranchWorkspace: true,
   showDotfilesByWorktree: true,
   filterRepoIds: true,
+  filterAgentIds: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
   manuallyUnreadTurnsByPaneKey: true
@@ -98,6 +101,15 @@ function stringArrayEqual(a: readonly string[], b: readonly string[]): boolean {
 function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: unknown): boolean {
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
+  }
+  if (field === 'filterAgentIds') {
+    if (a == null || b == null) {
+      return a == null && b == null
+    }
+    if (Array.isArray(a) && Array.isArray(b)) {
+      return stringArrayEqual(a, b)
+    }
+    return Object.is(a, b)
   }
   if (
     field === 'showDotfilesByWorktree' ||
@@ -148,6 +160,8 @@ export function persistedUIWriteFieldsToWireUpdate(
       // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
       // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
       update.filterRepoIds = [...(fields.filterRepoIds ?? [])]
+    } else if (field === 'filterAgentIds') {
+      update.filterAgentIds = fields.filterAgentIds == null ? null : [...fields.filterAgentIds]
     } else {
       assignSameNameWireField(
         update,
@@ -161,7 +175,7 @@ export function persistedUIWriteFieldsToWireUpdate(
 
 type SameNameWriteField = Exclude<
   keyof PersistedUIWriteBaseline,
-  'showSleepingWorkspaces' | 'filterRepoIds'
+  'showSleepingWorkspaces' | 'filterRepoIds' | 'filterAgentIds'
 >
 
 // Compile check: every non-special mirror field must exist on PersistedUIState

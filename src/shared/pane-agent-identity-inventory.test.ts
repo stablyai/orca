@@ -340,6 +340,7 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'resolveAgentTypeFromTerminalTitle',
     classification: 'identity-consumer',
     paths: [
+      ['src/renderer/src/components/sidebar/workspace-agent-filter-evidence.ts', 2],
       ['src/renderer/src/components/sidebar/worktree-agent-row-type.ts', 2],
       'src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts',
       ['src/renderer/src/lib/worktree-status.ts', 2]

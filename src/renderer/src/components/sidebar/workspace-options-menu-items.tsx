@@ -17,6 +17,7 @@ import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
+import { SidebarAgentScopeMenuSection } from './SidebarAgentScopeMenuSection'
 import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
 import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection'
 import { translate } from '@/i18n/i18n'
@@ -37,6 +38,7 @@ export function useWorkspaceOptionsFilterBadge(): {
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const repos = useAppStore((s) => s.repos)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
+  const filterAgentIds = useAppStore((s) => s.filterAgentIds)
 
   const selectedCount = useMemo(() => {
     let count = 0
@@ -55,6 +57,7 @@ export function useWorkspaceOptionsFilterBadge(): {
   )
   const hasRepoFilter = selectedCount > 0
   const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
+  const hasAgentFilter = filterAgentIds != null
   const hasAnyFilter =
     hasSleepingFilter ||
     hideDefaultBranchWorkspace ||
@@ -64,7 +67,8 @@ export function useWorkspaceOptionsFilterBadge(): {
     hideWorkspacesFromOtherDevices ||
     hasSleepingExemptionFilter ||
     hasRepoFilter ||
-    hasHostVisibilityFilter
+    hasHostVisibilityFilter ||
+    hasAgentFilter
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
     (hideDefaultBranchWorkspace ? 1 : 0) +
@@ -74,6 +78,7 @@ export function useWorkspaceOptionsFilterBadge(): {
     (hideWorkspacesFromOtherDevices ? 1 : 0) +
     (hasSleepingExemptionFilter ? 1 : 0) +
     (hasHostVisibilityFilter ? 1 : 0) +
+    (hasAgentFilter ? 1 : 0) +
     selectedCount
 
   return {
@@ -115,26 +120,26 @@ export function WorkspaceOptionsMenuItems({
         )}
       </DropdownMenuLabel>
       {/* Why: host + project filters share one section and the same single-row
-          shell as Sort by (label left, value right) so the menu stays flat. */}
-      {(showHostScopeControls || repos.length > 1) && (
-        <>
-          <DropdownMenuLabel>
-            {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
-          </DropdownMenuLabel>
-          {showHostScopeControls && (
-            <SidebarHostScopeMenuSection
-              hostVisibilityLabel={hostVisibilityLabel}
-              hostOptions={hostOptions}
-              preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-              setWorkspaceHostScope={setWorkspaceHostScope}
-              visibleWorkspaceHostIds={visibleWorkspaceHostIds}
-              setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
-            />
-          )}
-          <SidebarRepositoryFilterSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
-          <DropdownMenuSeparator />
-        </>
+          shell as Sort by (label left, value right) so the menu stays flat.
+          Agent is always listed so the Show section is always present. */}
+      <DropdownMenuLabel>
+        {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
+      </DropdownMenuLabel>
+      {showHostScopeControls && (
+        <SidebarHostScopeMenuSection
+          hostVisibilityLabel={hostVisibilityLabel}
+          hostOptions={hostOptions}
+          preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+          setWorkspaceHostScope={setWorkspaceHostScope}
+          visibleWorkspaceHostIds={visibleWorkspaceHostIds}
+          setVisibleWorkspaceHostIds={setVisibleWorkspaceHostIds}
+        />
       )}
+      <SidebarAgentScopeMenuSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+      {(showHostScopeControls || repos.length > 1) && (
+        <SidebarRepositoryFilterSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+      )}
+      <DropdownMenuSeparator />
 
       <DropdownMenuLabel>
         {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
