@@ -9,8 +9,18 @@ import {
 } from './profile-state-startup-failure'
 import { ProfileStateWriterError } from './profile-state-writer-errors'
 import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
+import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
 
 describe('profile-state startup failure formatting', () => {
+  it('asks for a newer build instead of rollback when the schema is newer', () => {
+    const error = new ProfileStateDatabaseOpenError('newer-schema', 'Newer schema: 999')
+    expect(profileStateStartupFailureClass(error)).toBe('newer-schema')
+    const message = formatProfileStateStartupFailure(error)
+    expect(message).toContain('newer version of Orca')
+    expect(message).not.toContain('rollback')
+    expect(message).not.toContain('unreadable')
+  })
+
   it('prints recovery paths and the offline rollback command', () => {
     const error = new ProfileStateRecoveryRequiredError(
       {

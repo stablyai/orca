@@ -85,17 +85,23 @@ export class WriteFlushBarrierOperations {
       return runtime.quitFlushPromise
     }
     runtime.quitFlushStarted = true
-    const maintenance = runtime.profileMaintenancePending
-    runtime.quitFlushPromise = (
-      maintenance
-        ? Promise.resolve(runtime.pendingProfileMaintenance)
-        : drainProfileStateOperations([
-            ...runtime.pendingProfileFlushes,
-            runtime.profileStateAuthority?.drainBackups?.(true)
-          ]).then(() => flushCurrentStateAsync(this, true))
-    )
+    runtime.quitFlushPromise = Promise.resolve(runtime.pendingProfileMaintenance)
+      .catch((error: unknown) => {
+        // Failed maintenance may re-admit unchanged storage before this final checkpoint.
+        if (runtime.profileMaintenancePending || runtime.writesFrozen) {
+          throw error
+        }
+      })
       .then(async () => {
-        if (options.exportJsonCompatibility && !maintenance) {
+        if (runtime.profileMaintenancePending) {
+          return
+        }
+        await drainProfileStateOperations([
+          ...runtime.pendingProfileFlushes,
+          runtime.profileStateAuthority?.drainBackups?.(true)
+        ])
+        await flushCurrentStateAsync(this, true)
+        if (options.exportJsonCompatibility) {
           await runtime.profileStateAuthority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
         }
       })

@@ -390,6 +390,31 @@ describe('profile domain transfers', () => {
     }
   )
 
+  it('leaves conflicted moves between inactive profiles for those profiles to recover', () => {
+    const { intent } = preparedMove()
+    persistProfileProjectMoveIntent(root, intent)
+    domainState.writeProfileProjectDomainChanges('target', root, intent.target)
+    withDatabase('source', (db) =>
+      writeProfileStateDomain(db, {
+        expectedRevision: 1,
+        domain: 'unrelated',
+        payload: 'true'
+      })
+    )
+    expect(recoverPendingProfileProjectMoves(root, 'third-profile')).toBe(0)
+    expect(() => recoverPendingProfileProjectMoves(root, 'source')).toThrow(/conflicts/)
+    expect(readdirSync(join(root, 'profile-move-intents'))).toContain(`${intent.id}.json`)
+  })
+
+  it('refuses a malformed move record even when its header names inactive profiles', () => {
+    const { intent } = preparedMove()
+    persistProfileProjectMoveIntent(root, intent)
+    const path = join(root, 'profile-move-intents', `${intent.id}.json`)
+    writeFileSync(path, JSON.stringify({ ...intent, source: null }))
+    expect(() => recoverPendingProfileProjectMoves(root, 'third-profile')).toThrow('malformed')
+    expect(JSON.parse(readFileSync(path, 'utf8')).source).toBeNull()
+  })
+
   it('refuses independently hashed malformed unrelated data before a copy writes anything', () => {
     const before = raw('target').json
     withDatabase('source', (db) =>

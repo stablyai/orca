@@ -110,7 +110,6 @@ async function canResumeFailedMaintenance(
     if (
       options.flush === false ||
       runtime.writesFrozen ||
-      runtime.quitFlushStarted ||
       profileStateWriterFailureOutcome(error) === 'indeterminate'
     ) {
       return false
@@ -122,7 +121,7 @@ async function canResumeFailedMaintenance(
     await (authority?.pauseForMaintenance
       ? (await authority.pauseForMaintenance()).resume()
       : authority?.assertCurrentRevision?.())
-    return !runtime.quitFlushStarted
+    return true
   } catch {
     return false
   }

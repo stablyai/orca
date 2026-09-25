@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => {
     app,
     events,
     userAgent: () => userAgent,
+    showErrorBox: vi.fn(),
+    backgroundLaunch: vi.fn(() => true),
     admission: vi.fn(),
     lock: vi.fn(() => true),
     afterIdentity: vi.fn((): void => {
@@ -45,9 +47,13 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('electron', () => ({
   app: mocks.app,
+  dialog: { showErrorBox: mocks.showErrorBox },
   ipcMain: {},
   powerMonitor: {},
   session: { defaultSession: {} }
+}))
+vi.mock('../window/foreground-activation-policy', () => ({
+  isBackgroundLaunch: mocks.backgroundLaunch
 }))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: true } }))
 vi.mock('./cli-launch-redirect', () => ({
@@ -157,6 +163,9 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
 vi.mock('../orca-profiles/profile-project-move-intent', () => ({
   recoverPendingProfileProjectMoves: mocks.recoverMoves
 }))
+vi.mock('../persistence/profile-state/profile-state-active-location', () => ({
+  getActiveProfileStateLocation: () => ({ profileId: 'active-profile' })
+}))
 vi.mock('../stats/collector')
 vi.mock('../claude-usage/store')
 vi.mock('../codex-usage/store')
@@ -190,6 +199,29 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
 }))
 
 describe('browser process user-agent startup ordering', () => {
+  it('explains admission refusal before a desktop launch exits', async () => {
+    const { runMainProcessPreflight } = await import('./main-process-preflight')
+    mocks.backgroundLaunch.mockReturnValueOnce(false)
+    mocks.admission.mockImplementationOnce(() => {
+      throw new Error('Stop Orca and orcad before retrying profile recovery')
+    })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(
+        runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+      ).toBe(false)
+      expect(mocks.showErrorBox).toHaveBeenCalledWith(
+        'Orca could not start',
+        expect.stringContaining('Stop Orca and orcad before retrying profile recovery')
+      )
+      expect(mocks.app.isReady).not.toHaveBeenCalled()
+    } finally {
+      error.mockRestore()
+      mocks.showErrorBox.mockClear()
+      mocks.events.length = 0
+    }
+  })
+
   it('does not acquire profile admission for a duplicate launch', async () => {
     const { runMainProcessPreflight } = await import('./main-process-preflight')
     mocks.events.length = 0
@@ -256,6 +288,7 @@ describe('browser process user-agent startup ordering', () => {
       ])
       expect(focusExistingWindow).not.toHaveBeenCalled()
       expect(requestDesktopActivation).not.toHaveBeenCalled()
+      expect(mocks.showErrorBox).not.toHaveBeenCalled()
     } finally {
       error.mockRestore()
     }
@@ -276,7 +309,7 @@ it('exits and releases admission after pending profile move recovery fails', asy
   expect(
     runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
   ).toBe(false)
-  expect(mocks.recoverMoves).toHaveBeenCalledWith('/canonical-user-data')
+  expect(mocks.recoverMoves).toHaveBeenCalledWith('/canonical-user-data', 'active-profile')
   expect(release).toHaveBeenCalledOnce()
   expect(mocks.app.exit).toHaveBeenCalledWith(1)
 })

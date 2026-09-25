@@ -7,6 +7,7 @@ import { migrateProfileStateToSqlite } from './profile-state-migration'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { profileStateJsonExportPath } from './profile-state-export-path'
 import type { ProfileStateAuthority } from '../loading-store/profile-state-authority'
+import { formatProfileStateStartupFailure } from './profile-state-startup-failure'
 
 vi.mock('node:fs', async (original) => ({ ...(await original<typeof fs>()) }))
 vi.mock('../../telemetry/client', () => ({ track: () => {} }))
@@ -31,6 +32,53 @@ afterEach(() => {
 })
 
 describe('first database publication with competing startup', () => {
+  it.each(['empty', 'legacy'])(
+    'explains unavailable hard links without publishing a partial %s database',
+    (kind) => {
+      const root = fs.mkdtempSync(join(tmpdir(), 'orca-bootstrap-no-hardlinks-'))
+      roots.push(root)
+      const options = {
+        dataFile: join(root, 'orca-data.json'),
+        databaseFile: join(root, 'profile-state.db'),
+        profileId: 'unsupported-publication',
+        allowEmptyProfileState: true
+      }
+      const json = '{"settings":{"theme":"dark"}}'
+      if (kind === 'legacy') {
+        fs.writeFileSync(options.dataFile, json)
+      }
+      const link = vi.spyOn(fs, 'linkSync').mockImplementation(() => {
+        throw Object.assign(new Error('hard links unsupported'), {
+          code: 'ENOTSUP',
+          syscall: 'link'
+        })
+      })
+      let failure: unknown
+      try {
+        bootstrapProfileStateAuthority(options)
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toMatchObject({ code: 'profile-state-publication-unavailable' })
+      const message = formatProfileStateStartupFailure(failure)
+      expect(message).toContain('hard links')
+      expect(message).toContain(root)
+      expect(message).toContain('complete Orca data directory')
+      expect(message).not.toContain('rollback')
+      expect(fs.existsSync(options.databaseFile)).toBe(false)
+      expect(fs.readdirSync(root)).toEqual(kind === 'legacy' ? ['orca-data.json'] : [])
+      if (kind === 'legacy') {
+        expect(fs.readFileSync(options.dataFile, 'utf8')).toBe(json)
+      }
+      link.mockRestore()
+      const retry = bootstrapProfileStateAuthority(options)
+      expect(retry.authority).toBeDefined()
+      if (retry.authority) {
+        authorities.push(retry.authority)
+      }
+    }
+  )
+
   it('names its migration export after the snapshot actually captured', () => {
     const root = fs.mkdtempSync(join(tmpdir(), 'orca-migration-export-race-'))
     roots.push(root)

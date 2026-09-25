@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import { publishFileDurableSync } from '../../durable-file-write'
+import { publishProfileStateDatabase } from './profile-state-database-publication'
 import type {
   ProfileStateAuthorityInitialState,
   ProfileStateStartupPaneAlias
 } from '../loading-store/profile-state-authority'
 import { Store } from '../loading-store/store'
 import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profile-state-database'
+import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
 import {
@@ -96,7 +97,10 @@ export function bootstrapProfileStateAuthority(
     return { classification, authority, initialState, migrated: false }
   } catch (error) {
     authority.close()
-    if (error instanceof ProfileStateAuthorityBootstrapError) {
+    if (
+      error instanceof ProfileStateAuthorityBootstrapError ||
+      (error instanceof ProfileStateDatabaseOpenError && error.code === 'newer-schema')
+    ) {
       throw error
     }
     throw new ProfileStateRecoveryRequiredError(options, error)
@@ -119,7 +123,7 @@ function createEmptyProfileStateDatabase({
       )
     }
     assertProfileStateCanInitialize({ dataFile, databaseFile, profileId })
-    if (!publishFileDurableSync(temporaryDatabaseFile, databaseFile)) {
+    if (!publishProfileStateDatabase(temporaryDatabaseFile, databaseFile)) {
       throw new ProfileStateAuthorityBootstrapError(
         'Profile state storage changed while creating an empty database'
       )

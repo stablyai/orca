@@ -16,6 +16,7 @@ import { restoreProfileStateDatabaseBackup } from './profile-state-database-reco
 import type { ProfileStateMaintenance } from './profile-state-access'
 import { readProfileStateDomain } from './profile-state-domain-reader'
 import { isRecord } from './profile-state-document-validation'
+import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
 import {
   invalidateHttp1CompatibilityMarker,
   writeHttp1CompatibilityMarker
@@ -44,6 +45,12 @@ export function rollbackProfileState(
   maintenance: ProfileStateMaintenance
 ): ProfileStateRollbackResult {
   const result = getProfileStateExports(userDataPath)
+  if (profileHasPendingProjectMove(result.profileId, userDataPath)) {
+    throw new ProfileStateRecoveryCommandError(
+      'runtime_error',
+      'This profile has a pending project move. Resolve the move with both profiles preserved before restoring a single profile.'
+    )
+  }
   if (selector.kind === 'sqlite') {
     return restoreDatabaseBackup(userDataPath, result, selector.backupId, maintenance)
   }

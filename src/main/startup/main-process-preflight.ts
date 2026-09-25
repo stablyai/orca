@@ -1,4 +1,4 @@
-import { app, ipcMain, powerMonitor, session } from 'electron'
+import { app, dialog, ipcMain, powerMonitor, session } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
 import { join } from 'node:path'
@@ -93,6 +93,9 @@ import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/browser-process-user-agent'
 import { initializeBrowserIdentityModeStore } from '../browser/browser-identity-mode-store'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { formatProfileStateStartupFailure } from '../persistence/profile-state/profile-state-startup-failure'
+import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: () => void
@@ -105,6 +108,18 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     return initializeMainProcessPreflight(options)
   } catch (error) {
     console.error('[startup] Preflight failed:', error)
+    if (!state.isServeMode && !isBackgroundLaunch()) {
+      try {
+        // showErrorBox also works before Electron is ready.
+        dialog.showErrorBox(
+          'Orca could not start',
+          formatProfileStateStartupFailure(error) ??
+            (error instanceof Error ? error.message : String(error))
+        )
+      } catch (dialogError) {
+        console.warn('[startup] Could not show startup failure:', dialogError)
+      }
+    }
     try {
       state.profileStateAdmission?.release()
       state.profileStateAdmission = undefined
@@ -307,7 +322,11 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   initOrcaProfilePaths()
   // A crash can leave a cross-profile SQLite move between its two commits. Resolve
   // that journal before any Store opens a profile, so no reader observes a half-move.
-  recoverPendingProfileProjectMoves(getProfileUserDataPath())
+  const profileUserDataPath = getProfileUserDataPath()
+  recoverPendingProfileProjectMoves(
+    profileUserDataPath,
+    getActiveProfileStateLocation(profileUserDataPath)?.profileId
+  )
   // Why: same timing as initDataPath — capture userData before app.setName changes it. See persistence.ts:20-28.
   initStatsPath()
   initClaudeUsagePath()

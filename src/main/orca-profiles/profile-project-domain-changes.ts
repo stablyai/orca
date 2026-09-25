@@ -5,7 +5,7 @@ import {
 } from '../persistence/profile-state/profile-state-document-validation'
 import { prepareProfileStateDomainMutation } from '../persistence/profile-state/profile-state-domain-write-validation'
 import type { ProfileStateDomainMutation } from '../persistence/profile-state/profile-state-domain-writes'
-import type { TransferProfileState } from './profile-project-state-file'
+import type { PersistedState } from '../../shared/persisted-state-types'
 
 export type ProfileProjectDomainDigest = { domain: string; hash: string }
 
@@ -33,7 +33,7 @@ export function profileProjectDomainDigests(
 export function prepareProfileProjectDomainChanges(
   revision: number,
   documents: readonly ProfileStateParsedDocument[],
-  state: TransferProfileState
+  state: PersistedState
 ): ProfileProjectDomainChanges {
   const originals = new Map(documents.map((document) => [document.domain, document]))
   const replacements: ProfileProjectDomainChanges['replacements'] = []

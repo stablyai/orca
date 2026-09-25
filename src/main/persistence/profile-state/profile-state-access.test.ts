@@ -36,6 +36,40 @@ afterEach(() => {
 })
 
 describe('profile state admission and maintenance', () => {
+  it.skipIf(process.platform === 'win32')(
+    'releases its published owner when directory sync fails',
+    () => {
+      const path = root()
+      const syncFile = fs.fsyncSync
+      let syncCount = 0
+      const sync = vi.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
+        if (++syncCount === 3) {
+          throw new Error('directory sync failed')
+        }
+        syncFile(fd)
+      })
+      expect(() => acquireProfileStateRuntimeAdmission(path)).toThrow('directory sync failed')
+      const paths = profileStateAccessPaths(path)
+      expect(fs.readdirSync(paths.participants)).toEqual([])
+      expect(fs.readdirSync(paths.candidates)).toEqual([])
+      sync.mockRestore()
+      acquireProfileStateMaintenance(path).release()
+    }
+  )
+
+  it('does not publish an owner whose contents could not be synced', () => {
+    const path = root()
+    const sync = vi.spyOn(fs, 'fsyncSync').mockImplementationOnce(() => {
+      throw new Error('owner sync failed')
+    })
+    expect(() => acquireProfileStateRuntimeAdmission(path)).toThrow('owner sync failed')
+    const paths = profileStateAccessPaths(path)
+    expect(fs.readdirSync(paths.participants)).toEqual([])
+    expect(fs.readdirSync(paths.candidates)).toEqual([])
+    sync.mockRestore()
+    acquireProfileStateMaintenance(path).release()
+  })
+
   it('allows concurrent normal writers and refuses maintenance until every admission releases', () => {
     const path = root()
     const first = acquireProfileStateRuntimeAdmission(path)
@@ -142,7 +176,12 @@ function staleGate(
   path: string,
   pid = 12345,
   host = hostname(),
-  extra: { bootIdentity?: string; startedAtMs?: number; processStartIdentity?: string } = {}
+  extra: {
+    bootIdentity?: string
+    machineIdentity?: string
+    startedAtMs?: number
+    processStartIdentity?: string
+  } = {}
 ): string {
   const gate = profileStateAccessPaths(path).maintenance
   fs.mkdirSync(gate)
@@ -163,6 +202,34 @@ function staleGate(
 }
 
 describe('profile state owner reclamation', () => {
+  it('reclaims a local owner from a previous boot even when its PID is now live', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('current-boot')
+    vi.spyOn(identity, 'profileStateAccessMachineIdentity').mockReturnValue('same-machine')
+    const owner = staleGate(path, process.pid, hostname(), {
+      bootIdentity: 'previous-boot',
+      machineIdentity: 'same-machine'
+    })
+    const kill = vi.spyOn(process, 'kill')
+    acquireProfileStateMaintenance(path).release()
+    expect(kill).not.toHaveBeenCalled()
+    expect(fs.existsSync(owner)).toBe(false)
+  })
+
+  it('keeps a differently booted machine with the same hostname unverifiable', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('current-boot')
+    vi.spyOn(identity, 'profileStateAccessMachineIdentity').mockReturnValue('this-machine')
+    const owner = staleGate(path, process.pid, hostname(), {
+      bootIdentity: 'another-boot',
+      machineIdentity: 'another-machine'
+    })
+    const kill = vi.spyOn(process, 'kill')
+    expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+    expect(kill).not.toHaveBeenCalled()
+    expect(fs.existsSync(owner)).toBe(true)
+  })
+
   it('reclaims a reused PID only when its recorded process start differs on the same boot', () => {
     const path = root()
     vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
