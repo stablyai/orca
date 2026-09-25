@@ -1,23 +1,31 @@
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import {
+  deleteConfirmedListSnapshot,
   deleteLastConfirmedClientValue,
+  getConfirmedListSnapshot,
   getLastConfirmedClientValue,
   getTaskPageGitHubMutationQueryKey,
   markTaskPageGitHubFamiliesDirty,
   notifyTaskPageGitHubMutationRegistry,
+  setConfirmedListSnapshot,
   setLastConfirmedClientValue,
   taskPageGitHubItemKey
 } from './task-page-github-work-item-mutation-registry'
 
-function markStateFamilyDirty(repoId: string, itemId: string): void {
+function markFamilyDirty(repoId: string, itemId: string, family: 'state' | 'assignees'): void {
   const queryKey = getTaskPageGitHubMutationQueryKey()
   if (queryKey !== null) {
-    markTaskPageGitHubFamiliesDirty(queryKey, taskPageGitHubItemKey(repoId, itemId), ['state'])
+    markTaskPageGitHubFamiliesDirty(queryKey, taskPageGitHubItemKey(repoId, itemId), [family])
   }
+}
+
+function dialogSourceScope(sourceContext: TaskSourceContext | null | undefined): string | null {
+  return sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
 }
 
 /**
@@ -33,11 +41,10 @@ export function assertTaskPageGitHubDialogStateAuthority(args: {
   state: GitHubWorkItem['state']
   sourceContext?: TaskSourceContext | null
 }): { revert: () => boolean } {
-  const sourceScope =
-    args.sourceContext?.provider === 'github' ? getTaskSourceCacheScope(args.sourceContext) : null
+  const sourceScope = dialogSourceScope(args.sourceContext)
   const previous = getLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state')
   setLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state', args.state)
-  markStateFamilyDirty(args.repoId, args.itemId)
+  markFamilyDirty(args.repoId, args.itemId, 'state')
   notifyTaskPageGitHubMutationRegistry()
   return {
     revert: () => {
@@ -51,9 +58,61 @@ export function assertTaskPageGitHubDialogStateAuthority(args: {
       } else {
         setLastConfirmedClientValue(sourceScope, args.repoId, args.itemId, 'state', previous)
       }
-      markStateFamilyDirty(args.repoId, args.itemId)
+      markFamilyDirty(args.repoId, args.itemId, 'state')
       notifyTaskPageGitHubMutationRegistry()
       return true
     }
   }
+}
+
+/**
+ * Same lag hold as state, for dialog assignee toggles: record the confirmed
+ * assignee list as the `assignees` snapshot so a search-lagged Tasks refetch
+ * keeps showing it; quiet adopt drops the snapshot once search matches.
+ */
+export function assertTaskPageGitHubDialogAssigneesAuthority(args: {
+  repoId: string
+  itemId: string
+  assignees: readonly GitHubAssignableUser[]
+  sourceContext?: TaskSourceContext | null
+}): { revert: () => boolean } {
+  const sourceScope = dialogSourceScope(args.sourceContext)
+  const previous = getConfirmedListSnapshot(sourceScope, args.repoId, args.itemId, 'assignees')
+  setConfirmedListSnapshot(sourceScope, args.repoId, args.itemId, 'assignees', args.assignees)
+  const recorded = getConfirmedListSnapshot(sourceScope, args.repoId, args.itemId, 'assignees')
+  markFamilyDirty(args.repoId, args.itemId, 'assignees')
+  notifyTaskPageGitHubMutationRegistry()
+  return {
+    revert: () => {
+      // A matching search adopt or newer mutation owns the snapshot now.
+      if (
+        getConfirmedListSnapshot(sourceScope, args.repoId, args.itemId, 'assignees') !== recorded
+      ) {
+        return false
+      }
+      if (previous === undefined) {
+        deleteConfirmedListSnapshot(sourceScope, args.repoId, args.itemId, 'assignees')
+      } else {
+        setConfirmedListSnapshot(sourceScope, args.repoId, args.itemId, 'assignees', previous)
+      }
+      markFamilyDirty(args.repoId, args.itemId, 'assignees')
+      notifyTaskPageGitHubMutationRegistry()
+      return true
+    }
+  }
+}
+
+/** Why: the dialog tracks assignee logins only; reuse known profiles so list rows keep names/avatars. */
+export function resolveTaskPageGitHubDialogAssigneeUsers(
+  logins: readonly string[],
+  knownUsers: readonly GitHubAssignableUser[]
+): GitHubAssignableUser[] {
+  return logins.map(
+    (login) =>
+      knownUsers.find((user) => user.login.toLowerCase() === login.toLowerCase()) ?? {
+        login,
+        name: null,
+        avatarUrl: ''
+      }
+  )
 }

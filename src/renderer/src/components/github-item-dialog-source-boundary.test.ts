@@ -299,6 +299,9 @@ describe('GitHubItemDialog source host boundaries', () => {
     )
     expect(editSection).toContain('assertTaskPageGitHubDialogStateAuthority({')
     expect(editSection).toContain('if (authority?.revert())')
+    // Why: dialog assignee toggles need the same cache patch + authority, or the Tasks row keeps stale assignees.
+    expect(editSection).toContain('assertTaskPageGitHubDialogAssigneesAuthority({')
+    expect(editSection).toContain('patchWorkItem(itemId, { assignees:')
 
     const actionsSection = componentSource(
       'github-item-dialog/land-pull-request/pr-actions-panel.tsx'
