@@ -155,6 +155,17 @@ describe('web MiniMax preload API', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps OpenCode Go credential operations local to the desktop', async () => {
+    const { api } = await installApi('Linux')
+    await expect(api.opencodeGoCredentials.getStatus()).resolves.toEqual({
+      apiKeyConfigured: false
+    })
+    await expect(api.opencodeGoCredentials.saveApiKey('fake-key')).rejects.toThrow(/desktop app/i)
+    await expect(api.opencodeGoCredentials.clearApiKey()).resolves.toEqual({
+      apiKeyConfigured: false
+    })
+  })
+
   it('exposes desktop-only MiniMax credential reads as unconfigured and rejects saves', async () => {
     const { api } = await installApi('Linux')
 

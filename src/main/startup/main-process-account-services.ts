@@ -15,6 +15,11 @@ import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limi
 import { getKimiRuntimeTarget, resolveKimiHome } from '../kimi/kimi-runtime-home'
 import { readMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../minimax/minimax-api-key-store'
+import {
+  hasOpenCodeGoApiKey,
+  readOpenCodeGoApiKey,
+  saveOpenCodeGoApiKey
+} from '../opencode/opencode-go-api-key-store'
 import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
@@ -92,6 +97,15 @@ export function initializeMainProcessAccountServices(): void {
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
     )
+    if ('opencodeSessionCookie' in updates || 'opencodeWorkspaceId' in updates) {
+      state.rateLimits?.invalidateOpenCodeGoCredentialState()
+      void state.rateLimits?.refresh().catch((error: unknown) => {
+        console.warn(
+          '[rate-limits] Failed to refresh OpenCode Go usage after a settings change:',
+          error
+        )
+      })
+    }
     // Why: these three pick the MiniMax host and quota bucket, so a stale snapshot from the
     // previous endpoint would otherwise sit in the status bar until the next poll.
     if (
@@ -115,14 +129,18 @@ export function initializeMainProcessAccountServices(): void {
   agentHookServer.setClaudeStatusLineListener((event) => {
     state.rateLimits!.ingestLiveClaudeRateLimits(event)
   })
+  store.migrateLegacyOpenCodeGoApiKey({
+    has: hasOpenCodeGoApiKey,
+    read: readOpenCodeGoApiKey,
+    save: saveOpenCodeGoApiKey
+  })
   state.rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store.getSettings()
     return {
       sessionCookie: settings.opencodeSessionCookie,
-      workspaceIdOverride: settings.opencodeWorkspaceId,
-      apiKey: settings.opencodeGoApiKey
+      workspaceIdOverride: settings.opencodeWorkspaceId
     }
-  })
+  }, readOpenCodeGoApiKey)
   state.rateLimits.setMiniMaxConfigResolver(() => {
     const settings = store.getSettings()
     const apiKey = readMiniMaxApiKey() ?? ''

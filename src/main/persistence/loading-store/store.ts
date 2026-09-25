@@ -16,6 +16,10 @@ import {
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { scheduleSave } from './write-scheduling'
+import {
+  migrateLegacyOpenCodeGoApiKey,
+  type OpenCodeGoApiKeyTarget
+} from './legacy-opencode-go-api-key-migration'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import type { ProjectCollectionOperations } from './project-collection-operations'
@@ -87,6 +91,13 @@ export class Store {
       adaptedProjectGroups ||
       sweptRepoIds.length > 0
     ) {
+      scheduleSave(this.domains.scheduling)
+    }
+  }
+
+  /** Moves the #22551 settings-slot OpenCode Go key into `target`; it stays on disk until that succeeds. */
+  migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
+    if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
       scheduleSave(this.domains.scheduling)
     }
   }

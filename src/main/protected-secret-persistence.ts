@@ -2,7 +2,6 @@ import { getSecretStore } from '../shared/secret-store'
 
 export const PROTECTED_SECRET_SLOT = {
   opencodeSessionCookie: 'settings.opencodeSessionCookie',
-  opencodeGoApiKey: 'settings.opencodeGoApiKey',
   httpProxyUrl: 'settings.httpProxyUrl',
   browserKagiSessionLink: 'ui.browserKagiSessionLink'
 } as const
@@ -38,6 +37,16 @@ export class ProtectedSecretPersistence {
   removeRetainedBlob(slot: string): void {
     this.retainedBlobs.delete(slot)
     this.sealedSlots.delete(slot)
+  }
+
+  /** Parks ciphertext this process must write back without decrypting it. */
+  retainSealed(slot: string, blob: string): void {
+    this.retainedBlobs.set(slot, blob)
+    this.sealedSlots.add(slot)
+  }
+
+  sealedBlob(slot: string): string | null {
+    return this.sealedSlots.has(slot) ? (this.retainedBlobs.get(slot) ?? null) : null
   }
 
   isSealed(slot: string, value: string): boolean {

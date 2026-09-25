@@ -5,11 +5,12 @@
  * against (a mis-sliced segment, a re-encoded payload, a dropped sentinel) is invisible until
  * something reads the bytes back.
  */
-import { mkdtempSync, readFileSync, realpathSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { getSecretStore } from '../../../shared/secret-store'
 
 vi.mock('electron', () => ({
   app: {
@@ -71,6 +72,68 @@ function session(activeTabId: string): WorkspaceSessionState {
 }
 
 describe('persisted state survives a save/load round trip', () => {
+  it('keeps a #22551 settings-slot OpenCode Go key on disk until its new owner has it', () => {
+    const dataFile = join(
+      realpathSync(mkdtempSync(join(tmpdir(), 'orca-legacy-opencode-go-key-'))),
+      'state.json'
+    )
+    const first = openStore(dataFile)
+    first.updateSettings({ opencodeWorkspaceId: 'wrk_test' })
+    first.flush()
+    const persisted = JSON.parse(readFileSync(dataFile, 'utf8'))
+    // Sealed exactly as #22551's protected-secret slot wrote it.
+    const sealed = getSecretStore().encryptString('fake-legacy-key').toString('base64')
+    persisted.settings.opencodeGoApiKey = sealed
+    writeFileSync(dataFile, JSON.stringify(persisted))
+    const onDiskKey = (): unknown =>
+      JSON.parse(readFileSync(dataFile, 'utf8')).settings.opencodeGoApiKey
+
+    // orcad-style consumer: loads and flushes the profile but never runs the migration.
+    const daemon = new Store({ dataFile, storageAuthority: 'runtime' })
+    stores.push(daemon)
+    expect(daemon.getSettings()).not.toHaveProperty('opencodeGoApiKey')
+    daemon.updateSettings({ opencodeWorkspaceId: 'wrk_daemon' })
+    daemon.flush()
+    expect(onDiskKey()).toBe(sealed)
+    expect(readFileSync(dataFile, 'utf8')).not.toContain('fake-legacy-key')
+
+    const loaded = openStore(dataFile)
+    expect(loaded.getSettings().opencodeWorkspaceId).toBe('wrk_daemon')
+    expect(loaded.getSettings()).not.toHaveProperty('opencodeGoApiKey')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    loaded.migrateLegacyOpenCodeGoApiKey({
+      has: () => false,
+      read: () => null,
+      save: () => {
+        throw new Error('disk full')
+      }
+    })
+    loaded.flush()
+    expect(onDiskKey()).toBe(sealed)
+
+    // Why: an older paired client can still send the retired field; it must not be stored.
+    const updates = { opencodeGoApiKey: 'fake-remote-key', opencodeWorkspaceId: 'wrk_next' }
+    expect(loaded.updateSettings(updates)).not.toHaveProperty('opencodeGoApiKey')
+    loaded.flush()
+    expect(onDiskKey()).toBe(sealed)
+
+    const saved: string[] = []
+    loaded.migrateLegacyOpenCodeGoApiKey({
+      has: () => saved.length > 0,
+      read: () => saved[0] ?? null,
+      save: (key) => saved.push(key)
+    })
+    loaded.migrateLegacyOpenCodeGoApiKey({
+      has: () => saved.length > 0,
+      read: () => saved[0] ?? null,
+      save: (key) => saved.push(key)
+    })
+    expect(saved).toEqual(['fake-legacy-key'])
+    loaded.flush()
+    expect(readFileSync(dataFile, 'utf8')).not.toContain('opencodeGoApiKey')
+    expect(openStore(dataFile).getSettings()).not.toHaveProperty('opencodeGoApiKey')
+  })
+
   it('reloads settings, secrets and both session partitions unchanged', () => {
     const dataFile = join(
       realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-round-trip-'))),

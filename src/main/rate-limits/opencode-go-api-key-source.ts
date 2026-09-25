@@ -160,13 +160,13 @@ export async function readOpenCodeCredentialDatabaseGoKey(): Promise<string | nu
  * Resolve the OpenCode Go API key in the documented precedence order.
  *
  * Settings override, then whatever OpenCode itself stored on `/connect` —
- * `auth.json`, then the `credential` table — then `OPENCODE_API_KEY`. Both
- * stores are probed on every version: 1.18.x creates the `credential` table too,
- * so its presence is not a 2.x marker, and a 2.x install that never ran the
- * legacy import has no `auth.json` at all.
+ * the `credential` table, then `auth.json` — then `OPENCODE_API_KEY`. The table
+ * wins because OpenCode 2 imports `auth.json` once and never writes it again,
+ * so a key re-connected on 2.x would otherwise be shadowed by a stale file; on
+ * 1.x the table exists but stays empty, so `auth.json` still decides there.
  * The stored key outranks the env var because OpenCode applies it after env,
  * and the env var is shared with the Zen provider.
- * @param input.settingsOverride - The key a user pasted into Orca's settings.
+ * @param input.settingsOverride - The key a user saved in Orca's settings.
  * @param input.environment - Process environment to read; injectable for tests.
  * @returns The first key found and the tier it came from, or `missing`.
  */
@@ -179,13 +179,13 @@ export async function resolveOpenCodeGoApiKey(input: {
   if (override) {
     return { status: 'found', key: override, tier: 'settings' }
   }
-  const fromAuthFile = readOpenCodeAuthFileGoKey(environment)
-  if (fromAuthFile) {
-    return { status: 'found', key: fromAuthFile, tier: 'opencode-auth-file' }
-  }
   const fromDatabase = await readOpenCodeCredentialDatabaseGoKey()
   if (fromDatabase) {
     return { status: 'found', key: fromDatabase, tier: 'opencode-credential-database' }
+  }
+  const fromAuthFile = readOpenCodeAuthFileGoKey(environment)
+  if (fromAuthFile) {
+    return { status: 'found', key: fromAuthFile, tier: 'opencode-auth-file' }
   }
   const fromEnvironment = trimmedKey(environment[OPENCODE_API_KEY_ENV])
   if (fromEnvironment) {

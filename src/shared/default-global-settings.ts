@@ -210,7 +210,6 @@ export function buildDefaultSettings(args: {
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
-    opencodeGoApiKey: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',

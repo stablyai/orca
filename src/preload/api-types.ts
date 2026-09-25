@@ -141,6 +141,9 @@ export type PreloadApi = {
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
+  opencodeGoCredentials: Pick<MinimaxCredentialsApi, 'saveApiKey' | 'clearApiKey'> & {
+    getStatus: () => Promise<{ apiKeyConfigured: boolean }>
+  }
   minimaxCredentials: MinimaxCredentialsApi
   grokAccounts: GrokAccountsApi
   ssh: SshApi

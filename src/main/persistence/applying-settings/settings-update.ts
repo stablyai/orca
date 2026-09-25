@@ -60,9 +60,6 @@ export function updateSettings(
   if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
   }
-  if ('opencodeGoApiKey' in updates && !updates.opencodeGoApiKey) {
-    operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeGoApiKey)
-  }
   if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
   }

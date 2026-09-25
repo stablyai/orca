@@ -7,6 +7,7 @@ import {
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
+import { LEGACY_OPENCODE_GO_API_KEY_SLOT } from './legacy-opencode-go-api-key-migration'
 import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
 import { projectWorktreeMetaByIdentityOntoLocators } from './worktree-meta-alias-projection'
 import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
@@ -128,14 +129,14 @@ export class StateSerializationSecretHandlingOperations {
           PROTECTED_SECRET_SLOT.opencodeSessionCookie,
           this.runtime.state.settings.opencodeSessionCookie
         ),
-        opencodeGoApiKey: encryptToSentinel(
-          PROTECTED_SECRET_SLOT.opencodeGoApiKey,
-          this.runtime.state.settings.opencodeGoApiKey ?? ''
-        ),
         httpProxyUrl: encryptToSentinel(
           PROTECTED_SECRET_SLOT.httpProxyUrl,
           this.runtime.state.settings.httpProxyUrl ?? ''
-        )
+        ),
+        // Why: the #22551 key stays on disk, still sealed, until the desktop migration releases it.
+        ...(this.runtime.protectedSecrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)
+          ? { opencodeGoApiKey: encryptToSentinel(LEGACY_OPENCODE_GO_API_KEY_SLOT, '') }
+          : {})
       },
       ui: {
         ...this.runtime.state.ui,

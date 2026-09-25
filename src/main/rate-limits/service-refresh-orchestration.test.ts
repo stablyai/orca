@@ -363,8 +363,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=abc123',
-      workspaceIdOverride: '',
-      apiKey: ''
+      workspaceIdOverride: ''
     }))
     const networkProxySettings = {
       httpProxyUrl: 'http://proxy.example:8080',
@@ -494,8 +493,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: '',
-      workspaceIdOverride: '',
-      apiKey: ''
+      workspaceIdOverride: ''
     }))
 
     vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
@@ -519,8 +517,7 @@ describe('RateLimitService', () => {
     let cookie = 'session=valid'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: cookie,
-      workspaceIdOverride: '',
-      apiKey: ''
+      workspaceIdOverride: ''
     }))
 
     // 1. Success fetch
@@ -556,8 +553,7 @@ describe('RateLimitService', () => {
     let workspaceId = 'wrk_A'
     service.setOpenCodeGoConfigResolver(() => ({
       sessionCookie: 'session=valid',
-      workspaceIdOverride: workspaceId,
-      apiKey: ''
+      workspaceIdOverride: workspaceId
     }))
 
     // 1. Success fetch for Workspace A

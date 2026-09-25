@@ -107,7 +107,7 @@ describe('resolveOpenCodeGoApiKey', () => {
     })
   })
 
-  it('falls back to the key OpenCode 1.x saved on /connect', async () => {
+  it('falls back to the key OpenCode 1.x saved on /connect when the table is empty', async () => {
     writeAuthFile({
       anthropic: { type: 'oauth', refresh: 'r', access: 'a', expires: 1 },
       'opencode-go': { type: 'api', key: AUTH_FILE_KEY }
@@ -136,6 +136,34 @@ describe('resolveOpenCodeGoApiKey', () => {
       status: 'found',
       key: DATABASE_KEY,
       tier: 'opencode-credential-database'
+    })
+  })
+
+  it('prefers the credential table over a stale auth.json, since OpenCode 2 stops writing the file', async () => {
+    process.env.OPENCODE_API_KEY = ENVIRONMENT_KEY
+    writeAuthFile({ 'opencode-go': { type: 'api', key: AUTH_FILE_KEY } })
+    const { path } = writeCredentialDatabase([
+      { value: JSON.stringify({ type: 'key', key: DATABASE_KEY }), active: 1, created: 1 }
+    ])
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({})).resolves.toEqual({
+      status: 'found',
+      key: DATABASE_KEY,
+      tier: 'opencode-credential-database'
+    })
+  })
+
+  it('keeps the settings override above the credential table', async () => {
+    const { path } = writeCredentialDatabase([
+      { value: JSON.stringify({ type: 'key', key: DATABASE_KEY }), active: 1, created: 1 }
+    ])
+    process.env.OPENCODE_DB = path
+
+    await expect(resolveOpenCodeGoApiKey({ settingsOverride: SETTINGS_KEY })).resolves.toEqual({
+      status: 'found',
+      key: SETTINGS_KEY,
+      tier: 'settings'
     })
   })
 

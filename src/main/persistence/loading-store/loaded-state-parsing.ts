@@ -18,11 +18,11 @@ import {
   sshPtyOwnerLeaseSecretSlot
 } from '../../protected-secret-persistence'
 import {
-  isLegacyOpenCodeGoApiKey,
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
 } from '../leasing-ssh-ptys/secret-validation'
 import { readGithubCacheSnapshot } from './user-data-path'
+import { retainLegacyOpenCodeGoApiKey } from './legacy-opencode-go-api-key-migration'
 import {
   gcStaleWorktreeMeta,
   normalizeWorktreeLinkedItemMetadata
@@ -108,13 +108,7 @@ export class LoadedStateParsingOperations {
             isLegacyOpenCodeSessionCookie
           )
         }
-        if (parsed.settings?.opencodeGoApiKey) {
-          parsed.settings.opencodeGoApiKey = this.runtime.protectedSecrets.decrypt(
-            PROTECTED_SECRET_SLOT.opencodeGoApiKey,
-            parsed.settings.opencodeGoApiKey,
-            isLegacyOpenCodeGoApiKey
-          )
-        }
+        retainLegacyOpenCodeGoApiKey(parsed.settings, this.runtime.protectedSecrets)
         if (parsed.settings?.httpProxyUrl) {
           const decryptedProxy = this.runtime.protectedSecrets.decryptWithStatus(
             PROTECTED_SECRET_SLOT.httpProxyUrl,

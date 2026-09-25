@@ -40,8 +40,12 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
   }
 
-  setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
+  setOpenCodeGoConfigResolver(
+    resolver: () => OpenCodeGoRateLimitConfig,
+    apiKeyResolver?: () => string | null
+  ): void {
     this.openCodeGoConfigResolver = resolver
+    this.openCodeGoApiKeyResolver = apiKeyResolver ?? null
   }
 
   setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
