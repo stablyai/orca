@@ -1,9 +1,13 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHost } from './document-host-seams'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
+import { handleMsg } from './host-message-router'
 import { viewportToMouseReportCell } from './mouse-report-cell'
+import { handleDragMove } from './selection-overlay'
+import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-markup'
 import { viewportToCell } from './viewport-cell'
 import { computeFitScale } from './viewport-transform'
 
@@ -21,6 +25,32 @@ function scopeWithGrid(host: TerminalDocumentHost = {}): TerminalDocumentScope {
   })
   return scope
 }
+
+const started: TerminalDocumentScope[] = []
+
+afterEach(() => {
+  while (started.length > 0) {
+    stopTerminalDocument(started.pop()!)
+  }
+})
+
+/** A started document over a grid, with the page's seams the case names. */
+function startedWithGrid(host: TerminalDocumentHost): TerminalDocumentScope {
+  document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
+  const grid = scopeWithGrid().term!
+  const scope = createTerminalDocumentScope({
+    installHostTransport: () => () => {},
+    hasEngine: () => true,
+    createTerminal: () => grid,
+    ...host
+  })
+  startTerminalDocument(scope)
+  started.push(scope)
+  handleMsg(scope, { type: 'init', cols: 55, rows: 40, initialData: '', preserveScroll: false })
+  return scope
+}
+
+const frames = () => new Promise((resolve) => setTimeout(resolve, 100))
 
 const pageHost = (): TerminalDocumentHost => ({
   viewportRect: () => ({ left: 0, top: HEADER, width: 412, height: 600 })
@@ -48,5 +78,47 @@ describe("the document's frame on the page", () => {
       viewportRect: () => ({ left: 0, top: 0, width: 0, height: 0 })
     })
     expect(computeFitScale(scope)).toBe(1)
+  })
+
+  it('commits no fit while the host is hidden, and one once it has a box', async () => {
+    let box = { left: 0, top: 0, width: 0, height: 0 }
+    const changes: (() => void)[] = []
+    const scope = startedWithGrid({
+      viewportRect: () => box,
+      observeViewport: (onChange) => {
+        changes.push(onChange)
+        return () => {}
+      }
+    })
+    const scales: string[] = []
+    const style = scope.surface!.style
+    Object.defineProperty(style, 'transform', {
+      set: (value: string) => scales.push(/scale\(([^)]*)\)/.exec(value)?.[1] ?? value),
+      get: () => ''
+    })
+    await frames()
+    expect(scales).toEqual([])
+    box = { left: 0, top: 0, width: 390, height: 600 }
+    changes.forEach((onChange) => onChange())
+    await frames()
+    // The refit repaints at the scale it has, then the fit commits once: 390 / (7.5 x 55).
+    expect(scales).toEqual(['1', String(390 / (7.5 * 55))])
+  })
+
+  it("edge-scrolls at the host's own edges, not the window's", () => {
+    // Host top 100, height 600: its bottom edge band is 660-700 in client Y, not 560-600.
+    const scope = startedWithGrid({
+      viewportRect: () => ({ left: 0, top: 100, width: 412, height: 600 })
+    })
+    scope.selMode = 'select'
+    scope.sel = { anchor: { col: 0, row: 5 }, focus: { col: 3, row: 5 }, activeHandle: 'end' }
+    const edge = (clientY: number) => {
+      handleDragMove(scope, 'end', 30, clientY)
+      return scope.edgeScrollDir
+    }
+    expect(edge(580)).toBe(0)
+    expect(edge(680)).toBe(1)
+    expect(edge(400)).toBe(0)
+    expect(edge(120)).toBe(-1)
   })
 })

@@ -78,6 +78,11 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
     if (!scope.term || !scope.term.element) {
       return
     }
+    // Why: a display:none host measures 0 wide; the fit stays pending until observeViewport reports a box.
+    const hostWidth = scope.viewportRect().width
+    if (!Number.isFinite(hostWidth) || hostWidth <= 0) {
+      return
+    }
     attempts++
     const cellW = getCellWidth(scope)
     if (cellW > 0 && scope.term.cols > 0) {
