@@ -136,7 +136,7 @@ describe('structured launch cancellation retirement', () => {
       value: { runtime: { call } }
     })
 
-    await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
+    await refreshLocalStructuredSessionTabs({ authoritative: true })
 
     expect(call.mock.calls.map(([request]) => request.method)).toEqual([
       'agentSession.close',

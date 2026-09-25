@@ -1,10 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
-import {
-  isCurrentLocalStructuredSessionGeneration,
-  latchLocalStructuredSessionRestore,
-  localStructuredSessionGeneration
-} from './inventory-generation-fence'
+import { latchLocalStructuredSessionRestore } from './inventory-publication-cursors'
 import { applyStructuredSessionTabSnapshots } from './snapshot-apply'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
@@ -29,17 +25,14 @@ function isStructuredSessionInventoryResponse(
   return value.snapshots === undefined || Array.isArray(value.snapshots)
 }
 
-export function restoreLocalStructuredSessionTabsOnce(
-  expectedGeneration = localStructuredSessionGeneration()
-): Promise<void> {
+export function restoreLocalStructuredSessionTabsOnce(): Promise<void> {
   // Why concurrent: the capability refresh only seeds the module cache that later launch
   // flows read; the inventory fetch never reads it, so chaining them only paid a second
   // serial IPC round-trip on the startup gate.
   return latchLocalStructuredSessionRestore(() =>
-    Promise.all([
-      refreshLocalRuntimeCapabilities(),
-      refreshLocalStructuredSessionTabs(expectedGeneration)
-    ]).then(() => undefined)
+    Promise.all([refreshLocalRuntimeCapabilities(), refreshLocalStructuredSessionTabs()]).then(
+      () => undefined
+    )
   )
 }
 
@@ -48,7 +41,6 @@ export function restoreLocalStructuredSessionTabsOnce(
  *  `authoritative` is opt-in and belongs to the repair lane alone: the startup restore stays
  *  fenced exactly as before, so nothing about first paint changes. */
 export function refreshLocalStructuredSessionTabs(
-  expectedGeneration = localStructuredSessionGeneration(),
   options: { authoritative?: boolean } = {}
 ): Promise<RuntimeMobileSessionTabsResult[]> {
   // Capture request order before IPC: a reply that began before a close cannot retire its fence.
@@ -73,13 +65,11 @@ export function refreshLocalStructuredSessionTabs(
           closeStructuredAgentSession({ kind: 'local' }, sessionId)
         )
       }
-      if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
-        applyStructuredSessionTabSnapshots(snapshots, undefined, {
-          ...options,
-          authoritative: options.authoritative === true || result.authoritative === true,
-          authoritativeInventory
-        })
-      }
+      applyStructuredSessionTabSnapshots(snapshots, undefined, {
+        ...options,
+        authoritative: options.authoritative === true || result.authoritative === true,
+        authoritativeInventory
+      })
       return snapshots
     })
 }

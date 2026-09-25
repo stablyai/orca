@@ -19,7 +19,7 @@ import { knownStructuredSessionWorktreeIds } from '../local-structured-session-t
 import {
   localStructuredSessionEpochHistoryByWorktree,
   localStructuredSessionVersionByWorktree
-} from './inventory-generation-fence'
+} from './inventory-publication-cursors'
 import { forgetRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'

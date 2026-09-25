@@ -6,11 +6,7 @@ import { localStructuredSessionsMayExist } from './local-structured-session-pres
 import { restoreLocalStructuredSessionTabsOnce } from './local-structured-session-tabs-sync/inventory-refresh'
 import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 
-export {
-  isCurrentLocalStructuredSessionGeneration,
-  localStructuredSessionGeneration,
-  resetLocalStructuredSessionVersionForTests
-} from './local-structured-session-tabs-sync/inventory-generation-fence'
+export { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-publication-cursors'
 export {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce

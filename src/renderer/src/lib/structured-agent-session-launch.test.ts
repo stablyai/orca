@@ -369,9 +369,7 @@ describe('startStructuredAgentLaunch', () => {
     await flushLaunchSettlement()
 
     expect(mocks.launch).toHaveBeenCalledOnce()
-    expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledWith(undefined, {
-      authoritative: true
-    })
+    expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledWith({ authoritative: true })
     expect(toast.error).not.toHaveBeenCalled()
   })
 

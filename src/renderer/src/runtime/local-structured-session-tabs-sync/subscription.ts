@@ -2,10 +2,6 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
 import {
-  isCurrentLocalStructuredSessionGeneration,
-  localStructuredSessionGeneration
-} from './inventory-generation-fence'
-import {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce
 } from './inventory-refresh'
@@ -19,8 +15,8 @@ import {
 // apply depends on depends back on it.
 const REPAIR_DROPPED_EPOCHS: StructuredSessionSnapshotApplyOptions = {
   onRetiredEpochDrop: (worktreeId, publicationEpoch) =>
-    scheduleRetiredEpochRepair(worktreeId, publicationEpoch, (generation) =>
-      refreshLocalStructuredSessionTabs(generation, { authoritative: true })
+    scheduleRetiredEpochRepair(worktreeId, publicationEpoch, () =>
+      refreshLocalStructuredSessionTabs({ authoritative: true })
     )
 }
 
@@ -34,15 +30,13 @@ export async function startLocalStructuredSessionTabsSync(args: {
   isDisposed: () => boolean
   setUnsubscribe: (unsubscribe: () => void) => void
 }): Promise<boolean> {
-  const syncGeneration = localStructuredSessionGeneration()
-  const isCurrent = (): boolean =>
-    !args.isDisposed() && isCurrentLocalStructuredSessionGeneration(syncGeneration)
+  const isCurrent = (): boolean => !args.isDisposed()
   const capabilities = await refreshLocalRuntimeCapabilities()
   if (!isCurrent()) {
     return false
   }
   const supported = capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-  await restoreLocalStructuredSessionTabsOnce(syncGeneration)
+  await restoreLocalStructuredSessionTabsOnce()
   if (!isCurrent()) {
     return false
   }
@@ -61,7 +55,7 @@ export async function startLocalStructuredSessionTabsSync(args: {
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
-      void refreshLocalStructuredSessionTabs(syncGeneration)
+      void refreshLocalStructuredSessionTabs()
         .catch((error) => console.warn('[structured-session-tabs] resync failed', error))
         .finally(() => {
           if (isCurrent()) {
