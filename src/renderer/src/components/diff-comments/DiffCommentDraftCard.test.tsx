@@ -73,6 +73,33 @@ describe('DiffCommentDraftCard', () => {
     expect(submitBtn.hasAttribute('disabled')).toBe(false)
   })
 
+  it('parks focus on the textarea before the pressed submit button turns disabled', async () => {
+    let resolveSubmit: (result: boolean) => void = () => {}
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveSubmit = resolve
+        })
+    )
+    const view = render(
+      <DiffCommentDraftCard lineNumber={10} onCancel={vi.fn()} onSubmit={onSubmit} />
+    )
+    const textarea = view.getByRole('textbox')
+    fireEvent.change(textarea, { target: { value: 'Pending note' } })
+    const submitBtn = view.getByRole('button', { name: 'Add note' })
+    submitBtn.focus()
+    expect(document.activeElement).toBe(submitBtn)
+    fireEvent.click(submitBtn)
+
+    // Chromium moves focus to <body> when a focused button turns disabled, which would stop the
+    // draft zone from handing focus back to the editor once the save lands.
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(submitBtn.hasAttribute('disabled')).toBe(true)
+    expect(document.activeElement).toBe(textarea)
+
+    await act(async () => resolveSubmit(true))
+  })
+
   it('calls onSubmit when clicking submit button', async () => {
     const onCancel = vi.fn()
     const onSubmit = vi.fn().mockResolvedValue(true)

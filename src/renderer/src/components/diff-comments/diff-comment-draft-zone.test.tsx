@@ -242,6 +242,24 @@ describe('useDiffCommentDraftZone focus handoff', () => {
     expect(fake.focusCount()).toBe(1)
   })
 
+  it('returns focus to the editor when the save was started from the submit button', async () => {
+    const fake = createFakeDiffCommentEditor()
+    const { onCreateComment, settle } = deferredCreateComment()
+    const hook = renderDraftZone(fake, onCreateComment)
+    openDraftAt(hook, DRAFT_LINE)
+    typeDraft(fake, BODY)
+    const submit = within(draftCard(fake).dom).getByRole('button', { name: 'Add note' })
+    submit.focus()
+    fireEvent.click(submit)
+    // The card must still hold focus while the save is pending, on a control that stays enabled.
+    expect(document.activeElement).toBe(draftCard(fake).textarea)
+
+    await settle(true)
+
+    expect(fake.zones.size).toBe(0)
+    expect(fake.focusCount()).toBe(1)
+  })
+
   it('leaves focus alone when the save settles after the user clicked away', async () => {
     const fake = createFakeDiffCommentEditor()
     const { onCreateComment, settle } = deferredCreateComment()

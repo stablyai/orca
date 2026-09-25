@@ -149,6 +149,9 @@ export function DiffCommentDraftCard({
       )
       return
     }
+    // Chromium drops focus to <body> when the pressed button turns disabled, and the zone only
+    // hands focus back to Monaco while the card still holds it. Park it on the textarea first.
+    textareaRef.current?.focus()
     setSubmitting(true)
     try {
       const result = await onSubmit(bodyState.body)
