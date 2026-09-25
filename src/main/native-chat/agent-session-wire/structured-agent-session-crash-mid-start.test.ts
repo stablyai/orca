@@ -44,11 +44,11 @@ function adapterThatNeverFinishesStarting(): StructuredAgentSessionAdapter {
     'thread/start': () => new Promise(() => {}),
     'thread/resume': () => new Promise(() => {})
   })
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection = await codex.openConnection(launch, handlers)
     await handlers.onSpawned?.(CHILD_PID)
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   return Object.assign(adapterFor({ ...codex, openConnection }), { supportsCreate: () => true })
 }
 
@@ -86,30 +86,11 @@ describe('a host that dies while its Codex child is starting', () => {
     const stopOwnerProcess = vi.fn(() => {
       orphanAlive = false
     })
-    const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>(
-      async ({ fence, spawnToken }) => ({
-        process: { hostId: 'local', pid: 5555, processStartTimeMs: NOW, spawnToken },
-        link: {
-          linkId: `link-${fence}`,
-          handle: { provider: 'codex', threadId: 'thread-after-restart' },
-          origin: 'created',
-          mintedAtFence: fence,
-          observedAt: NOW
-        }
-      })
-    )
+    const restarted = fakeCodex()
     const store = await openStore()
     const relaunched = host(
       store,
-      {
-        acquire,
-        releaseAcquisition: vi.fn(async () => true),
-        dispatch: vi.fn(),
-        cancelTurn: vi.fn(),
-        answerPrompt: vi.fn(),
-        setOption: vi.fn(),
-        supportsCreate: () => true
-      } as unknown as StructuredAgentSessionAdapter,
+      Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
       {
         mintSpawnToken: () => 'spawn-b',
         probeOwner: async () =>
@@ -129,10 +110,10 @@ describe('a host that dies while its Codex child is starting', () => {
       deathEvidence: { kind: 'pid-absent' }
     })
     await relaunched.hold(SESSION, 'desktop-chat:1')
-    expect(acquire).toHaveBeenCalledOnce()
+    expect(restarted.connections).toHaveLength(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
-      ownerProcess: { pid: 5555, spawnToken: 'spawn-b' }
+      ownerProcess: { spawnToken: 'spawn-b' }
     })
   })
 })
