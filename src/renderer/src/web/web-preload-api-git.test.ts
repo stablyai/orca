@@ -249,7 +249,7 @@ describe('web git preload API', () => {
       makeWorktree('wt-2', '/workspace/repo-child')
     ]
     const results: Record<string, unknown> = {
-      'status.get': { capabilities: ['git.carryWorkingTreeChanges'] },
+      'status.get': { capabilities: ['git.carry-working-tree-changes.v1'] },
       'repo.list': { repos: [{ id: 'repo-1' }] },
       'worktree.detectedList': { repoId: 'repo-1', authoritative: true, worktrees },
       'git.carryWorkingTreeChanges': { ok: true, trackedChanges: true, untrackedCopied: 3 }

@@ -17,14 +17,11 @@ type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane
   tabId: string
   worktreeId: string
-  groupId: string | null
 }
 
 type PreparedAgentSessionFork = {
   prompt: string
   agent: TuiAgent | null
-  worktreeId: string
-  pane: ManagedPane
 }
 
 function resolveTuiAgent(value: string | null | undefined): TuiAgent | null {
@@ -65,7 +62,7 @@ function ensureForkableSourceWorkspace(worktreeId: string, pane: ManagedPane): b
   return forkable
 }
 
-export function prepareAgentSessionForkFromPane({
+function prepareAgentSessionForkFromPane({
   pane,
   tabId,
   worktreeId
@@ -96,12 +93,7 @@ export function prepareAgentSessionForkFromPane({
     return null
   }
 
-  return {
-    prompt,
-    agent,
-    worktreeId,
-    pane
-  }
+  return { prompt, agent }
 }
 
 // Why: the standalone "Copy Context" action copies the bounded transcript on its

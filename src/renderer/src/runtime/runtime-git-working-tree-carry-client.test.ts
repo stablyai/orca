@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
+import {
+  GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
+} from '../../../shared/protocol-version'
 
 const callRuntimeRpc = vi.fn()
 const runtimeEnvironmentSupportsCapability = vi.fn()
@@ -15,11 +18,8 @@ vi.mock('./runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => `id:${id}`
 }))
 
-const {
-  carryRuntimeWorkingTreeChanges,
-  isWorkingTreeCarrySupported,
-  WORKING_TREE_CARRY_RUNTIME_CAPABILITY
-} = await import('./runtime-git-working-tree-carry-client')
+const { carryRuntimeWorkingTreeChanges, isWorkingTreeCarrySupported } =
+  await import('./runtime-git-working-tree-carry-client')
 
 const context = {
   settings: null,
@@ -85,7 +85,7 @@ describe('carryRuntimeWorkingTreeChanges', () => {
 describe('isWorkingTreeCarrySupported', () => {
   it('is supported when the local runtime advertises the capability', async () => {
     getActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
-    ensureLocalRuntimeCapabilities.mockResolvedValue(['git.carryWorkingTreeChanges'])
+    ensureLocalRuntimeCapabilities.mockResolvedValue(['git.carry-working-tree-changes.v1'])
     await expect(isWorkingTreeCarrySupported(null)).resolves.toBe(true)
     expect(runtimeEnvironmentSupportsCapability).not.toHaveBeenCalled()
   })
@@ -108,13 +108,15 @@ describe('isWorkingTreeCarrySupported', () => {
     await expect(isWorkingTreeCarrySupported(null)).resolves.toBe(false)
     expect(runtimeEnvironmentSupportsCapability).toHaveBeenCalledWith(
       'env-1',
-      'git.carryWorkingTreeChanges',
+      'git.carry-working-tree-changes.v1',
       10_000
     )
   })
 
   it('is advertised by this build of the runtime', () => {
-    expect(WORKING_TREE_CARRY_RUNTIME_CAPABILITY).toBe('git.carryWorkingTreeChanges')
-    expect(RUNTIME_CAPABILITIES).toContain(WORKING_TREE_CARRY_RUNTIME_CAPABILITY)
+    expect(GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY).toBe(
+      'git.carry-working-tree-changes.v1'
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY)
   })
 })

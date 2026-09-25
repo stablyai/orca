@@ -68,7 +68,7 @@ type TerminalMenuState = {
   onClosePane: () => void
   onClearScreen: () => void
   onResetTerminal: () => void
-  onForkAgentSession: () => Promise<void>
+  onForkAgentSession: () => void
   onContinueAgentSessionInNewSession: () => void
   onCopyAgentSessionContext: () => Promise<void>
   onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
@@ -214,7 +214,7 @@ export function useTerminalPaneContextMenu({
     }
   }
 
-  const onForkAgentSession = async (): Promise<void> =>
+  const onForkAgentSession = (): void =>
     forkAgentSessionFromMenuPane(agentSessionContext, resolveMenuPane())
 
   const onContinueAgentSessionInNewSession = (): void =>

@@ -12,9 +12,6 @@ import {
 } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
-export const WORKING_TREE_CARRY_RUNTIME_CAPABILITY =
-  GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY
-
 export type WorkingTreeCarryContext = {
   settings: RuntimeGitContext['settings']
   connectionId?: string
@@ -30,11 +27,14 @@ export async function isWorkingTreeCarrySupported(
     // Why: in the web client the "local" runtime is the paired host, which may predate the method.
     const capabilities = await ensureLocalRuntimeCapabilities()
     // Why: an unanswered probe is not evidence; the web shim still refuses an old host honestly.
-    return capabilities === null || capabilities.includes(WORKING_TREE_CARRY_RUNTIME_CAPABILITY)
+    return (
+      capabilities === null ||
+      capabilities.includes(GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY)
+    )
   }
   return runtimeEnvironmentSupportsCapability(
     target.environmentId,
-    WORKING_TREE_CARRY_RUNTIME_CAPABILITY,
+    GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY,
     10_000
   )
 }

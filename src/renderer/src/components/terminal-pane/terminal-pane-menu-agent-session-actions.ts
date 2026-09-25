@@ -16,15 +16,15 @@ export type TerminalPaneMenuAgentSessionContext = {
   onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
 }
 
-export const forkAgentSessionFromMenuPane = async (
+export const forkAgentSessionFromMenuPane = (
   context: TerminalPaneMenuAgentSessionContext,
   pane: ManagedPane | null
-): Promise<void> => {
+): void => {
   if (!pane) {
     return
   }
-  const { tabId, worktreeId, groupId } = context
-  openAgentSessionForkDialogFromPane({ pane, tabId, worktreeId, groupId })
+  const { tabId, worktreeId } = context
+  openAgentSessionForkDialogFromPane({ pane, tabId, worktreeId })
 }
 
 export const continueAgentSessionFromMenuPane = (

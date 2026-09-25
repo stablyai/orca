@@ -292,7 +292,7 @@ export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'automation.create-idempotency.v1' as const
 // Why: git.carryWorkingTreeChanges is a new method; older hosts answer it with method_not_found.
 export const GIT_CARRY_WORKING_TREE_CHANGES_RUNTIME_CAPABILITY =
-  'git.carryWorkingTreeChanges' as const
+  'git.carry-working-tree-changes.v1' as const
 export const GIT_CARRY_WORKING_TREE_CHANGES_UPDATE_REQUIRED_MESSAGE =
   'Carrying uncommitted changes requires a newer Orca server. Update the server and try again.'
 // Hosts without this capability have no notifications.registerPush RPC.

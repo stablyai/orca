@@ -84,7 +84,7 @@ function menuContext(worktreeId: string) {
 async function forkFromMenu(worktreeId: string, pane: ManagedPane | null): Promise<void> {
   const { forkAgentSessionFromMenuPane } =
     await import('./terminal-pane-menu-agent-session-actions')
-  await forkAgentSessionFromMenuPane(menuContext(worktreeId), pane)
+  forkAgentSessionFromMenuPane(menuContext(worktreeId), pane)
 }
 
 describe('forkAgentSessionFromMenuPane', () => {
