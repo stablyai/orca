@@ -549,6 +549,8 @@ describe('PR Checks skip wiring', () => {
   it('keeps the cheap root-directory guard on docs-only PRs', () => {
     expect(prWorkflow.jobs.root_directory_guard.if).toBeUndefined()
     expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
+    expect(prWorkflow.jobs.formatting.if).toBeUndefined()
+    expect(prWorkflow.jobs.formatting.needs).toBeUndefined()
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
@@ -588,11 +590,12 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
     expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
     expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
+    expect(verifyStep.run).toContain('"$FORMATTING" != "success"')
     expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {
-      if (job === 'code_paths' || job === 'root_directory_guard') {
+      if (job === 'code_paths' || job === 'root_directory_guard' || job === 'formatting') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`
