@@ -17,7 +17,8 @@ const EXPECTED_SUPPORTED_AGENTS = [
   'openclaude',
   'codex',
   'grok',
-  'omp'
+  'omp',
+  'opencode'
 ] as const satisfies readonly TuiAgent[]
 const SUPPORTED_AGENTS_LABEL_KEY = 'auto.components.settings.NativeChatSupportedAgents.label'
 
@@ -58,7 +59,7 @@ describe('NativeChatSupportedAgents', () => {
     }
   })
 
-  it('omits agents native chat cannot render, including OpenCode', () => {
+  it('omits agents native chat cannot render, including OpenCode 2', () => {
     const rendered = getRenderedChips().map((chip) => chip.agent)
 
     for (const entry of getAgentCatalog()) {
@@ -66,7 +67,7 @@ describe('NativeChatSupportedAgents', () => {
         expect(rendered).not.toContain(entry.id)
       }
     }
-    expect(rendered).not.toContain('opencode')
+    expect(rendered).not.toContain('opencode2')
   })
 
   it('keeps the label in the English catalog', () => {

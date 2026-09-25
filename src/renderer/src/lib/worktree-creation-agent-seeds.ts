@@ -3,6 +3,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
+import { getNativeChatToggleWslDistro } from '@/components/native-chat/native-chat-availability'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { nativeChatRequiresLocalTranscript } from '@/lib/native-chat-supported-agent'
@@ -64,6 +65,7 @@ function applyBackendSpawnedDraftViewMode(args: {
       agent,
       promptDelivery: 'draft',
       launchDraftText: request.launchDraftPrompt,
+      wslDistro: getNativeChatToggleWslDistro(state, worktreeId),
       ...(nativeChatRequiresLocalTranscript(agent)
         ? {
             nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(

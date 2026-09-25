@@ -5,6 +5,7 @@ import type {
 } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import { openTranscriptReadStream } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
@@ -42,6 +43,10 @@ export async function readNativeChatTranscript(
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
+  // Why: the SQLite-backed reader owns discovery; no path to resolve.
+  if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptFull(sessionId)
+  }
   let filePath: string | null
   try {
     filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))

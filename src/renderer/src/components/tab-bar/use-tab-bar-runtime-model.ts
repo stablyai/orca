@@ -12,6 +12,7 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { getNativeChatToggleWslDistro } from '../native-chat/native-chat-availability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -85,6 +86,8 @@ export type TabBarRuntimeModel = {
   workspaceHasSimulatorTab: boolean
   toggleTabViewMode: (tabId: string) => void
   nativeChatTranscriptIsLocalReadable: boolean
+  /** WSL distro the worktree's project runtime resolves to (OpenCode WSL gate). */
+  nativeChatWslDistro: string | null
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
 } & TabBarAgentProjections
@@ -255,6 +258,9 @@ export function useTabBarRuntimeModel({
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
     isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
   )
+  // Why: OpenCode's DB reader cannot reach a WSL guest's opencode.db — the
+  // tab-strip view toggle must refuse it like the other toggle surfaces.
+  const nativeChatWslDistro = useAppStore((s) => getNativeChatToggleWslDistro(s, worktreeId))
 
   return {
     newTerminalShortcut,
@@ -283,6 +289,7 @@ export function useTabBarRuntimeModel({
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
     nativeChatTranscriptIsLocalReadable,
+    nativeChatWslDistro,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled
   }

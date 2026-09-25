@@ -11,6 +11,7 @@ import { useAppStore } from '@/store'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
+import { getNativeChatToggleWslDistro } from '@/components/native-chat/native-chat-availability'
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
@@ -235,7 +236,10 @@ export function ensureWorktreeHasInitialTerminal(
             ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup)),
             nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
               getConnectionId(worktreeId)
-            )
+            ),
+            // Why: `store` is the narrow activation facade — the WSL runtime
+            // resolution needs the full state slices (see useAppStore use above).
+            wslDistro: getNativeChatToggleWslDistro(useAppStore.getState(), worktreeId)
           })
         }
       : {}),

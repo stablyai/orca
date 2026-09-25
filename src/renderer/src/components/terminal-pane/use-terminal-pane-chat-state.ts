@@ -8,7 +8,10 @@ import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sani
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { selectUnifiedTerminalTabChatFields } from './terminal-unified-tab-lookup'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import {
+  canToggleNativeChat,
+  getNativeChatToggleWslDistro
+} from '../native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,
@@ -47,6 +50,11 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     )
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
+  // Why: OpenCode's DB reader cannot reach a WSL guest's opencode.db — the
+  // availability gate hides the pane-header/context-menu toggles for it.
+  const nativeChatWslDistro = useAppStore((store) =>
+    getNativeChatToggleWslDistro(store, worktreeId)
+  )
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
@@ -133,13 +141,15 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
-        nativeChatTranscriptIsLocalReadable
+        nativeChatTranscriptIsLocalReadable,
+        wslDistro: nativeChatWslDistro
       })
     },
     [
       tabAgentTypeByLeaf,
       nativeChatEnabled,
       nativeChatTranscriptIsLocalReadable,
+      nativeChatWslDistro,
       terminalTab?.launchAgent,
       getNativeChatLeafIds,
       getTabWideAgentHintLeafId,

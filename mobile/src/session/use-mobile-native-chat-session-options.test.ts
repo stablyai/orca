@@ -63,6 +63,12 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(api!.snapshot[0]!.kind).toMatchObject({ type: 'select' })
   })
 
+  it('serves the OpenCode catalog snapshot now that native chat supports it', () => {
+    mount({ agent: 'opencode' })
+    expect(api!.snapshot[0]).toMatchObject({ id: 'model', category: 'model' })
+    expect(api!.snapshot[0]!.kind).toMatchObject({ type: 'select' })
+  })
+
   it('returns an empty snapshot for agents without a catalog', () => {
     mount({ agent: 'amp' })
     expect(api!.snapshot).toEqual([])

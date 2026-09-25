@@ -5,7 +5,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
 import {
   isNativeChatSupportedAgent,
-  nativeChatRequiresLocalTranscript
+  nativeChatRequiresLocalTranscript,
+  resolveNativeChatTranscriptAgent
 } from '@/lib/native-chat-supported-agent'
 
 export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -27,6 +28,10 @@ export function decideInitialAgentTabViewMode(args: {
   /** The unsent launch context, when `promptDelivery` is `'draft'`. */
   launchDraftText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
+  /** WSL distro the terminal's project runtime resolves to, when any — same
+   *  rule as canToggleNativeChat: OpenCode's DB reader cannot reach a guest's
+   *  opencode.db, so auto-open must not drop the tab into an endless-loading chat. */
+  wslDistro?: string | null
 }): Tab['viewMode'] {
   if (!agentTabsDefaultToNativeChat(args)) {
     return undefined
@@ -38,6 +43,10 @@ export function decideInitialAgentTabViewMode(args: {
     nativeChatRequiresLocalTranscript(args.agent) &&
     args.nativeChatTranscriptIsLocalReadable !== true
   ) {
+    return undefined
+  }
+  // Why: #9307 expectation 5 — never auto-open a chat whose transcript cannot load.
+  if (args.wslDistro?.trim() && resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
     return undefined
   }
   if (
@@ -59,6 +68,7 @@ export function initialAgentTabViewModeProps(
     promptDelivery?: NativeChatLaunchPromptDelivery
     launchDraftText?: string
     nativeChatTranscriptIsLocalReadable?: boolean
+    wslDistro?: string | null
   } = {}
 ): { viewMode?: Tab['viewMode'] } {
   const viewMode = decideInitialAgentTabViewMode({
@@ -67,7 +77,8 @@ export function initialAgentTabViewModeProps(
     agent: options.agent,
     promptDelivery: options.promptDelivery,
     launchDraftText: options.launchDraftText,
-    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable,
+    wslDistro: options.wslDistro
   })
   return viewMode ? { viewMode } : {}
 }

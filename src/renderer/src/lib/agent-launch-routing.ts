@@ -57,7 +57,13 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     agent: input.agent,
     promptDelivery: input.promptDelivery,
     launchDraftText: input.launchText,
-    nativeChatTranscriptIsLocalReadable: input.nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable: input.nativeChatTranscriptIsLocalReadable,
+    // Why: reuse the already-resolved project runtime — the WSL rule must match
+    // the toggle surfaces' (#9307 expectation 5).
+    wslDistro:
+      input.projectRuntime?.status === 'resolved' && input.projectRuntime.runtime.kind === 'wsl'
+        ? input.projectRuntime.runtime.distro
+        : null
   })
   return initialViewMode === 'chat' ? 'legacy-native-chat' : 'terminal-tui'
 }

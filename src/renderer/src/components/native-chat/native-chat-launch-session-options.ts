@@ -17,6 +17,7 @@ export type InitialNativeChatSessionOptionsArgs = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchDraftText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
+  wslDistro?: string | null
 }
 
 export function resolveInitialNativeChatSessionOptions(

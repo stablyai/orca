@@ -47,18 +47,52 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBeUndefined()
   })
 
-  it.each(['gemini', 'opencode'] as const)(
-    'keeps unsupported agent %s in terminal view',
-    (agent) => {
-      expect(
-        decideInitialAgentTabViewMode({
-          experimentalNativeChat: true,
-          openAgentTabsInChatByDefault: true,
-          agent
-        })
-      ).toBeUndefined()
-    }
-  )
+  it.each(['gemini'] as const)('keeps unsupported agent %s in terminal view', (agent) => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent
+      })
+    ).toBeUndefined()
+  })
+
+  it('opens local OpenCode in chat once its transcript is readable', () => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'opencode',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(null)
+      })
+    ).toBe('chat')
+  })
+
+  // Why: #9307 expectation 5 — auto-open must never land in an endless-loading
+  // chat; the guest's opencode.db is unreachable from the desktop host.
+  it('keeps WSL-resolved OpenCode in terminal view', () => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'opencode',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(null),
+        wslDistro: 'Ubuntu'
+      })
+    ).toBeUndefined()
+  })
+
+  it('still opens WSL-resolved Grok in chat (path translation reaches guest JSONL)', () => {
+    expect(
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'grok',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(null),
+        wslDistro: 'Ubuntu'
+      })
+    ).toBe('chat')
+  })
 
   it.each([
     ['local', null],
