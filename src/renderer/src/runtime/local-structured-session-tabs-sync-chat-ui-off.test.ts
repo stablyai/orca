@@ -123,8 +123,21 @@ describe('local structured session tab sync', () => {
     unmount()
   })
 
-  it('lets a later Chat UI change retry a sync whose capability probe failed', async () => {
-    getStatus.mockRejectedValueOnce(new Error('runtime not ready'))
+  it('subscribes on its own backoff after the capability probe fails', async () => {
+    // Startup probe, the restore's probe, and the first subscribe attempt all fail.
+    for (let failure = 0; failure < 3; failure += 1) {
+      getStatus.mockRejectedValueOnce(new Error('runtime not ready'))
+    }
+    const { unmount } = renderHook(() => useLocalStructuredSessionTabsSync())
+
+    // A failed probe is not a "no": no Chat UI change is needed for the mirror to go live.
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledOnce(), { timeout: 2000 })
+    expect(getStatus).toHaveBeenCalledTimes(4)
+    unmount()
+  })
+
+  it('lets a later Chat UI change retry a host that answered without the surface', async () => {
+    getStatus.mockResolvedValueOnce({ capabilities: [] })
     const { unmount } = renderHook(() => useLocalStructuredSessionTabsSync())
     await vi.waitFor(() => expect(getStatus).toHaveBeenCalled())
     await act(async () => {})

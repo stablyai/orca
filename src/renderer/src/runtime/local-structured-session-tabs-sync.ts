@@ -54,7 +54,7 @@ function ensureLocalStructuredSessionTabsSyncRunning(): void {
     }
   })
     .then((subscribed) => {
-      // A failed capability probe reads as unsupported; holding the slot would block every retry.
+      // Disposed, or the host answered without the surface; released so a Chat UI change can ask again.
       if (!subscribed) {
         sync.stop()
       }

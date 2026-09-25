@@ -1,6 +1,9 @@
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { refreshLocalRuntimeCapabilities } from '../local-runtime-capabilities'
+import {
+  readLocalRuntimeCapabilitiesOrUnknown,
+  refreshLocalRuntimeCapabilities
+} from '../local-runtime-capabilities'
 import {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce
@@ -20,27 +23,34 @@ const REPAIR_DROPPED_EPOCHS: StructuredSessionSnapshotApplyOptions = {
     )
 }
 
+/** `null` when the probe failed: that is not evidence the host lacks the surface. */
+async function probeStructuredSessionSurface(): Promise<boolean | null> {
+  await refreshLocalRuntimeCapabilities()
+  return (
+    readLocalRuntimeCapabilitiesOrUnknown()?.includes(
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+    ) ?? null
+  )
+}
+
 type SessionTabsEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
   | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
   | { type: 'end' }
 
-/** Resolves true once a live subscription owns the mirror, false when it never subscribed. */
+/** Resolves true once the subscription (or its retry) owns the mirror; false when disposed or the
+ *  host answered without the structured surface. */
 export async function startLocalStructuredSessionTabsSync(args: {
   isDisposed: () => boolean
   setUnsubscribe: (unsubscribe: () => void) => void
 }): Promise<boolean> {
   const isCurrent = (): boolean => !args.isDisposed()
-  const capabilities = await refreshLocalRuntimeCapabilities()
+  let supported = await probeStructuredSessionSurface()
   if (!isCurrent()) {
     return false
   }
-  const supported = capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
   await restoreLocalStructuredSessionTabsOnce()
-  if (!isCurrent()) {
-    return false
-  }
-  if (!supported) {
+  if (!isCurrent() || supported === false) {
     return false
   }
   let subscriptionGeneration = 0
@@ -69,6 +79,14 @@ export async function startLocalStructuredSessionTabsSync(args: {
   }
   const subscribeCurrent = async (): Promise<void> => {
     if (!isCurrent()) {
+      return
+    }
+    // An unknown answer is asked again on the subscribe backoff rather than read as unsupported.
+    supported ??= await probeStructuredSessionSurface()
+    if (supported === null) {
+      throw new Error('structured_session_capability_unknown')
+    }
+    if (!supported || !isCurrent()) {
       return
     }
     const generation = ++subscriptionGeneration
