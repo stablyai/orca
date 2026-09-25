@@ -20,6 +20,7 @@ import { attachFingerprintFields } from '../native-chat/agent-session-wire/struc
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
+import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { formatMessagePointer } from './orchestration/formatter'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
 import type { RpcRequest } from './rpc/core'
@@ -356,7 +357,7 @@ const POINTER =
 
 /** The text the PTY lane types into a local terminal for this mailbox, byte for byte. */
 function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, runtime.getLocalOrchestrationCliCommand()).trim()
+  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
 }
 
 /** The text of a turn the fake provider received. */
