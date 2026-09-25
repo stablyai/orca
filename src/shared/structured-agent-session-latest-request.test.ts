@@ -153,6 +153,21 @@ const ROWS: Row[] = [
     listed: true
   },
   {
+    name: 'a user message the provider journaled itself (history, an older host)',
+    items: [
+      {
+        itemId: 'codex:thread-1:turn-1:0',
+        revision: 0,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'from history' }] }
+      }
+    ],
+    submissions: [],
+    outcome: null,
+    listed: true
+  },
+  {
     name: 'a goal and nothing else yet',
     items: [
       {
