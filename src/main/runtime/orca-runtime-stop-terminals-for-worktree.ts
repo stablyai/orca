@@ -122,7 +122,7 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
     ) {
       throw new Error('workspace_session_unavailable')
     }
-    await this.store.runDurableMutation(() => {
+    const refusal = await this.store.runDurableMutation<Error | undefined>(() => {
       const session = cloneWorkspaceSessionState(this.store.getWorkspaceSession(hostId))
       const sleepingAgentSessionsByPaneKey = Object.fromEntries(
         Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).filter(
@@ -139,7 +139,7 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
         (tab) => tab.contentType === 'terminal'
       )
       if (remainingTerminalRows.length > 0 || remainingUnifiedTerminalTabs.length > 0) {
-        throw new Error('terminal_close_incomplete')
+        return { value: new Error('terminal_close_incomplete'), persist: false }
       }
       const hasChanges =
         Object.keys(sleepingAgentSessionsByPaneKey).length !==
@@ -167,6 +167,9 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
         }
       }
     })
+    if (refusal) {
+      throw refusal
+    }
   }
 
   async stopTerminalsForWorktree(
