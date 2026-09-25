@@ -26,6 +26,7 @@ export type MobileBrowserTunnelConnectionOptions<Socket extends BrowserNetworkTu
     createSocket: (callbacks: BrowserNetworkTunnelClientSocketCallbacks) => Socket
     outboundMemory: NonNullable<BrowserNetworkTunnelClientOptions['outboundMemory']>
     minimumTunnelGeneration: number
+    onClosed?: () => void
     timeoutMs?: number
     signal?: AbortSignal
   }
@@ -124,7 +125,11 @@ export class MobileBrowserTunnelConnection<Socket extends BrowserNetworkTunnelCl
       this.tunnel?.close(error)
     } finally {
       this.tunnel = null
-      this.client?.close()
+      try {
+        this.client?.close()
+      } finally {
+        this.options.onClosed?.()
+      }
     }
   }
 

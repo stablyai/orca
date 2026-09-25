@@ -4,8 +4,11 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class OrcaMobileWebShellModule : Module() {
+  private val browserLoopback = BrowserLoopbackModule()
+
   override fun definition() = ModuleDefinition {
     Name("OrcaMobileWebShell")
+    browserLoopback.install(this)
 
     View(OrcaMobileWebShellView::class) {
       Events("onLoadState", "onBridgeMessage", "onExternalNavigation")

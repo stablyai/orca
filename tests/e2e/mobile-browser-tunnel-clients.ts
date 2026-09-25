@@ -1,6 +1,7 @@
 import { build } from 'esbuild'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
+import type * as Android from '../../mobile/src/transport/android-browser-tunnel-socket'
 import type * as Direct from '../../mobile/src/transport/direct-rpc-client'
 import type * as Tunnel from '../../mobile/src/transport/mobile-browser-tunnel-connection'
 import type * as Relay from '../../mobile/src/transport/mobile-relay-rpc-session'
@@ -11,6 +12,7 @@ const require = createRequire(import.meta.url)
 const bundle = await build({
   stdin: {
     contents: `
+      export { AndroidBrowserTunnelSocket } from './mobile/src/transport/android-browser-tunnel-socket'
       export { DirectRpcClient } from './mobile/src/transport/direct-rpc-client'
       export { MobileBrowserTunnelConnection } from './mobile/src/transport/mobile-browser-tunnel-connection'
       export { connectMobileRelayRpcSession } from './mobile/src/transport/mobile-relay-rpc-session'
@@ -53,6 +55,11 @@ new Function('module', 'exports', 'require', bundle.outputFiles[0]!.text)(
   compiled.exports,
   createRequire(resolve('package.json'))
 )
-export const { DirectRpcClient, MobileBrowserTunnelConnection, connectMobileRelayRpcSession } =
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bundle exports exactly these three source modules above.
-  compiled.exports as typeof Direct & typeof Tunnel & typeof Relay
+export const {
+  AndroidBrowserTunnelSocket,
+  DirectRpcClient,
+  MobileBrowserTunnelConnection,
+  connectMobileRelayRpcSession
+} =
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bundle exports exactly these source modules above.
+  compiled.exports as typeof Android & typeof Direct & typeof Tunnel & typeof Relay
