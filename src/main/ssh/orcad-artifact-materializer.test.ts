@@ -1,15 +1,26 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
   ORCAD_EMOJI_SHORTCODE_DATASET,
+  ORCAD_RIPGREP_ARTIFACTS,
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR,
   ORCAD_VERSION_FILENAME,
-  orcadArtifactFilenames
+  orcadArtifactFilenames,
+  orcadTemplateCommonFilenames
 } from '../../shared/orcad-artifacts'
 import type { OrcadBunTarget } from '../../shared/orcad-bun-runtime'
 import { z } from 'zod'
@@ -59,6 +70,7 @@ function createTemplate(target: OrcadBunTarget = TARGET): {
   const cacheRoot = join(root, 'cache')
   const runtimePath = join(root, 'bun-runtime')
   const common: Record<string, string> = {
+    ...Object.fromEntries(orcadTemplateCommonFilenames().map((filename) => [filename, filename])),
     'orcad.js': 'orcad-entry',
     'daemon-entry.js': 'daemon-entry',
     'profile-state-writer-worker-entry.js': 'writer-entry',
@@ -100,6 +112,21 @@ function createTemplate(target: OrcadBunTarget = TARGET): {
 }
 
 describe('assembleOrcadArtifact', () => {
+  it.skipIf(process.platform === 'win32')(
+    'restores executable search modes from a template copied without them',
+    async () => {
+      const fixture = createTemplate()
+      const filenames = ORCAD_RIPGREP_ARTIFACTS.filter((filename) => filename.endsWith('/rg'))
+      for (const filename of filenames) {
+        chmodSync(join(fixture.templateDir, filename), 0o644)
+      }
+      const artifactDir = await assembleOrcadArtifact({ ...fixture, target: TARGET })
+      for (const filename of filenames) {
+        expect(statSync(join(artifactDir, filename)).mode & 0o777).toBe(0o755)
+      }
+    }
+  )
+
   it('gives Windows executable naming a new immutable slot identity', async () => {
     const target = 'win32-x64' as const
     const fixture = createTemplate(target)

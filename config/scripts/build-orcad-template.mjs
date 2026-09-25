@@ -15,6 +15,7 @@ import {
   ORCAD_BUILD_TARGET_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR,
+  ORCAD_RIPGREP_ARTIFACTS,
   orcadTemplateCommonFilenames
 } from '../../src/shared/orcad-artifacts.ts'
 import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
@@ -95,7 +96,11 @@ async function main() {
   rmSync(outputDir, { recursive: true, force: true })
   mkdirSync(outputDir, { recursive: true })
   for (const filename of commonArtifacts) {
-    copy(join(buildDir, filename), join(outputDir, filename))
+    copy(
+      join(buildDir, filename),
+      join(outputDir, filename),
+      ORCAD_RIPGREP_ARTIFACTS.some((artifact) => artifact === filename && artifact.endsWith('/rg'))
+    )
   }
   const targets = Object.fromEntries(
     await Promise.all(

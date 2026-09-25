@@ -7,12 +7,12 @@ import {
   externalNativeAddons,
   ORCAD_EXTERNAL_MODULES
 } from './orcad-entry-build.mjs'
-
 import { createRequire } from 'node:module'
 import {
   chmodSync,
   copyFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   rmSync,

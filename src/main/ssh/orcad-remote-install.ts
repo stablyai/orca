@@ -1,3 +1,5 @@
+import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
+import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { shellEscape } from './ssh-connection-utils'
 import type { SshConnection } from './ssh-connection'
@@ -43,14 +45,7 @@ export async function installOrcadBundle(
       signal: options.signal
     })
     if (options.host.os !== 'win32') {
-      const binaryPath = joinRemotePath(
-        options.host,
-        remoteDir,
-        'ripgrep',
-        options.host.relayPlatform,
-        'rg'
-      )
-      await execCommand(options.conn, `chmod 755 ${shellEscape(binaryPath)}`, {
+      await execCommand(options.conn, executablePermissionsCommand(options.host, remoteDir), {
         wrapCommand: options.host.commandDialect !== 'powershell',
         signal: options.signal
       })
@@ -69,4 +64,24 @@ export async function installOrcadBundle(
   } finally {
     await abandonInstall(options.conn, remoteDir, options.host)
   }
+}
+
+function executablePermissionsCommand(host: RemoteHostPlatform, directory: string): string {
+  const required = [
+    joinRemotePath(host, directory, orcadBunRuntimeFilename(host.os)),
+    joinRemotePath(host, directory, 'ripgrep', host.relayPlatform, 'rg')
+  ]
+  const browsers = new Set(
+    (['glibc', 'musl'] as const).map((libc) =>
+      shellEscape(
+        joinRemotePath(host, directory, orcadAgentBrowserNativeName(host.os, host.arch, libc))
+      )
+    )
+  )
+  // SFTP drops executable modes; missing optional browser binaries remain a supported install.
+  return (
+    `chmod 755 ${required.map(shellEscape).join(' ')} && ` +
+    `for executable in ${[...browsers].join(' ')}; do ` +
+    'if [ -f "$executable" ]; then chmod 755 "$executable" || exit $?; fi; done'
+  )
 }

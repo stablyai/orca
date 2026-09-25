@@ -13,6 +13,7 @@ import {
   ORCAD_TEMPLATE_TARGETS_DIR,
   ORCAD_VERSION,
   ORCAD_VERSION_FILENAME,
+  ORCAD_RIPGREP_ARTIFACTS,
   orcadArtifactFilenames,
   orcadTemplateCommonFilenames
 } from '../../shared/orcad-artifacts'
@@ -157,7 +158,9 @@ function artifactSources(
           : filename.endsWith('watcher.node')
             ? join(targetDir, 'watcher.node')
             : join(templateDir, filename),
-    ...(filename === orcadBunRuntimeFilename(target) ? { executable: true } : {})
+    executable:
+      filename === orcadBunRuntimeFilename(target) ||
+      ORCAD_RIPGREP_ARTIFACTS.some((artifact) => artifact === filename && artifact.endsWith('/rg'))
   }))
   if (!targetManifest.browserName) {
     return required

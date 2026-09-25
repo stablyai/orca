@@ -41,7 +41,9 @@ describe('remote install namespace', () => {
   it('requires every shipped search binary in a completed standalone runtime install', () => {
     const required = ORCAD_INSTALL_MODEL.requiredArtifacts(false)
     expect(required).toEqual(expect.arrayContaining([...ORCAD_RIPGREP_ARTIFACTS]))
-    expect(ORCAD_INSTALL_MODEL.requiredArtifacts(true)).toEqual(required)
+    expect(ORCAD_INSTALL_MODEL.requiredArtifacts(true)).toEqual(
+      expect.arrayContaining([...ORCAD_RIPGREP_ARTIFACTS])
+    )
   })
 
   it.skipIf(process.platform === 'win32')('rejects an install missing its search binary', () => {

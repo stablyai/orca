@@ -397,15 +397,7 @@ function isMuslTemplatePayload(filePath, neededLibraries, versionNeeds) {
 
 /** Imported (undefined) dynamic symbols from `objdump -T` (fail-closed). */
 function readImportedSymbols(filePath, objdumpPath) {
-  try {
-    return parseImportedSymbols(runObjdump(objdumpPath, '-T', filePath))
-  } catch (error) {
-    // Why: a statically linked binary (bundled ripgrep) has no dynamic symbol table to import from.
-    if (error instanceof Error && error.message.includes('not a dynamic object')) {
-      return new Set()
-    }
-    throw error
-  }
+  return parseImportedSymbols(runObjdump(objdumpPath, '-T', filePath))
 }
 
 /**

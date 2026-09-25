@@ -1,4 +1,8 @@
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { runProcess } from '../../shared/child-process/run-process'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
@@ -29,7 +33,6 @@ import {
 } from './ssh-relay-versioned-install'
 import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { finalizeInstall } from './ssh-relay-versioned-install'
 import type { SshConnection } from './ssh-connection'
 
 const mockExec = vi.mocked(execCommand)
@@ -297,6 +300,7 @@ describe('deployOrcad', () => {
       )
       expect(chmod).toBeGreaterThanOrEqual(0)
       expect(mockExec.mock.calls[chmod]?.[1]).toContain(`/ripgrep/${platform}/rg'`)
+      expect(mockExec.mock.calls[chmod]?.[1]).toContain("/bun-runtime'")
       expect(vi.mocked(uploadRelayDirectory).mock.invocationCallOrder[0]).toBeLessThan(
         mockExec.mock.invocationCallOrder[chmod]
       )
@@ -308,15 +312,17 @@ describe('deployOrcad', () => {
 
   it('does not run chmod on a Windows remote', async () => {
     scriptHost({ activationRecord: '', readiness: {}, log: [] })
-    await expect(
-      deployOrcad(
-        options({
-          host: getRemoteHostPlatform('win32-x64'),
-          remoteHome: 'C:/Users/u',
-          census: { liveSessions: 1, startedSinceActivation: 0 }
-        })
-      )
-    ).rejects.toThrow('not supported')
+    await installOrcadBundle(
+      {
+        conn: options().conn,
+        host: getRemoteHostPlatform('win32-x64'),
+        localOrcadDir: '/local/out/orcad'
+      },
+      NEW_VERSION,
+      `C:/Users/u/.orca-remote/orcad-${NEW_VERSION}`
+    )
+    expect(uploadRelayDirectory).toHaveBeenCalledOnce()
+    expect(finalizeInstall).toHaveBeenCalledOnce()
     expect(mockExec.mock.calls.some(([, command]) => String(command).startsWith('chmod '))).toBe(
       false
     )
@@ -332,6 +338,48 @@ describe('deployOrcad', () => {
     await expect(deployOrcad(options())).rejects.toThrow('chmod failed')
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
   })
+
+  it.skipIf(process.platform === 'win32').each([undefined, 'linux-x64', 'linux-musl-x64'])(
+    'restores uploaded executable modes with optional browser %s',
+    async (browserTarget) => {
+      const directory = mkdtempSync(join(tmpdir(), 'orcad-install-modes-'))
+      const binaries = ['bun-runtime', 'ripgrep/linux-x64/rg']
+      if (browserTarget) {
+        binaries.push(`agent-browser-${browserTarget}`)
+      }
+      try {
+        for (const filename of binaries) {
+          const path = join(directory, filename)
+          mkdirSync(dirname(path), { recursive: true })
+          writeFileSync(path, 'uploaded executable')
+          chmodSync(path, 0o644)
+        }
+        mockExec.mockImplementation(async (_conn, command) => {
+          const result = await runProcess({ program: '/bin/sh', args: ['-c', command] })
+          if (result.code !== 0) {
+            throw new Error(result.stderr)
+          }
+          return result.stdout
+        })
+        await installOrcadBundle(
+          {
+            conn: options().conn,
+            host: getRemoteHostPlatform('linux-x64'),
+            localOrcadDir: directory
+          },
+          NEW_VERSION,
+          directory
+        )
+        expect(finalizeInstall).toHaveBeenCalledOnce()
+        for (const filename of binaries) {
+          expect(statSync(join(directory, filename)).mode & 0o777).toBe(0o755)
+        }
+      } finally {
+        mockExec.mockReset()
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('allows startup time after a slow bundled preflight', async () => {
     let elapsedMs = 0
