@@ -43,6 +43,7 @@ const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/AddProjectFromFolderDialog')
 )
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
+const ForkDialog = lazy(() => import('../components/agent-session-fork/AgentSessionForkDialog'))
 const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
 const PreservedBranchBatchReviewModal = lazy(
   () => import('../components/sidebar/PreservedBranchBatchReviewModal')
@@ -218,6 +219,11 @@ export function AppRootSurfaces(props: {
         {activeModal === 'project-added' ? (
           <ModalBoundary boundaryId="modal.project-added" resetKey>
             <ProjectAddedDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'agent-session-fork' ? (
+          <ModalBoundary boundaryId="modal.agent-session-fork" resetKey>
+            <ForkDialog />
           </ModalBoundary>
         ) : null}
       </Suspense>

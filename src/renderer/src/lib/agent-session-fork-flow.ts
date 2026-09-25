@@ -79,7 +79,7 @@ async function carryChangesIntoChild(
   }
 }
 
-async function copyTranscriptPrompt(prompt: string): Promise<void> {
+export async function copyTranscriptPrompt(prompt: string): Promise<boolean> {
   try {
     await window.api.ui.writeTerminalClipboardText(prompt)
     toast.message(
@@ -88,6 +88,7 @@ async function copyTranscriptPrompt(prompt: string): Promise<void> {
         'Fork context copied. Launch an agent and paste it to start the fork.'
       )
     )
+    return true
   } catch (error) {
     toast.error(
       error instanceof Error
@@ -97,6 +98,7 @@ async function copyTranscriptPrompt(prompt: string): Promise<void> {
             'Failed to copy fork context.'
           )
     )
+    return false
   }
 }
 
