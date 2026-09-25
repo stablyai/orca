@@ -22,3 +22,11 @@ export function agentRowDotState(
   }
   return 'idle'
 }
+
+/**
+ * Whether an unvisited row earns the unread badge. Why only settled states: a spinner or a
+ * question glyph already demands attention, so a badge there is noise (mirrors the worktree slot).
+ */
+export function showsAgentRowUnreadBadge(state: AgentDotState): boolean {
+  return state === 'done' || state === 'failed' || state === 'interrupted' || state === 'idle'
+}

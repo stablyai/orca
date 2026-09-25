@@ -146,6 +146,28 @@ describe('DashboardAgentRow', () => {
     expect(markup).not.toContain('You are working inside Orca')
   })
 
+  it('overlays the unread badge only on unvisited settled rows', () => {
+    const render = (isUnvisited: boolean, state: 'done' | 'working' = 'done'): string =>
+      renderToStaticMarkup(
+        <TooltipProvider>
+          <DashboardAgentRow
+            agent={makeAgent({ state }, { state })}
+            onDismiss={vi.fn()}
+            onActivate={vi.fn()}
+            now={NOW}
+            isUnvisited={isUnvisited}
+            hideIdentityIcon
+            hideExpand
+          />
+        </TooltipProvider>
+      )
+
+    expect(render(true)).toContain('data-agent-row-unread-alert=""')
+    expect(render(false)).not.toContain('data-agent-row-unread-alert=""')
+    // Why: a spinner already signals activity; the badge there would be noise.
+    expect(render(true, 'working')).not.toContain('data-agent-row-unread-alert=""')
+  })
+
   it('shows the active model beside the agent label', () => {
     const markup = renderRow(makeAgent({}, { model: 'gpt-5.4-mini' }))
 
@@ -308,7 +330,13 @@ describe('DashboardAgentRow', () => {
           prompt: 'Give me a quick update',
           updatedAt: 2_000,
           stateStartedAt: 2_000,
-          stateHistory: [{ state: 'working', prompt: 'Give me a quick update', startedAt: 1_000 }],
+          stateHistory: [
+            {
+              state: 'working',
+              prompt: 'Give me a quick update',
+              startedAt: 1_000
+            }
+          ],
           interrupted: true
         }
       )
@@ -399,7 +427,11 @@ describe('DashboardAgentRow', () => {
         makeAgent(
           { state },
           // Why: 'idle' is a row-only state; the entry it is derived from still reports 'done'.
-          { state: state === 'idle' ? 'done' : state, toolName: 'bash', toolInput: 'rm -rf build/' }
+          {
+            state: state === 'idle' ? 'done' : state,
+            toolName: 'bash',
+            toolInput: 'rm -rf build/'
+          }
         )
       )
 

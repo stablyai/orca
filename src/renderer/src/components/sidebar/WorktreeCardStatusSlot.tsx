@@ -3,6 +3,7 @@ import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { UnreadAlertBadge } from '@/components/UnreadAlertBadge'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
@@ -42,10 +43,6 @@ const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} 
 // Why no faint tint here: the sleeping row is dimmed as a whole, so the glyph
 // keeps full muted-foreground and dims with everything around it.
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
-// Why: a left-edge badge overlays unread on the status glyph without widening
-// the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
-const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
 
 function overlayNewCardUnreadStatus(
   status: React.JSX.Element,
@@ -61,10 +58,10 @@ function overlayNewCardUnreadStatus(
       className="relative inline-flex size-5 shrink-0 items-center justify-center"
     >
       {status}
-      <span
+      {/* Why: a left-edge badge overlays unread on the status glyph without widening the lane or indenting the title. */}
+      <UnreadAlertBadge
         data-worktree-unread-alert=""
-        className={newCardUnreadAlertClassName}
-        aria-hidden="true"
+        className="left-0 top-1/2 size-[6px] -translate-y-1/2"
       />
     </span>
   )

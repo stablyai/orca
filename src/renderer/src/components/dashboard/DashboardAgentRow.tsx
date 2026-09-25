@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { UnreadAlertBadge } from '@/components/UnreadAlertBadge'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -10,7 +11,7 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
-import { agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDotState as asDotState, showsAgentRowUnreadBadge } from '@/lib/agent-row-dot-state'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
@@ -236,10 +237,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         <Tooltip>
           <TooltipTrigger asChild>
             <span
-              className="inline-flex shrink-0 items-center justify-center"
+              className="relative inline-flex shrink-0 items-center justify-center"
               aria-label={dotTooltipLabel}
             >
               <AgentStateDot state={dotState} size={stateDotSize} title={null} />
+              {isUnvisited && showsAgentRowUnreadBadge(dotState) && (
+                <UnreadAlertBadge
+                  data-agent-row-unread-alert=""
+                  className="-right-1 -top-1 size-[6px]"
+                />
+              )}
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
