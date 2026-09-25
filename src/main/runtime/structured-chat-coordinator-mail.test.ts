@@ -20,7 +20,7 @@ import { attachFingerprintFields } from '../native-chat/agent-session-wire/struc
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
-import { currentRunCoordinatorActor } from './orchestration/db/runs/run-coordinator-actor'
+import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
 import type { RpcRequest } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
@@ -546,7 +546,7 @@ describe('a /clear keeps the chat its orchestration address', () => {
     })
     // Nothing was rewritten: the Run is bound exactly as the first session bound it.
     expect(db.getRunRaw(runId)).toMatchObject({
-      coordinator_actor: `session:${COORDINATOR}`,
+      coordinator_orca_session_id: COORDINATOR,
       consumer_generation: generation
     })
   })
@@ -560,14 +560,14 @@ describe('a /clear keeps the chat its orchestration address', () => {
       { sessionId: middle }
     )
     const runId = idOf(created.run)
-    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(`session:${COORDINATOR}`)
+    expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
     const successor = await clearChat(middle)
     runtime.onStructuredSessionStatusForMail({ sessionId: successor, status: 'idle' })
 
     await expect(
       call('orchestration.runCurrent', {}, { sessionId: successor })
     ).resolves.toMatchObject({ run: { id: runId } })
-    expect(db.getRunRaw(runId)!.coordinator_actor).toBe(`session:${COORDINATOR}`)
+    expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
     // What it sends carries the same address.
     await openChat(PEER_CHAT)
     await expect(
@@ -580,30 +580,30 @@ describe('a /clear keeps the chat its orchestration address', () => {
   })
 
   it("binds a Run a cleared chat creates or uses to the conversation's root, at the Run's current generation", async () => {
-    const root = `session:${COORDINATOR}`
-    const boundActor = (runId: string): string | null =>
-      currentRunCoordinatorActor(db.getRunRaw(runId)!)
+    const root = COORDINATOR
+    const boundOrcaSessionId = (runId: string): string | null =>
+      currentRunCoordinatorOrcaSessionId(db.getRunRaw(runId)!)
     await openChat(COORDINATOR)
     const middle = await clearChat(COORDINATOR)
     const first = idOf(
       (await call('orchestration.runCreate', { objective: 'first' }, { sessionId: middle })).run
     )
     expect(db.getRunRaw(first)).toMatchObject({
-      coordinator_actor: root,
-      coordinator_actor_generation: db.getRunRaw(first)!.consumer_generation
+      coordinator_orca_session_id: root,
+      coordinator_orca_session_id_generation: db.getRunRaw(first)!.consumer_generation
     })
-    expect(boundActor(first)).toBe(root)
+    expect(boundOrcaSessionId(first)).toBe(root)
     const second = idOf(
       (await call('orchestration.runCreate', { objective: 'second' }, { sessionId: middle })).run
     )
-    expect(boundActor(first)).toBeNull()
+    expect(boundOrcaSessionId(first)).toBeNull()
 
     const successor = await clearChat(middle)
     await call('orchestration.runUse', { id: first }, { sessionId: successor })
     const rebound = db.getRunRaw(first)!
-    expect(rebound.coordinator_actor).toBe(root)
-    expect(rebound.coordinator_actor_generation).toBe(rebound.consumer_generation)
-    expect(boundActor(second)).toBeNull()
+    expect(rebound.coordinator_orca_session_id).toBe(root)
+    expect(rebound.coordinator_orca_session_id_generation).toBe(rebound.consumer_generation)
+    expect(boundOrcaSessionId(second)).toBeNull()
     await expect(
       call('orchestration.runCurrent', {}, { sessionId: successor })
     ).resolves.toMatchObject({ run: { id: first } })

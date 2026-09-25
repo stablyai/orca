@@ -13,6 +13,8 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
+import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
+import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -26,8 +28,8 @@ const { OrchestrationDb } = await import('./db')
 const { agentSessionPtyWriteGate } = await import('../agent-session-pty-write-gate')
 const { sessionOrchestrationIdentity } = await import('./structured-session-mail-address')
 
-const CHAT = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
-const CHAT_ACTOR = `session:${CHAT}`
+const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
+const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT)
 const TERMINAL_VIEW_PANE = 'tab_view:77777777-7777-4777-8777-777777777777'
 
 /** The real methods through the real prototype chain; a re-declared copy would pin nothing. */
@@ -87,7 +89,7 @@ function chatCoordinatedRun(): string {
     objective: 'o',
     coordinatorHandle: null,
     coordinatorPaneKey: null,
-    coordinatorActor: CHAT_ACTOR
+    coordinatorOrcaSessionId: CHAT
   }).id
 }
 
@@ -101,7 +103,7 @@ afterEach(() => {
   db.close()
 })
 
-describe('a Run whose coordinator is a chat (a session actor, no handle)', () => {
+describe('a Run whose coordinator is a chat (an Orca session id, no handle)', () => {
   it('delivers its mailbox to that session', () => {
     // The defect this pins: the resolver read only `coordinator_handle`, which a chat never has, so
     // neither lane claimed the Run mailbox and a worker's result never reached the chat.
@@ -149,8 +151,8 @@ describe('a Run whose coordinator is a chat (a session actor, no handle)', () =>
     expect(probe().target(`run:${runId}`)).toBeNull()
   })
 
-  it('does not deliver to an actor written at an earlier generation of the Run', () => {
-    // An older binary's rebind or unbind bumps the generation and leaves the actor behind.
+  it('does not deliver to an Orca session id written at an earlier generation of the Run', () => {
+    // An older binary's rebind or unbind bumps the generation and leaves the id behind.
     installStore(chatRecord())
     const runId = chatCoordinatedRun()
     db.db
@@ -159,13 +161,13 @@ describe('a Run whose coordinator is a chat (a session actor, no handle)', () =>
     expect(probe().target(`run:${runId}`)).toBeNull()
   })
 
-  it('ignores an actor left beside a PTY handle; the handle owns the Run', () => {
+  it('ignores an Orca session id left beside a PTY handle; the handle owns the Run', () => {
     installStore(chatRecord())
     const runId = db.createRun({
       objective: 'o',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_c:11111111-1111-4111-8111-111111111111',
-      coordinatorActor: CHAT_ACTOR
+      coordinatorOrcaSessionId: CHAT
     }).id
     expect(probe().target(`run:${runId}`)).toBeNull()
   })
@@ -174,7 +176,7 @@ describe('a Run whose coordinator is a chat (a session actor, no handle)', () =>
 describe('a session addressed directly', () => {
   it('owns its `session:<id>` mailbox', () => {
     installStore(chatRecord())
-    expect(probe().target(CHAT_ACTOR)).toEqual({ sessionId: CHAT, dispatchId: null })
+    expect(probe().target(CHAT_ADDRESS)).toEqual({ sessionId: CHAT, dispatchId: null })
   })
 
   it('claims nothing for a malformed session address', () => {
@@ -227,14 +229,14 @@ describe('the idle edge of a structured session', () => {
 
   it('points direct mail at a session that coordinates nothing', () => {
     installStore(chatRecord())
-    db.insertMessage({ from: 'term_peer', to: CHAT_ACTOR, subject: 'hi', type: 'status' })
+    db.insertMessage({ from: 'term_peer', to: CHAT_ADDRESS, subject: 'hi', type: 'status' })
     const delivered: string[] = []
     probe({
       deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
       notifyStructuredSessionJournalActivity: vi.fn(),
       cancelMessageWaiters: vi.fn()
     }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
-    expect(delivered).toEqual([CHAT_ACTOR])
+    expect(delivered).toEqual([CHAT_ADDRESS])
   })
 })
 
@@ -283,7 +285,7 @@ describe('the idle edge after a restart, before any orchestration call', () => {
       objective: 'o',
       coordinatorHandle: null,
       coordinatorPaneKey: null,
-      coordinatorActor: CHAT_ACTOR
+      coordinatorOrcaSessionId: CHAT
     }).id
     stored.close()
     const delivered: string[] = []
@@ -330,8 +332,8 @@ describe('the idle edge after a restart, before any orchestration call', () => {
 })
 
 describe('a coordinator chat continued by /clear', () => {
-  const MIDDLE = 'clear-fedcba9876543210fedcba9876543210fedcba98'
-  const SUCCESSOR = 'clear-0123456789abcdef0123456789abcdef01234567'
+  const MIDDLE = testOrcaSessionId('clear-fedcba9876543210fedcba9876543210fedcba98')
+  const SUCCESSOR = testOrcaSessionId('clear-0123456789abcdef0123456789abcdef01234567')
 
   function sessionRecord(sessionId: string, clearedInto?: string): AgentSessionRecord {
     const record = agentSessionRecordFixture(
@@ -375,12 +377,12 @@ describe('a coordinator chat continued by /clear', () => {
     return delivered
   }
 
-  function runCreatedBy(sessionId: string): string {
+  function runCreatedBy(sessionId: OrcaSessionId): string {
     return db.createRun({
       objective: 'o',
       coordinatorHandle: null,
       coordinatorPaneKey: null,
-      coordinatorActor: sessionOrchestrationIdentity(sessionId, db).actor
+      coordinatorOrcaSessionId: sessionOrchestrationIdentity(sessionId, db).orcaSessionId
     }).id
   }
 
@@ -397,7 +399,7 @@ describe('a coordinator chat continued by /clear', () => {
 
     const successor = sessionOrchestrationIdentity(SUCCESSOR, db)
     expect(db.getRunRaw(ownRun)).toMatchObject({
-      coordinator_actor: successor.actor,
+      coordinator_orca_session_id: successor.orcaSessionId,
       consumer_generation: generation
     })
     expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(ownRun)
@@ -412,7 +414,7 @@ describe('a coordinator chat continued by /clear', () => {
     expect(idleEdge(SUCCESSOR)).toContain(`run:${runId}`)
 
     expect(db.getRunRaw(runId)).toMatchObject({
-      coordinator_actor: CHAT_ACTOR,
+      coordinator_orca_session_id: CHAT,
       consumer_generation: generation
     })
     for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
@@ -434,7 +436,7 @@ describe('a coordinator chat continued by /clear', () => {
 
     const successor = sessionOrchestrationIdentity(SUCCESSOR, db)
     expect(db.getRunRaw(middleRun)).toMatchObject({
-      coordinator_actor: successor.actor,
+      coordinator_orca_session_id: successor.orcaSessionId,
       consumer_generation: generation
     })
     expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(middleRun)
@@ -444,8 +446,8 @@ describe('a coordinator chat continued by /clear', () => {
     installLineage(MIDDLE, SUCCESSOR)
     for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
       expect(sessionOrchestrationIdentity(member, db)).toMatchObject({
-        actor: CHAT_ACTOR,
-        address: CHAT_ACTOR
+        orcaSessionId: CHAT,
+        address: CHAT_ADDRESS
       })
       expect(probe().target(`session:${member}`)).toEqual({
         sessionId: SUCCESSOR,
@@ -454,11 +456,11 @@ describe('a coordinator chat continued by /clear', () => {
     }
     const direct = db.insertMessage({
       from: 'term_peer',
-      to: CHAT_ACTOR,
+      to: CHAT_ADDRESS,
       subject: 'hi',
       type: 'status'
     })
-    expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ACTOR])
-    expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ACTOR, read: 0 })
+    expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ADDRESS])
+    expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ADDRESS, read: 0 })
   })
 })

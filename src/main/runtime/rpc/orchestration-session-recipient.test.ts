@@ -6,7 +6,7 @@ import {
   structuredWorkerProcessIncarnation
 } from '../structured-worker-identity'
 import {
-  ACTOR_X,
+  ADDRESS_X,
   createSessionCallerHarness,
   idOf,
   isRecord,
@@ -67,15 +67,15 @@ describe('a send addressed to an agent session', () => {
     // The refusal this replaces: "Terminal session:<id> has no live pane or durable Run/Dispatch
     // mailbox." An agent's id is its public address, coordinator or not.
     const deliver = vi.spyOn(h.runtime, 'deliverPendingMessagesForHandle')
-    const sent = await send(ACTOR_X)
-    expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: ACTOR_X } } })
-    await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith(ACTOR_X, expect.anything()))
+    const sent = await send(ADDRESS_X)
+    expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: ADDRESS_X } } })
+    await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith(ADDRESS_X, expect.anything()))
   })
 
   it('accepts a bare Orca session id and normalizes it', async () => {
     expect(await send(SESSION_X)).toMatchObject({
       ok: true,
-      result: { message: { to_handle: ACTOR_X } }
+      result: { message: { to_handle: ADDRESS_X } }
     })
   })
 
@@ -84,7 +84,7 @@ describe('a send addressed to an agent session', () => {
       orchestrationRequest('orchestration.runCreate', { objective: 'o' }, { sessionId: SESSION_X })
     )
     const runId = idOf(resultOf(created).run)
-    expect(await send(ACTOR_X)).toMatchObject({
+    expect(await send(ADDRESS_X)).toMatchObject({
       ok: true,
       result: { message: { to_handle: `run:${runId}` } }
     })

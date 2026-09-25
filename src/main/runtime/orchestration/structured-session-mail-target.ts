@@ -8,10 +8,15 @@
  * Exactly one view answers for a session at a time, so the two lanes never both claim a mailbox.
  */
 
-import { parseOrchestrationActor } from '../../../shared/orchestration-actor'
+import {
+  ORCA_SESSION_ADDRESS_PREFIX,
+  isOrcaSessionId,
+  parseOrcaSessionAddress,
+  type OrcaSessionId
+} from '../../../shared/orca-session-address'
 import { agentSessionPtyWriteGate } from '../agent-session-pty-write-gate'
 import type { OrchestrationDb } from './db'
-import { currentRunCoordinatorActor } from './db/runs/run-coordinator-actor'
+import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   readAgentSessionRecordStore,
@@ -38,21 +43,22 @@ export function findConnectedPtyBoundToSession<T extends { ptyId: string; connec
 /**
  * The session a Run's coordinator binding names when that binding has no handle. A structured
  * worker coordinates by its own handle and resolves through it, so only a handle-less binding names
- * a session here, and only by an actor that still counts (see `currentRunCoordinatorActor`).
+ * a session here, and only by an Orca session id that still counts (see
+ * `currentRunCoordinatorOrcaSessionId`).
  */
 export function handleLessCoordinatorSessionId(
   run: Pick<
     RunRow,
     | 'coordinator_handle'
-    | 'coordinator_actor'
-    | 'coordinator_actor_generation'
+    | 'coordinator_orca_session_id'
+    | 'coordinator_orca_session_id_generation'
     | 'consumer_generation'
   >
-): string | null {
+): OrcaSessionId | null {
   if (run.coordinator_handle !== null) {
     return null
   }
-  return parseOrchestrationActor(currentRunCoordinatorActor(run))?.id ?? null
+  return currentRunCoordinatorOrcaSessionId(run)
 }
 
 /**
@@ -90,11 +96,11 @@ export function structuredSessionAddressTarget(
   mailboxHandle: string,
   db: OrchestrationDb | null | undefined
 ): StructuredPointerTarget | null | undefined {
-  if (!mailboxHandle.startsWith('session:')) {
+  if (!mailboxHandle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
     return undefined
   }
-  const actor = parseOrchestrationActor(mailboxHandle)
-  return actor ? structuredSessionMailTarget(actor.id, db) : null
+  const sessionId = parseOrcaSessionAddress(mailboxHandle)
+  return sessionId ? structuredSessionMailTarget(sessionId, db) : null
 }
 
 /**
@@ -103,6 +109,9 @@ export function structuredSessionAddressTarget(
  * while the session could not take it (closed, evicted, in the other view) is found again.
  */
 export function structuredSessionOwnedMailboxes(sessionId: string, db: OrchestrationDb): string[] {
+  if (!isOrcaSessionId(sessionId)) {
+    return []
+  }
   const identity = sessionOrchestrationIdentity(sessionId, db)
   const mailboxes = db.runsBoundToCoordinator(identity).map((run) => `run:${run.id}`)
   if (db.getUnreadDirectMessageTypes(identity.address).length > 0) {

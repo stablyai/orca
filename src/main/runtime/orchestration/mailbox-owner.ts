@@ -1,4 +1,5 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
+import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import type { OrchestrationDb } from './db'
 import type { OrchestrationCallerIdentity } from './orchestration-caller-identity'
 import { sessionOrchestrationIdentity } from './structured-session-mail-address'
@@ -112,7 +113,9 @@ export class OrchestrationMailboxOwner {
     leaf: OrchestrationMailboxLeaf
   ): OrchestrationCallerIdentity | null {
     const sessionId = leaf.ptyId ? this.deps.getBoundSessionIdForPty?.(leaf.ptyId) : null
-    return sessionId ? sessionOrchestrationIdentity(sessionId, db) : null
+    return sessionId && isOrcaSessionId(sessionId)
+      ? sessionOrchestrationIdentity(sessionId, db)
+      : null
   }
 
   routeForeignDirectMessages(leaf: OrchestrationMailboxLeaf): RoutedOrchestrationMailbox[] {

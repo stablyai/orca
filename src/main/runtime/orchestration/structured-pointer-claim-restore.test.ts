@@ -3,8 +3,9 @@ import { OrchestrationDb } from './db'
 import { OrcaRuntimeWithGetPtyRecordForPaneKey } from '../orca-runtime-get-pty-record-for-pane-key'
 import { releaseRestoredStructuredPointerClaims } from './structured-pointer-claim-restore'
 import { resolveStructuredPointerOperation } from './structured-pointer-operation-id'
+import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
-const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+const SESSION = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const BODY = { kind: 'message' as const, role: 'user' as const, blocks: [] }
 
 let db: OrchestrationDb
@@ -12,7 +13,7 @@ let mailbox: string
 
 beforeEach(() => {
   db = new OrchestrationDb(':memory:')
-  mailbox = `run:${db.createRun({ objective: 'o', coordinatorHandle: null, coordinatorPaneKey: null, coordinatorActor: `session:${SESSION}` }).id}`
+  mailbox = `run:${db.createRun({ objective: 'o', coordinatorHandle: null, coordinatorPaneKey: null, coordinatorOrcaSessionId: SESSION }).id}`
 })
 
 afterEach(() => {

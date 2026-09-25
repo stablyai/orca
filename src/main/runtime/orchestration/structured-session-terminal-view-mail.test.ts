@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
 import { OrchestrationMailboxOwner, type OrchestrationMailboxLeaf } from './mailbox-owner'
+import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
-const CHAT = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
-const CHAT_ACTOR = `session:${CHAT}`
+const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const VIEW_TAB = 'tab_view'
 const VIEW_LEAF = '77777777-7777-4777-8777-777777777777'
 
@@ -46,13 +46,13 @@ function chatRun(): string {
     objective: 'o',
     coordinatorHandle: null,
     coordinatorPaneKey: null,
-    coordinatorActor: CHAT_ACTOR
+    coordinatorOrcaSessionId: CHAT
   }).id
 }
 
 describe("a chat's terminal view reads the chat's mail", () => {
   it('owns the Run the chat coordinates, which no pane binding names', () => {
-    // The CLI in a terminal view acts as the session, so the Run is bound by actor and the pane
+    // The CLI in a terminal view acts as the session, so the Run is bound by Orca session id and the pane
     // path finds nothing: without this the idle edge of the view never pointed coordinator mail.
     const runId = chatRun()
     expect(owner(CHAT).resolve(viewLeaf)).toBe(`run:${runId}`)

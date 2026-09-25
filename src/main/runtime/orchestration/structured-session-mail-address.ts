@@ -15,9 +15,10 @@
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
-  formatOrchestrationActor,
-  parseOrchestrationActor
-} from '../../../shared/orchestration-actor'
+  formatOrcaSessionAddress,
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../shared/orca-session-address'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   isRecordedStructuredWorkerSession,
@@ -128,8 +129,10 @@ export function structuredSessionMailReach(
   if (!structuredWorkerHostScope(live.location)) {
     return { kind: 'other-host' }
   }
-  const identity = sessionOrchestrationIdentity(live.sessionId, db, store)
-  if (db && hasLostStructuredWorkerIdentity(identity, db)) {
+  const identity = isOrcaSessionId(live.sessionId)
+    ? sessionOrchestrationIdentity(live.sessionId, db, store)
+    : null
+  if (db && identity && hasLostStructuredWorkerIdentity(identity, db)) {
     // Why: it can no longer act (the caller resolver refuses it), so mail to it could never be read.
     return { kind: 'ended', reason: 'worker-identity-lost' }
   }
@@ -155,29 +158,28 @@ export function structuredSessionDeliveryView(
 }
 
 /**
- * Who a session is to orchestration: its conversation's actor, plus the handle and pane a structured
- * worker was minted. The caller resolver and mail delivery both take it from here, so a session is
- * matched the same way whether it is sending, checking, or being delivered to. Without a record
- * store there is no lineage to read, and the id stands for itself.
+ * Who a session is to orchestration: its conversation's Orca session id (the lineage root's), plus
+ * the handle and pane a structured worker was minted. The caller resolver and mail delivery both take
+ * it from here, so a session is matched the same way whether it is sending, checking, or being
+ * delivered to. Without a record store there is no lineage to read, and the id stands for itself.
  */
 export function sessionOrchestrationIdentity(
-  sessionId: string,
+  sessionId: OrcaSessionId,
   db: OrchestrationDb | null | undefined,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-): OrchestrationCallerIdentity & { actor: string } {
+): OrchestrationCallerIdentity & { orcaSessionId: OrcaSessionId } {
   const lineage = store ? structuredSessionLineage(store, sessionId) : null
-  const actor = formatOrchestrationActor({
-    kind: 'session',
-    id: lineage?.rootSessionId ?? sessionId
-  })
+  const root = lineage?.rootSessionId ?? sessionId
+  // Record ids are minted as Orca session ids; one that is not cannot name the conversation.
+  const orcaSessionId = isOrcaSessionId(root) ? root : sessionId
   // A worker identity is minted for one session, so it is looked up on the one running now.
   const worker = resolveStructuredWorkerIdentityForSession(
     lineage?.live?.sessionId ?? sessionId,
     db
   )
   return {
-    actor,
-    address: worker?.handle ?? actor,
+    orcaSessionId,
+    address: worker?.handle ?? formatOrcaSessionAddress(orcaSessionId),
     terminalHandle: worker?.handle ?? null,
     paneKey: worker?.paneKey ?? null
   }
@@ -189,13 +191,12 @@ export function sessionOrchestrationIdentity(
  * the conversation, whose root session is the one a Dispatch assigned.
  */
 export function hasLostStructuredWorkerIdentity(
-  identity: OrchestrationCallerIdentity & { actor: string },
+  identity: OrchestrationCallerIdentity,
   db: OrchestrationDb
 ): boolean {
-  const conversation = parseOrchestrationActor(identity.actor)
   return (
     identity.terminalHandle === null &&
-    conversation !== null &&
-    isRecordedStructuredWorkerSession(conversation.id, db)
+    identity.orcaSessionId !== null &&
+    isRecordedStructuredWorkerSession(identity.orcaSessionId, db)
   )
 }

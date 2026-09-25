@@ -10,10 +10,13 @@
  */
 
 import {
-  formatOrchestrationActor,
-  parseOrchestrationActor,
-  sessionOrchestrationActor
-} from '../../../../../../shared/orchestration-actor'
+  ORCA_SESSION_ADDRESS_PREFIX,
+  formatOrcaSessionAddress,
+  isOrcaSessionId,
+  parseOrcaSessionAddress,
+  type OrcaSessionAddress,
+  type OrcaSessionId
+} from '../../../../../../shared/orca-session-address'
 // The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration-session-caller-codes'
 import {
@@ -23,10 +26,8 @@ import {
 } from '../../../../orchestration/structured-session-mail-address'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 
-const SESSION_PREFIX = 'session:'
-
-/** `actor` is the `session:<id>` spelling; the mailbox mail lands in is the session's identity address. */
-export type SessionRecipient = { sessionId: string; actor: string }
+/** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
+export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionAddress }
 
 export type SessionRecipientRefusal = {
   code: (typeof CODES)[keyof typeof CODES]
@@ -35,7 +36,7 @@ export type SessionRecipientRefusal = {
 
 /** Whether a recipient may name a session, so the caller can install the session host first. */
 export function mayNameSession(recipient: string): boolean {
-  return recipient.startsWith(SESSION_PREFIX) || sessionOrchestrationActor(recipient) !== null
+  return recipient.startsWith(ORCA_SESSION_ADDRESS_PREFIX) || isOrcaSessionId(recipient)
 }
 
 /**
@@ -46,22 +47,22 @@ export function readSessionRecipient(
   recipient: string,
   store: AgentSessionRecordReader | null
 ): SessionRecipient | SessionRecipientRefusal | null {
-  if (recipient.startsWith(SESSION_PREFIX)) {
-    const actor = parseOrchestrationActor(recipient)
-    return actor
-      ? { sessionId: actor.id, actor: formatOrchestrationActor(actor) }
+  if (recipient.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+    const sessionId = parseOrcaSessionAddress(recipient)
+    return sessionId
+      ? { sessionId, address: formatOrcaSessionAddress(sessionId) }
       : {
           code: CODES.unknown,
           message: `${recipient} does not name an Orca agent session id. No message was sent.`
         }
   }
-  const actor = sessionOrchestrationActor(recipient)
-  const found = actor && store ? lookupOrcaAgentSession(store, actor.id) : null
+  const sessionId = isOrcaSessionId(recipient) ? recipient : null
+  const found = sessionId && store ? lookupOrcaAgentSession(store, sessionId) : null
   if (found?.kind === 'provider-id') {
     return providerIdRefusal(recipient, found.orcaSessionId)
   }
-  return actor && found?.kind === 'found'
-    ? { sessionId: actor.id, actor: formatOrchestrationActor(actor) }
+  return sessionId && found?.kind === 'found'
+    ? { sessionId, address: formatOrcaSessionAddress(sessionId) }
     : null
 }
 
@@ -112,6 +113,6 @@ export function refuseUndeliverableSessionRecipient(
 function providerIdRefusal(id: string, orcaSessionId: string): SessionRecipientRefusal {
   return {
     code: CODES.providerId,
-    message: `${id} is the provider's own session id, which changes on /clear. This session's Orca address is session:${orcaSessionId}; use that instead. No message was sent.`
+    message: `${id} is the provider's own session id, which changes on /clear. This session's Orca address is ${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}; use that instead. No message was sent.`
   }
 }
