@@ -547,12 +547,13 @@ describe('restart', () => {
    *  them. Every lease loads unreconciled, so this is the state that decides
    *  whether a persisted session is reachable at all. */
   async function reboot(
-    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>,
+    adapterOverrides: Partial<StructuredAgentSessionAdapter> = {}
   ) {
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
     host = new StructuredAgentSessionHost({
       store,
-      adapter: adapter(),
+      adapter: { ...adapter(), ...adapterOverrides },
       journalRoot: root,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
@@ -666,6 +667,18 @@ describe('restart', () => {
     // Mid-start the lease is only reserved; ownership does not wait for the agent.
     expect(claimMidStart).toBe('reserved')
     expect(status).toMatchObject({ owner: 'native' })
+  })
+
+  it('vouches for no owner of a chat in manual recovery or one this host cannot run', async () => {
+    await attach()
+    await store.transitionHandoff(SESSION, (record) => ({
+      ...record,
+      lease: { ...record.lease, handoffStage: 'manual-recovery' }
+    }))
+    expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'none', phase: 'failed' })
+
+    await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
+    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
   })
 
   it("keeps a session whose owner cannot be probed out of a live writer's hands", async () => {
