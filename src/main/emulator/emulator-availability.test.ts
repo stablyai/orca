@@ -14,7 +14,8 @@ type FakeBridgeOverrides = {
 const NO_ANDROID: BackendAvailability = {
   available: false,
   devices: [],
-  message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
+  message:
+    'Android platform-tools (adb) not found. Install Android Studio or standalone platform-tools, then set ANDROID_HOME.'
 }
 
 // A minimal stand-in exposing only what inspectEmulatorAvailability touches: the
@@ -47,7 +48,7 @@ describe('inspectEmulatorAvailability', () => {
   it('falls back to the Android setup message when no backend is available', async () => {
     const result = await inspectEmulatorAvailability(fakeBridge({ supported: false }))
     expect(result.available).toBe(false)
-    expect(result.message).toMatch(/Android SDK/)
+    expect(result.message).toMatch(/Android platform-tools/)
     expect(result.devices).toEqual([])
   })
 

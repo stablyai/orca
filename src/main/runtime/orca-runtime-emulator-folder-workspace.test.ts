@@ -158,4 +158,14 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
     expect(bridge.shutdownActiveManagedForWorktree).toHaveBeenCalledWith(FOLDER_WORKSPACE_KEY)
     expect(release).toHaveBeenCalledWith({ cleanupIfUnused: true })
   })
+
+  it('exposes ADB connection methods on the runtime edge surface', () => {
+    const runtime = new OrcaRuntimeService()
+
+    expect(typeof runtime.emulatorAdbConnect).toBe('function')
+    expect(typeof runtime.emulatorAdbDisconnect).toBe('function')
+    expect(typeof runtime.emulatorAdbConnectionStatus).toBe('function')
+    expect(typeof runtime.emulatorInstall).toBe('function')
+    expect(typeof runtime.emulatorLaunch).toBe('function')
+  })
 })

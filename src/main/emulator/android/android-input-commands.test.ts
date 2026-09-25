@@ -6,8 +6,7 @@ import { androidExec, androidTap } from './android-input-commands'
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  avdTools: { emulator: '/sdk/emulator', avdmanager: '/sdk/avdmanager' }
 }
 
 const ok: AndroidCommandResult = { stdout: 'ok', stderr: '', code: 0 }
