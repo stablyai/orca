@@ -16,6 +16,10 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import {
+  DEFAULT_TAB_GROUP_SPLIT_DIVIDER_DARK,
+  DEFAULT_TAB_GROUP_SPLIT_DIVIDER_LIGHT
+} from './tab-group-split-divider'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -84,6 +88,8 @@ export function buildDefaultSettings(args: {
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
+    tabGroupSplitDividerColorDark: DEFAULT_TAB_GROUP_SPLIT_DIVIDER_DARK,
+    tabGroupSplitDividerColorLight: DEFAULT_TAB_GROUP_SPLIT_DIVIDER_LIGHT,
     terminalInactivePaneOpacity: args.terminalInactivePaneOpacity,
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 140,

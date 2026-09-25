@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../lib/document-theme', () => ({
-  applyDocumentTheme: mocks.applyDocumentTheme
+  applyDocumentTheme: mocks.applyDocumentTheme,
+  resolveDocumentTheme: (theme: string) => theme === 'dark'
 }))
 
 vi.mock('@/lib/app-font-family', () => ({
@@ -73,6 +74,22 @@ describe('useDocumentAppearance', () => {
     expect(mocks.applyDocumentTheme).toHaveBeenCalledTimes(2)
     expect(mocks.buildAppFontFamily).toHaveBeenLastCalledWith('Monaco')
     expect(mocks.buildAppFontFamily).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('re-applies the workspace split divider when its color changes', () => {
+    const { unmount } = renderHook(() => useDocumentAppearance())
+
+    act(() => {
+      const settings = useAppStore.getState().settings!
+      useAppStore.setState({
+        settings: { ...settings, tabGroupSplitDividerColorDark: '#ff0000' }
+      })
+    })
+
+    expect(document.documentElement.style.getPropertyValue('--tab-group-split-divider')).toBe(
+      '#ff0000'
+    )
     unmount()
   })
 })
