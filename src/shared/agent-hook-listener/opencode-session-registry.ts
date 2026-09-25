@@ -161,6 +161,10 @@ export function resolveOpenCodeSharedServerEnvelope(args: {
   sessionId: string | undefined
 }): OpenCodeStampedEnvelope {
   const { state, source, stamped, sessionId } = args
+  // Why opencode2 is absent: Orca launches it with --standalone, so its server
+  // is private to the pane and the stamp already names the right pane — there
+  // is nothing to rewrite. Drop that flag and opencode2 must join this list, or
+  // its posts freeze onto whichever pane started the shared server.
   if ((source !== 'opencode' && source !== 'mimo-code') || !sessionId) {
     return stamped
   }
