@@ -249,6 +249,36 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary).toMatchObject({ hasFailed: true, hasInterrupted: false, hasLiveDone: false })
   })
 
+  it('reads a retained failed agent as failed after its pane goes away, not done', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const retainedTab = makeTab('tab-2', 'repo::/wt-2')
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: { 'repo::/wt-2': [retainedTab] },
+        agentStatusEpoch: 4,
+        agentStatusByPaneKey: {},
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {
+          'tab-2:0': {
+            entry: makeAgentStatusEntry({
+              paneKey: 'tab-2:0',
+              state: 'done',
+              mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1_000 }
+            }),
+            worktreeId: 'repo::/wt-2',
+            tab: retainedTab,
+            agentType: 'claude',
+            startedAt: 1_000
+          }
+        }
+      },
+      'repo::/wt-2'
+    )
+
+    expect(summary).toMatchObject({ hasFailed: true, hasRetainedDone: false })
+  })
+
   it('lets an unconfirmed restored row suppress only its pane title', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)

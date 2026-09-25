@@ -24,9 +24,15 @@ export function agentMainAgentVerdict(
   return row.mainAgent?.outcome ?? row.outcome ?? (row.interrupted === true ? 'cancellation' : null)
 }
 
-/** The turn ended without finishing its work: stopped, or failed. Policy that reads a clean
- *  finish (completion time, hibernation, sticky evidence) treats both alike. */
+/** The turn ended without finishing its work: stopped, or failed. Clean-finish policy
+ *  (hibernation, pane ownership, the value moment) treats both alike. */
 export function agentTurnEndedUncleanly(row: AgentMainAgentVerdictSource): boolean {
   const verdict = agentMainAgentVerdict(row)
   return verdict === 'cancellation' || verdict === 'failure'
+}
+
+/** The user stopped the turn. Attention (completion time, Smart Sort, sticky retention) demotes
+ *  only this: a failure is news the user has not seen, so it ranks like a completion. */
+export function agentTurnStoppedByUser(row: AgentMainAgentVerdictSource): boolean {
+  return agentMainAgentVerdict(row) === 'cancellation'
 }

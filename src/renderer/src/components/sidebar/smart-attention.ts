@@ -1,6 +1,6 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
+import { agentTurnStoppedByUser } from '../../../../shared/agent-main-agent-verdict'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -86,15 +86,15 @@ export function hasFreshAttributedAgentStatus(
 
 /**
  * Return the timestamp of the most recent `done`/`blocked`/`waiting` history row, ignoring
- * `done` rows that stopped (Ctrl+C) or failed. Returns `null` when no qualifying row exists.
+ * `done` rows the user stopped (Ctrl+C). Returns `null` when no qualifying row exists.
  */
 export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]): number | null {
   let max = 0
   for (const h of history) {
-    // Why: history rows keep the verdict, so filter a stopped or failed turn like the current entry.
+    // Why: history rows keep the verdict, so filter a stopped turn like the current entry.
     if (h.state === 'done' || h.state === 'blocked' || h.state === 'waiting') {
       // Why: Infinity from a corrupted row would pin the worktree atop Class 3 forever; treat non-finite as missing.
-      if (agentTurnEndedUncleanly(h) || !Number.isFinite(h.startedAt)) {
+      if (agentTurnStoppedByUser(h) || !Number.isFinite(h.startedAt)) {
         continue
       }
       if (h.startedAt > max) {
@@ -161,8 +161,8 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         ts = entry.stateStartedAt
         cause = entry.state
       } else if (entry.state === 'done') {
-        // Why: null covers a stopped or failed `done` (not a completion) and idle session
-        // boundaries; neither is attention.
+        // Why: null covers a stopped `done` (not a completion) and idle session boundaries;
+        // neither is attention. A failed `done` ranks here: it is news the user has not seen.
         const completedAt = agentEntryCompletionAt(entry)
         if (completedAt === null) {
           continue

@@ -110,6 +110,11 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
     ).toEqual([])
+    // A failure ranks like a completion for attention, but a failed pane is never passive.
+    const failed = entry({ mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: OLD } })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [failed.paneKey]: failed } }))
+    ).toEqual([])
     const noSession = entry({ providerSession: undefined })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))

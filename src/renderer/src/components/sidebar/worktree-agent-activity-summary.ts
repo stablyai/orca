@@ -151,7 +151,12 @@ function getWorktreeAgentActivitySummaries(
 
   for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     const summary = summaryForWorktree(retained.worktreeId)
-    summary.hasRetainedDone = true
+    // Why: a failed agent is retained so its failure stays visible, not so it reads done.
+    if (agentMainAgentVerdict(retained.entry) === 'failure') {
+      summary.hasFailed = true
+    } else {
+      summary.hasRetainedDone = true
+    }
     const paneIdentity = parseAgentStatusPaneIdentity(retained.entry?.paneKey)
     if (paneIdentity) {
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
