@@ -134,14 +134,15 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
       ? { beforeProviderChildStop: () => context.restartWitness?.beforeStop(sessionId) }
       : {}),
     // Host state must not disagree with the adapter for the steps in between.
-    onProviderChildStopped: () => {
+    onProviderChildStopped: (verdict) => {
       if (stopping) {
         endProviderChild(session, {
           generation: stopping.generation,
           fence: stopping.fence,
           cause: ending,
           reason: null,
-          duringStartup: stopping.phase === 'starting'
+          duringStartup: stopping.phase === 'starting',
+          ...verdict
         })
       }
       context.restartWitness?.stopped(sessionId)

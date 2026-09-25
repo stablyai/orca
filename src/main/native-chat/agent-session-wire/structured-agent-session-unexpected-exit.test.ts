@@ -39,7 +39,8 @@ function recoveryContext(input: {
       fence: 7,
       cause: 'exit',
       reason: null,
-      duringStartup: false
+      duringStartup: false,
+      rootGone: true
     }
   }
   const record = {

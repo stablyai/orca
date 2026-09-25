@@ -40,14 +40,19 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   phase: StructuredAgentSessionProviderChildPhase
 }
 
+/** What ending a child established about its provider root. A stop's comes only from
+ *  `stopAgentSessionProviderRoot`; an observed exit's root is gone by definition. */
+export type StructuredAgentSessionStopVerdict = { rootGone: boolean }
+
 /** How the conversation's last child ended. In memory only: the delivery loop reads it to tell a
  *  Stop from a failure. */
-export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChildIdentity & {
-  cause: 'exit' | 'attach-failed' | 'stop' | 'evict'
-  /** The provider's own diagnostic, when the ending carried one. */
-  reason: string | null
-  duringStartup: boolean
-}
+export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChildIdentity &
+  StructuredAgentSessionStopVerdict & {
+    cause: 'exit' | 'attach-failed' | 'stop' | 'evict'
+    /** The provider's own diagnostic, when the ending carried one. */
+    reason: string | null
+    duringStartup: boolean
+  }
 
 /** The conversation: its journal, params and readers outlive any child that serves it. */
 export type StructuredAgentSessionHostSession = {

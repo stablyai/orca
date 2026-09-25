@@ -78,7 +78,9 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         fence: child.fence,
         cause: 'exit',
         reason: unexpectedEvent.reason,
-        duringStartup: exitedDuringStartup
+        duringStartup: exitedDuringStartup,
+        // The adapter publishes an exit only once it saw the root go, first-hand or proven.
+        rootGone: true
       })
       context.publishStatus?.(unexpectedEvent.sessionId)
     }

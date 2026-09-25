@@ -174,9 +174,13 @@ describe('a child that will not stop', () => {
     ctx.adapter.closeSession = vi.fn(async () => {
       throw error
     })
+    const stopped = vi.fn()
+    ctx.onProviderChildStopped = stopped
 
     await evictStructuredAgentSession(ctx)
 
+    // The host ends its child on the one reading of the verdict, not a second one of its own.
+    expect(stopped).toHaveBeenCalledWith({ rootGone: true })
     expect(ctx.order).toEqual([
       'drained',
       'settleWork',

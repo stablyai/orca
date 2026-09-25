@@ -262,6 +262,7 @@ describe('Stop on a child still proving its start', () => {
     // The same conversation: no reopen, the holder kept, and the chat told it is idle again.
     expect(conversation()?.journal).toBe(journal)
     expect(conversation()?.child).toBeNull()
+    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'stop', rootGone: true })
     expect(host.isHeld(SESSION)).toBe(true)
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionPhase')
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionOwned')

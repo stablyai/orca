@@ -24,7 +24,10 @@ import { refuseAgentSessionMutation } from './structured-agent-session-mutation-
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import { settleStaleSessionStateOnAcquire } from './structured-agent-session-stale-turn-verdict'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionProviderChild,
+  StructuredAgentSessionStopVerdict
+} from './structured-agent-session-host-types'
 import {
   endProviderChild,
   indexProviderChild,
@@ -178,7 +181,8 @@ async function runAttach(
         return conversation.journal
       },
       // The cleanup released the acquisition, which for a re-attach is the live child itself.
-      onAcquisitionReleased: (cause) => endReleasedChild(context, sessionId, cause),
+      onAcquisitionReleased: (cause, verdict) =>
+        endReleasedChild(context, sessionId, cause, verdict),
       onAttached: async (attached, acquisitionGeneration, acquiredOwner, providerChildPhase) => {
         const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
         const current = context.sessions.get(sessionId)?.child ?? null
@@ -247,7 +251,8 @@ type AttachCandidate = {
 function endReleasedChild(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
-  cause: unknown
+  cause: unknown,
+  verdict: StructuredAgentSessionStopVerdict
 ): void {
   const session = context.sessions.get(sessionId)
   const child = session?.child
@@ -259,7 +264,8 @@ function endReleasedChild(
       fence: child.fence,
       cause: 'attach-failed',
       reason: cause instanceof Error ? cause.message : String(cause),
-      duringStartup: child.phase === 'starting'
+      duringStartup: child.phase === 'starting',
+      ...verdict
     })
   ) {
     return

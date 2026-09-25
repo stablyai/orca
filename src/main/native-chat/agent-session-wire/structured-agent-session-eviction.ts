@@ -22,6 +22,7 @@ import {
   type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 export type StructuredAgentSessionEvictionContext = {
@@ -37,8 +38,9 @@ export type StructuredAgentSessionEvictionContext = {
   /** Fires right before the stop, while the child's turn and background roster are still live. A
    *  throw is logged, never allowed to abort the stop. */
   beforeProviderChildStop?: () => void
-  /** Fires once the adapter has PROVEN the child gone, so host bookkeeping stops claiming one. */
-  onProviderChildStopped?: () => void
+  /** Fires with the stop's verdict once `stopAgentSessionProviderRoot` read the root gone, so host
+   *  bookkeeping stops claiming a child. */
+  onProviderChildStopped?: (verdict: StructuredAgentSessionStopVerdict) => void
   /** Whether this host still owes the child's wind-down. Distinct from `hasProviderChild`, which a
    *  proven exit retires mid-run: the two disagree for exactly the steps a retry has to repeat. */
   owesProviderChildWindDown?: boolean
@@ -83,13 +85,13 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         }
         // An adapter with no close has nothing to stop; anything else must PROVE the exit.
         const stop = context.adapter.disposeSession ?? context.adapter.closeSession
-        if (
-          stop &&
-          !(await stopAgentSessionProviderRoot(() => stop.call(context.adapter, context.sessionId)))
-        ) {
+        const rootGone = stop
+          ? await stopAgentSessionProviderRoot(() => stop.call(context.adapter, context.sessionId))
+          : true
+        if (!rootGone) {
           throw new Error('provider child exit was not proven')
         }
-        context.onProviderChildStopped?.()
+        context.onProviderChildStopped?.({ rootGone })
       }
     },
     {
