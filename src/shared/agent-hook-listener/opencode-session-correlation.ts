@@ -29,10 +29,11 @@ export type CorrelatedPane = {
    */
   directory: string | null
   /**
-   * ms epoch of the pane's last interactive PTY write, or null/absent when the
-   * pane has never been typed into since Orca registered it. Supplied by the
-   * binder so same-directory ties can be broken by who actually submitted the
-   * prompt, not by who merely had a client alive.
+   * ms epoch of the pane's last prompt activity (renderer keystroke, or a
+   * prompt Orca delivered host-side), or null/absent when the pane has had
+   * none since Orca registered it. Supplied by the binder so same-directory
+   * ties can be broken by who actually submitted the prompt, not by who merely
+   * had a client alive.
    */
   lastInputAtMs?: number | null
 }
@@ -223,10 +224,11 @@ function tieBreakByFreshLaunch(
 }
 
 /**
- * Break a same-directory tie by who was actually typing. Submitting the prompt
- * that creates a session writes to that pane's PTY immediately beforehand, so
- * the candidate with the most recent pre-creation input is the creator. A
- * candidate with no recorded input, or one whose last keystroke fell outside
+ * Break a same-directory tie by who was actually submitting the prompt.
+ * Creating a session writes to that pane's PTY immediately beforehand —
+ * whether a human keystroke or a prompt Orca delivered host-side — so the
+ * candidate with the most recent pre-creation activity is the creator. A
+ * candidate with no recorded activity, or one whose last write fell outside
  * the window, contributes nothing; candidates recorded at the identical
  * instant tie and are both rejected rather than guessed between.
  */

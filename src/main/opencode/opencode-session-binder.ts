@@ -36,8 +36,9 @@ export type BinderPaneSnapshot = {
   worktreeId: string | null
   shellPid: number | null
   /**
-   * ms epoch of the pane's last interactive PTY write, null when the pane has
-   * not been typed into since it registered. Breaks same-directory ties.
+   * ms epoch of the pane's last prompt activity (renderer keystroke, or a
+   * prompt Orca delivered host-side), null when neither has happened since it
+   * registered. Breaks same-directory ties.
    */
   lastInputAtMs: number | null
 }

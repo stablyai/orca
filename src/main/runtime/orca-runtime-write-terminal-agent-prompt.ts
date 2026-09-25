@@ -21,6 +21,7 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import { notePtyInput } from '../memory/pty-registry'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -68,6 +69,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!this.ptyController?.write(ptyId, initialWrite)) {
         throw new Error('terminal_not_writable')
       }
+      // Why: a prompt Orca delivers is not a keystroke, so the renderer path
+      // never records it. Without this the pane that submitted the prompt shows
+      // no prompt activity, and OpenCode's same-directory tie could hand its
+      // session to a sibling pane that merely happened to be typed into.
+      notePtyInput(ptyId, Date.now())
     } catch (error) {
       renderGate?.dispose()
       throw error
@@ -85,11 +91,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     } else {
       const agent = this.getPtyAgent(ptyId)
       const submitDelayMs = options.promptForSchedule
-        ? resolveAgentPromptSubmitDelayForAgent(
-            writeHostPlatform,
-            options.promptForSchedule,
-            agent
-          )
+        ? resolveAgentPromptSubmitDelayForAgent(writeHostPlatform, options.promptForSchedule, agent)
         : getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength)
       await waitForAgentPromptDelay(submitDelayMs, options.signal)
     }

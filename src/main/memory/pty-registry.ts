@@ -27,10 +27,11 @@ export type PtyRegistration = {
   // PTY instead of throwing and dropping the whole snapshot.
   pid: number | null
   /**
-   * ms epoch of the last interactive write to this PTY. Absent until a
-   * keystroke arrives, and dropped when the PTY is re-registered under a new
-   * incarnation. The session binder reads it to decide which of two
-   * same-directory panes submitted the prompt that created a session (#22838).
+   * ms epoch of the last prompt activity on this PTY — a keystroke from the
+   * renderer, or a prompt Orca delivered host-side. Absent until one arrives,
+   * and dropped when the PTY is re-registered under a new incarnation. The
+   * session binder reads it to decide which of two same-directory panes
+   * submitted the prompt that created a session (#22838).
    */
   lastInputAtMs?: number
 }
@@ -46,7 +47,7 @@ export function unregisterPty(ptyId: string): void {
 }
 
 /**
- * Record an interactive write against a PTY. Ids the registry never learned
+ * Record prompt activity against a PTY. Ids the registry never learned
  * (remote PTYs, already-torn-down ones) are ignored so the row cannot be
  * created by input alone.
  */
