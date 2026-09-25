@@ -84,7 +84,7 @@ function request(overrides: Partial<AgentSessionForkRequest> = {}): AgentSession
     asChild: true,
     carryChanges: false,
     sourceHeadOid: 'a'.repeat(40),
-    baseBranchOverride: null,
+    base: { kind: 'parent-commit' },
     launchSource: 'sidebar',
     ...overrides
   }
@@ -127,7 +127,7 @@ beforeEach(() => {
 describe('runAgentSessionFork', () => {
   it('creates a child worktree at the parent commit and compares against the parent branch', async () => {
     await runAgentSessionFork(
-      request({ sourceHeadOid: 'a'.repeat(40), baseBranchOverride: null, asChild: true }),
+      request({ sourceHeadOid: 'a'.repeat(40), base: { kind: 'parent-commit' }, asChild: true }),
       onStage
     )
     const call = createCall()
@@ -148,12 +148,34 @@ describe('runAgentSessionFork', () => {
   })
 
   it('uses the override branch and skips carrying when a different base is chosen', async () => {
-    await runAgentSessionFork(request({ baseBranchOverride: 'main', carryChanges: true }), onStage)
+    await runAgentSessionFork(
+      request({ base: { kind: 'ref', ref: 'main' }, carryChanges: true }),
+      onStage
+    )
     const call = createCall()
     expect(call[2]).toBe('main')
     expect(call[24]).toBeUndefined()
     expect(mocks.carryRuntimeWorkingTreeChanges).not.toHaveBeenCalled()
     expect(onStage.mock.calls.map(([stage]) => stage)).toEqual(['creating', 'launching'])
+  })
+
+  it('lets createWorktree resolve the repo default base, without carrying or a compare ref', async () => {
+    await runAgentSessionFork(
+      request({ base: { kind: 'repo-default' }, carryChanges: true }),
+      onStage
+    )
+    const call = createCall()
+    expect(call[2]).toBeUndefined()
+    expect(call[24]).toBeUndefined()
+    expect(mocks.carryRuntimeWorkingTreeChanges).not.toHaveBeenCalled()
+  })
+
+  it('starts from the parent branch when the parent commit is unknown', async () => {
+    await runAgentSessionFork(request({ sourceHeadOid: null, carryChanges: true }), onStage)
+    const call = createCall()
+    expect(call[2]).toBe('feedback')
+    expect(call[24]).toBeUndefined()
+    expect(mocks.carryRuntimeWorkingTreeChanges).not.toHaveBeenCalled()
   })
 
   it('carries changes before launching and reports stages in order', async () => {

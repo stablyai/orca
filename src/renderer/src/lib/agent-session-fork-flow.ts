@@ -24,15 +24,21 @@ export type AgentSessionForkSource =
 
 export type AgentSessionForkStage = 'creating' | 'carrying' | 'launching'
 
+/** Where the child branch starts: the parent's HEAD, the repo's default base, or a chosen ref. */
+export type AgentSessionForkBase =
+  | { kind: 'parent-commit' }
+  | { kind: 'repo-default' }
+  | { kind: 'ref'; ref: string }
+
 export type AgentSessionForkRequest = {
   sourceWorktreeId: string
   name: string
   source: AgentSessionForkSource
   asChild: boolean
   carryChanges: boolean
-  /** Exact commit to start from; null means "use baseBranchOverride". */
+  /** The parent's HEAD for a parent-commit base; null falls back to the parent branch. */
   sourceHeadOid: string | null
-  baseBranchOverride: string | null
+  base: AgentSessionForkBase
   launchSource: AgentForkLaunchSource
 }
 
@@ -52,6 +58,20 @@ function shortBranchName(branch: string | null | undefined): string | null {
     return null
   }
   return trimmed.startsWith('refs/heads/') ? trimmed.slice('refs/heads/'.length) : trimmed
+}
+
+// Why: undefined lets createWorktree resolve the repo's configured default base ref.
+function resolveCreateBase(
+  request: AgentSessionForkRequest,
+  parentBranch: string | null
+): string | undefined {
+  if (request.base.kind === 'ref') {
+    return request.base.ref
+  }
+  if (request.base.kind === 'repo-default') {
+    return undefined
+  }
+  return request.sourceHeadOid ?? parentBranch ?? undefined
 }
 
 function sourceAgent(source: AgentSessionForkSource): TuiAgent | undefined {
@@ -152,8 +172,9 @@ export async function runAgentSessionFork(
   const repo = state.repos.find((entry) => entry.id === sourceWorktree.repoId)
   const connectionId = repo?.connectionId ?? null
   const parentBranch = shortBranchName(sourceWorktree.branch)
-  const startsAtParentCommit = request.baseBranchOverride === null && request.sourceHeadOid !== null
-  const base = request.baseBranchOverride ?? request.sourceHeadOid ?? parentBranch ?? undefined
+  const startsAtParentCommit =
+    request.base.kind === 'parent-commit' && request.sourceHeadOid !== null
+  const base = resolveCreateBase(request, parentBranch)
 
   onStage('creating')
   let created: Awaited<ReturnType<typeof state.createWorktree>>

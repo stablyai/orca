@@ -19,10 +19,8 @@ import {
   parseAgentSessionForkModalData,
   type AgentSessionForkModalData
 } from './agent-session-fork-modal-data'
-import {
-  useAgentSessionForkDialogState,
-  type AgentSessionForkCarryAvailability
-} from './use-agent-session-fork-dialog-state'
+import { useAgentSessionForkDialogState } from './use-agent-session-fork-dialog-state'
+import type { AgentSessionForkCarryAvailability } from './agent-session-fork-parent-probe'
 import { AgentSessionForkSessionField } from './AgentSessionForkSessionField'
 import { AgentSessionForkAdvancedFields } from './AgentSessionForkAdvancedFields'
 
@@ -151,9 +149,10 @@ function AgentSessionForkDialogBody({
               open={state.advancedOpen}
               onOpenChange={state.setAdvancedOpen}
               repoId={source.worktree.repoId}
-              baseBranch={state.baseBranchOverride}
+              base={state.base}
               parentBranch={source.parentBranch}
-              onBaseBranchChange={state.setBaseBranchOverride}
+              workspace={workspace}
+              onBaseChange={state.setBase}
               disabled={state.busy}
             />
           ) : null}

@@ -95,14 +95,15 @@ vi.mock('@/lib/worktree-agent-fork-sessions', () => ({
 }))
 
 vi.mock('@/components/repo/CreateFromPicker', () => ({
-  CreateFromPicker: (props: { onValueChange: (value: string) => void }) => (
-    <button
-      type="button"
-      data-testid="create-from-picker"
-      onClick={() => props.onValueChange('main')}
-    >
-      pick base
-    </button>
+  CreateFromPicker: (props: { value: string; onValueChange: (value: string) => void }) => (
+    <div data-testid="create-from-picker" data-value={props.value}>
+      <button type="button" onClick={() => props.onValueChange('main')}>
+        pick main
+      </button>
+      <button type="button" onClick={() => props.onValueChange('')}>
+        pick project default
+      </button>
+    </div>
   )
 }))
 
@@ -227,6 +228,12 @@ async function openSessionSelect(): Promise<string[]> {
   )
 }
 
+function pickerValue(): string | null {
+  return (
+    document.querySelector('[data-testid="create-from-picker"]')?.getAttribute('data-value') ?? null
+  )
+}
+
 async function submitWithEnter(): Promise<void> {
   const input = nameInput()
   // Why: happy-dom lacks implicit submission; requestSubmit is what Enter in a form field runs.
@@ -309,9 +316,9 @@ describe('AgentSessionForkDialog', () => {
     mocks.getRuntimeGitStatus.mockResolvedValue(statusWith(DIRTY_ENTRIES))
     await renderDialog()
     act(() => buttonByText('Advanced').click())
-    const picker = document.querySelector<HTMLButtonElement>('[data-testid="create-from-picker"]')
-    expect(picker).toBeTruthy()
-    act(() => picker?.click())
+    expect(pickerValue()).toBe('feature/auth')
+    act(() => buttonByText('pick main').click())
+    expect(pickerValue()).toBe('main')
     expect(carrySwitch()?.disabled).toBe(true)
     expect(carrySwitch()?.getAttribute('aria-checked')).toBe('false')
     expect(bodyText()).toContain(
@@ -320,9 +327,85 @@ describe('AgentSessionForkDialog', () => {
 
     await submitWithEnter()
     expect(mocks.runAgentSessionFork).toHaveBeenCalledWith(
-      expect.objectContaining({ carryChanges: false, baseBranchOverride: 'main' }),
+      expect.objectContaining({ carryChanges: false, base: { kind: 'ref', ref: 'main' } }),
       expect.any(Function)
     )
+  })
+
+  it('treats "Project default" as the repo default base, not the parent commit', async () => {
+    mocks.getRuntimeGitStatus.mockResolvedValue(statusWith(DIRTY_ENTRIES))
+    await renderDialog()
+    act(() => buttonByText('Advanced').click())
+    act(() => buttonByText('pick project default').click())
+    expect(pickerValue()).toBe('')
+    expect(carrySwitch()?.disabled).toBe(true)
+    expect(bodyText()).toContain(
+      'Only available when starting from the current commit of Fix auth.'
+    )
+    expect(bodyText()).toContain('Default: the current commit of feature/auth.')
+
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledWith(
+      expect.objectContaining({ carryChanges: false, base: { kind: 'repo-default' } }),
+      expect.any(Function)
+    )
+  })
+
+  it("resets to the parent's commit and re-enables the carry switch", async () => {
+    mocks.getRuntimeGitStatus.mockResolvedValue(statusWith(DIRTY_ENTRIES))
+    await renderDialog()
+    act(() => buttonByText('Advanced').click())
+    expect(bodyText()).not.toContain("Start from Fix auth's commit")
+    act(() => buttonByText('pick main').click())
+    expect(carrySwitch()?.disabled).toBe(true)
+
+    act(() => buttonByText("Start from Fix auth's commit").click())
+    expect(pickerValue()).toBe('feature/auth')
+    expect(carrySwitch()?.disabled).toBe(false)
+    expect(carrySwitch()?.getAttribute('aria-checked')).toBe('true')
+    expect(bodyText()).not.toContain("Start from Fix auth's commit")
+
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledWith(
+      expect.objectContaining({ carryChanges: true, base: { kind: 'parent-commit' } }),
+      expect.any(Function)
+    )
+  })
+
+  it('waits for the parent status before forking so a fast Enter keeps the parent commit', async () => {
+    let resolveStatus: (status: GitStatusResult) => void = () => {}
+    mocks.getRuntimeGitStatus.mockReturnValue(
+      new Promise<GitStatusResult>((resolve) => {
+        resolveStatus = resolve
+      })
+    )
+    await renderDialog()
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).not.toHaveBeenCalled()
+    expect(buttonByText('Create Fork').disabled).toBe(true)
+
+    await act(async () => resolveStatus(statusWith(DIRTY_ENTRIES)))
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        sourceHeadOid: HEAD_OID,
+        base: { kind: 'parent-commit' },
+        carryChanges: true
+      }),
+      expect.any(Function)
+    )
+  })
+
+  it('forks from the parent branch when the status read fails', async () => {
+    mocks.getRuntimeGitStatus.mockRejectedValue(new Error('offline'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await renderDialog()
+    expect(carrySwitch()).toBeNull()
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceHeadOid: null, carryChanges: false }),
+      expect.any(Function)
+    )
+    warn.mockRestore()
   })
 
   it('disables the carry switch when the runtime host lacks the capability', async () => {
@@ -369,7 +452,7 @@ describe('AgentSessionForkDialog', () => {
         asChild: true,
         carryChanges: true,
         sourceHeadOid: HEAD_OID,
-        baseBranchOverride: null,
+        base: { kind: 'parent-commit' },
         launchSource: 'sidebar'
       },
       expect.any(Function)
