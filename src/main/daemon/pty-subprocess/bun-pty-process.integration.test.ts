@@ -1,10 +1,11 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess, runProcessSync } from '../../../shared/child-process/run-process'
 import { orcadBunRuntimeFilename } from '../../../shared/orcad-artifacts'
 import { ORCAD_BUN_VERSION } from '../../../shared/orcad-bun-runtime'
+import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 
 const runtimePath =
   process.env.BUN_EXECUTABLE ??
@@ -30,7 +31,7 @@ async function runTerminalScript(script: string): Promise<unknown> {
     expect(result.code, result.stderr).toBe(0)
     return JSON.parse(result.stdout)
   } finally {
-    rmSync(directory, { recursive: true, force: true })
+    removeTreeSync(directory)
   }
 }
 
