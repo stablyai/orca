@@ -655,7 +655,7 @@ export class PtyHandler {
   private async nodePtyUnavailableError(spawnError?: unknown): Promise<Error> {
     const nodePtyDir = this.relayNodePtyDir()
     const diagnosis = await collectNodePtyUnavailableDiagnosis({
-      nodePtyDir: existsSync(nodePtyDir) ? nodePtyDir : null,
+      nodePtyDir,
       error: spawnError ?? this.lastPtyLoadError
     })
     return Object.assign(new Error(formatNodePtyUnavailableMessage(diagnosis)), {

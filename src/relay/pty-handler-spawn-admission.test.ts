@@ -1,11 +1,12 @@
 import './mock-descendant-sweep'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import * as ptyShellUtils from './pty-shell-utils'
 import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
+import * as runProcessModule from '../shared/child-process/run-process'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -325,14 +326,30 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('keeps the load error it was handed instead of replacing it with guesses', async () => {
-    // #17830: the user got three remedies for four possible faults and could verify none.
-    // The relay must carry what it was actually told, and must not prescribe a toolchain
-    // install it never probed for.
-    const thrown =
-      'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
+  it('diagnoses a relay installed without node-pty instead of asking for a reconnect (#20386)', async () => {
+    // Relies on no node-pty beside the relay source — what the no-toolchain deploy leaves. Absence
+    // is observed on the owning host, so it is a diagnosis (docs/reference/ssh-execution-boundary.md).
+    expect(typeof process.resourcesPath, 'packaged node-pty lookup must be off').not.toBe('string')
+    expect(
+      existsSync(join(__dirname, 'node_modules', 'node-pty')),
+      'a node-pty beside src/relay would turn this into the installed-but-unbuilt case'
+    ).toBe(false)
+    const realRunProcess = runProcessModule.runProcess
+    vi.spyOn(runProcessModule, 'runProcess').mockImplementation((spec) =>
+      spec.program === '/bin/sh'
+        ? Promise.resolve({
+            stdout: 'HAVE python3\nPKG apt-get\n',
+            stderr: '',
+            code: 0,
+            signal: null,
+            timedOut: false
+          })
+        : realRunProcess(spec)
+    )
     mockPtySpawn.mockImplementationOnce(() => {
-      throw new Error(thrown)
+      throw new Error(
+        'Failed to load native module: pty.node, checked: build/Release, prebuilds/linux-x64'
+      )
     })
 
     const message = await dispatcher.callRequest('pty.spawn', {}).then(
@@ -340,12 +357,10 @@ describe('PtyHandler', () => {
       (error: Error) => error.message
     )
 
-    expect(message).toContain(thrown)
-    expect(message).not.toContain('install make, a C++ compiler, and python3')
-    // Nothing here established a cause — the relay's node-pty directory is not on disk in
-    // this harness — so per docs/reference/ssh-execution-boundary.md it must say so rather
-    // than pick a diagnosis. Every message still names the host, for the bug report.
-    expect(message).toContain('could not establish why')
+    expect(message).not.toContain('could not establish why')
+    expect(message).toContain('node-pty is not installed at')
+    expect(message).toContain('sudo apt-get install -y build-essential python3')
+    // Every message still names the host, for the bug report.
     expect(message).toMatch(/Host: linux\/\w+, .*Node v[\d.]+ \(ABI \d+\)/)
   })
 

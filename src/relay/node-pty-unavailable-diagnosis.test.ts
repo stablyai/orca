@@ -27,6 +27,7 @@ const SEARCHED = ['build/Release', 'build/Debug', 'prebuilds/linux-x64']
 
 const INSTALLED: NodePtyBindingSurvey = {
   moduleDir: MODULE_DIR,
+  installed: true,
   bindingPath: `${MODULE_DIR}/build/Release/pty.node`,
   searched: SEARCHED,
   builtNodeAbi: null,
@@ -140,6 +141,17 @@ describe('diagnoseNodePtyUnavailable', () => {
     })
     expect(present.reason).toBe('dependency_missing')
     expect(formatNodePtyUnavailableMessage(present)).not.toContain('apt-get')
+  })
+
+  it('names an absent node-pty directory as not installed and still offers the build tools (#20386)', () => {
+    // The no-toolchain deploy removes node-pty outright, so there is no directory to search.
+    const text = message({
+      survey: { ...NOTHING_INSTALLED, installed: false, searched: [] },
+      toolchain: toolchain(['python3'])
+    })
+    expect(text).toContain(`node-pty is not installed at ${MODULE_DIR}`)
+    expect(text).toContain('sudo apt-get install -y build-essential python3')
+    expect(text).not.toContain('reconnect to retry')
   })
 
   it('reports a binding that killed the probe as a crash rather than a miss', () => {
