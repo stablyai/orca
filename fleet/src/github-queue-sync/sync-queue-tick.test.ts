@@ -14,8 +14,13 @@ function statusOf(github: InMemoryGithub, number: number): string[] {
 
 function setup(...numbers: number[]): InMemoryGithub {
   const github = new InMemoryGithub();
+  const multi = numbers.length > 1;
   for (const number of numbers) {
-    github.addIssue(number, { title: `Task ${number}`, body: buildIssueBody(), labels: [...READY_LABELS] });
+    github.addIssue(number, {
+      title: `Task ${number}`,
+      body: multi ? buildIssueBody({ scope: `scripts/task-${number}.mjs` }) : buildIssueBody(),
+      labels: [...READY_LABELS]
+    });
   }
   return github;
 }

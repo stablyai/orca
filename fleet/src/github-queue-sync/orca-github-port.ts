@@ -10,6 +10,12 @@ export interface OrcaGithubPortConfig {
 
 const READY_QUERY = 'is:issue is:open label:"status:ready"';
 
+const ACTIVE_STATUS_QUERIES = [
+  'is:issue is:open label:"status:claimed"',
+  'is:issue is:open label:"status:in-progress"',
+  'is:issue is:open label:"status:review"',
+] as const;
+
 function asRecord(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`Orca trả về ${what} không đúng dạng`);
@@ -90,6 +96,35 @@ export function createOrcaGithubPort(
           title: String(item.title ?? ''),
           labels: toLabels(item.labels)
         }));
+    },
+
+    async listActiveIssues(limit): Promise<QueueIssueSummary[]> {
+      const activeLabels = ['status:claimed', 'status:in-progress', 'status:review'];
+      const byNumber = new Map<number, QueueIssueSummary>();
+
+      for (const query of ACTIVE_STATUS_QUERIES) {
+        const raw = asRecord(await rpc('github.listWorkItems', { repo, limit, query }), 'listWorkItems');
+        if (raw.errors !== undefined && asRecord(raw.errors, 'errors').issues !== undefined) {
+          throw new Error(`Không đọc được danh sách issue: ${JSON.stringify(asRecord(raw.errors, 'errors').issues)}`);
+        }
+        const items = Array.isArray(raw.items) ? raw.items : [];
+        for (const rawItem of items) {
+          const item = asRecord(rawItem, 'work item');
+          const labels = toLabels(item.labels);
+          if (item.type === 'issue' && labels.some((l) => activeLabels.includes(l))) {
+            const num = item.number as number;
+            if (!byNumber.has(num)) {
+              byNumber.set(num, {
+                number: num,
+                title: String(item.title ?? ''),
+                labels,
+              });
+            }
+          }
+        }
+      }
+
+      return Array.from(byNumber.values()).slice(0, limit);
     },
 
     async readIssue(issueNumber) {

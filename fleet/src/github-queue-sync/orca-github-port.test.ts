@@ -119,4 +119,65 @@ describe('createOrcaGithubPort', () => {
     const { rpc } = fakeRpc({ 'github.repoSlug': null });
     await assert.rejects(createOrcaGithubPort(rpc, CONFIG).updateComment(1, 'x'), /không đúng dạng/);
   });
+
+  it('listActiveIssues: 3 lệnh query đúng nhãn, gộp trùng, lọc nhãn sai phía client, ném lỗi khi Orca báo errors.issues', async () => {
+    // 1. Kiểm tra 3 query, lọc PR/nhãn sai, và gộp trùng
+    let queryIndex = 0;
+    const { rpc, calls } = fakeRpc({
+      'github.listWorkItems': (params: unknown) => {
+        const p = params as { query: string };
+        queryIndex += 1;
+        if (p.query.includes('status:claimed')) {
+          return {
+            items: [
+              { type: 'issue', number: 10, title: 'Issue 10', labels: ['status:claimed'] },
+              { type: 'pr', number: 11, title: 'PR 11', labels: ['status:claimed'] },
+            ]
+          };
+        }
+        if (p.query.includes('status:in-progress')) {
+          return {
+            items: [
+              { type: 'issue', number: 10, title: 'Issue 10 duplicate', labels: ['status:in-progress'] },
+              { type: 'issue', number: 20, title: 'Issue 20', labels: ['status:in-progress'] },
+              { type: 'issue', number: 25, title: 'Issue 25', labels: ['status:wrong'] },
+            ]
+          };
+        }
+        if (p.query.includes('status:review')) {
+          return {
+            items: [
+              { type: 'issue', number: 30, title: 'Issue 30', labels: ['status:review'] },
+            ]
+          };
+        }
+        return { items: [] };
+      }
+    });
+
+    const port = createOrcaGithubPort(rpc, CONFIG);
+    const result = await port.listActiveIssues(10);
+
+    // Đúng 3 query được gửi
+    assert.equal(calls.length, 3);
+    assert.equal(calls[0]?.params && (calls[0].params as { query: string }).query, 'is:issue is:open label:"status:claimed"');
+    assert.equal(calls[1]?.params && (calls[1].params as { query: string }).query, 'is:issue is:open label:"status:in-progress"');
+    assert.equal(calls[2]?.params && (calls[2].params as { query: string }).query, 'is:issue is:open label:"status:review"');
+
+    // Gộp trùng (10 chỉ xuất hiện 1 lần), lọc PR (11 bị bỏ), lọc nhãn sai (25 bị bỏ)
+    assert.deepEqual(result, [
+      { number: 10, title: 'Issue 10', labels: ['status:claimed'] },
+      { number: 20, title: 'Issue 20', labels: ['status:in-progress'] },
+      { number: 30, title: 'Issue 30', labels: ['status:review'] },
+    ]);
+
+    // 2. Ném lỗi khi Orca báo errors.issues
+    const errRpc = fakeRpc({
+      'github.listWorkItems': { items: [], errors: { issues: { message: 'rate limit exceeded' } } }
+    });
+    await assert.rejects(
+      createOrcaGithubPort(errRpc.rpc, CONFIG).listActiveIssues(10),
+      /Không đọc được danh sách issue/
+    );
+  });
 });

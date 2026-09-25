@@ -15,3 +15,4 @@ export { parseStateMarker, renderStateMarker } from './state-marker.ts';
 export type { FleetStateMarker } from './state-marker.ts';
 export { MAX_SPAWN_FAILURES, SPAWN_FAILURE_MARKER, syncQueueTick } from './sync-queue-tick.ts';
 export type { DispatchRequest, DispatchWorker, QueueSyncDeps, TickReport } from './sync-queue-tick.ts';
+export { loadHolders } from './active-scope-holders.ts';

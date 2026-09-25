@@ -5,6 +5,10 @@ import { tryClaim } from './issue-claim.ts';
 import type { QueueStatus } from './label-state-machine.ts';
 import { planTransition } from './label-state-machine.ts';
 import { upsertProgressComment } from './progress-comment.ts';
+import type { DeferReason, ResourceVerdict } from '../resource-guard/resource-guard.ts';
+import { formatDeferReason } from '../resource-guard/resource-guard.ts';
+import { selectDispatchable, type ActiveTask } from '../file-overlap-guard/dispatch-selection.ts';
+import { loadHolders } from './active-scope-holders.ts';
 
 /** Số lần khởi chạy lỗi tối đa trước khi chặn task, thay vì trả về `ready` để bốc lại mãi. */
 export const MAX_SPAWN_FAILURES = 3;
@@ -29,13 +33,17 @@ export interface QueueSyncDeps {
   readonly dispatchWorker: DispatchWorker;
   readonly maxIssuesPerTick?: number;
   readonly now?: () => Date;
+  readonly resourceCheck?: () => ResourceVerdict;
+  readonly holdingStatuses?: readonly string[];
+  readonly log?: (msg: string) => void;
 }
 
 export interface TickReport {
   readonly returnedToTriage: number[];
   readonly dispatched: number[];
-  readonly skipped: { readonly issue: number; readonly reason: string }[];
+  readonly skipped: { readonly issue: number; readonly reason: string; readonly blockedBy?: readonly number[] }[];
   readonly failed: { readonly issue: number; readonly error: string }[];
+  readonly deferredByResources?: readonly DeferReason[];
 }
 
 async function moveTo(github: GithubPort, issueNumber: number, labels: readonly string[], to: QueueStatus): Promise<void> {
@@ -55,9 +63,42 @@ async function moveTo(github: GithubPort, issueNumber: number, labels: readonly 
  */
 export async function syncQueueTick(deps: QueueSyncDeps): Promise<TickReport> {
   const { github, runId } = deps;
+
+  // Thứ tự chi phí: kiểm tài nguyên trước mọi lệnh GitHub.
+  if (deps.resourceCheck !== undefined) {
+    const verdict = deps.resourceCheck();
+    if (!verdict.dispatch) {
+      for (const reason of verdict.reasons) {
+        deps.log?.(formatDeferReason(reason));
+      }
+      return {
+        returnedToTriage: [],
+        dispatched: [],
+        skipped: [],
+        failed: [],
+        deferredByResources: verdict.reasons,
+      };
+    }
+  }
+
   const report: TickReport = { returnedToTriage: [], dispatched: [], skipped: [], failed: [] };
   const limit = deps.maxIssuesPerTick ?? DEFAULT_ISSUES_PER_TICK;
   const now = deps.now ?? (() => new Date());
+
+  const holdingStatuses = deps.holdingStatuses ?? ['claimed', 'in-progress'];
+  let cachedHolders: ActiveTask[] | undefined;
+
+  // Hạn chế: Khoá chồng phạm vi chỉ đúng khi một Fleet mỗi repo. Nếu hai Fleet cùng tải
+  // danh sách active trước khi bên kia đổi nhãn claimed, cả hai có thể dispatch hai issue
+  // trùng phạm vi trong cửa sổ tranh chấp đó. tryClaim chỉ chống trùng cùng một issue, không
+  // chống trùng phạm vi giữa hai issue khác nhau. Ở lần poll tiếp theo hai task này sẽ thấy nhau,
+  // nhưng lúc đó đã dispatch rồi. Chấp nhận được ở giai đoạn này (chưa phải khoá nguyên tử phân tán).
+  async function getHolders(): Promise<ActiveTask[]> {
+    if (cachedHolders === undefined) {
+      cachedHolders = await loadHolders(github, holdingStatuses, deps.log);
+    }
+    return cachedHolders;
+  }
 
   async function handleIssue(issueNumber: number): Promise<void> {
     const { issue, comments } = await github.readIssue(issueNumber);
@@ -71,6 +112,26 @@ export async function syncQueueTick(deps: QueueSyncDeps): Promise<TickReport> {
       await moveTo(github, issueNumber, issue.labels, 'triage');
       await github.addComment(issueNumber, formatTriageComment(verdict.reasons));
       report.returnedToTriage.push(issueNumber);
+      return;
+    }
+
+    // Kiểm tra trùng lặp phạm vi file (sau khi assessIssue hợp lệ, trước tryClaim):
+    const currentHolders = await getHolders();
+    const candidate = {
+      issueNumber,
+      scope: verdict.form.scopePatterns,
+    };
+    const selection = selectDispatchable([candidate], currentHolders, holdingStatuses);
+    if (selection.deferred.length > 0) {
+      const def = selection.deferred[0]!;
+      report.skipped.push({
+        issue: issueNumber,
+        reason: 'scope-overlap',
+        blockedBy: def.blockedBy,
+      });
+      deps.log?.(
+        `[sync-queue-tick] Issue #${issueNumber} hoãn dispatch vì trùng phạm vi file với issue: ${def.blockedBy.join(', ')}`,
+      );
       return;
     }
 
@@ -93,6 +154,12 @@ export async function syncQueueTick(deps: QueueSyncDeps): Promise<TickReport> {
         updatedAt: now()
       });
       report.dispatched.push(issueNumber);
+      // Dispatch thành công -> thêm vào currentHolders (status: 'in-progress') để giữ khoá cho candidate sau:
+      currentHolders.push({
+        issueNumber,
+        scope: verdict.form.scopePatterns,
+        status: 'in-progress',
+      });
     } catch (error) {
       // Khởi chạy lỗi: trả hàng đợi, nhưng đủ số lần thì chặn (tránh vòng spawn vô hạn tốn tiền agent).
       const blocked = spawnFailuresBefore + 1 >= MAX_SPAWN_FAILURES;

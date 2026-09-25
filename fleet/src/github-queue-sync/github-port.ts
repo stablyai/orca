@@ -28,6 +28,8 @@ export interface LabelChange {
 export interface GithubPort {
   /** Issue đang mở mang nhãn `status:ready`, cũ nhất trước. */
   listReadyIssues(limit: number): Promise<QueueIssueSummary[]>;
+  /** Issue đang mở mang nhãn `status:claimed`, `status:in-progress` hoặc `status:review`. */
+  listActiveIssues(limit: number): Promise<QueueIssueSummary[]>;
   /** Một lượt gọi cho cả issue lẫn comment — tiết kiệm rate limit `gh`. */
   readIssue(issueNumber: number): Promise<{ readonly issue: QueueIssue; readonly comments: readonly IssueComment[] }>;
   addComment(issueNumber: number, body: string): Promise<IssueComment>;

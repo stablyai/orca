@@ -44,6 +44,14 @@ export class InMemoryGithub {
           .slice(0, limit)
           .map(([number, issue]) => ({ number, title: issue.title, labels: [...issue.labels] }));
       },
+      listActiveIssues: async (limit): Promise<QueueIssueSummary[]> => {
+        await tick();
+        const activeStatuses = ['status:claimed', 'status:in-progress', 'status:review'];
+        return [...this.issues.entries()]
+          .filter(([, issue]) => issue.labels.some((l) => activeStatuses.includes(l)))
+          .slice(0, limit)
+          .map(([number, issue]) => ({ number, title: issue.title, labels: [...issue.labels] }));
+      },
       readIssue: async (number) => {
         await tick();
         const issue = this.stored(number);
