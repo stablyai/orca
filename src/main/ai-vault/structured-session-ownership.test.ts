@@ -3,6 +3,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -81,6 +82,36 @@ describe('structured AI Vault ownership', () => {
       )
     ).resolves.toBeUndefined()
   })
+
+  it('allows a codex fork of an owned session', async () => {
+    installOwnership()
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `codex fork ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it('allows a claude fork of an owned session', async () => {
+    installOwnership({ provider: 'claude' })
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${PROVIDER_SESSION} --fork-session`,
+        async () => undefined
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it('still refuses a plain claude resume of an owned session', async () => {
+    installOwnership({ provider: 'claude' })
+    await expect(
+      assertLegacyAiVaultResumeCommandAllowed(
+        `claude --resume ${PROVIDER_SESSION}`,
+        async () => undefined
+      )
+    ).rejects.toThrow(/agent_session_(conflict|ownership_unknown)/)
+  })
 })
 
 function installOwnership(overrides: Partial<StructuredProviderSessionOwnership> = {}): void {
@@ -93,6 +124,12 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
     ...overrides
   }
   const record = agentSessionRecordFixture(ownership.lease)
+  // Why: claude handles key off sessionId, codex off threadId; a single shape would silently unmatch one provider.
+  const handle: AgentSessionProviderHandle =
+    ownership.provider === 'codex'
+      ? { provider: 'codex', threadId: ownership.providerSessionId }
+      : { provider: 'claude', sessionId: ownership.providerSessionId, leafUuid: null }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mock only implements the `deps.store.listRecords` surface this suite reads; the rest of `StructuredAgentSessionHost` is unused.
   setStructuredAgentSessionHost({
     deps: {
       store: {
@@ -105,7 +142,7 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
             providerHandleChain: [
               {
                 ...record.providerHandleChain[0]!,
-                handle: { provider: ownership.provider, threadId: ownership.providerSessionId }
+                handle
               }
             ],
             lease: { ...ownership.lease, sessionId: ownership.sessionId }

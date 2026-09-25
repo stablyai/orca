@@ -151,6 +151,10 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
   }
   const provider = /codex(?:\.exe)?$/i.test(normalized[executableIndex]!) ? 'codex' : 'claude'
   const args = normalized.slice(executableIndex + 1)
+  // Why: --fork-session resumes into a new session id, so it never writes the named session.
+  if (provider === 'claude' && args.some((token) => token.toLowerCase() === '--fork-session')) {
+    return null
+  }
   // `--continue`/`-c` resume the most recent session and never take an id, so a
   // following token is a prompt, not a target — they are always target-less.
   const targetlessFlags = provider === 'codex' ? [] : ['--continue', '-c']
