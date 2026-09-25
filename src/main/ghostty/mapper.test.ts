@@ -16,6 +16,41 @@ describe('mapGhosttyToOrca — font & cursor', () => {
     expect(result.unsupportedKeys).toEqual([])
   })
 
+  // Ghostty treats a repeated `font-family` as a fallback chain: the first entry
+  // is the primary face and the rest are fallbacks. The generic "last occurrence
+  // wins" flattening in the mapper kept the last one, i.e. the least-preferred
+  // face. See #15985.
+  it('keeps the first font-family when the key is repeated', () => {
+    const result = mapGhosttyToOrca({ 'font-family': ['Menlo', 'Monaco'] })
+    expect(result.diff).toEqual({ terminalFontFamily: 'Menlo' })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('skips blank entries when picking the first font-family', () => {
+    const result = mapGhosttyToOrca({ 'font-family': ['   ', 'Fira Code', 'Monaco'] })
+    expect(result.diff).toEqual({ terminalFontFamily: 'Fira Code' })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('takes the first font-family after a mid-list reset, not the cleared one', () => {
+    // Why: an empty entry resets the list, so only what follows it is still in
+    // effect. Searching the whole array would import `Fira Code`, which this
+    // config explicitly cleared before asking for Monaco.
+    const result = mapGhosttyToOrca({ 'font-family': ['Fira Code', '', 'Monaco'] })
+    expect(result.diff).toEqual({ terminalFontFamily: 'Monaco' })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('treats a trailing blank font-family as a cleared list, not a missing value', () => {
+    // Why: Ghostty documents an empty value on a repeatable key as resetting the list --
+    // "specify the value as "" (empty string) to reset the list and then set the new
+    // values". A config ending in `font-family = ` has therefore cleared its fonts on
+    // purpose, so importing the earlier entry would resurrect a font the user removed.
+    const result = mapGhosttyToOrca({ 'font-family': ['Fira Code', '   '] })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['font-family'])
+  })
+
   it('skips invalid font-size values', () => {
     const result = mapGhosttyToOrca({ 'font-size': 'not-a-number' })
     expect(result.diff).toEqual({})
