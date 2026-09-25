@@ -50,7 +50,11 @@ export function computeFitScale(scope: TerminalDocumentScope) {
   if (termWidth <= 0) {
     return 1
   }
-  const vpWidth = scope.viewportSize().width
+  const vpWidth = scope.viewportRect().width
+  // Why: a host hidden with display:none measures 0; a 0 scale would blank it when shown again.
+  if (vpWidth <= 0) {
+    return 1
+  }
   return Math.min(1, vpWidth / termWidth)
 }
 
@@ -83,7 +87,7 @@ export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: bool
     scope.scrollIndicator.classList.remove('visible')
     return
   }
-  const trackHeight = Math.max(0, scope.viewportSize().height - 8)
+  const trackHeight = Math.max(0, scope.viewportRect().height - 8)
   const totalRows = maxViewportY + (scope.term.rows || 0)
   if (trackHeight <= 0 || totalRows <= 0) {
     return

@@ -3,7 +3,7 @@ import type { TerminalDocumentScope } from './document-scope'
 import { getCellHeight } from './fit-scale'
 import { notify } from './host-notify'
 import { applyXtermSelection, selRange } from './selection-range'
-import { viewportToCell } from './viewport-cell'
+import { viewportPoint, viewportToCell } from './viewport-cell'
 import { getTotalScale } from './viewport-transform'
 
 /** How close to an edge a handle drag starts scrolling, in pixels. */
@@ -20,7 +20,7 @@ export function repositionOverlay(scope: TerminalDocumentScope) {
   const sPx = cellToViewportPx(scope, r.start.col, r.start.row)
   const ePx = cellToViewportPx(scope, r.end.col + 1, r.end.row)
   const cellH = getCellHeight(scope) * getTotalScale(scope)
-  const viewport = scope.viewportSize()
+  const viewport = scope.viewportRect()
   // Why: native iOS pattern — start handle anchors at the TOP of the
   // first selected cell (dot above, stem covers the cell going down);
   // end handle anchors at the BOTTOM of the last selected cell (dot
@@ -143,9 +143,10 @@ export function handleDragMove(
     return
   }
   repositionOverlay(scope)
-  if (clientY < EDGE_SCROLL_PX) {
+  const y = viewportPoint(scope, clientX, clientY).y
+  if (y < EDGE_SCROLL_PX) {
     startEdgeScroll(scope, -1)
-  } else if (clientY > scope.viewportSize().height - EDGE_SCROLL_PX) {
+  } else if (y > scope.viewportRect().height - EDGE_SCROLL_PX) {
     startEdgeScroll(scope, 1)
   } else {
     stopEdgeScroll(scope)

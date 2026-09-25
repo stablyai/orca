@@ -9,7 +9,8 @@ import {
   postToReactNativeWebView,
   windowCapturedEngineErrors,
   windowHasEngine,
-  windowViewportSize,
+  observeWindowViewport,
+  windowViewportRect,
   type TerminalDocumentHost,
   type TerminalDocumentHostSeams
 } from './document-host-seams'
@@ -342,7 +343,8 @@ function createTerminalDocumentHostSeams(): TerminalDocumentHostSeams {
     paintDocumentBackground: paintWindowDocumentBackground,
     installHostTransport: installWindowHostTransport,
     hasEngine: windowHasEngine,
-    viewportSize: windowViewportSize,
+    viewportRect: windowViewportRect,
+    observeViewport: observeWindowViewport,
     root: null
   }
 }

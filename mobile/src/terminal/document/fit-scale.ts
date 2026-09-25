@@ -33,7 +33,7 @@ export function clampPan(scope: TerminalDocumentScope) {
   const ts = getTotalScale(scope)
   const cw = scope.term.element.scrollWidth * ts
   const ch = scope.term.element.scrollHeight * ts
-  const { width: vpW, height: vpH } = scope.viewportSize()
+  const { width: vpW, height: vpH } = scope.viewportRect()
   if (cw > vpW) {
     scope.panX = Math.min(0, Math.max(vpW - cw, scope.panX))
   } else {
@@ -132,7 +132,7 @@ export function commitFitScale(
 
   const cellW = getCellWidth(scope)
   const sw = scope.term.element.scrollWidth
-  const vpW = scope.viewportSize().width
+  const vpW = scope.viewportRect().width
   const expectedW = cellW * scope.term.cols
   const suspect = scope.currentScale === 1 && scope.term.cols > 0 && expectedW > vpW + 1 // expected wider than viewport but no zoom
   if (suspect) {
@@ -168,10 +168,7 @@ export function startFitScale(scope: TerminalDocumentScope) {
     clampPan(scope)
     updateTransform(scope)
   }
-  window.addEventListener('resize', refit)
-  scope.removeViewportRefit = () => {
-    window.removeEventListener('resize', refit)
-  }
+  scope.removeViewportRefit = scope.observeViewport(refit)
 }
 
 /**

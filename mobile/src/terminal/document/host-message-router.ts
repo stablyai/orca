@@ -73,7 +73,7 @@ export function measureFitDimensions(
     notify(scope, { type: 'measure-result', cols: null, rows: null })
     return
   }
-  const viewport = scope.viewportSize()
+  const viewport = scope.viewportRect()
   const vpWidth = viewport.width
   // Why: prefer the container height passed from React Native over the
   // viewport's. The RN layout system knows the exact pixel height of the

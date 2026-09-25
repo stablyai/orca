@@ -19,7 +19,7 @@ export function wheelEventPixelDeltaY(scope: TerminalDocumentScope, e: WheelEven
     return delta * getCellHeight(scope) * getTotalScale(scope)
   }
   if (e.deltaMode === 2) {
-    return delta * scope.viewportSize().height
+    return delta * scope.viewportRect().height
   }
   return delta
 }

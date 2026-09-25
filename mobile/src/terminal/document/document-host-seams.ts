@@ -4,12 +4,12 @@ import type {
 } from './document-terminal-shape'
 
 /**
- * The nine seams between the document and whatever is hosting it, as the document's own
+ * The ten seams between the document and whatever is hosting it, as the document's own
  * defaults, and the root its elements are read from. The document reads the seams at nine places:
  * `postToHost` twice, `createTerminal`, `createUnicode11Addon`, `createWebglAddon`,
  * `installErrorReporter`, `paintDocumentBackground`, `installHostTransport` and `hasEngine` once
- * each, plus `viewportSize` at every size bound; the root is read through one accessor, at the ten
- * element reads.
+ * each, plus `viewportRect` at every size bound and client-point mapping, and `observeViewport`
+ * once; the root is read through one accessor, at the ten element reads.
  *
  * Inside the WebView the host is React Native and the engine is an IIFE that hangs its
  * constructors off `window`; on the page the host is the component that mounted these modules and
@@ -21,8 +21,13 @@ import type {
 /** What a thrown value can be here: an Error-shaped object, a string, or nothing. */
 export type TerminalEngineError = string | null | undefined | { message?: unknown }
 
-/** The box the document's grid is shown in, in CSS px. */
-export type TerminalDocumentViewportSize = { width: number; height: number }
+/** The box the document's grid is shown in: client coordinates of its top-left, and its size. */
+export type TerminalDocumentViewportRect = {
+  left: number
+  top: number
+  width: number
+  height: number
+}
 
 /** The document's runtime error reporter, taking the window error handler's own arguments. */
 export type TerminalDocumentErrorReporter = (
@@ -37,7 +42,7 @@ export type TerminalDocumentErrorReporter = (
 export type TerminalDocumentHostFrame = string | Record<string, unknown> | undefined
 
 /**
- * The nine host seams, kept apart from the state because the host sets them once when it builds
+ * The ten host seams, kept apart from the state because the host sets them once when it builds
  * the scope, before the start sequence runs, and no module writes them afterwards.
  */
 export type TerminalDocumentHostSeams = {
@@ -59,8 +64,10 @@ export type TerminalDocumentHostSeams = {
   installHostTransport: (receive: (frame: TerminalDocumentHostFrame) => void) => () => void
   /** `message-bridge`: whether the engine is here, which is what readiness is reported on. */
   hasEngine: () => boolean
-  /** Every fit, pan, scroll and overlay bound: the box the grid is shown in, in CSS px. */
-  viewportSize: () => TerminalDocumentViewportSize
+  /** Every fit, pan, scroll and overlay bound, and every client point mapped into the grid. */
+  viewportRect: () => TerminalDocumentViewportRect
+  /** `fit-scale`: calls back when that box changes size, handing back its removal. */
+  observeViewport: (onChange: () => void) => () => void
   /**
    * Where this document's elements are: the node its markup was planted in, or null for the page
    * the document is running in.
@@ -74,7 +81,7 @@ export type TerminalDocumentHostSeams = {
    * Null rather than `document` as the default, because this is the one seam whose value is data:
    * a default of `document` is read when the scope is built rather than when an element is, and
    * the rule for every seam above it is that the window read happens at the call. The accessor
-   * resolves it, so the read stays where the other nine are.
+   * resolves it, so the read stays where the other ten are.
    */
   root: ParentNode | null
 }
@@ -83,7 +90,7 @@ export type TerminalDocumentHostSeams = {
  * What a host may hand the document instead of a window read.
  *
  * Every seam has a default, so a host names only the ones it owns differently: inside the WebView
- * that is none of them, and the page names all ten. Absent and present-but-undefined mean the same
+ * that is none of them, and the page names all eleven. Absent and present-but-undefined mean the same
  * thing, which is why the scope's spread filters rather than trusting key order.
  */
 export type TerminalDocumentHost = Partial<TerminalDocumentHostSeams>
@@ -211,8 +218,16 @@ export function windowHasEngine() {
  * The WebView's viewport: there the window is the terminal frame. On the page the window is the
  * whole page, taller than the frame by the header and dock, so the page answers with its host.
  */
-export function windowViewportSize(): TerminalDocumentViewportSize {
-  return { width: window.innerWidth, height: window.innerHeight }
+export function windowViewportRect(): TerminalDocumentViewportRect {
+  return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+}
+
+/** The WebView's frame changes size exactly when its window does. */
+export function observeWindowViewport(onChange: () => void) {
+  window.addEventListener('resize', onChange)
+  return function () {
+    window.removeEventListener('resize', onChange)
+  }
 }
 
 /**
