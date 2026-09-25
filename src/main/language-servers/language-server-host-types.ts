@@ -37,6 +37,14 @@ export type CompileDbStrategyFactory = (
   hooks: CompileDbStrategyHooks
 ) => CompileDbStrategy
 
+import type { LanguageServerHostAdapter } from './language-server-host-adapter'
+
+/** Test-seam type for host-adapter selection that can route SSH worktrees. */
+export type HostAdapterSelector = (
+  worktreeRoot: string,
+  sshTargetId: string | null
+) => LanguageServerHostAdapter
+
 /** Hooks the db strategy routes degraded/toast/status through (mirror host events). */
 export type CompileDbStrategyHooks = {
   onStatus?: (text: string | null) => void
@@ -50,6 +58,9 @@ export type LanguageServerHost = {
     worktreeRoot: string
     filePath: string
     text: string
+    /** SSH target id when the worktree is on a remote host (ticket 17);
+     *  null/undefined for local + WSL. Routes clangd through the relay lsp.* channel. */
+    connectionId?: string | null
   }): Promise<{ ok: true } | { ok: false; error: string }>
   changeDocument(args: {
     filePath: string
@@ -86,6 +97,8 @@ export type SessionEntry = {
   startPromise: Promise<ClangdSession> | null
   /** Open C/C++ documents served by this session (worktree-relative or external). */
   openDocuments: Set<string>
+  /** Open-document texts, retained so a respawn after a died session can replay didOpen (spec §6). */
+  openDocumentTexts: Map<string, string>
   /** Last-activity wall clock for LRU ordering; bumped on open/change. */
   lastActivityMs: number
   /** Armed idle-shutdown timer; cancelled on re-open. */

@@ -9,25 +9,21 @@
 // is selected per worktree through `selectHostAdapter` so the session +
 // lifecycle machinery are host-agnostic.
 import { openClangdSession, type ClangdSession } from './clangd-session'
-import {
-  normalizeHostFileKey,
-  selectHostAdapter,
-  type LanguageServerHostAdapter
-} from './language-server-host-adapter'
-import { buildDbStrategyHooks } from './language-server-session-db'
+import { normalizeHostFileKey, selectHostAdapterForHost } from './language-server-host-adapter'
+import { startClangdSession } from './language-server-session-start'
+import { SessionRespawnReplay, sessionKeyFor } from './lsp-reconnect-replay'
 import {
   clearIdleTimer,
-  evictLeastRecentlyUsed,
   maybeArmIdleTimer,
   touchSession
 } from './language-server-session-lifecycle'
-import {
-  LANGUAGE_SERVER_MAX_CONCURRENT_SESSIONS,
-  type ClangdVersionGate,
-  type CompileDbStrategyFactory,
-  type LanguageServerHost,
-  type LanguageServerHostEvents,
-  type SessionEntry
+import type {
+  ClangdVersionGate,
+  CompileDbStrategyFactory,
+  HostAdapterSelector,
+  LanguageServerHost,
+  LanguageServerHostEvents,
+  SessionEntry
 } from './language-server-host-types'
 
 export {
@@ -43,11 +39,13 @@ export function createLanguageServerHost(
   openSession: typeof openClangdSession = openClangdSession,
   versionGate: ClangdVersionGate | null = null,
   dbStrategyFactory: CompileDbStrategyFactory | null = null,
-  /** Test seam: override host-adapter selection (native vs WSL) without a real distro. */
-  selectAdapter: (worktreeRoot: string) => LanguageServerHostAdapter = selectHostAdapter
+  /** Test seam: override host-adapter selection (native vs WSL vs SSH) without a real distro/target. */
+  selectAdapter: HostAdapterSelector = selectHostAdapterForHost
 ): LanguageServerHost {
   const sessionsByKey = new Map<string, SessionEntry>()
   const sessionKeyByDocument = new Map<string, string>()
+  /** Reconnect replay: retains open docs across a died session for respawn (spec §6). */
+  const respawnReplay = new SessionRespawnReplay()
   const log = (line: string): void => events.onLog?.(line)
 
   function dropSession(key: string): void {
@@ -66,11 +64,10 @@ export function createLanguageServerHost(
     }
   }
 
-  function ensureSession(worktreeRoot: string): Promise<ClangdSession> {
-    const key = normalizeHostFileKey(worktreeRoot)
-    // Select the host adapter once per session: native (spawnProcess + local
-    // PATH) or WSL (wsl.exe --exec + guest PATH), per the worktree's path kind.
-    const adapter = selectAdapter(worktreeRoot)
+  function ensureSession(worktreeRoot: string, sshTargetId: string | null): Promise<ClangdSession> {
+    const key = sessionKeyFor(worktreeRoot, sshTargetId, normalizeHostFileKey)
+    // Select the host adapter once per session: native / WSL / SSH (relay lsp.*).
+    const adapter = selectAdapter(worktreeRoot, sshTargetId)
     const existing = sessionsByKey.get(key)
     if (existing) {
       if (existing.session?.died) {
@@ -87,83 +84,28 @@ export function createLanguageServerHost(
         return Promise.resolve(existing.session)
       }
     }
-    const program = adapter.resolveClangdProgram()
-    const startPromise = (async () => {
-      // Version gate (spec D7): probe before spawning. <12/absent -> reject,
-      // 12-15 -> suggest-upgrade, >=16 -> ok. The injected gate wins (tests);
-      // production uses the adapter's gate (native PATH or guest clangd).
-      const gateProbe = versionGate ?? ((p: string) => adapter.resolveClangdVersionGate(p))
-      const gate = await gateProbe(program)
-      const gateEntry = sessionsByKey.get(key)
-      if (gateEntry) {
-        gateEntry.gate = gate
-      }
-      if (gate.kind === 'reject') {
-        if (gate.message) {
-          events.onDegraded?.(gate.message)
+    const startPromise = startClangdSession(
+      { key, adapter, events, versionGate, dbStrategyFactory, sessionsByKey, dropSession, log },
+      openSession,
+      (error) => {
+        if (error) {
+          log(`[language-servers] session for ${key} died: ${error.message}`)
         }
+        respawnReplay.captureOnExit(key, sessionsByKey.get(key)?.openDocumentTexts ?? new Map())
         dropSession(key)
-        throw new Error(gate.message ?? 'clangd unavailable')
       }
-      if (gate.kind === 'suggest-upgrade' && gate.message) {
-        events.onDegraded?.(gate.message)
-      } else if (gate.kind === 'ok') {
-        events.onDegraded?.(null)
-      }
-      // LRU cap: evict before the 4th session materializes (spec §6).
-      const liveCount = [...sessionsByKey.values()].filter(
-        (entry) => entry.session && !entry.session.died
-      ).length
-      if (liveCount >= LANGUAGE_SERVER_MAX_CONCURRENT_SESSIONS) {
-        await evictLeastRecentlyUsed(sessionsByKey, events, log, dropSession)
-      }
-      // D9 compile-db strategy (spec §6): detect or CMake-generate the db
-      // before spawn; on failure clangd still starts in single-file mode. The
-      // injected factory wins (tests); production uses the adapter's strategy
-      // (native: CMake generation; WSL: detection-only — guest cmake is out of scope).
-      const dbStrategy = dbStrategyFactory
-        ? dbStrategyFactory(key, buildDbStrategyHooks(events, log))
-        : adapter.createDbStrategy(key, buildDbStrategyHooks(events, log))
-      const strategy = dbStrategy
-      const dbResolution = await strategy.resolve()
-      const strategyEntry = sessionsByKey.get(key)
-      if (strategyEntry) {
-        strategyEntry.dbStrategy = strategy
-      } else {
-        strategy.dispose()
-      }
-      const launch = await adapter.buildLaunch(key, {
-        compileCommandsDir: dbResolution.compileCommandsDir
-      })
-      log(
-        `[language-servers] starting clangd for ${key}: ${launch.program} ${launch.args.join(' ')}`
-      )
-      const session = await openSession({
-        program: launch.program,
-        args: launch.args,
-        cwd: launch.cwd,
-        env: launch.env,
-        rootPath: key,
-        adapter,
-        onStatus: (text) => events.onStatus?.(text),
-        onLog: log,
-        onExit: (error) => {
-          if (error) {
-            log(`[language-servers] session for ${key} died: ${error.message}`)
-          }
-          dropSession(key)
-        }
-      })
+    ).then((session) => {
       log(
         `[language-servers] clangd ${session.serverVersion ?? 'unknown version'} ready for ${key}`
       )
       return session
-    })()
+    })
     const entry: SessionEntry = {
       key,
       session: null,
       startPromise,
       openDocuments: new Set(),
+      openDocumentTexts: new Map(),
       lastActivityMs: Date.now(),
       idleTimer: null,
       gate: null,
@@ -174,6 +116,17 @@ export function createLanguageServerHost(
       .then((session) => {
         entry.session = session
         entry.startPromise = null
+        // Reconnect replay (spec §6): respawn reissues didOpen for retained open docs.
+        respawnReplay.replayOnRespawn(
+          session,
+          key,
+          entry,
+          sessionKeyByDocument,
+          normalizeHostFileKey,
+          (n) =>
+            n > 0 &&
+            log(`[language-servers] replayed ${n} open document(s) after respawn for ${key}`)
+        )
       })
       .catch(() => {
         dropSession(key)
@@ -215,14 +168,16 @@ export function createLanguageServerHost(
     get sessionCount(): number {
       return sessionsByKey.size
     },
-    async openDocument({ worktreeRoot, filePath, text }) {
+    async openDocument({ worktreeRoot, filePath, text, connectionId }) {
       try {
-        const sessionKey = normalizeHostFileKey(worktreeRoot)
-        const session = await ensureSession(worktreeRoot)
+        const sshTargetId = connectionId ?? null
+        const sessionKey = sessionKeyFor(worktreeRoot, sshTargetId, normalizeHostFileKey)
+        const session = await ensureSession(worktreeRoot, sshTargetId)
         const key = normalizeHostFileKey(filePath)
         const entry = sessionsByKey.get(sessionKey)
         if (entry) {
           entry.openDocuments.add(key)
+          entry.openDocumentTexts.set(key, text) // retained for respawn replay
           clearIdleTimer(entry)
           entry.lastActivityMs = Date.now()
         }
@@ -269,6 +224,7 @@ export function createLanguageServerHost(
         const entry = sessionsByKey.get(ownerKey)
         if (entry) {
           entry.openDocuments.delete(key)
+          entry.openDocumentTexts.delete(key)
           maybeArmIdleTimerLocal(ownerKey)
         }
       }

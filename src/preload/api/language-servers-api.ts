@@ -16,6 +16,8 @@ export type LanguageServersApi = {
     worktreeRoot: string
     filePath: string
     text: string
+    /** SSH target id when the worktree is remote (ticket 17); null for local + WSL. */
+    connectionId?: string | null
   }) => Promise<LanguageServerDocumentResult>
   changeDocument: (args: {
     filePath: string

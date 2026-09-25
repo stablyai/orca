@@ -8,8 +8,12 @@ import {
 import type { LanguageServersApi } from './language-servers-api'
 
 export const languageServersApi = {
-  openDocument: (args: { worktreeRoot: string; filePath: string; text: string }) =>
-    ipcRenderer.invoke('languageServers:openDocument', args),
+  openDocument: (args: {
+    worktreeRoot: string
+    filePath: string
+    text: string
+    connectionId?: string | null
+  }) => ipcRenderer.invoke('languageServers:openDocument', args),
   changeDocument: (args: {
     filePath: string
     version: number

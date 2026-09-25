@@ -71,7 +71,8 @@ export function installLanguageServerDocumentSync(monaco: typeof Monaco): () => 
       window.api.languageServers.openDocument({
         worktreeRoot: owner.worktreeRoot,
         filePath,
-        text: model.getValue()
+        text: model.getValue(),
+        connectionId: owner.connectionId ?? null
       })
     )
     entry.listeners.push(

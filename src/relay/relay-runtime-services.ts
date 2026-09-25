@@ -22,6 +22,7 @@ import { registerRelayPluginHostCallHandlers } from './plugin-host-call-handler'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SkillInstallHandler } from './skill-install-handler'
+import { LspHandler } from './lsp-handler'
 import { relayLogLine } from './relay-diagnostic-log'
 import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
 
@@ -32,6 +33,7 @@ export class RelayRuntimeServices {
   readonly fsHandler: FsHandler
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
+  readonly lspHandler: LspHandler
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
   private readonly sessionSearch: { dispose(): void } | null
   private readonly registeredHandlers: readonly unknown[]
@@ -79,6 +81,12 @@ export class RelayRuntimeServices {
     const portScanHandler = new PortScanHandler(dispatcher)
     const agentExecHandler = new AgentExecHandler(dispatcher)
     const workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
+    // Ticket 17: the relay `lsp.*` family (spawn/write/kill + data/stderr/exit).
+    // Constructed here so it registers its request/notification handlers on the
+    // dispatcher alongside the other host-side method families. An old relay that
+    // predates this build simply has no `lsp.*` handlers, so a new client probing
+    // `lsp.spawn` gets `method_not_found` (-32601) and degrades gracefully.
+    this.lspHandler = new LspHandler(dispatcher)
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
     const hostPlatform = relayPlatform ? getRemoteHostPlatform(relayPlatform) : undefined
     this.aiVaultService = hostPlatform ? createRelayAiVaultService(homedir(), hostPlatform) : null
@@ -105,6 +113,7 @@ export class RelayRuntimeServices {
       portScanHandler,
       agentExecHandler,
       workspaceSessionHandler,
+      this.lspHandler,
       new AiVaultHandler(dispatcher, {
         hostPlatform,
         service: this.aiVaultService ?? undefined

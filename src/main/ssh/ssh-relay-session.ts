@@ -68,6 +68,7 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { registerSshLspRelay, unregisterSshLspRelay } from './ssh-lsp-relay-registry'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
@@ -1204,6 +1205,8 @@ export class SshRelaySession {
     )
     registerSshFilesystemProvider(this.targetId, fsProvider)
 
+    registerSshLspRelay(this.targetId, mux)
+
     const gitProvider = new SshGitProvider(
       this.targetId,
       mux,
@@ -1697,6 +1700,7 @@ export class SshRelaySession {
     unregisterSshPtyProvider(this.targetId)
     unregisterSshFilesystemProvider(this.targetId)
     unregisterSshGitProvider(this.targetId)
+    unregisterSshLspRelay(this.targetId)
     this.sourceIdentityByRelayPtyId.clear()
     this.retiredSourceDeliveries.clear()
     this.rejectedPtyRecoveryAttempts.clear()

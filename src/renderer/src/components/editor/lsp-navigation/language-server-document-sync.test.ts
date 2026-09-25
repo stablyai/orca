@@ -92,7 +92,13 @@ function makeMonaco(models: FakeModel[]): {
 }
 
 type RecordedCall =
-  | { kind: 'open'; worktreeRoot: string; filePath: string; text: string }
+  | {
+      kind: 'open'
+      worktreeRoot: string
+      filePath: string
+      text: string
+      connectionId: string | null
+    }
   | {
       kind: 'change'
       filePath: string
@@ -107,8 +113,13 @@ function installApiRecorder(): RecordedCall[] {
     configurable: true,
     value: {
       languageServers: {
-        openDocument: async (args: { worktreeRoot: string; filePath: string; text: string }) => {
-          calls.push({ kind: 'open', ...args })
+        openDocument: async (args: {
+          worktreeRoot: string
+          filePath: string
+          text: string
+          connectionId?: string | null
+        }) => {
+          calls.push({ kind: 'open', ...args, connectionId: args.connectionId ?? null })
           return { ok: true as const }
         },
         changeDocument: async (args: {
@@ -168,7 +179,8 @@ describe('installLanguageServerDocumentSync', () => {
         kind: 'open',
         worktreeRoot: 'D:\\repo',
         filePath: 'D:\\repo\\src\\a.cpp',
-        text: 'model text'
+        text: 'model text',
+        connectionId: null
       }
     ])
   })
@@ -291,7 +303,8 @@ describe('installLanguageServerDocumentSync', () => {
         kind: 'open',
         worktreeRoot: 'D:\\repo',
         filePath: 'D:\\repo\\src\\a.cpp',
-        text: 'int main() {}'
+        text: 'int main() {}',
+        connectionId: null
       }
     ])
   })

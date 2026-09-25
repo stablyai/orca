@@ -17,6 +17,7 @@ import type { CompileDbStrategy, CompileDbStrategyHooks } from './language-serve
 import { wslNormalizeKey } from './wsl-path-mapping'
 import { createNativeHostAdapter } from './native-language-server-adapter'
 import { createWslHostAdapter } from './wsl-language-server-adapter'
+import { createSshHostAdapter } from './ssh-language-server-adapter'
 
 /** Full launch spec for the long-lived clangd process (program + argv + cwd + env). */
 export type LanguageServerProcessLaunch = {
@@ -51,7 +52,7 @@ export type LanguageServerProcessHandlers = NativeLanguageServerProcessHandlers
  * detection-only — guest cmake is out of scope for ticket 16).
  */
 export type LanguageServerHostAdapter = {
-  readonly kind: 'native' | 'wsl'
+  readonly kind: 'native' | 'wsl' | 'ssh'
   /** Canonical session/document key for an Orca file identity (case-folds UNC prefixes for WSL). */
   normalizeKey(filePath: string): string
   /** Orca file identity -> LSP document URI (host-local path form). */
@@ -100,9 +101,26 @@ const wslAdaptersByDistro = new Map<string, LanguageServerHostAdapter>()
 /**
  * Select the host adapter for a worktree root. A WSL UNC path yields the WSL
  * adapter bound to the distro (memoized per distro so probe results are
- * shared across sessions); everything else uses the stateless native adapter.
+ * shared across sessions); an SSH target id yields the SSH adapter (relay
+ * `lsp.*` channel); everything else uses the stateless native adapter.
+ *
+ * SSH selection needs the connection target id — the worktree root alone (a
+ * POSIX path) cannot distinguish a remote SSH file from a local POSIX one, so
+ * the caller threads the resolved SSH target id (from the renderer's
+ * connection-context) through `selectHostAdapterForHost`.
  */
 export function selectHostAdapter(worktreeRoot: string): LanguageServerHostAdapter {
+  return selectHostAdapterForHost(worktreeRoot, null)
+}
+
+/** Select with an explicit execution-host id so SSH worktrees route to the relay adapter. */
+export function selectHostAdapterForHost(
+  worktreeRoot: string,
+  sshTargetId: string | null
+): LanguageServerHostAdapter {
+  if (sshTargetId) {
+    return createSshHostAdapter(sshTargetId)
+  }
   const distro = parseWslUncPath(worktreeRoot)?.distro ?? null
   if (!distro) {
     return nativeAdapter

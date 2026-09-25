@@ -58,7 +58,7 @@ export function registerLanguageServersHandlers(
     'languageServers:openDocument',
     async (
       _event,
-      args: { worktreeRoot: string; filePath: string; text: string }
+      args: { worktreeRoot: string; filePath: string; text: string; connectionId?: string | null }
     ): Promise<LanguageServerDocumentResult> => {
       const result = await host.openDocument(args)
       if (!result.ok) {

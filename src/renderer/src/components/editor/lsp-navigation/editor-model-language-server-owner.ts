@@ -12,6 +12,18 @@ export type LocalDocumentOwner = {
   filePath: string
   worktreeId: string
   worktreeRoot: string
+  /** SSH target id when the document is on a remote host (ticket 17);
+   *  null for local + WSL. Routes clangd through the relay lsp.* channel. */
+  connectionId?: string | null
+}
+
+/** True when this edit tab is an SSH-owned file (ticket 17). */
+export function isSshEditorFile(file: OpenFile): boolean {
+  return (
+    file.mode === 'edit' &&
+    (file.runtimeEnvironmentId ?? null) === null &&
+    !!file.externalSshTargetId
+  )
 }
 
 /** True when this edit tab lives on the client-local native host. */
@@ -24,15 +36,18 @@ export function isLocalNativeEditorFile(file: OpenFile): boolean {
 }
 
 /**
- * Resolve the owning worktree for a native absolute path via its open editor
- * tab. Returns null when no local edit tab owns the path — the caller degrades
- * to "no navigation for this document".
+ * Resolve the owning worktree for a path via its open editor tab. Handles both
+ * local-native files (S1) and SSH-owned files (ticket 17) — the latter route
+ * clangd through the relay `lsp.*` channel. Returns null when no edit tab owns
+ * the path — the caller degrades to "no navigation for this document".
  */
 export function resolveLocalDocumentOwner(filePath: string): LocalDocumentOwner | null {
   const state = useAppStore.getState()
   const key = normalizeNativeFilePath(filePath)
   const owner = state.openFiles.find(
-    (file) => isLocalNativeEditorFile(file) && normalizeNativeFilePath(file.filePath) === key
+    (file) =>
+      (isLocalNativeEditorFile(file) || isSshEditorFile(file)) &&
+      normalizeNativeFilePath(file.filePath) === key
   )
   if (!owner) {
     return null
@@ -44,7 +59,8 @@ export function resolveLocalDocumentOwner(filePath: string): LocalDocumentOwner 
   return {
     filePath: key,
     worktreeId: owner.worktreeId,
-    worktreeRoot: normalizeNativeFilePath(worktree.path)
+    worktreeRoot: normalizeNativeFilePath(worktree.path),
+    connectionId: owner.externalSshTargetId ?? null
   }
 }
 
