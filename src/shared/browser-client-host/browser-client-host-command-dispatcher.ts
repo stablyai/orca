@@ -3,7 +3,7 @@ import {
   type BrowserClientHostCommandEvent,
   type BrowserClientHostCommandResult,
   type BrowserClientHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
+} from '../browser-client-host-protocol'
 import {
   assertBrowserClientHostCommandAuthority,
   snapshotBrowserClientHostLeaseAuthority

@@ -1,7 +1,7 @@
 import type { Session, WebContents } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
-import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
+import { BrowserClientHostCommandDispatcher } from '../../shared/browser-client-host/browser-client-host-command-dispatcher'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
 import { createBrowserRoutePartitionBindingStoreFake } from './browser-route-partition-binding-store-fake'
 import { BrowserRouteSessionRegistry } from './browser-route-session-registry'

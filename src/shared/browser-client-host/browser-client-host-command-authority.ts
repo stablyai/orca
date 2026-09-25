@@ -1,9 +1,9 @@
-import { sameBrowserClientAutomationMethods } from '../../shared/browser-client-automation-protocol'
+import { sameBrowserClientAutomationMethods } from '../browser-client-automation-protocol'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
+} from '../browser-client-host-protocol'
 
 type BrowserClientPageAuthority = Pick<
   BrowserClientHostedPageInventory,

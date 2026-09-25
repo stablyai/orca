@@ -1,6 +1,6 @@
 import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
-import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
+import { sameBrowserClientHostLeaseAuthority } from '../../shared/browser-client-host/browser-client-host-command-authority'
 
 export type ComposedBrowserClientNetworkRoutes = {
   retain(key: string, signal: AbortSignal): Promise<BrowserClientPageNetworkRoute>
