@@ -7,6 +7,8 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { confirmPtyShellForeground } from '../daemon/pty-subprocess/pty-shell-foreground-confirmation'
 import { createPtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
 import { spawnNativeDaemonPty } from '../daemon/pty-subprocess/native-pty-spawn'
+import { canUseBunPty, spawnBunPty } from '../daemon/pty-subprocess/bun-pty-process'
+import { createWindowsBunPtyLaunch } from '../daemon/pty-subprocess/windows-bun-pty-launch'
 import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-environment'
 import type { PtySubprocessOptions } from '../daemon/pty-subprocess'
 import { isGitForWindowsBashLauncherPath } from '../git-bash'
@@ -52,7 +54,23 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
       const plan = createPtyShellLaunchPlan(opts, env)
       expect(isGitForWindowsBashLauncherPath(plan.shellPath)).toBe(true)
       expect(plan.shellArgs.join(' ')).toContain('exec "$BASH"')
-      const spawned = await spawnNativeDaemonPty({ ...plan, env, cols: opts.cols, rows: opts.rows })
+      const spawned = await spawnNativeDaemonPty(
+        { ...plan, env, cols: opts.cols, rows: opts.rows },
+        {
+          canUseBunPty,
+          spawnBunPty: (args) =>
+            spawnBunPty(args, {
+              // Source tests use the TS worker; packaged hosts resolve their adjacent JS worker.
+              createWindowsLaunch: (launch) =>
+                createWindowsBunPtyLaunch(launch, {
+                  workerPath: join(
+                    __dirname,
+                    '../daemon/pty-subprocess/windows-bun-pty-gate-entry.ts'
+                  )
+                })
+            })
+        }
+      )
       const proc = spawned.process
       let output = ''
       let dead = false
