@@ -272,6 +272,37 @@ describe('external agent config isolation', () => {
     expect(isExternalAgentConfigIsolated()).toBe(true)
   })
 
+  it('treats the release-to-persist window as isolated for everyone outside the release', async () => {
+    let persisted = false
+    configureAgentConfigIsolation(() => ({ isolateExternalAgentConfig: persisted }))
+    let seenInsideRelease: boolean | null = null
+    onBeforeAgentConfigIsolation(async () => {
+      seenInsideRelease = isExternalAgentConfigIsolated()
+    })
+
+    await releaseExternalAgentStateBeforeIsolation()
+
+    // Not yet persisted: a concurrent account selection must already see isolation on.
+    expect(seenInsideRelease).toBe(false)
+    expect(isExternalAgentConfigIsolated()).toBe(true)
+    persisted = true
+    expect(isExternalAgentConfigIsolated()).toBe(true)
+    persisted = false
+    // Settled by the persisted read, so turning isolation off later takes effect.
+    expect(isExternalAgentConfigIsolated()).toBe(false)
+  })
+
+  it('reopens nothing when the release fails', async () => {
+    configureAgentConfigIsolation(() => ({ isolateExternalAgentConfig: false }))
+    onBeforeAgentConfigIsolation(async () => {
+      throw new Error('restore failed')
+    })
+
+    await expect(releaseExternalAgentStateBeforeIsolation()).rejects.toThrow()
+
+    expect(isExternalAgentConfigIsolated()).toBe(false)
+  })
+
   it('detects only the off-to-on transition', () => {
     expect(isIsolationTurningOn({}, { isolateExternalAgentConfig: true })).toBe(true)
     expect(

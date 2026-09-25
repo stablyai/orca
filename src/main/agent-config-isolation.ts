@@ -10,6 +10,9 @@ let readIsolationSettings: (() => IsolationSettings) | null = null
 // Why scoped to the release chain: handing the user's own login back is the one write isolation
 // allows, and concurrent writers outside that async chain must stay blocked.
 const releaseScope = new AsyncLocalStorage<true>()
+// Why: between the release and persisting the flag, a concurrent account selection would still see
+// isolation off and could materialize a managed login; treat the transition as already isolated.
+let transitionPending = false
 
 // Why a live reader instead of a cached flag: trust presets and credential sync run deep in launch
 // paths that never receive settings, and a toggle must take effect for the very next launch.
@@ -32,7 +35,13 @@ export function isExternalAgentConfigIsolated(): boolean {
     return false
   }
   try {
-    return isAgentConfigIsolatedInSettings(readIsolationSettings())
+    const persisted = isAgentConfigIsolatedInSettings(readIsolationSettings())
+    // Why self-settling: once the flag is persisted the window is closed; if persisting failed the
+    // pending flag keeps failing closed until restart rather than reopening the race.
+    if (persisted) {
+      transitionPending = false
+    }
+    return persisted || transitionPending
   } catch {
     // Why fail closed: an unreadable store must not turn a user's opt-out into a write.
     return true
@@ -51,6 +60,7 @@ export function onBeforeAgentConfigIsolation(task: () => Promise<unknown>): void
 // must not report isolation as in effect until every task succeeded.
 export async function releaseExternalAgentStateBeforeIsolation(): Promise<void> {
   const failures: unknown[] = []
+  transitionPending = true
   await releaseScope.run(true, async () => {
     for (const task of releaseTasksBeforeIsolation) {
       try {
@@ -61,6 +71,7 @@ export async function releaseExternalAgentStateBeforeIsolation(): Promise<void> 
     }
   })
   if (failures.length > 0) {
+    transitionPending = false
     throw new Error('Could not restore agent logins before isolating external agent config.', {
       cause: failures.length === 1 ? failures[0] : failures
     })
@@ -92,4 +103,5 @@ export function didIsolationTurnOff(before: IsolationSettings, after: IsolationS
 export function resetAgentConfigIsolationForTests(): void {
   readIsolationSettings = null
   releaseTasksBeforeIsolation.length = 0
+  transitionPending = false
 }
