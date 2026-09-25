@@ -41,6 +41,8 @@ import type { CodexStructuredTurnCancellation } from './codex-structured-turn-ca
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
 
+const TURN_BOUNDARIES: ReadonlySet<string> = new Set(['turn/started', 'turn/completed'])
+
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
   deps: CodexStructuredSessionAdapterDeps
@@ -134,7 +136,7 @@ export async function acquireCodexStructuredSession(input: {
       {
         onNotification: (method, params) => {
           // Stamped at receipt, ahead of any pre-publication buffering or retry.
-          const observedAt = isCodexTurnBoundary(method) ? (deps.now?.() ?? Date.now()) : undefined
+          const observedAt = TURN_BOUNDARIES.has(method) ? (deps.now?.() ?? Date.now()) : undefined
           const dispatchSequenceAtReceipt =
             method === 'turn/started' ? dispatchEchoes.latestSequence() : undefined
           input.deliver(
@@ -296,8 +298,4 @@ export async function acquireCodexStructuredSession(input: {
   } finally {
     attempt.finish()
   }
-}
-
-function isCodexTurnBoundary(method: string): boolean {
-  return method === 'turn/started' || method === 'turn/completed'
 }
