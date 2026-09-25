@@ -88,6 +88,7 @@ describe('RpcClientStreamRegistry', () => {
     )
     registry.subscribe('session.tabs.subscribe', { worktree: 'wt-1' }, () => {})
     const [older, newer] = sent
+    registry.handleResponse(streamingResponse(older!.id, { type: 'snapshot', tabs: [] }))
 
     disposeOlder()
 
@@ -98,6 +99,79 @@ describe('RpcClientStreamRegistry', () => {
     })
     expect(newer!.id).not.toBe(older!.id)
     expect(sent).toHaveLength(3)
+  })
+
+  it('holds a session tabs unsubscribe until the host registers the stream', () => {
+    const { registry, sent } = createRegistry()
+    const events: unknown[] = []
+    const dispose = registry.subscribe('session.tabs.subscribe', { worktree: 'wt-1' }, (event) =>
+      events.push(event)
+    )
+    const subscribe = sent[0]!
+
+    dispose()
+    // The host registers only as it emits the first snapshot, so an earlier unsubscribe finds nothing.
+    expect(sent).toHaveLength(1)
+
+    registry.handleResponse(streamingResponse(subscribe.id, { type: 'snapshot', tabs: [] }))
+
+    expect(sent[1]).toMatchObject({
+      method: 'session.tabs.unsubscribe',
+      params: { worktree: 'wt-1', subscriptionId: subscribe.id }
+    })
+    expect(sent).toHaveLength(2)
+    expect(events).toEqual([])
+    expect(registry.size()).toBe(0)
+  })
+
+  it('holds a session tabs unsubscribe again after a reconnect replays the stream', () => {
+    const { registry, sent } = createRegistry()
+    const dispose = registry.subscribe('session.tabs.subscribe', { worktree: 'wt-1' }, () => {})
+    const subscribe = sent[0]!
+    registry.handleResponse(streamingResponse(subscribe.id, { type: 'snapshot', tabs: [] }))
+
+    registry.markForReplay()
+    registry.replayAfterAuthentication()
+    dispose()
+
+    expect(sent.map((request) => request.method)).toEqual([
+      'session.tabs.subscribe',
+      'session.tabs.subscribe'
+    ])
+    registry.handleResponse(streamingResponse(subscribe.id, { type: 'snapshot', tabs: [] }))
+    expect(sent[2]).toMatchObject({
+      method: 'session.tabs.unsubscribe',
+      params: { worktree: 'wt-1', subscriptionId: subscribe.id }
+    })
+  })
+
+  it('drops a held session tabs unsubscribe when the stream ends or reconnects first', () => {
+    const { registry, sent } = createRegistry()
+    const disposeEnded = registry.subscribe(
+      'session.tabs.subscribe',
+      { worktree: 'wt-1' },
+      () => {}
+    )
+    const disposeReplayed = registry.subscribe(
+      'session.tabs.subscribe',
+      { worktree: 'wt-2' },
+      () => {}
+    )
+    const ended = sent[0]!
+    disposeEnded()
+    disposeReplayed()
+
+    registry.handleResponse({
+      id: ended.id,
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    registry.markForReplay()
+    registry.replayAfterAuthentication()
+
+    expect(sent).toHaveLength(2)
+    expect(registry.size()).toBe(0)
   })
 
   it('keeps a disposed browser tombstone until ready can be unsubscribed', () => {
