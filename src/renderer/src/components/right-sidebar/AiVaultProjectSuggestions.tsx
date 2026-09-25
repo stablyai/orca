@@ -30,7 +30,14 @@ export function AiVaultProjectSuggestions({
 }: {
   sessions: readonly AiVaultSession[]
 }): React.JSX.Element | null {
-  const repoCount = useAppStore((s) => s.repos.length)
+  // Why paths, not a count: a catalog refresh can change a repo's path without changing the count.
+  const repoPathsKey = useAppStore((s) =>
+    s.repos
+      .filter((repo) => !repo.connectionId)
+      .map((repo) => repo.path)
+      .sort()
+      .join('\n')
+  )
   const dismissed = useAppStore((s) => s.settings?.dismissedSessionProjectSuggestions)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
@@ -77,8 +84,8 @@ export function AiVaultProjectSuggestions({
     return () => {
       cancelled = true
     }
-    // Why repoCount/dismissed: a project added or declined elsewhere must drop out of the card.
-  }, [sourcesKey, repoCount, dismissed])
+    // Why repoPathsKey/dismissed: a project added, moved or declined elsewhere must drop out of the card.
+  }, [sourcesKey, repoPathsKey, dismissed])
 
   if (suggestions.length === 0) {
     return null

@@ -5,14 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { AiVaultProjectSuggestions } from './AiVaultProjectSuggestions'
 
-const store = vi.hoisted(() => ({
-  state: {
-    repos: [],
-    settings: { dismissedSessionProjectSuggestions: [] },
-    updateSettings: vi.fn(async () => {}),
-    addRepoPath: vi.fn(async (): Promise<{ id: string } | null> => null)
+const store = vi.hoisted(() => {
+  const repos: { path: string; connectionId?: string }[] = []
+  return {
+    state: {
+      repos,
+      settings: { dismissedSessionProjectSuggestions: [] },
+      updateSettings: vi.fn(async () => {}),
+      addRepoPath: vi.fn(async (): Promise<{ id: string } | null> => null)
+    }
   }
-}))
+})
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof store.state) => unknown) => selector(store.state)
@@ -122,6 +125,19 @@ describe('AiVaultProjectSuggestions', () => {
 
     expect(await screen.findByText("Couldn't add: app")).toBeTruthy()
     expect(store.state.addRepoPath).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes when a registered repo path changes without changing the repo count', async () => {
+    suggestProjects.mockResolvedValue([])
+    store.state.repos = [{ path: '/home/me/Projects/old' }]
+    const { rerender } = render(<AiVaultProjectSuggestions sessions={[makeSession()]} />)
+    await waitFor(() => expect(suggestProjects).toHaveBeenCalledOnce())
+
+    store.state.repos = [{ path: '/home/me/Projects/app' }]
+    rerender(<AiVaultProjectSuggestions sessions={[makeSession()]} />)
+
+    await waitFor(() => expect(suggestProjects).toHaveBeenCalledTimes(2))
+    store.state.repos = []
   })
 
   it('remembers dismissed suggestions in settings', async () => {
