@@ -278,7 +278,9 @@ export class StructuredAgentSessionHost {
       openConversation: this.conversationDelivery.open,
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
       stopAgent: (sessionId) =>
-        stopStructuredAgentSessionAgentUnderSerialize(this.lifetimeContext(), sessionId),
+        stopStructuredAgentSessionAgentUnderSerialize(this.lifetimeContext(), sessionId, {
+          cause: 'user-stop'
+        }),
       now: () => this.now()
     }
   }

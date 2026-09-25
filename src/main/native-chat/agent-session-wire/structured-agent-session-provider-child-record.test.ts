@@ -20,6 +20,7 @@ import { providerStartupFailureOutcome } from './structured-agent-session-dead-g
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -266,7 +267,7 @@ describe('Stop on a child still proving its start', () => {
     // The same conversation: no reopen, the holder kept, and the chat told it is idle again.
     expect(conversation()?.journal).toBe(journal)
     expect(conversation()?.child).toBeNull()
-    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'stop', rootGone: true })
+    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-stop', rootGone: true })
     expect(host.isHeld(SESSION)).toBe(true)
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionPhase')
     expect(frames.at(-1)).not.toHaveProperty('hostExecutionOwned')
@@ -511,3 +512,51 @@ describe('a send whose start failed, sent again with the same operation id', () 
 async function settleLoop(): Promise<void> {
   await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
 }
+
+describe('how a stopped child ends the start its loop was waiting on', () => {
+  /** A child the loop waits on, whose start the stop below does not settle, so a message sent
+   *  after the stop is queued when the loop next looks. */
+  async function stoppedWhileStarting(stop: () => Promise<void>) {
+    const start = deferred<void>()
+    adapterExtras = {
+      awaitStarted: vi.fn(() => start.promise),
+      closeSession: vi.fn(async () => true)
+    }
+    await restartHost()
+    acquire.mockImplementationOnce(spawnStartingChild)
+    await accept('first')
+    await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalledTimes(1))
+    await stop()
+    const second = await accept('second')
+    adapterExtras.awaitStarted = undefined
+    start.resolve()
+    return second
+  }
+
+  it("goes on after a user's Stop and delivers what was sent since (R2)", async () => {
+    const second = await stoppedWhileStarting(async () => {
+      expect(await stop()).toMatchObject({ ok: true })
+    })
+
+    await eventually(() => expect(submission(second)?.dispatchState).toBe('accepted'))
+    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'user-stop', reason: null })
+    expect(statusRows()).toEqual([])
+  })
+
+  it('fails the start after a host stop, with the stop as the reason (R2)', async () => {
+    const reason = 'Claude never finished starting, so Orca stopped it.'
+    const second = await stoppedWhileStarting(() =>
+      host['serialize'](SESSION, () =>
+        stopStructuredAgentSessionAgentUnderSerialize(host['lifetimeContext'](), SESSION, {
+          cause: 'host-stop',
+          reason
+        })
+      )
+    )
+
+    await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
+    expect(submission(second)?.reason).toBe(reason)
+    expect(statusRows()).toEqual([{ itemId: expect.any(String), text: reason, tone: 'error' }])
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+})

@@ -44,12 +44,21 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
  *  `stopAgentSessionProviderRoot`; an observed exit's root is gone by definition. */
 export type StructuredAgentSessionStopVerdict = { rootGone: boolean }
 
+export type StructuredAgentSessionChildEndCause =
+  | 'user-stop'
+  | 'host-stop'
+  | 'exit'
+  | 'attach-failed'
+  | 'evict'
+
 /** How the conversation's last child ended. In memory only: the delivery loop reads it to tell a
  *  Stop from a failure. */
 export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChildIdentity &
   StructuredAgentSessionStopVerdict & {
-    cause: 'exit' | 'attach-failed' | 'stop' | 'evict'
-    /** The provider's own diagnostic, when the ending carried one. */
+    /** `user-stop` is a Stop the user asked for; `host-stop` is the host stopping the child for a
+     *  cause of its own, which fails the start the delivery loop was waiting on. */
+    cause: StructuredAgentSessionChildEndCause
+    /** Descriptive text only — the provider's diagnostic, or the host's cause. Decides nothing. */
     reason: string | null
     duringStartup: boolean
   }

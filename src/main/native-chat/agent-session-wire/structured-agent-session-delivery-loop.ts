@@ -165,8 +165,9 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!awaitedChild || (awaitedChild.phase === 'starting' && startFailure !== null)) {
       // The child waited on is gone, replaced by another, or settled its start without proving it.
       const ended = awaitedChild ? undefined : session.lastEndedChild
-      // A Stop is not a failure: the next step starts, or waits on, a child for what is queued.
-      if (ended?.cause === 'stop') {
+      // A user's Stop is not a failure: the next step starts, or waits on, a child for what is
+      // queued. A host stop is: its cause is why the start did not land.
+      if (ended?.cause === 'user-stop') {
         return 'continue'
       }
       return this.fail(sessionId, {
@@ -209,8 +210,13 @@ export class StructuredAgentSessionDeliveryLoop {
   }
 }
 
+const HOST_STOPPED_BEFORE_DELIVERY = 'Orca stopped the agent before this message was sent.'
+
 /** Why a queued message the child never took is rejected, in the words the chat row uses. */
 function endedChildRejection(ended: StructuredAgentSessionEndedChild): string {
+  if (ended.cause === 'host-stop') {
+    return ended.reason ?? HOST_STOPPED_BEFORE_DELIVERY
+  }
   const reason = ended.reason ?? undefined
   return ended.duringStartup
     ? providerStartupFailureOutcome(reason)
