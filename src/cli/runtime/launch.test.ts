@@ -393,6 +393,31 @@ describe('serveOrcaApp', () => {
     )
   })
 
+  it('passes Tailcat through to the foreground server child', async () => {
+    const child = {
+      kill: vi.fn(),
+      once: vi.fn(
+        (event: string, handler: (code: number | null, signal: string | null) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => handler(0, null))
+          }
+          return child
+        }
+      )
+    }
+    spawnMock.mockReturnValue(child)
+
+    await expect(serveOrcaApp({ port: '6768', tailcat: true })).resolves.toBe(0)
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/Applications/Orca.app/Contents/MacOS/Orca',
+      ['--serve', '--serve-port', '6768', '--serve-tailcat'],
+      expect.objectContaining({
+        cwd: resolve(__dirname, '../../..')
+      })
+    )
+  })
+
   it('passes the app root before serve flags for dev Electron executables', async () => {
     process.env.ORCA_APP_EXECUTABLE = '/repo/node_modules/.bin/electron'
     process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'

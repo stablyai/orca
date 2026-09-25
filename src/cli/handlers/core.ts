@@ -102,16 +102,19 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const noPairing = flags.get('no-pairing') === true
     const mobilePairing = flags.get('mobile-pairing') === true
     const recipeJson = flags.get('recipe-json') === true
+    const tailcat = flags.get('tailcat') === true
+    const port = getOptionalServePort(flags)
     const validationError = getServeOptionValidationError({
       noPairing,
       mobilePairing,
       recipeJson,
-      projectRoot
+      projectRoot,
+      tailcat,
+      ...(port === null ? {} : { wsPort: Number(port) })
     })
     if (validationError) {
       throw new RuntimeClientError('invalid_argument', validationError)
     }
-    const port = getOptionalServePort(flags)
     const pairingAddressValue = flags.get('pairing-address')
     const exitCode = await serveOrcaApp({
       json,
@@ -119,6 +122,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,
+      tailcat,
       recipeJson,
       projectRoot
     })

@@ -37,6 +37,8 @@ export function translateHostAccessLinkError(kind: HostAccessLinkErrorKind): str
 
 export function translateRemotePairingEndpointKind(kind: RemotePairingEndpointKind): string {
   switch (kind) {
+    case 'tailcat':
+      return translate('auto.lib.remotePairingCopy.tailcat', 'Tailcat tunnel')
     case 'loopback':
       return translate('auto.lib.remotePairingCopy.loopback', 'Loopback')
     case 'tailscale':

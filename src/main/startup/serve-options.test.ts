@@ -13,6 +13,7 @@ describe('getServeOptions', () => {
       noPairing: true,
       mobilePairing: false,
       recipeJson: false,
+      tailcat: false,
       projectRoot: null
     })
   })
@@ -143,6 +144,7 @@ describe('getServeOptions', () => {
       noPairing: false,
       mobilePairing: false,
       recipeJson: false,
+      tailcat: false,
       projectRoot: null
     })
   })

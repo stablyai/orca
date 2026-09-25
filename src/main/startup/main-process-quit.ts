@@ -3,6 +3,7 @@ import { closeAllWatchers } from '../ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../ipc/pty'
+import { disposeTailcatTunnel } from '../tunnel/tailcat-tunnel-host'
 import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-init'
 import { beginSshShutdown } from '../ipc/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server'
@@ -198,6 +199,8 @@ function installWillQuitHandler(): void {
     // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
     // active SSH lease detached in memory synchronously, and that flush is what persists it.
     const sshShutdown = beginSshShutdown()
+    // Why: tailcat children outlive the runtime otherwise, serving a tunnel into a dead port.
+    const tailcatShutdown = disposeTailcatTunnel()
     killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
     const storeFlush = state.store?.flushAsync() ?? Promise.resolve()
@@ -244,6 +247,7 @@ function installWillQuitHandler(): void {
       { name: 'browser-client-hosts', promise: browserClientHostShutdown },
       { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
       { name: 'ssh', promise: sshShutdown },
+      { name: 'tailcat', promise: tailcatShutdown },
       { name: 'plugin-hosts', promise: pluginHostShutdown },
       { name: 'skill-uploads', promise: skillUploadShutdown },
       { name: 'grok-hooks', promise: grokHookCleanup },

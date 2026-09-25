@@ -14,9 +14,15 @@ import {
 } from './remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
+  isRemoteRuntimeConnectTimeout,
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions
 } from './remote-runtime-connect-bound'
+import {
+  createRemoteRuntimeWebSocket,
+  describeRemoteRuntimeSocketError,
+  remoteRuntimeSocketCreationError
+} from './remote-runtime-tunnel-dialer'
 import {
   isRemoteRuntimeBinaryFrameWithinLimit,
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
@@ -216,10 +222,9 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       options?.connectTimeoutMs
     )
     try {
-      ws = new WebSocket(pairing.endpoint, connectOptions)
+      ws = createRemoteRuntimeWebSocket(pairing, connectOptions)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
+      fail(remoteRuntimeSocketCreationError(error))
       return
     }
 
@@ -233,7 +238,9 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       fail(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          remoteRuntimeConnectFailureMessage(error, pairing.endpoint)
+          isRemoteRuntimeConnectTimeout(error)
+            ? remoteRuntimeConnectFailureMessage(error, pairing.endpoint)
+            : describeRemoteRuntimeSocketError(pairing, error)
         )
       )
     }

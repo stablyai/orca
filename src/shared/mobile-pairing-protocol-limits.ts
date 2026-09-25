@@ -4,3 +4,5 @@ export const PAIRING_ENDPOINT_MAX_CHARACTERS = 16 * 1024
 export const PAIRING_DEVICE_TOKEN_MAX_CHARACTERS = 64 * 1024
 export const PAIRING_PUBLIC_KEY_MAX_CHARACTERS = 4 * 1024
 export const PAIRING_RELAY_URL_MAX_CHARACTERS = 2048
+// Why: a tailcat address blob is dialed as a SOCKS5 domain name, whose length field is one byte.
+export const PAIRING_TUNNEL_TOKEN_MAX_CHARACTERS = 255

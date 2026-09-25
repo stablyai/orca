@@ -3,8 +3,11 @@ import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import { resolveAdvertisedPairingEndpoint } from '../runtime/pairing-endpoint'
 import { notifyServeSupervisorReady } from '../serve-update-handoff'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import { attachTailcatTunnel } from '../tunnel/tailcat-tunnel-host'
 import { mainProcessState as state } from './main-process-state'
 import { getServeOptions, type ServeOptions } from './serve-options'
+import { decodePairingOffer } from '../../shared/pairing'
 
 export { getServeOptions, type ServeOptions }
 
@@ -54,6 +57,10 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
   const advertised = boundEndpoint
     ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
     : null
+  if (options.tailcat) {
+    // Why: the offer below embeds the token, so the tunnel must be listening before it is minted.
+    await attachTailcatTunnel(runtimeRpc, getCanonicalUserDataPath(), { startServer: true })
+  }
   const pairing = options.noPairing
     ? ({
         available: false,
@@ -63,7 +70,8 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
     : runtimeRpc.createPairingOffer({
         address: options.pairingAddress,
         name: `${options.mobilePairing ? 'Mobile' : 'CLI'} ${new Date().toLocaleDateString()}`,
-        scope: options.mobilePairing ? 'mobile' : 'runtime'
+        scope: options.mobilePairing ? 'mobile' : 'runtime',
+        tunnel: options.tailcat
       })
   const pairingQr =
     pairing.available && options.mobilePairing
@@ -84,7 +92,8 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
             deviceId: pairing.deviceId,
             webClientUrl: pairing.webClientUrl,
             scope: options.mobilePairing ? 'mobile' : 'runtime',
-            qr: pairingQr
+            qr: pairingQr,
+            ...serveTunnelReadiness(pairing.pairingUrl)
           }
         : pairing
     },
@@ -93,4 +102,9 @@ export async function printServeReady(options: ServeOptions): Promise<void> {
       : { mode: options.json ? 'json' : 'human' }
   )
   notifyServeSupervisorReady(runtime.getRuntimeId())
+}
+
+function serveTunnelReadiness(pairingUrl: string): { tunnel?: { kind: 'tailcat'; token: string } } {
+  const tunnel = decodePairingOffer(pairingUrl).tunnel
+  return tunnel ? { tunnel: { kind: 'tailcat', token: tunnel.token } } : {}
 }

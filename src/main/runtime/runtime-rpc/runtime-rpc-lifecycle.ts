@@ -89,6 +89,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
             host,
             port: this.wsPort,
             preferPinnedPort: this.preferPinnedWsPort,
+            requirePinnedPort: this.requirePinnedWsPort,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
@@ -163,6 +164,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     host: string
     port: number
     preferPinnedPort: boolean
+    requirePinnedPort?: boolean
     fallbackPort?: number
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
     const deviceRegistry = this.deviceRegistry
@@ -175,7 +177,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       port: options.port,
       staticRoot: this.webClientRoot,
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
-      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
+      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
+      ...(options.requirePinnedPort ? { requirePinnedPort: true } : {})
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)

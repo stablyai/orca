@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PAIRING_OFFER_TUNNEL_VERSION } from './mobile-relay-pairing-offer'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from './pairing'
 import { classifyRemotePairingHostname, parseHostAccessLink } from './remote-pairing-address'
 
@@ -44,6 +45,22 @@ describe('remote pairing address', () => {
         displayEndpoint: 'orca.example.com',
         endpointKind: 'public'
       }
+    })
+  })
+
+  it('classifies a Tailcat offer by its transport instead of its fallback endpoint', () => {
+    const link = encodePairingOffer({
+      v: PAIRING_OFFER_TUNNEL_VERSION,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: 'key',
+      scope: 'runtime',
+      tunnel: { v: 1, kind: 'tailcat', token: 'tcRemoteHost', port: 6768 }
+    })
+
+    expect(parseHostAccessLink(link)).toMatchObject({
+      ok: true,
+      value: { displayEndpoint: 'Tailcat remote host', endpointKind: 'tailcat' }
     })
   })
 

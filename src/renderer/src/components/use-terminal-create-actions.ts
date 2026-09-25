@@ -47,10 +47,16 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           command: shellOverride,
           activate: true
         })
+          .then((outcome) => {
+            if (outcome.status === 'failed') {
+              showClientCreationActionError(outcome.message)
+            }
+          })
+          .catch(showClientCreationActionError)
         return
       }
       if (!shellOverride && targetGroupId) {
-        void openNewTerminalTabInActiveWorkspace(targetGroupId)
+        void openNewTerminalTabInActiveWorkspace(targetGroupId).catch(showClientCreationActionError)
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)

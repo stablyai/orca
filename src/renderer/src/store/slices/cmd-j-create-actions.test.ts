@@ -10,6 +10,7 @@ import {
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
+const showClientCreationActionErrorMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock,
@@ -18,6 +19,10 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
+}))
+
+vi.mock('@/lib/client-creation-action-error', () => ({
+  showClientCreationActionError: showClientCreationActionErrorMock
 }))
 
 vi.mock('@/lib/web-client-location', () => ({
@@ -62,6 +67,7 @@ describe('Cmd+J lifted creation actions', () => {
     pairedWebFlag.__ORCA_WEB_CLIENT__ = true
     createWebRuntimeSessionBrowserTabMock.mockReset()
     createWebRuntimeSessionTerminalMock.mockReset()
+    showClientCreationActionErrorMock.mockReset()
   })
 
   afterEach(() => {
@@ -178,7 +184,10 @@ describe('Cmd+J lifted creation actions', () => {
   })
 
   it('does not fall back to a local terminal tab when paired-web creation fails', async () => {
-    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
+    createWebRuntimeSessionTerminalMock.mockResolvedValue({
+      status: 'failed',
+      message: 'host refused terminal creation'
+    })
     const store = createTestStore()
     seedActiveWorkspace(store)
 
@@ -190,6 +199,7 @@ describe('Cmd+J lifted creation actions', () => {
       targetGroupId: 'group-1',
       activate: true
     })
+    expect(showClientCreationActionErrorMock).toHaveBeenCalledWith('host refused terminal creation')
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
@@ -316,6 +326,7 @@ describe('Cmd+J lifted creation actions', () => {
     await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
 
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
+    expect(showClientCreationActionErrorMock).not.toHaveBeenCalled()
     expect(store.getState().tabsByWorktree['wt-1'] ?? []).toHaveLength(1)
   })
 })
