@@ -3,7 +3,7 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "fe85e0346f78d8148f5b41a60eb4027d8f29ea66",
+  "baseline": "7fd1555d20f57f5dfbba821354a06df46114e155",
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "5f65c5b318f4764b0f58a5e7b593333759a9cfa799db45b11190ac26f4083335",
@@ -156,6 +156,12 @@
         }
       }
     },
+    "3fde28ed6a57": {
+      "launched": {
+        "kind": "prompt-not-sent",
+        "prompt": "Fix the failing checks"
+      }
+    },
     "9c16efc31903": {
       "name": "preflight.detectAgents#1",
       "ordinal": 5,
@@ -188,11 +194,6 @@
         }
       }
     },
-    "a829bb327824": {
-      "launched": {
-        "kind": "prompt-not-sent"
-      }
-    },
     "e0eef7c9fafe": {
       "name": "repo.list#1",
       "ordinal": 3,
@@ -223,7 +224,7 @@
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "a829bb327824",
+          "state": "3fde28ed6a57",
           "effects": []
         }
       }
