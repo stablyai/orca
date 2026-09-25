@@ -38,7 +38,7 @@ export function WorktreeForkAgentSessionMenuItem({
       }
     >
       <GitFork className="size-3.5" />
-      {translate('components.agentSessionFork.menuItem', 'Fork Agent Session…')}
+      {translate('components.agentSessionFork.menuItem', 'Fork Agent Session...')}
     </DropdownMenuItem>
   )
 }

@@ -128,7 +128,7 @@ describe('WorktreeContextMenu Fork Agent Session', () => {
   it('opens the fork dialog for a git worktree', () => {
     openMenu(worktreeFixture({ branch: 'refs/heads/feedback' }))
 
-    clickMenuItem('Fork Agent Session…')
+    clickMenuItem('Fork Agent Session...')
 
     expect(state.openModal).toHaveBeenCalledWith('agent-session-fork', {
       sourceWorktreeId: 'repo::wt-1',
@@ -141,7 +141,7 @@ describe('WorktreeContextMenu Fork Agent Session', () => {
   it('is disabled for a detached or archived worktree', () => {
     openMenu(worktreeFixture({ branch: '' }))
 
-    const item = findMenuItem('Fork Agent Session…')
+    const item = findMenuItem('Fork Agent Session...')
 
     expect(item?.getAttribute('aria-disabled')).toBe('true')
   })
@@ -149,6 +149,6 @@ describe('WorktreeContextMenu Fork Agent Session', () => {
   it('is hidden for folder workspaces', () => {
     openMenu(worktreeFixture({ id: 'folder::f-1', branch: '' }))
 
-    expect(findMenuItem('Fork Agent Session…')).toBeUndefined()
+    expect(findMenuItem('Fork Agent Session...')).toBeUndefined()
   })
 })
