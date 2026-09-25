@@ -8,6 +8,7 @@ import type {
   WorkingTreeCarryFailureReason,
   WorkingTreeCarryResult
 } from '../../../shared/working-tree-change-carry'
+import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   launchNativeAgentSessionFork,
@@ -68,13 +69,19 @@ async function carryChangesIntoChild(
   } catch (error) {
     // Why: a rejected carry (unreachable host, RPC timeout) must not undo a fork that already exists.
     console.error('[agent-session-fork] carrying changes failed', error)
-    return { ok: false, reason: 'apply_failed' }
+    // Why: the host may still finish after our deadline, so a timeout is "outcome unknown", not "nothing written".
+    return {
+      ok: false,
+      reason: hasRuntimeRpcErrorCode(error, 'runtime_timeout')
+        ? 'partially_applied'
+        : 'apply_failed'
+    }
   }
 }
 
 async function copyTranscriptPrompt(prompt: string): Promise<void> {
   try {
-    await window.api.ui.writeClipboardText(prompt)
+    await window.api.ui.writeTerminalClipboardText(prompt)
     toast.message(
       translate(
         'auto.components.terminal.pane.terminal.agent.session.fork.c00421d320',

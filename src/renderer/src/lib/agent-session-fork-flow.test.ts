@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import type { ForkableAgentSession } from './worktree-agent-fork-sessions'
 import {
   runAgentSessionFork,
@@ -41,7 +42,7 @@ const mocks = vi.hoisted(() => ({
   settingsForRepoOwner: vi.fn((_state: unknown, _repoId: string) => ({
     activeRuntimeEnvironmentId: 'owner-env'
   })),
-  writeClipboardText: vi.fn(async (_text: string) => undefined),
+  writeTerminalClipboardText: vi.fn(async (_text: string) => undefined),
   toastMessage: vi.fn(),
   toastError: vi.fn()
 }))
@@ -101,7 +102,9 @@ function createCall(): unknown[] {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.stubGlobal('window', { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
+  vi.stubGlobal('window', {
+    api: { ui: { writeTerminalClipboardText: mocks.writeTerminalClipboardText } }
+  })
   state.repos = [{ id: 'repo', connectionId: 'ssh-1' }]
   state.settings = { activeRuntimeEnvironmentId: null }
   knownWorktrees.clear()
@@ -217,6 +220,63 @@ describe('runAgentSessionFork', () => {
     expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps apply_failed for a runtime rejection that is not a timeout', async () => {
+    mocks.carryRuntimeWorkingTreeChanges.mockRejectedValue(
+      new RuntimeRpcCallError({
+        id: 'git.carryWorkingTreeChanges',
+        ok: false,
+        error: { code: 'remote_runtime_unavailable', message: 'Remote Orca runtime is offline.' }
+      })
+    )
+
+    const outcome = await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(outcome).toEqual({
+      ok: true,
+      worktreeId: 'repo::feedback-fork',
+      warnings: [{ kind: 'changes-not-carried', reason: 'apply_failed' }]
+    })
+  })
+
+  it('reports an uncertain carry when the runtime call times out', async () => {
+    mocks.carryRuntimeWorkingTreeChanges.mockRejectedValue(
+      new RuntimeRpcCallError({
+        id: 'git.carryWorkingTreeChanges',
+        ok: false,
+        error: {
+          code: 'runtime_timeout',
+          message: 'Timed out waiting for the remote Orca runtime to respond.'
+        }
+      })
+    )
+
+    const outcome = await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(outcome).toEqual({
+      ok: true,
+      worktreeId: 'repo::feedback-fork',
+      warnings: [{ kind: 'changes-not-carried', reason: 'partially_applied' }]
+    })
+    expect(mocks.launchNativeAgentSessionFork).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an uncertain carry when the web client call times out', async () => {
+    // Why: the web preload rethrows a failed envelope as a plain Error that keeps the code.
+    mocks.carryRuntimeWorkingTreeChanges.mockRejectedValue(
+      Object.assign(new Error('Timed out waiting for the remote Orca runtime to respond.'), {
+        code: 'runtime_timeout'
+      })
+    )
+
+    const outcome = await runAgentSessionFork(request({ carryChanges: true }), onStage)
+
+    expect(outcome).toEqual({
+      ok: true,
+      worktreeId: 'repo::feedback-fork',
+      warnings: [{ kind: 'changes-not-carried', reason: 'partially_applied' }]
+    })
+  })
+
   it('warns when the native fork cannot start', async () => {
     mocks.launchNativeAgentSessionFork.mockResolvedValue(false)
 
@@ -227,7 +287,7 @@ describe('runAgentSessionFork', () => {
       worktreeId: 'repo::feedback-fork',
       warnings: [{ kind: 'agent-not-started' }]
     })
-    expect(mocks.writeClipboardText).not.toHaveBeenCalled()
+    expect(mocks.writeTerminalClipboardText).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
   })
 
@@ -246,7 +306,7 @@ describe('runAgentSessionFork', () => {
       worktreePath: '/r/feedback-fork',
       launchSource: 'sidebar'
     })
-    expect(mocks.writeClipboardText).not.toHaveBeenCalled()
+    expect(mocks.writeTerminalClipboardText).not.toHaveBeenCalled()
   })
 
   it('copies the transcript prompt to the clipboard when the transcript fork cannot start', async () => {
@@ -265,7 +325,7 @@ describe('runAgentSessionFork', () => {
       worktreeId: 'repo::feedback-fork',
       warnings: [{ kind: 'agent-not-started' }]
     })
-    expect(mocks.writeClipboardText).toHaveBeenCalledWith('fork context')
+    expect(mocks.writeTerminalClipboardText).toHaveBeenCalledWith('fork context')
     expect(mocks.toastMessage).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo::feedback-fork', {
       sidebarRevealBehavior: 'auto'
@@ -274,7 +334,7 @@ describe('runAgentSessionFork', () => {
 
   it('still returns the fork when copying the transcript prompt fails', async () => {
     mocks.launchTranscriptAgentSessionFork.mockResolvedValue(false)
-    mocks.writeClipboardText.mockRejectedValue(new Error('clipboard denied'))
+    mocks.writeTerminalClipboardText.mockRejectedValue(new Error('clipboard denied'))
 
     const outcome = await runAgentSessionFork(
       request({ source: { kind: 'transcript', agent: 'gemini', prompt: 'fork context' } }),
