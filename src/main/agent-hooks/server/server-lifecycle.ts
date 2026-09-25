@@ -36,6 +36,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     if (this.server) {
       return
     }
+    await this.flushStatusPersist()
 
     if (options?.env) {
       this.env = options.env
