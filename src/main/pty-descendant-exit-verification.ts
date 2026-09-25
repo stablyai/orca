@@ -124,7 +124,17 @@ export async function terminateDescendantSnapshotWithVerdict(
   const forced = new Set<number>()
   const signalled = new Set<number>()
   const missingObservations = new Map(snapshot.descendants.map((row) => [row.pid, 0]))
-  const observedPids = new Set<number>()
+  // The snapshot is itself a table read that saw each target alive. An absence is evidence only
+  // from a read that started after the target was last seen: a shared or in-flight read begun
+  // earlier can miss a descendant forked since, but a later full scan cannot miss a live one.
+  const lastSeenAtMs = new Map(
+    snapshot.descendants.map((row) => [
+      row.pid,
+      snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+    ])
+  )
+  const provenAbsent = (): boolean =>
+    snapshot.descendants.every((row) => (missingObservations.get(row.pid) ?? 0) >= 2)
   if (!deps.requireIdentityBeforeSignal) {
     for (const row of snapshot.descendants) {
       sendSignal(row.pid, 'SIGTERM')
@@ -148,14 +158,11 @@ export async function terminateDescendantSnapshotWithVerdict(
       }
       const live = matchingSnapshotRows(snapshot, capture.rows, deps.requireIdentityBeforeSignal)
       if (deps.requireIdentityBeforeSignal) {
-        const rowsByPid = new Set(capture.rows.map((row) => row.pid))
         for (const row of snapshot.descendants) {
-          if (rowsByPid.has(row.pid)) {
-            observedPids.add(row.pid)
-          }
           if (live.some((current) => current.pid === row.pid)) {
             missingObservations.set(row.pid, 0)
-          } else {
+            lastSeenAtMs.set(row.pid, capture.capturedAtMs)
+          } else if (capture.capturedAtMs > (lastSeenAtMs.get(row.pid) ?? Infinity)) {
             missingObservations.set(row.pid, (missingObservations.get(row.pid) ?? 0) + 1)
           }
         }
@@ -163,15 +170,9 @@ export async function terminateDescendantSnapshotWithVerdict(
       if (live.length === 0) {
         // Before a signal has been sent, an empty identity match means the
         // snapshotted descendants already exited or were replaced. Signalling
-        // those old numeric pids would be unsafe. Partial reads are not proof
-        // that a never-observed target exited, so every identity needs two
-        // bounded absences after it has appeared in a table.
-        if (
-          deps.requireIdentityBeforeSignal &&
-          !snapshot.descendants.every(
-            (row) => observedPids.has(row.pid) && (missingObservations.get(row.pid) ?? 0) >= 2
-          )
-        ) {
+        // those old numeric pids would be unsafe. Every identity needs two
+        // absences from reads that started after it was last seen.
+        if (deps.requireIdentityBeforeSignal && !provenAbsent()) {
           await waitForDelay(50, deps.keepAlive)
           continue
         }
@@ -235,10 +236,7 @@ export async function terminateDescendantSnapshotWithVerdict(
     return 'live'
   }
   if (deps.requireIdentityBeforeSignal) {
-    const everyTargetAbsent = snapshot.descendants.every(
-      (row) => observedPids.has(row.pid) && (missingObservations.get(row.pid) ?? 0) >= 2
-    )
-    return everyTargetAbsent ? 'exited' : 'unverifiable'
+    return provenAbsent() ? 'exited' : 'unverifiable'
   }
   return 'exited'
 }
