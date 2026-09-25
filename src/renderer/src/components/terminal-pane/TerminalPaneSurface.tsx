@@ -10,7 +10,6 @@ import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorT
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
@@ -36,7 +35,6 @@ export function TerminalPaneSurface({
     activePaneIsChatLeaf,
     activatePaneTitleInteraction,
     agentSessionContinuation,
-    agentSessionFork,
     beginPaneDragFromHeader,
     closeTerminalLinkActions,
     contextMenu,
@@ -94,7 +92,6 @@ export function TerminalPaneSurface({
     sessionRestoredBannerPaneIds,
     sessionStateSaveFailureMessage,
     setAgentSessionContinuation,
-    setAgentSessionFork,
     setContainerRef,
     setQuickCommandEditorOpen,
     setRenameValue,
@@ -279,15 +276,6 @@ export function TerminalPaneSurface({
           onSave={saveQuickCommand}
         />
       ) : null}
-      <TerminalAgentSessionForkDialog
-        open={agentSessionFork !== null}
-        fork={agentSessionFork}
-        onOpenChange={(open) => {
-          if (!open) {
-            setAgentSessionFork(null)
-          }
-        }}
-      />
       {agentSessionContinuation ? (
         <AgentSessionContinuationDialog
           open

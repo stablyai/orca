@@ -10,7 +10,7 @@ import {
   appendTabToWorktreeOrder,
   getResumeLaunchTarget
 } from '@/lib/sleeping-agent-session-launch'
-import { getForkAgentLaunchPlatform } from '@/components/terminal-pane/terminal-agent-session-fork-launch-platform'
+import { getForkAgentLaunchPlatform } from './agent-fork-launch-platform'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv

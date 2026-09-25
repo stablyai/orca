@@ -7,7 +7,6 @@ import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-c
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 import type { TerminalPasteSource } from './terminal-paste-coordinator'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
-import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { pasteTerminalPaneMenuClipboard } from './terminal-pane-menu-paste'
 import {
@@ -43,7 +42,6 @@ type UseTerminalPaneContextMenuDeps = {
   onSetTitle: (paneId: number) => void
   onClearPaneTitle: (paneId: number) => void
   onPasteError: (message: string) => void
-  onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
   onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
   forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
@@ -95,7 +93,6 @@ export function useTerminalPaneContextMenu({
   onSetTitle,
   onClearPaneTitle,
   onPasteError,
-  onAgentSessionForkReady,
   onAgentSessionContinuationReady,
   forceBracketedMultilineTextPaste,
   rightClickToPaste
@@ -157,7 +154,6 @@ export function useTerminalPaneContextMenu({
     worktreeId,
     groupId,
     fallbackCwd,
-    onAgentSessionForkReady,
     onAgentSessionContinuationReady
   }
 

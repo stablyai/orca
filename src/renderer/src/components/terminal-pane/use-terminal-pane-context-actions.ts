@@ -41,7 +41,6 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     renamingPaneId,
     rightClickToPaste,
     setAgentSessionContinuation,
-    setAgentSessionFork,
     setPaneTitles,
     setRenamingPaneId,
     setTerminalError,
@@ -164,7 +163,6 @@ export function useTerminalPaneContextActions(controller: TerminalPaneCloseContr
     onSetTitle: handleStartRename,
     onClearPaneTitle: handleClearPaneTitleShortcut,
     onPasteError: setTerminalError,
-    onAgentSessionForkReady: setAgentSessionFork,
     onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
     rightClickToPaste
