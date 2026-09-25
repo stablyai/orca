@@ -9,10 +9,10 @@ import {
   pendingPtyIdBySerializerGeneration,
   rendererSerializerReadiness
 } from '../pane/serializer-state'
-import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
+import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-size'
-import { clearProviderPtyState } from '../provider/state-cleanup'
+import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { PtyIpcSpawnState } from './spawn-state'
 
@@ -68,18 +68,11 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
       }
     } catch (err) {
       console.error('[pty] failed to persist PTY binding after spawn:', err)
-      if (!ctx.result.isReattach) {
-        try {
-          await ctx.provider.shutdown(ctx.result.id, { immediate: true })
-        } catch (shutdownErr) {
-          console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
+      await discardUnpersistedPtySpawn(ctx.provider, ctx.result, () => {
+        if (args.connectionId && ctx.deps.store) {
+          ctx.deps.store.removeSshRemotePtyLease(args.connectionId, relayResultId)
         }
-        clearProviderPtyState(ctx.result.id)
-        deletePtyOwnership(ctx.result.id)
-      }
-      if (!ctx.result.isReattach && args.connectionId && ctx.deps.store) {
-        ctx.deps.store.removeSshRemotePtyLease(args.connectionId, relayResultId)
-      }
+      })
       throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
         agentSessionOperationOutcome: 'unknown' as const
       })

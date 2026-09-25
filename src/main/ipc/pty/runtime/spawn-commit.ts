@@ -1,5 +1,5 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
+import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { commitRuntimePtySize } from './spawn-commit-pty-size'
 import {
@@ -26,15 +26,19 @@ import {
 } from '../../../runtime/terminal-model-query-authority'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
-import { clearProviderPtyState } from '../provider/state-cleanup'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
-import { registerPersistedPtySpawn } from '../pane/spawn-registration'
+import {
+  admitPtyReattachOwnership,
+  discardUnpersistedPtySpawn,
+  registerPersistedPtySpawn
+} from '../pane/spawn-registration'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
+  admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
   if (
     isNativeWindowsLocalPtySpawn({
@@ -143,15 +147,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       }
     } catch (err) {
       console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
-      if (!ctx.result.isReattach) {
-        deletePtyOwnership(ctx.result.id)
-        try {
-          await ctx.provider.shutdown(ctx.result.id, { immediate: true })
-        } catch (shutdownErr) {
-          console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
-        }
-        clearProviderPtyState(ctx.result.id)
-      }
+      await discardUnpersistedPtySpawn(ctx.provider, ctx.result)
       if (err instanceof Error && err.message === 'terminal_split_source_not_found') {
         throw err
       }

@@ -18,13 +18,14 @@ import {
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { persistPtyIpcSpawnCommit, publishPtyIpcSpawnCommit } from './spawn-commit-persist'
-import { registerPersistedPtySpawn } from '../pane/spawn-registration'
+import { admitPtyReattachOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
+  admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   if (ctx.nativeWindowsConptySpawn) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
