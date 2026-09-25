@@ -27,7 +27,22 @@ export function getAgentForkArgv(
       return ['claude', '--resume', id, '--fork-session']
     case 'codex':
       return ['codex', 'fork', id]
-    default:
+    // Why: exhaustive (no default) so a new ResumableTuiAgent forces an explicit fork decision.
+    case 'gemini':
+    case 'antigravity':
+    case 'opencode':
+    case 'opencode2':
+    case 'pi':
+    case 'mimo-code':
+    case 'droid':
+    case 'grok':
+    case 'devin':
+    case 'omp':
+    case 'prime-agent':
+    case 'copilot':
+    case 'kimi':
+    case 'muse':
+    case 'zcode':
       return null
   }
 }
