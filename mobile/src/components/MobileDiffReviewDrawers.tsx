@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native'
 import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
@@ -111,7 +111,8 @@ function useOverflowActions(controller: ReturnType<typeof useMobileDiffReviewCon
         label: 'Send Unsent Notes',
         icon: Send,
         disabled: controller.unsentComments.length === 0,
-        skipAutoClose: true,
+        // Why: iOS cannot present the Send Notes sheet while this one is still on screen.
+        closeBeforePress: true,
         onPress: () => void controller.openSendSheet()
       },
       {
@@ -265,10 +266,18 @@ function SaveNoteButton({
 function CompletionDrawer({ controller }: Props) {
   const noteCount =
     controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
+  const sendAfterCloseRef = useRef(false)
   return (
     <BottomDrawer
       visible={controller.showCompletion}
       onClose={() => controller.setShowCompletion(false)}
+      onAfterClose={() => {
+        // Why: iOS cannot present a second native sheet until this drawer has fully unmounted.
+        if (sendAfterCloseRef.current) {
+          sendAfterCloseRef.current = false
+          void controller.openSendSheet()
+        }
+      }}
     >
       <Text style={styles.drawerTitle}>Review Complete</Text>
       <Text style={styles.drawerSubtitle}>
@@ -289,7 +298,10 @@ function CompletionDrawer({ controller }: Props) {
         <Pressable
           style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
           disabled={controller.unsentComments.length === 0}
-          onPress={() => void controller.openSendSheet()}
+          onPress={() => {
+            sendAfterCloseRef.current = true
+            controller.setShowCompletion(false)
+          }}
           accessibilityRole="button"
           accessibilityLabel="Send notes to agent"
         >
