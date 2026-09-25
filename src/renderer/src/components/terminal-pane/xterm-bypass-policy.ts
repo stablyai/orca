@@ -103,6 +103,11 @@ function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
 }
 
+/** Physical Shift used by Windows/Sogou to commit pinyin as Latin (`Process`/`229`). */
+function isImeModeToggleShiftKey(event: XtermBypassEvent): boolean {
+  return typeof event.code === 'string' && event.code.startsWith('Shift')
+}
+
 /**
  * Why: iOS/iPadOS composes CJK text by rewriting the field through
  * `beforeinput`/`input`, with no composition session, and that only runs when
@@ -199,8 +204,16 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   // them corrupts committed CJK text. Bare macOS/Linux keydown 229 is exempt:
   // it must reach xterm's CompositionHelper so it can schedule its textarea
   // diff (macOS: first key after an input-source switch; Linux: Sogou/fcitx
-  // candidate commits outside a composition session). Windows keeps full
-  // suppression until verified against its preedit-diff race.
+  // candidate commits outside a composition session). Windows keeps letter 229
+  // suppression for the preedit-diff race, but a ShiftLeft/ShiftRight keydown
+  // must pass: Sogou reports the English-mode toggle as Process/229 with that
+  // physical code, then an empty compositionend and a later latin input.
+  // The keyup stays here so a Shift-coded 229 release cannot become a kitty
+  // CSI-u for a press the TUI never saw. macOS and Linux are unchanged.
+  const isWindows = !isMac && !isLinux
+  if (isWindows && event.type === 'keydown' && isImeModeToggleShiftKey(event)) {
+    return false
+  }
   const passesStandalone229Keydown = isMac || isLinux
   const passesIdleComposing229Keydown =
     event.type === 'keydown' &&
@@ -311,8 +324,31 @@ export function shouldSuppressTerminalInterruptKeyup(event: XtermBypassEvent): b
   )
 }
 
-export function shouldSuppressTerminalModifierKeyboardEvent(event: XtermBypassEvent): boolean {
-  return isXtermHandledKeyEvent(event.type) && TERMINAL_MODIFIER_KEYS.has(event.key)
+/** The platform split the Windows Sogou Shift carve-out needs; see below. */
+export type XtermModifierKeyboardOptions = {
+  isMac: boolean
+  isLinux: boolean
+}
+
+export function shouldSuppressTerminalModifierKeyboardEvent(
+  event: XtermBypassEvent,
+  options: XtermModifierKeyboardOptions
+): boolean {
+  if (!isXtermHandledKeyEvent(event.type) || !TERMINAL_MODIFIER_KEYS.has(event.key)) {
+    return false
+  }
+  // Why: Sogou Shift-to-English is key=Shift whose IME/composition flags we
+  // cannot trust (isComposing and the tracker are often already false). The
+  // custom handler runs after xterm sets _keyDownSeen, so swallowing this
+  // keydown drops the later held-key insertText (#12099 / #22021). Gating the
+  // keydown on those flags was tried and dropped the commit on native Sogou.
+  // Keyup stays suppressed so kitty cannot encode a bare modifier release.
+  // Windows-only: on macOS and Linux the pane handler still swallows Shift
+  // before xterm, so neither platform depends on CompositionHelper consuming
+  // it — the one thing standing between a delivered Shift and a kitty press
+  // CSI-u, and it lives in the vendored patch.
+  const isWindows = !options.isMac && !options.isLinux
+  return !(isWindows && event.type === 'keydown' && event.key === 'Shift')
 }
 
 /**

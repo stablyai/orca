@@ -88,7 +88,7 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  
  export interface IBrowser {
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee3acfddfa 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..b2d99074a17a2197fc50091a1a2f760c27ece99f 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
 @@ -1,10 +1,15 @@
@@ -413,7 +413,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    }
  
    /**
-@@ -113,7 +313,19 @@ export class CompositionHelper {
+@@ -113,14 +313,32 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -434,21 +434,42 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
        if (ev.keyCode === 20 || ev.keyCode === 229) {
          // 20 is CapsLock, 229 is Enter
          // Continue composing if the keyCode is the "composition character"
-@@ -128,6 +340,10 @@ export class CompositionHelper {
++        if (this._isImeModeToggleShift(ev)) {
++          this._imeKeydownAwaitingCommit = true;
++        }
+         return false;
+       }
+       if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18) {
+         // Continue composing if the keyCode is a modifier key
++        if (this._isImeModeToggleShift(ev)) {
++          this._imeKeydownAwaitingCommit = true;
++        }
+         return false;
+       }
+       // Finish composition immediately. This is mainly here for the case where enter is
+@@ -128,6 +346,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
 +    // Nothing is forwarded for a keydown the IME consumed, so it is left owing its commit; any
 +    // other keydown either forwards its own text or produces none, and clears the debt.
-+    this._imeKeydownAwaitingCommit = ev.keyCode === 229;
++    this._imeKeydownAwaitingCommit = ev.keyCode === 229 || this._isImeModeToggleShift(ev);
 +
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +354,74 @@ export class CompositionHelper {
-     return true;
-   }
+@@ -135,6 +357,79 @@ export class CompositionHelper {
+       return false;
+     }
  
++    if (this._isImeModeToggleShift(ev)) {
++      // Consume idle/trailing Shift so kitty cannot encode it; the custom handler
++      // must still deliver the keydown or Sogou's delayed insertText is dropped.
++      return false;
++    }
++    return true;
++  }
++
 +  /**
 +   * Defers keypress text while a composition finalizer is pending so all input is emitted once
 +   * after reconciliation with the final textarea candidate.
@@ -514,13 +535,10 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +      this._textareaChangeTimer = undefined;
 +    }
 +    this._coreService.triggerDataEvent(text, true);
-+    return true;
-+  }
-+
-   /**
-    * Finalizes the composition, resuming regular input actions. This is called when a composition
-    * is ending.
-@@ -146,23 +430,52 @@ export class CompositionHelper {
+     return true;
+   }
+ 
+@@ -146,23 +441,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -584,7 +602,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,37 +485,315 @@ export class CompositionHelper {
+@@ -172,37 +496,339 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -613,17 +631,39 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 -          }
 -          if (input.length > 0) {
 -            this._coreService.triggerDataEvent(input, true);
--          }
 +      pending.finalizerTimer = this._defer(() => {
 +        pending.finalizerTimer = undefined;
 +        if (this._compositionTransactionId === pending.transactionId) {
 +          this._isAwaitingCompositionEnd = false;
 +        }
 +        if (this._pendingComposition === pending) {
++          if (this._shouldWaitForHeldImeCommit(pending)) {
++            return;
+           }
 +          this._sendPendingComposition(pending, true);
-+        }
+         }
+-      }, 0);
 +      });
-+    }
+     }
+   }
+ 
++  /** Physical Shift used by Windows IMEs (Sogou) to commit pinyin as Latin. */
++  private _isImeModeToggleShift(ev: KeyboardEvent): boolean {
++    return ev.keyCode === 16 || (typeof ev.code === 'string' && ev.code.startsWith('Shift'));
++  }
++
++  /**
++   * Windows/Sogou Shift-to-English ends the composition with empty data while the Process key
++   * is still down, then delivers the latin commit as a later insertText. Flushing the empty
++   * textarea on this tick would drop that commit.
++   */
++  private _shouldWaitForHeldImeCommit(pending: IPendingComposition): boolean {
++    return (
++      pending.expectsPostCompositionInput &&
++      this._imeKeydownAwaitingCommit &&
++      pending.inputData.length === 0 &&
++      this._getPendingTextareaInput(pending, true).length === 0
++    );
 +  }
 +
 +  private _sendPendingComposition(
@@ -765,6 +805,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +    this._pendingComposition = undefined;
 +    this._isAwaitingCompositionEnd = false;
 +    this._isComposing = false;
++    this._imeKeydownAwaitingCommit = false;
 +    this._compositionView.classList.remove('active');
 +    this._resetCompositionView();
 +    this._textarea.value =
@@ -813,8 +854,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +          id: pending.transactionId,
 +          data: input,
 +          dataPendingReconciliation: true
-         }
--      }, 0);
++        }
 +      }
 +    ));
 +  }
@@ -822,9 +862,9 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +  private _dispatchCompositionSessionEvent(event: CustomEvent): void {
 +    if (typeof this._textarea.dispatchEvent === 'function') {
 +      this._textarea.dispatchEvent(event);
-     }
-   }
- 
++    }
++  }
++
 +  private _dispatchCompositionTransactionSettled(): void {
 +    this._dispatchCompositionSessionEvent(new CustomEvent(
 +      'xterm-composition-transaction-settled',
@@ -883,7 +923,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
 +      if (
 +        this._isComposing &&
 +        this._compositionTransactionId === transactionId &&
-+        this._composedRegionLength() === 0
++        this._composedRegionLength() === 0 &&
++        !this._imeKeydownAwaitingCommit
 +      ) {
 +        this._cancelComposition();
 +      }
@@ -927,7 +968,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    /**
     * Apply any changes made to the textarea after the current event chain is allowed to complete.
     * This should be called when not currently composing but a keydown event with the "composition
-@@ -222,6 +813,9 @@ export class CompositionHelper {
+@@ -222,6 +848,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -937,7 +978,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +830,105 @@ export class CompositionHelper {
+@@ -236,6 +865,105 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -1043,7 +1084,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +936,23 @@ export class CompositionHelper {
+@@ -243,10 +971,23 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
@@ -1068,7 +1109,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..4d62369d0005f465318ec93e221fd3ee
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -254,31 +960,156 @@ export class CompositionHelper {
+@@ -254,31 +995,156 @@ export class CompositionHelper {
        const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
        const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
  

@@ -204,6 +204,88 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     ).toBe(true)
   })
 
+  it('lets Windows Sogou Shift-to-English keydowns reach CompositionHelper', () => {
+    // Why: native Shift toggle is key=Process code=ShiftLeft keyCode=229, then
+    // an ordinary Shift. Swallowing that keydown drops the later latin input.
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'ShiftLeft', keyCode: 229, isComposing: true }),
+        windowsComposing
+      )
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Shift', code: 'ShiftLeft', keyCode: 16, shiftKey: true, isComposing: true }),
+        windowsComposing
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses a Windows Sogou Shift-coded keyup so kitty cannot encode the release', () => {
+    // Why: the held-commit fix only needs the keydown. A Shift-coded Process/229
+    // keyup otherwise reaches KittyKeyboard and emits a release CSI-u.
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({
+          type: 'keyup',
+          key: 'Process',
+          code: 'ShiftRight',
+          keyCode: 229,
+          isComposing: true
+        }),
+        windowsComposing
+      )
+    ).toBe(true)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keyup', key: 'Process', code: 'ShiftLeft', keyCode: 229 }),
+        windowsIdle
+      )
+    ).toBe(true)
+  })
+
+  it('keeps Shift-coded IME events on the previous policy for macOS and Linux', () => {
+    const macComposing = {
+      isMac: true,
+      isLinux: false,
+      compositionActive: true,
+      candidateKeyGuardActive: false,
+      pendingCandidateKeyReleaseActive: false
+    }
+    for (const options of [macComposing, linuxComposing]) {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({
+            key: 'Shift',
+            code: 'ShiftLeft',
+            keyCode: 16,
+            shiftKey: true,
+            isComposing: true
+          }),
+          options
+        )
+      ).toBe(true)
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: 'Process', code: 'ShiftLeft', keyCode: 229, isComposing: true }),
+          options
+        )
+      ).toBe(true)
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({
+            type: 'keyup',
+            key: 'Process',
+            code: 'ShiftRight',
+            keyCode: 229,
+            isComposing: true
+          }),
+          options
+        )
+      ).toBe(true)
+    }
+  })
+
   it('lets standalone Linux 229 keydowns reach xterm so its CompositionHelper can diff text', () => {
     // Why: Sogou/fcitx candidate commits can ride a bare 229 keydown outside a
     // composition session; xterm must see it to schedule its textarea diff.

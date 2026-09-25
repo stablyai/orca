@@ -21,10 +21,13 @@ import {
   CHECKOUT_DIFF_FLAGS,
   PNPM_DIFF_FLAGS,
   assertSourceDerivationsAgree,
+  commonParent,
   escapeRegExp,
   formatCheckFailure,
+  posixRelative,
   normalizePnpmDiff,
-  pnpmDiffEnvironment
+  pnpmDiffEnvironment,
+  withoutGitRepositoryLocation
 } from './xterm-patch-text.mjs'
 
 const DEFAULT_REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
@@ -166,12 +169,16 @@ const WINDOWS_SHIM_COMMANDS = new Set(['npm', 'npx', 'pnpm', 'yarn'])
 
 function run(command, args, options = {}) {
   const shim = process.platform === 'win32' && WINDOWS_SHIM_COMMANDS.has(command)
+  const { env: providedEnv, ...rest } = options
+  const env =
+    command === 'git' ? withoutGitRepositoryLocation(providedEnv ?? process.env) : providedEnv
   return execFileSync(shim ? `${command}.cmd` : command, args, {
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'inherit'],
     shell: shim,
-    ...options
+    ...rest,
+    ...(env ? { env } : {})
   })
 }
 
@@ -228,6 +235,14 @@ function ensureUpstreamCheckout(manifest, workDir) {
   }
   run('git', ['checkout', '--quiet', '--detach', commit], { cwd: root })
   run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
+  // Why: upstream's `* text=auto` smudges CRLF on Windows. A later
+  // `checkout --force` leaves those files in place because Git still
+  // considers them clean, so drop the index and reset after disabling text.
+  const localAttributes = path.join(root, '.git', 'info', 'attributes')
+  mkdirSync(path.dirname(localAttributes), { recursive: true })
+  writeFileSync(localAttributes, '* -text\n')
+  run('git', ['rm', '-r', '--quiet', '--cached', '.'], { cwd: root })
+  run('git', ['reset', '--quiet', '--hard', commit], { cwd: root })
   return root
 }
 
@@ -277,7 +292,7 @@ function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
   const sourceRoot = path.join(pristineDir, 'src')
   const drifted = listFilesRelative(sourceRoot)
     .map((relative) => path.join('src', relative))
-    .filter((relative) => relative !== stampFile)
+    .filter((relative) => !stampFile || toPosix(relative) !== toPosix(stampFile))
     .filter(
       (relative) =>
         !sameBytes(
@@ -356,9 +371,13 @@ function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination
 }
 
 function diffFolders(folderA, folderB) {
+  const cwd = commonParent(folderA, folderB)
+  const relA = posixRelative(cwd, folderA)
+  const relB = posixRelative(cwd, folderB)
   let stdout
   try {
-    stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, folderA, folderB], {
+    stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, relA, relB], {
+      cwd,
       encoding: 'utf8',
       maxBuffer: 512 * 1024 * 1024,
       env: pnpmDiffEnvironment(),
@@ -371,7 +390,7 @@ function diffFolders(folderA, folderB) {
     }
     stdout = error.stdout
   }
-  return normalizePnpmDiff(stdout, folderA, folderB)
+  return normalizePnpmDiff(stdout, relA, relB)
 }
 
 /** The source of truth for the hand-written half: what the checkout itself holds. */

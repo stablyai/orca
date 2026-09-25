@@ -217,15 +217,21 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
 })
 
 describe('shouldSuppressTerminalModifierKeyboardEvent', () => {
+  const WINDOWS = { isMac: false, isLinux: false }
+  const MAC = { isMac: true, isLinux: false }
+  const LINUX = { isMac: false, isLinux: true }
+
   it('suppresses standalone modifier events before Kitty can encode them', () => {
     expect(
       shouldSuppressTerminalModifierKeyboardEvent(
-        event({ type: 'keydown', key: 'Control', code: 'ControlLeft', ctrlKey: true })
+        event({ type: 'keydown', key: 'Control', code: 'ControlLeft', ctrlKey: true }),
+        WINDOWS
       )
     ).toBe(true)
     expect(
       shouldSuppressTerminalModifierKeyboardEvent(
-        event({ type: 'keyup', key: 'Meta', code: 'MetaLeft', metaKey: false })
+        event({ type: 'keyup', key: 'Meta', code: 'MetaLeft', metaKey: false }),
+        MAC
       )
     ).toBe(true)
   })
@@ -233,11 +239,69 @@ describe('shouldSuppressTerminalModifierKeyboardEvent', () => {
   it('does not suppress non-modifier keyboard input', () => {
     expect(
       shouldSuppressTerminalModifierKeyboardEvent(
-        event({ type: 'keydown', key: 'c', code: 'KeyC', ctrlKey: true })
+        event({ type: 'keydown', key: 'c', code: 'KeyC', ctrlKey: true }),
+        WINDOWS
       )
     ).toBe(false)
-    expect(shouldSuppressTerminalModifierKeyboardEvent(event({ type: 'keypress', key: 'c' }))).toBe(
-      false
-    )
+    expect(
+      shouldSuppressTerminalModifierKeyboardEvent(event({ type: 'keypress', key: 'c' }), WINDOWS)
+    ).toBe(false)
+  })
+
+  it('lets every Windows Shift keydown reach CompositionHelper and still swallows the keyup', () => {
+    // Why: Sogou Shift-to-English is often key=Shift after compositionend, with
+    // isComposing already false. Gating on composition state drops the later
+    // held-key insertText (#12099 / #22021). CompositionHelper consumes the
+    // keydown so kitty cannot encode a bare modifier.
+    expect(
+      shouldSuppressTerminalModifierKeyboardEvent(
+        event({ type: 'keydown', key: 'Shift', code: 'ShiftLeft', shiftKey: true }),
+        WINDOWS
+      )
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalModifierKeyboardEvent(
+        event({
+          type: 'keydown',
+          key: 'Shift',
+          code: 'ShiftLeft',
+          shiftKey: true,
+          isComposing: true
+        }),
+        WINDOWS
+      )
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalModifierKeyboardEvent(
+        event({ type: 'keyup', key: 'Shift', code: 'ShiftRight', shiftKey: false }),
+        WINDOWS
+      )
+    ).toBe(true)
+  })
+
+  it('keeps macOS and Linux Shift keydown suppressed at the policy, not in xterm', () => {
+    // Why: only Sogou needs the keydown delivered. Leaving the other platforms
+    // on the pane-level swallow keeps them off the vendored CompositionHelper
+    // patch that is the sole reason a delivered Shift emits no kitty CSI-u.
+    for (const platform of [MAC, LINUX]) {
+      expect(
+        shouldSuppressTerminalModifierKeyboardEvent(
+          event({ type: 'keydown', key: 'Shift', code: 'ShiftLeft', shiftKey: true }),
+          platform
+        )
+      ).toBe(true)
+      expect(
+        shouldSuppressTerminalModifierKeyboardEvent(
+          event({
+            type: 'keydown',
+            key: 'Shift',
+            code: 'ShiftLeft',
+            shiftKey: true,
+            isComposing: true
+          }),
+          platform
+        )
+      ).toBe(true)
+    }
   })
 })

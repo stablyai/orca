@@ -6,6 +6,8 @@
  * tests exercise it with no network and no build.
  */
 
+import path from 'node:path'
+
 /**
  * Flags pnpm@12 passes to `git diff` in its own `diff_folders()`. A patch built
  * with anything else is a patch pnpm may re-diff differently on the next
@@ -41,13 +43,50 @@ export const CHECKOUT_DIFF_FLAGS = PNPM_DIFF_FLAGS.filter((flag) => flag !== '--
   (flag) => (flag === '--' ? ['--relative', '--'] : [flag])
 )
 
+const GIT_REPOSITORY_LOCATION_KEYS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_COMMON_DIR',
+  'GIT_PREFIX'
+]
+
+/** Drop repo-location overrides so a `cwd` git spawn cannot rewrite the caller checkout. */
+export function withoutGitRepositoryLocation(baseEnvironment = process.env) {
+  const environment = { ...baseEnvironment }
+  for (const key of GIT_REPOSITORY_LOCATION_KEYS) {
+    delete environment[key]
+  }
+  return environment
+}
+
 /** Applies pnpm's git config isolation so local machine settings cannot change the patch. */
 export function pnpmDiffEnvironment(baseEnvironment = process.env) {
   return {
-    ...baseEnvironment,
+    ...withoutGitRepositoryLocation(baseEnvironment),
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_CONFIG_GLOBAL: '/dev/null'
   }
+}
+
+export function posixRelative(from, to) {
+  return path.relative(from, to).split(path.sep).join('/')
+}
+
+/** Deepest shared directory of two absolute paths, for `git diff --no-index` relative args. */
+export function commonParent(folderA, folderB, pathImpl = path) {
+  const resolvedA = pathImpl.resolve(folderA)
+  const resolvedB = pathImpl.resolve(folderB)
+  const left = resolvedA.split(pathImpl.sep)
+  const right = resolvedB.split(pathImpl.sep)
+  let shared = 0
+  while (shared < left.length && shared < right.length && left[shared] === right[shared]) {
+    shared++
+  }
+  const joined = left.slice(0, shared).join(pathImpl.sep)
+  return pathImpl.isAbsolute(joined) ? joined : pathImpl.parse(resolvedA).root
 }
 
 export function escapeRegExp(value) {
