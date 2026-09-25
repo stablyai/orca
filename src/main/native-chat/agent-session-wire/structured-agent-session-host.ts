@@ -269,17 +269,9 @@ export class StructuredAgentSessionHost {
     commands: this.deps.adapter.readCommands?.(sessionId)
   })
 
-  async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
-    this.requireSession(sessionId)
-    // Queued behind an in-flight attach, so a starting chat answers with its settled owner.
-    return this.serialize(sessionId, async () => {
-      const record = this.deps.store.getRecord(sessionId)
-      if (!record) {
-        throw new Error('agent_session_identity_required')
-      }
-      return structuredAgentSessionOwnerStatus(record)
-    })
-  }
+  /** From the record store, never the session map: an idle-released chat has no map entry. */
+  handoffStatus = (sessionId: string): SessionWire.AgentSessionHandoffStatus =>
+    structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request) =>
     this.backgroundTasks.history(request)

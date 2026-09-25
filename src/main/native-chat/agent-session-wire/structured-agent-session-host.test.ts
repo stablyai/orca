@@ -633,14 +633,14 @@ describe('restart', () => {
       handoffStage: null,
       handoffOperationId: null
     })
-    await expect(host.handoffStatus(SESSION)).resolves.toMatchObject({
+    expect(host.handoffStatus(SESSION)).toMatchObject({
       owner: 'native',
       phase: 'idle',
       stage: null
     })
   })
 
-  it('answers the owner status of a starting chat once its start settles', async () => {
+  it('answers native for a chat whose start is still in flight', async () => {
     await attach()
     await reboot(async () => ({ outcome: 'pid-absent' }))
     await host.restoreReadableSessions()
@@ -658,11 +658,14 @@ describe('restart', () => {
 
     const hold = host.hold(SESSION, 'surface-1')
     await started.promise
+    const claimMidStart = store.getRecord(SESSION)?.lease.claimStatus
     const status = host.handoffStatus(SESSION)
     release.resolve()
     await hold
 
-    await expect(status).resolves.toMatchObject({ owner: 'native', stage: null })
+    // Mid-start the lease is only reserved; ownership does not wait for the agent.
+    expect(claimMidStart).toBe('reserved')
+    expect(status).toMatchObject({ owner: 'native' })
   })
 
   it("keeps a session whose owner cannot be probed out of a live writer's hands", async () => {
