@@ -131,5 +131,4 @@ export type RuntimeStore = {
     updates: Partial<GlobalSettings>,
     options?: { notifyListeners?: boolean; originWebContentsId?: number }
   ) => unknown
-  onSettingsChanged?: Store['onSettingsChanged']
 }

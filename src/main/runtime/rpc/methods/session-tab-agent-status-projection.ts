@@ -10,7 +10,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { structuredNativeChatProjectionEnabled } from './structured-agent-session-policy'
+import { canServeStructuredAgentSessions } from './structured-agent-session-policy'
 
 type SessionTabsPayload = RuntimeMobileSessionTabsResult | RuntimeMobileSessionTabsSnapshot
 
@@ -33,17 +33,9 @@ function clientCanRenderStructuredAgentSessionTab(
 
 function resolveMobileStructuredChatFallbackTitle(
   tab: RuntimeMobileSessionAgentTab,
-  args: {
-    clientKind: 'mobile' | 'runtime' | undefined
-    clientCapabilities: readonly RuntimeCapability[] | undefined
-    structuredNativeChatEnabled?: boolean
-  }
+  clientCapabilities: readonly RuntimeCapability[] | undefined
 ): string | null {
-  if (
-    args.clientKind !== 'mobile' ||
-    args.structuredNativeChatEnabled !== true ||
-    clientCanRenderStructuredAgentSessionTab(tab, args.clientCapabilities)
-  ) {
+  if (clientCanRenderStructuredAgentSessionTab(tab, clientCapabilities)) {
     return null
   }
   return tab.agent === 'claude'
@@ -54,24 +46,16 @@ function resolveMobileStructuredChatFallbackTitle(
 export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload>(
   payload: TPayload,
   clientKind: 'mobile' | 'runtime' | undefined,
-  clientCapabilities: readonly RuntimeCapability[] | undefined,
-  structuredNativeChatEnabled: boolean
+  clientCapabilities: readonly RuntimeCapability[] | undefined
 ): TPayload {
-  const structuredVisible = structuredNativeChatProjectionEnabled({
-    clientKind,
-    clientCapabilities,
-    structuredNativeChatEnabled
-  })
+  // Existing chats only: the host's Chat UI setting governs creating new ones, never this listing.
   let projected: TPayload
-  if (clientKind === 'mobile' && structuredNativeChatEnabled === true) {
+  if (clientKind === 'mobile') {
     // Why: deleting the row left the user hunting for a chat the desktop says exists; the row
     // survives with a title naming the fix. Nothing is removed, so no group/layout repair applies.
-    projected = projectUnsupportedAgentSessionTabTitles(payload, {
-      clientKind,
-      clientCapabilities,
-      structuredNativeChatEnabled
-    })
+    projected = projectUnsupportedAgentSessionTabTitles(payload, clientCapabilities)
   } else {
+    const structuredVisible = canServeStructuredAgentSessions({ clientKind, clientCapabilities })
     projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
     // Why: a paired client renders only codex structured tabs unless it says otherwise
     // (mobile's resolveMobileNativeChat returns null for every other agent), so an
@@ -106,18 +90,14 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
 
 function projectUnsupportedAgentSessionTabTitles<TPayload extends SessionTabsPayload>(
   payload: TPayload,
-  args: {
-    clientKind: 'mobile'
-    clientCapabilities: readonly RuntimeCapability[] | undefined
-    structuredNativeChatEnabled: true
-  }
+  clientCapabilities: readonly RuntimeCapability[] | undefined
 ): TPayload {
   let changed = false
   const tabs = payload.tabs.map((tab) => {
     if (tab.type !== 'agent-session') {
       return tab
     }
-    const title = resolveMobileStructuredChatFallbackTitle(tab, args)
+    const title = resolveMobileStructuredChatFallbackTitle(tab, clientCapabilities)
     if (title === null) {
       return tab
     }

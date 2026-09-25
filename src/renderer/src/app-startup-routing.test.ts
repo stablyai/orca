@@ -366,17 +366,13 @@ describe('renderer startup runtime routing', () => {
     expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
   })
 
-  it('skips startup structured tab projection while the host setting is off', () => {
-    const source = readSource('src/renderer/src/runtime/local-structured-session-tabs-sync.ts')
+  it('projects open structured chats at startup whatever the Chat UI setting', () => {
+    const source = readSource(STARTUP_HYDRATION_PATH)
     const projectIndex = source.indexOf("timeRendererStartupStep('project-structured-session-tabs'")
 
-    expect(readSource(STARTUP_HYDRATION_PATH)).toContain(
-      'await restoreLocalStructuredSessionTabsAtStartup()'
-    )
     expect(projectIndex).toBeGreaterThanOrEqual(0)
-    expect(source.slice(projectIndex - 180, projectIndex)).toContain(
-      'isNativeChatEnabled(useAppStore.getState().settings)'
-    )
+    // Chat UI governs how new launches open; chats that already exist come back regardless.
+    expect(source.slice(projectIndex - 180, projectIndex)).not.toContain('settings')
   })
 
   it('probes local runtime capabilities before any startup gate can hold the answer back', () => {
@@ -387,7 +383,7 @@ describe('renderer startup runtime routing', () => {
 
     expect(probeIndex).toBeGreaterThanOrEqual(0)
     // Why pinned here: the structured-session-tabs sync is the cache's only other writer and it
-    // waits for workspaceSessionReady + terminalStartupRestorationReady + the experimental flag.
+    // waits for workspaceSessionReady + terminalStartupRestorationReady.
     // Every resolveAgentLaunchRoute reader — including the three that cannot await — reads an
     // unanswered cache as "unsupported", so a create in that window degrades to a bare
     // terminal (#19154). The probe must therefore start before the chain and outside its gates.
@@ -413,7 +409,9 @@ describe('renderer startup runtime routing', () => {
       "timeRendererStartupStep('prepare-terminal-startup-restoration'"
     )
     const reconnectIndex = appSource.indexOf("timeRendererStartupStep('reconnect-terminals'")
-    const projectIndex = appSource.indexOf('await restoreLocalStructuredSessionTabsAtStartup()')
+    const projectIndex = appSource.indexOf(
+      "timeRendererStartupStep('project-structured-session-tabs'"
+    )
     const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
     const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
     const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)

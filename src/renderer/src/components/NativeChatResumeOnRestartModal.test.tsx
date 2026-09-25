@@ -147,6 +147,15 @@ it('keeps next-launch preference out of the current resume action', async () => 
   expect(rpc).toHaveBeenCalledTimes(2)
 })
 
+// Chat UI decides how new launches open; a chat that was working is still offered back.
+it('offers the resume with Chat UI off', async () => {
+  rpc.mockResolvedValue({ sessions: offered })
+  useAppStore.setState({ settings: { ...getDefaultSettings(''), experimentalNativeChat: false } })
+  await mount(<NativeChatResumeOnRestartModal />)
+
+  expect(button('Resume 2 chats')).toBeTruthy()
+})
+
 // One primary action and one way out of it; the body copy carries the transparency.
 it('offers exactly Dismiss all and the resume action', async () => {
   rpc.mockResolvedValue({ sessions: offered })

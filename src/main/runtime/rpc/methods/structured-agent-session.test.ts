@@ -332,23 +332,26 @@ describe('capability gating', () => {
     })
   })
 
-  it('requires the host structured-chat setting for mobile clients', async () => {
-    const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
-      getClientSettings: () => ({ experimentalNativeChat: false })
+  it('serves a capable mobile client whatever the host Chat UI setting', async () => {
+    for (const experimentalNativeChat of [false, true]) {
+      const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
+        getClientSettings: () => ({ experimentalNativeChat })
+      })
+      expect(response).toMatchObject({ ok: true })
+    }
+    expect(hostCalls.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses send to a mobile client that did not negotiate the capability', async () => {
+    const response = await call('agentSession.send', sendParams(), {
+      clientKind: 'mobile',
+      clientCapabilities: []
     })
     expect(response).toMatchObject({
       ok: false,
       error: { message: expect.stringContaining('structured_agent_session_unsupported') }
     })
     expect(hostCalls.send).not.toHaveBeenCalled()
-  })
-
-  it('serves mobile clients only after capability and setting negotiation', async () => {
-    const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
-      getClientSettings: () => ({ experimentalNativeChat: true })
-    })
-    expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.send).toHaveBeenCalledTimes(1)
   })
 
   it.each(CLEANUP_METHODS)(

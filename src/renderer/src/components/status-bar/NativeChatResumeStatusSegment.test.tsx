@@ -168,21 +168,30 @@ describe('NativeChatResumeStatusSegment', () => {
     ])
   })
 
-  it('hides when the feature is disabled or the host offers nothing', async () => {
+  it('offers chats that were working even with Chat UI off', async () => {
     rpc.mockResolvedValue({ sessions: candidates })
     useAppStore.setState({
       settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
     })
     await mount()
-    expect(screen.queryByRole('button')).toBeNull()
-    // Nothing is even asked of the host while the feature is off.
-    expect(rpc).not.toHaveBeenCalled()
 
-    cleanup()
-    rpc.mockResolvedValue({ sessions: [] })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
+    expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
+  })
+
+  it('waits for settings, which carry the resume preference, before asking the host', async () => {
+    rpc.mockResolvedValue({ sessions: candidates })
+    useAppStore.setState({ settings: null })
+    await mount()
+
+    expect(rpc).not.toHaveBeenCalled()
+    await act(async () => {
+      useAppStore.setState({ settings: getDefaultSettings('') })
     })
+    expect(rpc).toHaveBeenCalledWith(expect.anything(), 'agentSession.restartResumable')
+  })
+
+  it('hides when the host offers nothing', async () => {
+    rpc.mockResolvedValue({ sessions: [] })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()
   })

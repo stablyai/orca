@@ -11,7 +11,6 @@ import {
   DialogTitle
 } from './ui/dialog'
 import { useAppStore } from '../store'
-import { isNativeChatEnabled } from '../../../shared/structured-native-chat-launch-route'
 import { translate } from '@/i18n/i18n'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { ResumeOnRestartGroups } from './NativeChatResumeOnRestartGroups'
@@ -61,8 +60,7 @@ function selectedByDefault(failure: ResumeFailure | undefined): boolean {
 }
 
 export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
-  const structuredEnabled = useAppStore((store) => isNativeChatEnabled(store.settings))
-  const { candidates, failed, listedAt } = useNativeChatRestartOffer(structuredEnabled)
+  const { candidates, failed, listedAt } = useNativeChatRestartOffer()
   const rows = useMemo<ResumeCandidate[]>(() => [...candidates, ...failed], [candidates, failed])
   const failureBySession = useMemo(
     () => new Map(failed.map((failure) => [failure.sessionId, failure])),
@@ -162,7 +160,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     })
   }
 
-  if (!structuredEnabled || !open || rows.length === 0) {
+  if (!open || rows.length === 0) {
     return null
   }
 

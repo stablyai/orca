@@ -1,8 +1,6 @@
 import { AlertCircle, RotateCcw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { requestNativeChatResumeOnRestartDialog } from '../native-chat-resume-on-restart-dialog'
 import {
   refreshNativeChatRestartOffer,
@@ -128,9 +126,8 @@ export function NativeChatResumeStatusSegment({
 }: {
   iconOnly: boolean
 }): React.JSX.Element | null {
-  const structuredEnabled = useAppStore((store) => isNativeChatEnabled(store.settings))
-  const { candidates, failed } = useNativeChatRestartOffer(structuredEnabled)
-  if (!structuredEnabled || (candidates.length === 0 && failed.length === 0)) {
+  const { candidates, failed } = useNativeChatRestartOffer()
+  if (candidates.length === 0 && failed.length === 0) {
     return null
   }
 

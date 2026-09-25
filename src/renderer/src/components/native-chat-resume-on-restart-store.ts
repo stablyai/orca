@@ -343,16 +343,17 @@ async function loadLaunchOffer(): Promise<void> {
 /**
  * The offer, fetching it on first use.
  *
- * `enabled` is a gate, not a trigger: settings arrive after the first render, so the fetch waits
- * for the flag rather than being lost when it was still undefined.
+ * Waits for settings, which arrive after the first render, because the launch reads the resume
+ * preference from them. Not gated on Chat UI: chats that were working stay resumable when it is off.
  */
-export function useNativeChatRestartOffer(enabled: boolean): NativeChatRestartOffer {
+export function useNativeChatRestartOffer(): NativeChatRestartOffer {
+  const settingsLoaded = useAppStore((store) => store.settings !== null)
   useEffect(() => {
-    if (enabled) {
+    if (settingsLoaded) {
       // Fetched after mount, never awaited by startup: the workspace is usable first.
       launch ??= loadLaunchOffer()
     }
-  }, [enabled])
+  }, [settingsLoaded])
   return useSyncExternalStore(subscribe, getNativeChatRestartOffer, getNativeChatRestartOffer)
 }
 

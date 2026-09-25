@@ -4,6 +4,7 @@
 // `agent-session.structured.v1`. A client that does not is told the surface does
 // not exist rather than receiving the journal or mutation surface. Session-tab
 // inventory may expose only a metadata placeholder for an incapable mobile client.
+// The methods that create a session also ask the host's Chat UI setting; see the gate.
 
 import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
 import type { z } from 'zod'
@@ -19,10 +20,9 @@ import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireStructuredCapability,
-  requireStructuredCleanupHost,
+  requireStructuredCreatePermission,
   requireStructuredHost as requireHost,
-  structuredCallerFor as callerFor,
-  supportsStructuredSessions
+  structuredCallerFor as callerFor
 } from './structured-agent-session-gate'
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
@@ -128,9 +128,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.createSupport',
     params: CreateSupportParams,
     handler: async (params, ctx) => {
-      if (!supportsStructuredSessions(ctx)) {
-        throw new Error('structured_agent_session_unsupported')
-      }
+      requireStructuredCreatePermission(ctx)
       return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
     }
   }),
@@ -138,7 +136,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.create',
     params: CreateParams,
     handler: async (params, ctx) => {
-      requireStructuredCapability(ctx)
+      requireStructuredCreatePermission(ctx)
       if (params.envelope.expectedRuntimeFence !== null) {
         throw new Error('agent_session_operation_invalid')
       }
@@ -184,7 +182,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.ensure',
     params: AttachParams,
-    handler: async (params, ctx) => attachClientSuppliedLocation(params, ctx)
+    // Create-gated: attaching a client-supplied location can bring a new session into being.
+    handler: async (params, ctx) => {
+      requireStructuredCreatePermission(ctx)
+      return attachClientSuppliedLocation(params, ctx)
+    }
   }),
   defineMethod({
     name: 'agentSession.send',
@@ -192,10 +194,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: sendStructuredAgentSessionForClient
   }),
   defineMethod({
-    // Stopping a turn, so it stays available after admission is revoked: see the gate's rule.
     name: 'agentSession.cancel',
     params: CancelParams,
-    handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
+    handler: async (params, ctx) => requireHost(ctx).cancel(callerFor(ctx), params)
   }),
   defineMethod({
     // Releasing a chat view, not ending a conversation: the record and journal stay on disk so the
@@ -203,9 +204,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.close',
     params: OptionsParams,
     handler: async (params, ctx) => {
-      // Cleanup gate: turning the host setting off must not strand an open chat whose owner can
-      // then never close it. See the rule on `requireStructuredCleanupHost`.
-      const host = requireStructuredCleanupHost(ctx)
+      const host = requireHost(ctx)
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)
@@ -295,9 +294,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     name: 'agentSession.unsubscribe',
     params: UnsubscribeParams,
     handler: async (params, ctx) => {
-      // Why: cleanup must stay available after the setting is disabled, so an admitted caller can
-      // retire resources it already owns; the base still comes from main's shared helper.
-      requireStructuredCleanupHost(ctx)
+      requireHost(ctx)
       const base = subscriptionBaseFor(ctx, params.sessionId)
       if (params.subscriptionId) {
         ctx.runtime.cleanupSubscription(`${base}:${params.subscriptionId}`)
