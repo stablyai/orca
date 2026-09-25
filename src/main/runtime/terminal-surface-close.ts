@@ -13,8 +13,8 @@ import { advanceTerminalTopologyRevision } from './workspace-session-terminal-me
 /**
  * The membership half of every explicit terminal close: removes a tab, or one leaf of a split
  * tab, and advances the repo's topology revision so a stale renderer save cannot restore it.
- * Closing a tab's last leaf closes the tab, and every tab close is recorded in the session it was
- * removed from, which is the owning host's partition.
+ * A leaf close never removes its tab: callers close the last pane with a tab close. Every tab close
+ * is recorded in the session it was removed from, which is the owning host's partition.
  */
 export function closeTerminalSurfaceInWorkspaceSession(
   session: WorkspaceSessionState,
@@ -28,8 +28,13 @@ export function closeTerminalSurfaceInWorkspaceSession(
   }
 ): WorkspaceSessionTerminalTabCloseResult {
   const layout = session.terminalLayoutsByTabId[tabId]
-  if (options.leafId && layout && countTerminalLayoutLeaves(layout.root) > 1) {
-    if (!layoutContainsLeafId(layout.root, options.leafId)) {
+  if (options.leafId) {
+    // Why: the exit may already have retired this leaf, leaving only live siblings to lose.
+    if (
+      !layout ||
+      countTerminalLayoutLeaves(layout.root) <= 1 ||
+      !layoutContainsLeafId(layout.root, options.leafId)
+    ) {
       return { session, ptyIdsToKill: [], closed: false, pinned: false }
     }
     // The leaf's own binding is passed so the retirement's stale-binding fence always admits it.
@@ -45,8 +50,7 @@ export function closeTerminalSurfaceInWorkspaceSession(
     force: options.force
   })
   // Why a tab this session never listed is still recorded: its spawn may commit later and graft it.
-  // A leaf close that found no tab says nothing about the tab, so it records nothing.
-  if (result.pinned || (!result.closed && options.leafId)) {
+  if (result.pinned) {
     return result
   }
   const recorded: WorkspaceSessionState = {
