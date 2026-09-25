@@ -19,6 +19,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
 
+  it('uses classic file icons by default', () => {
+    expect(getDefaultSettings('/tmp').fileIconTheme).toBe('classic')
+  })
+
   it('uses list view for Source Control changes by default', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })

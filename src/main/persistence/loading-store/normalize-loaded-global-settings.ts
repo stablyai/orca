@@ -4,6 +4,7 @@ import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-c
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
+import { normalizeFileIconTheme } from '../../../shared/file-icon-theme'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
@@ -109,6 +110,7 @@ export function normalizeLoadedGlobalSettings(
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
     appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+    fileIconTheme: normalizeFileIconTheme(parsed.settings?.fileIconTheme),
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,
     machineName: normalizeMachineName(parsed.settings?.machineName),

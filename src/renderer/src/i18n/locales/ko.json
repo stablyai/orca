@@ -10235,6 +10235,16 @@
             }
           }
         },
+        "fileIconTheme": {
+          "search": {
+            "title": "File Icons",
+            "description": "Choose how file type icons appear in the file explorer, search results, and editor tabs.",
+            "icons": "file icons",
+            "explorer": "file explorer",
+            "material": "material",
+            "classic": "classic"
+          }
+        },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Mission Control에 의해 차단되었습니다. 여기에서 다시 매핑하거나 시스템 설정에서 변경하세요."
         },

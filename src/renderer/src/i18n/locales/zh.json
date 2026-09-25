@@ -6670,7 +6670,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "也在原来的列表中显示已固定的工作树",
             "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
-          }
+          },
+          "fileIconThemeLabel": "File Icons",
+          "fileIconThemeClassic": "Classic",
+          "fileIconThemeMaterial": "Material"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -10233,6 +10236,16 @@
               "104f4d7dbd": "配对",
               "4575341c77": "选择本地桌面、添加已保存的远程 Orca 服务器或生成配对 URL。"
             }
+          }
+        },
+        "fileIconTheme": {
+          "search": {
+            "title": "File Icons",
+            "description": "Choose how file type icons appear in the file explorer, search results, and editor tabs.",
+            "icons": "file icons",
+            "explorer": "file explorer",
+            "material": "material",
+            "classic": "classic"
           }
         },
         "shortcutDefinitionCatalog": {

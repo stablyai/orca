@@ -6670,7 +6670,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "ピン留めしたワークツリーを元のリストにも表示",
             "description": "ピン留めしたワークツリーを Pinned に残したまま、すべて、プロジェクト、ステータス、PR にも表示します。"
-          }
+          },
+          "fileIconThemeLabel": "File Icons",
+          "fileIconThemeClassic": "Classic",
+          "fileIconThemeMaterial": "Material"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -10270,6 +10273,16 @@
               "104f4d7dbd": "ペアリング",
               "4575341c77": "ローカルデスクトップを選択するか、保存されたリモート Orca サーバーを追加するか、ペアリング URL を生成します。"
             }
+          }
+        },
+        "fileIconTheme": {
+          "search": {
+            "title": "File Icons",
+            "description": "Choose how file type icons appear in the file explorer, search results, and editor tabs.",
+            "icons": "file icons",
+            "explorer": "file explorer",
+            "material": "material",
+            "classic": "classic"
           }
         },
         "shortcutDefinitionCatalog": {

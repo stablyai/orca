@@ -25,6 +25,7 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
+import { getFileIconThemeEntries } from './file-icon-theme-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
@@ -158,6 +159,7 @@ export function AppearancePane({
     },
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
+    ...getFileIconThemeEntries(),
     ...getLayoutEntries(),
     getLeftSidebarAppearanceEntry(),
     getWorkspaceCardLayoutEntry()

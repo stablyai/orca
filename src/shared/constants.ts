@@ -161,6 +161,7 @@ export function getDefaultWorkspaceDir(homeDir: string): string {
   return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
 }
 
+/** Keep fresh, migrated, local, and remote settings aligned on one complete default schema. */
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return buildDefaultSettings({
     workspaceDir: getDefaultWorkspaceDir(homedir),
