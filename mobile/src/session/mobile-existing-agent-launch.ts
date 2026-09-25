@@ -25,6 +25,10 @@ export const PROMPTED_AGENT_LAUNCH_TIMEOUT_MS = 90_000
 export const AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE =
   'Update Orca on your computer to start an agent from your phone.'
 
+// Same words the mobile web shell uses for a status read that failed; leaving the host re-reads it.
+export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE =
+  "Could not read this host's status. Go back and reopen it."
+
 export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
   "Couldn't confirm the agent started. Check the workspace before trying again."
 

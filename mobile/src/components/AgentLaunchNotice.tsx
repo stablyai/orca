@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
-import { AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE } from '../session/mobile-existing-agent-launch'
+import {
+  AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE,
+  AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE
+} from '../session/mobile-existing-agent-launch'
 import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
@@ -17,7 +20,12 @@ type Props = {
 export function AgentLaunchNotice({ availability, error, undeliveredPrompt, errorStyle }: Props) {
   const clipboard = useClipboardWriter()
   const [copyState, setCopyState] = useState<{ prompt: string; label: string } | null>(null)
-  const message = availability === 'update-required' ? AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE : error
+  const message =
+    availability === 'update-required'
+      ? AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE
+      : availability === 'unverified'
+        ? AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE
+        : error
   if (!message) {
     return null
   }

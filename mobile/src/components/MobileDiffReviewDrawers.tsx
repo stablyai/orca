@@ -85,7 +85,9 @@ function useSendActions(controller: ReturnType<typeof useMobileDiffReviewControl
         disabled: comments.length === 0 || controller.agentLaunchAvailability !== 'available',
         ...(controller.agentLaunchAvailability === 'update-required'
           ? { hint: 'Update Orca on your computer' }
-          : {}),
+          : controller.agentLaunchAvailability === 'unverified'
+            ? { hint: "Could not read this host's status" }
+            : {}),
         skipAutoClose: true,
         onPress: () => void controller.createTerminalAndSend(comments)
       },
