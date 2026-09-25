@@ -45,6 +45,10 @@ import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import { AgentLaunch, AgentLaunchReplay, type AgentLaunchParams } from './agent-launch-schemas'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
+import {
+  agentLaunchCallerNavigationId,
+  selectAgentLaunchTabForCaller
+} from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 
 /**
@@ -138,18 +142,28 @@ async function resolveUnlaunchedIntent(
   return intent
 }
 
-function runAgentLaunch(
+async function runAgentLaunch(
   intent: AgentLaunchIntent,
   context: RpcContext,
   attachOperationId?: string,
   operationCallerKey?: string
 ): Promise<AgentLaunchResult> {
-  return executeAgentLaunch({
+  const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
+  const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
-    surfaces: agentLaunchSurfaceFactory(context, attachOperationId, operationCallerKey),
+    surfaces: agentLaunchSurfaceFactory(
+      context,
+      attachOperationId,
+      operationCallerKey,
+      callerNavigationId === null
+    ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent)
   })
+  if (callerNavigationId !== null) {
+    await selectAgentLaunchTabForCaller(context.runtime, result, callerNavigationId)
+  }
+  return result
 }
 
 /**
