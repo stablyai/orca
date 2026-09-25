@@ -18026,6 +18026,9 @@
           }
         }
       }
+    },
+    "agentChildRow": {
+      "ended": "Terminé"
     }
   },
   "dashboardPopout": {

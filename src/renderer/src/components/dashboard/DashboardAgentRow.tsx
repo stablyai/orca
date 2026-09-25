@@ -10,11 +10,15 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { agentNoUpdateLabel, formatCompactDuration } from '@/lib/agent-row-decay-state'
-import { agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import {
+  agentChildRowMessageLine,
+  agentChildRowNoUpdateLabel
+} from '@/components/agent-child-row-text'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -22,6 +26,13 @@ function formatTimeAgo(ts: number, now: number): string {
     return 'just now'
   }
   return `${formatCompactDuration(delta)} ago`
+}
+
+// A child row's silence is the model's, on the clock its compact row and the strip read.
+function rowNoUpdateLabel(agent: DashboardAgentRowData, now: number): string {
+  return agent.childRow
+    ? agentChildRowNoUpdateLabel(agent.childRow, now)
+    : agentNoUpdateLabel(agent.entry, now)
 }
 
 function stateDotTooltipLabel(
@@ -34,9 +45,7 @@ function stateDotTooltipLabel(
   }
   // Why: report the observation, not a verdict on the agent — the elapsed gap is what
   // lets the user apply context Orca has no way to know (a long build, a slow download).
-  return dotState === 'unverifiable'
-    ? agentNoUpdateLabel(agent.entry, now)
-    : agentStateLabel(dotState)
+  return dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : agentStateLabel(dotState)
 }
 
 type Props = {
@@ -130,7 +139,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
+  const displayLabel =
+    prompt ||
+    agentStateLabel(
+      agent.childRow?.displayState ?? asDotState(agent.state, agent.entry.workingMode)
+    )
   const model = agent.entry.model?.trim() ?? ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
@@ -140,7 +153,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
+  const lastAssistantMessage = agent.childRow
+    ? agentChildRowMessageLine(agent.childRow)
+    : (agent.entry.lastAssistantMessage?.trim() ?? '')
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1
@@ -153,13 +169,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
-  const dotState: AgentDotState = isInterrupted
-    ? 'interrupted'
-    : asDotState(agent.state, agent.entry.workingMode)
+  const dotState: AgentDotState = agentRowDisplayDotState(agent)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.
-  const noUpdateLabel = dotState === 'unverifiable' ? agentNoUpdateLabel(agent.entry, now) : null
+  const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 

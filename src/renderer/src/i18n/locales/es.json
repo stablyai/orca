@@ -15015,6 +15015,9 @@
         "copySessionIdSuccess": "ID de sesión copiado",
         "copySessionIdError": "No se pudo copiar el ID de sesión"
       }
+    },
+    "agentChildRow": {
+      "ended": "Finalizado"
     }
   },
   "dashboardPopout": {

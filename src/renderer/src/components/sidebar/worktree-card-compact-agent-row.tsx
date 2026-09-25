@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -213,34 +214,50 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           />
         </button>
       ) : null}
-      {/* Why: the row's actionable disabled reason must win on every hit area. */}
-      <AgentStateDot
-        state={dotState}
-        size="sm"
-        title={sendTargetDisabledReason ? null : undefined}
-        tooltipSide="right"
-      />
-      {!hideIcon && (
-        <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
-          <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
-        </span>
-      )}
-      <span
-        className="min-w-0 flex-1 truncate"
-        title={sendTargetDisabledReason ? undefined : rowTitle}
-      >
-        {/* Why: the selected-row fill is strong enough to wash out the dimmed
-            prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
-          {leadingText}
-        </span>
-        {trailingText && (
-          <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
-            {' '}
-            - {trailingText}
+      {agent.childRow ? (
+        // Why: a child row reads through the piece the chat strip renders, so both say the same.
+        <AgentChildRowContent
+          row={agent.childRow}
+          now={now}
+          leadClassName={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}
+          trailClassName={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}
+          separator=" - "
+          dotTitle={sendTargetDisabledReason ? null : undefined}
+          tooltipSide="right"
+          lineTitle={!sendTargetDisabledReason}
+        />
+      ) : (
+        <>
+          {/* Why: the row's actionable disabled reason must win on every hit area. */}
+          <AgentStateDot
+            state={dotState}
+            size="sm"
+            title={sendTargetDisabledReason ? null : undefined}
+            tooltipSide="right"
+          />
+          {!hideIcon && (
+            <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+              <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
+            </span>
+          )}
+          <span
+            className="min-w-0 flex-1 truncate"
+            title={sendTargetDisabledReason ? undefined : rowTitle}
+          >
+            {/* Why: the selected-row fill is strong enough to wash out the dimmed
+                prompt/secondary text, so lift both toward full foreground when focused. */}
+            <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
+              {leadingText}
+            </span>
+            {trailingText && (
+              <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
+                {' '}
+                - {trailingText}
+              </span>
+            )}
           </span>
-        )}
-      </span>
+        </>
+      )}
       {model && (
         <span
           className={cn(

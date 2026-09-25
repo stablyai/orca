@@ -6,6 +6,15 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from '../../../../shared/agent-session-wire'
+import {
+  buildAgentChildRowModels,
+  buildLegacyTaskRowModels,
+  usableAgentChildLabel,
+  type AgentChildRowContext,
+  type AgentChildRowModel
+} from '../../../../shared/agent-child-row-model'
+import { agentChildRunStateFor } from '../../../../shared/agent-status-child-work-display'
+import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import { formatNativeChatDuration } from '../../../../shared/native-chat-turn-status'
 import { translate } from '@/i18n/i18n'
 
@@ -13,27 +22,16 @@ type TaskKind = AgentSessionBackgroundTask['kind']
 type RunState = AgentSessionBackgroundTaskRunState
 
 export type BackgroundRosterTask = {
-  task: AgentSessionBackgroundTask
-  settled: boolean
+  /** What the row shows, decided by the same model the sidebar's child rows use. */
+  row: AgentChildRowModel
+  /** The row's display state in the header's vocabulary. */
   state: RunState
-  name: string
 }
 
 export type BackgroundTaskGroup = { kind: TaskKind; tasks: BackgroundRosterTask[] }
 
 /** Fixed presentation order; groups render only when non-empty. */
 const KIND_ORDER: readonly TaskKind[] = ['agent', 'command', 'monitor', 'workflow', 'unknown']
-
-/** Provider strings that carry no identity; a row falls through to its kind label. */
-const PLACEHOLDER_NAMES = new Set(['unknown', 'untitled', 'task', 'subagent'])
-
-function usableTaskText(value: string | undefined): string | null {
-  const trimmed = value?.trim()
-  if (!trimmed || PLACEHOLDER_NAMES.has(trimmed.toLowerCase())) {
-    return null
-  }
-  return trimmed
-}
 
 export function backgroundTaskKindLabel(kind: TaskKind): string {
   switch (kind) {
@@ -50,56 +48,63 @@ export function backgroundTaskKindLabel(kind: TaskKind): string {
   }
 }
 
-/** Display name: description → name → kind label. Empty-after-trim and
- *  placeholder values fall through, so a row always renders something. */
+/** The transcript row's name: description → name → kind label. Empty-after-trim and
+ *  placeholder values fall through, so the row always renders something. */
 export function resolveBackgroundTaskName(task: AgentSessionBackgroundTask): string {
   return (
-    usableTaskText(task.description) ??
-    usableTaskText(task.name) ??
+    usableAgentChildLabel(task.description) ??
+    usableAgentChildLabel(task.name) ??
     backgroundTaskKindLabel(task.kind)
   )
 }
 
-function effectiveState(task: AgentSessionBackgroundTask, settled: boolean): RunState {
-  if (task.state) {
-    return task.state
-  }
-  if (settled) {
-    return 'done'
-  }
-  return task.kind === 'monitor' ? 'monitoring' : 'working'
+/** Stable-sort first-seen then id, so a live update never reshuffles surviving rows. */
+function groupRosterEntries(entries: BackgroundRosterTask[]): BackgroundTaskGroup[] {
+  entries.sort((left, right) => {
+    const startDelta = left.row.firstObservedAt - right.row.firstObservedAt
+    return startDelta !== 0 ? startDelta : left.row.id < right.row.id ? -1 : 1
+  })
+  return KIND_ORDER.map((kind) => ({
+    kind,
+    tasks: entries.filter((entry) => entry.row.kind === kind)
+  })).filter((group) => group.tasks.length > 0)
 }
 
-/** Merge live and settled tasks into kind groups, stable-sorted first-seen
- *  (startedAt) then id, so a live update never reshuffles surviving rows. */
+function rosterEntries(rows: readonly AgentChildRowModel[]): BackgroundTaskGroup[] {
+  return groupRosterEntries(
+    rows.map((row) => ({ row, state: agentChildRunStateFor(row.displayState) }))
+  )
+}
+
+/** Kind groups from a host that publishes only the task roster, live and settled merged. */
 export function buildBackgroundTaskGroups(
   tasks: readonly AgentSessionBackgroundTask[],
   settledTasks: readonly AgentSessionBackgroundTask[]
 ): BackgroundTaskGroup[] {
-  // Older hosts can retain a previous turn beside its resumed live task.
-  const owners = new Map<string, BackgroundRosterTask>()
-  for (const [roster, settled] of [
-    [settledTasks, true],
-    [tasks, false]
-  ] as const) {
-    for (const task of roster) {
-      owners.set(task.id, {
-        task,
-        settled,
-        state: effectiveState(task, settled),
-        name: resolveBackgroundTaskName(task)
-      })
-    }
-  }
-  const entries = [...owners.values()]
-  entries.sort((left, right) => {
-    const startDelta = (left.task.startedAt ?? 0) - (right.task.startedAt ?? 0)
-    return startDelta !== 0 ? startDelta : left.task.id < right.task.id ? -1 : 1
-  })
-  return KIND_ORDER.map((kind) => ({
-    kind,
-    tasks: entries.filter((entry) => entry.task.kind === kind)
-  })).filter((group) => group.tasks.length > 0)
+  // An old host's unlabeled row keeps the kind label it always showed; a view row reads its state.
+  return rosterEntries(
+    buildLegacyTaskRowModels(tasks, settledTasks).map((row) =>
+      row.name ? row : { ...row, name: backgroundTaskKindLabel(row.kind) }
+    )
+  )
+}
+
+// Until a caller passes the session's parent-row context, every live claim stands as reported.
+const REPORTED_ROW_CONTEXT: AgentChildRowContext = {
+  parentEvidenceFresh: true,
+  transportObservation: 'live',
+  parentObservedAt: 0,
+  hostClockOffsetMs: 0
+}
+
+/** Kind groups from the host's child views: the main agent's work at the top, each child's own
+ *  work nested beneath it rather than counted again in its kind's group. Pass the context the
+ *  sidebar builds for the same parent (`agentChildRowContextForParent`) so both read one verdict. */
+export function buildBackgroundTaskGroupsFromViews(
+  views: readonly AgentChildWorkView[],
+  context: AgentChildRowContext = REPORTED_ROW_CONTEXT
+): BackgroundTaskGroup[] {
+  return rosterEntries(buildAgentChildRowModels(views, context))
 }
 
 export function backgroundTaskStateWord(state: RunState): string {
@@ -155,14 +160,26 @@ export function formatBackgroundTaskTokens(totalTokens: number): string {
     : `${tokenScaleText(Math.round(totalTokens / 100_000) / 10)}m`
 }
 
-export function backgroundTaskElapsedLabel(
-  task: AgentSessionBackgroundTask,
-  now: number
-): string | null {
-  if (task.startedAt === undefined || task.startedAt <= 0) {
+export function backgroundTaskElapsedLabel(startedAt: number, now: number): string | null {
+  if (startedAt <= 0) {
     return null
   }
-  return formatNativeChatDuration((now - task.startedAt) / 1000)
+  return formatNativeChatDuration((now - startedAt) / 1000)
+}
+
+/** Whether a row's elapsed time moves: only live work's does. */
+export function backgroundTaskRowTicks(row: AgentChildRowModel): boolean {
+  return !row.settled && row.firstObservedAt > 0
+}
+
+/** A live row's clock runs; a settled row's stops where it settled, so finished work never ticks. */
+export function backgroundTaskRowElapsedLabel(row: AgentChildRowModel, now: number): string | null {
+  if (!row.settled) {
+    return backgroundTaskElapsedLabel(row.firstObservedAt, now)
+  }
+  return row.settledAt !== undefined
+    ? backgroundTaskElapsedLabel(row.firstObservedAt, row.settledAt)
+    : null
 }
 
 export function backgroundTaskGroupLabel(kind: TaskKind): string {

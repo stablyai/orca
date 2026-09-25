@@ -9,9 +9,9 @@ import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liv
 import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child-work-reconciliation'
 import {
   agentChildWorkOwnedLiveness,
-  deriveAgentChildDisplayState,
-  projectAgentChildWorkViews
-} from '../../shared/agent-status-child-work-view'
+  deriveAgentChildDisplayState
+} from '../../shared/agent-status-child-work-display'
+import { projectAgentChildWorkViews } from '../../shared/agent-status-child-work-view'
 import { createAgentStatusStore } from '../../shared/agent-status-store'
 import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
 import type {
