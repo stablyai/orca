@@ -29,6 +29,7 @@ const { resolveOrcaSessionParty } = await import('./orchestration-party')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
+  structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } = await import('../structured-worker-identity')
 
@@ -450,5 +451,81 @@ describe('a coordinator chat continued by /clear', () => {
     })
     expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ADDRESS])
     expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ADDRESS, read: 0 })
+  })
+})
+
+describe('a structured worker continued by /clear', () => {
+  const WORKER = testOrcaSessionId('9c2e4a61-3f7b-4d8e-b105-6a2d8e4f1c93')
+  const WORKER_SUCCESSOR = testOrcaSessionId('clear-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678')
+
+  afterEach(() => {
+    structuredWorkerIdentities.clear()
+  })
+
+  /** A worker minted for WORKER, whose conversation `/clear` continued in WORKER_SUCCESSOR. */
+  function clearedWorker(): { handle: string; paneKey: string } {
+    const store = installStore(null)
+    const minted = agentSessionRecordFixture(
+      agentSessionLeaseFixture({ sessionId: WORKER, runtimeKind: 'native' })
+    )
+    store.records.set(WORKER, {
+      ...minted,
+      conversationCommand: {
+        command: 'clear',
+        state: 'completed',
+        replacementSessionId: WORKER_SUCCESSOR,
+        operationId: 'op-worker',
+        callerKey: 'caller',
+        phase: 'committed'
+      }
+    })
+    store.records.set(
+      WORKER_SUCCESSOR,
+      agentSessionRecordFixture(
+        agentSessionLeaseFixture({ sessionId: WORKER_SUCCESSOR, runtimeKind: 'native' })
+      )
+    )
+    const identity = structuredWorkerIdentities.register({
+      handle: mintStructuredWorkerHandle(),
+      sessionId: WORKER,
+      agent: 'codex',
+      paneKey: mintStructuredWorkerPaneKey(WORKER),
+      processIncarnation: structuredWorkerProcessIncarnation(WORKER),
+      worktreeId: 'wt_1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    return { handle: identity.handle, paneKey: identity.paneKey }
+  }
+
+  it("delivers mail at the worker's handle to the live successor, as a terminal keeps its handle", () => {
+    // The strand this pins: the handle resolved to the session minted for it, which `/clear`
+    // replaced, so the worker's own mail was pointed at a session that no longer runs its turns.
+    const { handle } = clearedWorker()
+    expect(probe().target(handle)).toEqual({ sessionId: WORKER_SUCCESSOR, dispatchId: null })
+  })
+
+  it("delivers the worker's dispatch mailbox and a Run it coordinates to the live successor", () => {
+    const { handle, paneKey } = clearedWorker()
+    const dispatch = db.createDispatchContext({
+      taskId: db.createTask({ runId: chatCoordinatedRun(), spec: 'work' }).id,
+      assigneeHandle: handle,
+      assigneePaneKey: paneKey,
+      processIncarnation: structuredWorkerProcessIncarnation(WORKER),
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    expect(probe().target(`dispatch:${dispatch.id}`)).toEqual({
+      sessionId: WORKER_SUCCESSOR,
+      dispatchId: dispatch.id
+    })
+    const workerRun = db.createRun({
+      objective: 'o',
+      coordinatorHandle: handle,
+      coordinatorPaneKey: paneKey
+    }).id
+    expect(probe().target(`run:${workerRun}`)).toEqual({
+      sessionId: WORKER_SUCCESSOR,
+      dispatchId: null
+    })
   })
 })

@@ -1,8 +1,8 @@
 /**
- * Where a mailbox owned by a structured session is delivered, for sessions that are not structured
- * workers: a chat that coordinates a Run (`run:<id>` with no coordinator handle) and a session
- * addressed directly at `session:<id>`. The session is resolved here, never a pane, and takes the
- * pointer as a session turn.
+ * Where a mailbox owned by a structured session is delivered: a chat that coordinates a Run
+ * (`run:<id>` with no coordinator handle), a session addressed directly at `session:<id>`, and the
+ * live session behind a structured worker's handle. The session is resolved here, never a pane, and
+ * takes the pointer as a session turn.
  */
 
 import {
@@ -13,12 +13,14 @@ import {
 } from '../../../shared/orca-session-address'
 import type { OrchestrationDb } from './db'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
+import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   addressableSessionParty,
   structuredSessionMailReach
 } from './structured-session-mail-address'
 import {
+  lineageLiveSession,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
@@ -59,6 +61,18 @@ export function structuredSessionMailTarget(
   return reach?.kind === 'reachable'
     ? { sessionId: reach.session.sessionId, dispatchId: null }
     : null
+}
+
+/**
+ * The session a structured worker's mail reaches: the one minted for it, or that session's live
+ * `/clear` successor, which carries on as the worker the way a terminal keeps its handle.
+ */
+export function structuredWorkerMailSessionId(
+  mintedSessionId: string,
+  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+): string | null {
+  const live = store ? lineageLiveSession(store, mintedSessionId) : null
+  return live && structuredWorkerHostScope(live.location) ? live.sessionId : null
 }
 
 /**

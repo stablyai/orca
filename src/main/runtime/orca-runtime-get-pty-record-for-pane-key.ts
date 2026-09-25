@@ -12,7 +12,8 @@ import {
   handleLessCoordinatorSessionId,
   structuredSessionAddressTarget,
   structuredSessionMailTarget,
-  structuredSessionIdleEdgeMailboxes
+  structuredSessionIdleEdgeMailboxes,
+  structuredWorkerMailSessionId
 } from './orchestration/structured-session-mail-target'
 import {
   resolveTerminalIdentityFromProbes,
@@ -242,8 +243,8 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (!assignee) {
       return null
     }
-    const identity = resolveStructuredWorkerAuthority(assignee, this._orchestrationDb)?.identity
-    return identity ? { sessionId: identity.sessionId, dispatchId } : null
+    const sessionId = this.liveStructuredWorkerSessionId(assignee)
+    return sessionId ? { sessionId, dispatchId } : null
   }
 
   /**
@@ -266,8 +267,8 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (!coordinator) {
       return null
     }
-    const identity = resolveStructuredWorkerAuthority(coordinator, this._orchestrationDb)?.identity
-    return identity ? { sessionId: identity.sessionId, dispatchId: null } : null
+    const workerSessionId = this.liveStructuredWorkerSessionId(coordinator)
+    return workerSessionId ? { sessionId: workerSessionId, dispatchId: null } : null
   }
 
   /**
@@ -289,11 +290,19 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     // Answers null for anything that is not a live structured worker of THIS runtime, so `run:`
     // and PTY handles fall through to the PTY lane exactly as before.
     const identity = resolveStructuredWorkerAuthority(handle, db)?.identity
-    if (!identity) {
+    const sessionId = identity ? structuredWorkerMailSessionId(identity.sessionId) : null
+    if (!identity || !sessionId) {
       return null
     }
     const dispatchId = db?.findActiveDispatchForAssignee?.(handle, identity.paneKey)?.id ?? null
-    return { sessionId: identity.sessionId, dispatchId }
+    return { sessionId, dispatchId }
+  }
+
+  /** The live session behind a structured worker handle of this runtime; see
+   *  `structuredWorkerMailSessionId`. */
+  private liveStructuredWorkerSessionId(handle: string): string | null {
+    const identity = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)?.identity
+    return identity ? structuredWorkerMailSessionId(identity.sessionId) : null
   }
 
   protected scheduleRestoredMessageRepoints(): void {
