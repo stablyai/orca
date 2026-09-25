@@ -8,9 +8,9 @@ const TARGET_PANE = makePaneKey('tab-opencode', '22222222-2222-4222-8222-2222222
 describe('AgentHookServer OpenCode lifecycle', () => {
   const servers: AgentHookServer[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const server of servers) {
-      server.stop()
+      await server.stop()
     }
     servers.length = 0
   })

@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 
@@ -13,7 +13,17 @@ import type {
 import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 
+type StatusSnapshot = { json: string; directory: string; path: string; immediate: boolean }
+
+const STATUS_PERSIST_MAX_ATTEMPTS = 3
+const STATUS_PERSIST_MAX_RETRY_MS = 30_000
+
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
+  protected pendingStatusPersist: Promise<void> | null = null
+  private pendingStatusSnapshot: StatusSnapshot | null = null
+  private statusPersistFailures = 0
+  private statusPersistRetryAfter = 0
+
   protected serializeStatusFile(): string {
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
@@ -82,59 +92,101 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     if (this.statusPersistTimer) {
       clearTimeout(this.statusPersistTimer)
     }
-    this.statusPersistTimer = setTimeout(() => {
-      this.statusPersistTimer = null
-      this.runStatusPersist()
-    }, STATUS_PERSIST_DEBOUNCE_MS)
-    // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
+    this.statusPersistTimer = setTimeout(
+      () => {
+        this.statusPersistTimer = null
+        void this.runStatusPersist()
+      },
+      Math.max(STATUS_PERSIST_DEBOUNCE_MS, this.statusPersistRetryAfter - Date.now())
+    )
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
     }
   }
 
-  flushStatusPersistSync(): void {
+  flushStatusPersist(): Promise<void> {
     if (this.statusPersistTimer) {
       clearTimeout(this.statusPersistTimer)
       this.statusPersistTimer = null
     }
-    if (!this.lastStatusFilePath) {
-      return
-    }
-    this.runStatusPersist()
+    return this.runStatusPersist(true)
   }
 
-  protected runStatusPersist(): void {
-    if (!this.lastStatusFilePath || !this.endpointDir) {
-      return
+  protected runStatusPersist(immediate = false): Promise<void> {
+    if (this.lastStatusFilePath && this.endpointDir) {
+      this.pendingStatusSnapshot = {
+        json: this.serializeStatusFile(),
+        directory: this.endpointDir,
+        path: this.lastStatusFilePath,
+        immediate: immediate || this.pendingStatusSnapshot?.immediate === true
+      }
     }
-    const json = this.serializeStatusFile()
-    if (json === this.lastWrittenJson) {
-      return
+    if (immediate && this.pendingStatusSnapshot) {
+      this.pendingStatusSnapshot.immediate = true
     }
-    const tmpPath = join(this.endpointDir, `.last-status-${process.pid}-${randomUUID()}.tmp`)
-    let tmpWritten = false
+    if (!this.pendingStatusSnapshot) {
+      return this.pendingStatusPersist ?? Promise.resolve()
+    }
+    if (!this.pendingStatusPersist) {
+      this.pendingStatusPersist = this.drainStatusSnapshots()
+    }
+    return this.pendingStatusPersist
+  }
+
+  private async drainStatusSnapshots(): Promise<void> {
+    // Assign the in-flight promise before a duplicate-only drain can finish.
+    await Promise.resolve()
+    let failed: { snapshot: StatusSnapshot; error: unknown } | null = null
     try {
-      mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
-      if (process.platform !== 'win32') {
+      while (this.pendingStatusSnapshot) {
+        if (!this.pendingStatusSnapshot.immediate && Date.now() < this.statusPersistRetryAfter) {
+          this.scheduleStatusPersist()
+          break
+        }
+        const snapshot = this.pendingStatusSnapshot
+        const { json, directory, path } = snapshot
+        this.pendingStatusSnapshot = null
+        if (json === this.lastWrittenJson) {
+          failed = null
+          continue
+        }
+        const tmpPath = join(directory, `.last-status-${process.pid}-${randomUUID()}.tmp`)
         try {
-          chmodSync(this.endpointDir, 0o700)
-        } catch {
-          // best-effort
+          await mkdir(directory, { recursive: true, mode: 0o700 })
+          if (process.platform !== 'win32') {
+            await chmod(directory, 0o700).catch(() => {})
+          }
+          await writeFile(tmpPath, json, { mode: 0o600 })
+          await rename(tmpPath, path)
+          this.lastWrittenJson = json
+          failed = null
+          this.statusPersistFailures = 0
+          this.statusPersistRetryAfter = 0
+        } catch (err) {
+          failed = { snapshot, error: err }
+          this.statusPersistFailures = Math.min(this.statusPersistFailures + 1, 8)
+          this.statusPersistRetryAfter =
+            Date.now() +
+            Math.min(
+              STATUS_PERSIST_MAX_RETRY_MS,
+              STATUS_PERSIST_DEBOUNCE_MS * 2 ** (this.statusPersistFailures - 1)
+            )
+          console.warn('[agent-hooks] failed to write last-status file:', err)
+          await rm(tmpPath, { force: true }).catch(() => {})
+          if (
+            this.lastStatusFilePath === path &&
+            this.statusPersistFailures < STATUS_PERSIST_MAX_ATTEMPTS
+          ) {
+            this.scheduleStatusPersist()
+          }
         }
       }
-      writeFileSync(tmpPath, json, { mode: 0o600 })
-      tmpWritten = true
-      renameSync(tmpPath, this.lastStatusFilePath)
-      this.lastWrittenJson = json
-    } catch (err) {
-      console.warn('[agent-hooks] failed to write last-status file:', err)
-      if (tmpWritten) {
-        try {
-          unlinkSync(tmpPath)
-        } catch {
-          // tmp already gone
-        }
+      if (failed && !this.lastStatusFilePath) {
+        this.pendingStatusSnapshot = failed.snapshot
+        throw failed.error
       }
+    } finally {
+      this.pendingStatusPersist = null
     }
   }
 

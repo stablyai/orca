@@ -497,8 +497,8 @@ describe('AgentHookServer listener replay', () => {
         },
         'conn-1'
       )
-      firstServer.flushStatusPersistSync()
-      firstServer.stop()
+      await firstServer.flushStatusPersist()
+      await firstServer.stop()
 
       await secondServer.start({ env: 'production', userDataPath: dir })
 
@@ -509,8 +509,8 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
     } finally {
-      firstServer.stop()
-      secondServer.stop()
+      await firstServer.stop()
+      await secondServer.stop()
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -558,7 +558,7 @@ describe('AgentHookServer listener replay', () => {
         })
       )
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

@@ -70,8 +70,8 @@ async function restartWithInFlightSubagent(options?: {
       }
     })
   }
-  first.flushStatusPersistSync()
-  first.stop()
+  await first.flushStatusPersist()
+  await first.stop()
 
   const restarted = new AgentHookServer()
   await restarted.start({ env: 'production', userDataPath: dir })

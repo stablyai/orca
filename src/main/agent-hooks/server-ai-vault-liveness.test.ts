@@ -47,8 +47,8 @@ describe('AgentHookServer AI Vault liveness identity', () => {
       await first.start({ env: 'production', userDataPath })
       seedLocalIdentity(first)
       first.dropStatusEntry(PANE)
-      first.flushStatusPersistSync()
-      first.stop()
+      await first.flushStatusPersist()
+      await first.stop()
 
       const second = new AgentHookServer()
       await second.start({ env: 'production', userDataPath })
@@ -62,10 +62,10 @@ describe('AgentHookServer AI Vault liveness identity', () => {
         ])
         expect(second.getStatusChangeSnapshot()).toEqual([])
       } finally {
-        second.stop()
+        await second.stop()
       }
     } finally {
-      first.stop()
+      await first.stop()
       await rm(userDataPath, { recursive: true, force: true })
     }
   })

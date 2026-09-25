@@ -69,7 +69,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
       expect(paneState(server)).toBe('missing')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -82,7 +82,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
       expect(paneState(server)).toBe('missing')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -101,7 +101,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(false)
       expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -110,7 +110,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
     try {
       expect(server.reconcileEndedProcessForPaneKeys([PANE])).toBe(0)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -139,14 +139,14 @@ describe('reconcileEndedProcessForPaneKeys', () => {
       expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(false)
 
       // The retained identity must not recreate dead launch authority after restart.
-      server.flushStatusPersistSync()
-      server.stop()
+      await server.flushStatusPersist()
+      await server.stop()
       const restarted = await startServer()
       expect(restarted.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
       expect(restarted.getHydratedAuthorityCommitments()).toHaveLength(0)
       restarted.stop()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -160,7 +160,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
       expect(paneState(server)).toBe('missing')
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -174,7 +174,7 @@ describe('reconcileEndedProcessForPaneKeys', () => {
 
       expect(server._getStateForTests().claudeSessionOwnerByPaneKey.has(PANE)).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

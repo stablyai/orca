@@ -44,9 +44,9 @@ describe('agent status observation provenance', () => {
     getCohortAtEmitMock.mockReturnValue({})
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const server of servers) {
-      server.stop()
+      await server.stop()
     }
     servers.length = 0
     vi.restoreAllMocks()
@@ -251,7 +251,7 @@ describe('agent status observation provenance', () => {
         },
         CONNECTION
       )
-      server.flushStatusPersistSync()
+      await server.flushStatusPersist()
 
       const path = join(userDataPath, 'agent-hooks', 'last-status.json')
       expect(existsSync(path)).toBe(true)

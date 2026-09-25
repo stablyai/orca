@@ -175,7 +175,7 @@ async function startOrcadRuntime(
       } finally {
         uninstallObservedStatusIdentity()
         uninstallHookStatusRepublish()
-        agentHookServer.stop()
+        await agentHookServer.stop()
       }
     }
   })

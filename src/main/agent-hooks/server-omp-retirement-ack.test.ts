@@ -13,7 +13,7 @@ const hook = {
 }
 
 describe('OMP retirement acknowledgement', () => {
-  it('emits a single live acknowledgement and never trusts one in hook input', () => {
+  it('emits a single live acknowledgement and never trusts one in hook input', async () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setListener(listener)
@@ -23,10 +23,10 @@ describe('OMP retirement acknowledgement', () => {
     server.ingestRemote(hook, null)
     expect(listener.mock.calls[1][0]).not.toHaveProperty('authorityRestartId')
     expect(server.getStatusSnapshot()[0]).not.toHaveProperty('authorityRestartId')
-    server.stop()
+    await server.stop()
   })
 
-  it.each(['attach', 'replacement', 'close'])('revokes recovery after %s', (operation) => {
+  it.each(['attach', 'replacement', 'close'])('revokes recovery after %s', async (operation) => {
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setListener(listener)
@@ -51,39 +51,42 @@ describe('OMP retirement acknowledgement', () => {
     for (const [event] of listener.mock.calls) {
       expect(event).not.toHaveProperty('authorityRestartId')
     }
-    server.stop()
+    await server.stop()
   })
 })
 
-it.each([false, true])('keeps repeated detached retirement coherent (closed=%s)', (closed) => {
-  const server = new AgentHookServer()
-  const listener = vi.fn()
-  const ownerPane = 'owner:22222222-2222-4222-8222-222222222222'
-  const latestId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-  server.setListener(listener)
-  try {
-    server.transferPaneAuthority(PANE, ownerPane, 'pty')
-    server.retirePaneAuthority(ownerPane, ID)
-    server.retirePaneAuthority(ownerPane, latestId)
-    if (closed) {
-      server.dropStatusEntriesByTabPrefix('owner')
-      for (let n = 0; n < 1025; n++) {
-        server.dropStatusEntriesByTabPrefix(`other-${n}`)
+it.each([false, true])(
+  'keeps repeated detached retirement coherent (closed=%s)',
+  async (closed) => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    const ownerPane = 'owner:22222222-2222-4222-8222-222222222222'
+    const latestId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    server.setListener(listener)
+    try {
+      server.transferPaneAuthority(PANE, ownerPane, 'pty')
+      server.retirePaneAuthority(ownerPane, ID)
+      server.retirePaneAuthority(ownerPane, latestId)
+      if (closed) {
+        server.dropStatusEntriesByTabPrefix('owner')
+        for (let n = 0; n < 1025; n++) {
+          server.dropStatusEntriesByTabPrefix(`other-${n}`)
+        }
       }
+      server.ingestRemote(hook, null)
+      server.ingestRemote(hook, null)
+      if (closed) {
+        expect(server.getStatusSnapshot()).toEqual([])
+        expect(listener).not.toHaveBeenCalled()
+      } else {
+        expect(listener.mock.calls[0][0]).toMatchObject({
+          paneKey: ownerPane,
+          authorityRestartId: latestId
+        })
+        expect(listener.mock.calls[1][0]).not.toHaveProperty('authorityRestartId')
+      }
+    } finally {
+      await server.stop()
     }
-    server.ingestRemote(hook, null)
-    server.ingestRemote(hook, null)
-    if (closed) {
-      expect(server.getStatusSnapshot()).toEqual([])
-      expect(listener).not.toHaveBeenCalled()
-    } else {
-      expect(listener.mock.calls[0][0]).toMatchObject({
-        paneKey: ownerPane,
-        authorityRestartId: latestId
-      })
-      expect(listener.mock.calls[1][0]).not.toHaveProperty('authorityRestartId')
-    }
-  } finally {
-    server.stop()
   }
-})
+)

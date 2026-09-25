@@ -29,9 +29,9 @@ beforeEach(() => {
   getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
 })
 
-afterEach(() => {
+afterEach(async () => {
   for (const server of running.splice(0)) {
-    server.stop()
+    await server.stop()
   }
   for (const path of temporaryPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
@@ -260,8 +260,8 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
       mainAgent: { state: 'done' },
       subagents: [expect.objectContaining({ state: 'working' })]
     })
-    firstDesktop.flushStatusPersistSync()
-    firstDesktop.stop()
+    await firstDesktop.flushStatusPersist()
+    await firstDesktop.stop()
 
     const desktop = new AgentHookServer()
     await desktop.start({ env: 'production', userDataPath })

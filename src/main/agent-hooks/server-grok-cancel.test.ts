@@ -89,7 +89,7 @@ describe('a Grok cancel never hides a running task', () => {
       expect(pressCtrlC(server)).toBe(false)
       expect(row(server)).toEqual(before)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -124,7 +124,7 @@ describe('a Grok cancel never hides a running task', () => {
         mainAgent: { state: 'done', outcome: 'cancellation' }
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

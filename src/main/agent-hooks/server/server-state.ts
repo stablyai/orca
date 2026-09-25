@@ -273,7 +273,7 @@ export abstract class AgentHookServerState {
   ): AgentHookAuthorityEvidence | null
   protected abstract serializeStatusFile(): string
   protected abstract scheduleStatusPersist(): void
-  protected abstract runStatusPersist(): void
+  protected abstract runStatusPersist(): Promise<void>
 
   abstract _getStateForTests(): HookListenerState
   abstract _resetPromptSentDedupeForTests(): void

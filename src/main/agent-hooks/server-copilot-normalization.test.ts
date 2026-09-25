@@ -337,7 +337,7 @@ describe('Copilot hook normalization', () => {
         })
       )
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -414,7 +414,7 @@ describe('Copilot hook normalization', () => {
         })
       )
     } finally {
-      server.stop()
+      await server.stop()
       rmSync(tmpDir, { recursive: true, force: true })
     }
   })
@@ -477,7 +477,7 @@ describe('Copilot hook normalization', () => {
         })
       )
     } finally {
-      server.stop()
+      await server.stop()
       vi.unstubAllEnvs()
       rmSync(tmpDir, { recursive: true, force: true })
     }

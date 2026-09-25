@@ -92,7 +92,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         { timeout: 2_000, interval: 50 }
       )
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -149,7 +149,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         { timeout: 3_000, interval: 50 }
       )
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -201,7 +201,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         { timeout: 3_000, interval: 50 }
       )
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

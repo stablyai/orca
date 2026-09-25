@@ -255,7 +255,7 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
         terminal.kill('SIGKILL')
       }
       await Promise.race([exit, delay(2000)])
-      hooks.stop()
+      await hooks.stop()
       model.closeAllConnections()
       await new Promise<void>((resolve) => model.close(() => resolve()))
       record('artifact', directory)

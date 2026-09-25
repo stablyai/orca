@@ -104,9 +104,9 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
   const servers: AgentHookServer[] = []
   const tempDirs: string[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const server of servers) {
-      server.stop()
+      await server.stop()
     }
     servers.length = 0
     for (const dir of tempDirs) {
@@ -308,8 +308,8 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
 
     pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
     await settle()
-    first.flushStatusPersistSync()
-    first.stop()
+    await first.flushStatusPersist()
+    await first.stop()
 
     const restarted = new AgentHookServer()
     servers.push(restarted)

@@ -12,8 +12,8 @@ describe('AgentHookServer /statusline/claude', () => {
     await server.start({ env: 'production' })
   })
 
-  afterEach(() => {
-    server.stop()
+  afterEach(async () => {
+    await server.stop()
   })
 
   function post(body: string, token?: string): Promise<Response> {

@@ -87,7 +87,7 @@ describe('Grok background status ownership', () => {
         expect.objectContaining({ paneKey: PANE, state: 'done', agentType: 'grok' })
       ])
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -152,7 +152,7 @@ describe('Grok background status ownership', () => {
         expect(sink.onAgentStart).toHaveBeenCalledTimes(countsAfterMainAgentStops ? 1 : 2)
         expect(sink.onAgentStop).toHaveBeenCalledTimes(countsAfterMainAgentStops ? 1 : 2)
       } finally {
-        server.stop()
+        await server.stop()
       }
     }
   )
@@ -216,8 +216,8 @@ describe('Grok background status ownership', () => {
         },
         'conn-1'
       )
-      firstServer.flushStatusPersistSync()
-      firstServer.stop()
+      await firstServer.flushStatusPersist()
+      await firstServer.stop()
 
       await restoredServer.start({ env: 'production', userDataPath })
       restoredServer.ingestRemote(
@@ -261,8 +261,8 @@ describe('Grok background status ownership', () => {
         expect.objectContaining({ state: 'done', prompt: 'new turn', agentType: 'grok' })
       ])
     } finally {
-      firstServer.stop()
-      restoredServer.stop()
+      await firstServer.stop()
+      await restoredServer.stop()
       rmSync(userDataPath, { recursive: true, force: true })
     }
   })

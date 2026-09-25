@@ -69,8 +69,8 @@ describe('The main agent fact across a restart', () => {
       state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: expect.any(Number) }
     })
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
     const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
     expect(file.entries[PANE].payload.mainAgent).toEqual(live?.mainAgent)
     expect(file.entries[PANE]).not.toHaveProperty('claudeLeadBoundaryChildOnly')
@@ -98,7 +98,7 @@ describe('The main agent fact across a restart', () => {
         }
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -130,8 +130,8 @@ describe('The main agent fact across a restart', () => {
       state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -146,7 +146,7 @@ describe('The main agent fact across a restart', () => {
         mainAgent: { state: 'done', outcome: 'cancellation' }
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -180,7 +180,7 @@ describe('The main agent fact across a restart', () => {
         mainAgent: { state: 'done' }
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -227,7 +227,7 @@ describe('The main agent fact across a restart', () => {
           mainAgent: { state: 'done' }
         })
       } finally {
-        server.stop()
+        await server.stop()
       }
     }
   )
@@ -258,7 +258,7 @@ describe('The main agent fact across a restart', () => {
         restoredUnconfirmed: true
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -283,7 +283,7 @@ describe('The main agent fact across a restart', () => {
     try {
       expect(server.getStatusSnapshot()[0]?.mainAgent).toEqual(mainAgent)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -301,7 +301,7 @@ describe('The main agent fact across a restart', () => {
       expect(row).toMatchObject({ state: 'done', prompt: 'survived' })
       expect(row?.mainAgent).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -318,7 +318,7 @@ describe('The main agent fact across a restart', () => {
     try {
       expect(server.getStatusSnapshot()[0]?.mainAgent).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

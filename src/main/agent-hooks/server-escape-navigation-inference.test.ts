@@ -448,7 +448,7 @@ describe('navigation Escape over the loopback hook listener', () => {
           ...(expectedInference ? { interrupted: true } : {})
         })
       } finally {
-        server.stop()
+        await server.stop()
       }
     }
   )

@@ -76,7 +76,7 @@ describe('hook status session-tabs republish', () => {
     }
   })
 
-  it('renews mobile freshness across its lease through a bounded heartbeat cadence', () => {
+  it('renews mobile freshness across its lease through a bounded heartbeat cadence', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     const server = new AgentHookServer()
@@ -133,7 +133,7 @@ describe('hook status session-tabs republish', () => {
     } finally {
       uninstall()
       heartbeat.dispose()
-      server.stop()
+      await server.stop()
     }
   })
 })

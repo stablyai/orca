@@ -46,8 +46,8 @@ describe('Persisted Claude lead boundaries', () => {
       firstServer,
       buildBody({ hook_event_name: 'SubagentStart', agent_id: 'arestored-child' })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -75,7 +75,7 @@ describe('Persisted Claude lead boundaries', () => {
       })
       expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -105,8 +105,8 @@ describe('Persisted Claude lead boundaries', () => {
     expect(firstServer._getStateForTests().lastStatusByPaneKey.get(PANE)?.hookEventName).toBe(
       'Stop'
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -126,7 +126,7 @@ describe('Persisted Claude lead boundaries', () => {
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
       expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -142,8 +142,8 @@ describe('Persisted Claude lead boundaries', () => {
       buildBody({ hook_event_name: 'SubagentStart', agent_id: 'arestored-child' })
     )
     await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop' }))
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const secondServer = new AgentHookServer()
     await secondServer.start({ env: 'production', userDataPath })
@@ -152,8 +152,8 @@ describe('Persisted Claude lead boundaries', () => {
       connectionId: null,
       payload: { state: 'working', prompt: '', agentType: 'claude' }
     })
-    secondServer.flushStatusPersistSync()
-    secondServer.stop()
+    await secondServer.flushStatusPersist()
+    await secondServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -170,7 +170,7 @@ describe('Persisted Claude lead boundaries', () => {
       })
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -198,8 +198,8 @@ describe('Persisted Claude lead boundaries', () => {
     )
     expect(firstServer.getStatusSnapshot()[0]?.state).toBe('working')
     expect(mainAgentState(firstServer)).toBe('done')
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -213,7 +213,7 @@ describe('Persisted Claude lead boundaries', () => {
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
       expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -252,8 +252,8 @@ describe('Persisted Claude lead boundaries', () => {
       firstServer,
       buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achild-a' })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -269,7 +269,7 @@ describe('Persisted Claude lead boundaries', () => {
       })
       expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -285,8 +285,8 @@ describe('Persisted Claude lead boundaries', () => {
       buildBody({ hook_event_name: 'SubagentStart', agent_id: 'arestored-child' })
     )
     await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop' }))
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -303,7 +303,7 @@ describe('Persisted Claude lead boundaries', () => {
       })
       expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -343,8 +343,8 @@ describe('Persisted Claude lead boundaries', () => {
       buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achilda' })
     )
     expect(mainAgentState(firstServer)).toBe('working')
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -360,7 +360,7 @@ describe('Persisted Claude lead boundaries', () => {
       })
       expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -385,8 +385,8 @@ describe('Persisted Claude lead boundaries', () => {
         ]
       })
     )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
+    await firstServer.flushStatusPersist()
+    await firstServer.stop()
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
@@ -402,7 +402,7 @@ describe('Persisted Claude lead boundaries', () => {
       })
       expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })

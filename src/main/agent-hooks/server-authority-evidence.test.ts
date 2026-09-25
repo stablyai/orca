@@ -11,9 +11,9 @@ const SECOND_PANE_KEY = makePaneKey('tab-authority-2', '22222222-2222-4222-8222-
 describe('AgentHookServer authority evidence', () => {
   const servers: AgentHookServer[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const server of servers) {
-      server.stop()
+      await server.stop()
     }
     servers.length = 0
   })

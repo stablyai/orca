@@ -62,8 +62,8 @@ describe('OpenCode MessagePart flood benchmark', () => {
     await server.start({ env: 'production', userDataPath: tempDir })
   })
 
-  afterEach(() => {
-    server.stop()
+  afterEach(async () => {
+    await server.stop()
     rmSync(tempDir, { recursive: true, force: true })
   })
 

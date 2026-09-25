@@ -296,7 +296,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     }
   })
 
-  it('accepts a runtime-owned legacy pane without opening legacy relay ingress', () => {
+  it('accepts a runtime-owned legacy pane without opening legacy relay ingress', async () => {
     const server = new AgentHookServer()
     const event = {
       paneKey: 'legacy-tab:7',
@@ -317,14 +317,14 @@ describe('AgentHookServer ingestTerminalStatus', () => {
         prompt: 'legacy task'
       })
     ])
-    server.stop()
+    await server.stop()
   })
 
   it.each([
     ['PTY id', { ptyId: undefined }],
     ['terminal handle', { terminalHandle: undefined }],
     ['matching tab', { tabId: 'other-tab' }]
-  ])('rejects a legacy terminal row without its runtime-owned %s', (_label, overrides) => {
+  ])('rejects a legacy terminal row without its runtime-owned %s', async (_label, overrides) => {
     const server = new AgentHookServer()
     server.ingestTerminalStatus({
       paneKey: 'legacy-tab:7',
@@ -336,7 +336,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     })
 
     expect(server.getStatusSnapshot()).toEqual([])
-    server.stop()
+    await server.stop()
   })
 
   it('suppresses exact duplicate runtime terminal status observations', () => {

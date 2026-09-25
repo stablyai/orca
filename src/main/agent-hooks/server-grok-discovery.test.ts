@@ -78,7 +78,7 @@ describe('AgentHookServer Grok discovery retries', () => {
         )
       })
     } finally {
-      server.stop()
+      await server.stop()
       rmSync(root, { recursive: true, force: true })
     }
   })
@@ -112,7 +112,7 @@ describe('AgentHookServer Grok discovery retries', () => {
         expect.objectContaining({ state: 'working', prompt: 'old prompt', agentType: 'grok' })
       ])
     } finally {
-      server.stop()
+      await server.stop()
       rmSync(root, { recursive: true, force: true })
     }
   })

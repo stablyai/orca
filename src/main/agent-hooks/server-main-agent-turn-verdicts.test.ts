@@ -35,8 +35,8 @@ describe('main agent turn verdicts and clocks', () => {
     await server.start({ env: 'production' })
   })
 
-  afterEach(() => {
-    server.stop()
+  afterEach(async () => {
+    await server.stop()
   })
 
   async function post(path: string, payload: Record<string, unknown>): Promise<void> {

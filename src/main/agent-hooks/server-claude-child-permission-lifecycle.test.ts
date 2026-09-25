@@ -70,7 +70,7 @@ describe('Claude child permission lifecycle', () => {
       expect(status?.interactivePrompt).toBeUndefined()
       expect(status?.subagents).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -107,7 +107,7 @@ describe('Claude child permission lifecycle', () => {
       expect(status?.interactivePrompt).toBeUndefined()
       expect(status?.subagents).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -149,7 +149,7 @@ describe('Claude child permission lifecycle', () => {
       expect(status?.interactivePrompt).toBeUndefined()
       expect(status?.subagents).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -183,7 +183,7 @@ describe('Claude child permission lifecycle', () => {
       expect(status?.toolInput).toBeUndefined()
       expect(status?.interactivePrompt).toBeUndefined()
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -207,7 +207,7 @@ describe('Claude child permission lifecycle', () => {
         subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'working' })]
       })
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 
@@ -236,7 +236,7 @@ describe('Claude child permission lifecycle', () => {
       expect(status?.toolInput).toBeUndefined()
       expect(status?.subagents).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
     } finally {
-      server.stop()
+      await server.stop()
     }
   })
 })
