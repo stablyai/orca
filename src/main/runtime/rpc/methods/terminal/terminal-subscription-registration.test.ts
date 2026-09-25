@@ -4,8 +4,10 @@ import { registerTerminalSubscription } from './terminal-subscription-registrati
 
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'
 
-function createRegistration(requestSignal?: AbortSignal) {
-  const registry = new RuntimeSubscriptionRegistry()
+function createRegistration(
+  requestSignal?: AbortSignal,
+  registry = new RuntimeSubscriptionRegistry()
+) {
   const runtime = {
     registerOwnedSubscriptionCleanup: registry.registerOwned.bind(registry),
     subscribeToPtyExit: vi.fn((_ptyId: string, _listener: () => void) => vi.fn()),
@@ -49,13 +51,20 @@ describe('terminal subscription registration', () => {
     expect(teardown).toHaveBeenCalledOnce()
   })
 
-  it('releases at once when the request signal is already aborted', () => {
+  it('is released on arrival, without taking the slot, when the request signal is already aborted', () => {
+    const registry = new RuntimeSubscriptionRegistry()
+    const liveCleanup = vi.fn()
+    registry.registerOwned(SUBSCRIPTION_ID, liveCleanup, 'conn-a')
     const request = new AbortController()
     request.abort()
-    const { emit, registration } = createRegistration(request.signal)
+    const { emit, registration } = createRegistration(request.signal, registry)
 
     expect(registration.released).toBe(true)
-    expect(emit.mock.calls).toEqual([[{ type: 'end' }]])
+    expect(registration.signal.aborted).toBe(true)
+    expect(emit).not.toHaveBeenCalled()
+    expect(liveCleanup).not.toHaveBeenCalled()
+    expect(registry.cleanupIfOwnedByConnection(SUBSCRIPTION_ID, 'conn-a')).toBe(true)
+    expect(liveCleanup).toHaveBeenCalledOnce()
   })
 
   it('removes phone presence and aborts even when the teardown throws', async () => {

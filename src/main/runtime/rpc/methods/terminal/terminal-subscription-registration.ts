@@ -75,19 +75,22 @@ export function registerTerminalSubscription({
       controller.abort()
     }
   }
-  const registryEntry = runtime.registerOwnedSubscriptionCleanup(
-    subscriptionId,
-    () => {
-      try {
-        releaseOnce()
-      } finally {
-        end()
-      }
-    },
-    connectionId
-  )
+  // Why: a closed socket hands out a pre-aborted signal; registering would evict the slot's live stream for a dead request.
+  const registryEntry = requestSignal?.aborted
+    ? null
+    : runtime.registerOwnedSubscriptionCleanup(
+        subscriptionId,
+        () => {
+          try {
+            releaseOnce()
+          } finally {
+            end()
+          }
+        },
+        connectionId
+      )
   // Why: route through the registry so the entry leaves with the release and a teardown error is contained there.
-  const release = (): void => registryEntry.releaseIfCurrent()
+  const release = (): void => registryEntry?.releaseIfCurrent()
   const onRequestAbort = (): void => release()
 
   const registration: TerminalSubscriptionRegistration = {
@@ -125,11 +128,10 @@ export function registerTerminalSubscription({
       release()
     }
   }
-  // Why: a listener added to an aborted signal never fires; a closed socket hands out a pre-aborted signal.
-  if (requestSignal?.aborted) {
-    release()
-  } else {
+  if (registryEntry) {
     requestSignal?.addEventListener('abort', onRequestAbort, { once: true })
+  } else {
+    releaseOnce()
   }
   return registration
 }
