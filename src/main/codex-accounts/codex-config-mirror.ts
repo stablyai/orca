@@ -2,7 +2,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+import {
+  ensureCodexDaemonSocketGuard,
+  syncSystemConfigIntoManagedCodexHome
+} from '../codex/codex-config-mirror'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import type { Store } from '../persistence'
 import { toWindowsWslPath } from '../wsl'
@@ -105,10 +108,12 @@ export class CodexConfigMirror {
     canonicalConfig = this.readForManagedHome(managedHomePath),
     expectedAccountId?: string
   ): void {
+    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     if (canonicalConfig === null) {
+      // Why: with no ~/.codex/config.toml there is nothing to mirror, but Codex still cannot start in a long home without the daemon guard.
+      ensureCodexDaemonSocketGuard(trustedManagedHomePath)
       return
     }
-    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
     // granted there while refreshing ordinary settings from the lane's source.
     syncSystemConfigIntoManagedCodexHome({

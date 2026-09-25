@@ -114,7 +114,8 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
   return true
 }
 
-function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
+/** Applies only the daemon guard, for passes that have no source config to mirror. */
+export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
   try {
     const observation = observeAgentStateFile(join(runtimeHomePath, 'config.toml'))
     if (observation.kind !== 'indeterminate') {
