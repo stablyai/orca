@@ -1,4 +1,9 @@
-import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../../agent-status-types'
+import type {
+  AgentMainAgentStatus,
+  AgentStatusState,
+  AgentWorkingMode,
+  ParsedAgentStatusPayload
+} from '../../agent-status-types'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
@@ -139,14 +144,26 @@ export function seedCodexStateFromSnapshot(
   }
 }
 
-/** Sync the Codex lead record when the server infers an interrupt, so delayed child events cannot restore stale working state. */
-export function markCodexLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
+/** Sync the Codex lead record when the server infers an interrupt and fold it with the pane's
+ *  roster, so delayed child events cannot restore stale working state and the synthesized row
+ *  keeps the children the cancel left running (captured: Codex sends no hook on the interrupt). */
+export function markCodexLeadTurnInterrupted(
+  state: HookListenerState,
+  paneKey: string
+): { state: AgentStatusState; workingMode?: AgentWorkingMode; mainAgent?: AgentMainAgentStatus } {
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
-  setCodexMainAgentTurnState(state, paneKey, {
+  const record = setCodexMainAgentTurnState(state, paneKey, {
     state: 'done',
     outcome: 'cancellation',
     model: lead?.model
   })
+  const resolved = resolveCodexPaneStatus(state, paneKey, record)
+  const mainAgent = codexMainAgentStatusForPayload(record)
+  return {
+    state: resolved.stateName,
+    ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
+    ...(mainAgent ? { mainAgent } : {})
+  }
 }
 
 export function codexLeadStateForHookEvent(

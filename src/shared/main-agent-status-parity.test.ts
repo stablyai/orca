@@ -380,6 +380,16 @@ const STORIES: Story[] = [
       turnOutcome: 'cancellation',
       backgroundTasks: [AGENT_TASK],
       expect: { state: 'working', mainAgent: { state: 'done', outcome: 'cancellation' } }
+    },
+    // Captured (codex-cancel-bg-subagent-hooks.jsonl): Codex 0.156.1 sends no hook on Ctrl+C or
+    // Esc and keeps the subagent running, so the inferred cancel must fold with the live roster.
+    codex: {
+      events: [
+        { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
+        { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
+        ORCA_INFERRED_INTERRUPT
+      ],
+      expect: { state: 'working', mainAgent: { state: 'done', outcome: 'cancellation' } }
     }
   }
 ]
@@ -412,12 +422,11 @@ describe('mainAgent status parity across lanes', () => {
     let last: ParsedAgentStatusPayload | null = null
     for (const payload of events) {
       if (payload === ORCA_INFERRED_INTERRUPT) {
-        if (source === 'codex') {
-          markCodexLeadTurnInterrupted(state, PANE_KEY)
-          continue
-        }
         // What the server publishes for the cancel, shaped like the row the lane would build.
-        const folded = markClaudeLeadTurnInterrupted(state, PANE_KEY)
+        const folded =
+          source === 'codex'
+            ? markCodexLeadTurnInterrupted(state, PANE_KEY)
+            : markClaudeLeadTurnInterrupted(state, PANE_KEY)
         last = { ...(last ?? { prompt: '' }), ...folded, interrupted: folded.state === 'done' }
         continue
       }

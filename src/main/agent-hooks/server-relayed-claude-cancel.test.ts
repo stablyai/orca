@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../relay/agent-hook-server'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
-import { hookAt, loadCapture, type CapturedHook } from './claude-cancel-capture.test-fixture'
+import { hookAt, loadCapture, type CapturedHook } from './agent-cancel-capture.test-fixture'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),

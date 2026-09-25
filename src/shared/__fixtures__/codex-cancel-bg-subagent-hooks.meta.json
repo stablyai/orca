@@ -1,0 +1,12 @@
+{
+  "source_scenario": "codex-cancel-bg-subagent",
+  "codex_version": "codex-cli 0.156.1",
+  "argv": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "model": "gpt-5.5",
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-24",
+  "clock": "t is seconds since the driver started; hook records keep the ps snapshot taken inside the capture ingress",
+  "note": "Codex CLI driven over a real PTY with CODEX_HOME pointed at a copy of the managed home; the managed codex-hook.sh posted every hook to a local stand-in for Orca's hook ingress. One turn starts a background terminal (sleep 240, PreToolUse with no PostToolUse ever), spawns a subagent (spawn_agent) that runs sleep 130, and runs sleep 90 in the foreground; Ctrl+C mid-turn paints Interrupted, fires NO hook, and every process survives (the interrupted foreground command becomes a background terminal). A second turn runs sleep 80 and is cancelled with Esc: same result. The subagent's natural end fires its PostToolUse and SubagentStop even though both parent turns were interrupted; the background terminals' ends fire nothing, before and after a 75s settle. No root Stop ever fires for an interrupted turn; the next typed turn Stops normally. Scrubbed: username, session/turn/agent ids, tool call ids replaced by same-length placeholders."
+}

@@ -400,11 +400,13 @@ describe('the main agent fact on an inferred interrupt', () => {
     }
   })
 
-  it('refuses a cancel of a working Codex main agent beside a live child', () => {
+  it('folds a cancel of a working Codex main agent with the live child the row alone evidences', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
       const server = new AgentHookServer()
+      // Why no hookEventName: such a row never reconciles into main's Codex cache, so the row's
+      // own subagents are the only child evidence — the seed must keep them from being retired.
       server.ingestRemote(
         {
           paneKey: PANE,
@@ -422,7 +424,6 @@ describe('the main agent fact on an inferred interrupt', () => {
       )
       const baseline = server.getStatusSnapshot()[0]
       vi.setSystemTime(1_500)
-      // Why: the synthesized Codex row is a plain done; it would retire the child its combine keeps working.
       expect(
         server.inferInterrupt({
           paneKey: PANE,
@@ -432,8 +433,15 @@ describe('the main agent fact on an inferred interrupt', () => {
           baselineAgentType: 'codex',
           intent: 'ctrl-c'
         })
-      ).toBe(false)
-      expect(server.getStatusSnapshot()[0]).toEqual(baseline)
+      ).toBe(true)
+      const inferred = server.getStatusSnapshot()[0]
+      expect(inferred).toMatchObject({
+        state: 'working',
+        mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 1_500 },
+        subagents: [expect.objectContaining({ id: 'child-1', state: 'working' })]
+      })
+      expect(inferred.interrupted).toBeUndefined()
+      expect(inferred.workingMode).toBeUndefined()
     } finally {
       vi.useRealTimers()
     }

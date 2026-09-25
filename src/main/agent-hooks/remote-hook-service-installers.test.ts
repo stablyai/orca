@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
 }))
 
 import { CodexHookService, codexHookService } from '../codex/hook-service'
+import { CODEX_EVENTS } from '../codex/codex-hook-definition'
 import { DroidHookService, droidHookService } from '../droid/hook-service'
 import { CursorHookService, cursorHookService } from '../cursor/hook-service'
 import { CURSOR_EVENTS, type CursorEvent } from '../cursor/hook-events'
@@ -232,14 +233,7 @@ describe('remote hook service installers', () => {
       _managed?: unknown
     }
     expect(hooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
-    for (const eventName of [
-      'SessionStart',
-      'UserPromptSubmit',
-      'PreToolUse',
-      'PermissionRequest',
-      'PostToolUse',
-      'Stop'
-    ]) {
+    for (const eventName of CODEX_EVENTS) {
       const command = hooks.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/codex-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
