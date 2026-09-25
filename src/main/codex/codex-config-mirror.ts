@@ -7,6 +7,7 @@ import {
 } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
+import { bindCodexMcpHeaderHelperHome } from './codex-mcp-header-home-binding'
 import { normalizeDeprecatedCodexHookFeatureFlag } from './config-toml-deprecated-hook-flag'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -140,9 +141,17 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
     runtimeConfigBeforeMirror !== null
       ? mergeSystemCodexConfigIntoRuntime(
           runtimeConfigBeforeMirror,
-          prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+          prepareSystemConfigForRuntimeMirror(
+            rawSystemConfig,
+            sourceConfigDir,
+            homes.runtimeHomePath
+          )
         )
-      : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+      : prepareSystemConfigForFreshRuntimeMirror(
+          rawSystemConfig,
+          sourceConfigDir,
+          homes.runtimeHomePath
+        )
   if (runtimeConfigBeforeMirror === nextRuntimeConfig) {
     return
   }
@@ -190,12 +199,16 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath)
     )
     return { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  const systemConfig = prepareSystemConfigForRuntimeMirror(
+    rawSystemConfig,
+    sourceConfigDir,
+    runtimeHomePath
+  )
   // Why: reuse the bytes already observed above rather than re-reading. A second
   // read could succeed where the first failed and re-open the gap this closes.
   const runtimeConfig = runtimeConfigObservation.value
@@ -220,11 +233,18 @@ export function resolveCodexConfigMirrorSourceDirectory(
   )
 }
 
-function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
-  return rewriteRelativePathConfigValues(
+function prepareSystemConfigForRuntimeMirror(
+  config: string,
+  systemConfigDir: string,
+  runtimeHomePath?: string
+): string {
+  const normalized = rewriteRelativePathConfigValues(
     normalizeDeprecatedCodexHookFeatureFlag(config),
     systemConfigDir
   )
+  return runtimeHomePath
+    ? bindCodexMcpHeaderHelperHome(normalized, systemConfigDir, runtimeHomePath)
+    : normalized
 }
 
 // Why: trust blocks reference a hooks.json path, so system-home hook trust
@@ -233,9 +253,12 @@ function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: st
 // Linux-side ~/.codex the config resolves against inside the distro.
 export function prepareSystemConfigForFreshRuntimeMirror(
   config: string,
-  systemConfigDir: string
+  systemConfigDir: string,
+  runtimeHomePath?: string
 ): string {
-  return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
+  return stripRuntimeOwnedTomlSections(
+    prepareSystemConfigForRuntimeMirror(config, systemConfigDir, runtimeHomePath)
+  )
 }
 
 function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {

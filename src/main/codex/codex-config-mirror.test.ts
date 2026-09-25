@@ -3,6 +3,8 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
+import { quoteWindowsCmdArgument } from '../../shared/child-process/windows-command-line'
+import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -73,6 +75,32 @@ afterEach(() => {
 })
 
 describe('syncSystemConfigIntoManagedCodexHome', () => {
+  it('keeps account-specific MCP bindings across repeated mirrors without promoting a home', () => {
+    const quoteHome = process.platform === 'win32' ? quoteWindowsCmdArgument : quotePosixShell
+    const helper = `python helper.py --home ${quoteHome(getSystemCodexHomePath())}`
+    const canonical =
+      'model = "system-model"\n[mcp_servers.example]\n' +
+      `http_headers_helper = ${JSON.stringify(helper)}\n`
+    writeFileSync(getSystemConfigPath(), canonical, 'utf-8')
+    const homes = ['alice', 'bob'].map((name) => join(userDataDir, name, 'home'))
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (const runtimeHomePath of homes) {
+        mkdirSync(runtimeHomePath, { recursive: true })
+        syncSystemConfigIntoManagedCodexHome({
+          runtimeHomePath,
+          systemHomePath: getSystemCodexHomePath()
+        })
+        const mirrored = readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')
+        expect(mirrored).toContain('model = "system-model"')
+        expect(mirrored).toContain(JSON.stringify(runtimeHomePath).slice(1, -1))
+        for (const other of homes.filter((home) => home !== runtimeHomePath)) {
+          expect(mirrored).not.toContain(JSON.stringify(other).slice(1, -1))
+        }
+      }
+    }
+    expect(readFileSync(getSystemConfigPath(), 'utf-8')).toBe(canonical)
+  })
+
   it('seeds a missing runtime config without copying system hook trust', () => {
     writeFileSync(
       getSystemConfigPath(),
