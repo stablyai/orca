@@ -52,6 +52,7 @@ export async function launchAgentWithPrompt(args: {
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: resolved.agent,
+    ...(resolved.agentArgs !== undefined ? { agentArgs: resolved.agentArgs } : {}),
     prompt: { text: args.prompt, delivery: 'submit' },
     launchSource: args.launchSource
   })

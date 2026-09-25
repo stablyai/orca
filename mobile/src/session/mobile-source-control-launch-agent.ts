@@ -5,7 +5,10 @@
 
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import type { Repo } from '../../../src/shared/repo-types'
-import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
+import type {
+  SourceControlActionRecipe,
+  SourceControlLaunchActionId
+} from '../../../src/shared/source-control-ai-actions'
 import { resolveSourceControlActionRecipe } from '../../../src/shared/source-control-ai'
 import {
   pickSourceControlLaunchAgent,
@@ -17,8 +20,8 @@ import { isMobileTuiAgent } from '../tasks/mobile-tui-agents'
 import type { MobileAgentLaunchContext } from './mobile-new-tab-agent-loader'
 
 export type MobileSourceControlLaunchAgent =
-  | { kind: 'agent'; agent: TuiAgent }
-  | { kind: 'unavailable'; message: string }
+  /** `agentArgs`: the recipe's saved launch arguments, sent as the desktop sends them. */
+  { kind: 'agent'; agent: TuiAgent; agentArgs?: string } | { kind: 'unavailable'; message: string }
 
 type LaunchAgentSettings = Pick<
   GlobalSettings,
@@ -32,7 +35,8 @@ export function resolveMobileSourceControlLaunchAgent(
 ): MobileSourceControlLaunchAgent {
   const settings = readLaunchAgentSettings(context.settings)
   const detectedAgents = context.detectedAgents.filter(isMobileTuiAgent)
-  const savedAgent = actionId ? readSavedAgent(settings, context.repo, actionId) : null
+  const recipe = actionId ? readSavedRecipe(settings, context.repo, actionId) : null
+  const savedAgent = readSourceControlLaunchRecipeAgentId(recipe)
   // Why: the phone has no pre-launch dialog showing the pick, so a saved agent that can't run here
   // is an error, as on the desktop's direct launch, rather than a silent swap to another agent.
   if (
@@ -51,7 +55,11 @@ export function resolveMobileSourceControlLaunchAgent(
     disabledAgents: settings?.disabledTuiAgents
   })
   return agent
-    ? { kind: 'agent', agent }
+    ? {
+        kind: 'agent',
+        agent,
+        ...(recipe?.agentArgs !== undefined ? { agentArgs: recipe.agentArgs } : {})
+      }
     : { kind: 'unavailable', message: 'No enabled AI agent was detected on this workspace host.' }
 }
 
@@ -63,15 +71,13 @@ function readLaunchAgentSettings(settings: unknown): LaunchAgentSettings | null 
   return settings as LaunchAgentSettings
 }
 
-function readSavedAgent(
+function readSavedRecipe(
   settings: LaunchAgentSettings | null,
   repo: unknown,
   actionId: SourceControlLaunchActionId
-): TuiAgent | null {
+): SourceControlActionRecipe | null {
   try {
-    return readSourceControlLaunchRecipeAgentId(
-      resolveSourceControlActionRecipe({ settings, repo: readRepoOverrides(repo), actionId })
-    )
+    return resolveSourceControlActionRecipe({ settings, repo: readRepoOverrides(repo), actionId })
   } catch {
     // A recipe the phone cannot read must not block the button; the default agent still applies.
     return null

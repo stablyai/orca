@@ -106,6 +106,8 @@ describe('launchAgentWithPrompt', () => {
       prompt: { text: 'Fix the failing checks', delivery: 'submit' },
       launchSource: 'task_page'
     })
+    // No saved arguments: the host applies the user's configured defaults.
+    expect(launchParams(sendRequest)).not.toHaveProperty('agentArgs')
     expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(false)
     expect(
       sendRequest.mock.calls.some(([method]) => method === 'session.tabs.createTerminal')
@@ -122,6 +124,18 @@ describe('launchAgentWithPrompt', () => {
     })
     await run(client)
     expect(launchParams(sendRequest)).toMatchObject({ agent: 'claude' })
+  })
+
+  it("sends the action's saved agent arguments, as the desktop does", async () => {
+    const { client, sendRequest } = hostClient({
+      settings: {
+        defaultTuiAgent: 'claude',
+        sourceControlAi: { actions: { fixChecks: { agentArgs: '--model opus' } } }
+      },
+      launch: launchedWith({ delivery: 'submit', outcome: 'handed-to-terminal' })
+    })
+    await run(client)
+    expect(launchParams(sendRequest)).toMatchObject({ agent: 'claude', agentArgs: '--model opus' })
   })
 
   it('refuses rather than swaps when the saved agent is not on this host', async () => {

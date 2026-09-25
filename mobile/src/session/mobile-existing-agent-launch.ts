@@ -50,6 +50,7 @@ export async function launchAgentInExistingWorkspace(args: {
   hostCapabilities: readonly string[] | null | undefined
   worktreeId: string
   agent: TuiAgent
+  agentArgs?: string
   prompt?: AgentLaunchPrompt
   launchSource?: string
   // Injected in tests; each call is one new operation, so a later tap never replays this one.
@@ -62,6 +63,7 @@ export async function launchAgentInExistingWorkspace(args: {
     agent: args.agent,
     worktreeId: args.worktreeId,
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
+    ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {})
   })
