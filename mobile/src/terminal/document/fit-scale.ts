@@ -64,6 +64,12 @@ export function adjustRowsForViewport() {}
 // scrollWidth (xterm rendered something). Cap at 60 frames (~1s @60Hz)
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
+
+function hasViewportWidth(scope: TerminalDocumentScope) {
+  const width = scope.viewportRect().width
+  return Number.isFinite(width) && width > 0
+}
+
 export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
   if (!scope.term || !scope.term.element) {
     return
@@ -79,8 +85,7 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
       return
     }
     // Why: a display:none host measures 0 wide; the fit stays pending until observeViewport reports a box.
-    const hostWidth = scope.viewportRect().width
-    if (!Number.isFinite(hostWidth) || hostWidth <= 0) {
+    if (!hasViewportWidth(scope)) {
       return
     }
     attempts++
@@ -167,6 +172,10 @@ export function commitFitScale(
  */
 export function startFitScale(scope: TerminalDocumentScope) {
   const refit = () => {
+    // Why: a hidden screen's host reports 0x0; refitting then would drop the pan it comes back to.
+    if (!hasViewportWidth(scope)) {
+      return
+    }
     applyFitScale(scope, 'window-resize')
     adjustRowsForViewport()
     repositionOverlay(scope)

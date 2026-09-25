@@ -121,4 +121,39 @@ describe("the document's frame on the page", () => {
     expect(edge(400)).toBe(0)
     expect(edge(120)).toBe(-1)
   })
+
+  it('keeps pan and zoom while a hidden host reports 0x0, and refits once it has a box', async () => {
+    // react-native-screens hides the session when another screen covers it; coming back must
+    // find the pan the user left, as native does, since native never refits on navigation.
+    let box = { left: 0, top: 0, width: 390, height: 600 }
+    const changes: (() => void)[] = []
+    const scope = startedWithGrid({
+      viewportRect: () => box,
+      observeViewport: (onChange) => {
+        changes.push(onChange)
+        return () => {}
+      }
+    })
+    await frames()
+    scope.panX = -40
+    scope.panY = -30
+    scope.userScale = 1.5
+    const kept = { panX: -40, panY: -30, userScale: 1.5, currentScale: scope.currentScale }
+    box = { left: 0, top: 0, width: 0, height: 0 }
+    changes.forEach((onChange) => onChange())
+    await frames()
+    const { panX, panY, userScale, currentScale } = scope
+    expect({ panX, panY, userScale, currentScale }).toEqual(kept)
+
+    box = { left: 0, top: 0, width: 390, height: 600 }
+    const scales: string[] = []
+    Object.defineProperty(scope.surface!.style, 'transform', {
+      set: (value: string) => scales.push(/scale\(([^)]*)\)/.exec(value)?.[1] ?? value),
+      get: () => ''
+    })
+    changes.forEach((onChange) => onChange())
+    await frames()
+    expect(scope.userScale).toBe(1)
+    expect(scales.at(-1)).toBe(String(390 / (7.5 * 55)))
+  })
 })

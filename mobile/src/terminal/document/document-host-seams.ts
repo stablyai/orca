@@ -5,11 +5,10 @@ import type {
 
 /**
  * The ten seams between the document and whatever is hosting it, as the document's own
- * defaults, and the root its elements are read from. The document reads the seams at nine places:
- * `postToHost` twice, `createTerminal`, `createUnicode11Addon`, `createWebglAddon`,
- * `installErrorReporter`, `paintDocumentBackground`, `installHostTransport` and `hasEngine` once
- * each, plus `viewportRect` at every size bound and client-point mapping, and `observeViewport`
- * once; the root is read through one accessor, at the ten element reads.
+ * defaults, and the root its elements are read from. `postToHost` is read twice; `createTerminal`,
+ * the two addon builders, `installErrorReporter`, `paintDocumentBackground`, `installHostTransport`,
+ * `hasEngine` and `observeViewport` once each; `viewportRect` at every size bound and client-point
+ * mapping. The root is read through one accessor, at the ten element reads.
  *
  * Inside the WebView the host is React Native and the engine is an IIFE that hangs its
  * constructors off `window`; on the page the host is the component that mounted these modules and
