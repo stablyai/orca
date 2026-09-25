@@ -43,14 +43,20 @@ export function useClientHostedBrowserGuestTools({
     toolsReady: !disabled
   })
   const { markup, grab, grabAnnotations } = tools
+  const { setPendingAnnotationPayload } = grabAnnotations
+  const cancelMarkup = markup.cancel
   const showOverlay = !disabled && markup.isActive && markup.baseImage !== null
   const browserHostClientId = placement?.browserHostClientId
   const browserHostGeneration = placement?.browserHostGeneration
   const pageHostGeneration = placement?.pageHostGeneration
 
   useEffect(() => {
-    // Invalidate pending captures on deactivation, guest replacement, failure, or unmount.
-    return markup.cancel
+    // Invalidate pending captures and an unsaved comment card on deactivation, guest replacement,
+    // failure, or unmount — the card's element rects belong to the document it was picked on.
+    return () => {
+      cancelMarkup()
+      setPendingAnnotationPayload(null)
+    }
   }, [
     browserPageId,
     runtimeEnvironmentId,
@@ -58,7 +64,8 @@ export function useClientHostedBrowserGuestTools({
     browserHostGeneration,
     pageHostGeneration,
     disabled,
-    markup.cancel
+    cancelMarkup,
+    setPendingAnnotationPayload
   ])
 
   const grabActive = grab.state !== 'idle'
@@ -95,7 +102,6 @@ export function useClientHostedBrowserGuestTools({
   ])
 
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
-  const { setPendingAnnotationPayload } = grabAnnotations
   const clearAnnotationsOnLoad = useCallback(() => {
     // Why: a load replaces the document, invalidating captured element rects — same as a local tab.
     clearBrowserPageAnnotations(browserPageId)
