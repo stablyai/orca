@@ -4,6 +4,8 @@ import {
   signalPosixPtyProcessGroups
 } from '../../pty/posix-pty-process-groups'
 
+const RESUME_RETRY_MS = 500
+
 type BunPtyProcessHandle = Readonly<{
   pid: number
   kill(signal?: string | number): void
@@ -27,16 +29,26 @@ export function createBunPtyProducerFlowControl(
     signalProcessGroup?: (pgid: number, signal: NodeJS.Signals) => void
   }>
 ): BunPtyProducerFlowControl {
-  let paused = false
+  let state: 'running' | 'paused' | 'uncertain' = 'running'
   let pauseRequested = false
   let shuttingDown = false
   let pendingRead: AbortController | undefined
+  let resumeRetry: ReturnType<typeof setTimeout> | undefined
+  let groupResumeRequired = false
 
-  const signalProcessGroup = (signal: 'SIGSTOP' | 'SIGCONT', table?: string): void => {
+  const signalProcessGroup = (
+    signal: 'SIGSTOP' | 'SIGCONT',
+    table?: string,
+    requireGroups = false
+  ): void => {
+    let resumeFailed = false
     signalPosixPtyProcessGroups(
       options.processHandle.pid,
       signal,
       () => {
+        if (requireGroups) {
+          throw new Error('Paused PTY group ownership is unavailable')
+        }
         options.processHandle.kill(signal)
       },
       {
@@ -46,15 +58,59 @@ export function createBunPtyProducerFlowControl(
           : options.readProcessTable
             ? { readProcessTable: options.readProcessTable }
             : {}),
-        ...(options.signalProcessGroup
-          ? { signalProcessGroup: (pgid: number) => options.signalProcessGroup?.(pgid, signal) }
-          : {})
+        signalProcessGroup(pgid) {
+          // Keep the shell stopped until every preceding job group has resumed.
+          if (signal === 'SIGCONT' && requireGroups && resumeFailed) {
+            throw new Error('An earlier PTY group could not be resumed')
+          }
+          try {
+            if (options.signalProcessGroup) {
+              options.signalProcessGroup(pgid, signal)
+            } else {
+              process.kill(-pgid, signal)
+            }
+          } catch (error) {
+            resumeFailed = !(error instanceof Error && 'code' in error && error.code === 'ESRCH')
+            throw error
+          }
+          if (signal === 'SIGSTOP') {
+            groupResumeRequired = true
+          }
+        }
       }
     )
   }
 
+  const clearResumeRetry = (): void => {
+    clearTimeout(resumeRetry)
+    resumeRetry = undefined
+  }
+
+  const retryResume = (): void => {
+    if (
+      shuttingDown ||
+      options.isExited() ||
+      pauseRequested ||
+      state === 'running' ||
+      resumeRetry
+    ) {
+      return
+    }
+    // Callers send resume once; retain the obligation until fresh ownership can release every group.
+    resumeRetry = setTimeout(() => {
+      resumeRetry = undefined
+      reconcile()
+    }, RESUME_RETRY_MS)
+    resumeRetry.unref?.()
+  }
+
   const reconcile = (): void => {
-    if (shuttingDown || options.isExited() || pauseRequested === paused || pendingRead) {
+    if (
+      shuttingDown ||
+      options.isExited() ||
+      state === (pauseRequested ? 'paused' : 'running') ||
+      pendingRead
+    ) {
       return
     }
     const controller = new AbortController()
@@ -71,19 +127,28 @@ export function createBunPtyProducerFlowControl(
       .catch(() => '')
       .then((table) => {
         pendingRead = undefined
-        if (shuttingDown || options.isExited() || pauseRequested === paused) {
+        if (
+          shuttingDown ||
+          options.isExited() ||
+          state === (pauseRequested ? 'paused' : 'running')
+        ) {
           return
         }
         const nextPaused = pauseRequested
-        // A partially successful stop still needs a later resume.
-        if (nextPaused) {
-          paused = true
+        // Partial signals require a fresh transition even if the requested state changes again.
+        state = 'uncertain'
+        signalProcessGroup(
+          nextPaused ? 'SIGSTOP' : 'SIGCONT',
+          table,
+          !nextPaused && groupResumeRequired
+        )
+        state = nextPaused ? 'paused' : 'running'
+        if (!nextPaused) {
+          groupResumeRequired = false
         }
-        signalProcessGroup(nextPaused ? 'SIGSTOP' : 'SIGCONT', table)
-        paused = nextPaused
       })
       .catch(() => {
-        // PTY ownership can disappear during a scan; flow control is best-effort.
+        retryResume()
       })
   }
 
@@ -92,9 +157,10 @@ export function createBunPtyProducerFlowControl(
       if (shuttingDown || options.isExited()) {
         return
       }
+      clearResumeRetry()
       if (options.platform === 'win32') {
-        if (!paused && options.windowsJob?.pause()) {
-          paused = true
+        if (state !== 'paused' && options.windowsJob?.pause()) {
+          state = 'paused'
         }
         return
       }
@@ -102,9 +168,10 @@ export function createBunPtyProducerFlowControl(
       reconcile()
     },
     resume() {
+      clearResumeRetry()
       if (options.platform === 'win32') {
         if (!options.isExited() && options.windowsJob?.resume()) {
-          paused = false
+          state = 'running'
         }
         return
       }
@@ -112,22 +179,25 @@ export function createBunPtyProducerFlowControl(
       reconcile()
     },
     resumeForShutdown() {
+      clearResumeRetry()
       if (options.platform === 'win32') {
-        options.windowsJob?.resume()
-        paused = false
+        if (!options.isExited()) {
+          options.windowsJob?.resume()
+        }
+        state = 'running'
         return
       }
       shuttingDown = true
       pendingRead?.abort()
       try {
-        if (!options.isExited() && paused) {
+        if (!options.isExited() && state !== 'running') {
           // Teardown must release stopped jobs before the root receives its exit signal.
           signalProcessGroup('SIGCONT')
         }
       } catch {
         // A failed resume must not prevent the caller from terminating the PTY.
       }
-      paused = false
+      state = 'running'
     }
   }
 }

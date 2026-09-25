@@ -66,6 +66,7 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
       return
     }
     exited = true
+    producerFlowControl.resumeForShutdown()
     windowsLaunch?.readShellProcessId()
     exitCode = code
     exitSignal = Object.entries(constants.signals).find(

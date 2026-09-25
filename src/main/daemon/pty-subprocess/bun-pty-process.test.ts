@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { canUseBunPty, spawnBunPty } from './bun-pty-process'
 import type { BunRuntime, BunTerminalOptions } from './bun-pty-process-contract'
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
+import * as posixPtyGroups from '../../pty/posix-pty-process-groups'
 
 type FakeTerminal = {
   closed: boolean
@@ -85,11 +86,62 @@ function spawn(deps?: Parameters<typeof spawnBunPty>[1]) {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   testRuntime = undefined
 })
 
 describe('Bun.Terminal PTY adapter', () => {
+  it('cancels a pending ownership lookup on natural exit without delivering a late stop', async () => {
+    const harness = createBunHarness()
+    let finishRead: (table: string) => void = () => {}
+    const read = vi.spyOn(posixPtyGroups, 'readPosixPtyProcessTable').mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          finishRead = resolve
+        })
+    )
+    const signalProcessGroup = vi.fn()
+    const proc = spawn({ signalProcessGroup })
+    proc.pause()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    const signal = read.mock.calls[0][1]
+    expect(signal?.aborted).toBe(false)
+    harness.resolveExit(0)
+    await harness.processHandle.exited
+    expect(signal?.aborted).toBe(true)
+    finishRead('4321 4321 pts/test\n4322 4322 pts/test')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(signalProcessGroup).not.toHaveBeenCalled()
+    expect(harness.processHandle.kill).not.toHaveBeenCalled()
+  })
+
+  it('cancels a queued resume retry immediately on natural exit', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const harness = createBunHarness()
+    const read = vi
+      .spyOn(posixPtyGroups, 'readPosixPtyProcessTable')
+      .mockResolvedValueOnce('4321 4321 pts/test\n4322 4322 pts/test')
+      .mockRejectedValueOnce(new Error('temporary ps failure'))
+    const signalProcessGroup = vi.fn()
+    const proc = spawn({ signalProcessGroup })
+    proc.pause()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    proc.resume()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(vi.getTimerCount()).toBe(1)
+    harness.resolveExit(0)
+    await harness.processHandle.exited
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(signalProcessGroup.mock.calls).toEqual([
+      [4322, 'SIGSTOP'],
+      [4321, 'SIGSTOP']
+    ])
+    expect(harness.processHandle.kill).not.toHaveBeenCalled()
+  })
+
   it('exposes initial and successfully applied dimensions for terminal inspection', () => {
     const harness = createBunHarness()
     const proc = spawn()
@@ -398,6 +450,17 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(onExit).toHaveBeenCalledOnce()
     expect(job.close).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
+    expect(job.resume).toHaveBeenCalledTimes(2)
+    job.resume.mockImplementation(() => {
+      throw new Error('job already closed')
+    })
+    expect(() => {
+      proc.pause()
+      proc.resume()
+      proc.kill()
+      proc.destroy()
+    }).not.toThrow()
+    expect(job.resume).toHaveBeenCalledTimes(2)
   })
 
   it('does not release a Windows gate without exact job ownership', async () => {

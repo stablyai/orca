@@ -79,9 +79,9 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
       expect(result).toEqual({ exitCode: 143, signal: 15 })
     })
 
-    it.skipIf(!existsSync('/bin/bash'))(
-      'stops foreground and background floods and resumes without losing output',
-      async () => {
+    it.skipIf(!existsSync('/bin/bash')).each([false, true])(
+      'stops foreground and background floods without losing output (transient resume failure: %s)',
+      async (rejectFirstResume) => {
         const result = await runTerminalScript(`
       const expected = 16 * 1024 * 1024
       const {join} = require('node:path')
@@ -98,12 +98,16 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
         'const ready=setInterval(()=>{if(!existsSync(process.argv[3]))return;clearInterval(ready);process.stdout.write("x".repeat(65536));const continued=setInterval(()=>{if(!existsSync(process.argv[4]))return;clearInterval(continued);clearTimeout(deadline);let count=1;const timer=setInterval(()=>{process.stdout.write("x".repeat(65536));if(++count===128)clearInterval(timer)},1)},1)},1)'
       ].join(';'))
       const groups = new Set()
-      let bytes = 0, paused = false, settledBytes = 0, stable = false, verifying = false
+      let bytes = 0, paused = false, settledBytes = 0, stable = false, verifying = false, rejectedResume = false
       const proc = spawnBunPty({
         ...args, file:'/bin/bash',
         args:['--noprofile','--norc','-i','-c','exec 2>/dev/null; "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER" "$ORCA_TEST_BACKGROUND_READY" "$ORCA_TEST_GO" "$ORCA_TEST_CONTINUE" & "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER" "$ORCA_TEST_FOREGROUND_READY" "$ORCA_TEST_GO" "$ORCA_TEST_CONTINUE"; wait'],
         env:{...args.env,ORCA_TEST_RUNTIME:process.execPath,ORCA_TEST_PRODUCER:producer,ORCA_TEST_BACKGROUND_READY:backgroundReady,ORCA_TEST_FOREGROUND_READY:foregroundReady,ORCA_TEST_GO:go,ORCA_TEST_CONTINUE:continueOutput}
       },{signalProcessGroup:(pgid,signal)=>{
+        if (signal === 'SIGCONT' && ${rejectFirstResume} && !rejectedResume) {
+          rejectedResume = true
+          throw Object.assign(new Error('transient resume failure'), {code:'EPERM'})
+        }
         process.kill(-pgid,signal)
         if (signal === 'SIGSTOP') groups.add(pgid)
         if (groups.size < 3 || verifying) return
@@ -131,7 +135,7 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
       proc.onExit(event => {
         clearInterval(ready)
         clearInterval(heartbeat)
-        console.log(JSON.stringify({event,stable,exact:bytes===expected,pausedBeforeExit:settledBytes<expected,responsive:beats>10,jobControlGroups:groups.size>=3}))
+        console.log(JSON.stringify({event,stable,exact:bytes===expected,pausedBeforeExit:settledBytes<expected,responsive:beats>10,jobControlGroups:groups.size>=3,rejectedResume}))
         proc.destroy()
       })
     `)
@@ -141,7 +145,8 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
           exact: true,
           pausedBeforeExit: true,
           responsive: true,
-          jobControlGroups: true
+          jobControlGroups: true,
+          rejectedResume: rejectFirstResume
         })
       }
     )
