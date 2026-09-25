@@ -13,6 +13,7 @@ import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
 import { createPreflightSlice } from './slices/preflight'
 import { createJiraSlice } from './slices/jira'
+import { createPluginTaskSourcesSlice } from './slices/plugin-task-sources'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
@@ -118,7 +119,8 @@ export const useAppStore = create<AppState>()(
         ...createNewIssueDraftSlice(...a),
         ...createTaskCreationDraftsSlice(...a),
         ...createRemoteServerUpdatesSlice(...a),
-        ...createTerminalQuickCommandHostsSlice(...a)
+        ...createTerminalQuickCommandHostsSlice(...a),
+        ...createPluginTaskSourcesSlice(...a)
       }
     })
   )

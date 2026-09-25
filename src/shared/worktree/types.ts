@@ -10,13 +10,19 @@ import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from '../worktree-scan-failure'
 
 export type WorkspaceLinkedItem = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  /** `'plugin'` covers every contributed task source. One member, not one per
+   *  installed plugin: the union must not grow with what the user installs. */
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'plugin'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
   url: string
   linearIdentifier?: string
   jiraIdentifier?: string
+  /** Installed plugin that owns a `'plugin'` item. */
+  pluginKey?: string
+  /** Contributed source within that plugin. */
+  sourceId?: string
   repoId?: string
 }
 

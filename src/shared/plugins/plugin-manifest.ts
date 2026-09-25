@@ -16,6 +16,7 @@ import {
   pluginRelativePathSchema
 } from './plugin-manifest-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
+import { isPluginTaskSourceIconAssetPath } from './plugin-task-source-icon'
 
 /**
  * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
@@ -33,6 +34,7 @@ const SEMVER_RE =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 export const PLUGIN_PANEL_LIMIT = 64
 export const PLUGIN_COMMAND_LIMIT = 256
+export const PLUGIN_TASK_SOURCE_LIMIT = 16
 
 // Why: v0 supports only the ">=x.y.z" form. A closed grammar keeps the gate
 // predictable; richer ranges can be added without breaking old manifests.
@@ -56,6 +58,33 @@ const commandContributionSchema = z.object({
   context: z.enum(['global', 'worktree']).optional(),
   /** Built-in action aliases remain declarative and do not activate a worker. */
   action: pluginCommandIdSchema.optional()
+})
+
+/** The `.svg` suffix is what separates the two arms, so a Lucide token may not
+ *  wear it. Both arms stay open: installed manifests declare bare tokens. */
+const taskSourceIconSchema = z.union([
+  z
+    .string()
+    .max(1024)
+    .refine(isPluginTaskSourceIconAssetPath, 'must be a plugin-relative ".svg" path')
+    // The conventional "./" prefix is canonicalized away so one identity is stored.
+    .transform((value) => value.replace(/^\.[\\/]/, ''))
+    .pipe(pluginRelativePathSchema),
+  z
+    .string()
+    .min(1)
+    .max(64)
+    .refine((value) => !isPluginTaskSourceIconAssetPath(value), 'must not be a file path')
+])
+
+/** A task source contributes entries to the Tasks list. The worker supplies
+ *  data; core renders it, so no entry point is declared here. */
+const taskSourceContributionSchema = z.object({
+  id: pluginIdSchema,
+  title: z.string().min(1).max(256),
+  /** Lucide icon name rendered in the Tasks source bar, or a plugin-relative
+   *  `.svg` the host validates and resolves before the renderer paints it. */
+  icon: taskSourceIconSchema.optional()
 })
 
 /** Domain events a plugin can subscribe to in v0. Closed set: server-side
@@ -98,6 +127,10 @@ export const pluginManifestSchema = z
       .object({
         panels: z.array(panelContributionSchema).max(PLUGIN_PANEL_LIMIT).default([]),
         commands: z.array(commandContributionSchema).max(PLUGIN_COMMAND_LIMIT).default([]),
+        taskSources: z
+          .array(taskSourceContributionSchema)
+          .max(PLUGIN_TASK_SOURCE_LIMIT)
+          .default([]),
         events: z.array(eventContributionSchema).max(PLUGIN_EVENT_SUBSCRIPTION_LIMIT).default([]),
         languagePacks: z
           .array(pluginLanguagePackContributionSchema)
@@ -120,6 +153,7 @@ export const pluginManifestSchema = z
       .default(() => ({
         panels: [],
         commands: [],
+        taskSources: [],
         events: [],
         languagePacks: [],
         keybindings: [],
@@ -133,6 +167,7 @@ export const pluginManifestSchema = z
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 export type PluginPanelContribution = z.infer<typeof panelContributionSchema>
 export type PluginCommandContribution = z.infer<typeof commandContributionSchema>
+export type PluginTaskSourceContribution = z.infer<typeof taskSourceContributionSchema>
 export type PluginEventContribution = z.infer<typeof eventContributionSchema>
 
 export {

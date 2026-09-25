@@ -72,7 +72,8 @@ const preview: PluginMarketplaceHostInstallPreview = {
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
-      agents: []
+      agents: [],
+      taskSources: []
     },
     capabilities: [{ kind: 'workspace:read' }]
   }
@@ -92,6 +93,7 @@ function installedPlugin(contentHash = 'different-content'): PluginHostListEntry
     bundled: false,
     capabilities: [],
     panels: [],
+    taskSources: [],
     commands: [],
     hasWorker: true,
     restarts: 0,

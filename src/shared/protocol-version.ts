@@ -40,6 +40,12 @@ export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' a
 export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v1' as const
 export const WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY =
   'worktree.linked-work-item-context.v1' as const
+// Why: WorkspaceLinkedItemSchema is an RPC *param* schema and rejects a provider it
+// does not know instead of nulling the item, so a 'plugin' item sent to a host that
+// predates the arm refuses the whole worktree.create. Advertised unconditionally:
+// every build carrying this constant accepts the arm.
+export const WORKTREE_LINKED_WORK_ITEM_PLUGIN_PROVIDER_RUNTIME_CAPABILITY =
+  'worktree.linked-work-item-plugin-provider.v1' as const
 export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
   'worktree.github-pr-suppression.v1' as const
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
@@ -342,6 +348,7 @@ export const RUNTIME_CAPABILITIES = [
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_WORK_ITEM_PLUGIN_PROVIDER_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,

@@ -274,7 +274,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       // Why: only a branch picked to NAME the workspace becomes a source pill; a base ref
       // chosen in the composer's own picker must leave a typed name on screen.
       baseBranch: baseBranchNamesWorkspace ? baseBranch : undefined
-    }) as SmartWorkspaceNameSelection | null
+    })
   }, [baseBranch, baseBranchNamesWorkspace, isProjectGroupTarget, linkedWorkItem])
 
   return {

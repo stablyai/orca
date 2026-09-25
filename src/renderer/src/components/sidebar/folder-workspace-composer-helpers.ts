@@ -80,7 +80,7 @@ export function toFolderWorkspaceLinkedTask(
 export function getSmartNameSelection(
   linkedWorkItem: LinkedWorkItemSummary | null
 ): SmartWorkspaceNameSelection | null {
-  return buildWorkspaceSourceSelection({ linkedWorkItem }) as SmartWorkspaceNameSelection | null
+  return buildWorkspaceSourceSelection({ linkedWorkItem })
 }
 
 export function getLinkedItemDisplayName(item: LinkedWorkItemSummary): string | null {

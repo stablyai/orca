@@ -10,6 +10,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { WorkspaceLinkedItem } from '../../../../../shared/worktree/types'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -78,7 +79,7 @@ export type NewWorkspaceDraft = {
   note: string
   attachments: string[]
   linkedWorkItem: {
-    provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+    provider?: WorkspaceLinkedItem['provider']
     type: 'issue' | 'pr' | 'mr'
     number: number
     title: string
@@ -86,6 +87,8 @@ export type NewWorkspaceDraft = {
     linearIdentifier?: string
     linearBranchName?: string
     jiraIdentifier?: string
+    pluginKey?: string
+    sourceId?: string
     repoId?: string
   } | null
   /** Preserve where provider data came from, separately from the host chosen to run the workspace. */

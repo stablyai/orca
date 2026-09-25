@@ -21,6 +21,7 @@ import type {
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection
 } from './managed-account-types'
+import type { PersistedPluginTaskSourceSelection } from './plugins/plugin-task-source-selection-persistence'
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
@@ -359,6 +360,13 @@ export type GlobalSettings = {
   pluginConsents: Record<string, string>
   /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
   devPluginPaths: string[]
+  /** Per contributed task source (`pluginKey:sourceId`), the facet selections
+   *  and project scope the user left it filtered to. An absent key means nothing
+   *  was ever saved, which is what lets a facet's declared default apply; a saved
+   *  entry is the user's own answer and suppresses that default, so a facet they
+   *  cleared comes back cleared. Ineligible option and scope ids are dropped on
+   *  load, and a facet left with none is treated as cleared rather than unsaved. */
+  pluginTaskSourceSelections: Record<string, PersistedPluginTaskSourceSelection>
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */

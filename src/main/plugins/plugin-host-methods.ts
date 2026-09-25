@@ -138,6 +138,14 @@ function summarizeParams(method: string, params: unknown): string {
     case 'secrets.delete':
     case 'settings.set':
       return `key=${String(record.key)}`
+    case 'azureDevOps.boardsRequest': {
+      const method = typeof record.method === 'string' ? record.method : ''
+      const path = typeof record.path === 'string' ? record.path : ''
+      // Which organization a write reached is part of what was done.
+      const organization =
+        typeof record.organization === 'string' ? ` org=${record.organization}` : ''
+      return `${method} ${path}${organization}`
+    }
     default:
       return ''
   }

@@ -3,12 +3,14 @@ import type { PluginPanelEntry } from '../../../../shared/plugins/plugin-panel-b
 import { listPluginsForClients } from '../../../plugins/plugin-client-list'
 import type { PluginListEntry } from '../../../plugins/plugin-list-projection'
 import type { PluginService } from '../../../plugins/plugin-service'
+import { invokeContributedTaskSource } from '../../../plugins/plugin-task-source-invoker'
 import {
   pluginConsentRequestSchema,
   type PluginConsentRequest
 } from '../../../../shared/plugins/plugin-consent-request'
 import {
   PluginInvokeCommandParams,
+  PluginInvokeTaskSourceParams,
   PluginReadPanelEntryParams,
   PluginSetEnabledParams,
   PluginsPanelActionParams
@@ -137,6 +139,24 @@ export const PLUGIN_METHODS = [
       const service = requirePluginService()
       await service.whenReady()
       return service.invokeCommand(params.pluginKey, params.commandId, params.args)
+    }
+  }),
+  defineMethod({
+    // Why: resolves the PLUGIN_TASK_SOURCE_EXTENSION_POINT proxy, never
+    // PluginService.invokeTaskSource — see that method's doc comment.
+    name: 'plugins.invokeTaskSource',
+    params: PluginInvokeTaskSourceParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      return invokeContributedTaskSource({
+        resolveProxy: (pluginKey, sourceId) => service.resolveTaskSourceProxy(pluginKey, sourceId),
+        activate: (pluginKey) => service.activateForTaskSource(pluginKey),
+        pluginKey: params.pluginKey,
+        sourceId: params.sourceId,
+        method: params.method,
+        params: params.params
+      })
     }
   })
 ]

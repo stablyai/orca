@@ -53,7 +53,11 @@ function createServices(): PluginHostServices {
       getAll: vi.fn().mockReturnValue({ theme: 'dark' }),
       set: vi.fn().mockReturnValue({ ok: true })
     },
-    subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events)
+    subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events),
+    azureDevOpsBoardsRequest: vi
+      .fn()
+      .mockResolvedValue({ status: 200, body: { count: 0 }, code: null }),
+    azureDevOpsBoardsOrganizations: vi.fn().mockReturnValue(['contoso-labs'])
   }
 }
 
@@ -117,12 +121,14 @@ const successParams: Record<string, unknown> = {
   'secrets.delete': { key: 'token' },
   'settings.get': {},
   'settings.set': { key: 'theme', value: 'dark' },
-  'events.subscribe': { events: ['worktree.created'] }
+  'events.subscribe': { events: ['worktree.created'] },
+  'azureDevOps.boardsRequest': { method: 'GET', path: '/_apis/projects' },
+  'azureDevOps.boardsOrganizations': {}
 }
 
 describe('plugin host main/relay conformance', () => {
-  it('runs a granted success through both transports for all 13 v0 methods', async () => {
-    expect(PLUGIN_HOST_API_V0).toHaveLength(13)
+  it('runs a granted success through both transports for all 15 host methods', async () => {
+    expect(PLUGIN_HOST_API_V0).toHaveLength(15)
     expect(Object.keys(successParams).sort()).toEqual(
       PLUGIN_HOST_API_V0.map((entry) => entry.name).sort()
     )

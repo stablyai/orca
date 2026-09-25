@@ -10,6 +10,7 @@ type ContributionValidationManifest = {
   contributes: {
     panels: IdentifiedContribution[]
     commands: (IdentifiedContribution & { action?: string; context?: 'global' | 'worktree' })[]
+    taskSources: IdentifiedContribution[]
     events: { on: string }[]
     languagePacks: { locale: string }[]
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
@@ -44,7 +45,7 @@ export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
 ): void {
-  for (const path of ['panels', 'commands'] as const) {
+  for (const path of ['panels', 'commands', 'taskSources'] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
       (entry) => (entry as IdentifiedContribution).id,
@@ -129,6 +130,15 @@ export function validatePluginManifestContributions(
       code: 'custom',
       path: ['main'],
       message: 'required when contributes.events is non-empty'
+    })
+  }
+  // A task source is implemented in the worker; without `main` it can never
+  // answer a call, so the contribution would be inert rather than merely unused.
+  if (manifest.contributes.taskSources.length > 0 && !manifest.main) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contributes', 'taskSources'],
+      message: 'task sources require a worker entry (`main`)'
     })
   }
   if (

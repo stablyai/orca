@@ -68,6 +68,22 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-avatar-tone-1: var(--avatar-tone-1);
+  --color-avatar-tone-1-foreground: var(--avatar-tone-1-foreground);
+  --color-avatar-tone-2: var(--avatar-tone-2);
+  --color-avatar-tone-2-foreground: var(--avatar-tone-2-foreground);
+  --color-avatar-tone-3: var(--avatar-tone-3);
+  --color-avatar-tone-3-foreground: var(--avatar-tone-3-foreground);
+  --color-avatar-tone-4: var(--avatar-tone-4);
+  --color-avatar-tone-4-foreground: var(--avatar-tone-4-foreground);
+  --color-avatar-tone-5: var(--avatar-tone-5);
+  --color-avatar-tone-5-foreground: var(--avatar-tone-5-foreground);
+  --color-avatar-tone-6: var(--avatar-tone-6);
+  --color-avatar-tone-6-foreground: var(--avatar-tone-6-foreground);
+  --color-avatar-tone-7: var(--avatar-tone-7);
+  --color-avatar-tone-7-foreground: var(--avatar-tone-7-foreground);
+  --color-avatar-tone-8: var(--avatar-tone-8);
+  --color-avatar-tone-8-foreground: var(--avatar-tone-8-foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-worktree-sidebar: var(--worktree-sidebar);
@@ -203,6 +219,25 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  /* Identity tones for initials badges: a categorical wheel, not a ramp, so two
+     people next to each other never read as the same colour. Order is the hash
+     order, so re-ordering these re-colours every existing person. */
+  --avatar-tone-1: var(--color-blue-100);
+  --avatar-tone-1-foreground: var(--color-blue-800);
+  --avatar-tone-2: var(--color-cyan-100);
+  --avatar-tone-2-foreground: var(--color-cyan-800);
+  --avatar-tone-3: var(--color-emerald-100);
+  --avatar-tone-3-foreground: var(--color-emerald-800);
+  --avatar-tone-4: var(--color-lime-100);
+  --avatar-tone-4-foreground: var(--color-lime-800);
+  --avatar-tone-5: var(--color-amber-100);
+  --avatar-tone-5-foreground: var(--color-amber-800);
+  --avatar-tone-6: var(--color-rose-100);
+  --avatar-tone-6-foreground: var(--color-rose-800);
+  --avatar-tone-7: var(--color-fuchsia-100);
+  --avatar-tone-7-foreground: var(--color-fuchsia-800);
+  --avatar-tone-8: var(--color-violet-100);
+  --avatar-tone-8-foreground: var(--color-violet-800);
   --worktree-sidebar: #f5f5f5;
   --worktree-sidebar-foreground: #0a0a0a;
   --worktree-sidebar-accent: #eaeaea;
@@ -318,6 +353,23 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  /* Same hue order as light mode, inverted: dark surface, light glyph. */
+  --avatar-tone-1: var(--color-blue-900);
+  --avatar-tone-1-foreground: var(--color-blue-200);
+  --avatar-tone-2: var(--color-cyan-900);
+  --avatar-tone-2-foreground: var(--color-cyan-200);
+  --avatar-tone-3: var(--color-emerald-900);
+  --avatar-tone-3-foreground: var(--color-emerald-200);
+  --avatar-tone-4: var(--color-lime-900);
+  --avatar-tone-4-foreground: var(--color-lime-200);
+  --avatar-tone-5: var(--color-amber-900);
+  --avatar-tone-5-foreground: var(--color-amber-200);
+  --avatar-tone-6: var(--color-rose-900);
+  --avatar-tone-6-foreground: var(--color-rose-200);
+  --avatar-tone-7: var(--color-fuchsia-900);
+  --avatar-tone-7-foreground: var(--color-fuchsia-200);
+  --avatar-tone-8: var(--color-violet-900);
+  --avatar-tone-8-foreground: var(--color-violet-200);
   /* Why: light mode sets worktree-sidebar to secondary (#f5f5f5); mirror that
      lift in dark mode so the panel reads clearly above #0a0a0a canvas. */
   --worktree-sidebar: #2a2a2a;
@@ -722,6 +774,19 @@
 .terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
+}
+
+/* Why: a plugin ships only the glyph shape, in --plugin-task-source-icon; the
+   element's own background-color paints it, so it tracks the theme. */
+.plugin-task-source-icon {
+  -webkit-mask-image: var(--plugin-task-source-icon);
+  mask-image: var(--plugin-task-source-icon);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
 }
 
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in

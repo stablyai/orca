@@ -157,3 +157,73 @@ describe('plugin settings lifecycle authority', () => {
     expect(service.refresh).toHaveBeenCalledOnce()
   })
 })
+
+describe('plugins:invokeTaskSource IPC', () => {
+  function registerAndFindHandler(service: PluginService): (args: unknown) => Promise<unknown> {
+    const store = { onSettingsChanged: vi.fn(() => vi.fn()) } as unknown as Store
+    registerPluginHandlers(store, service, null)
+    const registration = electronMocks.handle.mock.calls.find(
+      ([name]) => name === 'plugins:invokeTaskSource'
+    )
+    if (!registration) {
+      throw new Error('plugins:invokeTaskSource was not registered')
+    }
+    const handler = registration[1] as (event: unknown, args: unknown) => Promise<unknown>
+    return (args: unknown) => handler(undefined, args)
+  }
+
+  it('rejects an unknown method with a validation envelope and never resolves a proxy', async () => {
+    const resolveTaskSourceProxy = vi.fn()
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy,
+      activateForTaskSource
+    } as unknown as PluginService
+    const handler = registerAndFindHandler(service)
+
+    await expect(
+      handler({ pluginKey: 'acme.boards', sourceId: 'azure-boards', method: 'deleteEverything' })
+    ).resolves.toMatchObject({ ok: false, code: 'validation' })
+    expect(resolveTaskSourceProxy).not.toHaveBeenCalled()
+    expect(activateForTaskSource).not.toHaveBeenCalled()
+  })
+
+  it('returns the extension-point proxy envelope unchanged for a valid call without activating', async () => {
+    const call = vi.fn().mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy: vi.fn().mockReturnValue({ sourceId: 'azure-boards', call }),
+      activateForTaskSource
+    } as unknown as PluginService
+    const handler = registerAndFindHandler(service)
+
+    await expect(
+      handler({
+        pluginKey: 'acme.boards',
+        sourceId: 'azure-boards',
+        method: 'listItems',
+        params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+      })
+    ).resolves.toEqual({ ok: true, data: { items: [], nextCursor: null } })
+    expect(activateForTaskSource).not.toHaveBeenCalled()
+  })
+
+  it('activates an idle plugin once and reports unavailable when the source still has no proxy', async () => {
+    const resolveTaskSourceProxy = vi.fn().mockReturnValue(null)
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy,
+      activateForTaskSource
+    } as unknown as PluginService
+    const handler = registerAndFindHandler(service)
+
+    await expect(
+      handler({ pluginKey: 'acme.boards', sourceId: 'missing-source', method: 'status' })
+    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+    expect(activateForTaskSource).toHaveBeenCalledWith('acme.boards')
+    expect(resolveTaskSourceProxy).toHaveBeenCalledTimes(2)
+  })
+})

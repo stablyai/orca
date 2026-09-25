@@ -6,7 +6,9 @@ import {
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type PluginHostMethodSpec
 } from '../../shared/plugins/plugin-host-api'
+import type { BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE } from '../../shared/azure-devops/boards-proxy-path-policy'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { PluginTaskSourceErrorCode } from '../../shared/plugins/plugin-task-source-contract'
 
 export type PluginWorktreeContext = {
   worktreeId: string
@@ -47,6 +49,14 @@ export type PluginHostServices = {
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
   subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
+  azureDevOpsBoardsRequest(request: {
+    method: string
+    path: string
+    organization?: string
+    query?: Record<string, string>
+    body?: unknown
+  }): Promise<{ status: number; body: unknown; code: PluginTaskSourceErrorCode | null }>
+  azureDevOpsBoardsOrganizations(): string[]
 }
 
 export type BoundPluginHostMethod = {
@@ -167,6 +177,21 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
     const { events } = params as { events: PluginEventName[] }
     return { subscribed: services.subscribeEvents(pluginId, events) }
+  }),
+  definePluginMethod('azureDevOps.boardsRequest', async (params, { services }) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host API spec validates params against azureDevOpsBoardsRequestParams before this handler runs.
+    const request = params as {
+      method: string
+      path: string
+      organization?: string
+      query?: Record<string, string>
+      body?: unknown
+      contentType?: typeof BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE
+    }
+    return services.azureDevOpsBoardsRequest(request)
+  }),
+  definePluginMethod('azureDevOps.boardsOrganizations', async (_params, { services }) => {
+    return { organizations: services.azureDevOpsBoardsOrganizations() }
   })
 ])
 

@@ -37,6 +37,11 @@ export type JiraWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue'
 }
 
+export type PluginWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'plugin'
+  type: 'issue'
+}
+
 export type WorkspaceSourceItemLike = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
   provider?: WorkspaceSourceProvider
 }
@@ -49,11 +54,16 @@ export type WorkspaceSourceSelectionKind =
   | 'branch'
   | 'linear'
   | 'jira'
+  | 'plugin'
 
 export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind
   label: string
   url?: string
+  /** Which contributed source produced a `plugin` selection. The renderer needs
+   *  it to draw that plugin's own icon rather than a generic one. */
+  pluginKey?: string
+  sourceId?: string
 }
 
 const GITLAB_ISSUE_PATH_RE = /\/-\/(?:issues|work_items)\//i
@@ -157,6 +167,27 @@ export function buildJiraWorkspaceSource(
   }
 }
 
+/** A contributed item's key ('AB-41') has no field of its own on the linked
+ *  item, so it leads the title — the same text the composer already seeds its
+ *  name from. `number` stays 0 for the same reason Linear and Jira keep it 0. */
+export function buildPluginWorkspaceSource(item: {
+  key: string
+  title: string
+  url: string
+  pluginKey: string
+  sourceId: string
+}): PluginWorkspaceSource {
+  return {
+    provider: 'plugin',
+    type: 'issue',
+    number: 0,
+    title: `${item.key} ${item.title}`.trim(),
+    url: item.url,
+    pluginKey: item.pluginKey,
+    sourceId: item.sourceId
+  }
+}
+
 export function shouldApplyWorkspaceSourceAutoName(args: {
   currentName: string
   lastAutoName: string
@@ -184,6 +215,26 @@ export function getWorkspaceSourceName(item: WorkspaceSourceItemLike): {
   }
 }
 
+// No `default`: a new provider must fail to compile here rather than silently
+// render as a GitHub issue.
+function getWorkspaceSourceSelectionKind(
+  provider: WorkspaceSourceProvider,
+  type: WorkspaceSourceItemLike['type']
+): WorkspaceSourceSelectionKind {
+  switch (provider) {
+    case 'linear':
+      return 'linear'
+    case 'jira':
+      return 'jira'
+    case 'plugin':
+      return 'plugin'
+    case 'gitlab':
+      return type === 'mr' ? 'gitlab-mr' : 'gitlab-issue'
+    case 'github':
+      return type === 'pr' ? 'github-pr' : 'github-issue'
+  }
+}
+
 export function buildWorkspaceSourceSelection(args: {
   linkedWorkItem: WorkspaceSourceItemLike | null
   baseBranch?: string
@@ -193,25 +244,19 @@ export function buildWorkspaceSourceSelection(args: {
     return baseBranch ? { kind: 'branch', label: baseBranch } : null
   }
   const provider = getWorkspaceSourceProvider(linkedWorkItem)
-  const kind: WorkspaceSourceSelectionKind =
-    provider === 'linear'
-      ? 'linear'
-      : provider === 'jira'
-        ? 'jira'
-        : provider === 'gitlab'
-          ? linkedWorkItem.type === 'mr'
-            ? 'gitlab-mr'
-            : 'gitlab-issue'
-          : linkedWorkItem.type === 'pr'
-            ? 'github-pr'
-            : 'github-issue'
   return {
-    kind,
+    kind: getWorkspaceSourceSelectionKind(provider, linkedWorkItem.type),
     label:
-      provider === 'linear' || provider === 'jira' || linkedWorkItem.number === 0
+      provider === 'linear' ||
+      provider === 'jira' ||
+      provider === 'plugin' ||
+      linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
-    url: linkedWorkItem.url
+    url: linkedWorkItem.url,
+    ...(provider === 'plugin'
+      ? { pluginKey: linkedWorkItem.pluginKey, sourceId: linkedWorkItem.sourceId }
+      : {})
   }
 }
 
@@ -222,5 +267,7 @@ export function shouldPreserveWorkspaceSourceOnRepoChange(
     return false
   }
   const provider = getWorkspaceSourceProvider(item)
-  return provider === 'linear' || provider === 'jira'
+  // Account-backed sources, contributed ones included, are not tied to the
+  // selected repo, so switching repo must not drop the selection.
+  return provider === 'linear' || provider === 'jira' || provider === 'plugin'
 }

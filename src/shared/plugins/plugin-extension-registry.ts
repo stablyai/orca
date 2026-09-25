@@ -7,6 +7,11 @@
  * All P0 points are EXPERIMENTAL — excluded from compatibility guarantees.
  */
 
+import type {
+  PluginTaskSourceMethod,
+  PluginTaskSourceResult
+} from './plugin-task-source-contract'
+
 declare const extensionPointBrand: unique symbol
 
 export type PluginExtensionPoint<T> = {
@@ -36,6 +41,22 @@ export const PLUGIN_COMMAND_EXTENSION_POINT = definePluginExtensionPoint<PluginW
   'command',
   { experimental: true }
 )
+
+/** A contributed task source whose implementation lives in the plugin's
+ *  worker. `call` proxies one contract method; the worker activates lazily.
+ *  The host validates and scrubs before resolving — but only for a `method`
+ *  in PLUGIN_TASK_SOURCE_METHODS; a caller taking it from outside TypeScript's
+ *  control (e.g. off the wire) must validate it against that set first. */
+export type PluginTaskSourceProxy = {
+  readonly sourceId: string
+  call(
+    method: PluginTaskSourceMethod,
+    params?: unknown
+  ): Promise<PluginTaskSourceResult<unknown>>
+}
+
+export const PLUGIN_TASK_SOURCE_EXTENSION_POINT =
+  definePluginExtensionPoint<PluginTaskSourceProxy>('taskSource', { experimental: true })
 
 export type PluginExtensionRegistration<T> = {
   pluginId: string

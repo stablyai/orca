@@ -44,4 +44,23 @@ describe('areWorkspaceLinkedItemsEqual', () => {
     )
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, repoId: 'repo-2' })).toBe(false)
   })
+
+  it('separates contributed items that differ only by plugin or source identity', () => {
+    const contributed: WorkspaceLinkedItem = {
+      provider: 'plugin',
+      type: 'issue',
+      number: 0,
+      title: 'AB-41 Ship the detail panel',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
+      pluginKey: 'nssf.azure-boards',
+      sourceId: 'boards'
+    }
+    expect(areWorkspaceLinkedItemsEqual(contributed, { ...contributed })).toBe(true)
+    expect(
+      areWorkspaceLinkedItemsEqual(contributed, { ...contributed, pluginKey: 'acme.tracker' })
+    ).toBe(false)
+    expect(areWorkspaceLinkedItemsEqual(contributed, { ...contributed, sourceId: 'backlog' })).toBe(
+      false
+    )
+  })
 })

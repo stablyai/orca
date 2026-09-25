@@ -4,6 +4,7 @@ import type {
 } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
+import type { PluginTaskSourceResult } from '../../shared/plugins/plugin-task-source-contract'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
 import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
@@ -15,6 +16,16 @@ export type PluginHostPanel = {
   /** Lucide icon name declared in the plugin manifest. */
   icon?: string
   tabKey: `plugin:${string}`
+}
+
+/** Task source contribution as surfaced by the main-process plugin service. */
+export type PluginHostTaskSource = {
+  id: string
+  title: string
+  /** Lucide icon name, or the plugin-relative `.svg` path, as declared. */
+  icon?: string
+  /** The host-validated SVG, already encoded for a CSS mask. */
+  iconDataUrl?: string
 }
 
 /** `pending` = awaiting (re-)consent; `idle` = enabled, worker not running
@@ -46,6 +57,7 @@ export type PluginHostListEntry = {
   bundled: boolean
   capabilities: { kind: string; description: string }[]
   panels: PluginHostPanel[]
+  taskSources: PluginHostTaskSource[]
   commands: {
     id: string
     title: string
@@ -155,6 +167,14 @@ export type PluginsApi = {
     commandId: string
     args?: unknown
   }) => Promise<unknown>
+  /** `method` must be one of PLUGIN_TASK_SOURCE_METHODS; an unknown value
+   *  resolves a `validation` envelope rather than rejecting. */
+  invokeTaskSource: (args: {
+    pluginKey: string
+    sourceId: string
+    method: string
+    params?: unknown
+  }) => Promise<PluginTaskSourceResult<unknown>>
   /** Relays a sandboxed panel's bridge request to main, which enforces the
    *  plugin's consented capabilities before executing. */
   panelAction: (args: {

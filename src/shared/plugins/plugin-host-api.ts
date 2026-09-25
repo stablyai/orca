@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
+import {
+  BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE,
+  BOARDS_PROXY_METHODS
+} from '../azure-devops/boards-proxy-path-policy'
+import { PLUGIN_TASK_SOURCE_ERROR_CODES } from './plugin-task-source-contract'
 
 /**
  * Host API v0 — the separately-versioned public facade plugins call. Every
@@ -21,6 +26,9 @@ export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
 export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
 export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
+export const PLUGIN_BOARDS_PATH_MAX_LENGTH = 2048
+export const PLUGIN_BOARDS_ORGANIZATION_MAX_LENGTH = 256
+export const PLUGIN_BOARDS_ORGANIZATION_LIMIT = 64
 
 const workspaceReadContextParams = z.object({}).strict().optional()
 const workspaceReadContextResult = z
@@ -94,6 +102,37 @@ const eventsSubscribeParams = z.object({
   events: z.array(z.enum(PLUGIN_EVENT_NAMES)).min(1).max(PLUGIN_EVENT_NAMES.length)
 })
 const eventsSubscribeResult = z.object({ subscribed: z.array(z.enum(PLUGIN_EVENT_NAMES)) })
+
+const azureDevOpsBoardsRequestParams = z
+  .object({
+    method: z.enum(BOARDS_PROXY_METHODS),
+    path: z.string().min(1).max(PLUGIN_BOARDS_PATH_MAX_LENGTH),
+    /** Selects one of the host's configured organizations. Absent means the
+     *  first one; a name outside the set is refused, never substituted. */
+    organization: z.string().min(1).max(PLUGIN_BOARDS_ORGANIZATION_MAX_LENGTH).optional(),
+    query: z.record(z.string().max(256), z.string().max(2048)).optional(),
+    body: z.unknown().optional(),
+    /** Creating a work item is a POST carrying a JSON Patch document, which
+     *  the method alone cannot signal. Restricted to that one media type so a
+     *  plugin cannot reshape an arbitrary request. */
+    contentType: z.literal(BOARDS_PROXY_JSON_PATCH_CONTENT_TYPE).optional()
+  })
+  .strict()
+const azureDevOpsBoardsRequestResult = z.object({
+  status: z.number().int(),
+  body: z.unknown(),
+  /** Host classification of `status`, so a plugin never has to guess; null on success. */
+  code: z.enum(PLUGIN_TASK_SOURCE_ERROR_CODES).nullable()
+})
+
+const azureDevOpsBoardsOrganizationsParams = z.object({}).strict().optional()
+const azureDevOpsBoardsOrganizationsResult = z.object({
+  /** Configured organization names, in configured order. Names only: no base
+   *  URLs, no credentials, and no way to add one. */
+  organizations: z
+    .array(z.string().min(1).max(PLUGIN_BOARDS_ORGANIZATION_MAX_LENGTH))
+    .max(PLUGIN_BOARDS_ORGANIZATION_LIMIT)
+})
 
 export type PluginHostMethodSpec = {
   name: string
@@ -249,6 +288,27 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: eventsSubscribeParams,
     result: eventsSubscribeResult
+  }),
+  spec({
+    name: 'azureDevOps.boardsRequest',
+    since: '1.0',
+    scope: 'desktop',
+    capability: 'azure-devops:boards',
+    mutation: true,
+    // Panels have no network scope by design; this stays worker-only.
+    panel: false,
+    params: azureDevOpsBoardsRequestParams,
+    result: azureDevOpsBoardsRequestResult
+  }),
+  spec({
+    name: 'azureDevOps.boardsOrganizations',
+    since: '1.1',
+    scope: 'desktop',
+    capability: 'azure-devops:boards',
+    mutation: false,
+    panel: false,
+    params: azureDevOpsBoardsOrganizationsParams,
+    result: azureDevOpsBoardsOrganizationsResult
   })
 ]
 

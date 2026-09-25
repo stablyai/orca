@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetAzureDevOpsPreviewApiVersionCache,
   requestAzureDevOpsJson,
-  requestAzureDevOpsJsonAtBase
+  requestAzureDevOpsJsonAtBase,
+  requestAzureDevOpsResponseAtBase
 } from './azure-devops-api-request'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 
@@ -130,5 +131,132 @@ describe('Azure DevOps API request (STA-3494)', () => {
 
     await requestAzureDevOpsJson(serverRepoRef(), '/_apis/git/repositories/my-repo')
     expect(paths).toEqual(['/rewrite/MyProject/_apis/git/repositories/my-repo'])
+  })
+})
+
+describe('non-GET requests', () => {
+  it('sends the body and content type, and retries a PATCH with -preview', async () => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+    const calls: { url: string; init: RequestInit }[] = []
+    const fetchMock = vi.fn(async (url: URL, init: RequestInit) => {
+      calls.push({ url: String(url), init })
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({ typeKey: 'VssInvalidPreviewVersionException' }), {
+          status: 400
+        })
+      }
+      return new Response(JSON.stringify({ id: 1 }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await requestAzureDevOpsJsonAtBase<{ id: number }>(
+      'https://ado.example/tfs/DefaultCollection',
+      '/_apis/wit/workitems/1',
+      {
+        method: 'PATCH',
+        body: [{ op: 'add', path: '/fields/System.Title', value: 'New' }],
+        contentType: 'application/json-patch+json'
+      }
+    )
+
+    expect(result).toEqual({ id: 1 })
+    expect(calls).toHaveLength(2)
+    expect(calls[0].init.method).toBe('PATCH')
+    expect(calls[0].init.headers).toMatchObject({
+      'Content-Type': 'application/json-patch+json'
+    })
+    expect(calls[1].url).toContain('api-version=7.1-preview')
+    // The retry must still carry the original method and payload, not a bare
+    // GET-shaped follow-up that happens to hit the right URL.
+    expect(calls[1].init.method).toBe('PATCH')
+    expect(calls[1].init.body).toBe(calls[0].init.body)
+    expect(calls[1].init.body).toBe(
+      JSON.stringify([{ op: 'add', path: '/fields/System.Title', value: 'New' }])
+    )
+  })
+})
+
+describe('requestAzureDevOpsResponseAtBase', () => {
+  it('preserves the upstream status instead of collapsing it', async () => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ message: 'gone' }), { status: 404 }))
+    )
+
+    const result = await requestAzureDevOpsResponseAtBase(
+      'https://dev.azure.com/org',
+      '/_apis/wit/workitems/1'
+    )
+
+    expect(result).toEqual({ status: 404, body: { message: 'gone' } })
+  })
+
+  it('returns a 200 body without throwing', async () => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ count: 2 }), { status: 200 }))
+    )
+
+    const result = await requestAzureDevOpsResponseAtBase(
+      'https://dev.azure.com/org',
+      '/_apis/projects'
+    )
+
+    expect(result).toEqual({ status: 200, body: { count: 2 } })
+  })
+})
+
+describe('requestAzureDevOpsResponseAtBase and the preview-version probe', () => {
+  beforeEach(() => {
+    _resetAzureDevOpsPreviewApiVersionCache()
+  })
+  afterEach(() => {
+    globalThis.fetch = OLD_FETCH
+    process.env = OLD_ENV
+  })
+
+  it('hands back a 400 the preview probe rejected, body intact', async () => {
+    // The probe reads the body to look for VssInvalidPreviewVersionException.
+    // Reading the original would leave nothing for the caller, and the Boards
+    // proxy would report an opaque 503 instead of Azure's validation message.
+    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'token' }
+    globalThis.fetch = vi.fn(
+      async (_input: string | URL | Request) =>
+        new Response(
+          JSON.stringify({ typeKey: 'RuleValidationException', message: 'TF51011: no such path' }),
+          { status: 400, headers: { 'content-type': 'application/json' } }
+        )
+    )
+
+    const result = await requestAzureDevOpsResponseAtBase(SERVER_BASE, '/_apis/wit/wiql', {
+      method: 'POST',
+      body: { query: 'SELECT [System.Id] FROM WorkItems' }
+    })
+
+    expect(result.status).toBe(400)
+    expect(result.body).toMatchObject({ message: 'TF51011: no such path' })
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('redirect handling', () => {
+  afterEach(() => {
+    globalThis.fetch = OLD_FETCH
+    process.env = OLD_ENV
+  })
+
+  it('refuses to follow a redirect rather than carrying the credential to an unchecked path', async () => {
+    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'token' }
+    let seen: RequestInit | undefined
+    globalThis.fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      seen = init
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+
+    await requestAzureDevOpsResponseAtBase(SERVER_BASE, '/_apis/wit/workitems')
+
+    expect(seen?.redirect).toBe('error')
   })
 })

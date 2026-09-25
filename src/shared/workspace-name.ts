@@ -3,6 +3,7 @@ import {
   foldWorkspaceNameWhitespaceToHyphen
 } from './workspace-name-text-scanner'
 import { escapeRegex } from './string-utils'
+import type { WorkspaceLinkedItem } from './worktree/types'
 
 function normalizeApostrophes(input: string): string {
   return input.replace(/[‘’]/g, "'")
@@ -47,7 +48,7 @@ export type WorkspaceIntentWorkItem = {
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider?: WorkspaceLinkedItem['provider']
   linearIdentifier?: string
   jiraIdentifier?: string
 }

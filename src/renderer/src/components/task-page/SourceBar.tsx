@@ -13,6 +13,9 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
+import { useAppStore } from '@/store'
+import { usePluginTaskSourceContributions } from '@/store/plugin-task-source-contributions'
+import { TaskPagePluginSourceGroup } from './plugin-source/SourceGroup'
 export function TaskPageSourceBar({
   model
 }: {
@@ -48,6 +51,13 @@ export function TaskPageSourceBar({
     handleLinearTeamSelectionChange,
     handleLinearScopeOpen
   } = model
+  usePluginTaskSourceContributions()
+  const pluginTaskSources = useAppStore((state) => state.pluginTaskSources)
+  const selectedPluginTaskSource = useAppStore((state) => state.selectedPluginTaskSource)
+  const selectPluginTaskSource = useAppStore((state) => state.selectPluginTaskSource)
+  // Picking a contributed source leaves `taskSource` on its last built-in value,
+  // so every built-in reading of it has to yield while one is selected.
+  const builtInSourceSelected = selectedPluginTaskSource === null
   return (
     <div className="flex items-center justify-between gap-2">
       <div
@@ -73,7 +83,7 @@ export function TaskPageSourceBar({
         </Tooltip>
         <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
         {visibleSourceOptions.map((source) => {
-          const active = taskSource === source.id
+          const active = builtInSourceSelected && taskSource === source.id
           const sourceAvailabilityNotice = taskSourceAvailabilityNoticeByProvider[source.id] ?? null
           const sourceDisabled = source.disabled || sourceAvailabilityNotice?.blocking
           return (
@@ -87,6 +97,9 @@ export function TaskPageSourceBar({
                       return
                     }
                     taskSourceManuallyChangedRef.current = true
+                    // Without this the plugin list stays mounted over the
+                    // built-in source the user just picked.
+                    selectPluginTaskSource(null)
                     openTaskPage(
                       {
                         taskSource: source.id
@@ -126,6 +139,11 @@ export function TaskPageSourceBar({
             </Tooltip>
           )
         })}
+        <TaskPagePluginSourceGroup
+          sources={pluginTaskSources}
+          selected={selectedPluginTaskSource}
+          onSelect={selectPluginTaskSource}
+        />
         <div
           className="hidden min-w-0 max-w-[min(420px,40vw)] items-center rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-xs text-muted-foreground sm:flex"
           title={taskSourceContextSummary.title}
@@ -133,7 +151,7 @@ export function TaskPageSourceBar({
           <span className="truncate">{taskSourceContextSummary.label}</span>
         </div>
       </div>
-      {taskSource === 'linear' && linearConnected ? (
+      {builtInSourceSelected && taskSource === 'linear' && linearConnected ? (
         <div className="flex items-center gap-2">
           <LinearScopeSelector
             workspaces={linearWorkspaces}
@@ -191,7 +209,7 @@ export function TaskPageSourceBar({
           </Tooltip>
         </div>
       ) : null}
-      {taskSource === 'jira' && jiraConnected ? (
+      {builtInSourceSelected && taskSource === 'jira' && jiraConnected ? (
         <div className="flex items-center gap-2">
           {jiraSites.length > 1 ? (
             <Select

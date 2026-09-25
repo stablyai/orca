@@ -8,9 +8,12 @@ import {
   type PluginConsentLists
 } from '../../shared/plugins/plugin-consent-state'
 import type { PluginPanelActionOutcome } from '../../shared/plugins/plugin-panel-bridge'
-import { createPluginExtensionRegistry } from '../../shared/plugins/plugin-extension-registry'
 import {
-  discoverPlugins,
+  createPluginExtensionRegistry,
+  PLUGIN_TASK_SOURCE_EXTENSION_POINT,
+  type PluginTaskSourceProxy
+} from '../../shared/plugins/plugin-extension-registry'
+import {
   getPluginsDataDir,
   getUserPluginsDir,
   type DiscoveredPlugin,
@@ -23,15 +26,21 @@ import { PluginContentVerifier } from './plugin-content-integrity'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { PluginPanelController } from './plugin-panel-controller'
 import { PluginWorkerController } from './plugin-worker-controller'
+import { createPluginActivationCoalescer } from './plugin-activation-coalescer'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
-import { collectApprovedWorkerSpecs } from './plugin-worker-reconciliation'
 import type { PluginRunState } from './plugin-supervisor'
-import { isPluginApproved, snapshotPluginConsentLists } from './plugin-activation-policy'
+import { snapshotPluginConsentLists } from './plugin-activation-policy'
+import { PluginActivationReconciliation } from './plugin-activation-reconciliation'
 import { PluginContentPackRegistry } from './plugin-content-pack-registry'
 import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
-import { assertPluginWorkerCommand } from './plugin-command-invocation'
+import {
+  invokePluginWorkerCommand,
+  invokePluginWorkerTaskSource,
+  type PluginWorkerInvocationHost
+} from './plugin-worker-invocation'
+import type { PluginTaskSourceMethod } from '../../shared/plugins/plugin-task-source-contract'
 import { deliverPluginEvent } from './plugin-event-delivery'
 import { PluginInstallationState } from './plugin-installation-state'
 
@@ -45,6 +54,7 @@ export class PluginService {
   private readonly eventBus = new PluginEventBus()
   private readonly audit: PluginAuditLog
   private readonly workerController: PluginWorkerController
+  private readonly reconciliation: PluginActivationReconciliation
   private readonly contentVerifier = new PluginContentVerifier()
   readonly contentPacks: PluginContentPackRegistry
   readonly panels: PluginPanelController
@@ -53,7 +63,6 @@ export class PluginService {
   private runtimeDelegate: PluginRuntimeDelegate | null = null
   private initPromise: Promise<void> | null = null
   private refreshChain: Promise<void> = Promise.resolve()
-  private contentPacksReady = false
   private disposed = false
   private readonly installed = new PluginInstallationState({
     pluginsDir: () => getUserPluginsDir(this.options.userDataPath),
@@ -88,11 +97,27 @@ export class PluginService {
       isCurrentApproved: (plugin) =>
         this.findValidPlugin(plugin.pluginKey) === plugin && this.canStartPluginWork(plugin),
       invokeCommand: (pluginKey, commandId, args) => this.invokeCommand(pluginKey, commandId, args),
+      invokeTaskSource: (pluginKey, sourceId, method, params) =>
+        this.invokeTaskSource(pluginKey, sourceId, method, params),
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: false }),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
       onStateChanged: () => this.notifyChanged(false),
       onWorkerGone: (pluginKey) => this.eventBus.clear(pluginKey)
+    })
+    this.reconciliation = new PluginActivationReconciliation({
+      options,
+      contentVerifier: this.contentVerifier,
+      contentPacks: this.contentPacks,
+      panels: this.panels,
+      workerController: this.workerController,
+      installed: this.installed,
+      housekeeping: this.housekeeping,
+      isDisposed: () => this.disposed,
+      isApproved: (plugin) => this.activationState(plugin) === 'approved',
+      isRuntimeApproved: (plugin) => this.isRuntimeApproved(plugin),
+      notifyChanged: (contentPacksChanged) => this.notifyChanged(contentPacksChanged),
+      requestRefresh: () => void this.refresh()
     })
   }
 
@@ -136,51 +161,12 @@ export class PluginService {
     return refresh
   }
 
-  private async performRefresh(
+  private performRefresh(
     enabled: boolean,
     devPaths: string[],
     consentLists: PluginConsentLists
   ): Promise<void> {
-    if (this.disposed) {
-      return
-    }
-    this.contentPacksReady = false
-    this.contentVerifier.clear()
-    if (!enabled) {
-      this.panels.revokeAll()
-    }
-    const next = enabled
-      ? await discoverPlugins({
-          pluginsDir: getUserPluginsDir(this.options.userDataPath),
-          devPluginPaths: devPaths,
-          hostVersion: this.options.hostVersion
-        })
-      : []
-    if (this.disposed) {
-      return
-    }
-    // Publish identity before shutdown so triggers cannot restart old code.
-    this.installed.discovered = next
-    await this.contentPacks.reconcile(
-      next,
-      (plugin) => isPluginApproved(enabled, plugin, consentLists),
-      this.options.getKeybindings?.()
-    )
-    this.contentPacksReady = true
-    const nextSpecs = collectApprovedWorkerSpecs(next, (plugin) => this.isRuntimeApproved(plugin))
-    // Notify before slow shutdown so feature-off unmounts panels immediately.
-    this.notifyChanged(true)
-    await this.workerController.reconcile(nextSpecs)
-    if (this.disposed) {
-      return
-    }
-    this.housekeeping.sync({
-      enabled,
-      devPaths,
-      reapIdle: () => this.workerController.reapIdle(),
-      refresh: () => void this.refresh()
-    })
-    this.notifyChanged(false)
+    return this.reconciliation.refresh(enabled, devPaths, consentLists)
   }
 
   getDiscovered(): readonly DiscoveredPlugin[] {
@@ -213,7 +199,7 @@ export class PluginService {
 
   private isRuntimeApproved(plugin: ValidDiscoveredPlugin): boolean {
     return (
-      this.contentPacksReady &&
+      this.reconciliation.isContentPacksReady() &&
       this.activationState(plugin) === 'approved' &&
       !this.contentPacks.error(plugin.pluginKey) &&
       !this.options.getPluginKillListEntry?.(plugin.pluginKey)
@@ -268,17 +254,54 @@ export class PluginService {
     })
   }
 
-  async invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
-    const plugin = this.findValidPlugin(pluginKey)
-    if (!plugin || !this.canStartPluginWork(plugin)) {
-      throw new Error(`plugin ${pluginKey} is not enabled`)
+  private readonly workerInvocation: PluginWorkerInvocationHost = {
+    resolveRunnablePlugin: (pluginKey) => {
+      const plugin = this.findValidPlugin(pluginKey)
+      return plugin && this.canStartPluginWork(plugin) ? plugin : null
+    },
+    ensureWorker: (plugin) => this.workerController.ensure(plugin)
+  }
+
+  invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
+    return invokePluginWorkerCommand(this.workerInvocation, { pluginKey, commandId, args })
+  }
+
+  /** The sanctioned entry for a client-facing task source call: the proxy
+   *  validates and scrubs, unlike `invokeTaskSource` below. Null when the
+   *  worker hasn't registered that source (not yet started, or unknown). */
+  resolveTaskSourceProxy(pluginKey: string, sourceId: string): PluginTaskSourceProxy | null {
+    return this.registry.resolve(PLUGIN_TASK_SOURCE_EXTENSION_POINT, pluginKey, sourceId)
+  }
+
+  private readonly taskSourceActivations = createPluginActivationCoalescer(async (pluginKey) => {
+    const plugin = this.workerInvocation.resolveRunnablePlugin(pluginKey)
+    if (plugin) {
+      await this.workerInvocation.ensureWorker(plugin)
     }
-    assertPluginWorkerCommand(plugin, commandId)
-    const handle = await this.workerController.ensure(plugin)
-    if (!handle.commands.includes(commandId)) {
-      throw new Error(`plugin ${pluginKey} registered no handler for ${commandId}`)
-    }
-    return handle.invokeCommand(commandId, args)
+  })
+
+  /** Lazy activation for an idle plugin's first task source call: the same
+   *  ensure() path invokeCommand uses, which is what registers proxies. The
+   *  burst of calls a task surface opens with shares one attempt, so none of
+   *  them re-resolves before that attempt has settled. */
+  activateForTaskSource(pluginKey: string): Promise<void> {
+    return this.taskSourceActivations.activate(pluginKey)
+  }
+
+  /** Unvalidated worker data, unscrubbed rejections. The sanctioned entry
+   *  point is the PLUGIN_TASK_SOURCE_EXTENSION_POINT proxy, not this. */
+  invokeTaskSource(
+    pluginKey: string,
+    sourceId: string,
+    method: PluginTaskSourceMethod,
+    params?: unknown
+  ): Promise<unknown> {
+    return invokePluginWorkerTaskSource(this.workerInvocation, {
+      pluginKey,
+      sourceId,
+      method,
+      params
+    })
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {
@@ -310,24 +333,9 @@ export class PluginService {
   /** Reconciles live workers and client projections after consent or
    * enablement changes without re-reading plugin files or starting workers. */
   async reconcileActivationState(): Promise<void> {
-    const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
+    const reconcile = this.refreshChain.then(() => this.reconciliation.reapplyActivationState())
     this.refreshChain = reconcile.catch(() => undefined)
     return reconcile
-  }
-
-  private async performActivationStateReconciliation(): Promise<void> {
-    this.contentPacksReady = false
-    await this.contentPacks.reconcile(
-      this.installed.discovered,
-      (plugin) => this.activationState(plugin) === 'approved',
-      this.options.getKeybindings?.()
-    )
-    this.contentPacksReady = true
-    const nextSpecs = collectApprovedWorkerSpecs(this.installed.discovered, (plugin) =>
-      this.isRuntimeApproved(plugin)
-    )
-    await this.workerController.reconcile(nextSpecs)
-    this.notifyChanged(true)
   }
 
   async dispose(): Promise<void> {

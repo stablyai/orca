@@ -5,6 +5,7 @@ import {
   type PluginWorkerChildMessage
 } from '../../shared/plugins/plugin-host-protocol'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { PluginTaskSourceMethod } from '../../shared/plugins/plugin-task-source-contract'
 
 /**
  * Message-loop core of the out-of-process plugin worker. Electron-free and
@@ -29,6 +30,14 @@ export type PluginWorkerOrcaApi = {
   /** Call a host API method (capability-gated host-side). */
   host: {
     call(method: string, params?: unknown): Promise<unknown>
+  }
+  /** Register a task source declared in the manifest. Methods are optional;
+   *  an absent method is reported to the host, never silently empty. */
+  taskSources: {
+    register(
+      sourceId: string,
+      implementation: Partial<Record<PluginTaskSourceMethod, (params: unknown) => unknown>>
+    ): void
   }
   /** Consented capability kinds (informational — the host re-gates). */
   grantedCapabilities: readonly string[]
@@ -56,6 +65,10 @@ export function createPluginWorkerRuntime(
   const importModule = options.importModule ?? ((specifier: string) => import(specifier))
   const exit = options.exit ?? ((code: number) => process.exit(code))
   const commandHandlers = new Map<string, (args: unknown) => unknown>()
+  const taskSourceHandlers = new Map<
+    string,
+    Partial<Record<PluginTaskSourceMethod, (params: unknown) => unknown>>
+  >()
   const eventHandlers = new Map<string, ((payload: unknown) => void | Promise<void>)[]>()
   const pendingHostCalls = new Map<
     number,
@@ -102,6 +115,11 @@ export function createPluginWorkerRuntime(
           eventHandlers.set(event, handlers)
         }
       },
+      taskSources: {
+        register(sourceId, implementation) {
+          taskSourceHandlers.set(sourceId, implementation)
+        }
+      },
       host: {
         call(method, params) {
           const callId = nextHostCallId++
@@ -117,7 +135,11 @@ export function createPluginWorkerRuntime(
       }
     }
     await activate(orca)
-    send({ type: 'ready', commands: [...commandHandlers.keys()] })
+    send({
+      type: 'ready',
+      commands: [...commandHandlers.keys()],
+      taskSources: [...taskSourceHandlers.keys()]
+    })
   }
 
   return {
@@ -151,6 +173,31 @@ export function createPluginWorkerRuntime(
             } catch (error) {
               send({
                 type: 'commandResult',
+                callId: message.callId,
+                ok: false,
+                error: toErrorMessage(error)
+              })
+            }
+            return
+          }
+          case 'invokeTaskSource': {
+            const implementation = taskSourceHandlers.get(message.sourceId)
+            const handler = implementation?.[message.method]
+            if (!handler) {
+              send({
+                type: 'taskSourceResult',
+                callId: message.callId,
+                ok: false,
+                error: `task source ${message.sourceId} does not implement ${message.method}`
+              })
+              return
+            }
+            try {
+              const value = await handler(message.params)
+              send({ type: 'taskSourceResult', callId: message.callId, ok: true, value })
+            } catch (error) {
+              send({
+                type: 'taskSourceResult',
                 callId: message.callId,
                 ok: false,
                 error: toErrorMessage(error)

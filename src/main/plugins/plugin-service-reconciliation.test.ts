@@ -46,7 +46,9 @@ async function pluginRoot(pluginManifest = manifest()): Promise<string> {
 function testWorker(): PluginWorkerHandle & { dispose: ReturnType<typeof vi.fn> } {
   return {
     commands: ['run'],
+    taskSources: [],
     invokeCommand: vi.fn(async () => null),
+    invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
     lastActivityAt: () => Date.now(),
     inFlightCount: () => 0,

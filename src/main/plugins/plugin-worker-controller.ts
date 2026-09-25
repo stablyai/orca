@@ -3,8 +3,14 @@ import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 import type { PluginPanelActionOutcome } from '../../shared/plugins/plugin-panel-bridge'
 import {
   PLUGIN_COMMAND_EXTENSION_POINT,
+  PLUGIN_TASK_SOURCE_EXTENSION_POINT,
   type PluginExtensionRegistry
 } from '../../shared/plugins/plugin-extension-registry'
+import {
+  PLUGIN_TASK_SOURCE_RESULT_SCHEMAS,
+  type PluginTaskSourceMethod
+} from '../../shared/plugins/plugin-task-source-contract'
+import { invokePluginTaskSourceMethod } from './plugin-task-source-invoker'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { resolveContainedPluginArtifact } from './plugin-artifact-validation'
 import type { PluginContentVerifier } from './plugin-content-integrity'
@@ -27,6 +33,12 @@ export type PluginWorkerControllerOptions = {
   capabilities: (pluginKey: string) => readonly PluginCapabilityKind[] | null
   isCurrentApproved: (plugin: ValidDiscoveredPlugin) => boolean
   invokeCommand: (pluginKey: string, commandId: string, args: unknown) => Promise<unknown>
+  invokeTaskSource: (
+    pluginKey: string,
+    sourceId: string,
+    method: PluginTaskSourceMethod,
+    params: unknown
+  ) => Promise<unknown>
   executeHostCall: (
     pluginKey: string,
     method: string,
@@ -97,8 +109,20 @@ export class PluginWorkerController {
           `plugin ${plugin.pluginKey} registered undeclared command ${undeclaredCommand}`
         )
       }
+      const declaredTaskSources = new Set(
+        plugin.manifest.contributes.taskSources.map((source) => source.id)
+      )
+      const undeclaredTaskSource = handle.taskSources.find(
+        (source) => !declaredTaskSources.has(source)
+      )
+      if (undeclaredTaskSource) {
+        await this.manager.deactivate(plugin.pluginKey)
+        throw new Error(
+          `plugin ${plugin.pluginKey} registered undeclared task source ${undeclaredTaskSource}`
+        )
+      }
       this.activationErrors.delete(plugin.pluginKey)
-      this.registerCommands(plugin, spec, handle.commands)
+      this.registerContributions(plugin, spec, handle)
       return handle
     } catch (error) {
       this.activationErrors.set(
@@ -149,13 +173,13 @@ export class PluginWorkerController {
     return this.manager.disposeAll()
   }
 
-  private registerCommands(
+  private registerContributions(
     plugin: ValidDiscoveredPlugin,
     spec: PluginWorkerSpawnSpec,
-    commands: readonly string[]
+    handle: PluginWorkerHandle
   ): void {
     this.options.registry.clearPlugin(plugin.pluginKey)
-    for (const commandId of commands) {
+    for (const commandId of handle.commands) {
       this.options.registry.register(
         PLUGIN_COMMAND_EXTENSION_POINT,
         plugin.pluginKey,
@@ -164,6 +188,33 @@ export class PluginWorkerController {
           invoke: (args) => this.options.invokeCommand(plugin.pluginKey, commandId, args)
         },
         commandId
+      )
+    }
+    for (const sourceId of handle.taskSources) {
+      this.options.registry.register(
+        PLUGIN_TASK_SOURCE_EXTENSION_POINT,
+        plugin.pluginKey,
+        {
+          sourceId,
+          // Never the raw worker value: the host owns validation and scrubbing
+          // so no consumer of the extension point has to repeat them.
+          call: (method, params) =>
+            invokePluginTaskSourceMethod({
+              callWorker: (request) =>
+                this.options.invokeTaskSource(
+                  request.pluginKey,
+                  request.sourceId,
+                  request.method,
+                  request.params
+                ),
+              pluginKey: plugin.pluginKey,
+              sourceId,
+              method,
+              params,
+              resultSchema: PLUGIN_TASK_SOURCE_RESULT_SCHEMAS[method]
+            })
+        },
+        sourceId
       )
     }
     this.registeredSpecs.set(plugin.pluginKey, spec)

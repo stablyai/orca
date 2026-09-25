@@ -17,6 +17,7 @@ import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
 import { createPreflightSlice } from './preflight'
 import { createJiraSlice } from './jira'
+import { createPluginTaskSourcesSlice } from './plugin-task-sources'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
@@ -105,7 +106,8 @@ export function createTestStore() {
     ...createNewIssueDraftSlice(...a),
     ...createTaskCreationDraftsSlice(...a),
     ...createRemoteServerUpdatesSlice(...a),
-    ...createTerminalQuickCommandHostsSlice(...a)
+    ...createTerminalQuickCommandHostsSlice(...a),
+    ...createPluginTaskSourcesSlice(...a)
   }))
 }
 

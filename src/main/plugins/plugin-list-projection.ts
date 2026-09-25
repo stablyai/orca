@@ -3,7 +3,7 @@ import {
   type PluginCapabilityKind
 } from '../../shared/plugins/plugin-capabilities'
 import { needsReconsent } from '../../shared/plugins/plugin-consent-state'
-import { pluginPanelTabKey } from '../../shared/plugins/plugin-manifest'
+import { pluginPanelTabKey, type PluginManifest } from '../../shared/plugins/plugin-manifest'
 import type { PluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
 import { isInvalidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginService } from './plugin-service'
@@ -15,6 +15,12 @@ import {
   isOfficialPluginIdentity
 } from '../../shared/plugins/plugin-marketplace'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import { readContainedPluginArtifactText } from './plugin-artifact-validation'
+import {
+  buildPluginTaskSourceIconDataUrl,
+  classifyPluginTaskSourceIcon,
+  PLUGIN_TASK_SOURCE_ICON_MAX_BYTES
+} from '../../shared/plugins/plugin-task-source-icon'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
 
@@ -30,6 +36,15 @@ export type PluginListPanelEntry = {
   title: string
   icon?: string
   tabKey: `plugin:${string}`
+}
+
+export type PluginListTaskSourceEntry = {
+  id: string
+  title: string
+  /** As declared: a Lucide token, or the plugin-relative `.svg` path. */
+  icon?: string
+  /** Present only for an asset icon the host read and accepted. */
+  iconDataUrl?: string
 }
 
 export type PluginListStatus =
@@ -57,6 +72,7 @@ export type PluginListEntry = {
   bundled: boolean
   capabilities: { kind: PluginCapabilityKind; description: string }[]
   panels: PluginListPanelEntry[]
+  taskSources: PluginListTaskSourceEntry[]
   commands: {
     id: string
     title: string
@@ -80,6 +96,48 @@ export type PluginListEntry = {
     contentHash: string
     marketplace?: { reference: string; resolvedCommit: string }
   }
+}
+
+/** A plugin's own icon file is read on every listing, so a bad one degrades to
+ *  no icon: one plugin's broken SVG must never blank the whole source bar. */
+async function resolveTaskSourceIconDataUrl(
+  rootDir: string,
+  icon: string
+): Promise<string | undefined> {
+  const ref = classifyPluginTaskSourceIcon(icon)
+  if (ref.kind !== 'asset') {
+    return undefined
+  }
+  try {
+    const svg = await readContainedPluginArtifactText(
+      rootDir,
+      ref.path,
+      PLUGIN_TASK_SOURCE_ICON_MAX_BYTES
+    )
+    const resolved = buildPluginTaskSourceIconDataUrl(svg)
+    return resolved.ok ? resolved.dataUrl : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function projectTaskSources(
+  rootDir: string,
+  sources: PluginManifest['contributes']['taskSources']
+): Promise<PluginListTaskSourceEntry[]> {
+  return Promise.all(
+    sources.map(async (source) => {
+      const iconDataUrl = source.icon
+        ? await resolveTaskSourceIconDataUrl(rootDir, source.icon)
+        : undefined
+      return {
+        id: source.id,
+        title: source.title,
+        ...(source.icon ? { icon: source.icon } : {}),
+        ...(iconDataUrl ? { iconDataUrl } : {})
+      }
+    })
+  )
 }
 
 export async function buildPluginList(
@@ -112,6 +170,7 @@ export async function buildPluginList(
           bundled: false,
           capabilities: [],
           panels: [],
+          taskSources: [],
           commands: [],
           hasWorker: false,
           vmRecipes: [],
@@ -177,6 +236,10 @@ export async function buildPluginList(
           ...(panel.icon ? { icon: panel.icon } : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
+        taskSources: await projectTaskSources(
+          plugin.rootDir,
+          plugin.manifest.contributes.taskSources
+        ),
         commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
           id: command.id,
           title: command.title,

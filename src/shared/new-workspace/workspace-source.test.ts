@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
+  buildPluginWorkspaceSource,
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
   getWorkspaceSourceProvider,
@@ -102,6 +105,48 @@ describe('workspace source policy', () => {
     ).toBe(false)
     // Why: a null source (branch-only) has nothing to preserve; callers guard on this.
     expect(shouldPreserveWorkspaceSourceOnRepoChange(null)).toBe(false)
+  })
+
+  it('gives a contributed item its own selection kind instead of a GitHub issue', () => {
+    const contributed = buildPluginWorkspaceSource({
+      key: 'AB-41',
+      title: 'Ship the detail panel',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
+      pluginKey: 'nssf.azure-boards',
+      sourceId: 'boards'
+    })
+    expect(contributed).toEqual({
+      provider: 'plugin',
+      type: 'issue',
+      number: 0,
+      title: 'AB-41 Ship the detail panel',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
+      pluginKey: 'nssf.azure-boards',
+      sourceId: 'boards'
+    })
+    // The identity travels with the selection: the composer resolves the
+    // contributing plugin's own icon from it.
+    expect(buildWorkspaceSourceSelection({ linkedWorkItem: contributed })).toEqual({
+      kind: 'plugin',
+      label: 'AB-41 Ship the detail panel',
+      url: 'https://dev.azure.com/contoso/proj/_workitems/edit/41',
+      pluginKey: 'nssf.azure-boards',
+      sourceId: 'boards'
+    })
+    expect(getWorkspaceSourceName(contributed)).toEqual({
+      seedName: 'ab-41-ship-the-detail-panel',
+      displayName: 'AB-41 Ship the detail panel'
+    })
+    // A contributed source is account-backed, so the repo picker must not clear it.
+    expect(shouldPreserveWorkspaceSourceOnRepoChange(contributed)).toBe(true)
+  })
+
+  it('resolves the selection kind by an exhaustive switch, never a default arm', () => {
+    // A `default` would compile against a new provider and then render it as
+    // whatever arm the fallback names. The switch is the safety net.
+    const source = readFileSync(join(__dirname, 'workspace-source.ts'), 'utf8')
+    const resolver = source.slice(source.indexOf('function getWorkspaceSourceSelectionKind'))
+    expect(resolver.slice(0, resolver.indexOf('\n}'))).not.toContain('default:')
   })
 
   it('shares provider inference, selection labels, and auto-name gates', () => {

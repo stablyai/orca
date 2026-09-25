@@ -1,3 +1,4 @@
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -220,5 +221,126 @@ describe('buildPluginList consent identity', () => {
         keybindings: [{ key: 'Mod+Alt+T', when: 'worktree' }]
       }
     ])
+  })
+
+  it('projects a contributed task source with its title and icon', async () => {
+    const taskSourceManifest = pluginManifestSchema.parse({
+      ...manifest,
+      main: 'dist/worker.js',
+      contributes: {
+        taskSources: [{ id: 'issues', title: 'Issues', icon: 'ticket' }]
+      }
+    })
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'demo'),
+      manifest: taskSourceManifest,
+      consentFingerprint: 'sha256-current',
+      contentHash: null,
+      isDev: true
+    }
+
+    expect(
+      (
+        await buildPluginList(
+          serviceWith(plugin, { activation: 'approved' }),
+          emptyPluginLockfile()
+        )
+      )[0]?.taskSources
+    ).toEqual([{ id: 'issues', title: 'Issues', icon: 'ticket' }])
+  })
+})
+
+describe('buildPluginList task source icons', () => {
+  function iconManifest(icon: string): typeof manifest {
+    return pluginManifestSchema.parse({
+      manifestVersion: 1,
+      id: 'demo',
+      publisher: 'orca-samples',
+      name: 'Demo',
+      version: '1.0.0',
+      engines: { orca: '>=1.0.0' },
+      pluginApi: 1,
+      main: 'main.mjs',
+      contributes: {
+        panels: [],
+        commands: [],
+        events: [],
+        taskSources: [{ id: 'boards', title: 'Boards', icon }]
+      },
+      capabilities: [{ kind: 'workspace:read' }]
+    })
+  }
+
+  async function pluginRoot(files: Record<string, string>): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-plugin-icon-'))
+    await writeFile(join(dir, 'main.mjs'), 'export default {}')
+    for (const [name, contents] of Object.entries(files)) {
+      await writeFile(join(dir, name), contents)
+    }
+    return dir
+  }
+
+  function discovered(
+    pluginKey: string,
+    rootDir: string,
+    pluginManifest: typeof manifest
+  ): ValidDiscoveredPlugin {
+    return {
+      pluginKey,
+      rootDir,
+      manifest: pluginManifest,
+      consentFingerprint: 'sha256-current',
+      contentHash: null,
+      isDev: true
+    }
+  }
+
+  it('projects an accepted icon as a base64 data URL', async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1H0z"/></svg>'
+    const rootDir = await pluginRoot({ 'boards.svg': svg })
+    const plugin = discovered('orca-samples.demo', rootDir, iconManifest('./boards.svg'))
+
+    const [entry] = await buildPluginList(serviceWith(plugin), emptyPluginLockfile())
+
+    expect(entry?.taskSources[0]).toEqual({
+      id: 'boards',
+      title: 'Boards',
+      icon: 'boards.svg',
+      iconDataUrl: `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`
+    })
+  })
+
+  it('degrades a missing icon file to no icon instead of failing the listing', async () => {
+    const rootDir = await pluginRoot({})
+    const plugin = discovered('orca-samples.demo', rootDir, iconManifest('boards.svg'))
+
+    const [entry] = await buildPluginList(serviceWith(plugin), emptyPluginLockfile())
+
+    expect(entry?.taskSources[0]).toEqual({ id: 'boards', title: 'Boards', icon: 'boards.svg' })
+  })
+
+  it('degrades a rejected icon without disturbing the other plugins in the listing', async () => {
+    const hostileRoot = await pluginRoot({
+      'boards.svg': '<svg xmlns="http://www.w3.org/2000/svg" onload="fetch(1)"/>'
+    })
+    const cleanSvg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1H0z"/></svg>'
+    const cleanRoot = await pluginRoot({ 'boards.svg': cleanSvg })
+    const hostile = discovered('orca-samples.hostile', hostileRoot, iconManifest('boards.svg'))
+    const clean = discovered('orca-samples.clean', cleanRoot, iconManifest('boards.svg'))
+    const service = Object.assign(serviceWith(hostile), {
+      getDiscovered: () => [hostile, clean]
+    })
+
+    const entries = await buildPluginList(service, emptyPluginLockfile())
+
+    expect(entries[0]?.taskSources[0]).toEqual({
+      id: 'boards',
+      title: 'Boards',
+      icon: 'boards.svg'
+    })
+    expect(entries[1]?.taskSources[0]?.iconDataUrl).toBe(
+      `data:image/svg+xml;base64,${Buffer.from(cleanSvg, 'utf8').toString('base64')}`
+    )
   })
 })

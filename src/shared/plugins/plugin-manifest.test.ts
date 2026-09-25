@@ -88,3 +88,87 @@ describe('pluginManifestSchema boundaries', () => {
     ).toBe(false)
   })
 })
+
+describe('taskSources contribution', () => {
+  it('accepts a task source when the plugin has a worker entry', () => {
+    const result = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [{ id: 'azure-boards', title: 'Azure Boards', icon: 'kanban' }]
+        }
+      })
+    )
+
+    expect(result).toMatchObject({ ok: true })
+  })
+
+  it('rejects duplicate task source ids', () => {
+    const result = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [
+            { id: 'boards', title: 'One' },
+            { id: 'boards', title: 'Two' }
+          ]
+        }
+      })
+    )
+
+    expect(result.ok).toBe(false)
+  })
+
+  it('rejects a task source without a worker entry', () => {
+    const result = parsePluginManifest(
+      manifest({
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [{ id: 'boards', title: 'Boards' }]
+        }
+      })
+    )
+
+    expect(result.ok).toBe(false)
+  })
+})
+
+describe('task source icon declarations', () => {
+  function withIcon(icon: string): ReturnType<typeof parsePluginManifest> {
+    return parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: {
+          panels: [],
+          commands: [],
+          events: [],
+          taskSources: [{ id: 'boards', title: 'Boards', icon }]
+        }
+      })
+    )
+  }
+
+  it('accepts a bare Lucide token', () => {
+    expect(withIcon('kanban').ok).toBe(true)
+  })
+
+  it('accepts a plugin-relative svg path', () => {
+    expect(withIcon('./azure-boards.svg').ok).toBe(true)
+  })
+
+  it('rejects an svg path that escapes the plugin directory', () => {
+    expect(withIcon('../escape.svg').ok).toBe(false)
+  })
+
+  it('rejects an absolute svg path', () => {
+    expect(withIcon('/etc/escape.svg').ok).toBe(false)
+  })
+})

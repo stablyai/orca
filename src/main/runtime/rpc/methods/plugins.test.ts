@@ -72,3 +72,69 @@ describe('plugin panel serve RPC identity', () => {
     })
   })
 })
+
+describe('plugins.invokeTaskSource RPC', () => {
+  it('rejects an unknown method with a validation envelope and never resolves a proxy', async () => {
+    const resolveTaskSourceProxy = vi.fn()
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy,
+      activateForTaskSource
+    } as unknown as PluginService
+    setPluginServiceForRpc(service)
+
+    await expect(
+      method('plugins.invokeTaskSource').handler(
+        { pluginKey: 'acme.boards', sourceId: 'azure-boards', method: 'deleteEverything' },
+        context()
+      )
+    ).resolves.toMatchObject({ ok: false, code: 'validation' })
+    expect(resolveTaskSourceProxy).not.toHaveBeenCalled()
+    expect(activateForTaskSource).not.toHaveBeenCalled()
+  })
+
+  it('returns the extension-point proxy envelope unchanged for a valid call without activating', async () => {
+    const call = vi.fn().mockResolvedValue({ ok: true, data: { items: [], nextCursor: null } })
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy: vi.fn().mockReturnValue({ sourceId: 'azure-boards', call }),
+      activateForTaskSource
+    } as unknown as PluginService
+    setPluginServiceForRpc(service)
+
+    await expect(
+      method('plugins.invokeTaskSource').handler(
+        {
+          pluginKey: 'acme.boards',
+          sourceId: 'azure-boards',
+          method: 'listItems',
+          params: { scopeIds: [], search: null, cursor: null, limit: 50 }
+        },
+        context()
+      )
+    ).resolves.toEqual({ ok: true, data: { items: [], nextCursor: null } })
+    expect(activateForTaskSource).not.toHaveBeenCalled()
+  })
+
+  it('activates an idle plugin once and reports unavailable when the source still has no proxy', async () => {
+    const resolveTaskSourceProxy = vi.fn().mockReturnValue(null)
+    const activateForTaskSource = vi.fn().mockResolvedValue(undefined)
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      resolveTaskSourceProxy,
+      activateForTaskSource
+    } as unknown as PluginService
+    setPluginServiceForRpc(service)
+
+    await expect(
+      method('plugins.invokeTaskSource').handler(
+        { pluginKey: 'acme.boards', sourceId: 'missing-source', method: 'status' },
+        context()
+      )
+    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
+    expect(activateForTaskSource).toHaveBeenCalledWith('acme.boards')
+    expect(resolveTaskSourceProxy).toHaveBeenCalledTimes(2)
+  })
+})

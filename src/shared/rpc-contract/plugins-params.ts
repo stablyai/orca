@@ -17,4 +17,14 @@ export const PluginInvokeCommandParams = z.object({
   args: z.unknown().optional()
 })
 
+// Why: `method` is checked against PLUGIN_TASK_SOURCE_METHODS by the handler,
+// not here — an unknown value must produce a `validation` envelope in the
+// reply, not a schema-parse rejection at the transport boundary.
+export const PluginInvokeTaskSourceParams = z.object({
+  pluginKey: z.string().min(1),
+  sourceId: z.string().min(1),
+  method: z.string().min(1).max(64),
+  params: z.unknown().optional()
+})
+
 export const PluginsPanelActionParams = z.unknown()

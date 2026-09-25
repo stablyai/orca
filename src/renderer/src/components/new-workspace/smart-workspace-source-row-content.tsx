@@ -5,10 +5,13 @@ import {
   GitBranch,
   GitBranchPlus,
   GitMerge,
-  GitPullRequest
+  GitPullRequest,
+  Puzzle
 } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { PluginTaskSourceAssetIcon } from '@/components/plugin-task-source-icon'
+import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { JiraSite } from '../../../../shared/jira-types'
@@ -59,26 +62,45 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
 }
 
 export function SelectionIcon({
-  kind
+  selection
 }: {
-  kind: SmartWorkspaceNameSelection['kind']
+  selection: SmartWorkspaceNameSelection
 }): React.JSX.Element {
-  if (kind === 'github-pr') {
-    return <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
+  const contributedSources = useAppStore((state) => state.pluginTaskSources)
+  // No `default`: a new source kind must fail to compile rather than borrow
+  // Linear's logo.
+  switch (selection.kind) {
+    case 'github-pr':
+      return <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
+    case 'gitlab-mr':
+      return <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
+    case 'github-issue':
+    case 'gitlab-issue':
+      return <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
+    case 'branch':
+      return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
+    case 'jira':
+      return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
+    case 'plugin': {
+      // Falls back to the generic glyph when the plugin is gone or shipped no
+      // icon: a selection outlives the source it came from.
+      const source = contributedSources.find(
+        (candidate) =>
+          candidate.pluginKey === selection.pluginKey &&
+          candidate.sourceId === selection.sourceId
+      )
+      return source?.iconDataUrl ? (
+        <PluginTaskSourceAssetIcon
+          dataUrl={source.iconDataUrl}
+          className="text-muted-foreground"
+        />
+      ) : (
+        <Puzzle className="size-3.5 shrink-0 text-muted-foreground" />
+      )
+    }
+    case 'linear':
+      return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  if (kind === 'gitlab-mr') {
-    return <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
-  }
-  if (kind === 'github-issue' || kind === 'gitlab-issue') {
-    return <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
-  }
-  if (kind === 'branch') {
-    return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-  }
-  if (kind === 'jira') {
-    return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
-  }
-  return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
 export function RowLabel({

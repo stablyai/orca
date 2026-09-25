@@ -15,7 +15,9 @@ function worker(lastActivity = Date.now()): TestWorker {
   const exitCallbacks: ((code: number | null) => void)[] = []
   return {
     commands: ['run'],
+    taskSources: [],
     invokeCommand: vi.fn(async () => null),
+    invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
     lastActivityAt: () => lastActivity,
     inFlightCount: () => 0,

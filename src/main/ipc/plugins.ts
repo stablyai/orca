@@ -16,6 +16,7 @@ import {
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import type { PluginService } from '../plugins/plugin-service'
 import { bindPluginPanelOwnerLifecycle } from '../plugins/plugin-panel-owner-lifecycle'
+import { invokeContributedTaskSource } from '../plugins/plugin-task-source-invoker'
 import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import { pluginConsentRequestSchema } from '../../shared/plugins/plugin-consent-request'
 import { normalizePluginIdList } from '../../shared/plugins/plugin-consent-state'
@@ -46,6 +47,16 @@ const invokeCommandArgsSchema = z.object({
   pluginKey: z.string().min(1),
   commandId: z.string().min(1),
   args: z.unknown().optional()
+})
+
+// Why: `method` is checked against PLUGIN_TASK_SOURCE_METHODS by the handler,
+// not here — an unknown value must produce a `validation` envelope in the
+// reply, not a schema-parse rejection at the transport boundary.
+const invokeTaskSourceArgsSchema = z.object({
+  pluginKey: z.string().min(1),
+  sourceId: z.string().min(1),
+  method: z.string().min(1).max(64),
+  params: z.unknown().optional()
 })
 
 const installArgsSchema = z.discriminatedUnion('kind', [
@@ -177,6 +188,21 @@ export function registerPluginHandlers(
     await pluginService.whenReady()
     const parsed = invokeCommandArgsSchema.parse(args)
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args)
+  })
+
+  // Why: resolves the PLUGIN_TASK_SOURCE_EXTENSION_POINT proxy, never
+  // pluginService.invokeTaskSource — see that method's doc comment.
+  ipcMain.handle('plugins:invokeTaskSource', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    const parsed = invokeTaskSourceArgsSchema.parse(args)
+    return invokeContributedTaskSource({
+      resolveProxy: (pluginKey, sourceId) => pluginService.resolveTaskSourceProxy(pluginKey, sourceId),
+      activate: (pluginKey) => pluginService.activateForTaskSource(pluginKey),
+      pluginKey: parsed.pluginKey,
+      sourceId: parsed.sourceId,
+      method: parsed.method,
+      params: parsed.params
+    })
   })
 
   ipcMain.handle('plugins:install', async (_event, args: unknown) => {

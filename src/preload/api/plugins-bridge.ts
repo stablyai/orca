@@ -26,6 +26,8 @@ export const pluginsApi = {
   }): Promise<PluginPanelEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
   invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
     ipcRenderer.invoke('plugins:invokeCommand', args),
+  invokeTaskSource: (args: { pluginKey: string; sourceId: string; method: string; params?: unknown }) =>
+    ipcRenderer.invoke('plugins:invokeTaskSource', args),
   panelAction: (args: {
     sessionToken: string
     action: string

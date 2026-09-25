@@ -568,6 +568,18 @@
             }
           }
         }
+      },
+      "plugin": {
+        "linked": {
+          "item": {
+            "host": {
+              "support": {
+                "droppedTitle": "Linked item left off this workspace",
+                "droppedDescription": "This remote Orca server is too old to store links from installed plugins. Update the server to keep them."
+              }
+            }
+          }
+        }
       }
     },
     "lib": {
@@ -2332,7 +2344,52 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "pluginTaskSourceEmpty": "No tasks found",
+        "pluginTaskSourceEmptyHint": "This source returned no items.",
+        "pluginTaskSourceUnassigned": "Unassigned",
+        "pluginTaskSourceOpen": "Open {{value0}}",
+        "pluginTaskSourceRefresh": "Refresh",
+        "pluginTaskSourceFilters": "Filters",
+        "pluginTaskSourceSearch": "Search tasks...",
+        "pluginTaskSourceScopes": "Projects",
+        "pluginTaskSourceAllScopes": "All projects",
+        "pluginTaskSourceScopeCount": "{{value0}} projects",
+        "pluginTaskSourceScopeSearch": "Search projects...",
+        "pluginTaskSourceScopesNoMatch": "No projects match your search.",
+        "pluginTaskSourceScopesLoading": "Loading projects...",
+        "pluginTaskSourceScopesFailed": "Projects unavailable",
+        "pluginTaskSourceFacetOne": "{{value0}}: {{value1}}",
+        "pluginTaskSourceFacetMany": "{{value0}}: {{value1}} selected",
+        "pluginTaskSourceFacetOptionSearch": "Search options...",
+        "pluginTaskSourceFacetNoMatch": "No options match your search.",
+        "pluginTaskSourceFacetEmpty": "No options for this selection.",
+        "pluginTaskSourceFacetLoading": "Loading...",
+        "pluginTaskSourceFacetFailed": "{{value0}} unavailable",
+        "pluginTaskSourceFacetClear": "Clear",
+        "pluginTaskSourceFacetsClearAll": "Clear all",
+        "pluginTaskSourceDetailTitle": "Task details",
+        "pluginTaskSourceDetailHint": "Read the selected task, its description and its comments.",
+        "pluginTaskSourceDetailClose": "Close task details",
+        "pluginTaskSourceDescription": "Description",
+        "pluginTaskSourceNoDescription": "No description provided.",
+        "pluginTaskSourceNoPriority": "No priority",
+        "pluginTaskSourceComments": "Comments",
+        "pluginTaskSourceNoComments": "No comments yet.",
+        "pluginTaskSourceOpenIn": "Open in {{value0}}",
+        "pluginTaskSourceCopyUrl": "Copy URL",
+        "pluginTaskSourceCopyKey": "Copy key",
+        "pluginTaskSourceCopyUrlLabel": "URL",
+        "pluginTaskSourceCopyKeyLabel": "Key",
+        "pluginTaskSourceCopied": "{{value0}} copied",
+        "pluginTaskSourceCopyFailed": "Failed to copy {{value0}}",
+        "pluginTaskSourceCommentPlaceholder": "Add a comment...",
+        "pluginTaskSourceCommentDraft": "Comment body",
+        "pluginTaskSourceCommentSubmit": "Comment",
+        "pluginTaskSourceReply": "Reply",
+        "pluginTaskSourceReplyTo": "Reply to {{value0}}",
+        "pluginTaskSourceReplyAttribution": "{{value0}} wrote:",
+        "pluginTaskSourceCommentPostedWhileErrored": "Your comment was posted. The rest of the list is still unavailable."
       },
       "Terminal": {
         "73768427cf": "Close",

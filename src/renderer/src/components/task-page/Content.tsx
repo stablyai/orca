@@ -6,6 +6,8 @@ import { TaskPageGitHubList } from './github/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
+import { TaskPagePluginSourceContent } from './plugin-source/Content'
+import { useAppStore } from '@/store'
 export function TaskPageContent({
   model
 }: {
@@ -25,7 +27,12 @@ export function TaskPageContent({
     closeTaskDetailPage,
     handleUseWorkItem
   } = model
-  return taskSource === 'github' && dialogWorkItem ? (
+  const selectedPluginTaskSource = useAppStore((state) => state.selectedPluginTaskSource)
+  // Must precede the taskSource chain: that chain's bare `else` returns Jira,
+  // so anything placed after it is unreachable.
+  return selectedPluginTaskSource ? (
+    <TaskPagePluginSourceContent />
+  ) : taskSource === 'github' && dialogWorkItem ? (
     dialogWorkItem.type === 'pr' ? (
       <PullRequestPage
         workItem={dialogWorkItem}

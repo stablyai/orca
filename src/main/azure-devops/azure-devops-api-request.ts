@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import {
+  getConfiguredAzureDevOpsApiBaseUrls,
+  normalizeAzureDevOpsApiBaseUrl
+} from './azure-devops-organization-base-urls'
 
 const REQUEST_TIMEOUT_MS = 5000
 const DEFAULT_API_VERSION = '7.1'
@@ -50,6 +54,10 @@ type AzureDevOpsAuthConfig = {
 export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  method?: 'GET' | 'POST' | 'PATCH'
+  body?: unknown
+  /** Azure DevOps needs `application/json-patch+json` for work item updates. */
+  contentType?: string
 }
 
 function envValue(name: string): string | null {
@@ -57,16 +65,12 @@ function envValue(name: string): string | null {
   return value.length > 0 ? value : null
 }
 
-export function normalizeAzureDevOpsApiBaseUrl(value: string): string {
-  return value
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/\/_apis$/i, '')
-}
-
 export function getAzureDevOpsAuthConfig(): AzureDevOpsAuthConfig {
   return {
-    apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
+    // One base URL, never the raw list: every caller of this config addresses a
+    // single origin. Selecting among the rest goes through
+    // resolveAzureDevOpsApiBaseUrl.
+    apiBaseUrl: getConfiguredAzureDevOpsApiBaseUrls()[0] ?? null,
     pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
     accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
     username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
@@ -130,7 +134,14 @@ function apiUrl(
   return url
 }
 
-// Reads the body only for a 400 on a non-preview request; consumed either way.
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+// Reads the body only for a 400 on a non-preview request, and only from a
+// clone: a 400 that is not a preview rejection is still handed to the caller,
+// which reads it for Azure's own validation message. Cloning here rather than
+// at the call site keeps the unread-clone case from existing at all.
 async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): Promise<boolean> {
   if (response.ok || response.status !== 400) {
     return false
@@ -139,11 +150,44 @@ async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): P
     return false
   }
   try {
-    const body = (await response.json()) as { typeKey?: string | null } | null
-    return body?.typeKey === 'VssInvalidPreviewVersionException'
+    const body: unknown = await response.clone().json()
+    return isRecord(body) && body.typeKey === 'VssInvalidPreviewVersionException'
   } catch {
     return false
   }
+}
+
+async function fetchWithApiVersionRetry(
+  baseUrl: string,
+  path: string,
+  options: AzureDevOpsRequestOptions
+): Promise<Response> {
+  const config = getAzureDevOpsAuthConfig()
+  const method = options.method ?? 'GET'
+  const hasBody = options.body !== undefined
+  const doFetch = (url: URL): Promise<Response> =>
+    fetch(url, {
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(hasBody ? { 'Content-Type': options.contentType ?? 'application/json' } : {}),
+        ...authHeaders(config)
+      },
+      ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+      // A same-origin redirect would carry this request, credential and all, to
+      // a path the Boards proxy policy already checked and no longer governs.
+      redirect: 'error',
+      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
+    })
+  const url = apiUrl(baseUrl, path, options.searchParams)
+  const response = await doFetch(url)
+  if (await shouldRetryWithPreviewApiVersion(url, response)) {
+    // The retry replaces this response, so its body is never read.
+    await cancelUnreadResponseBody(response)
+    markAzureDevOpsPreviewApiVersionOrigin(url.origin)
+    return doFetch(apiUrl(baseUrl, path, options.searchParams))
+  }
+  return response
 }
 
 export async function requestAzureDevOpsJsonAtBase<T>(
@@ -155,22 +199,8 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // throws instead of collapsing to null so callers never report false not_found.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
-  const doFetch = (url: URL): Promise<Response> =>
-    fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        ...authHeaders(config)
-      },
-      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
-    })
   try {
-    const url = apiUrl(baseUrl, path, options.searchParams)
-    let response = await doFetch(url)
-    if (await shouldRetryWithPreviewApiVersion(url, response)) {
-      markAzureDevOpsPreviewApiVersionOrigin(url.origin)
-      response = await doFetch(apiUrl(baseUrl, path, options.searchParams))
-    }
+    const response = await fetchWithApiVersionRetry(baseUrl, path, options)
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
       if (throwOnFailure) {
@@ -184,6 +214,33 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       throw error
     }
     return null
+  }
+}
+
+export type AzureDevOpsResponse = { status: number; body: unknown }
+
+/**
+ * Status-preserving variant. `requestAzureDevOpsJsonAtBase` collapses every
+ * failure to null or a generic Error, which loses the distinction between a
+ * missing work item, an expired token, and a throttle. The Boards proxy needs
+ * that distinction to report the right error code.
+ */
+export async function requestAzureDevOpsResponseAtBase(
+  baseUrl: string,
+  path: string,
+  options: AzureDevOpsRequestOptions = {}
+): Promise<AzureDevOpsResponse> {
+  const response = await fetchWithApiVersionRetry(baseUrl, path, options)
+  const text = await response.text()
+  if (!text) {
+    return { status: response.status, body: null }
+  }
+  try {
+    return { status: response.status, body: JSON.parse(text) }
+  } catch {
+    // Azure DevOps returns HTML for some auth failures; keep it as a string
+    // rather than discarding the status that tells the caller what happened.
+    return { status: response.status, body: text }
   }
 }
 

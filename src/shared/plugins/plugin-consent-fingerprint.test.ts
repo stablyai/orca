@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { canonicalizeCapabilitySet, type PluginCapability } from './plugin-capabilities'
+import {
+  canonicalizeCapabilitySet,
+  PLUGIN_CAPABILITY_DESCRIPTIONS,
+  type PluginCapability
+} from './plugin-capabilities'
 import { fingerprintPluginConsent } from './plugin-consent-fingerprint'
 import {
   getPluginActivationState,
@@ -99,6 +103,24 @@ describe('fingerprintPluginConsent', () => {
 
     expect(fingerprintPluginConsent(subject, 'a'.repeat(64))).toBe(
       fingerprintPluginConsent(subject, 'b'.repeat(64))
+    )
+  })
+})
+
+describe('azure-devops:boards consent', () => {
+  it('changes the fingerprint when the capability is added', () => {
+    const before = fingerprintPluginConsent({ capabilities: [{ kind: 'storage' }], main: 'main.mjs' })
+    const after = fingerprintPluginConsent({
+      capabilities: [{ kind: 'storage' }, { kind: 'azure-devops:boards' }],
+      main: 'main.mjs'
+    })
+
+    expect(after).not.toEqual(before)
+  })
+
+  it('describes the capability without implying the plugin receives a token', () => {
+    expect(PLUGIN_CAPABILITY_DESCRIPTIONS['azure-devops:boards']).toBe(
+      'Read and update Azure Boards work items using your existing Azure DevOps connection'
     )
   })
 })

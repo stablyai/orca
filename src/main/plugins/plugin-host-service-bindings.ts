@@ -1,5 +1,8 @@
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
-import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
+import {
+  PLUGIN_BOARDS_ORGANIZATION_LIMIT,
+  PLUGIN_WORKSPACE_TERMINAL_LIMIT
+} from '../../shared/plugins/plugin-host-api'
 import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
@@ -7,6 +10,8 @@ import {
   describeAgentSessionPtyWriteRefusal,
   isAgentSessionPtyWriteRefusedError
 } from '../../shared/agent-session-pty-write-admission'
+import { executeBoardsProxyRequest } from '../azure-devops/boards-proxy'
+import { listConfiguredAzureDevOpsOrganizations } from '../azure-devops/azure-devops-organization-base-urls'
 
 /** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
@@ -94,6 +99,9 @@ export function bindPluginHostServices(input: {
       set: (key, itemKey, value) =>
         new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
     },
-    subscribeEvents
+    subscribeEvents,
+    azureDevOpsBoardsRequest: (request) => executeBoardsProxyRequest(request),
+    azureDevOpsBoardsOrganizations: () =>
+      listConfiguredAzureDevOpsOrganizations().slice(0, PLUGIN_BOARDS_ORGANIZATION_LIMIT)
   }
 }
