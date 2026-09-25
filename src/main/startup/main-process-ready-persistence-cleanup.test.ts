@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   state: {
     store: { freezeWritesAsync: vi.fn(async () => {}) },
+    profileStateAdmission: initialAdmission(),
     mainProcessI18nReady: Promise.resolve()
   },
   foundation: vi.fn(async () => {}),
@@ -10,6 +11,10 @@ const { state, foundation, runtime, i18n, launch } = vi.hoisted(() => ({
   i18n: vi.fn(async () => {}),
   launch: vi.fn(async () => {})
 }))
+
+function initialAdmission(): { release(): void } | undefined {
+  return undefined
+}
 
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
 vi.mock('./main-process-ready-foundation', () => ({ initializeReadyFoundation: foundation }))
@@ -26,11 +31,15 @@ const options = {
   handleMacAppActivation: () => {}
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  state.profileStateAdmission = { release: vi.fn() }
+})
 
 describe('startup persistence lifetime', () => {
   it('awaits writer release after a later startup phase fails', async () => {
     const failure = new Error('runtime startup failed')
+    const admission = state.profileStateAdmission
     runtime.mockRejectedValueOnce(failure)
     let release = () => {}
     state.store.freezeWritesAsync.mockImplementationOnce(
@@ -42,8 +51,11 @@ describe('startup persistence lifetime', () => {
     const ready = initializeMainProcessReady(options)
     const rejected = expect(ready).rejects.toBe(failure)
     await vi.waitFor(() => expect(state.store.freezeWritesAsync).toHaveBeenCalledOnce())
+    expect(admission?.release).not.toHaveBeenCalled()
     release()
     await rejected
+    expect(admission?.release).toHaveBeenCalledOnce()
+    expect(state.profileStateAdmission).toBeUndefined()
     expect(launch).not.toHaveBeenCalled()
   })
 
@@ -74,6 +86,7 @@ describe('startup persistence lifetime', () => {
     try {
       await expect(initializeMainProcessReady(options)).rejects.toBe(failure)
       expect(log).toHaveBeenCalledOnce()
+      expect(state.profileStateAdmission?.release).not.toHaveBeenCalled()
     } finally {
       log.mockRestore()
     }

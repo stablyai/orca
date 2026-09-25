@@ -28,14 +28,17 @@ describe('profile-state startup failure formatting', () => {
     expect(profileStateStartupFailureClass(error)).toBe('recovery-required')
   })
 
-  it('formats authority ambiguity without suggesting a destructive recovery', () => {
+  it('explains ambiguity and offers explicit inspection before choosing a recovery point', () => {
     const message = formatProfileStateStartupFailure(
       new ProfileStateAuthorityBootstrapError('both profile stores are present')
     )
 
-    expect(message).toBe(
+    expect(message).toContain(
       'Orca cannot safely choose a profile-state authority: both profile stores are present'
     )
+    expect(message).toContain('neither is selected automatically')
+    expect(message).toContain('orca profile state exports')
+    expect(message).toContain('orca profile state rollback --backup <id>')
     expect(
       profileStateStartupFailureClass(new ProfileStateAuthorityBootstrapError('ambiguous'))
     ).toBe('ambiguous-authority')

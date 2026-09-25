@@ -8,8 +8,10 @@ import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixtur
 import type { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
-import { profileStateJsonExportPath } from './profile-state-export-path'
-import { profileStateDatabaseBackups } from './profile-state-backup-path'
+import {
+  profileStateJsonExportPath,
+  profileStateJsonExportPaths
+} from './profile-state-export-path'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -205,7 +207,7 @@ describe('live profile authority admission', () => {
     store.updateSettings({ theme: 'light' })
     await store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
     expect(JSON.parse(readFileSync(input.dataFile, 'utf8')).settings.theme).toBe('light')
-    expect(profileStateDatabaseBackups(input.databaseFile).length).toBeGreaterThan(0)
+    expect(profileStateJsonExportPaths(input.dataFile).length).toBeGreaterThan(0)
     expect(readState(input).settings.theme).toBe('light')
     await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
     const reopened = await open(input)

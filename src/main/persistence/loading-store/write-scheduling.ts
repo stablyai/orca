@@ -53,11 +53,11 @@ export function scheduleSave(
     }
   }
   // A timer admitted after the final snapshot could outlive the awaited shutdown work.
-  if (runtime.quitFlushStarted) {
+  if (runtime.quitFlushStarted || runtime.profileMaintenancePending) {
     return
   }
   runtime.writeGeneration += 1
-  if (runtime.writesFrozen || runtime.profileMaintenancePending) {
+  if (runtime.writesFrozen) {
     return
   }
   const now = Date.now()
@@ -70,7 +70,7 @@ export function scheduleSave(
   runtime.writeTimer = setTimeout(() => {
     runtime.writeTimer = null
     runtime.firstPendingSaveAt = null
-    void enqueueWrite(writes).catch(() => {})
+    void enqueueWrite(writes, { skipIfClean: true }).catch(() => {})
   }, delay)
 }
 

@@ -30,7 +30,17 @@ const mocks = vi.hoisted(() => {
       events.push(`set-name:${name}`)
     })
   }
-  return { app, events, userAgent: () => userAgent, admission: vi.fn() }
+  return {
+    app,
+    events,
+    userAgent: () => userAgent,
+    admission: vi.fn(),
+    lock: vi.fn(() => true),
+    afterIdentity: vi.fn((): void => {
+      throw new Error('preflight-test-stop')
+    }),
+    recoverMoves: vi.fn()
+  }
 })
 
 vi.mock('electron', () => ({
@@ -83,10 +93,7 @@ vi.mock('./dev-instance-identity', () => ({
 }))
 vi.mock('./renderer-heap-headroom')
 vi.mock('./startup-diagnostics', () => ({
-  isStartupDiagnosticsEnabled: () => {
-    mocks.events.push('continued-after-browser-identity')
-    throw new Error('preflight-test-stop')
-  },
+  isStartupDiagnosticsEnabled: () => false,
   logStartupDiagnostic: vi.fn()
 }))
 vi.mock('./event-loop-stall-probe')
@@ -100,8 +107,11 @@ vi.mock('./serve-desktop-activation', () => ({
 }))
 vi.mock('./single-instance-lock', () => ({
   shouldBypassSingleInstanceLock: () => false,
-  shouldSkipSingleInstanceLock: () => true,
-  acquireSingleInstanceLock: vi.fn(),
+  shouldSkipSingleInstanceLock: () => false,
+  acquireSingleInstanceLock: () => {
+    mocks.events.push('single-instance-lock')
+    return mocks.lock()
+  },
   logSingleInstanceLockBypass: vi.fn(),
   logSingleInstanceLockFailure: vi.fn(),
   SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE: 1
@@ -109,7 +119,12 @@ vi.mock('./single-instance-lock', () => ({
 vi.mock('../../shared/app-environment', () => ({ setAppEnvironment: vi.fn() }))
 vi.mock('../host/electron-app-environment', () => ({ ElectronAppEnvironment: class {} }))
 vi.mock('../own-chromium-tree-kill-guard')
-vi.mock('../../shared/secret-store')
+vi.mock('../../shared/secret-store', () => ({
+  setSecretStore: () => {
+    mocks.events.push('continued-after-browser-identity')
+    mocks.afterIdentity()
+  }
+}))
 vi.mock('../host/electron-secret-store')
 vi.mock('../ipc/pty-host-bindings')
 vi.mock('../host/electron-runtime-desktop-surface')
@@ -135,7 +150,13 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
 }))
 vi.mock('../macos-press-and-hold-default')
 vi.mock('../ai-vault/session-parse-cache-persistence')
-vi.mock('../orca-profiles/profile-index-store')
+vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
+vi.mock('../orca-profiles/profile-storage-paths', () => ({
+  getProfileUserDataPath: () => '/canonical-user-data'
+}))
+vi.mock('../orca-profiles/profile-project-move-intent', () => ({
+  recoverPendingProfileProjectMoves: mocks.recoverMoves
+}))
 vi.mock('../stats/collector')
 vi.mock('../claude-usage/store')
 vi.mock('../codex-usage/store')
@@ -169,17 +190,30 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
 }))
 
 describe('browser process user-agent startup ordering', () => {
+  it('does not acquire profile admission for a duplicate launch', async () => {
+    const { runMainProcessPreflight } = await import('./main-process-preflight')
+    mocks.events.length = 0
+    mocks.lock.mockReturnValueOnce(false)
+    expect(
+      runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+    ).toBe(false)
+    expect(mocks.events).not.toContain('admission:/canonical-user-data')
+    expect(mocks.events).not.toContain('read-mode:/canonical-user-data')
+    expect(mocks.app.exit).toHaveBeenCalledWith(1)
+    mocks.events.length = 0
+  })
+
   it('executes after the dev app name and before later preflight work', async () => {
     const { getBrowserProcessUserAgentIdentity } =
       await import('../browser/browser-process-user-agent')
     const { runMainProcessPreflight } = await import('./main-process-preflight')
 
-    expect(() =>
+    expect(
       runMainProcessPreflight({
         focusExistingWindow: vi.fn(),
         requestDesktopActivation: vi.fn()
       })
-    ).toThrow('preflight-test-stop')
+    ).toBe(false)
 
     const nameIndex = mocks.events.indexOf('set-name:Orca Development')
     const modeIndex = mocks.events.indexOf('read-mode:/canonical-user-data')
@@ -214,11 +248,35 @@ describe('browser process user-agent startup ordering', () => {
     try {
       expect(runMainProcessPreflight({ focusExistingWindow, requestDesktopActivation })).toBe(false)
       expect(mocks.app.exit).toHaveBeenCalledWith(1)
-      expect(mocks.events).toEqual(['init-data-path', 'admission:/canonical-user-data'])
+      expect(mocks.events).toEqual([
+        'init-data-path',
+        'set-name:Orca Development',
+        'single-instance-lock',
+        'admission:/canonical-user-data'
+      ])
       expect(focusExistingWindow).not.toHaveBeenCalled()
       expect(requestDesktopActivation).not.toHaveBeenCalled()
     } finally {
       error.mockRestore()
     }
   })
+})
+
+it('exits and releases admission after pending profile move recovery fails', async () => {
+  const { resetBrowserProcessUserAgentForTests } =
+    await import('../browser/browser-process-user-agent')
+  resetBrowserProcessUserAgentForTests()
+  const release = vi.fn()
+  mocks.admission.mockReturnValueOnce({ release })
+  mocks.afterIdentity.mockImplementationOnce(() => undefined)
+  mocks.recoverMoves.mockImplementationOnce(() => {
+    throw new Error('unreadable move journal')
+  })
+  const { runMainProcessPreflight } = await import('./main-process-preflight')
+  expect(
+    runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+  ).toBe(false)
+  expect(mocks.recoverMoves).toHaveBeenCalledWith('/canonical-user-data')
+  expect(release).toHaveBeenCalledOnce()
+  expect(mocks.app.exit).toHaveBeenCalledWith(1)
 })

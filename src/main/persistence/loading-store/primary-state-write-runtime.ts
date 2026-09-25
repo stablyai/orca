@@ -7,6 +7,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'dataFile'
   | 'dirtyProfileStateDomains'
   | 'durableMutationPhase'
+  | 'fatalMutationError'
   | 'flushOrThrow'
   | 'runDurableMutation'
   | 'firstPendingSaveAt'
@@ -50,4 +51,19 @@ export function canReuseDurableProfileState(
   }
   authority?.assertCurrentRevision?.()
   return true
+}
+
+export async function stopAfterFailedPrimaryStateMutation(
+  runtime: PrimaryStateWriteOperationsRuntime,
+  error: unknown
+): Promise<void> {
+  // A throwing callback never returns its rollback; do not persist a partial edit.
+  runtime.writesFrozen = true
+  runtime.quitFlushStarted = true
+  runtime.fatalMutationError = error instanceof Error ? error : new Error(String(error))
+  if (runtime.writeTimer) {
+    clearTimeout(runtime.writeTimer)
+    runtime.writeTimer = null
+  }
+  await runtime.profileStateAuthority?.close?.()
 }

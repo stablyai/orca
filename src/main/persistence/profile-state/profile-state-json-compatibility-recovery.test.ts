@@ -100,12 +100,19 @@ describe.each(['sync', 'async'] as const)('%s compatibility export recovery', (m
     async (phase) => {
       const state = fixture()
       if (phase === 'publication') {
-        vi.spyOn(
-          durableFiles,
-          mode === 'sync' ? 'writeFileDurableSync' : 'writeFileDurable'
-        ).mockImplementationOnce(() => {
-          throw new Error('injected publication failure')
-        })
+        if (mode === 'sync') {
+          const write = durableFiles.writeFileDurableSync
+          vi.spyOn(durableFiles, 'writeFileDurableSync').mockImplementation((...args) => {
+            if (args[1] === state.paths.dataFile) {
+              throw new Error('injected publication failure')
+            }
+            write(...args)
+          })
+        } else {
+          vi.spyOn(durableFiles, 'writeFileDurable').mockRejectedValueOnce(
+            new Error('injected publication failure')
+          )
+        }
       } else {
         state.withDatabase((db) =>
           db.exec(
@@ -128,6 +135,7 @@ describe.each(['sync', 'async'] as const)('%s compatibility export recovery', (m
           acceptedRevision: 2
         })
       }
+      vi.restoreAllMocks()
       state.withDatabase((db) => db.exec('DROP TRIGGER IF EXISTS reject_acceptance'))
       state.authority.writeSerializedState(Buffer.from('{"settings":{"theme":"system"}}'))
 
@@ -154,9 +162,11 @@ describe.each(['sync', 'async'] as const)('%s compatibility export recovery', (m
     }
     if (mode === 'sync') {
       const write = durableFiles.writeFileDurableSync
-      vi.spyOn(durableFiles, 'writeFileDurableSync').mockImplementationOnce((...args) => {
+      vi.spyOn(durableFiles, 'writeFileDurableSync').mockImplementation((...args) => {
         write(...args)
-        compete()
+        if (args[1] === state.paths.dataFile) {
+          compete()
+        }
       })
     } else {
       const write = durableFiles.writeFileDurable

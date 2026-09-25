@@ -44,7 +44,7 @@ export type ProfileStateAuthority = {
   scheduleBackup?: () => void
 
   /** Drain owned backup handles before shutdown or profile file mutations. */
-  drainBackups?: () => Promise<void>
+  drainBackups?: (cancel?: boolean) => Promise<void>
 
   /** Optionally publish a durable JSON export for rollback or a compatibility runtime. */
   writeJsonExport?: (targetPath: string) => number

@@ -11,7 +11,8 @@ if (
   !isRecord(request) ||
   typeof request.databasePath !== 'string' ||
   typeof request.profileId !== 'string' ||
-  typeof request.targetPath !== 'string'
+  typeof request.targetPath !== 'string' ||
+  (request.temporaryPath !== undefined && typeof request.temporaryPath !== 'string')
 ) {
   throw new Error('Invalid profile state backup request')
 }
@@ -19,7 +20,8 @@ if (
 void writeProfileStateBackup({
   databasePath: request.databasePath,
   profileId: request.profileId,
-  targetPath: request.targetPath
+  targetPath: request.targetPath,
+  temporaryPath: request.temporaryPath
 })
   .then(
     () => port.postMessage({ ok: true }),

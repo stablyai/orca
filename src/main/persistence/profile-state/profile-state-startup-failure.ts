@@ -63,7 +63,13 @@ export function formatProfileStateStartupFailure(error: unknown): string | undef
   }
 
   if (isProfileStateAuthorityFailure(error)) {
-    return `Orca cannot safely choose a profile-state authority: ${error.message}`
+    return [
+      `Orca cannot safely choose a profile-state authority: ${error.message}`,
+      'An older build may have changed the JSON file. Both copies are preserved; neither is selected automatically.',
+      'Stop Orca and copy the profile directory before choosing which state to keep.',
+      'Run `orca profile state exports` to inspect retained recovery points.',
+      'Use `orca profile state rollback --backup <id>` or `orca profile state rollback --revision <revision>` only after selecting the state you want to restore.'
+    ].join('\n')
   }
 
   const failureClass = profileStateStartupFailureClass(error)

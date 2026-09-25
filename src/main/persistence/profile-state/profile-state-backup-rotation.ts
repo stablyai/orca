@@ -5,6 +5,7 @@ import {
   profileStateDatabaseBackups
 } from './profile-state-backup-path'
 import { runProfileStateBackup } from './profile-state-backup-worker'
+import { removeAbandonedProfileStateBackupFiles } from './profile-state-backup-temporary-files'
 
 const BACKUP_COUNT = 5
 const BACKUP_INTERVAL_MS = 60 * 60 * 1000
@@ -14,6 +15,7 @@ const BACKUP_RETRY_MS = 60 * 1000
 export class ProfileStateBackupRotation {
   private pending: Promise<void> | undefined
   private stopped = false
+  private readonly cancellation = new AbortController()
   private nextAttemptAt = 0
 
   constructor(
@@ -31,7 +33,7 @@ export class ProfileStateBackupRotation {
       .then(() => this.rotate())
       .catch((error: unknown) => {
         this.nextAttemptAt = this.now() + BACKUP_RETRY_MS
-        if (this.stopped && isMissingPath(error)) {
+        if (this.stopped && (this.cancellation.signal.aborted || isMissingPath(error))) {
           return
         }
         console.error('[persistence] Failed to back up profile state database:', error)
@@ -50,6 +52,7 @@ export class ProfileStateBackupRotation {
 
   stop(): void {
     this.stopped = true
+    this.cancellation.abort()
   }
 
   assertIdle(): void {
@@ -63,6 +66,7 @@ export class ProfileStateBackupRotation {
       return
     }
     const now = this.now()
+    await removeAbandonedProfileStateBackupFiles(this.databasePath, now)
     const latest = (await this.regularBackups())[0]
     if (this.stopped) {
       return
@@ -75,11 +79,14 @@ export class ProfileStateBackupRotation {
       this.databasePath,
       createProfileStateDatabaseBackupId(now)
     )
-    await this.runBackup({
-      databasePath: this.databasePath,
-      profileId: this.profileId,
-      targetPath: target
-    })
+    await this.runBackup(
+      {
+        databasePath: this.databasePath,
+        profileId: this.profileId,
+        targetPath: target
+      },
+      this.cancellation.signal
+    )
     this.nextAttemptAt = this.now() + BACKUP_INTERVAL_MS
     for (const backup of (await this.regularBackups()).slice(BACKUP_COUNT)) {
       await rm(backup.path, { force: true })

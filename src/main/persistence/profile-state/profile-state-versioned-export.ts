@@ -1,8 +1,11 @@
-import { mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
 import { durableWriteTempPath, publishFileDurableSync } from '../../durable-file-write'
-import { profileStateJsonExportPath } from './profile-state-export-path'
+import {
+  profileStateJsonExportPath,
+  profileStateJsonExportPaths
+} from './profile-state-export-path'
 
 /** An existing revision must never be replaced with different content. */
 export function writeVersionedProfileStateExport(
@@ -28,8 +31,22 @@ export function writeVersionedProfileStateExport(
       fsyncFileSync(targetPath)
       bestEffortFsyncDirectorySync(dirname(targetPath))
     }
+    pruneProfileStateJsonExports(dataFile)
     return revision
   } finally {
     rmSync(stagingPath, { force: true })
+  }
+}
+
+function pruneProfileStateJsonExports(dataFile: string): void {
+  try {
+    const regularExports = profileStateJsonExportPaths(dataFile).filter((path) =>
+      lstatSync(path).isFile()
+    )
+    for (const path of regularExports.slice(5)) {
+      rmSync(path, { force: true })
+    }
+  } catch (error) {
+    console.warn('[persistence] Failed to prune retained JSON exports:', error)
   }
 }

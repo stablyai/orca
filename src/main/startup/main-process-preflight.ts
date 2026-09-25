@@ -101,6 +101,21 @@ export type MainProcessPreflightOptions = {
 
 /** Performs all module-scope work that must happen before Electron's ready event. */
 export function runMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
+  try {
+    return initializeMainProcessPreflight(options)
+  } catch (error) {
+    console.error('[startup] Preflight failed:', error)
+    try {
+      state.profileStateAdmission?.release()
+      state.profileStateAdmission = undefined
+    } finally {
+      app.exit(1)
+    }
+    return false
+  }
+}
+
+function initializeMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
   if (runProfileStateRecoveryPreflight()) {
     return false
   }
@@ -188,23 +203,11 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why captured now: after the dev/E2E override above, and before app.setName('Orca') (whenReady)
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
-  // Keep admission until process death, including outstanding backup workers and final flushes.
-  try {
-    acquireProfileStateRuntimeAdmission(getCanonicalUserDataPath())
-  } catch (error) {
-    console.error('[profile-state] Startup refused:', error)
-    app.exit(1)
-    return false
-  }
   // Why: Electron resolves the macOS safeStorage Keychain service name from the app name before
   // ready. Dev pins userData above, so applying its name here cannot shift the captured path.
   if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
     app.setName(state.devInstanceIdentity.appName)
   }
-  // Why: renderer and worker defaults are process-global and must be fixed before any session exists.
-  initializeBrowserProcessUserAgent(
-    initializeBrowserIdentityModeStore(getCanonicalUserDataPath()).appliedMode
-  )
   state.startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
   if (state.startupDiagnosticsEnabled) {
     logStartupDiagnostic('before-single-instance-lock', {
@@ -244,6 +247,11 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
     return false
   }
+  state.profileStateAdmission = acquireProfileStateRuntimeAdmission(getCanonicalUserDataPath())
+  // Renderer and worker defaults must be fixed before any session exists.
+  initializeBrowserProcessUserAgent(
+    initializeBrowserIdentityModeStore(getCanonicalUserDataPath()).appliedMode
+  )
   // Why first in this block: the accessor throws until installed and everything below may read a
   // credential. The constructor does not touch `safeStorage` — it resolves lazily per call — so
   // installing here changes no timing, in particular not the pre-ready Keychain service-name

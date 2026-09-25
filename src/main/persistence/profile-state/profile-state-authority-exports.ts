@@ -12,6 +12,7 @@ import {
   acceptProfileStateJsonCompatibility
 } from './profile-state-documents'
 import type Database from '../../sqlite/sync-database'
+import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
 import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
 
 function readExportSnapshot(db: Database.Database, expectedRevision?: number) {
@@ -44,6 +45,7 @@ export function writeProfileStateAuthorityCompatibilityExport(
   if (snapshot.revision === 0) {
     return undefined
   }
+  writeCompatibilityRecoveryExport(targetPath, snapshot)
   const retained = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : undefined
   stageProfileStateJsonCompatibility(db, snapshot.json, snapshot.revision, retained)
   mkdirSync(dirname(targetPath), { recursive: true })
@@ -61,6 +63,7 @@ export async function writeProfileStateAuthorityCompatibilityExportAsync(
   if (snapshot.revision === 0) {
     return undefined
   }
+  writeCompatibilityRecoveryExport(targetPath, snapshot)
   const retained = await readFile(targetPath, 'utf8').catch((error: unknown) => {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return undefined
@@ -72,4 +75,15 @@ export async function writeProfileStateAuthorityCompatibilityExportAsync(
   await writeFileDurable(durableWriteTempPath(targetPath), targetPath, snapshot.json)
   acceptProfileStateJsonCompatibility(db, snapshot.json, snapshot.revision)
   return snapshot.revision
+}
+
+function writeCompatibilityRecoveryExport(
+  dataFile: string,
+  snapshot: { json: string; revision: number }
+): void {
+  writeVersionedProfileStateExport(dataFile, (path) => {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileDurableSync(durableWriteTempPath(path), path, snapshot.json)
+    return snapshot.revision
+  })
 }

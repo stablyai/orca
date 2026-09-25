@@ -120,10 +120,9 @@ if (preflightReady) {
         handleMacAppActivation
       })
     } catch (error) {
-      const message = formatProfileStateStartupFailure(error)
-      if (message === undefined) {
-        throw error
-      }
+      const message =
+        formatProfileStateStartupFailure(error) ??
+        `Orca could not finish starting: ${error instanceof Error ? error.message : String(error)}`
       const failureClass = profileStateStartupFailureClass(error)
       if (failureClass !== undefined) {
         recordDurableCrashBreadcrumb('profile_state_startup_failed', {
@@ -135,7 +134,7 @@ if (preflightReady) {
         try {
           await presentProfileStateStartupRecoveryDialog({
             message,
-            ...(failureClass === 'recovery-required'
+            ...(failureClass === 'recovery-required' || failureClass === 'ambiguous-authority'
               ? { recoveryCommand: 'orca profile state exports' }
               : {}),
             showMessageBox: (options) => dialog.showMessageBox(options),

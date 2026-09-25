@@ -211,7 +211,7 @@ export class Store {
     return writeVersionedProfileStateExport(this.runtime.dataFile, writeExport)
   }
 
-  /** Publish canonical JSON for a pre-update older-build compatibility window. */
+  /** Publish recovery and canonical JSON checkpoints for older builds. */
   writeLatestProfileStateJsonCompatibilityExport(): number | undefined {
     const authority = this.runtime.profileStateAuthority
     if (authority?.asynchronous) {

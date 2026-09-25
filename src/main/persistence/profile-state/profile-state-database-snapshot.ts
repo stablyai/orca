@@ -9,7 +9,10 @@ import { durableWriteTempPath, renameDurable } from '../../durable-file-write'
 export async function writeProfileStateDatabaseSnapshotAsync(
   db: Database.Database,
   targetPath: string,
-  options: { validateStagedSnapshot?: (stagingPath: string) => Promise<void> | void } = {}
+  options: {
+    temporaryPath?: string
+    validateStagedSnapshot?: (stagingPath: string) => Promise<void> | void
+  } = {}
 ): Promise<void> {
   if (targetPath.length === 0 || targetPath.includes('\0')) {
     throw new Error('Profile state snapshot path is invalid')
@@ -20,11 +23,13 @@ export async function writeProfileStateDatabaseSnapshotAsync(
   await mkdir(dirname(targetPath), { recursive: true })
   await assertSnapshotTargetIsSeparate(db, targetPath)
   await assertNoSnapshotSidecars(targetPath)
-  const temporaryPath = durableWriteTempPath(targetPath)
+  const temporaryPath = options.temporaryPath ?? durableWriteTempPath(targetPath)
   let published = false
+  let created = false
   try {
     // Pre-create privately: the native backup otherwise creates a world-readable temporary file.
     const temporary = await open(temporaryPath, 'wx', 0o600)
+    created = true
     await temporary.close()
     await db.backup(temporaryPath)
     // The native copy preserves WAL mode; snapshots must not create sidecars when opened read-only.
@@ -48,12 +53,16 @@ export async function writeProfileStateDatabaseSnapshotAsync(
     await renameDurable(temporaryPath, targetPath)
     published = true
   } finally {
-    if (!published) {
+    if (created && !published) {
       await rm(temporaryPath, { force: true })
     }
-    await Promise.all(
-      ['-wal', '-shm', '-journal'].map((suffix) => rm(`${temporaryPath}${suffix}`, { force: true }))
-    )
+    if (created) {
+      await Promise.all(
+        ['-wal', '-shm', '-journal'].map((suffix) =>
+          rm(`${temporaryPath}${suffix}`, { force: true })
+        )
+      )
+    }
   }
 }
 

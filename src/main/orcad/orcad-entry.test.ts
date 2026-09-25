@@ -15,7 +15,9 @@ describe('orcad profile-state shutdown', () => {
 
     await flushOrcadProfileStoreForShutdown(store)
 
-    expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+    expect(store.flushFinalOrThrowAsync).toHaveBeenCalledExactlyOnceWith({
+      exportJsonCompatibility: true
+    })
     expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
     expect(events).toEqual(['flush', 'freeze'])
   })

@@ -10,8 +10,16 @@ import {
   type ProfileStateMaintenance
 } from './profile-state-access'
 import { profileStateAccessPaths } from './profile-state-access-owner'
+import * as identity from './profile-state-access-identity'
+import * as processStart from '../../daemon/daemon-process-start-time'
 
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }))
+vi.mock('../../daemon/daemon-process-start-time', async (importOriginal) => ({
+  ...(await importOriginal<typeof processStart>())
+}))
+vi.mock('./profile-state-access-identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof identity>())
+}))
 
 const roots: string[] = []
 function root(): string {
@@ -130,7 +138,12 @@ describe('profile state admission and maintenance', () => {
   )
 })
 
-function staleGate(path: string, pid = 12345, host = hostname()): string {
+function staleGate(
+  path: string,
+  pid = 12345,
+  host = hostname(),
+  extra: { bootIdentity?: string; startedAtMs?: number; processStartIdentity?: string } = {}
+): string {
   const gate = profileStateAccessPaths(path).maintenance
   fs.mkdirSync(gate)
   const token = randomUUID()
@@ -142,13 +155,136 @@ function staleGate(path: string, pid = 12345, host = hostname()): string {
       pid,
       host,
       platform: process.platform,
-      pidNamespace: process.platform === 'linux' ? fs.readlinkSync('/proc/self/ns/pid') : null
+      pidNamespace: process.platform === 'linux' ? fs.readlinkSync('/proc/self/ns/pid') : null,
+      ...extra
     })
   )
   return record
 }
 
 describe('profile state owner reclamation', () => {
+  it('reclaims a reused PID only when its recorded process start differs on the same boot', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+    vi.spyOn(identity, 'profileStateAccessProcessIdentity').mockReturnValue(
+      'linux-start-ticks:2000'
+    )
+    const owner = staleGate(path, process.pid, hostname(), {
+      bootIdentity: 'same-boot',
+      processStartIdentity: 'linux-start-ticks:1000'
+    })
+    acquireProfileStateMaintenance(path).release()
+    expect(fs.existsSync(owner)).toBe(false)
+  })
+
+  it('cannot reclaim a live Linux owner when wall-clock time changes', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    if (!platform) {
+      throw new Error('Missing platform descriptor')
+    }
+    const path = root()
+    const read = fs.readFileSync
+    const fields = Array.from({ length: 20 }, () => '0')
+    fields[0] = 'S'
+    fields[19] = '987654'
+    let clock = 1_700_000_000_000
+    const wallStart = vi
+      .spyOn(processStart, 'getProcessStartedAtMs')
+      .mockImplementation(() => clock)
+    vi.spyOn(fs, 'readFileSync').mockImplementation((file, options) => {
+      if (file === '/proc/12345/stat') {
+        return `12345 (orca daemon) ${fields.join(' ')}`
+      }
+      return read(file, options)
+    })
+    vi.spyOn(fs, 'readlinkSync').mockReturnValue('pid:[same-namespace]')
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+    vi.spyOn(process, 'kill').mockReturnValue(true)
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      const processStartIdentity = identity.profileStateAccessProcessIdentity(12345)
+      expect(processStartIdentity).toBe('linux-start-ticks:987654')
+      if (processStartIdentity === null) {
+        throw new Error('Expected process identity')
+      }
+      const owner = staleGate(path, 12345, hostname(), {
+        bootIdentity: 'same-boot',
+        processStartIdentity
+      })
+      clock += 60_000
+      expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+      expect(fs.existsSync(owner)).toBe(true)
+      expect(wallStart).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
+  it('does not compare legacy epoch timestamps with raw process identity', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+    vi.spyOn(identity, 'profileStateAccessProcessIdentity').mockReturnValue(
+      'linux-start-ticks:2000'
+    )
+    const owner = staleGate(path, process.pid, hostname(), {
+      bootIdentity: 'same-boot',
+      startedAtMs: 1000
+    })
+    expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+    expect(fs.existsSync(owner)).toBe(true)
+  })
+
+  it.each([
+    'wall-time-ms:1000',
+    'linux-start-ticks:invalid',
+    'linux-start-ticks:99999999999999999'
+  ])('does not compare incompatible or malformed identity %s', (recorded) => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+    vi.spyOn(identity, 'profileStateAccessProcessIdentity').mockReturnValue(
+      'linux-start-ticks:2000'
+    )
+    const owner = staleGate(path, process.pid, hostname(), {
+      bootIdentity: 'same-boot',
+      processStartIdentity: recorded
+    })
+    expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+    expect(fs.existsSync(owner)).toBe(true)
+  })
+
+  it('does not interpret an unavailable process start as proof of PID reuse', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+    vi.spyOn(identity, 'profileStateAccessProcessIdentity').mockReturnValue(null)
+    const owner = staleGate(path, process.pid, hostname(), {
+      bootIdentity: 'same-boot',
+      processStartIdentity: 'linux-start-ticks:1000'
+    })
+    expect(() => acquireProfileStateMaintenance(path)).toThrow('unverifiable')
+    expect(fs.existsSync(owner)).toBe(true)
+  })
+
+  it('recognizes an exited owner after a hostname change on the same kernel boot', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+    const owner = staleGate(path, 12345, 'previous-hostname', { bootIdentity: 'same-boot' })
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('exited'), { code: 'ESRCH' })
+    })
+    acquireProfileStateMaintenance(path).release()
+    expect(fs.existsSync(owner)).toBe(false)
+  })
+
+  it('keeps a differently booted host unverifiable after a hostname change', () => {
+    const path = root()
+    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('different-boot')
+    const owner = staleGate(path, 12345, 'previous-hostname', { bootIdentity: 'owner-boot' })
+    const kill = vi.spyOn(process, 'kill')
+    expect(() => acquireProfileStateMaintenance(path)).toThrow('verify PID 12345')
+    expect(kill).not.toHaveBeenCalled()
+    expect(fs.existsSync(owner)).toBe(true)
+  })
+
   it('does not infer exit from a PID in another platform on a shared root', () => {
     const path = root()
     const owner = staleGate(path)

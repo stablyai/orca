@@ -113,15 +113,22 @@ describe('SQLite profile state during an update quit', () => {
     }
   })
 
-  it('keeps ordinary quits free of compatibility JSON writes', async () => {
+  it('exports a normal quit for an older build after sessions and settings changed', async () => {
     const { store, dataFile, databasePath } = await fixture()
-    const retainedJson = readFileSync(dataFile, 'utf8')
+    store.updateSettings({ theme: 'dark' })
     store.markSshRemotePtyLeasesForShutdown(TARGET_ID, 'detached')
 
-    await store.flushAsync()
+    await store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
 
-    expect(readFileSync(dataFile, 'utf8')).toBe(retainedJson)
-    expect(persistedState(databasePath).json).not.toBe(retainedJson)
+    const json = readFileSync(dataFile, 'utf8')
+    expect(json).toBe(persistedState(databasePath).json)
+    const legacy = new Store({ dataFile })
+    try {
+      expect(legacy.getSettings().theme).toBe('dark')
+      expect(legacy.getSshRemotePtyLeases(TARGET_ID)[0]?.state).toBe('detached')
+    } finally {
+      legacy.freezeWrites()
+    }
   })
 
   it('does not publish or accept a snapshot when final persistence fails', async () => {

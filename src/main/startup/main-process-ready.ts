@@ -30,6 +30,8 @@ export async function initializeMainProcessReady(
   } catch (error) {
     try {
       await state.store?.freezeWritesAsync()
+      state.profileStateAdmission?.release()
+      state.profileStateAdmission = undefined
     } catch (closeError) {
       console.error(
         '[persistence] Failed to close profile persistence after startup failure:',

@@ -81,7 +81,7 @@ describe('main window profile-state update preparation', () => {
     vi.clearAllMocks()
   })
 
-  it('publishes rollback and compatibility exports before an update quit', async () => {
+  it('publishes both recovery forms with one profile checkpoint before an update quit', async () => {
     const window = { webContents: { id: 17 } }
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mocked BrowserWindow only needs webContents for this composition-root wiring test.
@@ -107,11 +107,8 @@ describe('main window profile-state update preparation', () => {
       claudeRuntimeAuth: state.claudeRuntimeAuth,
       store
     })
-    expect(store.writeLatestProfileStateJsonExportAsync).toHaveBeenCalledOnce()
+    expect(store.writeLatestProfileStateJsonExportAsync).not.toHaveBeenCalled()
     expect(store.writeLatestProfileStateJsonCompatibilityExportAsync).toHaveBeenCalledOnce()
     expect(options).toHaveProperty('onBeforeUpdateQuitFailure', 'abort')
-    expect(store.writeLatestProfileStateJsonExportAsync.mock.invocationCallOrder[0]).toBeLessThan(
-      store.writeLatestProfileStateJsonCompatibilityExportAsync.mock.invocationCallOrder[0]
-    )
   })
 })

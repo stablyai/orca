@@ -162,6 +162,39 @@ describe('profile state backup worker', () => {
     rmSync(directory, { recursive: true })
   })
 
+  it.each(['timeout', 'cancel'] as const)(
+    'cleans a terminated %s worker only after exit',
+    async (mode) => {
+      const { directory, job } = fixture()
+      const ready = join(directory, 'ready')
+      const worker = script(
+        directory,
+        `
+      const { workerData } = require('node:worker_threads')
+      const fs = require('node:fs')
+      for (const suffix of ['', '-wal', '-shm', '-journal']) fs.writeFileSync(workerData.temporaryPath + suffix, 'incomplete')
+      fs.writeFileSync(${JSON.stringify(ready)}, 'ready')
+      setInterval(() => {}, 1000)
+    `
+      )
+      const cancellation = new AbortController()
+      const pending = runProfileStateBackupWorker(job, {
+        workerPath: worker,
+        timeoutMs: 500,
+        signal: cancellation.signal
+      })
+      const failed = expect(pending).rejects.toThrow(mode === 'cancel' ? 'cancelled' : 'timed out')
+      await vi.waitFor(() => expect(existsSync(ready)).toBe(true))
+      expect(readdirSync(directory).filter((name) => name.startsWith('backup.db.'))).toHaveLength(4)
+      if (mode === 'cancel') {
+        cancellation.abort()
+      }
+      await failed
+      expect(readdirSync(directory).filter((name) => name.startsWith('backup.db.'))).toEqual([])
+      expect(existsSync(job.databasePath)).toBe(true)
+    }
+  )
+
   it('reports a missing bundle and leaves the primary untouched', async () => {
     const { directory, job } = fixture()
     const before = readFileSync(job.databasePath)
