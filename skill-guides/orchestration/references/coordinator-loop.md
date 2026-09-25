@@ -8,10 +8,10 @@ of truth for the loop order and completion boundary.
 
 When `ORCA status --json` reports `caller.kind` `session`, you coordinate from a
 chat. Never block in `check --wait`: your shell tool has its own timeout, and
-Orca wakes you instead. Orca refuses it with `wait_requires_terminal` while the
-session runs as a chat; only its terminal view may wait. When messages reach your Run, Orca starts a new turn in
-this chat once you are idle, saying `You have <n> orchestration message(s)` and
-naming the `check` to run.
+Orca wakes you instead. Orca refuses it with `wait_requires_terminal` from any
+chat session. When messages reach your Run, Orca starts a new turn in this chat
+once you are idle, saying `You have <n> orchestration message(s)` and naming the
+`check` to run.
 
 1. Bind one Run and start the full independent wave.
 2. End your turn.

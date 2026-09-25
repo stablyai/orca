@@ -1,4 +1,3 @@
-import type { AgentSessionOwnerRuntimeKind } from '../../../shared/agent-session-record'
 import type { RunRow } from './types'
 import { isEquivalentPaneKey } from './db/pane-key-match'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
@@ -35,8 +34,6 @@ export type OrchestrationSessionCaller = OrchestrationCallerIdentity &
     sessionId: OrcaSessionId
     /** Where the session runs, from its record; `worker-start --worktree current` places here. */
     workspaceId: string
-    /** Who holds the lease: a native chat runs turn by turn, a TUI owner runs in a PTY. */
-    runtimeKind: AgentSessionOwnerRuntimeKind
   }>
 
 /** A caller with neither a pane nor an Orca session id can never be bound to a Run. */

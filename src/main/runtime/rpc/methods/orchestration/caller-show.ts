@@ -12,7 +12,7 @@ import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../.
 import { SessionAddressParams } from '../../../../../shared/rpc-contract/orchestration-params'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { sessionOrchestrationIdentity } from '../../../orchestration/structured-session-mail-address'
+import { resolveOrcaSessionParty } from '../../../orchestration/orchestration-party'
 import { defineMethod } from '../../core'
 
 export const ORCHESTRATION_CALLER_METHODS = [
@@ -42,8 +42,8 @@ export const ORCHESTRATION_CALLER_METHODS = [
   defineMethod({
     name: 'orchestration.sessionAddress',
     params: SessionAddressParams,
-    // Why host-side: the address is derived from the session records, which only the host holds, the
-    // same derivation a verb acting as that session binds to.
+    // Why host-side: the party resolver derives it from the session records, which only the host
+    // holds, exactly as it binds a verb acting as that session: the lineage root's address.
     handler: (params, { runtime }): OrchestrationSessionAddressResult => {
       if (!isOrcaSessionId(params.sessionId)) {
         throw new OrchestrationError(
@@ -52,8 +52,8 @@ export const ORCHESTRATION_CALLER_METHODS = [
           { effectsApplied: false }
         )
       }
-      const identity = sessionOrchestrationIdentity(params.sessionId, runtime.getOrchestrationDb())
-      return { address: formatOrcaSessionAddress(identity.orcaSessionId) }
+      const party = resolveOrcaSessionParty(params.sessionId, runtime.getOrchestrationDb())
+      return { address: formatOrcaSessionAddress(party.orcaSessionId) }
     }
   })
 ]

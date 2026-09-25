@@ -1,16 +1,21 @@
 /**
- * A chat runs turn by turn through a shell tool with its own timeout, so the host refuses a
- * blocking `check --wait` from it instead of leaving the rule to the guide. The gate is the lease:
- * a session a terminal view holds runs in a PTY, where blocking is legitimate.
+ * A structured session runs turn by turn through a shell tool with its own timeout, so the host
+ * refuses a blocking `check --wait` from any session caller instead of leaving the rule to the guide.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  mintStructuredWorkerHandle,
+  mintStructuredWorkerPaneKey,
+  structuredWorkerIdentities,
+  structuredWorkerProcessIncarnation
+} from '../structured-worker-identity'
 import {
   createSessionCallerHarness,
   isRecord,
   orchestrationRequest,
   resultOf,
-  sessionRecord,
   SESSION_X,
+  SESSION_Y,
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
@@ -60,17 +65,31 @@ describe('check --wait from an agent session', () => {
     expect(waitForMessage).not.toHaveBeenCalled()
   })
 
+  it('refuses a structured worker session too: every session runs turn by turn', async () => {
+    structuredWorkerIdentities.register({
+      handle: mintStructuredWorkerHandle(),
+      sessionId: SESSION_Y,
+      agent: 'claude',
+      paneKey: mintStructuredWorkerPaneKey(SESSION_Y),
+      processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
+      worktreeId: 'wt_1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+
+    const response = await h.dispatch(
+      orchestrationRequest(
+        'orchestration.check',
+        { wait: true, timeoutMs: 1_000 },
+        { sessionId: SESSION_Y }
+      )
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'wait_requires_terminal' } })
+  })
+
   it('still answers the same chat a non-waiting check', async () => {
     const result = resultOf(await check({}))
 
     expect(result.timedOut).not.toBe(true)
-  })
-
-  it('lets a session a terminal view holds block, because it runs in a PTY', async () => {
-    h.records.set(SESSION_X, sessionRecord(SESSION_X, { lease: { runtimeKind: 'tui' } }))
-
-    const result = resultOf(await check({ wait: true, timeoutMs: 50 }))
-
-    expect(result.timedOut).toBe(true)
   })
 })

@@ -30,7 +30,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
         recordMutationReceipt
       }
     ) => {
-      if (params.wait === true && orchestrationCaller?.runtimeKind === 'native') {
+      if (params.wait === true && orchestrationCaller) {
         throw waitRequiresTerminal(orchestrationCaller.sessionId)
       }
       const db = runtime.getOrchestrationDb()
@@ -118,13 +118,13 @@ export const ORCHESTRATION_CHECK_METHODS = [
 ]
 
 /**
- * A native chat runs turn by turn through a shell tool with its own timeout, so a blocking wait is
- * killed mid-wait and retried. Keyed on the lease: a session a terminal view holds may block.
+ * A structured session, chat or worker, runs turn by turn through a shell tool with its own
+ * timeout, so a blocking wait is killed mid-wait and retried. Only a terminal agent may block.
  */
 function waitRequiresTerminal(sessionId: string): OrchestrationError {
   return new OrchestrationError(
     'wait_requires_terminal',
-    `Agent session ${sessionId} is a chat, which runs turn by turn, so check --wait would outlive your shell tool. Run check without --wait, process and --ack what it returns, then end your turn: Orca starts a new turn in this chat when mail arrives. No effects were applied.`,
+    `Agent session ${sessionId} runs turn by turn, so check --wait would outlive your shell tool; only an agent in a terminal can wait. Run check without --wait, process and --ack what it returns, then end your turn: Orca starts a new turn in this session when mail arrives. No effects were applied.`,
     { effectsApplied: false }
   )
 }

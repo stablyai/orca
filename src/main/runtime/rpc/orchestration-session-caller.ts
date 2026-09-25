@@ -133,8 +133,7 @@ export async function resolveOrchestrationSessionCaller(
   const caller: OrchestrationSessionCaller = Object.freeze({
     ...resolveOrcaSessionParty(sessionId, db),
     sessionId,
-    workspaceId: record.location.workspaceId,
-    runtimeKind: record.lease.runtimeKind
+    workspaceId: record.location.workspaceId
   })
   return {
     request: {
