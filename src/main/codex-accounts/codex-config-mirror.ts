@@ -20,7 +20,7 @@ export type CanonicalCodexConfig = {
 
 export class CodexConfigMirror {
   constructor(
-    private readonly store: Store,
+    private readonly store: Pick<Store, 'getSettings'>,
     private readonly assertManagedHomePath: (
       candidatePath: string,
       expectedAccountId?: string

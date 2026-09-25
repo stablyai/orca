@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { getDefaultSettings } from '../../shared/constants'
 
 const testState = vi.hoisted(() => ({ fakeHomeDir: '' }))
 
@@ -35,10 +36,20 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     // Long enough to exceed sun_path on every platform, like a real account home.
     managedHomePath = join(root, 'a'.repeat(80), 'home')
     mkdirSync(managedHomePath, { recursive: true })
-    const store = {
-      getSettings: () => ({ codexManagedAccounts: [{ id: 'acct', managedHomePath }] })
+    const settings = {
+      ...getDefaultSettings(testState.fakeHomeDir),
+      codexManagedAccounts: [
+        {
+          id: 'acct',
+          email: 'user@example.com',
+          managedHomePath,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
     }
-    mirror = new CodexConfigMirror(store as never, (path) => path)
+    mirror = new CodexConfigMirror({ getSettings: () => settings }, (path) => path)
   })
 
   afterEach(() => {
