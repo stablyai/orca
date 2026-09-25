@@ -131,13 +131,47 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
   defineMethod({
     name: 'orchestration.inbox',
     params: InboxParams,
-    handler: (params, { runtime }) => {
+    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
+      if (params.run) {
+        if (!params.terminal) {
+          throw new OrchestrationError(
+            'terminal_required',
+            'Run-scoped inbox reads require a terminal. Run this command inside a live Orca terminal or pass --terminal <handle>.'
+          )
+        }
+        const callerPaneKey = runtime.getTerminalPaneKey(params.terminal) ?? params.terminalPaneKey
+        const run = resolveRunScope(runtime, {
+          runId: params.run,
+          callerTerminalHandle: params.terminal,
+          callerPaneKey,
+          requireCurrentConsumer: true,
+          legacyCoordinatorRunId,
+          callerEvidence: orchestrationCompatibilityEvidence
+        })
+        const messages = db.getRunMailboxHistory(run.id, params.limit)
+        return {
+          messages,
+          count: messages.length,
+          scope: `messages addressed to Run ${run.id}`,
+          runBinding: run.id
+        }
+      }
       // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
-      const messages = params.terminal
-        ? db.getAllMessagesForHandle(params.terminal, params.limit)
-        : db.getInbox(params.limit)
-      return { messages, count: messages.length }
+      if (params.terminal) {
+        // Why: the runtime's live handle wins; pane metadata only preserves a reminted caller identity.
+        const paneKey = runtime.getTerminalPaneKey(params.terminal) ?? params.terminalPaneKey
+        const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+        const messages = db.getAllMessagesForHandle(params.terminal, params.limit)
+        return {
+          messages,
+          count: messages.length,
+          scope: `messages addressed to terminal ${params.terminal}`,
+          runBinding: boundRun?.id ?? null
+        }
+      }
+      const messages = db.getInbox(params.limit)
+      return { messages, count: messages.length, scope: 'messages across all recipients' }
     }
   }),
 
