@@ -1,3 +1,4 @@
+import { createDesktopBrowserHostLeaseSubscription } from './desktop-browser-host-lease-subscription'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
@@ -19,8 +20,8 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
-import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
+import { PairedRuntimeBrowserClientHost } from '../../shared/browser-client-host/paired-runtime-browser-client-host'
+import { PairedRuntimeBrowserHostLease } from '../../shared/browser-client-host/paired-runtime-browser-host-lease'
 
 const pairing = {
   v: 2,
@@ -340,7 +341,7 @@ function createHost(
   pageReconciliationProtocolVersion?: 1
 ): PairedRuntimeBrowserClientHost {
   return new PairedRuntimeBrowserClientHost({
-    pairing,
+    subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
     authorityRuntimeId: 'runtime-a',
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],

@@ -17,7 +17,7 @@ type CreateHost = (
 const createHostCallbacks: CreateHost[] = []
 const hostOptions: { browserHostClientId: string }[] = []
 
-vi.mock('./paired-runtime-browser-client-host', () => ({
+vi.mock('../../shared/browser-client-host/paired-runtime-browser-client-host', () => ({
   PairedRuntimeBrowserClientHost: class {
     constructor(options: { browserHostClientId: string }) {
       hostOptions.push(options)

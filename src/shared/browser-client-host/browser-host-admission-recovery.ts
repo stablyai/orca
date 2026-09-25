@@ -1,9 +1,9 @@
-import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import type { BrowserClientHostLeaseAuthority } from '../browser-client-host-protocol'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../shared/remote-runtime-client-error-classification'
+} from '../remote-runtime-client-error-classification'
 import { nextBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
 import type { BrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
 

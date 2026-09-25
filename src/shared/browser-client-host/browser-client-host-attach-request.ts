@@ -1,5 +1,5 @@
-import { BrowserClientHostAttachParams } from '../../shared/browser-client-host-protocol'
-import { prepareBrowserClientPageInventoryForAttach } from './browser-client-page-inventory'
+import { BrowserClientHostAttachParams } from '../browser-client-host-protocol'
+import { prepareBrowserClientPageInventoryForAttach } from './browser-client-page-inventory-attach'
 import type { PairedRuntimeBrowserHostLeaseOptions } from './paired-runtime-browser-host-lease-options'
 
 export function assertBrowserClientHostAttachOptions(

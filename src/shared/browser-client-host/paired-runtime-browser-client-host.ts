@@ -1,26 +1,24 @@
+import type { BrowserClientAutomationMethod } from '../browser-client-automation-protocol'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
-import type { PairingOffer } from '../../shared/pairing'
-import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import type { BrowserClientFileChannelAvailability } from './browser-client-file-channel-transport'
-import { BrowserClientHostCommandDispatcher } from '../../shared/browser-client-host/browser-client-host-command-dispatcher'
-import type {
-  CommandHandler,
-  DispatcherOptions
-} from '../../shared/browser-client-host/browser-client-host-command-state'
+} from '../browser-client-host-protocol'
+import type { SubscribeBrowserHostLease } from './browser-host-lease-subscription'
+import type { RuntimeRpcResponse } from '../runtime-rpc-envelope'
+import type { BrowserClientFileChannelAvailability } from './browser-client-file-channel-availability'
+import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
+import type { CommandHandler, DispatcherOptions } from './browser-client-host-command-state'
 import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
 
 type DispatcherLimits = Omit<DispatcherOptions, 'authority' | 'handler'>
 
 export type PairedRuntimeBrowserClientHostOptions = {
-  pairing: PairingOffer
+  subscribe: SubscribeBrowserHostLease
   authorityRuntimeId: string
   browserHostClientId: string
+  supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
   hostCapabilities: readonly string[]
   handler: CommandHandler
   getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
@@ -29,7 +27,6 @@ export type PairedRuntimeBrowserClientHostOptions = {
   dispatcher?: DispatcherLimits
   timeoutMs?: number
   reconnectRetryDelayMs?: number
-  subscription?: RemoteRuntimeSubscriptionOptions
   maxConcurrentCommandResults?: number
   maxUnsettledCommandResults?: number
   onAuthority?: (authority: BrowserClientHostLeaseAuthority) => void
@@ -48,10 +45,11 @@ export class PairedRuntimeBrowserClientHost {
 
   constructor(private readonly options: PairedRuntimeBrowserClientHostOptions) {
     this.lease = new PairedRuntimeBrowserHostLease({
-      pairing: options.pairing,
+      subscribe: options.subscribe,
       authorityRuntimeId: options.authorityRuntimeId,
       browserHostClientId: options.browserHostClientId,
       hostCapabilities: options.hostCapabilities,
+      supportedAutomationMethods: options.supportedAutomationMethods,
       pageCommandProtocolVersion: 1,
       ...(options.fileChannelProtocolVersion
         ? { fileChannelProtocolVersion: options.fileChannelProtocolVersion }
@@ -72,7 +70,6 @@ export class PairedRuntimeBrowserClientHost {
       onPageCommand: (command) => this.dispatch(command),
       timeoutMs: options.timeoutMs,
       reconnectRetryDelayMs: options.reconnectRetryDelayMs,
-      subscription: options.subscription,
       maxConcurrentCommandResults: options.maxConcurrentCommandResults,
       maxUnsettledCommandResults: options.maxUnsettledCommandResults,
       onError: (error) => this.handleLeaseError(error)

@@ -1,3 +1,4 @@
+import { createDesktopBrowserHostLeaseSubscription } from './desktop-browser-host-lease-subscription'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
@@ -15,8 +16,8 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-import { PairedRuntimeBrowserHostLease } from './paired-runtime-browser-host-lease'
-import type { PairedRuntimeBrowserHostLeaseOptions } from './paired-runtime-browser-host-lease-options'
+import { PairedRuntimeBrowserHostLease } from '../../shared/browser-client-host/paired-runtime-browser-host-lease'
+import type { PairedRuntimeBrowserHostLeaseOptions } from '../../shared/browser-client-host/paired-runtime-browser-host-lease-options'
 
 const pairing = {
   v: 2,
@@ -279,7 +280,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
     subscribeRemoteRuntimeRequestMock.mockReset()
     const unsolicitedAttempts = mockAttempts()
     const unsolicited = new PairedRuntimeBrowserHostLease({
-      pairing,
+      subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
       hostCapabilities: ['webview']
@@ -414,7 +415,7 @@ function createReconnectLease(
   overrides: Partial<PairedRuntimeBrowserHostLeaseOptions>
 ): PairedRuntimeBrowserHostLease {
   return new PairedRuntimeBrowserHostLease({
-    pairing,
+    subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
     authorityRuntimeId: 'runtime-a',
     browserHostClientId: 'host-a',
     hostCapabilities: ['webview'],

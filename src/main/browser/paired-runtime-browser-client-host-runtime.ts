@@ -1,3 +1,4 @@
+import { createDesktopBrowserHostLeaseSubscription } from './desktop-browser-host-lease-subscription'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
@@ -29,7 +30,7 @@ import {
 } from './browser-client-page-automation-runtime'
 import { selectBrowserClientPageRenderer } from './browser-client-page-renderer-runtime'
 import { PairedRuntimeBrowserClientHostComposition } from './paired-runtime-browser-client-host-composition'
-import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
+import { PairedRuntimeBrowserClientHost } from '../../shared/browser-client-host/paired-runtime-browser-client-host'
 import {
   PairedRuntimeBrowserClientHostRegistry,
   type PairedRuntimeBrowserClientHostStart
@@ -112,7 +113,7 @@ const browserClientHosts =
           { handler, getPageInventory, onAuthority, onTransportLost, onReconnected, onError }
         ) => {
           const host = new PairedRuntimeBrowserClientHost({
-            pairing: next.pairing,
+            subscribe: createDesktopBrowserHostLeaseSubscription(next.pairing),
             authorityRuntimeId: next.authorityRuntimeId,
             browserHostClientId: getBrowserClientHostId(),
             hostCapabilities: [

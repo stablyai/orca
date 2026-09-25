@@ -1,24 +1,19 @@
 import {
   assertBrowserClientAutomationMethodSupported,
   sameBrowserClientAutomationMethods
-} from '../../shared/browser-client-automation-protocol'
+} from '../browser-client-automation-protocol'
 import {
   BrowserClientHostEvent,
   type BrowserClientHostCommandEvent,
   type BrowserClientHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
-import {
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../browser-client-host-protocol'
+import type {
+  BrowserHostLeaseSubscription,
+  BrowserHostLeaseSubscriptionCallbacks
+} from './browser-host-lease-subscription'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { createBrowserClientHostAttachRequest } from './browser-client-host-attach-request'
-import { sameBrowserClientHostLeaseAuthority } from '../../shared/browser-client-host/browser-client-host-command-authority'
+import { sameBrowserClientHostLeaseAuthority } from './browser-client-host-command-authority'
 import type { PairedRuntimeBrowserHostLeaseOptions } from './paired-runtime-browser-host-lease-options'
 
 type PairedRuntimeBrowserHostLeaseConnectionOptions = {
@@ -33,7 +28,7 @@ type PairedRuntimeBrowserHostLeaseConnectionOptions = {
 }
 
 export class PairedRuntimeBrowserHostLeaseConnection {
-  private subscription: RemoteRuntimeSubscription | null = null
+  private subscription: BrowserHostLeaseSubscription | null = null
   private readyTimeout: ReturnType<typeof setTimeout> | null = null
   private resolveReady = (_authority: BrowserClientHostLeaseAuthority): void => {}
   private rejectReady = (_error: Error): void => {}
@@ -52,7 +47,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     return this.subscription !== null
   }
 
-  get sendRequest(): RemoteRuntimeSubscription['sendRequest'] | undefined {
+  get sendRequest(): BrowserHostLeaseSubscription['sendRequest'] | undefined {
     return this.subscription?.sendRequest
   }
 
@@ -64,25 +59,12 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     void ready.catch(() => undefined)
     const request = createBrowserClientHostAttachRequest(this.options.lease)
     try {
-      let subscription: RemoteRuntimeSubscription
+      let subscription: BrowserHostLeaseSubscription
       try {
-        subscription = await subscribeRemoteRuntimeRequest(
-          this.options.lease.pairing,
-          'browser.clientHost.attach',
+        subscription = await this.options.lease.subscribe(
           request.params,
           this.options.timeoutMs,
-          this.callbacks(request),
-          {
-            ...this.options.lease.subscription,
-            // Why metadata is advertised here: page metadata is published back over this very
-            // connection (the runtime refuses page traffic from any other), and its handler gates
-            // on the capability being declared by the connection it arrives on.
-            clientCapabilities: [
-              ...(this.options.lease.subscription?.clientCapabilities ?? []),
-              BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-              BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-            ]
-          }
+          this.callbacks(request)
         )
       } catch (error) {
         this.fail(asError(error))
@@ -137,7 +119,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
   }
 
   private callbacks(request: ReturnType<typeof createBrowserClientHostAttachRequest>) {
-    const callbacks: RemoteRuntimeSubscriptionCallbacks = {
+    const callbacks: BrowserHostLeaseSubscriptionCallbacks = {
       onResponse: (response) => this.handleResponse(response, request),
       onError: (error) => this.fail(error),
       onClose: () =>
@@ -152,7 +134,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
   }
 
   private handleResponse(
-    response: Parameters<RemoteRuntimeSubscriptionCallbacks['onResponse']>[0],
+    response: Parameters<BrowserHostLeaseSubscriptionCallbacks['onResponse']>[0],
     request: ReturnType<typeof createBrowserClientHostAttachRequest>
   ): void {
     if (!this.active) {

@@ -1,15 +1,14 @@
-import type { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
+import type { BrowserClientAutomationMethod } from '../browser-client-automation-protocol'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../shared/browser-client-host-protocol'
-import type { PairingOffer } from '../../shared/pairing'
-import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
+} from '../browser-client-host-protocol'
+import type { SubscribeBrowserHostLease } from './browser-host-lease-subscription'
 
 export type PairedRuntimeBrowserHostLeaseOptions = {
-  pairing: PairingOffer
+  subscribe: SubscribeBrowserHostLease
   authorityRuntimeId: string
   browserHostClientId: string
   supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
@@ -31,6 +30,5 @@ export type PairedRuntimeBrowserHostLeaseOptions = {
   maxConcurrentCommandResults?: number
   maxUnsettledCommandResults?: number
   timeoutMs?: number
-  subscription?: RemoteRuntimeSubscriptionOptions
   onError?: (error: Error) => void
 }

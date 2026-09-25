@@ -1,5 +1,5 @@
-import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import type { BrowserHostLeaseSubscription } from './browser-host-lease-subscription'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 
 /**
  * Resolves the sender for traffic that has to ride the lease's own connection, or fails closed.
@@ -10,9 +10,9 @@ import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-err
  * spending a round trip to be told the request could never have worked.
  */
 export function requireBrowserHostLeaseSendRequest(
-  sendRequest: RemoteRuntimeSubscription['sendRequest'] | undefined,
+  sendRequest: BrowserHostLeaseSubscription['sendRequest'] | undefined,
   unavailableMessage: string
-): NonNullable<RemoteRuntimeSubscription['sendRequest']> {
+): NonNullable<BrowserHostLeaseSubscription['sendRequest']> {
   if (!sendRequest) {
     throw new RemoteRuntimeClientError('remote_runtime_unavailable', unavailableMessage)
   }

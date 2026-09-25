@@ -1,3 +1,4 @@
+import { createDesktopBrowserHostLeaseSubscription } from './desktop-browser-host-lease-subscription'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
@@ -14,7 +15,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
+import { PairedRuntimeBrowserClientHost } from '../../shared/browser-client-host/paired-runtime-browser-client-host'
 
 const pairing = {
   v: 2,
@@ -35,7 +36,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
     const attempts = mockAttempts()
     let state: 'active' | 'outcomeUnknown' = 'active'
     const host = new PairedRuntimeBrowserClientHost({
-      pairing,
+      subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
       hostCapabilities: ['webview'],
@@ -71,7 +72,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
     const handler = vi.fn(() => ({ status: 'completed' as const }))
     const onError = vi.fn()
     const host = new PairedRuntimeBrowserClientHost({
-      pairing,
+      subscribe: createDesktopBrowserHostLeaseSubscription(pairing),
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
       hostCapabilities: ['webview'],

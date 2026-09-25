@@ -3,12 +3,12 @@ import {
   BrowserClientHostCommandResultAck,
   type BrowserClientHostCommandEvent,
   type BrowserClientHostCommandResult as BrowserClientHostCommandResultType
-} from '../../shared/browser-client-host-protocol'
-import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../browser-client-host-protocol'
+import type { BrowserHostLeaseSubscription } from './browser-host-lease-subscription'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 
 export async function submitBrowserHostCommandResult(
-  sendRequest: NonNullable<RemoteRuntimeSubscription['sendRequest']>,
+  sendRequest: NonNullable<BrowserHostLeaseSubscription['sendRequest']>,
   command: BrowserClientHostCommandEvent,
   candidate: BrowserClientHostCommandResultType,
   timeoutMs: number

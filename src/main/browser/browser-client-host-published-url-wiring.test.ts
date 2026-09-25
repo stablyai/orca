@@ -20,7 +20,7 @@ type CompositionOptions = {
 const compositionOptions: CompositionOptions[] = []
 const recordedUrlParams: unknown[] = []
 
-vi.mock('./paired-runtime-browser-client-host', () => ({
+vi.mock('../../shared/browser-client-host/paired-runtime-browser-client-host', () => ({
   PairedRuntimeBrowserClientHost: class {}
 }))
 

@@ -1,4 +1,4 @@
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 
 type InventoryRefreshState = {
   closed: boolean

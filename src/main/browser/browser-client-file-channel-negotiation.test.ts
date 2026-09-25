@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { BrowserClientHostAttachParams } from '../../shared/browser-client-host-protocol'
-import { createBrowserClientHostAttachRequest } from './browser-client-host-attach-request'
+import { createBrowserClientHostAttachRequest } from '../../shared/browser-client-host/browser-client-host-attach-request'
 import { sameBrowserClientHostLeaseAuthority } from '../../shared/browser-client-host/browser-client-host-command-authority'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
-import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
+import { PairedRuntimeBrowserClientHost } from '../../shared/browser-client-host/paired-runtime-browser-client-host'
 
 const leaseOptions = {
-  pairing: {} as never,
+  subscribe: async () => ({ close: () => {} }),
   authorityRuntimeId: 'runtime-1',
   browserHostClientId: 'host-1',
   hostCapabilities: ['webview'],
@@ -112,8 +112,9 @@ describe('browser file channel negotiation', () => {
   })
 
   it('separates a host that never offered the channel from one whose lease is gone', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This existing white-box test sets the private lease fields declared by the receiver.
     const host = new PairedRuntimeBrowserClientHost({
-      pairing: {} as never,
+      subscribe: async () => ({ close: () => {} }),
       authorityRuntimeId: 'runtime-1',
       browserHostClientId: 'host-1',
       hostCapabilities: ['webview'],
