@@ -22,7 +22,7 @@ afterAll(() => {
 
 // Mirrors how each shell embeds the snippet: bash rcfile top level, zsh first-prompt hook.
 const SHELLS = [
-  { name: 'bash', enabled: posix, args: (body: string) => ['-uc', body] },
+  { name: 'bash', enabled: posix, args: (body: string) => ['--norc', '--noprofile', '-uc', body] },
   {
     name: 'zsh',
     enabled: hasZsh,
