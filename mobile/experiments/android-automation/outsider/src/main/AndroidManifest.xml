@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Unrelated probe" android:allowBackup="false">
+    <activity android:name=".Probe" android:exported="true" />
+  </application>
+</manifest>

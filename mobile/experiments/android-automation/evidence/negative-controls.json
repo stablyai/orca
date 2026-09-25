@@ -1,0 +1,73 @@
+[
+  {
+    "variant": "throw",
+    "change": "Replace mutation expression with (() => { throw new Error('review-forced-evaluation-failure') })()",
+    "exitCode": 1,
+    "passed": false,
+    "routeSocket": "webview_devtools_remote_5327",
+    "unrelatedApp": {
+      "uid": 10217,
+      "socket": "webview_devtools_remote_5327",
+      "connected": false,
+      "rejected": "java.io.IOException: Permission denied"
+    },
+    "shellMutation": {
+      "result": {
+        "type": "object",
+        "subtype": "error",
+        "className": "Error",
+        "description": "Error: review-forced-evaluation-failure\n    at <anonymous>:1:16\n    at <anonymous>:1:64",
+        "objectId": "5417562133400471347.3.1"
+      },
+      "exceptionDetails": {
+        "exceptionId": 1,
+        "text": "Uncaught",
+        "lineNumber": 0,
+        "columnNumber": 9,
+        "scriptId": "10",
+        "exception": {
+          "type": "object",
+          "subtype": "error",
+          "className": "Error",
+          "description": "Error: review-forced-evaluation-failure\n    at <anonymous>:1:16\n    at <anonymous>:1:64",
+          "objectId": "5417562133400471347.3.2"
+        }
+      }
+    },
+    "failure": "AssertionError [ERR_ASSERTION]: Shell evaluation threw",
+    "cleanup": [
+      {
+        "action": "remove forward 52781"
+      },
+      {
+        "action": "uninstall dev.orca.outsider"
+      },
+      {
+        "action": "uninstall dev.orca.automationproof"
+      }
+    ]
+  },
+  {
+    "variant": "socket",
+    "change": "Replace only outsider socket argument with review-no-such-socket",
+    "exitCode": 1,
+    "passed": false,
+    "routeSocket": "webview_devtools_remote_6509",
+    "unrelatedApp": {
+      "uid": 10219,
+      "socket": "review-no-such-socket",
+      "connected": false,
+      "rejected": "java.io.IOException: Connection refused"
+    },
+    "shellMutation": null,
+    "failure": "AssertionError [ERR_ASSERTION]: Unrelated UID probed a different socket",
+    "cleanup": [
+      {
+        "action": "uninstall dev.orca.outsider"
+      },
+      {
+        "action": "uninstall dev.orca.automationproof"
+      }
+    ]
+  }
+]
