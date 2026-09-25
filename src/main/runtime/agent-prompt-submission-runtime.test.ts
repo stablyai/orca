@@ -90,6 +90,38 @@ describe('agent prompt submission runtime', () => {
     }
   })
 
+  it('does not record prompt activity when the prompt is pasted but never submitted', async () => {
+    vi.useFakeTimers()
+    registerPty({
+      ptyId: 'pty-prompt',
+      worktreeId: null,
+      sessionId: null,
+      paneKey: 'tab:leaf',
+      pid: 1
+    })
+    try {
+      const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+        if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+          runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
+        }
+      })
+      const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+      const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
+
+      await vi.runAllTimersAsync()
+
+      await rejected
+      // The paste reached the PTY but the Enter never did, so nothing was
+      // submitted. Crediting this pane would let it win a same-directory tie
+      // for a session it never created — the wrong-pane outcome this exists
+      // to prevent.
+      expect(writes).not.toContain('\r')
+      expect(promptActivityAt('pty-prompt')).toBeUndefined()
+    } finally {
+      unregisterPty('pty-prompt')
+    }
+  })
+
   it('accepts a working-to-idle cycle completed before the first poll', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
