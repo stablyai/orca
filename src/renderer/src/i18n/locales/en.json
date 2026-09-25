@@ -608,6 +608,7 @@
           "da41abbdd4": "Ante",
           "060d152fb5": "Trae",
           "muse_label": "Muse",
+          "zcode_label": "ZCode",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "opencode2_label": "OpenCode 2"
@@ -982,6 +983,7 @@
             "empty": "{{fileName}} is empty.",
             "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
             "tooMany": "You can attach up to {{maxCount}} images.",
+            "totalTooLarge": "{{fileName}} would bring the attachments over {{maxSize}} in total.",
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
             "additionalErrors": "{{count}} additional images could not be attached."
@@ -3263,6 +3265,14 @@
             "e2fcf07c0d": "Orca could not save this terminal session because local storage is full or not writable. Open the disk space analyzer to find workspace storage you can clean up.",
             "678c780a2c": "Disk space is unavailable"
           },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
+          },
           "osc52": {
             "clipboard": {
               "blocked": {
@@ -5385,7 +5395,9 @@
           "69969ba364": "Sending…",
           "imageReadFailed": "Could not read the attached images. Try attaching them again.",
           "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
-          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed.",
+          "imagesRejected": "Feedback sent. Your screenshots were too large to upload and were not included.",
+          "imagesNotIncluded": "Feedback sent. Your screenshots could not be uploaded and were not included."
         },
         "SidebarFilter": {
           "e3b3898218": "Add project",
@@ -6284,7 +6296,7 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "Attach up to {count} screenshots",
+          "screenshotsHint": "Attach up to {{count}} screenshots, {{maxSize}} total",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },

@@ -688,20 +688,33 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     )
   })
 
-  it('does not report a second release as successful while retained exit evidence is unproven', async () => {
-    const claude = fakeClaude({ unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' } })
+  it('starts the chat again after a crash whose root exited but whose descendants went unverified', async () => {
+    const claude = fakeClaude()
     const adapter = await acquired(claude)
+    const first = claude.connections[0]
+    first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+    first.close = vi.fn<FakeConnection['close']>().mockResolvedValue(false)
+    first.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
+
+    // Before the exit publishes, the start settles it itself rather than refusing on it.
+    await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
+
+    expect(claude.connections).toHaveLength(2)
+  })
+
+  it('publishes a crash whose root exited but whose descendants went unverified', async () => {
+    const claude = fakeClaude({ unprovenCloseVerdict: { root: 'exited', tree: 'unverifiable' } })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = await acquired(claude, {}, events)
     const connection = claude.connections[0]
     connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
-    connection.close = vi.fn().mockResolvedValue(false) as unknown as FakeConnection['close']
+    await adapter.drainObservedExits()
 
-    await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).rejects.toBeInstanceOf(
-      AgentSessionAcquisitionRootExitObservedError
+    // The owner releases the lease on a root exit, so the host must hear of it now, as of a proven one.
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: 'ended', cause: 'unexpected-exit' })
     )
-    await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).rejects.toBeInstanceOf(
-      AgentSessionAcquisitionRootExitObservedError
-    )
-    expect(connection.close).toHaveBeenCalledTimes(2)
+    await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(true)
   })
 
   it('keeps shutdown pending until a retained unexpected-exit proof settles', async () => {
