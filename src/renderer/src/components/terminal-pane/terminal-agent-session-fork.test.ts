@@ -19,9 +19,19 @@ type KnownWorktree = {
   isBare?: boolean
 }
 
+type MockAgentStatus = {
+  agentType?: string
+  worktreeId?: string
+  updatedAt?: number
+  providerSession?: { key: 'session_id'; id: string }
+}
+
 type MockStore = {
   repos: { id: string; kind?: 'git' | 'folder' }[]
-  agentStatusByPaneKey: Record<string, { agentType?: string }>
+  agentStatusByPaneKey: Record<string, MockAgentStatus>
+  retainedAgentsByPaneKey: Record<string, never>
+  sleepingAgentSessionsByPaneKey: Record<string, never>
+  agentLaunchConfigByPaneKey: Record<string, never>
   tabsByWorktree: Record<string, { id: string; launchAgent?: string | null }[]>
   getKnownWorktreeById: ReturnType<typeof vi.fn<(id: string) => KnownWorktree | undefined>>
   openModal: typeof mockOpenModal
@@ -30,6 +40,9 @@ type MockStore = {
 const store: MockStore = {
   repos: [],
   agentStatusByPaneKey: {},
+  retainedAgentsByPaneKey: {},
+  sleepingAgentSessionsByPaneKey: {},
+  agentLaunchConfigByPaneKey: {},
   tabsByWorktree: {},
   getKnownWorktreeById: vi.fn<(id: string) => KnownWorktree | undefined>(),
   openModal: mockOpenModal
@@ -124,6 +137,43 @@ describe('forkAgentSessionFromMenuPane', () => {
       preselectedPaneKey: `tab-1:${LEAF_ID}`,
       transcript: null
     })
+  })
+
+  it('opens the dialog on a native session even without captured context', async () => {
+    store.agentStatusByPaneKey = {
+      [`tab-1:${LEAF_ID}`]: {
+        agentType: 'claude',
+        worktreeId: 'repo::wt',
+        updatedAt: 1,
+        providerSession: { key: 'session_id', id: 'sess-1' }
+      }
+    }
+
+    await forkFromMenu('repo::wt', makePane('\x1b[0m\r\n\x1bc\x07'))
+
+    expect(mockToast.error).not.toHaveBeenCalled()
+    expect(mockOpenModal).toHaveBeenCalledWith('agent-session-fork', {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: `tab-1:${LEAF_ID}`,
+      transcript: null
+    })
+  })
+
+  it('reports an empty terminal when the pane agent cannot fork natively', async () => {
+    store.agentStatusByPaneKey = {
+      [`tab-1:${LEAF_ID}`]: {
+        agentType: 'pi',
+        worktreeId: 'repo::wt',
+        updatedAt: 1,
+        providerSession: { key: 'session_id', id: 'sess-1' }
+      }
+    }
+
+    await forkFromMenu('repo::wt', makePane('\x1b[0m\r\n\x1bc\x07'))
+
+    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(mockToast.error).toHaveBeenCalledWith('No terminal context to fork')
   })
 
   it('does nothing without a pane', async () => {

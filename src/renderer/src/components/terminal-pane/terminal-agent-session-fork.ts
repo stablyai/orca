@@ -5,6 +5,7 @@ import {
   buildBoundedSessionTranscript
 } from '@/lib/agent-session-fork-context'
 import { useAppStore } from '@/store'
+import { listForkableAgentSessions } from '@/lib/worktree-agent-fork-sessions'
 import { buildAgentSessionForkModalData } from '@/components/agent-session-fork/agent-session-fork-modal-data'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -145,21 +146,27 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
 }
 
 export function openAgentSessionForkDialogFromPane(args: ForkAgentSessionFromPaneArgs): void {
-  if (!ensureForkableSourceWorkspace(args.worktreeId, args.pane)) {
+  const { pane, tabId, worktreeId } = args
+  if (!ensureForkableSourceWorkspace(worktreeId, pane)) {
     return
   }
-  const fork = prepareAgentSessionForkFromPane(args)
-  if (!fork) {
+  const paneKey = makePaneKey(tabId, pane.leafId)
+  // Why: a native fork resumes the provider session, so it needs no captured scrollback and
+  // the dialog drops the transcript option for it anyway.
+  const hasNativeFork = listForkableAgentSessions(useAppStore.getState(), worktreeId).some(
+    (session) => session.paneKey === paneKey
+  )
+  const fork = hasNativeFork ? null : prepareAgentSessionForkFromPane(args)
+  if (!hasNativeFork && !fork) {
     return
   }
-  // Why: the dialog preselects a native-fork session by paneKey and then drops the transcript option.
   useAppStore.getState().openModal(
     'agent-session-fork',
     buildAgentSessionForkModalData({
-      sourceWorktreeId: fork.worktreeId,
+      sourceWorktreeId: worktreeId,
       launchSource: 'terminal_context_menu',
-      preselectedPaneKey: makePaneKey(args.tabId, fork.pane.leafId),
-      transcript: fork.agent ? { agent: fork.agent, prompt: fork.prompt } : null
+      preselectedPaneKey: paneKey,
+      transcript: fork?.agent ? { agent: fork.agent, prompt: fork.prompt } : null
     })
   )
 }
