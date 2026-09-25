@@ -107,14 +107,14 @@ function listedNames(container: HTMLElement): string[] {
 }
 
 describe('ChatPane shell environment', () => {
-  it('shows only when Chat UI is on with Chat UI as the default view', () => {
+  it('shows whenever Chat UI is on, whatever the default view', () => {
     for (const experimentalNativeChat of [false, true]) {
       for (const openAgentTabsInChatByDefault of [false, true]) {
         const { container, unmount } = renderSetting({
           experimentalNativeChat,
           openAgentTabsInChatByDefault
         })
-        const expected = experimentalNativeChat && openAgentTabsInChatByDefault
+        const expected = experimentalNativeChat
         const label = JSON.stringify({ experimentalNativeChat, openAgentTabsInChatByDefault })
         expect(container.querySelector(SHELL_ENV_TOGGLE) !== null, label).toBe(expected)
         expect(container.querySelector(RESUME_TOGGLE) !== null, label).toBe(expected)
@@ -294,7 +294,6 @@ describe('ChatPane', () => {
     expect(container.querySelector(DEFAULT_VIEW_SELECT)?.getAttribute('data-value')).toBe(
       'terminal-chat'
     )
-    // Structured-only rows have no entry path under Terminal chat.
     expect(container.textContent).not.toContain(STRUCTURED_SCOPE)
 
     await act(async () => {
@@ -360,7 +359,7 @@ describe('ChatPane', () => {
     expect(container.querySelector(SHELL_ENV_TOGGLE)).toBeNull()
   })
 
-  it('keeps the Chat UI switch and default view reachable when a search matches only a structured row', () => {
+  it('keeps the Chat UI switch reachable when a search matches only a host-owned row', () => {
     useAppStore.setState({ settingsSearchQuery: 'variables' })
     const { container } = renderSetting({
       experimentalNativeChat: true,
@@ -368,20 +367,19 @@ describe('ChatPane', () => {
     })
 
     expect(container.querySelector(CHAT_UI_TOGGLE)).not.toBeNull()
-    expect(container.querySelector('#chat-default-view')).not.toBeNull()
+    expect(container.querySelector('#chat-default-view')).toBeNull()
     expect(container.querySelector('#chat-shell-environment')).not.toBeNull()
     expect(container.querySelector('#chat-resume-on-restart')).toBeNull()
   })
 
-  it('shows the default view that unlocks a searched structured row under Terminal chat', () => {
+  it('finds the resume row under Terminal chat', () => {
     useAppStore.setState({ settingsSearchQuery: 'resume' })
     const { container } = renderSetting({
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: false
     })
 
-    expect(container.querySelector('#chat-default-view')).not.toBeNull()
-    expect(container.querySelector('#chat-resume-on-restart')).toBeNull()
+    expect(container.querySelector('#chat-resume-on-restart')).not.toBeNull()
   })
 
   it('hides the default view when a search matches neither it nor a structured row', () => {

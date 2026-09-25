@@ -1,7 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { useAppStore } from '../../store'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
@@ -9,7 +8,6 @@ import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
 import { getChatSearchEntry } from './chat-search'
-import { matchesSettingsSearch } from './settings-search'
 
 type NativeChatDefaultView = 'terminal-chat' | 'native-chat'
 
@@ -23,17 +21,8 @@ export function ChatPane({ settings, updateSettings }: ChatPaneProps): React.JSX
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
-  // Structured-only settings; terminal-backed chat never reads them, and web clients cannot reach the host copy.
-  const hostOwnedRowsAvailable = !isPairedWebClientWindow()
-  const showStructuredRows = defaultView === 'native-chat' && hostOwnedRowsAvailable
-  const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  // Default view gates the structured rows, so a search for one must keep it reachable too.
-  const structuredRowSearchMatch =
-    hostOwnedRowsAvailable &&
-    matchesSettingsSearch(searchQuery, [
-      getChatSearchEntry('chat-resume-on-restart'),
-      getChatSearchEntry('chat-shell-environment')
-    ])
+  // They apply to every open Chat UI chat whatever the default view, but web clients cannot reach the host copy.
+  const showHostOwnedRows = !isPairedWebClientWindow()
 
   return (
     <div className="w-full max-w-3xl space-y-3">
@@ -60,10 +49,7 @@ export function ChatPane({ settings, updateSettings }: ChatPaneProps): React.JSX
 
       {nativeChatEnabled ? (
         <div className="ml-4 space-y-4 border-l border-border pl-4">
-          <SearchableSetting
-            {...getChatSearchEntry('chat-default-view')}
-            forceVisible={structuredRowSearchMatch}
-          >
+          <SearchableSetting {...getChatSearchEntry('chat-default-view')}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
@@ -120,8 +106,7 @@ export function ChatPane({ settings, updateSettings }: ChatPaneProps): React.JSX
             </div>
           </SearchableSetting>
 
-          {/* Only structured sessions have a resume cursor to continue from. */}
-          {showStructuredRows ? (
+          {showHostOwnedRows ? (
             <SearchableSetting {...getChatSearchEntry('chat-resume-on-restart')}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 shrink space-y-0.5">
@@ -152,7 +137,7 @@ export function ChatPane({ settings, updateSettings }: ChatPaneProps): React.JSX
             </SearchableSetting>
           ) : null}
 
-          {showStructuredRows ? (
+          {showHostOwnedRows ? (
             <SearchableSetting {...getChatSearchEntry('chat-shell-environment')}>
               <NativeChatShellEnvironmentSetting
                 settings={settings}
