@@ -146,6 +146,22 @@ describe('WorktreeContextMenu Fork Agent Session', () => {
     expect(item?.getAttribute('aria-disabled')).toBe('true')
   })
 
+  it.each([
+    [{ branch: '' }, 'Check out a branch first; this workspace is on a detached commit.'],
+    [{ isArchived: true }, 'Unarchive this workspace to fork it.'],
+    [{ isBare: true }, 'Bare repositories have no working tree to fork.']
+  ])('explains why it is disabled for %o', (overrides, reason) => {
+    openMenu(worktreeFixture(overrides))
+
+    expect(findMenuItem('Fork Agent Session...')?.getAttribute('title')).toBe(reason)
+  })
+
+  it('gives no disabled reason when the worktree can be forked', () => {
+    openMenu(worktreeFixture())
+
+    expect(findMenuItem('Fork Agent Session...')?.hasAttribute('title')).toBe(false)
+  })
+
   it('is hidden for folder workspaces', () => {
     openMenu(worktreeFixture({ id: 'folder::f-1', branch: '' }))
 

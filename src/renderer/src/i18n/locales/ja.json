@@ -18201,7 +18201,12 @@
       "changesNotCarried": "{{name}} を未コミットの変更なしで作成しました。",
       "agentNotStarted": "{{name}} を作成しましたが、Agent を起動できませんでした。",
       "menuItem": "Agent セッションをフォーク...",
-      "sourceMissing": "元のワークスペースはもう存在しません。"
+      "sourceMissing": "元のワークスペースはもう存在しません。",
+      "disabledReason": {
+        "bare": "ベアリポジトリにはフォークできる作業ツリーがありません。",
+        "archived": "フォークするには、このワークスペースのアーカイブを解除してください。",
+        "detached": "先にブランチをチェックアウトしてください。このワークスペースはデタッチされたコミット上にあります。"
+      }
     }
   },
   "dashboardPopout": {

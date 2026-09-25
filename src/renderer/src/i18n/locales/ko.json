@@ -18201,7 +18201,12 @@
       "changesNotCarried": "커밋되지 않은 변경 사항 없이 {{name}}을(를) 만들었습니다.",
       "agentNotStarted": "{{name}}을(를) 만들었지만 에이전트를 시작할 수 없습니다.",
       "menuItem": "에이전트 세션 포크...",
-      "sourceMissing": "원본 워크스페이스가 더 이상 존재하지 않습니다."
+      "sourceMissing": "원본 워크스페이스가 더 이상 존재하지 않습니다.",
+      "disabledReason": {
+        "bare": "베어 저장소에는 포크할 작업 트리가 없습니다.",
+        "archived": "포크하려면 이 워크스페이스의 보관을 해제하세요.",
+        "detached": "먼저 브랜치를 체크아웃하세요. 이 워크스페이스는 분리된 커밋에 있습니다."
+      }
     }
   },
   "dashboardPopout": {

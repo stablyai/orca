@@ -18201,7 +18201,12 @@
       "changesNotCarried": "已创建 {{name}}，但未带入你的未提交更改。",
       "agentNotStarted": "已创建 {{name}}，但智能体未能启动。",
       "menuItem": "派生智能体会话...",
-      "sourceMissing": "源工作区已不存在。"
+      "sourceMissing": "源工作区已不存在。",
+      "disabledReason": {
+        "bare": "裸仓库没有可派生的工作树。",
+        "archived": "请先取消归档此工作区，再进行派生。",
+        "detached": "请先检出一个分支；此工作区当前处于分离的提交上。"
+      }
     }
   },
   "dashboardPopout": {

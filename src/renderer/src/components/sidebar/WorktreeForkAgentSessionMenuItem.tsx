@@ -8,6 +8,28 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
+function forkDisabledReason(worktree: Worktree): string | undefined {
+  if (worktree.isBare) {
+    return translate(
+      'components.agentSessionFork.disabledReason.bare',
+      'Bare repositories have no working tree to fork.'
+    )
+  }
+  if (worktree.isArchived) {
+    return translate(
+      'components.agentSessionFork.disabledReason.archived',
+      'Unarchive this workspace to fork it.'
+    )
+  }
+  if (!worktree.branch?.trim()) {
+    return translate(
+      'components.agentSessionFork.disabledReason.detached',
+      'Check out a branch first; this workspace is on a detached commit.'
+    )
+  }
+  return undefined
+}
+
 export function WorktreeForkAgentSessionMenuItem({
   worktree,
   repo,
@@ -21,10 +43,12 @@ export function WorktreeForkAgentSessionMenuItem({
   if (parseWorkspaceKey(worktree.id)?.type === 'folder' || repo?.kind === 'folder') {
     return null
   }
-  const forkable = Boolean(worktree.branch?.trim()) && !worktree.isArchived && !worktree.isBare
+  const disabledReason = forkDisabledReason(worktree)
+  // Why: Radix forwards `title` to the item, as the Delete item does to explain its disabled state.
   return (
     <DropdownMenuItem
-      disabled={isDeleting || !forkable}
+      disabled={isDeleting || disabledReason !== undefined}
+      title={disabledReason}
       onSelect={() =>
         openModal(
           'agent-session-fork',

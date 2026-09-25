@@ -18362,7 +18362,12 @@
       "changesNotCarried": "Created {{name}} without your uncommitted changes.",
       "agentNotStarted": "Created {{name}}, but the agent could not start.",
       "menuItem": "Fork Agent Session...",
-      "sourceMissing": "The source workspace no longer exists."
+      "sourceMissing": "The source workspace no longer exists.",
+      "disabledReason": {
+        "bare": "Bare repositories have no working tree to fork.",
+        "archived": "Unarchive this workspace to fork it.",
+        "detached": "Check out a branch first; this workspace is on a detached commit."
+      }
     }
   },
   "dashboardPopout": {
