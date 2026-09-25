@@ -23,10 +23,8 @@ export function useSessionSearchStatus(args: {
   executionHostId: ExecutionHostId
   active: boolean
   refresh?: number
-  /** Called with each polled answer; keep it stable, it restarts polling when it changes. */
-  onStatus?: (status: AiVaultSearchStatus) => void
 }): SessionSearchStatusRead {
-  const { executionHostId, active, onStatus } = args
+  const { executionHostId, active } = args
   const refresh = args.refresh ?? 0
   const visible = useWindowStreamVisible(0)
   const [status, setStatus] = useState<AiVaultSearchStatus | null>(null)
@@ -60,7 +58,6 @@ export function useSessionSearchStatus(args: {
         if (!disposed) {
           setStatus(next)
           setFailed(false)
-          onStatus?.(next)
         }
       } catch (error) {
         if (!disposed) {
@@ -79,7 +76,7 @@ export function useSessionSearchStatus(args: {
       disposed = true
       stopPolling()
     }
-  }, [executionHostId, active, visible, refresh, intervalMs, hostTooOld, onStatus])
+  }, [executionHostId, active, visible, refresh, intervalMs, hostTooOld])
 
   return { status, failed, hostTooOld, adopt }
 }

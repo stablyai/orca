@@ -1,11 +1,14 @@
 import type { JSX } from 'react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
-import { Badge } from '@/components/ui/badge'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
-import { FeatureTipDialogFrame } from './FeatureTipDialogFrame'
+import {
+  FeatureTipDialogFrame,
+  FeatureTipEyebrow,
+  FeatureTipSettingsLine
+} from './FeatureTipDialogFrame'
 import { translate } from '@/i18n/i18n'
 
 export function CmdJPaletteTipDialog({
@@ -54,12 +57,7 @@ export function CmdJPaletteTipDialog({
       <DialogHeader className="gap-4 text-left">
         <div>
           {/* Why: uppercase eyebrow reads as a category label, not a feature launch. */}
-          <Badge
-            variant="outline"
-            className="mb-3 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-          >
-            {tip.eyebrow.toUpperCase()}
-          </Badge>
+          <FeatureTipEyebrow label={tip.eyebrow} />
           {/* Why: flow the shortcut chip as inline text (not a flex item) so the
                 short Mac label (⌘⇧J) stays on one line, while a wide label like
                 "Ctrl+Shift+J" wraps to the next line only when it doesn't fit —
@@ -78,23 +76,17 @@ export function CmdJPaletteTipDialog({
           </DialogTitle>
           <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
             <span className="block">{tip.description}</span>
-            <span className="block text-muted-foreground">
-              {translate(
+            <FeatureTipSettingsLine
+              lead={translate(
                 'auto.components.feature.tips.CmdJPaletteTipDialog.8241897205',
                 'Rebind the shortcut anytime in'
-              )}{' '}
-              <button
-                type="button"
-                onClick={onRebindClick}
-                className="inline appearance-none border-0 bg-transparent p-0 font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:decoration-foreground"
-              >
-                {translate(
-                  'auto.components.feature.tips.CmdJPaletteTipDialog.c0bb9f869b',
-                  'Settings → Shortcuts'
-                )}
-              </button>
-              .
-            </span>
+              )}
+              link={translate(
+                'auto.components.feature.tips.CmdJPaletteTipDialog.c0bb9f869b',
+                'Settings → Shortcuts'
+              )}
+              onClick={onRebindClick}
+            />
           </DialogDescription>
         </div>
       </DialogHeader>

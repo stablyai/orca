@@ -25,15 +25,43 @@ import {
 type DemoPhase = 'idle' | 'typing' | 'searching' | 'results' | 'focused' | 'erasing'
 type DemoState = { scene: number; phase: DemoPhase; chars: number }
 
-const IDLE_MS = 1100
-const TYPE_MS = 65
-const SEARCHING_MS = 550
-const RESULTS_MS = 1300
-const FOCUSED_MS = 2200
-const ERASE_MS = 24
+// Per-step delay; typing and erasing advance one character per step.
+const PHASE_MS: Record<DemoPhase, number> = {
+  idle: 1100,
+  typing: 65,
+  searching: 550,
+  results: 1300,
+  focused: 2200,
+  erasing: 24
+}
 const ROW_STAGGER_MS = 90
 
 function noop(): void {}
+
+// The real panel header, inert, with everything but the query held still.
+const DEMO_HEADER_PROPS = {
+  hasScanResult: true,
+  activeWorktreePath: '/demo',
+  activeProjectKey: 'demo',
+  scope: 'all',
+  executionHostScope: LOCAL_EXECUTION_HOST_ID,
+  hostScopeOptions: [{ id: LOCAL_EXECUTION_HOST_ID, label: getLocalExecutionHostLabel() }],
+  agents: AI_VAULT_AGENTS,
+  group: DEFAULT_AI_VAULT_GROUP,
+  hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
+  sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+  adjustmentCount: 0,
+  onQueryChange: noop,
+  onScopeChange: noop,
+  onExecutionHostScopeChange: noop,
+  onAgentEnabledChange: noop,
+  onAllAgentsEnabledChange: noop,
+  onGroupChange: noop,
+  onHideEmptySessionsChange: noop,
+  onSessionLimitChange: noop,
+  onReset: noop,
+  onRefresh: noop
+} as const
 
 function nextDemoState(state: DemoState, queryLength: number, sceneCount: number): DemoState {
   switch (state.phase) {
@@ -53,23 +81,6 @@ function nextDemoState(state: DemoState, queryLength: number, sceneCount: number
       return state.chars > 0
         ? { ...state, chars: state.chars - 1 }
         : { scene: (state.scene + 1) % sceneCount, phase: 'idle', chars: 0 }
-  }
-}
-
-function demoStepDelay(state: DemoState, queryLength: number): number {
-  switch (state.phase) {
-    case 'idle':
-      return IDLE_MS
-    case 'typing':
-      return state.chars < queryLength ? TYPE_MS : TYPE_MS * 2
-    case 'searching':
-      return SEARCHING_MS
-    case 'results':
-      return RESULTS_MS
-    case 'focused':
-      return FOCUSED_MS
-    case 'erasing':
-      return ERASE_MS
   }
 }
 
@@ -127,7 +138,6 @@ function DemoSessionRow({
 }): JSX.Element {
   return (
     <div
-      data-testid="session-search-demo-row"
       data-focused={focused}
       className="flex flex-col border-b border-sidebar-border px-3 py-2 transition-colors duration-300 animate-in fade-in-0 slide-in-from-bottom-1 [animation-fill-mode:both] data-[focused=true]:bg-sidebar-accent/55 motion-reduce:animate-none"
       style={{ animationDelay: `${index * ROW_STAGGER_MS}ms` }}
@@ -174,7 +184,10 @@ export function SessionSearchFeatureTipVisual(): JSX.Element {
     }
     const timeoutId = window.setTimeout(
       () => setState((current) => nextDemoState(current, queryLength, scenes.length)),
-      demoStepDelay(state, queryLength)
+      // Why: a beat after the last keystroke before the search starts.
+      state.phase === 'typing' && state.chars === queryLength
+        ? PHASE_MS.typing * 2
+        : PHASE_MS[state.phase]
     )
     return () => window.clearTimeout(timeoutId)
   }, [queryLength, reducedMotion, scenes.length, state])
@@ -197,33 +210,12 @@ export function SessionSearchFeatureTipVisual(): JSX.Element {
       >
         <DemoActivityStrip />
         <AiVaultPanelHeader
+          {...DEMO_HEADER_PROPS}
           query={scene.query.slice(0, shown.chars)}
           searching={shown.chars > 0}
           loading={shown.phase === 'searching'}
-          hasScanResult
-          activeWorktreePath="/demo"
-          activeProjectKey="demo"
-          scope="all"
-          executionHostScope={LOCAL_EXECUTION_HOST_ID}
-          hostScopeOptions={[{ id: LOCAL_EXECUTION_HOST_ID, label: getLocalExecutionHostLabel() }]}
-          agents={AI_VAULT_AGENTS}
-          group={DEFAULT_AI_VAULT_GROUP}
-          hideEmptySessions={DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS}
-          sessionLimit={DEFAULT_AI_VAULT_SESSION_LIMIT}
-          adjustmentCount={0}
-          onQueryChange={noop}
-          onScopeChange={noop}
-          onExecutionHostScopeChange={noop}
-          onAgentEnabledChange={noop}
-          onAllAgentsEnabledChange={noop}
-          onGroupChange={noop}
-          onHideEmptySessionsChange={noop}
-          onSessionLimitChange={noop}
-          onReset={noop}
-          onRefresh={noop}
         />
         <div
-          key={showingHits ? `hits-${shown.scene}` : 'recent'}
           data-dimmed={dimmed}
           className="min-h-0 flex-1 overflow-hidden transition-opacity duration-200 data-[dimmed=true]:opacity-45"
         >

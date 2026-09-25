@@ -1,4 +1,5 @@
 import type { ComponentProps, JSX, ReactNode } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 
 /** Shared two-column tip layout: copy and actions on the left, a feature visual on the right. */
@@ -30,5 +31,41 @@ export function FeatureTipDialogFrame({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+export function FeatureTipEyebrow({ label }: { label: string }): JSX.Element {
+  return (
+    <Badge
+      variant="outline"
+      className="mb-3 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+    >
+      {label.toUpperCase()}
+    </Badge>
+  )
+}
+
+/** A muted "Change it anytime in Settings → X." line whose link leaves the tip for Settings. */
+export function FeatureTipSettingsLine({
+  lead,
+  link,
+  onClick
+}: {
+  lead: string
+  link: string
+  onClick: () => void
+}): JSX.Element {
+  return (
+    <span className="block text-muted-foreground">
+      {lead}{' '}
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline appearance-none border-0 bg-transparent p-0 font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:decoration-foreground"
+      >
+        {link}
+      </button>
+      .
+    </span>
   )
 }

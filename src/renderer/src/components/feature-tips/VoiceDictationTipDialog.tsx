@@ -1,12 +1,15 @@
 import { useRef, type JSX } from 'react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { Badge } from '@/components/ui/badge'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { FeatureTipActions } from './FeatureTipActions'
-import { FeatureTipDialogFrame } from './FeatureTipDialogFrame'
+import {
+  FeatureTipDialogFrame,
+  FeatureTipEyebrow,
+  FeatureTipSettingsLine
+} from './FeatureTipDialogFrame'
 import { VoiceDictationFeatureTipVisual } from './VoiceDictationFeatureTipVisual'
 
 export function VoiceDictationTipDialog({
@@ -41,12 +44,7 @@ export function VoiceDictationTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          <Badge
-            variant="outline"
-            className="mb-3 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-          >
-            {tip.eyebrow.toUpperCase()}
-          </Badge>
+          <FeatureTipEyebrow label={tip.eyebrow} />
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {tip.title}
           </DialogTitle>
@@ -80,20 +78,14 @@ export function VoiceDictationTipDialog({
                 )}
               </span>
             )}
-            <span className="block text-muted-foreground">
-              {translate(
+            <FeatureTipSettingsLine
+              lead={translate(
                 'featureTips.voice.settingsInstruction',
                 'Change the model, dictation mode, or shortcut anytime in'
-              )}{' '}
-              <button
-                type="button"
-                onClick={onVoiceSettingsClick}
-                className="inline appearance-none border-0 bg-transparent p-0 font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:decoration-foreground"
-              >
-                {translate('featureTips.voice.settingsLink', 'Settings → Voice')}
-              </button>
-              .
-            </span>
+              )}
+              link={translate('featureTips.voice.settingsLink', 'Settings → Voice')}
+              onClick={onVoiceSettingsClick}
+            />
           </DialogDescription>
         </div>
       </DialogHeader>

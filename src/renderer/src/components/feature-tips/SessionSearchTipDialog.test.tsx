@@ -39,7 +39,6 @@ function render(stage: SessionSearchTipStage, status: AiVaultSearchStatus | null
       onSettingsClick={() => {}}
       stage={stage}
       status={status}
-      statusUnavailable={false}
     />
   )
 }

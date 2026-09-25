@@ -67,7 +67,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const handleOpenChange = (open: boolean): void => {
     if (!open) {
       setupRequestIdRef.current += 1
-      sessionSearchSetup.dialogClosed()
       markCurrentTipSeen()
       setSkillTerminalOpen(false)
       setPrimaryBusy(false)
@@ -77,7 +76,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   const handleSkip = (): void => {
     setupRequestIdRef.current += 1
-    sessionSearchSetup.dialogClosed()
     markCurrentTipSeen()
     setSkillTerminalOpen(false)
     setPrimaryBusy(false)
@@ -107,8 +105,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
   }
 
   const openSessionSearchSettings = (): void => {
-    // Why: Settings shows the same progress, but a toast still says when the first index lands.
-    sessionSearchSetup.dialogClosed()
     markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'session-history', repoId: null })
@@ -151,21 +147,17 @@ export default function FeatureTipsModal(): JSX.Element | null {
         break
       }
       case 'enable-session-search': {
+        if (sessionSearchSetup.stage === 'offer') {
+          // Why: stay open through the first index so search is never offered half-built.
+          setPrimaryBusy(true)
+          await sessionSearchSetup.enable()
+          setPrimaryBusy(false)
+          break
+        }
+        closeModal()
         if (sessionSearchSetup.stage === 'ready') {
-          sessionSearchSetup.reset()
-          closeModal()
           showAiVaultSearch()
-          break
         }
-        if (sessionSearchSetup.stage === 'indexing') {
-          sessionSearchSetup.dialogClosed()
-          closeModal()
-          break
-        }
-        // Why: stay open through the first index so search is never offered half-built.
-        setPrimaryBusy(true)
-        await sessionSearchSetup.enable()
-        setPrimaryBusy(false)
         break
       }
       case 'setup-cli': {
@@ -295,7 +287,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onSettingsClick={openSessionSearchSettings}
         stage={sessionSearchSetup.stage}
         status={sessionSearchSetup.status}
-        statusUnavailable={sessionSearchSetup.statusUnavailable}
       />
     )
   }

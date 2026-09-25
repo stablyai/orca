@@ -1,7 +1,8 @@
-import type { FeatureTipId } from '../../../../shared/feature-tips'
 import {
   getCompletedFeatureTipIds,
-  getOrderedUnseenFeatureTips
+  getOrderedUnseenFeatureTips,
+  type FeatureTip,
+  type FeatureTipId
 } from '../../../../shared/feature-tips'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -34,6 +35,25 @@ export function isSessionSearchFeatureTipCompleted(
   return webClient || resolveAiVaultSearchSettings(settings).enabled
 }
 
+/** Unseen tips whose feature the user has not already set up, in display order. */
+export function getPendingFeatureTips(args: {
+  seenTipIds: readonly FeatureTipId[]
+  cliInstalled: boolean
+  featureInteractions: FeatureInteractionState
+  settings: FeatureTipSettings | null | undefined
+  webClient: boolean
+}): FeatureTip[] {
+  return getOrderedUnseenFeatureTips({
+    seenTipIds: new Set(args.seenTipIds),
+    completedTipIds: getCompletedFeatureTipIds({
+      cliInstalled: args.cliInstalled,
+      voiceDictationEnabled: args.settings?.voice?.enabled === true,
+      sessionSearchTipCompleted: isSessionSearchFeatureTipCompleted(args.settings, args.webClient),
+      featureInteractions: args.featureInteractions
+    })
+  })
+}
+
 export function getFeatureTipsAppOpenDecision(args: {
   activeModal: string
   cliInstalled: boolean | null
@@ -63,16 +83,12 @@ export function getFeatureTipsAppOpenDecision(args: {
     return { kind: 'skip' }
   }
 
-  const unseenTips = getOrderedUnseenFeatureTips({
-    seenTipIds: new Set<FeatureTipId>(args.featureTipsSeenIds),
-    completedTipIds: getCompletedFeatureTipIds({
-      cliInstalled: args.cliInstalled,
-      voiceDictationEnabled: args.settings.voice?.enabled === true,
-      sessionSearchTipCompleted: isSessionSearchFeatureTipCompleted(args.settings, args.webClient),
-      featureInteractions: args.featureInteractions
-    })
-  })
-
-  const nextTip = unseenTips[0]
+  const nextTip = getPendingFeatureTips({
+    seenTipIds: args.featureTipsSeenIds,
+    cliInstalled: args.cliInstalled,
+    featureInteractions: args.featureInteractions,
+    settings: args.settings,
+    webClient: args.webClient
+  })[0]
   return nextTip ? { kind: 'open', tipId: nextTip.id } : { kind: 'skip' }
 }

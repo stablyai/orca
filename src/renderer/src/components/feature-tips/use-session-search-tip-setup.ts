@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
 import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
@@ -16,19 +16,14 @@ export type SessionSearchTipStage = 'offer' | 'indexing' | 'ready'
 export type SessionSearchTipSetup = {
   stage: SessionSearchTipStage
   status: AiVaultSearchStatus | null
-  /** The status read failed; indexing still runs, only the count is unknown. */
-  statusUnavailable: boolean
-  /** Turns search on; resolves false when the setting could not be saved. */
-  enable: () => Promise<boolean>
-  /** The dialog closed; an unfinished index keeps being watched so a toast can say when it is done. */
-  dialogClosed: () => void
-  reset: () => void
+  /** Turns local search on; the stage then follows the index. */
+  enable: () => Promise<void>
 }
 
 /**
  * The tip's view of local session search, read from the setting and the index itself so a
  * build started from Settings shows the same progress. The feature-tips modal stays mounted
- * after it closes, so a build the user left running keeps being watched and toasts once ready.
+ * after it closes, so a build the user left mid-index is still watched and toasts once ready.
  */
 export function useSessionSearchTipSetup({
   dialogOpen
@@ -37,47 +32,55 @@ export function useSessionSearchTipSetup({
 }): SessionSearchTipSetup {
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
   const searchEnabled = useAppStore((s) => resolveAiVaultSearchSettings(s.settings).enabled)
-  const [watchingInBackground, setWatchingInBackground] = useState(false)
-
-  // Why: toasting from the poll answer (not an effect) fires exactly once, when readiness arrives.
-  const handleStatus = useCallback(
-    (next: AiVaultSearchStatus) => {
-      if (!watchingInBackground || !isSessionSearchIndexReady(next)) {
-        return
-      }
-      setWatchingInBackground(false)
-      toast.success(translate('featureTips.sessionSearch.readyToast', 'Session search is ready'), {
-        description: sessionSearchStatusMessage(next),
-        action: {
-          label: translate('featureTips.sessionSearch.readyToastOpen', 'Open'),
-          onClick: showAiVaultSearch
-        }
-      })
-    },
-    [showAiVaultSearch, watchingInBackground]
-  )
-
+  const [wasOpen, setWasOpen] = useState(dialogOpen)
+  const [toastWhenReady, setToastWhenReady] = useState(false)
+  const [readyToastStatus, setReadyToastStatus] = useState<AiVaultSearchStatus | null>(null)
   const read = useSessionSearchStatus({
     executionHostId: LOCAL_EXECUTION_HOST_ID,
-    active: searchEnabled && (dialogOpen || watchingInBackground),
-    onStatus: handleStatus
+    active: searchEnabled && (dialogOpen || toastWhenReady)
   })
   let stage: SessionSearchTipStage = 'offer'
   if (searchEnabled) {
     stage = isSessionSearchIndexReady(read.status) ? 'ready' : 'indexing'
   }
 
+  // Why: closing this tip mid-index is the only thing that asks for a later toast.
+  if (wasOpen !== dialogOpen) {
+    setWasOpen(dialogOpen)
+    if (!dialogOpen && stage === 'indexing') {
+      setToastWhenReady(true)
+    }
+  }
+  if (toastWhenReady && !searchEnabled) {
+    setToastWhenReady(false)
+  }
+  if (toastWhenReady && stage === 'ready' && read.status) {
+    setToastWhenReady(false)
+    setReadyToastStatus(read.status)
+  }
+
+  useEffect(() => {
+    if (!readyToastStatus) {
+      return
+    }
+    toast.success(translate('featureTips.sessionSearch.readyToast', 'Session search is ready'), {
+      description: sessionSearchStatusMessage(readyToastStatus),
+      action: {
+        label: translate('featureTips.sessionSearch.readyToastOpen', 'Open'),
+        onClick: showAiVaultSearch
+      }
+    })
+  }, [readyToastStatus, showAiVaultSearch])
+
   return {
     stage,
     status: read.status,
-    statusUnavailable: read.failed || read.hostTooOld,
     enable: async () => {
       const store = useAppStore.getState()
       try {
         await store.updateSettingsOrThrow({
           aiVaultSearch: { ...resolveAiVaultSearchSettings(store.settings), enabled: true }
         })
-        return true
       } catch {
         toast.error(
           translate(
@@ -85,10 +88,7 @@ export function useSessionSearchTipSetup({
             'Could not turn on session search. Try again.'
           )
         )
-        return false
       }
-    },
-    dialogClosed: () => setWatchingInBackground(stage === 'indexing'),
-    reset: () => setWatchingInBackground(false)
+    }
   }
 }

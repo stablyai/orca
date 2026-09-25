@@ -18184,7 +18184,6 @@
     },
     "sessionSearch": {
       "enableFailed": "Could not turn on session search. Try again.",
-      "progressUnknown": "Indexing your sessions…",
       "progressStarting": "Finding your sessions…",
       "settingsLink": "Settings → Agent Session Search",
       "agentsInstruction": "Your agents can search it too. Ask one to “find the session where we fixed the login timeout.”",
@@ -18193,7 +18192,6 @@
       "indexingDescription": "Orca is reading your past agent transcripts so you can search them. This can take a few minutes.",
       "indexingTitle": "Indexing your agent sessions",
       "readyTitle": "Session search is ready",
-      "turningOn": "Turning on…",
       "continueInBackground": "Continue in background",
       "startSearching": "Start searching",
       "demoRoleAssistant": "Assistant",

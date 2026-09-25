@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
 import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
@@ -14,18 +15,20 @@ type Mocks = {
   settings: { aiVaultSearch: { enabled: boolean; historyDays: null } }
   status: AiVaultSearchStatus | null
   updateSettingsOrThrow: () => Promise<void>
+  showAiVaultSearch: () => void
 }
 
 const mocks = vi.hoisted((): Mocks => ({
   settings: { aiVaultSearch: { enabled: false, historyDays: null } },
   status: null,
-  updateSettingsOrThrow: async () => {}
+  updateSettingsOrThrow: async () => {},
+  showAiVaultSearch: vi.fn()
 }))
 
 vi.mock('@/store', () => {
   const state = () => ({
     settings: mocks.settings,
-    showAiVaultSearch: vi.fn(),
+    showAiVaultSearch: mocks.showAiVaultSearch,
     updateSettingsOrThrow: mocks.updateSettingsOrThrow
   })
   const useAppStore = Object.assign(
@@ -47,8 +50,9 @@ vi.mock('@/components/settings/use-session-search-status', () => ({
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 let latest: SessionSearchTipSetup | null = null
+let dialogOpen = true
 function Probe(): null {
-  latest = useSessionSearchTipSetup({ dialogOpen: true })
+  latest = useSessionSearchTipSetup({ dialogOpen })
   return null
 }
 
@@ -59,7 +63,22 @@ afterEach(() => {
   act(() => root.render(null))
   mocks.settings = { aiVaultSearch: { enabled: false, historyDays: null } }
   mocks.status = null
+  dialogOpen = true
+  vi.mocked(toast.success).mockClear()
 })
+
+const indexing = (): AiVaultSearchStatus => ({
+  ...unavailableSessionSearchStatus(),
+  enabled: true,
+  phase: 'indexing'
+})
+const ready = (): AiVaultSearchStatus => ({
+  ...unavailableSessionSearchStatus(),
+  enabled: true,
+  phase: 'current',
+  lastSweepCompletedAt: 1
+})
+const searchOn = { aiVaultSearch: { enabled: true, historyDays: null } }
 
 function render(): void {
   act(() => root.render(<Probe />))
@@ -116,5 +135,38 @@ describe('useSessionSearchTipSetup', () => {
     render()
     expect(latest?.stage).toBe('indexing')
     expect(latest?.status?.filesIndexed).toBe(4369)
+  })
+
+  it('toasts once when a build the user closed mid-index finishes', () => {
+    mocks.settings = searchOn
+    mocks.status = indexing()
+    render()
+    dialogOpen = false
+    render()
+    expect(toast.success).not.toHaveBeenCalled()
+
+    mocks.status = ready()
+    render()
+    render()
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(toast.success).mock.calls[0][1]).toMatchObject({
+      action: { label: 'Open', onClick: mocks.showAiVaultSearch }
+    })
+  })
+
+  it('does not toast when another tip closes or the ready dialog closes', () => {
+    mocks.settings = searchOn
+    mocks.status = indexing()
+    dialogOpen = false
+    render()
+    mocks.status = ready()
+    render()
+    expect(toast.success).not.toHaveBeenCalled()
+
+    dialogOpen = true
+    render()
+    dialogOpen = false
+    render()
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })
