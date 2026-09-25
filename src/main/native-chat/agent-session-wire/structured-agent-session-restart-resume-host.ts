@@ -9,7 +9,6 @@ import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger
 } from '../../../shared/agent-session-resume-marker'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { createStructuredAgentSessionRestartCandidateReader } from './structured-agent-session-restart-candidates'
 import {
@@ -34,7 +33,10 @@ import {
   type StructuredAgentSessionContinuationOutcome
 } from './structured-agent-session-restart-continuation'
 import { restartContinuationId } from './structured-agent-session-restart-continuation-envelope'
-import { createStructuredAgentSessionRestartOfferWithdrawal } from './structured-agent-session-restart-offer-withdrawal'
+import {
+  createStructuredAgentSessionRestartOfferWithdrawal,
+  type StructuredAgentSessionRestartOfferSession
+} from './structured-agent-session-restart-offer-withdrawal'
 import {
   STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER,
   type StructuredAgentSessionRestartResumeSurfaces
@@ -42,7 +44,7 @@ import {
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 
-type LiveSession = { journal: AgentSessionJournal; child: { fence: number } | null }
+type LiveSession = StructuredAgentSessionRestartOfferSession
 
 export type StructuredAgentSessionRestartResume = {
   /** Teardown: begin, then per session a snapshot right before its child stops and a confirmation
@@ -65,8 +67,8 @@ export type StructuredAgentSessionRestartResume = {
   }>
   /** Named sessions forget their offer or failure; unnamed, every durable record goes. */
   dismiss: (sessionIds?: readonly string[]) => Promise<number>
-  /** The chat's agent was started: its offer ends unless the start is a resume's own. */
-  onOwnedEdge: (sessionId: string) => void
+  /** A message was accepted, or the agent proved a start: the chat may have moved on. */
+  recheck: (sessionId: string) => void
 }
 
 export function createStructuredAgentSessionRestartResume(
@@ -81,11 +83,6 @@ export function createStructuredAgentSessionRestartResume(
   const admission = new StructuredAgentSessionResumeAdmission()
   const enqueueRecoveryOperation = createStructuredAgentSessionRestartOperationQueue()
 
-  const derive = createStructuredAgentSessionRestartCandidateReader({
-    sessions,
-    getRecord: deps.store.getRecord,
-    adapter: deps.adapter
-  })
   const witnesses = createStructuredAgentSessionRestartWitnesses({
     sessions,
     getRecord: deps.store.getRecord,
@@ -98,7 +95,6 @@ export function createStructuredAgentSessionRestartResume(
   const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
     sessions,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
-    isDisposed: surfaces.isDisposed,
     isContinuation: (clientMessageId) =>
       deps.store.getOperationRow(
         STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER,
@@ -106,6 +102,12 @@ export function createStructuredAgentSessionRestartResume(
       ) !== null,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
+  })
+  const derive = createStructuredAgentSessionRestartCandidateReader({
+    sessions,
+    getRecord: deps.store.getRecord,
+    adapter: deps.adapter,
+    movedOn: withdrawal.movedOn
   })
   const failures = createStructuredAgentSessionRestartFailureLedger({
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
@@ -145,10 +147,7 @@ export function createStructuredAgentSessionRestartResume(
       deps.store.getRecord(sessionId)
         ? structuredAgentSessionConversationFence(deps.store, sessionId)
         : null,
-    stillResumable: (marker) =>
-      derive([marker], 'may-be-held').candidates.length === 1 &&
-      !withdrawal.withdrawn(marker.sessionId) &&
-      !withdrawal.acceptedSinceRestart(marker.sessionId)
+    stillResumable: (marker) => derive([marker], 'may-be-held').candidates.length === 1
   }
 
   /** One explicit action: reserve the offers, then continue each through `continueOne`, a few at
@@ -194,11 +193,7 @@ export function createStructuredAgentSessionRestartResume(
           admission,
           consumeMarker: async (sessionId) => {
             const marker = markersBySession.get(sessionId)
-            return (
-              marker !== undefined &&
-              derive([marker], 'may-be-held').candidates.length === 1 &&
-              !withdrawal.withdrawn(sessionId)
-            )
+            return marker !== undefined && derive([marker], 'may-be-held').candidates.length === 1
           },
           resume: async (sessionId) => {
             const marker = markersBySession.get(sessionId)
@@ -313,6 +308,6 @@ export function createStructuredAgentSessionRestartResume(
     // dismissal. A later capture is a new interruption and may create a fresh offer normally.
     dismiss: (sessionIds) => failures.dismiss(sessionIds, witnesses.clear),
     continueAfterRestart,
-    onOwnedEdge: withdrawal.onOwnedEdge
+    recheck: withdrawal.recheck
   }
 }

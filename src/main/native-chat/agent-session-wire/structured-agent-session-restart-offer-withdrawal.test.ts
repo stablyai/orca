@@ -1,6 +1,6 @@
-// A restart offer ends when the chat's agent is started again, other than by its own continuation,
-// and a message and a continuation racing to be first are decided at acceptance. Each case reads
-// the offer list and the capsule, never only an in-memory set.
+// A restart offer ends when the chat moves on after the restart: another message accepted, or its
+// agent started, other than by the offer's own continuation. Each case reads the offer list and the
+// capsule, never only an in-memory set.
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -26,6 +26,9 @@ import {
 afterEach(() => vi.restoreAllMocks())
 
 const SUPERSEDED = 'agent_session_restart_work_superseded'
+
+/** A start under a loaded machine: reconcile, acquire, hand over. */
+const COLD_START = { timeout: 10_000 }
 
 async function offered(work: 'turn' | 'submission' = 'turn') {
   const state = await interruptedRestart(work, false)
@@ -62,7 +65,7 @@ it('withdraws the offer when /compact starts the agent at rest (R-01)', async ()
   expect(await host.conversationCommand(CALLER, compactParams())).toMatchObject({ ok: true })
 
   expect(acquire).toHaveBeenCalledOnce()
-  await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]))
+  await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]), COLD_START)
   expect(await host.restartResume.list()).toEqual([])
 })
 
@@ -139,8 +142,8 @@ it('reads an older build’s marker whose message id no longer matches, and one 
   expect(parseAgentSessionResumeMarker(withoutId)).toEqual(withoutId)
 
   await host.send(CALLER, userSend('Carry on'))
-  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
-  await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]))
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce(), COLD_START)
+  await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]), COLD_START)
 })
 
 it('still writes the message id the previous build requires on every marker', async () => {
@@ -151,42 +154,49 @@ it('still writes the message id the previous build requires on every marker', as
   expect(capsule.entries[0]?.marker).toHaveProperty('latestUserItemId')
 })
 
-it('keeps the offer when the send that would start the agent fails to (R-08)', async () => {
-  const { host, root, acquire } = await offered()
-  acquire.mockRejectedValueOnce(new Error('Not signed in'))
+/** Sends a message whose start fails, and waits for it to be rejected. */
+async function sendWhoseStartFails(state: Awaited<ReturnType<typeof offered>>) {
+  state.acquire.mockRejectedValueOnce(new Error('Not signed in'))
   const params = userSend('while signed out')
-
-  await host.send(CALLER, params)
-
+  await state.host.send(CALLER, params)
   await vi.waitFor(async () =>
     expect(
-      (await host.journalSnapshot(SESSION)).submissions.find(
+      (await state.host.journalSnapshot(SESSION)).submissions.find(
         (entry) => entry.clientMessageId === params.envelope.clientOperationId
       )
     ).toMatchObject({ dispatchState: 'rejected' })
   )
-  expect(await host.restartResume.list()).toHaveLength(1)
-  expect(await offersIn(root)).toHaveLength(1)
+}
+
+// A message the user sent is activity even when its start then failed.
+it('withdraws the offer when the user sends a message whose start then fails (R-08)', async () => {
+  const state = await offered()
+  const { host, root, dispatch } = state
+
+  await sendWhoseStartFails(state)
+
+  expect(await host.restartResume.list()).toEqual([])
+  await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]), COLD_START)
+  // A click from a surface that still shows the offer finds nothing to act on.
+  expect(await host.restartResume.continueAfterRestart([SESSION], 'stale-click')).toMatchObject({
+    resumed: [],
+    continued: []
+  })
+  expect(dispatch).not.toHaveBeenCalled()
 })
 
-it('keeps the offer a quit captures when a start lands while quitting (R-09)', async () => {
-  const { host, root, acquire } = await offered()
-  const starting = Promise.withResolvers<void>()
-  const acquired = Promise.withResolvers<void>()
-  const spawn = acquire.getMockImplementation()!
-  acquire.mockImplementationOnce(async (input) => {
-    acquired.resolve()
-    await starting.promise
-    return spawn(input)
-  })
-  await host.send(CALLER, userSend('started as the app quits'))
-  await acquired.promise
+// The open handle is only a cache: closing it and reading the chat again must not bring back an
+// offer the user's message withdrew.
+it('keeps the offer withdrawn after the chat is closed and read again', async () => {
+  const state = await offered()
+  const { host, root } = state
+  await sendWhoseStartFails(state)
 
-  const quitting = host.flushAllStreamedEvents({ trigger: 'quit' })
-  starting.resolve()
-  await quitting
+  await host.close(SESSION)
+  await host.revealSession(SESSION)
 
-  expect(await offersIn(root)).toHaveLength(1)
+  expect(await host.restartResume.list()).toEqual([])
+  expect(await offersIn(root)).toEqual([])
 })
 
 // Resume that runs by itself at launch goes through the same call a click does, and the same rule
@@ -219,7 +229,7 @@ it("refuses an automatic continuation when the user's message was accepted first
   const result = await host.restartResume.continueAfterRestart(undefined, 'launch')
 
   expect(result.continued).toMatchObject([{ outcome: 'refused', reason: SUPERSEDED }])
-  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce(), COLD_START)
   expect(sentTexts(dispatch)).toEqual(['A new request'])
   // Nothing the user did failed: no row reached the reader, and nothing is kept.
   expect(await statusNotes(host)).toEqual([])
@@ -247,37 +257,9 @@ it('delivers a clicked continuation and a message sent right after it, in the or
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
 
   expect(result.continued).toMatchObject([{ outcome: 'continued' }])
-  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2))
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2), COLD_START)
   const [first, second] = sentTexts(dispatch)
   expect(first).not.toBe('And then this')
   expect(second).toBe('And then this')
-  expect(await offersIn(root)).toEqual([])
-})
-
-// The user's message came first but its start failed, so no start withdrew the offer: Resume is
-// still refused quietly, and nothing is filed for the user to act on.
-it("files nothing when Resume loses to the user's message whose start failed", async () => {
-  const { host, root, acquire, dispatch } = await offered()
-  acquire.mockRejectedValueOnce(new Error('Not signed in'))
-  const params = userSend('while signed out')
-  await host.send(CALLER, params)
-  await vi.waitFor(async () =>
-    expect(
-      (await host.journalSnapshot(SESSION)).submissions.find(
-        (entry) => entry.clientMessageId === params.envelope.clientOperationId
-      )
-    ).toMatchObject({ dispatchState: 'rejected' })
-  )
-  expect(await host.restartResume.list()).toHaveLength(1)
-
-  const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-
-  expect(result).toMatchObject({
-    continued: [{ outcome: 'refused', reason: SUPERSEDED }],
-    sessions: [],
-    failed: []
-  })
-  expect(dispatch).not.toHaveBeenCalled()
-  expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
   expect(await offersIn(root)).toEqual([])
 })

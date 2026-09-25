@@ -75,7 +75,7 @@ export class StructuredAgentSessionHost {
     () => this.now(),
     () => this.deps,
     (sessionId) => this.sessions.touch(sessionId),
-    (sessionId) => this.restartResume.onOwnedEdge(sessionId)
+    (sessionId) => this.restartResume.recheck(sessionId)
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -152,10 +152,11 @@ export class StructuredAgentSessionHost {
       now: () => this.now(),
       onBarrierError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
     })
-    this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
-      ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
-      isDisposed: () => this.lifetime.isDisposed()
-    })
+    this.restartResume = createStructuredAgentSessionRestartResume(
+      deps,
+      this.sessions,
+      structuredAgentSessionRestartResumeSurfaces(this, this.now)
+    )
     this.lifetime = createStructuredAgentSessionConversationLifetime({
       context: () => this.lifetimeContext(),
       sessions: this.sessions,
@@ -265,7 +266,10 @@ export class StructuredAgentSessionHost {
       openConversation: this.conversationDelivery.open,
       ensureAgent: (sessionId) =>
         ensureStructuredAgentSessionAgentForOperation(this.attachContext(), sessionId),
-      wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
+      wakeDelivery: (sessionId) => {
+        this.conversationDelivery.loop.wake(sessionId)
+        this.restartResume.recheck(sessionId)
+      },
       stopAgent: this.lifetime.stopAgent,
       now: () => this.now()
     }

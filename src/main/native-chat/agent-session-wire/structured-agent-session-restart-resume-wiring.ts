@@ -31,8 +31,6 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   onNoteFailed: (sessionId: string, error: unknown) => void
   now: () => number
-  /** Quit has begun; see the offer withdrawal. */
-  isDisposed: () => boolean
 }
 
 /** The caller key the continuation sends under, so its writes are attributable to Orca itself. */
@@ -62,7 +60,7 @@ type RestartResumeHostBindings = {
 export function structuredAgentSessionRestartResumeSurfaces(
   host: RestartResumeHostBindings,
   now: () => number
-): Omit<StructuredAgentSessionRestartResumeSurfaces, 'isDisposed'> {
+): StructuredAgentSessionRestartResumeSurfaces {
   return {
     revealSession: host.revealSession,
     send: (params) =>
