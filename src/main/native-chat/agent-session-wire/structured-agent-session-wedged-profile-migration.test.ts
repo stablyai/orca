@@ -14,7 +14,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { evaluateAgentSessionAcquisition } from '../../../shared/agent-session-lease-adjudication'
+import {
+  evaluateAgentSessionAcquisition,
+  type AgentSessionOwnerProbe
+} from '../../../shared/agent-session-lease-adjudication'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
@@ -657,7 +660,7 @@ describe('already-wedged profiles become usable on load', () => {
     expect(order).toEqual(['acquire'])
   })
 
-  it('releases a conflicted record whose owner cannot be verified, signalling nothing', async () => {
+  it('waits out a conflicted owner it cannot verify, signalling nothing, until it is proven gone', async () => {
     await seedStore(
       wedgedRecord({
         claimStatus: 'conflicted',
@@ -666,13 +669,21 @@ describe('already-wedged profiles become usable on load', () => {
       })
     )
     const stopOwnerProcess = vi.fn()
-    openHost({
-      probeOwner: async () => ({ outcome: 'indeterminate', reason: 'no answer' }),
-      stopOwnerProcess
-    })
+    let probe: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
+    openHost({ probeOwner: async () => probe, stopOwnerProcess })
     await host.restoreReadableSessions()
 
-    expect(await host.attach(CALLER, hostTestAttachParams(14))).toMatchObject({ ok: true })
+    // A terminal agent keeps its transport across a restart, so an unanswered probe is not a way in.
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_conflict' }
+    })
+    expect(acquire).not.toHaveBeenCalled()
+
+    // The user quits that terminal: the next open proves it gone and the chat takes over.
+    probe = { outcome: 'pid-absent' }
+    await host.hold(SESSION, 'holder-1')
     expect(acquire).toHaveBeenCalledOnce()
     expect(stopOwnerProcess).not.toHaveBeenCalled()
   })

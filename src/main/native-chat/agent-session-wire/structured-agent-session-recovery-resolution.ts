@@ -54,8 +54,12 @@ export async function resolveStructuredSessionRecovery(
   }
   let probe = await deps.probeRecord(record)
   const owner = record.lease.ownerProcess
+  if (owner && record.lease.claimStatus === 'conflicted' && !isProvenDeadProbe(probe)) {
+    // A terminal agent keeps its transport across a restart, so only proof of its exit is a way in.
+    return 'unresolved'
+  }
   if (owner && isProvenAliveProbe(probe)) {
-    if (record.lease.claimStatus === 'conflicted' || owner.hostId !== deps.store.hostId) {
+    if (owner.hostId !== deps.store.hostId) {
       return 'unresolved'
     }
     probe = await stopOwnerAndReprobe(deps, record, owner.pid)
