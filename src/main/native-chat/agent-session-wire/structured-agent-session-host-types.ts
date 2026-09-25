@@ -1,4 +1,5 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -61,6 +62,9 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** Descriptive text only — the provider's diagnostic, or the host's cause. Decides nothing. */
     reason: string | null
     duringStartup: boolean
+    /** Where the conversation's journal stood when the child ended, to order the end against a
+     *  message's acceptance. */
+    endedAt: AgentJournalCursor
   }
 
 /** The conversation: its journal, params and readers outlive any child that serves it. */

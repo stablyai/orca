@@ -6,6 +6,7 @@
 // and fence, so an ending that arrives late for an older child cannot end a newer one.
 
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionEndedChild,
   StructuredAgentSessionHostSession,
@@ -13,7 +14,9 @@ import type {
   StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
 
-type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'>
+type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'> & {
+  journal: Pick<AgentSessionJournal, 'cursor'>
+}
 
 /** The fence a conversation write carries: the record's, which is where the next child starts. A
  *  child's own writes carry `child.fence`, which equals it while that child holds the lease. */
@@ -45,13 +48,13 @@ export function markProviderChildStarted(
 
 export function endProviderChild(
   session: ChildBearer,
-  ended: StructuredAgentSessionEndedChild
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt'>
 ): boolean {
   if (!matchingChild(session, ended)) {
     return false
   }
   session.child = null
-  session.lastEndedChild = ended
+  session.lastEndedChild = { ...ended, endedAt: session.journal.cursor() }
   return true
 }
 

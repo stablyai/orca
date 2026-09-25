@@ -161,7 +161,9 @@ function stop() {
 }
 
 async function submission(id: string): Promise<AgentJournalSubmission | undefined> {
-  return (await host.journalSnapshot(SESSION)).submissions.find((entry) => entry.clientMessageId === id)
+  return (await host.journalSnapshot(SESSION)).submissions.find(
+    (entry) => entry.clientMessageId === id
+  )
 }
 
 async function statusRows(): Promise<{ itemId: string; text: string; tone?: string }[]> {
@@ -340,11 +342,15 @@ describe('a published child that dies while it proves its start', () => {
         settled.resolve(TEXT)
       } else {
         settled.resolve(TEXT)
-        await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+        await eventually(async () =>
+          expect((await submission(second))?.dispatchState).toBe('rejected')
+        )
         await exit(child, EXIT, true)
       }
 
-      await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+      await eventually(async () =>
+        expect((await submission(second))?.dispatchState).toBe('rejected')
+      )
       expect(await statusRows()).toEqual([
         {
           itemId: `orca:${encodeURIComponent(`start-failure:${child.acquisitionGeneration}`)}`,
@@ -359,6 +365,104 @@ describe('a published child that dies while it proves its start', () => {
       expect(acquire).toHaveBeenCalledTimes(2)
     }
   )
+})
+
+/** A start by an operation that needs the agent, such as a goal change, outside the loop. */
+function startForOperation() {
+  return host['serialize'](SESSION, () =>
+    ensureStructuredAgentSessionAgent(host['attachContext'](), SESSION)
+  )
+}
+
+describe('a start another operation made that dies while a sent message waits on it', () => {
+  const EXIT = 'claude stream-json exited (code 1)'
+  const TEXT = providerStartupFailureOutcome(EXIT)
+
+  it("is the message's own failed start: one error row, the message rejected, no second start (R2)", async () => {
+    adapterExtras = { awaitStarted: vi.fn(async () => TEXT) }
+    await restartHost()
+    acquire.mockImplementation(spawnStartingChild)
+    // An operation that needs the agent starts a child that has not proven its start.
+    await startForOperation()
+    const operationChild = currentChild()
+    const events = await subscribe()
+    const params = sendParams('hello')
+
+    // Accepted first; that child's exit is settled before the loop's first step.
+    const sent = host.send(CALLER, params)
+    const exited = exit(operationChild, EXIT, true)
+    expect(await sent).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    await exited
+    const id = params.envelope.clientOperationId
+
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    await settleLoop()
+    expect((await submission(id))?.reason).toBe(TEXT)
+    expect(await statusRows()).toEqual([
+      {
+        itemId: `orca:${encodeURIComponent(`start-failure:${operationChild.acquisitionGeneration}`)}`,
+        text: TEXT,
+        tone: 'error'
+      }
+    ])
+    expect(rejectedIn(events, id)).toBe(true)
+    // The setup's child and the operation's: nothing started again into the same failure.
+    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('leaves a message sent after that start failed to a fresh start (R2)', async () => {
+    await restartHost()
+    acquire.mockImplementationOnce(spawnStartingChild)
+    await startForOperation()
+    await exit(currentChild(), EXIT, true)
+    expect(await statusRows()).toHaveLength(1)
+
+    const id = await accept('after the failure')
+
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
+    expect(acquire).toHaveBeenCalledTimes(3)
+  })
+
+  it('starts again for a message whose proven child crashed: only a failed start settles it (R2)', async () => {
+    await restartHost()
+    await startForOperation()
+    const params = sendParams('hello')
+
+    const sent = host.send(CALLER, params)
+    const exited = exit(currentChild(), 'codex app-server crashed')
+    await sent
+    await exited
+    const id = params.envelope.clientOperationId
+
+    await eventually(async () => expect((await submission(id))?.dispatchState).not.toBe('pending'))
+    expect((await submission(id))?.dispatchState).toBe('accepted')
+    expect(acquire).toHaveBeenCalledTimes(3)
+  })
+
+  it('waits on a child started since the failed one, not on the failure (R2)', async () => {
+    adapterExtras = { awaitStarted: vi.fn(async () => undefined) }
+    await restartHost()
+    acquire.mockImplementation(spawnStartingChild)
+    await startForOperation()
+    const params = sendParams('hello')
+
+    // A second operation's start lands after the first child's exit, before the loop's first step.
+    const sent = host.send(CALLER, params)
+    const exited = exit(currentChild(), EXIT, true)
+    const held = startForOperation()
+    await sent
+    await exited
+    await held
+    const id = params.envelope.clientOperationId
+
+    await eventually(async () => expect((await submission(id))?.dispatchState).not.toBe('pending'))
+    expect((await submission(id))?.dispatchState).toBe('accepted')
+    expect(acquire).toHaveBeenCalledTimes(3)
+  })
 })
 
 describe('a child that ends before its message is handed over', () => {
@@ -556,7 +660,9 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
 
     await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
     expect((await submission(second))?.reason).toBe(reason)
-    expect(await statusRows()).toEqual([{ itemId: expect.any(String), text: reason, tone: 'error' }])
+    expect(await statusRows()).toEqual([
+      { itemId: expect.any(String), text: reason, tone: 'error' }
+    ])
     expect(dispatch).not.toHaveBeenCalled()
   })
 })

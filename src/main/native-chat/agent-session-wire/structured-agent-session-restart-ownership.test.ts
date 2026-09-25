@@ -326,10 +326,12 @@ it('fails closed on corrupt recovery storage while an ordinary send still works'
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
   // list; the action's read of offers and of failures; the post-action refresh of both; and the
   // send's start, which cannot withdraw an offer it cannot read.
-  expect(warning).toHaveBeenCalledTimes(6)
-  expect(warning).toHaveBeenLastCalledWith(
-    '[structured-agent-session] withdrawing a restart offer failed'
+  await vi.waitFor(() =>
+    expect(warning).toHaveBeenLastCalledWith(
+      '[structured-agent-session] withdrawing a restart offer failed'
+    )
   )
+  expect(warning).toHaveBeenCalledTimes(6)
   warning.mockRestore()
 })
 

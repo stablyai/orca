@@ -55,8 +55,6 @@ function pendingSubmissionInFlight(
     if (
       submission &&
       submission.recovered !== true &&
-      // A queued message reached no agent, so there is no work of its to resume.
-      !isQueuedAgentJournalSubmission(submission) &&
       (submission.dispatchState === 'pending' || submission.dispatchState === 'unknown')
     ) {
       return submission
@@ -160,12 +158,20 @@ export function structuredAgentSessionWorkingAtStop(input: {
     return null
   }
   const snapshot = session.journal.snapshot()
+  // A queued message reached no agent, so it is no work to resume: quit rejects it as never sent.
+  const handedOver = snapshot.submissions.filter(
+    (submission) => !isQueuedAgentJournalSubmission(submission)
+  )
   const roster = input.backgroundTasks(sessionId)
-  const status = structuredAgentSessionShownStatus(snapshot, roster, session.child.fence)
+  const status = structuredAgentSessionShownStatus(
+    { items: snapshot.items, submissions: handedOver },
+    roster,
+    session.child.fence
+  )
   if (status.state === 'done') {
     return null
   }
-  const work = structuredAgentSessionResumeWork(snapshot.items, snapshot.submissions)
+  const work = structuredAgentSessionResumeWork(snapshot.items, handedOver)
   const head = agentSessionProviderHandleChainHead(
     input.getRecord(sessionId)?.providerHandleChain ?? []
   )

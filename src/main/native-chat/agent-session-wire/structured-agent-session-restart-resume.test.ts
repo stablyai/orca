@@ -324,6 +324,67 @@ describe('deriving what was working at teardown', () => {
     expect(recorded?.work).toEqual({ kind: 'submission', id: 'msg-1' })
   })
 
+  // Accepted while the agent was starting and never handed over: the chat shows working, but no
+  // agent had the message, and quit rejects it as never sent.
+  it('marks nothing for a session whose only work is a message still queued', () => {
+    const queued = { ...submission('msg-1', 'pending'), handoverRecorded: true as const }
+    expect(
+      markersAtTeardown({
+        sessions: new Map([
+          [
+            SESSION,
+            {
+              journal: journal([turnItem('turn-0', 'completed')], false, [queued]),
+              child: { fence: 1 }
+            }
+          ]
+        ]),
+        getRecord: () => claudeRecord(null),
+        backgroundTasks: () => undefined,
+        trigger: 'quit',
+        teardownId: TEARDOWN_CURRENT,
+        now: NOW
+      })
+    ).toEqual([])
+  })
+
+  it('marks a handed-over message over a newer queued one, and a turn a queued one waits behind', () => {
+    const handedOver = {
+      ...submission('msg-1', 'pending'),
+      handoverRecorded: true as const,
+      handedOverAt: NOW
+    }
+    const queued = { ...submission('msg-2', 'pending'), handoverRecorded: true as const }
+    const markers = markersAtTeardown({
+      sessions: new Map([
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-0', 'completed')], false, [handedOver, queued]),
+            child: { fence: 1 }
+          }
+        ],
+        [
+          'session-running',
+          {
+            journal: journal([turnItem('turn-1', 'running')], false, [queued]),
+            child: { fence: 1 }
+          }
+        ]
+      ]),
+      getRecord: () => claudeRecord(null),
+      backgroundTasks: () => undefined,
+      trigger: 'quit',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(markers.map((entry) => entry.work)).toEqual([
+      { kind: 'submission', id: 'msg-1' },
+      { kind: 'turn', id: 'turn-1' }
+    ])
+  })
+
   // Once a turn exists it is the better identity: it is what eviction rewrites, so it is what the
   // journal can be asked about at launch.
   it('prefers the running turn over the send that opened it', () => {

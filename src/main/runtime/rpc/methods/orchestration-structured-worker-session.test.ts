@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { dispatchWriteFailureReason } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
 const hostRef: { current: unknown } = { current: null }
@@ -222,22 +223,44 @@ describe('structured worker session', () => {
 })
 
 describe('structured worker dispatch preamble', () => {
-  function hostWithSubmission(
-    submission: Record<string, unknown>,
-    delivered?: Record<string, unknown>
-  ) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a host stub carrying only the members the worker start reaches.
+  type PreambleHost = Parameters<typeof sendStructuredWorkerPreamble>[0]['host']
+  type Settled = Pick<AgentJournalSubmission, 'dispatchState' | 'reason'>
+
+  function submissionOf(settled: Settled): AgentJournalSubmission {
+    return {
+      clientMessageId: 'c1',
+      fence: 7,
+      payloadFingerprint: 'fingerprint',
+      providerItemId: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      ...settled
+    }
+  }
+
+  function hostWithSubmission(submission: Settled, delivered?: Settled): PreambleHost {
     return {
       deps: { store: { getRecord: () => ({ lease: { runtimeFence: 7 } }) } },
-      send: async () => ({ ok: true, value: { clientMessageId: 'c1', submission } }),
+      send: async () => ({
+        ok: true,
+        replayed: false,
+        fence: 7,
+        cursor: { epoch: 'epoch-1', sequence: 1 },
+        value: { clientMessageId: 'c1', submission: submissionOf(submission) }
+      }),
       // What the submission settled as while the worker's agent started; undefined when the
       // start outlasted the wait.
       waitForSendSettlement: async () =>
-        delivered ? { value: { clientMessageId: 'c1', submission: delivered } } : undefined
-    } as never
+        delivered
+          ? {
+              cursor: { epoch: 'epoch-1', sequence: 2 },
+              value: { clientMessageId: 'c1', submission: submissionOf(delivered) }
+            }
+          : undefined
+    }
   }
 
-  const send = (host: never) =>
+  const send = (host: PreambleHost) =>
     sendStructuredWorkerPreamble({ host, sessionId: 's1', dispatchId: 'd1', preamble: 'spec' })
 
   it('reports the preamble delivered only on an accepted submission', async () => {

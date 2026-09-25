@@ -199,10 +199,18 @@ export async function discardStructuredWorkerSession(
   retireSettledStructuredWorkerTab(sessionId, runtime)
 }
 
+/** What a preamble send reads of the host. */
+type StructuredWorkerPreambleHost = Pick<
+  StructuredAgentSessionHost,
+  'send' | 'waitForSendSettlement'
+> & {
+  deps: { store: { getRecord: (sessionId: string) => { lease: { runtimeFence: number } } | null } }
+}
+
 /** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
  *  not taken it within the wait; the host still holds it for that agent, and never re-sends it. */
 export async function sendStructuredWorkerPreamble(args: {
-  host: StructuredAgentSessionHost
+  host: StructuredWorkerPreambleHost
   sessionId: string
   dispatchId: string
   preamble: string

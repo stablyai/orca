@@ -1,3 +1,4 @@
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { endProviderChild } from './structured-agent-session-provider-child'
@@ -22,7 +23,7 @@ type UnexpectedExitLifecycleEvent = StructuredAgentSessionEndedEvent & {
 export type StructuredAgentSessionUnexpectedExitSession = Pick<
   StructuredAgentSessionHostSession,
   'child' | 'lastEndedChild'
-> & { journal: DeadGenerationJournal }
+> & { journal: DeadGenerationJournal & Pick<AgentSessionJournal, 'cursor'> }
 
 export type StructuredAgentSessionUnexpectedExitContext<
   TSession extends StructuredAgentSessionUnexpectedExitSession = StructuredAgentSessionHostSession
