@@ -1,4 +1,5 @@
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   runProcess,
   runProcessSync,
@@ -7,6 +8,18 @@ import {
 
 const PROCESS_TABLE_TIMEOUT_MS = 1_000
 const PROCESS_TABLE_MAX_BYTES = 1024 * 1024
+const SELECTED_COLUMNS = 'pid=,pgid=,tty='
+// Explicit widths prevent BusyBox from truncating device numbers into another terminal's identity.
+const ALL_PROCESS_ARGS = ['-e', '-o', 'pid=PROCESS_ID,pgid=PROCESS_GID,tty=TERMINAL_DEVICE_NUMBER']
+let psDialect: 'selected' | 'all' | undefined
+let dialectProbe: Promise<void> | undefined
+
+class UnsupportedPsSelectionError extends Error {}
+
+export function resetPosixPtyProcessTableDialectForTests(): void {
+  psDialect = undefined
+  dialectProbe = undefined
+}
 
 type ProcessRow = {
   pid: number
@@ -28,48 +41,102 @@ function readProcessTableResult(result: ProcessResult): string {
   return result.stdout
 }
 
-function runPs(args: string[]): string {
-  return readProcessTableResult(
-    runProcessSync({
-      program: 'ps',
-      args,
-      timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
-      maxOutputBytes: PROCESS_TABLE_MAX_BYTES
-    })
-  )
+function readSelectionResult(result: ProcessResult, option: 'p' | 't'): string {
+  const rejectedOption =
+    /^ps: (?:invalid|illegal|unrecognized) option(?: -- |: | )['"]?-?([pt])['"]?\s*$/m.exec(
+      result.stderr ?? ''
+    )?.[1]
+  if (
+    result.code !== null &&
+    result.code !== 0 &&
+    !result.signal &&
+    !result.timedOut &&
+    !result.outputTruncated &&
+    rejectedOption === option
+  ) {
+    throw new UnsupportedPsSelectionError()
+  }
+  const output = readProcessTableResult(result)
+  if (psDialect === 'all') {
+    throw new UnsupportedPsSelectionError()
+  }
+  return output
+}
+
+function hasControllingTty(tty: string): boolean {
+  return tty !== '?' && tty !== '??' && tty !== '-' && tty !== '0' && !/^0,\d+$/.test(tty)
+}
+
+function* processTableQueries(rootPid: number): Generator<string[], string, ProcessResult> {
+  if (psDialect !== 'all') {
+    try {
+      const root = readSelectionResult(yield ['-p', String(rootPid), '-o', SELECTED_COLUMNS], 'p')
+      const rootRow = parseProcessRows(root).find((row) => row.pid === rootPid)
+      if (!rootRow || !hasControllingTty(rootRow.tty)) {
+        return root
+      }
+      const terminal = readSelectionResult(yield ['-t', rootRow.tty, '-o', SELECTED_COLUMNS], 't')
+      psDialect ??= 'selected'
+      return `${root}\n${terminal}`
+    } catch (error) {
+      if (!(error instanceof UnsupportedPsSelectionError)) {
+        throw error
+      }
+      psDialect = 'all'
+    }
+  }
+  return readProcessTableResult(yield ALL_PROCESS_ARGS)
+}
+
+function processTableSpec(args: string[]) {
+  return {
+    program: 'ps',
+    args,
+    env: { ...process.env, LC_ALL: 'C' },
+    timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
+    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+  }
 }
 
 function readPtyProcessTable(rootPid: number): string {
-  const root = runPs(['-p', String(rootPid), '-o', 'pid=,pgid=,tty='])
-  const rootRow = parseProcessRows(root).find((row) => row.pid === rootPid)
-  if (!rootRow || rootRow.tty === '?' || rootRow.tty === '??') {
-    return root
+  const queries = processTableQueries(rootPid)
+  let next = queries.next()
+  while (!next.done) {
+    next = queries.next(runProcessSync(processTableSpec(next.value)))
   }
-  // Why: a whole-host `ps -ax` takes nearly a second on large machines. TTY
-  // selection keeps forced terminal teardown proportional to one terminal.
-  return `${root}\n${runPs(['-t', rootRow.tty, '-o', 'pid=,pgid=,tty='])}`
+  return next.value
 }
 
 export async function readPosixPtyProcessTable(
   rootPid: number,
   signal?: AbortSignal
 ): Promise<string> {
-  const read = async (args: string[]): Promise<string> => {
-    const result = await runProcess({
-      program: 'ps',
-      args,
-      timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
-      maxOutputBytes: PROCESS_TABLE_MAX_BYTES,
-      signal
+  while (dialectProbe) {
+    await waitForPromiseWithSignal(dialectProbe, signal)
+  }
+  signal?.throwIfAborted()
+  let releaseProbe: (() => void) | undefined
+  if (psDialect === undefined) {
+    dialectProbe = new Promise<void>((resolve) => {
+      releaseProbe = resolve
     })
-    return readProcessTableResult(result)
   }
-  const root = await read(['-p', String(rootPid), '-o', 'pid=,pgid=,tty='])
-  const rootRow = parseProcessRows(root).find((row) => row.pid === rootPid)
-  if (!rootRow || rootRow.tty === '?' || rootRow.tty === '??' || signal?.aborted) {
-    return root
+  try {
+    const queries = processTableQueries(rootPid)
+    let next = queries.next()
+    while (!next.done) {
+      signal?.throwIfAborted()
+      const result = await runProcess({ ...processTableSpec(next.value), signal })
+      signal?.throwIfAborted()
+      next = queries.next(result)
+    }
+    return next.value
+  } finally {
+    if (releaseProbe) {
+      dialectProbe = undefined
+      releaseProbe()
+    }
   }
-  return `${root}\n${await read(['-t', rootRow.tty, '-o', 'pid=,pgid=,tty='])}`
 }
 
 function parseProcessRows(output: string): ProcessRow[] {
@@ -95,7 +162,7 @@ export function getPosixPtyProcessGroups(
 ): number[] | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
-  if (!root || root.tty === '?' || root.tty === '??') {
+  if (!root || !hasControllingTty(root.tty)) {
     return null
   }
   // Why: a development daemon can inherit its launch TTY. Never group-signal

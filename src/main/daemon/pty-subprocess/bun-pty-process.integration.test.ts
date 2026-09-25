@@ -84,15 +84,41 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
       async () => {
         const result = await runTerminalScript(`
       const expected = 16 * 1024 * 1024
-      const producer = require('node:path').join(args.cwd, 'producer.cjs')
-      require('node:fs').writeFileSync(producer, 'let count=0;const timer=setInterval(()=>{process.stdout.write("x".repeat(65536));if(++count===128)clearInterval(timer)},1)')
+      const {join} = require('node:path')
+      const {writeFileSync,existsSync} = require('node:fs')
+      const producer = join(args.cwd, 'producer.cjs')
+      const backgroundReady = join(args.cwd, 'background-ready')
+      const foregroundReady = join(args.cwd, 'foreground-ready')
+      const go = join(args.cwd, 'go')
+      const continueOutput = join(args.cwd, 'continue-output')
+      writeFileSync(producer, [
+        'const {writeFileSync,existsSync}=require("node:fs")',
+        'writeFileSync(process.argv[2],"ready")',
+        'const deadline=setTimeout(()=>process.exit(97),10000)',
+        'const ready=setInterval(()=>{if(!existsSync(process.argv[3]))return;clearInterval(ready);process.stdout.write("x".repeat(65536));const continued=setInterval(()=>{if(!existsSync(process.argv[4]))return;clearInterval(continued);clearTimeout(deadline);let count=1;const timer=setInterval(()=>{process.stdout.write("x".repeat(65536));if(++count===128)clearInterval(timer)},1)},1)},1)'
+      ].join(';'))
       const groups = new Set()
+      let bytes = 0, paused = false, settledBytes = 0, stable = false, verifying = false
       const proc = spawnBunPty({
         ...args, file:'/bin/bash',
-        args:['--noprofile','--norc','-i','-c','exec 2>/dev/null; "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER" & "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER"; wait'],
-        env:{...args.env,ORCA_TEST_RUNTIME:process.execPath,ORCA_TEST_PRODUCER:producer}
-      },{signalProcessGroup:(pgid,signal)=>{groups.add(pgid);process.kill(-pgid,signal)}})
-      let bytes = 0, paused = false, settledBytes = 0, stable = false
+        args:['--noprofile','--norc','-i','-c','exec 2>/dev/null; "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER" "$ORCA_TEST_BACKGROUND_READY" "$ORCA_TEST_GO" "$ORCA_TEST_CONTINUE" & "$ORCA_TEST_RUNTIME" "$ORCA_TEST_PRODUCER" "$ORCA_TEST_FOREGROUND_READY" "$ORCA_TEST_GO" "$ORCA_TEST_CONTINUE"; wait'],
+        env:{...args.env,ORCA_TEST_RUNTIME:process.execPath,ORCA_TEST_PRODUCER:producer,ORCA_TEST_BACKGROUND_READY:backgroundReady,ORCA_TEST_FOREGROUND_READY:foregroundReady,ORCA_TEST_GO:go,ORCA_TEST_CONTINUE:continueOutput}
+      },{signalProcessGroup:(pgid,signal)=>{
+        process.kill(-pgid,signal)
+        if (signal === 'SIGSTOP') groups.add(pgid)
+        if (groups.size < 3 || verifying) return
+        verifying = true
+        writeFileSync(continueOutput, 'continue')
+        setTimeout(() => {
+          settledBytes = bytes
+          setTimeout(() => { stable = bytes === settledBytes;proc.resume() }, 150)
+        },150)
+      }})
+      const ready = setInterval(() => {
+        if (!existsSync(backgroundReady) || !existsSync(foregroundReady)) return
+        clearInterval(ready)
+        writeFileSync(go, 'go')
+      }, 5)
       let beats = 0
       const heartbeat = setInterval(() => beats++, 5)
       proc.onData(data => {
@@ -100,13 +126,10 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
         if (!paused) {
           paused = true
           proc.pause()
-          setTimeout(() => {
-            settledBytes = bytes
-            setTimeout(() => { stable = bytes === settledBytes;proc.resume() }, 150)
-          },150)
         }
       })
       proc.onExit(event => {
+        clearInterval(ready)
         clearInterval(heartbeat)
         console.log(JSON.stringify({event,stable,exact:bytes===expected,pausedBeforeExit:settledBytes<expected,responsive:beats>10,jobControlGroups:groups.size>=3}))
         proc.destroy()
