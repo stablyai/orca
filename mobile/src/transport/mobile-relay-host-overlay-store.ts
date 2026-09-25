@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import {
   MobileRelayHostOverlaySchema,
+  toStoredMobileRelayHostOverlay,
   type MobileRelayHostOverlay
 } from './mobile-relay-host-overlay'
 
@@ -51,42 +53,49 @@ async function mutateOverlays(
   return mutation
 }
 
-export async function loadMobileRelayHostOverlays(
-  existingHostIds: ReadonlySet<string>
-): Promise<Map<string, MobileRelayHostOverlay>> {
-  return (await loadMobileRelayHostOverlayState(existingHostIds)).overlays
-}
-
 export async function loadMobileRelayHostOverlayState(
   existingHostIds: ReadonlySet<string>
-): Promise<{ overlays: Map<string, MobileRelayHostOverlay>; orphanHostIds: string[] }> {
+): Promise<{ relays: Map<string, MobileRelayEndpoint>; orphanHostIds: string[] }> {
   await overlayMutation
   const overlays = parseOverlays(await AsyncStorage.getItem(OVERLAY_STORAGE_KEY)) ?? []
-  const active = new Map<string, MobileRelayHostOverlay>()
+  const relays = new Map<string, MobileRelayEndpoint>()
   const orphanHostIds: string[] = []
   for (const overlay of overlays) {
     // Why: an older app can remove the legacy base without knowing this
     // namespace; never let the retained overlay resurrect that host later.
-    if (existingHostIds.has(overlay.hostId)) {
-      active.set(overlay.hostId, overlay)
-    } else {
+    if (!existingHostIds.has(overlay.hostId)) {
       orphanHostIds.push(overlay.hostId)
+    } else if (overlay.relay) {
+      relays.set(overlay.hostId, overlay.relay)
     }
   }
-  return { overlays: active, orphanHostIds }
+  return { relays, orphanHostIds }
 }
 
-export async function saveMobileRelayHostOverlay(overlay: MobileRelayHostOverlay): Promise<void> {
-  const validated = MobileRelayHostOverlaySchema.parse(overlay)
-  return mutateOverlays((overlays) => {
-    const index = overlays.findIndex(({ hostId }) => hostId === validated.hostId)
+/** Resolves whether storage changed. */
+export async function saveMobileRelayHostRouting(
+  hostId: string,
+  relay: MobileRelayEndpoint
+): Promise<boolean> {
+  const validated = toStoredMobileRelayHostOverlay(hostId, relay)
+  let wrote = false
+  await mutateOverlays((overlays) => {
+    const index = overlays.findIndex((overlay) => overlay.hostId === hostId)
     if (index === -1) {
+      wrote = true
       return [...overlays, validated]
     }
+    // Why: a failing relay loop re-resolves the same cell every retry. Both sides are this
+    // schema's output, so key order matches; an older record's direct entry fails the compare.
+    if (JSON.stringify(overlays[index]) === JSON.stringify(validated)) {
+      return overlays
+    }
+    wrote = true
     const next = overlays.slice()
     next[index] = validated
     return next
   })
+  return wrote
 }
 
 export function removeMobileRelayHostOverlay(hostId: string): Promise<void> {

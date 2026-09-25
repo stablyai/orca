@@ -106,7 +106,7 @@ export function relayCredentialMountAdapters(
               writeBundle: async (written: { current: { version: number } }) => {
                 effect('bundle-written', { version: written.current.version })
               },
-              saveHost: async () => {
+              saveRelayRouting: async () => {
                 effect('host-saved', HOST_ID)
               },
               deleteBundle: async () => {
@@ -116,7 +116,7 @@ export function relayCredentialMountAdapters(
           })
           started.then(
             (result) => {
-              outcome = result === null ? 'declined' : result.host.relayHostId
+              outcome = result === null ? 'declined' : result.host.relay?.relayHostId
             },
             (error: unknown) => {
               outcome = `failed: ${error instanceof Error ? error.message : String(error)}`

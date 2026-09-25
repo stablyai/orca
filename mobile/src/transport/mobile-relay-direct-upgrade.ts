@@ -3,8 +3,7 @@ import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
-import { MobileRelayUpgradeHostRemovedError, saveExistingHostRelayUpgrade } from './host-store'
-import { persistRelayHost } from './mobile-endpoint-supervisor-support'
+import { MobileRelayUpgradeHostRemovedError, setRelayRouting } from './host-store'
 import {
   MobileRelayCredentialBundleSchema,
   deleteMobileRelayCredentialBundle,
@@ -36,7 +35,7 @@ type Dependencies = {
   writeJournal: typeof writeMobileRelayDirectUpgradeJournal
   clearJournal: typeof deleteMobileRelayDirectUpgradeJournal
   writeBundle: typeof writeMobileRelayCredentialBundle
-  saveHost: typeof saveExistingHostRelayUpgrade
+  saveRelayRouting: typeof setRelayRouting
   deleteBundle: typeof deleteMobileRelayCredentialBundle
   randomBytes: (length: number) => Uint8Array
 }
@@ -54,7 +53,7 @@ export async function upgradeDirectMobileRelay(args: {
     writeJournal: writeMobileRelayDirectUpgradeJournal,
     clearJournal: deleteMobileRelayDirectUpgradeJournal,
     writeBundle: writeMobileRelayCredentialBundle,
-    saveHost: saveExistingHostRelayUpgrade,
+    saveRelayRouting: setRelayRouting,
     deleteBundle: deleteMobileRelayCredentialBundle,
     randomBytes: ExpoCrypto.getRandomBytes,
     ...args.dependencies
@@ -120,9 +119,8 @@ async function publishCommitted(
   })
   // Why: the overlay must never advertise relay without its matching credential.
   await dependencies.writeBundle(bundle)
-  let updatedHost: HostProfile
   try {
-    updatedHost = await persistRelayHost(host, endpoints.relay, dependencies.saveHost)
+    await dependencies.saveRelayRouting(host.id, endpoints.relay)
   } catch (error) {
     if (error instanceof MobileRelayUpgradeHostRemovedError) {
       await dependencies.deleteBundle(host.id)
@@ -131,7 +129,7 @@ async function publishCommitted(
     throw error
   }
   await dependencies.clearJournal(host.id)
-  return { host: updatedHost, bundle }
+  return { host: { ...host, relay: endpoints.relay }, bundle }
 }
 
 async function getEndpoints(

@@ -37,28 +37,20 @@ class FakeClient implements RpcClient {
 const host: HostProfile = {
   id: 'host-1',
   name: 'Blue Whale',
-  endpoint: 'ws://192.168.1.10:6768',
+  endpoint: 'ws://100.64.0.2:6768',
   deviceToken: 'device-token',
   publicKeyB64: 'A'.repeat(44),
-  lastConnected: 1,
-  endpoints: [
-    { id: 'lan', kind: 'lan', url: 'ws://192.168.1.10:6768' },
-    { id: 'tailscale', kind: 'tailscale', url: 'ws://100.64.0.2:6768' }
-  ]
+  lastConnected: 1
 }
 
 describe('mobile direct endpoint probe', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('uses the first authenticated candidate without waiting for a stale primary', async () => {
-    const clients = new Map<string, FakeClient>()
-    const openDirect = vi.fn((endpoint: string) => {
+  it('dials only the saved endpoint and reports its path', async () => {
+    const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
-      clients.set(endpoint, client)
-      if (endpoint.includes('100.64.0.2')) {
-        setTimeout(() => client.publishState('connected'), 100)
-      }
+      setTimeout(() => client.publishState('connected'), 100)
       return client
     })
 
@@ -66,9 +58,8 @@ describe('mobile direct endpoint probe', () => {
     await vi.advanceTimersByTimeAsync(100)
     const result = await probing
 
+    expect(openDirect.mock.calls).toEqual([[host.endpoint]])
     expect(result?.path).toBe('tailscale')
-    expect(openDirect).toHaveBeenCalledTimes(2)
-    expect(clients.get(host.endpoint)?.close).toHaveBeenCalledOnce()
     expect(result?.client.close).not.toHaveBeenCalled()
   })
 
@@ -89,10 +80,8 @@ describe('mobile direct endpoint probe', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     await expect(probing).resolves.toBeNull()
 
-    expect(clients).toHaveLength(2)
-    for (const client of clients) {
-      expect(client.close).toHaveBeenCalledOnce()
-    }
+    expect(clients).toHaveLength(1)
+    expect(clients[0]!.close).toHaveBeenCalledOnce()
     // No 12s timer is left behind to fire into a settled probe.
     expect(vi.getTimerCount()).toBe(0)
   })

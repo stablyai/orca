@@ -4,6 +4,7 @@ import { ReplacementAuthenticationTimeoutError } from './replacement-session-aut
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { HostProfile } from './types'
+import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 
 // Why: a suspect session that survived a failed replacement dial must come down,
@@ -80,25 +81,18 @@ export function isDirectorResolutionFailure(error: Error): boolean {
   )
 }
 
-export function relayWebSocketUrl(relay: { cellUrl: string; relayHostId: string }): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
-}
-
-export async function persistRelayHost(
+// Why: a stopped supervisor's host may be removed or re-paired; its successor owns routing.
+export async function adoptRelayRouting(
   host: HostProfile,
   relay: MobileRelayEndpoint,
-  saveHost: (host: HostProfile) => Promise<void>
+  dependencies: Pick<MobileEndpointSupervisorDependencies, 'saveRelayRouting'>,
+  stopped: boolean
 ): Promise<HostProfile> {
-  const endpoints = [
-    ...(host.endpoints ?? [{ id: 'direct-primary', kind: 'lan' as const, url: host.endpoint }])
-  ].filter(({ kind }) => kind !== 'relay')
-  endpoints.push({ id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) })
-  const updated = { ...host, endpoints, relayHostId: relay.relayHostId, relay }
-  await saveHost(updated)
-  return updated
+  if (stopped) {
+    return host
+  }
+  await dependencies.saveRelayRouting(host.id, relay)
+  return { ...host, relay }
 }
 
 export function encodeBase64Url(value: Uint8Array): string {

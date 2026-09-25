@@ -16,7 +16,6 @@ const directHost: HostProfile = {
 const upgraded = {
   host: {
     ...directHost,
-    relayHostId: 'AbCdEf0123_-xyZ9',
     relay: {
       v: 1 as const,
       directorUrl: 'https://relay-staging.onorca.dev',

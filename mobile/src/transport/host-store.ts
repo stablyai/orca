@@ -1,3 +1,4 @@
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { HostProfileSchema } from './types'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
 import { getNextHostNameFromHosts } from './host-names'
@@ -16,7 +17,7 @@ import {
   loadMobileRelayHostOverlayState,
   removeMobileRelayHostOverlay,
   removeMobileRelayHostOverlays,
-  saveMobileRelayHostOverlay
+  saveMobileRelayHostRouting
 } from './mobile-relay-host-overlay-store'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
 import {
@@ -77,7 +78,7 @@ async function doLoadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot>
   })
   return joinHostCatalogCredentials({
     storedHosts,
-    overlays: overlayState.overlays,
+    relays: overlayState.relays,
     tokenCache,
     readToken: readHostDeviceToken,
     getRevision: hostListLoads.getHostListLoadRevision
@@ -150,12 +151,27 @@ export { updateHostDescriptor } from './host-descriptor-persistence'
 
 export class MobileRelayUpgradeHostRemovedError extends Error {}
 
-export const saveHost = (host: HostProfile): Promise<void> => persistHost(host, false)
+/**
+ * Relay routing learned after pairing (director re-resolution, rotation, direct upgrade). Takes no
+ * profile: a learner's snapshot predates any Edit Host, so the row and device token stay untouched.
+ */
+export async function setRelayRouting(hostId: string, relay: MobileRelayEndpoint): Promise<void> {
+  let wrote = false
+  await enqueueHostListMutation(async () => {
+    const hosts = await readStoredHostProfilesForMutation()
+    if (!hosts.some(({ id }) => id === hostId)) {
+      // Why: an in-flight relay learner must not resurrect a host the user removed.
+      throw new MobileRelayUpgradeHostRemovedError('mobile relay host was removed')
+    }
+    wrote = await saveMobileRelayHostRouting(hostId, relay)
+  })
+  if (wrote) {
+    hostListLoads.dropSharedHostListLoad()
+  }
+}
 
-export const saveExistingHostRelayUpgrade = (host: HostProfile): Promise<void> =>
-  persistHost(host, true)
-
-async function persistHost(host: HostProfile, requireExisting: boolean): Promise<void> {
+/** Pairing only (a census fences the importers): it creates or re-pairs the whole host. */
+export async function savePairedHost(host: HostProfile): Promise<void> {
   const validated = HostProfileSchema.parse(host)
   const stored = toStoredHostProfile(validated)
   const duplicateHostIds = new Set<string>()
@@ -179,9 +195,6 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
           .map((candidate) =>
             candidate.id === stored.id ? mergeHostNameIdentity(stored, candidate) : candidate
           )
-      } else if (requireExisting) {
-        // Why: an in-flight relay upgrade must not resurrect a host the user removed.
-        throw new MobileRelayUpgradeHostRemovedError('mobile relay upgrade host was removed')
       } else {
         next = [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
       }
@@ -217,18 +230,12 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   }
   // Why: a later removal owns its cleanup intent; cancel only while this publication remains authoritative.
   cancelCleanupForStoredHost(stored.id)
-  if (validated.endpoints) {
-    await saveMobileRelayHostOverlay({
-      v: 2,
-      hostId: stored.id,
-      endpoints: validated.endpoints,
-      relayHostId: validated.relayHostId,
-      relay: validated.relay
-    })
+  if (validated.relay) {
+    await saveMobileRelayHostRouting(stored.id, validated.relay)
     hostListLoads.dropSharedHostListLoad()
   }
   const overlayRemovalIds = [...duplicateHostIds]
-  if (!validated.endpoints && updatedExistingHost) {
+  if (!validated.relay && updatedExistingHost) {
     overlayRemovalIds.push(stored.id)
   }
   if (overlayRemovalIds.length > 0) {

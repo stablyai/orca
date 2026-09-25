@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import { connect, type ConnectOptions } from './rpc-client'
-import { resolvePairingHostIdentity, saveHost } from './host-store'
+import { resolvePairingHostIdentity, savePairedHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
@@ -45,7 +45,7 @@ type Dependencies = {
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   resolveHostIdentity: typeof resolvePairingHostIdentity
-  saveHost: typeof saveHost
+  saveHost: typeof savePairedHost
   saveJournal: typeof saveMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
@@ -60,7 +60,7 @@ const defaultDependencies: Dependencies = {
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   resolveHostIdentity: resolvePairingHostIdentity,
-  saveHost,
+  saveHost: savePairedHost,
   saveJournal: saveMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,

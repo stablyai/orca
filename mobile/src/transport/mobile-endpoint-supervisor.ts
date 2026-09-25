@@ -4,8 +4,8 @@ import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import {
+  adoptRelayRouting,
   liveRelayLeaseExpiry,
-  persistRelayHost,
   suspendRelayIfStillConnected
 } from './mobile-endpoint-supervisor-support'
 import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
@@ -96,7 +96,7 @@ export class MobileEndpointSupervisor {
       relay: () => this.host.relay,
       resolveRelay: dependencies.resolveRelay,
       persistResolvedRelay: async (resolved) => {
-        this.host = await persistRelayHost(this.host, resolved, dependencies.saveHost)
+        this.host = await adoptRelayRouting(this.host, resolved, dependencies, this.stopped)
       },
       bundle: () => this.bundle,
       adoptBundle: (bundle) => (this.bundle = bundle),
@@ -325,7 +325,7 @@ export class MobileEndpointSupervisor {
       this.bundle = result.bundle
       // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
       credentialRefreshed = true
-      this.host = await persistRelayHost(this.host, result.relay, this.dependencies.saveHost)
+      this.host = await adoptRelayRouting(this.host, result.relay, this.dependencies, this.stopped)
     } catch {
       // Why: pending material remains durable; the next authenticated direct
       // opportunity must reconcile it before creating another install key.

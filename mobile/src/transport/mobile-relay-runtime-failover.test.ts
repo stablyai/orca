@@ -199,15 +199,6 @@ const host: HostProfile = {
   deviceToken: 'device-token',
   publicKeyB64: 'A'.repeat(44),
   lastConnected: 1,
-  endpoints: [
-    { id: 'direct-primary', kind: 'lan', url: DIRECT_ENDPOINT },
-    {
-      id: 'relay-primary',
-      kind: 'relay',
-      url: 'wss://relay-c1.onorca.dev/v1/connect/id'
-    }
-  ],
-  relayHostId: relay.relayHostId,
   relay
 }
 
@@ -234,7 +225,7 @@ function dependencies(
     resolveRelay: vi.fn(async ({ relay }) => relay),
     readBundle: vi.fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER)),
     writeBundle: vi.fn(async () => {}),
-    saveHost: vi.fn(async () => {}),
+    saveRelayRouting: vi.fn(async () => {}),
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),
     setTimer: (handler, ms) => setTimeout(handler, ms),

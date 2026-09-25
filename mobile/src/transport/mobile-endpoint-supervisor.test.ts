@@ -191,9 +191,7 @@ describe('mobile endpoint supervisor', () => {
       expect.any(String),
       expect.any(Function)
     )
-    expect(deps.saveHost).toHaveBeenCalledWith(
-      expect.objectContaining({ relay: resolved, endpoint: host.endpoint })
-    )
+    expect(deps.saveRelayRouting).toHaveBeenCalledWith(host.id, resolved)
     supervisor.stop()
   })
 
@@ -666,7 +664,7 @@ describe('mobile endpoint supervisor', () => {
     await vi.waitFor(() => expect(deps.resolveRelay).toHaveBeenCalledOnce())
     supervisor.setForeground(false)
     finishResolve?.(relay)
-    await vi.waitFor(() => expect(deps.saveHost).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(deps.saveRelayRouting).toHaveBeenCalledOnce())
     await vi.advanceTimersByTimeAsync(0)
 
     expect(openRelay).toHaveBeenCalledTimes(2)

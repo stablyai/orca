@@ -157,7 +157,9 @@ describe('edit host handleSave', () => {
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
       endpoint: 'ws://192.168.1.20:6768'
     })
-    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', {
+      savedAddressChanged: true
+    })
     expect(dependencies.back).toHaveBeenCalledTimes(1)
 
     act(() => renderer.unmount())
@@ -174,7 +176,9 @@ describe('edit host handleSave', () => {
       personalName: 'Home Desk',
       endpoint: 'ws://192.168.1.20:6768'
     })
-    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', {
+      savedAddressChanged: true
+    })
     expect(dependencies.back).toHaveBeenCalledTimes(1)
 
     act(() => renderer.unmount())
@@ -228,7 +232,9 @@ describe('edit host handleSave', () => {
       await Promise.resolve()
     })
 
-    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1', {
+      savedAddressChanged: true
+    })
     expect(dependencies.back).toHaveBeenCalledTimes(1)
     expect(findText(renderer, 'connect failed')).toBe(false)
 

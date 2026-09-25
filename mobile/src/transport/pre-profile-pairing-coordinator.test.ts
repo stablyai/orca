@@ -331,15 +331,7 @@ describe('pre-profile pairing coordinator', () => {
       expect.objectContaining({
         id: `host-${now}`,
         endpoint: directOffer.endpoint,
-        relayHostId: relayOffer.relay!.relayHostId,
-        endpoints: [
-          { id: 'direct-primary', kind: 'lan', url: directOffer.endpoint },
-          {
-            id: 'relay-primary',
-            kind: 'relay',
-            url: `wss://relay-c1.onorca.dev/v1/connect/${relayOffer.relay!.relayHostId}`
-          }
-        ]
+        relay: expect.objectContaining({ relayHostId: relayOffer.relay!.relayHostId })
       })
     )
   })
@@ -357,7 +349,7 @@ describe('pre-profile pairing coordinator', () => {
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(deps.saveHost).toHaveBeenCalledWith(
-      expect.not.objectContaining({ endpoints: expect.anything() })
+      expect.not.objectContaining({ relay: expect.anything() })
     )
     expect(events).toEqual([
       'save-journal',
@@ -389,7 +381,7 @@ describe('pre-profile pairing coordinator', () => {
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(deps.saveHost).toHaveBeenCalledWith(
-      expect.not.objectContaining({ endpoints: expect.anything() })
+      expect.not.objectContaining({ relay: expect.anything() })
     )
     expect(events).toEqual([
       'save-journal',
