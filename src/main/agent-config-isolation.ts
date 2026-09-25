@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { GlobalSettings } from '../shared/global-settings-types'
 
 type IsolationSettings =
@@ -6,6 +7,9 @@ type IsolationSettings =
   | undefined
 
 let readIsolationSettings: (() => IsolationSettings) | null = null
+// Why scoped to the release chain: handing the user's own login back is the one write isolation
+// allows, and concurrent writers outside that async chain must stay blocked.
+const releaseScope = new AsyncLocalStorage<true>()
 
 // Why a live reader instead of a cached flag: trust presets and credential sync run deep in launch
 // paths that never receive settings, and a toggle must take effect for the very next launch.
@@ -24,7 +28,7 @@ export function isAgentConfigIsolatedInSettings(settings: IsolationSettings): bo
  * Checked at each writer's entry: a toggle mid-call lets that one call finish.
  */
 export function isExternalAgentConfigIsolated(): boolean {
-  if (!readIsolationSettings) {
+  if (!readIsolationSettings || releaseScope.getStore() === true) {
     return false
   }
   try {
@@ -43,13 +47,23 @@ export function onBeforeAgentConfigIsolation(task: () => Promise<unknown>): void
   releaseTasksBeforeIsolation.push(task)
 }
 
+// Why throw: a failed release can leave a managed login in the CLI's own files, so the caller
+// must not report isolation as in effect until every task succeeded.
 export async function releaseExternalAgentStateBeforeIsolation(): Promise<void> {
-  for (const task of releaseTasksBeforeIsolation) {
-    try {
-      await task()
-    } catch (error) {
-      console.warn('[agent-config-isolation] failed to release state before isolating:', error)
+  const failures: unknown[] = []
+  await releaseScope.run(true, async () => {
+    for (const task of releaseTasksBeforeIsolation) {
+      try {
+        await task()
+      } catch (error) {
+        failures.push(error)
+      }
     }
+  })
+  if (failures.length > 0) {
+    throw new Error('Could not restore agent logins before isolating external agent config.', {
+      cause: failures.length === 1 ? failures[0] : failures
+    })
   }
 }
 

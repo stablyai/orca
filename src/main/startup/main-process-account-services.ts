@@ -4,7 +4,11 @@ import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../codex-accounts/service'
 import { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
 import { ClaudeAccountService } from '../claude-accounts/service'
-import { onBeforeAgentConfigIsolation } from '../agent-config-isolation'
+import {
+  isExternalAgentConfigIsolated,
+  onBeforeAgentConfigIsolation,
+  releaseExternalAgentStateBeforeIsolation
+} from '../agent-config-isolation'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
@@ -18,7 +22,10 @@ import { readMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../minimax/minimax-api-key-store'
 import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
-import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
+import {
+  hasManagedClaudeSelection,
+  normalizeClaudeRuntimeSelection
+} from '../claude-accounts/runtime-selection'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
 import { setSystemCodexHomeHookSweepSuppressed } from '../codex/hook-service'
@@ -74,13 +81,24 @@ export function initializeMainProcessAccountServices(): void {
   state.codexSessionMigration.scheduleInitialRun()
   state.claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   state.claudeAccounts = new ClaudeAccountService(store, state.rateLimits, state.claudeRuntimeAuth)
-  // Why: a managed Claude login materialized into ~/.claude would otherwise outlive isolation and
-  // silently bill that account for every `claude` run outside Orca.
+  // Why every runtime: a managed login selected for host or any WSL distro must not outlive isolation.
   onBeforeAgentConfigIsolation(async () => {
-    if (store.getSettings().activeClaudeManagedAccountId) {
-      await state.claudeAccounts?.selectAccount(null)
+    const selection = normalizeClaudeRuntimeSelection(store.getSettings())
+    if (selection.host) {
+      await state.claudeAccounts?.selectAccountForTarget(null, { runtime: 'host' })
+    }
+    for (const [wslDistro, accountId] of Object.entries(selection.wsl ?? {})) {
+      if (accountId) {
+        await state.claudeAccounts?.selectAccountForTarget(null, { runtime: 'wsl', wslDistro })
+      }
     }
   })
+  // Why at startup too: isolation can arrive via the profile file or another client, not only the toggle.
+  if (isExternalAgentConfigIsolated() && hasManagedClaudeSelection(store.getSettings())) {
+    void releaseExternalAgentStateBeforeIsolation().catch((error: unknown) =>
+      console.warn('[agent-config-isolation] startup release failed:', error)
+    )
+  }
   state.rateLimits.setCodexHomePathResolver((target) =>
     state.codexRuntimeHome!.prepareForRateLimitFetch(target)
   )

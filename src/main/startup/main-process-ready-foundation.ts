@@ -235,7 +235,8 @@ export async function initializeReadyFoundation(): Promise<void> {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
-    if ('agentStatusHooksEnabled' in updates) {
+    // Why isolation too: it forces hooks off without changing agentStatusHooksEnabled.
+    if ('agentStatusHooksEnabled' in updates || 'isolateExternalAgentConfig' in updates) {
       // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
       // guest process and timers, and on must restart them — otherwise open WSL panes report no
       // status until their next spawn.

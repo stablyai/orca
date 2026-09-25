@@ -9173,7 +9173,13 @@
             "yolo": "yolo",
             "manual": "manual",
             "skip": "skip",
-            "checks": "checks"
+            "checks": "checks",
+            "isolateKeywordIsolate": "isolate",
+            "isolateKeywordIsolation": "isolation",
+            "isolateKeywordDotfiles": "dotfiles",
+            "isolateKeywordTrust": "trust",
+            "isolateKeywordCredentials": "credentials",
+            "isolateKeywordConfig": "config"
           }
         },
         "appearance": {
@@ -10882,7 +10888,7 @@
           "a68a642835": "Shows working, waiting, and done states in Orca. Turn off to remove Orca-managed hooks and stop reinstalling them.",
           "pausedByIsolationDescription": "Paused while external agent config is isolated. Turn off to remove hooks Orca installed earlier.",
           "isolateExternalAgentConfigTitle": "Isolate external agent config",
-          "isolateExternalAgentConfigDescription": "Never write agent CLI config, trust files, or credentials outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off."
+          "isolateExternalAgentConfigDescription": "Don't write agent CLI config, folder trust files, or managed-account logins outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off, which removes them. Refreshed Codex tokens still sync to ~/.codex/auth.json so your own Codex login keeps working."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Auto-generate tab titles",

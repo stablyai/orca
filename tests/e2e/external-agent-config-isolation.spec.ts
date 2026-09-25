@@ -25,8 +25,9 @@ const SEEDED_HOME_FILES: Record<string, string> = {
   '.copilot/config.json': '{}\n'
 }
 
-// Why an allowlist: Chromium and child shells legitimately create caches (fontconfig, NSS, Mesa)
-// under HOME; the contract is about agent CLI config, trust files and credentials.
+// Why an allowlist: Chromium and child shells create caches under HOME; the contract covers agent
+// CLIs' own config, trust files and credentials. ~/.orca is Orca's own data except agent-hooks, which
+// agent configs reference.
 const AGENT_CONFIG_ROOTS = [
   '.claude',
   '.claude.json',
@@ -45,43 +46,52 @@ const AGENT_CONFIG_ROOTS = [
   path.join('.config', 'amp'),
   path.join('.config', 'devin'),
   path.join('.config', 'opencode'),
-  path.join('.orca', 'agent-hooks'),
-  path.join('.orca', 'claude-agent-teams-bin')
+  path.join('.orca', 'agent-hooks')
 ]
-
-function isAgentConfigPath(relativePath: string): boolean {
-  return AGENT_CONFIG_ROOTS.some(
-    (root) =>
-      relativePath === root ||
-      relativePath.startsWith(`${root}${path.sep}`) ||
-      relativePath === `${root}/`
-  )
-}
 
 function changedAgentConfigPaths(
   before: Map<string, string>,
   after: Map<string, string>
 ): string[] {
   const keys = new Set([...before.keys(), ...after.keys()])
-  return [...keys]
-    .filter((key) => isAgentConfigPath(key) && before.get(key) !== after.get(key))
-    .sort()
+  return [...keys].filter((key) => before.get(key) !== after.get(key)).sort()
 }
 
-function snapshotTree(root: string): Map<string, string> {
+// Why tolerate ENOENT: a file can vanish between readdir and read while the app is running.
+function readIfPresent<T>(read: () => T): T | null {
+  try {
+    return read()
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
+}
+
+function snapshotAgentConfig(home: string): Map<string, string> {
   const files = new Map<string, string>()
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir)) {
-      const full = path.join(dir, entry)
-      if (statSync(full).isDirectory()) {
-        files.set(`${path.relative(root, full)}/`, '')
-        walk(full)
-      } else {
-        files.set(path.relative(root, full), readFileSync(full, 'utf-8'))
+  const visit = (relativePath: string): void => {
+    const full = path.join(home, relativePath)
+    const stats = readIfPresent(() => statSync(full))
+    if (!stats) {
+      return
+    }
+    if (stats.isDirectory()) {
+      files.set(`${relativePath}/`, '')
+      for (const entry of readIfPresent(() => readdirSync(full)) ?? []) {
+        visit(path.join(relativePath, entry))
       }
+      return
+    }
+    const contents = readIfPresent(() => readFileSync(full, 'utf-8'))
+    if (contents !== null) {
+      files.set(relativePath, contents)
     }
   }
-  walk(root)
+  for (const root of AGENT_CONFIG_ROOTS) {
+    visit(root)
+  }
   return files
 }
 
@@ -110,7 +120,7 @@ async function runOrcaAgainstSeededHome(isolated: boolean) {
     mkdirSync(path.dirname(target), { recursive: true })
     writeFileSync(target, contents)
   }
-  const before = snapshotTree(homeIsolation.isolatedHome)
+  const before = snapshotAgentConfig(homeIsolation.isolatedHome)
 
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const app = await electron.launch({
@@ -131,7 +141,7 @@ async function runOrcaAgainstSeededHome(isolated: boolean) {
       }
     }, workspacePath)
     await page.waitForTimeout(STARTUP_WRITE_WINDOW_MS)
-    return { before, after: snapshotTree(homeIsolation.isolatedHome) }
+    return { before, after: snapshotAgentConfig(homeIsolation.isolatedHome) }
   } finally {
     await closeElectronAppForE2E(app)
     await cleanupE2EDaemons(userDataDir)

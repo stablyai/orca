@@ -14,6 +14,7 @@ import {
   getAgentStatusHooksSearchKeywords,
   getAgentStatusHooksTitle,
   getIsolateExternalAgentConfigDescription,
+  getIsolateExternalAgentConfigSearchKeywords,
   getIsolateExternalAgentConfigTitle
 } from './agent-status-hooks-copy'
 import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
@@ -113,7 +114,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: getIsolateExternalAgentConfigTitle(),
     description: getIsolateExternalAgentConfigDescription(),
-    keywords: getAgentStatusHooksSearchKeywords()
+    keywords: getIsolateExternalAgentConfigSearchKeywords()
   },
   {
     title: getAgentGeneratedTabTitlesTitle(),

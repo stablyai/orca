@@ -62,6 +62,23 @@ export function getIsolateExternalAgentConfigTitle(): string {
 export function getIsolateExternalAgentConfigDescription(): string {
   return translate(
     ISOLATE_AGENT_CONFIG_DESCRIPTION_KEY,
-    "Never write agent CLI config, trust files, or credentials outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off."
+    "Don't write agent CLI config, folder trust files, or managed-account logins outside Orca's data. Turns off status hooks, folder trust presets, and Claude account switching. Existing hooks stay until you turn status hooks off, which removes them. Refreshed Codex tokens still sync to ~/.codex/auth.json so your own Codex login keeps working."
   )
+}
+
+export function getIsolateExternalAgentConfigSearchKeywords(): string[] {
+  return searchKeywords([
+    { key: 'auto.components.settings.agents.search.isolateKeywordIsolate', fallback: 'isolate' },
+    {
+      key: 'auto.components.settings.agents.search.isolateKeywordIsolation',
+      fallback: 'isolation'
+    },
+    { key: 'auto.components.settings.agents.search.isolateKeywordDotfiles', fallback: 'dotfiles' },
+    { key: 'auto.components.settings.agents.search.isolateKeywordTrust', fallback: 'trust' },
+    {
+      key: 'auto.components.settings.agents.search.isolateKeywordCredentials',
+      fallback: 'credentials'
+    },
+    { key: 'auto.components.settings.agents.search.isolateKeywordConfig', fallback: 'config' }
+  ])
 }

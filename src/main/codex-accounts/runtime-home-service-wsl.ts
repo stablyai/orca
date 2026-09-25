@@ -1,4 +1,5 @@
 import { join, win32 as pathWin32 } from 'node:path'
+import { isExternalAgentConfigIsolated } from '../agent-config-isolation'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import {
   getCodexSelectionLaneKey,
@@ -136,7 +137,8 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
       }
     }
 
-    if (!systemHome || !parsedSystemHome) {
+    // Why: the system-default destination is the distro's real ~/.codex; account homes are Orca-owned.
+    if (!systemHome || !parsedSystemHome || isExternalAgentConfigIsolated()) {
       return null
     }
     const systemAuth = reads[accountHomes.length] ?? { kind: 'unreadable' }

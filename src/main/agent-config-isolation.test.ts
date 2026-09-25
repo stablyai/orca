@@ -202,7 +202,7 @@ describe('external agent config isolation', () => {
     expect(runtimeToml).toContain('trust_level = "trusted"')
   })
 
-  it('runs every release task before isolating, even when one fails', async () => {
+  it('runs every release task, then rejects when any failed so isolation is not saved', async () => {
     const calls: string[] = []
     onBeforeAgentConfigIsolation(async () => {
       calls.push('first')
@@ -211,13 +211,31 @@ describe('external agent config isolation', () => {
     onBeforeAgentConfigIsolation(async () => {
       calls.push('second')
     })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    await releaseExternalAgentStateBeforeIsolation()
-
+    await expect(releaseExternalAgentStateBeforeIsolation()).rejects.toThrow(
+      'Could not restore agent logins'
+    )
     expect(calls).toEqual(['first', 'second'])
-    expect(warn).toHaveBeenCalledOnce()
-    warn.mockRestore()
+  })
+
+  it('lifts isolation only inside the release chain', async () => {
+    configureAgentConfigIsolation(() => ({ isolateExternalAgentConfig: true }))
+    const seenInsideRelease: boolean[] = []
+    onBeforeAgentConfigIsolation(async () => {
+      await Promise.resolve()
+      seenInsideRelease.push(isExternalAgentConfigIsolated())
+    })
+    let seenConcurrently: boolean | null = null
+    const concurrent = (async () => {
+      await Promise.resolve()
+      seenConcurrently = isExternalAgentConfigIsolated()
+    })()
+
+    await Promise.all([releaseExternalAgentStateBeforeIsolation(), concurrent])
+
+    expect(seenInsideRelease).toEqual([false])
+    expect(seenConcurrently).toBe(true)
+    expect(isExternalAgentConfigIsolated()).toBe(true)
   })
 
   it('detects only the off-to-on transition', () => {
