@@ -168,6 +168,107 @@ describe('correlateOpenCodeSessionOwners', () => {
     expect(results).toEqual([])
   })
 
+  it('breaks a same-directory tie with the pane typed into just before creation', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 3_600_000 },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 65_000 }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-b', basis: 'creation-correlation' }
+    ])
+  })
+
+  it('prefers whichever of two in-window panes was typed into last', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 90_000 },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 65_000 }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-b', basis: 'creation-correlation' }
+    ])
+  })
+
+  it('binds the only typed pane even when the other has no input record', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 65_000 }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-b', basis: 'creation-correlation' }
+    ])
+  })
+
+  it('stays unbound when both panes were typed into before creation', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 65_000 },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 65_000 }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
+  })
+
+  it('ignores input older than the tie-break window', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 600_000 },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 660_000 }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
+  })
+
+  it('ignores input that arrived after the session was created', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 65_000 },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 10_000 }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'creation-correlation' }
+    ])
+  })
+
+  it('ignores input when only one pane has client evidence', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 65_000 },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 61_000 }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'creation-correlation' }
+    ])
+  })
+
   it('rejects a client that started after creation beyond skew', () => {
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_1', NOW - 3_600_000)],

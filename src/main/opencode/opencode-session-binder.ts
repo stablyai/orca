@@ -35,6 +35,11 @@ export type BinderPaneSnapshot = {
   directory: string | null
   worktreeId: string | null
   shellPid: number | null
+  /**
+   * ms epoch of the pane's last interactive PTY write, null when the pane has
+   * not been typed into since it registered. Breaks same-directory ties.
+   */
+  lastInputAtMs: number | null
 }
 
 /** One session store row feeding a binder round. */
@@ -157,6 +162,20 @@ function toCorrelatedClients(
   return clients
 }
 
+/** Most recent of two observations; null when neither side has one. */
+function mostRecentInput(
+  left: number | null | undefined,
+  right: number | null | undefined
+): number | null {
+  if (typeof left !== 'number') {
+    return typeof right === 'number' ? right : null
+  }
+  if (typeof right !== 'number') {
+    return left
+  }
+  return Math.max(left, right)
+}
+
 /** Pure round core: correlate unbound sessions against panes and clients. */
 export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult {
   // Why dedupe by key, newest wins: remints and reattachments can leave a
@@ -166,7 +185,15 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
   // worktree.
   const paneByKey = new Map<string, CorrelatedPane>()
   for (const pane of deps.panes) {
-    paneByKey.set(pane.paneKey, { paneKey: pane.paneKey, directory: pane.directory })
+    const previous = paneByKey.get(pane.paneKey)
+    paneByKey.set(pane.paneKey, {
+      paneKey: pane.paneKey,
+      directory: pane.directory,
+      // Why most-recent instead of the current row's own value: a reminted
+      // PTY re-registers with no input history, so the replaced row's
+      // observation is the only record of what the human typed there.
+      lastInputAtMs: mostRecentInput(previous?.lastInputAtMs, pane.lastInputAtMs)
+    })
   }
   const panes = [...paneByKey.values()]
   const clients = toCorrelatedClients(deps.processes, deps.panes, deps.nowMs)
@@ -303,7 +330,8 @@ export function listBinderPaneSnapshots(): BinderPaneSnapshot[] {
       paneKey: pty.paneKey,
       directory: parsed?.worktreePath ?? null,
       worktreeId: pty.worktreeId,
-      shellPid: pty.pid
+      shellPid: pty.pid,
+      lastInputAtMs: pty.lastInputAtMs ?? null
     })
   }
   return snapshots

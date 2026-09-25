@@ -25,8 +25,18 @@ function proc(
   return { pid, ppid, startedAtMs, executable: argv[0] ?? '', argv }
 }
 
-function pane(paneKey: string, shellPid: number | null): BinderPaneSnapshot {
-  return { paneKey, directory: DIR, worktreeId: 'repo::/Users/jin/work/mocitec', shellPid }
+function pane(
+  paneKey: string,
+  shellPid: number | null,
+  lastInputAtMs: number | null = null
+): BinderPaneSnapshot {
+  return {
+    paneKey,
+    directory: DIR,
+    worktreeId: 'repo::/Users/jin/work/mocitec',
+    shellPid,
+    lastInputAtMs
+  }
 }
 
 describe('runOpenCodeBinderRound', () => {
@@ -97,6 +107,49 @@ describe('runOpenCodeBinderRound', () => {
     ])
   })
 
+  it('breaks a same-directory tie from the pane snapshots input', () => {
+    const { ownerships } = runOpenCodeBinderRound({
+      nowMs: NOW,
+      sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
+      panes: [pane(PANE_A, 100, NOW - 3_600_000), pane(PANE_B, 200, NOW - 65_000)],
+      processes: [
+        proc(100, 1, ['zsh']),
+        proc(200, 1, ['zsh']),
+        proc(101, 100, ['opencode'], NOW - 86_400_000),
+        proc(201, 200, ['opencode'], NOW - 86_400_000)
+      ],
+      knownOwners: new Map(),
+      parentBySessionId: new Map()
+    })
+    expect(ownerships).toEqual([
+      { sessionId: 'ses_1', paneKey: PANE_B, basis: 'creation-correlation' }
+    ])
+  })
+
+  it('keeps a reminted pane input history when its live row has none', () => {
+    const { ownerships } = runOpenCodeBinderRound({
+      nowMs: NOW,
+      sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
+      panes: [
+        pane(PANE_A, 100, NOW - 65_000),
+        pane(PANE_A, 101, null),
+        pane(PANE_B, 200, NOW - 3_600_000)
+      ],
+      processes: [
+        proc(100, 1, ['zsh']),
+        proc(101, 1, ['zsh']),
+        proc(200, 1, ['zsh']),
+        proc(102, 100, ['opencode'], NOW - 86_400_000),
+        proc(201, 200, ['opencode'], NOW - 86_400_000)
+      ],
+      knownOwners: new Map(),
+      parentBySessionId: new Map()
+    })
+    expect(ownerships).toEqual([
+      { sessionId: 'ses_1', paneKey: PANE_A, basis: 'creation-correlation' }
+    ])
+  })
+
   it('advances the cursor past handled rows only', () => {
     const fresh = [
       { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },
@@ -161,7 +214,13 @@ describe('applyBinderOwnerships', () => {
     const applied = applyBinderOwnerships(
       state,
       [
-        { paneKey: PANE_A, directory: '/elsewhere', worktreeId: 'repo::/elsewhere', shellPid: 100 },
+        {
+          paneKey: PANE_A,
+          directory: '/elsewhere',
+          worktreeId: 'repo::/elsewhere',
+          shellPid: 100,
+          lastInputAtMs: null
+        },
         { ...pane(PANE_A, 101) }
       ],
       [{ sessionId: 'ses_1', paneKey: PANE_A, basis: 'argv' }],

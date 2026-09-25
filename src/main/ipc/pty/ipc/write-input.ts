@@ -11,6 +11,7 @@ import {
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
 import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
+import { notePtyInput } from '../../../memory/pty-registry'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import {
@@ -206,6 +207,7 @@ export function createPtyWriteInput(deps: {
     try {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
+      notePtyInput(args.id, Date.now())
       interactiveOutputCharsByPty.set(args.id, 0)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
@@ -235,6 +237,7 @@ export function createPtyWriteInput(deps: {
     try {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
+      notePtyInput(args.id, Date.now())
       interactiveOutputCharsByPty.set(args.id, 0)
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)

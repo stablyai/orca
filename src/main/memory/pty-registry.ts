@@ -26,6 +26,13 @@ export type PtyRegistration = {
   // storing null lets the collector render a zero-attribution row for that
   // PTY instead of throwing and dropping the whole snapshot.
   pid: number | null
+  /**
+   * ms epoch of the last interactive write to this PTY. Absent until a
+   * keystroke arrives, and dropped when the PTY is re-registered under a new
+   * incarnation. The session binder reads it to decide which of two
+   * same-directory panes submitted the prompt that created a session (#22838).
+   */
+  lastInputAtMs?: number
 }
 
 const registry = new Map<string, PtyRegistration>()
@@ -36,6 +43,18 @@ export function registerPty(entry: PtyRegistration): void {
 
 export function unregisterPty(ptyId: string): void {
   registry.delete(ptyId)
+}
+
+/**
+ * Record an interactive write against a PTY. Ids the registry never learned
+ * (remote PTYs, already-torn-down ones) are ignored so the row cannot be
+ * created by input alone.
+ */
+export function notePtyInput(ptyId: string, nowMs: number): void {
+  const entry = registry.get(ptyId)
+  if (entry) {
+    entry.lastInputAtMs = nowMs
+  }
 }
 
 /** Snapshot of currently-registered local PTYs for the collector to walk. */
