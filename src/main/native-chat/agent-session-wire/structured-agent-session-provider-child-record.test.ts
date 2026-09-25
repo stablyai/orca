@@ -415,6 +415,43 @@ describe("a view's start that dies while a sent message waits on it", () => {
     await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
     expect(acquire).toHaveBeenCalledTimes(3)
   })
+
+  it('starts again for a message whose proven child crashed: only a failed start settles it (R2)', async () => {
+    await restartHost()
+    await host.hold(SESSION, 'surface-1')
+    const params = sendParams('hello')
+
+    const sent = host.send(CALLER, params)
+    const exited = exit(currentChild(), 'codex app-server crashed')
+    await sent
+    await exited
+    const id = params.envelope.clientOperationId
+
+    await eventually(() => expect(submission(id)?.dispatchState).not.toBe('pending'))
+    expect(submission(id)?.dispatchState).toBe('accepted')
+    expect(acquire).toHaveBeenCalledTimes(3)
+  })
+
+  it('waits on a child started since the failed one, not on the failure (R2)', async () => {
+    adapterExtras = { awaitStarted: vi.fn(async () => undefined) }
+    await restartHost()
+    acquire.mockImplementation(spawnStartingChild)
+    await host.hold(SESSION, 'surface-1')
+    const params = sendParams('hello')
+
+    // A second view's start lands after the first child's exit, before the loop's first step.
+    const sent = host.send(CALLER, params)
+    const exited = exit(currentChild(), EXIT, true)
+    const held = host.hold(SESSION, 'surface-2')
+    await sent
+    await exited
+    await held
+    const id = params.envelope.clientOperationId
+
+    await eventually(() => expect(submission(id)?.dispatchState).not.toBe('pending'))
+    expect(submission(id)?.dispatchState).toBe('accepted')
+    expect(acquire).toHaveBeenCalledTimes(3)
+  })
 })
 
 describe('a child that ends before its message is handed over', () => {

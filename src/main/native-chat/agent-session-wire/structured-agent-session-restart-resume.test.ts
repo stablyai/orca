@@ -348,7 +348,7 @@ describe('deriving what was working at teardown', () => {
     ).toEqual([])
   })
 
-  it('marks a message handed over and not yet answered, and a turn a queued one waits behind', () => {
+  it('marks a handed-over message over a newer queued one, and a turn a queued one waits behind', () => {
     const handedOver = {
       ...submission('msg-1', 'pending'),
       handoverRecorded: true as const,
@@ -360,7 +360,7 @@ describe('deriving what was working at teardown', () => {
         [
           SESSION,
           {
-            journal: journal([turnItem('turn-0', 'completed')], false, [handedOver]),
+            journal: journal([turnItem('turn-0', 'completed')], false, [handedOver, queued]),
             child: { fence: 1 }
           }
         ],
