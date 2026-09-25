@@ -6,8 +6,10 @@
 // it is given.
 
 import { defineMethod } from '../core'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   ensureStructuredHostInstalled,
+  requireStructuredCapability,
   requireStructuredHost,
   structuredCallerFor
 } from './structured-agent-session-gate'
@@ -18,6 +20,11 @@ export const STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS = [
     name: 'agentSession.restartResumable',
     params: RestartResumableParams,
     handler: async (_params, ctx) => {
+      requireStructuredCapability(ctx)
+      // No store on disk means no offer; installing the host just to say so is a per-launch cost.
+      if (!getStructuredAgentSessionHost() && !ctx.runtime.hasStructuredAgentSessionRecords()) {
+        return { sessions: [], failed: [] }
+      }
       await ensureStructuredHostInstalled(ctx)
       const host = requireStructuredHost(ctx)
       return {
