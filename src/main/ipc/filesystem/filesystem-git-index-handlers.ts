@@ -7,6 +7,8 @@ import {
   bulkStageFiles,
   bulkUnstageFiles
 } from '../../git/status'
+import { carryLocalWorkingTreeChanges } from '../../git/source-control/carry-working-tree-changes'
+import type { WorkingTreeCarryResult } from '../../../shared/working-tree-change-carry'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -138,6 +140,36 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
         worktreePath
       )
       await bulkStageFiles(worktreePath, filePaths, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'git:carryWorkingTreeChanges',
+    async (
+      _event,
+      args: { sourceWorktreePath: string; targetWorktreePath: string; connectionId?: string }
+    ): Promise<WorkingTreeCarryResult> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.carryWorkingTreeChanges(args.sourceWorktreePath, args.targetWorktreePath)
+      }
+      // Why: both roots must be Orca-registered worktrees before git or fs touches them.
+      const [sourcePath, targetPath] = await Promise.all([
+        resolveRegisteredWorktreePath(args.sourceWorktreePath, store),
+        resolveRegisteredWorktreePath(args.targetWorktreePath, store)
+      ])
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.targetWorktreePath,
+        targetPath
+      )
+      return carryLocalWorkingTreeChanges(sourcePath, targetPath, {
         ...gitOptions,
         admissionTier: 'interactive'
       })

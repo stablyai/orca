@@ -243,6 +243,8 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
     bulkStage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),
+    // Why: no runtime RPC route exists yet, so the web client refuses without touching either worktree.
+    carryWorkingTreeChanges: async () => ({ ok: false, reason: 'apply_failed' }),
     unstage: async ({ worktreePath, filePath }) =>
       mutateGitPath('git.unstage', worktreePath, filePath),
     bulkUnstage: async ({ worktreePath, filePaths }) =>
