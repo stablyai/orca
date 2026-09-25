@@ -17,16 +17,7 @@ import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { prepareManagedCodexHomeBeforeShellLaunch } from '../../main/codex/managed-home-shell-preflight'
-import {
-  readAgentHookSettingsFromProfileState,
-  updateAgentHookSettingsFromProfileState,
-  type ProfileStateOfflineLocation
-} from '../../main/persistence/profile-state/profile-state-offline-settings'
-import { getActiveProfileStateLocation } from '../profile-state-location'
-import {
-  acquireProfileStateMaintenance,
-  acquireProfileStateRuntimeAdmission
-} from '../../main/persistence/profile-state/profile-state-access'
+import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/profile-state-offline-settings'
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -38,11 +29,14 @@ type AgentHookCommandResult = {
 // Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
 const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
 
-function getDataPath(): string {
-  return getProfileStateLocation()?.dataFile ?? join(getDefaultUserDataPath(), 'orca-data.json')
+async function getDataPath(): Promise<string> {
+  return (
+    (await getProfileStateLocation())?.dataFile ?? join(getDefaultUserDataPath(), 'orca-data.json')
+  )
 }
 
-function getProfileStateLocation(): ProfileStateOfflineLocation | undefined {
+async function getProfileStateLocation(): Promise<ProfileStateOfflineLocation | undefined> {
+  const { getActiveProfileStateLocation } = await import('../profile-state-location.js')
   return getActiveProfileStateLocation()
 }
 
@@ -87,27 +81,29 @@ function writePersistedState(dataPath: string, state: PersistedState): void {
   }
 }
 
-function readHookSettingsFromDisk(): Pick<
-  GlobalSettings,
-  'agentStatusHooksEnabled' | 'disabledTuiAgents'
+async function readHookSettingsFromDisk(): Promise<
+  Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
 > {
+  const { acquireProfileStateRuntimeAdmission } =
+    await import('../../main/persistence/profile-state/profile-state-access.js')
   const admission = acquireProfileStateRuntimeAdmission(getDefaultUserDataPath())
   try {
-    return readAdmittedHookSettingsFromDisk()
+    return await readAdmittedHookSettingsFromDisk()
   } finally {
     admission.release()
   }
 }
 
-function readAdmittedHookSettingsFromDisk(): Pick<
-  GlobalSettings,
-  'agentStatusHooksEnabled' | 'disabledTuiAgents'
+async function readAdmittedHookSettingsFromDisk(): Promise<
+  Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
 > {
-  const profileStateLocation = getProfileStateLocation()
+  const profileStateLocation = await getProfileStateLocation()
   if (profileStateLocation) {
+    const { readAgentHookSettingsFromProfileState } =
+      await import('../../main/persistence/profile-state/profile-state-offline-settings.js')
     return readAgentHookSettingsFromProfileState(profileStateLocation)
   }
-  const state = readPersistedState(getDataPath())
+  const state = readPersistedState(await getDataPath())
   return {
     agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled !== false,
     disabledTuiAgents: normalizeDisabledTuiAgents(state.settings?.disabledTuiAgents)
@@ -134,28 +130,32 @@ async function readHookSettings(
   return readHookSettingsFromDisk()
 }
 
-function updateEnabledOnDisk(enabled: boolean): {
+async function updateEnabledOnDisk(enabled: boolean): Promise<{
   settingsPath: string
   settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
-} {
+}> {
+  const { acquireProfileStateMaintenance } =
+    await import('../../main/persistence/profile-state/profile-state-access.js')
   // A stopped-status response cannot exclude first migration racing this JSON write.
   const maintenance = acquireProfileStateMaintenance(getDefaultUserDataPath())
   try {
-    return updateAdmittedEnabledOnDisk(enabled)
+    return await updateAdmittedEnabledOnDisk(enabled)
   } finally {
     maintenance.release()
   }
 }
 
-function updateAdmittedEnabledOnDisk(enabled: boolean): {
+async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
   settingsPath: string
   settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
-} {
-  const profileStateLocation = getProfileStateLocation()
+}> {
+  const profileStateLocation = await getProfileStateLocation()
   if (profileStateLocation) {
+    const { updateAgentHookSettingsFromProfileState } =
+      await import('../../main/persistence/profile-state/profile-state-offline-settings.js')
     return updateAgentHookSettingsFromProfileState(profileStateLocation, enabled)
   }
-  const dataPath = getDataPath()
+  const dataPath = await getDataPath()
   const state = readPersistedState(dataPath)
   state.settings = {
     ...getDefaultPersistedState(homedir()).settings,
@@ -219,8 +219,8 @@ async function setAgentHooksEnabled(
   const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
     await import('../../main/agent-hooks/managed-agent-hook-controls.js')
   const updatedRuntime = await updateRunningRuntime(client, enabled)
-  const offlineUpdate = updatedRuntime ? null : updateEnabledOnDisk(enabled)
-  const settingsPath = offlineUpdate?.settingsPath ?? getDataPath()
+  const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
+  const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
   const statuses = updatedRuntime
     ? getManagedAgentHookStatuses()
     : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
@@ -263,8 +263,8 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/managed-agent-hook-controls.js')
     const result: AgentHookCommandResult = {
-      enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
-      settingsPath: getDataPath(),
+      enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
+      settingsPath: await getDataPath(),
       appliedBy: 'offline',
       statuses: getManagedAgentHookStatuses()
     }

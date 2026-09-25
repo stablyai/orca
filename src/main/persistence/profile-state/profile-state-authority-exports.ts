@@ -15,17 +15,6 @@ import type Database from '../../sqlite/sync-database'
 import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
 import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
 
-/** Preparation may leave a recovery export, but cannot change SQLite acceptance or canonical JSON. */
-export class ProfileStateExportPreparationError extends Error {
-  constructor(cause: unknown) {
-    super(
-      `Profile state compatibility export preparation failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-      { cause }
-    )
-    this.name = 'ProfileStateExportPreparationError'
-  }
-}
-
 function readExportSnapshot(db: Database.Database, expectedRevision?: number) {
   const snapshot = readProfileStateSnapshot(db)
   if (expectedRevision !== undefined && snapshot.revision !== expectedRevision) {
@@ -56,14 +45,9 @@ export function writeProfileStateAuthorityCompatibilityExport(
   if (snapshot.revision === 0) {
     return undefined
   }
-  let retained: string | undefined
-  try {
-    writeCompatibilityRecoveryExport(targetPath, snapshot)
-    retained = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : undefined
-    mkdirSync(dirname(targetPath), { recursive: true })
-  } catch (error) {
-    throw new ProfileStateExportPreparationError(error)
-  }
+  writeCompatibilityRecoveryExport(targetPath, snapshot)
+  const retained = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : undefined
+  mkdirSync(dirname(targetPath), { recursive: true })
   stageProfileStateJsonCompatibility(db, snapshot.json, snapshot.revision, retained)
   writeFileDurableSync(durableWriteTempPath(targetPath), targetPath, snapshot.json)
   acceptProfileStateJsonCompatibility(db, snapshot.json, snapshot.revision)
@@ -79,19 +63,14 @@ export async function writeProfileStateAuthorityCompatibilityExportAsync(
   if (snapshot.revision === 0) {
     return undefined
   }
-  let retained: string | undefined
-  try {
-    writeCompatibilityRecoveryExport(targetPath, snapshot)
-    retained = await readFile(targetPath, 'utf8').catch((error: unknown) => {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return undefined
-      }
-      throw error
-    })
-    await mkdir(dirname(targetPath), { recursive: true })
-  } catch (error) {
-    throw new ProfileStateExportPreparationError(error)
-  }
+  writeCompatibilityRecoveryExport(targetPath, snapshot)
+  const retained = await readFile(targetPath, 'utf8').catch((error: unknown) => {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return undefined
+    }
+    throw error
+  })
+  await mkdir(dirname(targetPath), { recursive: true })
   stageProfileStateJsonCompatibility(db, snapshot.json, snapshot.revision, retained)
   await writeFileDurable(durableWriteTempPath(targetPath), targetPath, snapshot.json)
   acceptProfileStateJsonCompatibility(db, snapshot.json, snapshot.revision)

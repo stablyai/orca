@@ -36,7 +36,12 @@ export class ProfileStateWriterConnection {
 
   constructor(
     initialization: ProfileStateWriterInitialization,
-    options: { workerPath?: string; timeoutMs?: number } = {}
+    private readonly options: {
+      workerPath?: string
+      timeoutMs?: number
+      onFailure?: (error: Error) => void
+      reportInitializationFailure?: boolean
+    } = {}
   ) {
     this.initialRevision = initialization.revision
     this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS
@@ -277,10 +282,21 @@ export class ProfileStateWriterConnection {
   }
 
   private fault(error: Error): void {
-    this.failure ??= error
+    if (this.failure) {
+      return
+    }
+    this.failure = error
     this.settle(undefined, this.failure)
     if (!this.didExit) {
       void this.worker?.terminate().catch(() => {})
+    }
+    // Startup failures already reject ready; admitted writers must also alert idle callers.
+    if (this.latestRevision !== undefined || this.options.reportInitializationFailure) {
+      try {
+        this.options.onFailure?.(error)
+      } catch (notificationError) {
+        console.error('[persistence] Could not report stopped saving:', notificationError)
+      }
     }
   }
 }

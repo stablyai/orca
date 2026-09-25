@@ -17,6 +17,23 @@ vi.mock('../../ssh/ssh-config-parser', () => ({
 }))
 
 describe('worker authority close admission', () => {
+  it('reports a failed maintenance resume without accepting a changed database', async () => {
+    const notify = vi.fn()
+    const { authority, peer } = await createWorkerMaintenanceFixture(undefined, notify)
+    const maintenance = await authority.pauseForMaintenance()
+    const other = peer()
+    other.writeSerializedDomains([{ domain: 'ui', payload: '{"external":true}' }])
+    other.close()
+
+    await expect(maintenance.resume()).rejects.toMatchObject({
+      code: 'profile-state-revision-conflict'
+    })
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: 'profile-state-revision-conflict' })
+    )
+    expect(() => authority.assertWritable()).toThrow()
+  })
+
   it('refuses new commands while its existing backup drains', async () => {
     const { authority, directory, readState } = await createWorkerMaintenanceFixture()
     const before = readState()

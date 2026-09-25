@@ -75,7 +75,10 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     >()
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       for (const tab of snapshot.tabs) {
-        if (tab.type === 'terminal' && tab.ptyId === ptyId) {
+        if (
+          tab.type === 'terminal' &&
+          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+        ) {
           exactSurfaceByKey.set(`${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`, {
             worktreeId,
             parentTabId: tab.parentTabId,
@@ -139,11 +142,8 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
-    // Safe against respawn: `getPtyLifecycleGeneration` lazily mints from the
-    // monotonic `nextPtyLifecycleGeneration`, so a re-read after this delete
-    // returns a strictly newer number — never a reused one. Every comparison a
-    // stale frame makes therefore still fails, exactly as the advance above intends.
     this.ptyLifecycleGenerationById.delete(ptyId)
+    this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -223,13 +223,17 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     } else {
       // Why: permanent process exit is absence, not a starting/sleeping tab.
       // Retire before publishing so paired clients never persist a ghost.
-      retirement = this.retireMobileSessionSurfacesForPty(
-        ptyId,
-        incarnationId,
-        exactSurfaces
-      ).catch((error) => {
-        console.error('[runtime] failed to publish terminal retirement:', error)
-      })
+      const pendingRetirement = {}
+      this.pendingPtySurfaceRetirementsByPtyId.set(ptyId, pendingRetirement)
+      retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+        .catch((error) => {
+          console.error('[runtime] failed to publish terminal retirement:', error)
+        })
+        .finally(() => {
+          if (this.pendingPtySurfaceRetirementsByPtyId.get(ptyId) === pendingRetirement) {
+            this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
+          }
+        })
     }
 
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []

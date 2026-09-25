@@ -4,6 +4,7 @@ import {
 } from './profile-state-document-validation'
 import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
 import { ProfileStateIndeterminateWriteError } from './profile-state-write-transaction'
+import { ProfileStateReadRollbackError } from './profile-state-read-snapshot'
 import type {
   ProfileStateWriterErrorData,
   ProfileStateWriterFailureOutcome
@@ -22,7 +23,10 @@ export class ProfileStateWriterError extends Error {
 }
 
 export function profileStateWriterFailureOutcome(error: unknown): ProfileStateWriterFailureOutcome {
-  if (error instanceof ProfileStateIndeterminateWriteError) {
+  if (
+    error instanceof ProfileStateIndeterminateWriteError ||
+    error instanceof ProfileStateReadRollbackError
+  ) {
     return 'indeterminate'
   }
   if (error instanceof ProfileStateWriterError) {
@@ -54,7 +58,8 @@ export function encodeProfileStateWriterError(
   if (
     error instanceof ProfileStateDatabaseOpenError ||
     error instanceof ProfileStateWriterError ||
-    error instanceof ProfileStateIndeterminateWriteError
+    error instanceof ProfileStateIndeterminateWriteError ||
+    error instanceof ProfileStateReadRollbackError
   ) {
     return { code: error.code, message: error.message, outcome }
   }

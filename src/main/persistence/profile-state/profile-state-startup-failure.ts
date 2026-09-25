@@ -75,6 +75,7 @@ export function formatProfileStateStartupFailure(error: unknown): string | undef
       `Orca cannot safely choose a profile-state authority: ${error.message}`,
       'An older build may have changed the JSON file. Both copies are preserved; neither is selected automatically.',
       'Stop Orca and copy the profile directory before choosing which state to keep.',
+      'To keep the current JSON, including edits from an older build, run `orca profile state rollback --current-json`. This archives both copies and does not merge their contents.',
       'Run `orca profile state exports` to inspect retained recovery points.',
       'Use `orca profile state rollback --backup <id>` or `orca profile state rollback --revision <revision>` only after selecting the state you want to restore.'
     ].join('\n')

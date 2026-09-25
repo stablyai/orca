@@ -81,6 +81,21 @@ describe('profile-state recovery launch', () => {
     expect(mocks.run.mock.calls[0][0].env).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
   })
 
+  it('round-trips current JSON selection without requiring an invented revision', async () => {
+    const current = { ...result, revision: null }
+    mocks.run.mockResolvedValue({
+      code: 0,
+      signal: null,
+      timedOut: false,
+      stdout: `${PROFILE_STATE_RECOVERY_RESULT_PREFIX}${JSON.stringify({ ok: true, result: current })}\n`,
+      stderr: ''
+    })
+    expect(
+      await launchProfileStateRecovery({ userDataPath: '.', selector: { kind: 'current-json' } })
+    ).toEqual(current)
+    expect(mocks.run.mock.calls[0][0].args.at(-1)).toContain('"kind":"current-json"')
+  })
+
   it('preserves a structured refusal from the lock owner', async () => {
     mocks.run.mockResolvedValue({
       code: 1,

@@ -9,7 +9,11 @@ import { ProfileStateWorkerAuthority } from './profile-state-worker-authority'
 /** Publish live state only after its exact bootstrap revision has a worker owner. */
 export async function createLiveProfileStateStore(
   options: ProfileStateStoreFactoryOptions,
-  workerOptions: { workerPath?: string; backupWorkerPath?: string } = {}
+  workerOptions: {
+    workerPath?: string
+    backupWorkerPath?: string
+    onFailure?: (error: Error) => void
+  } = {}
 ): Promise<ProfileStateStoreFactoryResult> {
   const { initialState: initial, ...prepared } = prepareProfileStateStore(options)
   if (!initial) {

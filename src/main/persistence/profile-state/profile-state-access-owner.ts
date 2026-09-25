@@ -6,7 +6,6 @@ import {
   readlinkSync,
   readdirSync,
   realpathSync,
-  renameSync,
   rmdirSync,
   unlinkSync,
   writeFileSync
@@ -14,6 +13,11 @@ import {
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
+import { renameFileWithWindowsRetry } from '../../codex-accounts/fs-utils'
+import {
+  START_TIME_TOLERANCE_MS,
+  startTimesWithinTolerance
+} from '../../daemon/daemon-process-start-time'
 import {
   profileStateAccessBootIdentity,
   profileStateAccessMachineIdentity,
@@ -111,7 +115,9 @@ function readOwner(path: string): AccessOwner | undefined {
         processStartIdentity:
           'processStartIdentity' in owner &&
           typeof owner.processStartIdentity === 'string' &&
-          /^(?:linux-start-ticks|wall-time-ms):\d+$/.test(owner.processStartIdentity) &&
+          /^(?:linux-start-ticks|darwin-utc-start-ms|wall-time-ms):\d+$/.test(
+            owner.processStartIdentity
+          ) &&
           Number.isSafeInteger(Number(owner.processStartIdentity.split(':')[1]))
             ? owner.processStartIdentity
             : null
@@ -167,7 +173,13 @@ function ownerExited(owner: AccessOwner): boolean {
     actualStart !== null &&
     recordedStart != null &&
     actualStart.split(':')[0] === recordedStart.split(':')[0] &&
-    actualStart !== recordedStart
+    (actualStart.startsWith('darwin-utc-start-ms:')
+      ? !startTimesWithinTolerance(
+          Number(actualStart.split(':')[1]),
+          Number(recordedStart.split(':')[1]),
+          START_TIME_TOLERANCE_MS
+        )
+      : actualStart !== recordedStart)
   )
 }
 
@@ -258,7 +270,7 @@ export function publishAccessOwner(paths: ProfileStateAccessPaths, exclusive: bo
     bestEffortFsyncDirectorySync(candidate)
     for (let attempt = 0; ; attempt += 1) {
       try {
-        renameSync(candidate, target)
+        renameFileWithWindowsRetry(candidate, target)
         published = true
         break
       } catch (error) {

@@ -47,6 +47,8 @@ describe('profile-state startup failure formatting', () => {
       'Orca cannot safely choose a profile-state authority: both profile stores are present'
     )
     expect(message).toContain('neither is selected automatically')
+    expect(message).toContain('orca profile state rollback --current-json')
+    expect(message).toContain('does not merge')
     expect(message).toContain('orca profile state exports')
     expect(message).toContain('orca profile state rollback --backup <id>')
     expect(

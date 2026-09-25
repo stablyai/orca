@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { getActiveViewPreferenceFile } from '../../active-view-preference'
+import { ActiveViewPreference, getActiveViewPreferenceFile } from '../../active-view-preference'
 import * as backupWorker from '../profile-state/profile-state-backup-worker'
 import { profileStateDatabaseBackups } from '../profile-state/profile-state-backup-path'
 import {
@@ -86,10 +86,12 @@ describe('profile maintenance admission', () => {
       const { store, authority, readState } = await createWorkerMaintenanceFixture()
       const started = maintenanceBarrier()
       const release = maintenanceBarrier()
-      vi.spyOn(authority, 'drainBackups').mockImplementationOnce(async () => {
-        started.resolve()
-        await release.promise
-      })
+      vi.spyOn(ActiveViewPreference.prototype, 'flushPendingAsync').mockImplementationOnce(
+        async () => {
+          started.resolve()
+          await release.promise
+        }
+      )
       store.updateSettings({ theme: 'dark' })
       const older = store.flushPendingOrThrowAsync()
       await started.promise
@@ -120,10 +122,12 @@ describe('profile maintenance admission', () => {
       vi.spyOn(console, 'error').mockImplementation(() => {})
       const started = maintenanceBarrier()
       const release = maintenanceBarrier()
-      vi.spyOn(authority, 'drainBackups').mockImplementationOnce(async () => {
-        started.resolve()
-        await release.promise
-      })
+      vi.spyOn(ActiveViewPreference.prototype, 'flushPendingAsync').mockImplementationOnce(
+        async () => {
+          started.resolve()
+          await release.promise
+        }
+      )
       store.updateSettings({ theme: 'dark' })
       const accepted = store.flushPendingOrThrowAsync()
       await started.promise
@@ -198,10 +202,12 @@ describe('profile maintenance admission', () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     const started = maintenanceBarrier()
     const release = maintenanceBarrier()
-    vi.spyOn(authority, 'drainBackups').mockImplementationOnce(async () => {
-      started.resolve()
-      await release.promise
-    })
+    vi.spyOn(ActiveViewPreference.prototype, 'flushPendingAsync').mockImplementationOnce(
+      async () => {
+        started.resolve()
+        await release.promise
+      }
+    )
     store.updateSettings({ theme: 'dark' })
     const accepted = store.flushPendingOrThrowAsync()
     await started.promise

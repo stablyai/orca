@@ -9,7 +9,7 @@ import { toAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import { createPtyIpcSpawnState } from './spawn-state'
-import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
+import { persistPtyIpcSpawnCommit, publishPtyIpcSpawnCommit } from './spawn-commit-persist'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -20,15 +20,7 @@ const TARGET = 'ssh-1'
 const WORKTREE = 'repo1::/worktree'
 const TAB = 'tab-1'
 
-/**
- * Drives the shipped IPC spawn commit rather than the store primitives it calls.
- *
- * The store-level suite could not catch this: it exercised bind-then-upsert, and this path does the
- * opposite — it writes the lease row first so a force-quit in the renderer's debounce window cannot
- * strand a running remote shell without one, then binds the pane. Supersession is fenced on the
- * pane's binding, so under this real order it bailed on the predecessor every time and never re-ran,
- * and each reconnect left one more reattachable lease for `reattachKnownPtys` to `pty.attach`.
- */
+/** Exercises the shipped binding-then-publication order so reconnects retire earlier leases. */
 async function commitSshSpawn(
   store: ReturnType<typeof createStore>,
   args: { relayPtyId: string; leafId: string }
@@ -45,7 +37,7 @@ async function commitSshSpawn(
   const ctx = createPtyIpcSpawnState(deps, spawnArgs)
   ctx.result = { id: toAppSshPtyId(TARGET, args.relayPtyId) }
   ctx.validatedLeafId = args.leafId
-  await persistPtyIpcSpawnCommit(ctx)
+  publishPtyIpcSpawnCommit(ctx, await persistPtyIpcSpawnCommit(ctx))
 }
 
 /** One pane's layout, so the two host partitions can be given different bindings for one leaf. */

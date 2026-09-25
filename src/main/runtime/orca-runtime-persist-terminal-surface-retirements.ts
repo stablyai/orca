@@ -88,8 +88,8 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
     incarnationId: string,
     exactSurfaces: readonly Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>[]
   ): Promise<void> {
-    // Physical cleanup already removed this generation; retirement must not recreate it.
-    const exitGeneration = this.ptyLifecycleGenerationById.get(ptyId)
+    // Reads can mint a new frame generation while this independent retirement waits for disk.
+    const pendingRetirement = this.pendingPtySurfaceRetirementsByPtyId.get(ptyId)
     const terminalHandle =
       this.handleByPtyId.get(ptyId) ?? this.findHandleForPtyRecord(ptyId) ?? undefined
     const retiredSurfaceByKey = new Map<string, RetiredTerminalSurface>()
@@ -125,7 +125,7 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
     const currentIncarnation = this.ptysById.get(ptyId)?.incarnationId
     if (
       !persisted ||
-      this.ptyLifecycleGenerationById.get(ptyId) !== exitGeneration ||
+      this.pendingPtySurfaceRetirementsByPtyId.get(ptyId) !== pendingRetirement ||
       (currentIncarnation && currentIncarnation !== incarnationId)
     ) {
       return

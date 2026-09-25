@@ -80,31 +80,46 @@ describe('maintenance compatibility checkpoint', () => {
     expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('light')
   })
 
-  it('keeps the writer fenced when promotion fails after publishing canonical JSON', async () => {
-    const { store, authority, dataFile, databaseFile, profileId, readState } =
-      await createWorkerMaintenanceFixture()
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    await authority.writeJsonCompatibilityExportAsync(dataFile)
-    const opened = openProfileStateDatabase(databaseFile, profileId)
-    try {
-      opened.db.exec(`
+  it.each(['maintenance', 'update-preflight'] as const)(
+    'resumes saving after a rolled-back %s export leaves both JSON versions accepted',
+    async (phase) => {
+      const { store, authority, dataFile, databaseFile, profileId, readState } =
+        await createWorkerMaintenanceFixture()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await authority.writeJsonCompatibilityExportAsync(dataFile)
+      const opened = openProfileStateDatabase(databaseFile, profileId)
+      try {
+        opened.db.exec(`
         CREATE TRIGGER reject_acceptance BEFORE INSERT ON profile_state_meta
         WHEN NEW.key = 'legacy_json_acceptance'
           AND json_type(NEW.value, '$.pending') IS NULL
         BEGIN SELECT RAISE(ABORT, 'injected promotion failure'); END
       `)
-    } finally {
-      opened.db.close()
-    }
-    store.updateSettings({ theme: 'dark' })
+      } finally {
+        opened.db.close()
+      }
+      store.updateSettings({ theme: 'dark' })
 
-    await expect(store.beginProfileMaintenance()).rejects.toMatchObject({
-      outcome: 'indeterminate'
-    })
-    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('dark')
-    expect(readState().settings.theme).toBe('dark')
-    await expect(store.runDurableMutation(() => ({ value: undefined }))).rejects.toThrow(
-      'finalized'
-    )
-  })
+      await expect(
+        phase === 'maintenance'
+          ? store.beginProfileMaintenance()
+          : store.writeLatestProfileStateJsonCompatibilityExportAsync()
+      ).rejects.toMatchObject({ outcome: 'known-failure' })
+      expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('dark')
+      expect(readState().settings.theme).toBe('dark')
+      await store.runDurableMutation(() => {
+        store.updateSettings({ theme: 'light' })
+        return { value: undefined }
+      })
+      expect(readState().settings.theme).toBe('light')
+      const repaired = openProfileStateDatabase(databaseFile, profileId)
+      try {
+        repaired.db.exec('DROP TRIGGER reject_acceptance')
+      } finally {
+        repaired.db.close()
+      }
+      await (await store.beginProfileMaintenance()).resume()
+      expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('light')
+    }
+  )
 })

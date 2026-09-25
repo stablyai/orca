@@ -1,5 +1,17 @@
 import type Database from '../../sqlite/sync-database'
 
+export class ProfileStateReadRollbackError extends Error {
+  readonly code = 'profile-state-read-rollback-failed' as const
+
+  constructor(
+    cause: unknown,
+    readonly rollbackError: unknown
+  ) {
+    super('Profile state read failed without releasing its transaction', { cause })
+    this.name = 'ProfileStateReadRollbackError'
+  }
+}
+
 /** Reuse a caller's transaction without committing or rolling it back. */
 export function withProfileStateReadSnapshot<T>(db: Database.Database, read: () => T): T {
   const ownsTransaction = !db.isTransaction
@@ -13,11 +25,11 @@ export function withProfileStateReadSnapshot<T>(db: Database.Database, read: () 
     }
     return result
   } catch (error) {
-    if (ownsTransaction) {
+    if (ownsTransaction && db.isTransaction) {
       try {
         db.exec('ROLLBACK')
-      } catch {
-        // Preserve the original read error if rollback itself is unavailable.
+      } catch (rollbackError) {
+        throw new ProfileStateReadRollbackError(error, rollbackError)
       }
     }
     throw error
