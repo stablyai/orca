@@ -18,7 +18,6 @@ import {
 } from './mobile-session-tab-close-outcome'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import { SESSION_TAB_NOT_FOUND_ERROR } from '../../shared/session-tab-close'
 import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
 import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
@@ -302,10 +301,8 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
     } else if (tab.type === 'agent-session') {
       if (this.notifier?.closeSessionTab) {
         try {
-          await this.notifier.closeSessionTab(
-            structuredAgentSessionTabId(tab.sessionId),
-            worktreeId
-          )
+          // Why: a reopened chat's window tab id is not derivable from its session; the window maps ours.
+          await this.notifier.closeSessionTab(tab.id, worktreeId)
         } catch (error) {
           // The renderer already having removed the tab is an idempotent close, not a veto.
           if (!(error instanceof Error && error.message === SESSION_TAB_NOT_FOUND_ERROR)) {
