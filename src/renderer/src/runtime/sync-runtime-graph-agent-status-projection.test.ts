@@ -147,4 +147,18 @@ describe('mobile agent-status projection equivalence', () => {
     expect([...projected].sort()).toEqual([...localeCompareOrderedEntries].sort())
     expect(projected).toHaveLength(localeCompareOrderedEntries.length)
   })
+
+  it('republishes a verdict change that leaves the interrupted flag as it was', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const project = (live: 'success' | 'failure', history: 'success' | 'failure'): string =>
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': makeEntry(0, {
+          state: 'done',
+          mainAgent: { state: 'done', outcome: live, stateStartedAt: 1740000000000 },
+          stateHistory: [{ state: 'done', prompt: 'p', startedAt: 1, outcome: history }]
+        })
+      })
+    expect(project('failure', 'success')).not.toBe(project('success', 'success'))
+    expect(project('success', 'failure')).not.toBe(project('success', 'success'))
+  })
 })
