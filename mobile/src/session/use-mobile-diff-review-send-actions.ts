@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -65,19 +65,29 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     await saveCommentsAndReviewState(nextComments, screenState.reviewState)
   }, [saveCommentsAndReviewState, screenState])
 
+  // Read when a send settles, not when it was tapped: an agent launch can take a minute, and notes
+  // written meanwhile must survive the whole-list save below.
+  const latestScreenStateRef = useRef(screenState)
+  useEffect(() => {
+    latestScreenStateRef.current = screenState
+  }, [screenState])
+  // One launch at a time: each tap is a new operation, so a second tap would start a second agent.
+  const agentLaunchInFlightRef = useRef(false)
+
   const markNotesSent = useCallback(
     async (comments: readonly DiffComment[]) => {
-      if (screenState.kind !== 'ready') {
+      const current = latestScreenStateRef.current
+      if (current.kind !== 'ready') {
         return
       }
       const next = markMobileDiffCommentsSent(
-        screenState.comments,
+        current.comments,
         new Set(comments.map((comment) => comment.id)),
         Date.now()
       )
-      await saveCommentsAndReviewState(next, screenState.reviewState)
+      await saveCommentsAndReviewState(next, current.reviewState)
     },
-    [saveCommentsAndReviewState, screenState]
+    [saveCommentsAndReviewState]
   )
 
   const sendPromptToTerminal = useCallback(
@@ -116,20 +126,32 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      // The desktop asks which agent to use; the review screen has no picker, so this takes the
-      // desktop's own default resolution with no saved recipe.
-      const result = await launchAgentWithPrompt({
-        client,
-        hostCapabilities,
-        worktreeId,
-        prompt: formatMobileDiffReviewPrompt(comments),
-        actionId: null,
-        launchSource: 'notes_send'
-      })
-      if (result.kind === 'not-started' || result.kind === 'unconfirmed') {
-        throw new Error(result.message)
+      if (agentLaunchInFlightRef.current) {
+        return
       }
+      agentLaunchInFlightRef.current = true
+      // Closed up front so the wait (up to a minute for a terminal agent) shows its progress here.
       setSendSheet(null)
+      setActionError('Starting an agent...')
+      let result
+      try {
+        // The desktop asks which agent to use; the review screen has no picker, so this takes the
+        // desktop's own default resolution with no saved recipe.
+        result = await launchAgentWithPrompt({
+          client,
+          hostCapabilities,
+          worktreeId,
+          prompt: formatMobileDiffReviewPrompt(comments),
+          actionId: null,
+          launchSource: 'notes_send'
+        })
+      } finally {
+        agentLaunchInFlightRef.current = false
+      }
+      if (result.kind === 'not-started' || result.kind === 'unconfirmed') {
+        setActionError(result.message)
+        return
+      }
       if (result.kind === 'prompt-not-sent') {
         // Notes stay unsent so Copy Notes and a later send still carry them.
         setActionError(

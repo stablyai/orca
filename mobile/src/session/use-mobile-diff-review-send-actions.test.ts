@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import {
   isMobileNativeChatInputStale,
@@ -59,30 +60,35 @@ const LAUNCH_CAPABILITIES = [
   'agent.launch.replay-required.v1'
 ]
 
-// Answers the agent loader's reads and the launch, by method.
-function launchClient(promptOutcome: 'handed-to-terminal' | 'not-delivered') {
-  const reply = (result: unknown) => ({
-    id: 'rpc',
-    ok: true as const,
-    result,
-    _meta: { runtimeId: 'r' }
+function rpcReply(result: unknown) {
+  return { id: 'rpc', ok: true as const, result, _meta: { runtimeId: 'r' } }
+}
+
+function launchedReply(promptOutcome: 'handed-to-terminal' | 'not-delivered') {
+  return rpcReply({
+    outcome: { kind: 'terminal', handle: 'term-1' },
+    worktreeId: 'wt-1',
+    receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'd' },
+    prompt: { delivery: 'submit', outcome: promptOutcome }
   })
-  const sendRequest = vi.fn(async (method: string, _params?: unknown) => {
+}
+
+// Answers the agent loader's reads and the launch, by method.
+function launchClient(
+  promptOutcome: 'handed-to-terminal' | 'not-delivered',
+  launchReply: () => Promise<RpcResponse> = async () => launchedReply(promptOutcome)
+) {
+  const sendRequest = vi.fn(async (method: string, _params?: unknown): Promise<RpcResponse> => {
     if (method === 'repo.list') {
-      return reply({ repos: [{ id: 'wt-1' }] })
+      return rpcReply({ repos: [{ id: 'wt-1' }] })
     }
     if (method === 'settings.get') {
-      return reply({ settings: { defaultTuiAgent: 'codex' } })
+      return rpcReply({ settings: { defaultTuiAgent: 'codex' } })
     }
     if (method === 'preflight.detectAgents') {
-      return reply(['codex'])
+      return rpcReply(['codex'])
     }
-    return reply({
-      outcome: { kind: 'terminal', handle: 'term-1' },
-      worktreeId: 'wt-1',
-      receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'd' },
-      prompt: { delivery: 'submit', outcome: promptOutcome }
-    })
+    return launchReply()
   })
   return { client: requestPortRpcClient(sendRequest), sendRequest }
 }
@@ -102,8 +108,10 @@ describe('useMobileDiffReviewSendActions', () => {
   let setActionError: ReturnType<typeof vi.fn>
   let setSendSheet: ReturnType<typeof vi.fn>
   let saveCommentsAndReviewState: ReturnType<typeof vi.fn>
+  let screenState: ReviewScreenState = READY
 
   beforeEach(() => {
+    screenState = READY
     clipboardMock.setStringAsync.mockReset().mockResolvedValue(true)
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
@@ -124,7 +132,7 @@ describe('useMobileDiffReviewSendActions', () => {
       connState: 'connected',
       hostCapabilities: LAUNCH_CAPABILITIES,
       worktreeId: 'wt-1',
-      screenState: READY,
+      screenState,
       setActionError,
       setSendSheet,
       saveCommentsAndReviewState
@@ -317,5 +325,61 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(setActionError).toHaveBeenLastCalledWith(
       "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
     )
+  })
+
+  it('shows a launch that did not start on the review screen instead of rejecting', async () => {
+    await mount(
+      launchClient('handed-to-terminal', async () => ({
+        id: 'rpc',
+        ok: false,
+        error: { code: 'selector_not_found', message: 'Workspace not found' },
+        _meta: { runtimeId: 'r' }
+      })).client
+    )
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(setSendSheet).toHaveBeenCalledWith(null)
+    expect(setActionError).toHaveBeenLastCalledWith('Workspace not found')
+    expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+  })
+
+  it('starts one agent for a double tap and keeps notes written while it starts', async () => {
+    let answerLaunch: (reply: RpcResponse) => void = () => {}
+    const { client, sendRequest } = launchClient(
+      'handed-to-terminal',
+      () =>
+        new Promise<RpcResponse>((resolve) => {
+          answerLaunch = resolve
+        })
+    )
+    await mount(client)
+    let first: Promise<void> | undefined
+    await act(async () => {
+      first = actions?.createTerminalAndSend([COMMENT])
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(setActionError).toHaveBeenLastCalledWith('Starting an agent...')
+    const written: DiffComment = { ...COMMENT, id: 'comment-2', body: 'written meanwhile' }
+    screenState = { ...READY, comments: [COMMENT, written] }
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+    })
+    await act(async () => {
+      answerLaunch(launchedReply('handed-to-terminal'))
+      await first
+    })
+    expect(
+      sendRequest.mock.calls.filter(([method]) => method === 'agent.launchReplay')
+    ).toHaveLength(1)
+    expect(saveCommentsAndReviewState).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: 'comment-1', sentAt: expect.any(Number) }),
+        expect.not.objectContaining({ sentAt: expect.anything() })
+      ],
+      READY.reviewState
+    )
+    expect(saveCommentsAndReviewState.mock.calls[0]?.[0]?.[1]?.id).toBe('comment-2')
+    expect(setActionError).toHaveBeenLastCalledWith('Review notes sent')
   })
 })
