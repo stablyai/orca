@@ -2,6 +2,7 @@ import {
   AgentStatusObservationSequencer,
   createAgentStatusAuthorityId
 } from '../../../shared/agent-status-observation'
+import { createBrowserUuid } from './browser-uuid'
 
 /**
  * The renderer's sequencer for status rows it writes itself: remote-runtime OSC bytes it
@@ -13,5 +14,5 @@ import {
  * ids from different authorities are incomparable, not merely older.
  */
 export const rendererAgentStatusObservations = new AgentStatusObservationSequencer(
-  createAgentStatusAuthorityId('renderer')
+  createAgentStatusAuthorityId('renderer', createBrowserUuid)
 )

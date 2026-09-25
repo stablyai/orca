@@ -3,11 +3,12 @@
  * hides crypto.randomUUID and crypto.subtle (secure-context-only). This test
  * recreates that exact global shape and drives the real call sites.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const realCrypto = globalThis.crypto
 
 beforeEach(() => {
+  vi.resetModules()
   // Match a non-secure browser context: getRandomValues stays, the
   // secure-context-only members are undefined.
   Object.defineProperty(globalThis, 'crypto', {
@@ -54,6 +55,14 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
     const { createBrowserUuid } = await import('./browser-uuid')
     expect(createBrowserUuid()).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    )
+  })
+
+  it('initializes the renderer status authority when randomUUID is missing', async () => {
+    const { rendererAgentStatusObservations } = await import('./renderer-agent-status-observations')
+
+    expect(rendererAgentStatusObservations.getAuthorityId()).toMatch(
+      /^renderer:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     )
   })
 })
