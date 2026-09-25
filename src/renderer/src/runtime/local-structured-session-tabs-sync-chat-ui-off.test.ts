@@ -47,6 +47,9 @@ const unsubscribe = vi.fn()
 const subscribe = vi.fn(async () => ({ unsubscribe }))
 const call = vi.fn(async () => ({ ok: true, result: { snapshots: [inventoryWithOpenChat()] } }))
 const hasLocalStructuredAgentSessions = vi.fn(async () => true)
+const getStatus = vi.fn(async () => ({
+  capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}))
 
 function setChatUi(experimentalNativeChat: boolean): void {
   useAppStore.setState({ settings: { ...getDefaultSettings(''), experimentalNativeChat } })
@@ -57,14 +60,15 @@ beforeEach(() => {
   subscribe.mockClear()
   call.mockClear()
   hasLocalStructuredAgentSessions.mockReset().mockResolvedValue(true)
+  getStatus.mockReset().mockResolvedValue({
+    capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  })
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
       app: { hasLocalStructuredAgentSessions },
       runtime: {
-        getStatus: vi.fn(async () => ({
-          capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-        })),
+        getStatus,
         call,
         subscribe
       }
@@ -116,6 +120,19 @@ describe('local structured session tab sync', () => {
 
     await vi.waitFor(() => expect(subscribe).toHaveBeenCalledOnce())
     expect(hasLocalStructuredAgentSessions).toHaveBeenCalledOnce()
+    unmount()
+  })
+
+  it('lets a later Chat UI change retry a sync whose capability probe failed', async () => {
+    getStatus.mockRejectedValueOnce(new Error('runtime not ready'))
+    const { unmount } = renderHook(() => useLocalStructuredSessionTabsSync())
+    await vi.waitFor(() => expect(getStatus).toHaveBeenCalled())
+    await act(async () => {})
+    expect(subscribe).not.toHaveBeenCalled()
+
+    await act(async () => setChatUi(true))
+
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledOnce())
     unmount()
   })
 

@@ -29,24 +29,25 @@ type SessionTabsEvent =
   | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
   | { type: 'end' }
 
+/** Resolves true once a live subscription owns the mirror, false when it never subscribed. */
 export async function startLocalStructuredSessionTabsSync(args: {
   isDisposed: () => boolean
   setUnsubscribe: (unsubscribe: () => void) => void
-}): Promise<void> {
+}): Promise<boolean> {
   const syncGeneration = localStructuredSessionGeneration()
   const isCurrent = (): boolean =>
     !args.isDisposed() && isCurrentLocalStructuredSessionGeneration(syncGeneration)
   const capabilities = await refreshLocalRuntimeCapabilities()
   if (!isCurrent()) {
-    return
+    return false
   }
   const supported = capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
   await restoreLocalStructuredSessionTabsOnce(syncGeneration)
   if (!isCurrent()) {
-    return
+    return false
   }
   if (!supported) {
-    return
+    return false
   }
   let subscriptionGeneration = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -135,4 +136,5 @@ export async function startLocalStructuredSessionTabsSync(args: {
     console.warn('[structured-session-tabs] subscribe failed', error)
     scheduleSubscribeRetry()
   })
+  return true
 }

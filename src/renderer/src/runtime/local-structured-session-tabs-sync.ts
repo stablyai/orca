@@ -56,11 +56,18 @@ function ensureLocalStructuredSessionTabsSyncRunning(): void {
     setUnsubscribe: (next) => {
       unsubscribe = next
     }
-  }).catch((error) => {
-    console.warn('[structured-session-tabs] sync failed', error)
-    // Released so a later Chat UI change can try again.
-    sync.stop()
   })
+    .then((subscribed) => {
+      // A failed capability probe reads as unsupported; holding the slot would block every retry.
+      if (!subscribed) {
+        sync.stop()
+      }
+    })
+    .catch((error) => {
+      console.warn('[structured-session-tabs] sync failed', error)
+      // Released so a later Chat UI change can try again.
+      sync.stop()
+    })
 }
 
 export function useLocalStructuredSessionTabsSync(): void {
