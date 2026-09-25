@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { relativePathInsideRoot } from '../../shared/cross-platform-path'
+import { TERMINAL_ENTER_INPUT } from '../../shared/terminal-ctrl-enter-input'
 import { readCodexRolloutSessionMetaId } from './codex-rollout-session-meta'
 import { listCodexSessionJsonlFilesIncrementally } from './codex-session-file-listing'
 
@@ -32,7 +33,7 @@ export function parseCodexTuiStatusSessionId(output: string): string | null {
 }
 
 export function codexTuiStatusSubmitInput(kittyKeyboardFlags: number): string {
-  return kittyKeyboardFlags > 0 ? KITTY_ENTER : '\r'
+  return kittyKeyboardFlags > 0 ? KITTY_ENTER : TERMINAL_ENTER_INPUT
 }
 
 export function codexTuiStatusProbeInput(kittyKeyboardFlags: number): {
