@@ -23,11 +23,13 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 
+const SOURCE_BRANCH = 'refs/heads/feature/auth'
+
 const sourceWorktree = {
   id: 'repo::wt',
   repoId: 'repo',
   displayName: 'Fix auth',
-  branch: 'refs/heads/feature/auth',
+  branch: SOURCE_BRANCH,
   path: '/repos/wt'
 }
 
@@ -95,8 +97,16 @@ vi.mock('@/lib/worktree-agent-fork-sessions', () => ({
 }))
 
 vi.mock('@/components/repo/CreateFromPicker', () => ({
-  CreateFromPicker: (props: { value: string; onValueChange: (value: string) => void }) => (
-    <div data-testid="create-from-picker" data-value={props.value}>
+  CreateFromPicker: (props: {
+    value: string
+    ariaLabelledBy?: string
+    onValueChange: (value: string) => void
+  }) => (
+    <div
+      data-testid="create-from-picker"
+      data-value={props.value}
+      data-labelledby={props.ariaLabelledBy}
+    >
       <button type="button" onClick={() => props.onValueChange('main')}>
         pick main
       </button>
@@ -139,6 +149,7 @@ const DIRTY_ENTRIES = [
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 beforeEach(() => {
+  sourceWorktree.branch = SOURCE_BRANCH
   state.activeModal = 'agent-session-fork'
   state.modalData = {
     sourceWorktreeId: 'repo::wt',
@@ -281,6 +292,62 @@ describe('AgentSessionForkDialog', () => {
     )
   })
 
+  it('preselects the terminal pane when it is a native session and omits the transcript', async () => {
+    const s1 = session('s1')
+    const s2 = session('s2')
+    mocks.listForkableAgentSessions.mockReturnValue([s1, s2])
+    state.modalData = {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: s2.paneKey,
+      transcript: { agent: 'claude', prompt: 'transcript prompt' }
+    }
+    await renderDialog()
+    expect(sessionTrigger()?.textContent).toContain('Session s2')
+    const options = await openSessionSelect()
+    expect(options).toHaveLength(3)
+    expect(options.some((option) => option.includes('(transcript)'))).toBe(false)
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalledWith(
+      expect.objectContaining({ source: { kind: 'native', session: s2 } }),
+      expect.any(Function)
+    )
+  })
+
+  it('lists the transcript first, ahead of the native sessions, and selects it', async () => {
+    mocks.listForkableAgentSessions.mockReturnValue([session('s1')])
+    state.modalData = {
+      sourceWorktreeId: 'repo::wt',
+      launchSource: 'terminal_context_menu',
+      preselectedPaneKey: 'tab-9:pane-1',
+      transcript: { agent: 'gemini', prompt: 'transcript prompt' }
+    }
+    await renderDialog()
+    expect(sessionTrigger()?.textContent).toContain('(transcript)')
+    const options = await openSessionSelect()
+    expect(options).toHaveLength(3)
+    expect(options[0]).toContain('(transcript)')
+    expect(options[1]).toContain('Session s1')
+    expect(options[2]).toContain('No agent (branch only)')
+  })
+
+  it('describes a branch-only fork when no agent is selected', async () => {
+    mocks.listForkableAgentSessions.mockReturnValue([])
+    await renderDialog()
+    expect(bodyText()).toContain('Start a new branch from Fix auth.')
+    expect(bodyText()).not.toContain('continue the conversation there')
+  })
+
+  it('describes continuing the conversation when a session is selected', async () => {
+    await renderDialog()
+    expect(bodyText()).toContain(
+      'Start a new branch from Fix auth and continue the conversation there.'
+    )
+  })
+
   it('prefills the name with "<workspace>-fork" and focuses it', async () => {
     await renderDialog()
     const input = nameInput()
@@ -382,7 +449,7 @@ describe('AgentSessionForkDialog', () => {
     await renderDialog()
     await submitWithEnter()
     expect(mocks.runAgentSessionFork).not.toHaveBeenCalled()
-    expect(buttonByText('Create Fork').disabled).toBe(true)
+    expect(buttonByText('Create fork').disabled).toBe(true)
 
     await act(async () => resolveStatus(statusWith(DIRTY_ENTRIES)))
     expect(mocks.runAgentSessionFork).toHaveBeenCalledExactlyOnceWith(
@@ -408,6 +475,31 @@ describe('AgentSessionForkDialog', () => {
     warn.mockRestore()
   })
 
+  it('shows a detached parent as its short commit, not the project default', async () => {
+    sourceWorktree.branch = ''
+    await renderDialog()
+    act(() => buttonByText('Advanced').click())
+    expect(pickerValue()).toBe('aaaaaaa')
+    expect(bodyText()).toContain('Default: the current commit (aaaaaaa).')
+    act(() => buttonByText('pick project default').click())
+    expect(pickerValue()).toBe('')
+  })
+
+  it('labels the base picker and links the carry switch to its reason', async () => {
+    mocks.getRuntimeGitStatus.mockResolvedValue(statusWith(DIRTY_ENTRIES))
+    await renderDialog()
+    act(() => buttonByText('Advanced').click())
+    const labelledBy = document
+      .querySelector('[data-testid="create-from-picker"]')
+      ?.getAttribute('data-labelledby')
+    expect(labelledBy && document.getElementById(labelledBy)?.textContent).toBe('Start from')
+    act(() => buttonByText('pick main').click())
+    const describedBy = carrySwitch()?.getAttribute('aria-describedby')
+    expect(describedBy && document.getElementById(describedBy)?.textContent).toBe(
+      'Only available when starting from the current commit of Fix auth.'
+    )
+  })
+
   it('disables the carry switch when the runtime host lacks the capability', async () => {
     mocks.getRuntimeGitStatus.mockResolvedValue(statusWith(DIRTY_ENTRIES))
     mocks.isWorkingTreeCarrySupported.mockResolvedValue(false)
@@ -429,7 +521,7 @@ describe('AgentSessionForkDialog', () => {
       'This agent will get the transcript as a draft instead of the conversation history.'
     )
     mocks.copyTranscriptPrompt.mockResolvedValue(true)
-    await act(async () => buttonByText('Copy Context').click())
+    await act(async () => buttonByText('Copy context').click())
     expect(mocks.copyTranscriptPrompt).toHaveBeenCalledWith('transcript prompt')
     expect(state.closeModal).toHaveBeenCalled()
   })
@@ -439,7 +531,7 @@ describe('AgentSessionForkDialog', () => {
     mocks.listForkableAgentSessions.mockReturnValue([s1])
     mocks.getRuntimeGitStatus.mockResolvedValue(statusWith(DIRTY_ENTRIES))
     await renderDialog()
-    const submitButton = buttonByText('Create Fork')
+    const submitButton = buttonByText('Create fork')
     expect(submitButton.type).toBe('submit')
     expect(submitButton.form).toBe(nameInput().form)
 
@@ -473,16 +565,113 @@ describe('AgentSessionForkDialog', () => {
     )
     await renderDialog()
     await submitWithEnter()
-    expect(buttonByText('Create Fork').disabled).toBe(true)
-    expect(bodyText()).not.toContain('Creating worktree…')
+    expect(buttonByText('Create fork').disabled).toBe(true)
+    expect(bodyText()).not.toContain('Creating workspace…')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 250))
     })
-    expect(bodyText()).toContain('Creating worktree…')
+    expect(bodyText()).toContain('Creating workspace…')
 
     await act(async () => finish({ ok: false, error: 'boom' }))
     expect(document.querySelector('[role="alert"]')?.textContent).toBe('boom')
-    expect(bodyText()).not.toContain('Creating worktree…')
+    expect(bodyText()).not.toContain('Creating workspace…')
+    expect(state.closeModal).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(nameInput())
+  })
+
+  it('shows a neutral stage while waiting for the parent status', async () => {
+    mocks.getRuntimeGitStatus.mockReturnValue(new Promise<GitStatusResult>(() => {}))
+    await renderDialog()
+    await submitWithEnter()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
+    expect(bodyText()).toContain('Preparing…')
+    expect(mocks.runAgentSessionFork).not.toHaveBeenCalled()
+  })
+
+  it('lets Cancel back out during the status wait without starting the fork', async () => {
+    let resolveStatus: (status: GitStatusResult) => void = () => {}
+    mocks.getRuntimeGitStatus.mockReturnValue(
+      new Promise<GitStatusResult>((resolve) => {
+        resolveStatus = resolve
+      })
+    )
+    await renderDialog()
+    await submitWithEnter()
+    expect(buttonByText('Cancel').disabled).toBe(false)
+    act(() => buttonByText('Cancel').click())
+    expect(state.closeModal).toHaveBeenCalledTimes(1)
+
+    await act(async () => resolveStatus(statusWith(DIRTY_ENTRIES)))
+    expect(mocks.runAgentSessionFork).not.toHaveBeenCalled()
+  })
+
+  it('lets Esc back out during the status wait without starting the fork', async () => {
+    let resolveStatus: (status: GitStatusResult) => void = () => {}
+    mocks.getRuntimeGitStatus.mockReturnValue(
+      new Promise<GitStatusResult>((resolve) => {
+        resolveStatus = resolve
+      })
+    )
+    await renderDialog()
+    await submitWithEnter()
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(state.closeModal).toHaveBeenCalledTimes(1)
+
+    await act(async () => resolveStatus(statusWith([])))
+    expect(mocks.runAgentSessionFork).not.toHaveBeenCalled()
+  })
+
+  it('blocks Esc and Cancel once the fork has started', async () => {
+    mocks.runAgentSessionFork.mockReturnValue(new Promise(() => {}))
+    await renderDialog()
+    await submitWithEnter()
+    expect(mocks.runAgentSessionFork).toHaveBeenCalled()
+    expect(buttonByText('Cancel').disabled).toBe(true)
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(state.closeModal).not.toHaveBeenCalled()
+  })
+
+  it('does not close a modal that replaced the dialog mid-fork', async () => {
+    let finish: (value: unknown) => void = () => {}
+    mocks.runAgentSessionFork.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    await renderDialog()
+    await submitWithEnter()
+    state.activeModal = 'edit-meta'
+    await act(async () =>
+      finish({
+        ok: true,
+        worktreeId: 'repo::child',
+        warnings: [{ kind: 'agent-not-started' }]
+      })
+    )
+    expect(state.closeModal).not.toHaveBeenCalled()
+    expect(mocks.toastWarning).toHaveBeenCalledWith(
+      'Created fix-auth-fork, but the agent could not start.'
+    )
+  })
+
+  it('toasts the error when another modal replaced the dialog mid-fork', async () => {
+    let finish: (value: unknown) => void = () => {}
+    mocks.runAgentSessionFork.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve
+      })
+    )
+    await renderDialog()
+    await submitWithEnter()
+    state.activeModal = 'edit-meta'
+    await act(async () => finish({ ok: false, error: 'boom' }))
+    expect(mocks.toastError).toHaveBeenCalledWith('boom')
     expect(state.closeModal).not.toHaveBeenCalled()
   })
 

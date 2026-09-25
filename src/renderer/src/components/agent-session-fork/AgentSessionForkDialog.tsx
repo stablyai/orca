@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef } from 'react'
+import { useEffect, useId, useMemo, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -14,22 +14,26 @@ import { Label } from '@/components/ui/label'
 import { SettingsSwitchRow } from '@/components/settings/SettingsFormControls'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { AgentSessionForkStage } from '@/lib/agent-session-fork-flow'
 import {
   parseAgentSessionForkModalData,
   type AgentSessionForkModalData
 } from './agent-session-fork-modal-data'
-import { useAgentSessionForkDialogState } from './use-agent-session-fork-dialog-state'
+import {
+  useAgentSessionForkDialogState,
+  type AgentSessionForkDialogStage
+} from './use-agent-session-fork-dialog-state'
 import type { AgentSessionForkCarryAvailability } from './agent-session-fork-parent-probe'
 import { AgentSessionForkSessionField } from './AgentSessionForkSessionField'
 import { AgentSessionForkAdvancedFields } from './AgentSessionForkAdvancedFields'
 
-function stageLabel(stage: AgentSessionForkStage): string {
+function stageLabel(stage: AgentSessionForkDialogStage): string {
   switch (stage) {
+    case 'preparing':
+      return translate('components.agentSessionFork.stage.preparing', 'Preparing…')
     case 'creating':
-      return translate('components.agentSessionFork.stage.creating', 'Creating worktree…')
+      return translate('components.agentSessionFork.stage.creating', 'Creating workspace…')
     case 'carrying':
-      return translate('components.agentSessionFork.stage.carrying', 'Bringing changes…')
+      return translate('components.agentSessionFork.stage.carrying', 'Copying changes…')
     case 'launching':
       return translate('components.agentSessionFork.stage.launching', 'Starting agent…')
   }
@@ -62,9 +66,17 @@ function AgentSessionForkDialogBody({
 }): React.JSX.Element {
   const state = useAgentSessionForkDialogState(data)
   const nameId = useId()
+  const carryDescriptionId = useId()
   const nameInputRef = useRef<HTMLInputElement>(null)
   const { source } = state
   const workspace = source.label
+
+  useEffect(() => {
+    // Why: the submit button that held focus is disabled while busy, so focus must return to the form.
+    if (state.error) {
+      nameInputRef.current?.focus()
+    }
+  }, [state.error])
 
   return (
     <Dialog
@@ -88,11 +100,17 @@ function AgentSessionForkDialogBody({
             {translate('components.agentSessionFork.title', 'Fork Agent Session')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
-              'components.agentSessionFork.description',
-              'Start a new branch from {{workspace}} and continue the conversation there.',
-              { workspace }
-            )}
+            {state.selectedOption.kind === 'none'
+              ? translate(
+                  'components.agentSessionFork.descriptionNoAgent',
+                  'Start a new branch from {{workspace}}.',
+                  { workspace }
+                )
+              : translate(
+                  'components.agentSessionFork.description',
+                  'Start a new branch from {{workspace}} and continue the conversation there.',
+                  { workspace }
+                )}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -139,6 +157,7 @@ function AgentSessionForkDialogBody({
                 { modified: state.modifiedCount, added: state.newCount }
               )}
               description={carryDescription(state.carryAvailability, workspace)}
+              descriptionId={carryDescriptionId}
               checked={state.carryChanges && state.carryAvailability === 'available'}
               onChange={() => state.setCarryChanges((value) => !value)}
               disabled={state.carryAvailability !== 'available' || state.busy}
@@ -151,6 +170,7 @@ function AgentSessionForkDialogBody({
               repoId={source.worktree.repoId}
               base={state.base}
               parentBranch={source.parentBranch}
+              parentCommit={state.parentCommitShort}
               workspace={workspace}
               onBaseChange={state.setBase}
               disabled={state.busy}
@@ -178,7 +198,7 @@ function AgentSessionForkDialogBody({
                 onClick={() => void state.copyContext()}
                 disabled={state.busy}
               >
-                {translate('components.agentSessionFork.copyContext', 'Copy Context')}
+                {translate('components.agentSessionFork.copyContext', 'Copy context')}
               </Button>
             ) : (
               <span />
@@ -189,24 +209,24 @@ function AgentSessionForkDialogBody({
                 variant="ghost"
                 size="sm"
                 onClick={state.close}
-                disabled={state.busy}
+                disabled={state.flowRunning}
               >
                 {translate('components.agentSessionFork.cancel', 'Cancel')}
               </Button>
-              {/* Why: fixed width so the stage labels don't resize the button mid-fork. */}
+              {/* Why: reserves the longest English stage label so the busy swap never shrinks it. */}
               <Button
                 type="submit"
                 size="sm"
-                className="w-40"
+                className="min-w-48"
                 disabled={state.busy || state.nameInvalid}
               >
                 {state.visibleStage ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    <span className="truncate">{stageLabel(state.visibleStage)}</span>
+                    {stageLabel(state.visibleStage)}
                   </>
                 ) : (
-                  translate('components.agentSessionFork.submit', 'Create Fork')
+                  translate('components.agentSessionFork.submit', 'Create fork')
                 )}
               </Button>
             </div>

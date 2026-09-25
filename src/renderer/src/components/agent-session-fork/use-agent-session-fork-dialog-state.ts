@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   copyTranscriptPrompt,
   runAgentSessionFork,
@@ -28,6 +30,13 @@ import { showAgentSessionForkWarnings } from './agent-session-fork-warning-toast
 // Why: local forks finish before a spinner would read as progress; only slow (SSH) ones show stages.
 const STAGE_LABEL_DELAY_MS = 200
 const PARENT_COMMIT_BASE: AgentSessionForkBase = { kind: 'parent-commit' }
+
+/** `preparing` covers the wait for the parent's status, before anything is created. */
+export type AgentSessionForkDialogStage = AgentSessionForkStage | 'preparing'
+
+function isForkDialogActive(): boolean {
+  return useAppStore.getState().activeModal === 'agent-session-fork'
+}
 
 export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) {
   const closeModal = useAppStore((s) => s.closeModal)
@@ -79,10 +88,14 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
   const [changes, setChanges] = useState<ParentWorkingTreeChanges | null>(null)
   const [carrySupported, setCarrySupported] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
-  const [stage, setStage] = useState<AgentSessionForkStage | null>(null)
+  const [flowRunning, setFlowRunning] = useState(false)
+  const [stage, setStage] = useState<AgentSessionForkDialogStage | null>(null)
   const [stageVisible, setStageVisible] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const busyRef = useRef(false)
+  const flowRunningRef = useRef(false)
+  const closedRef = useRef(false)
+  const mountedRef = useMountedRef()
   const probeRef = useRef<ParentProbe | null>(null)
 
   useEffect(() => {
@@ -114,6 +127,15 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
   const trimmedName = name.trim()
   const nameInvalid = trimmedName.length === 0
 
+  const resetBusy = useCallback((): void => {
+    busyRef.current = false
+    flowRunningRef.current = false
+    setBusy(false)
+    setFlowRunning(false)
+    setStage(null)
+    setStageVisible(false)
+  }, [])
+
   const submit = useCallback(async (): Promise<void> => {
     if (busyRef.current || nameInvalid) {
       return
@@ -121,13 +143,18 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     busyRef.current = true
     setBusy(true)
     setError(null)
-    // Why: the wait reads as the first stage, and a fast Enter must not skip the parent's HEAD.
-    setStage('creating')
+    // Why: a fast Enter must wait for the parent's HEAD instead of silently forking from its branch.
+    setStage('preparing')
     const probe = probeRef.current
     const [probedChanges, probedCarrySupported] = await Promise.all([
       probe?.changes ?? null,
       probe?.carrySupported ?? false
     ])
+    // Why: nothing exists yet, so a cancel (or another modal) during the wait must not create a fork.
+    if (closedRef.current || !mountedRef.current || !isForkDialogActive()) {
+      resetBusy()
+      return
+    }
     const probedCarry = resolveCarryAvailability(probedChanges, probedCarrySupported, base)
     const request: AgentSessionForkRequest = {
       sourceWorktreeId: data.sourceWorktreeId,
@@ -139,19 +166,26 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
       base,
       launchSource: data.launchSource
     }
+    flowRunningRef.current = true
+    setFlowRunning(true)
     const outcome = await runAgentSessionFork(request, setStage).catch((forkError: unknown) => ({
       ok: false as const,
       error: forkError instanceof Error ? forkError.message : String(forkError)
     }))
-    busyRef.current = false
+    const stillShown = mountedRef.current && isForkDialogActive()
+    resetBusy()
     if (!outcome.ok) {
-      setBusy(false)
-      setStage(null)
-      setStageVisible(false)
-      setError(outcome.error)
+      // Why: if another modal replaced this one mid-fork, the inline error would never be seen.
+      if (stillShown) {
+        setError(outcome.error)
+      } else {
+        toast.error(outcome.error)
+      }
       return
     }
-    closeModal()
+    if (stillShown) {
+      closeModal()
+    }
     showAgentSessionForkWarnings(outcome.warnings, request.name, request.source)
   }, [
     asChild,
@@ -160,7 +194,9 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     closeModal,
     data.launchSource,
     data.sourceWorktreeId,
+    mountedRef,
     nameInvalid,
+    resetBusy,
     selectedOption,
     trimmedName
   ])
@@ -175,7 +211,9 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
   }, [closeModal, selectedOption])
 
   const close = useCallback((): void => {
-    if (!busyRef.current) {
+    // Why: once the flow runs, closing would hide a fork that is still being created.
+    if (!flowRunningRef.current) {
+      closedRef.current = true
       closeModal()
     }
   }, [closeModal])
@@ -195,6 +233,7 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     carryChanges,
     setCarryChanges,
     carryAvailability,
+    parentCommitShort: changes?.headOid ? changes.headOid.slice(0, 7) : null,
     modifiedCount: changes?.modified ?? 0,
     newCount: changes?.added ?? 0,
     base,
@@ -202,6 +241,7 @@ export function useAgentSessionForkDialogState(data: AgentSessionForkModalData) 
     advancedOpen,
     setAdvancedOpen,
     busy,
+    flowRunning,
     visibleStage: busy && stageVisible ? stage : null,
     error,
     submit,
