@@ -38,6 +38,40 @@ describe('MobileRelayRpcStreams failure parity', () => {
     expect(sendFrame).toHaveBeenCalledTimes(1)
   })
 
+  it.each([
+    [
+      'an error reply',
+      (streams: MobileRelayRpcStreams) => streams.handleResponse(rpcFailure('stream-1'))
+    ],
+    ['a send failure', () => undefined]
+  ])(
+    'sends no terminal unsubscribe when the listener disposes on %s',
+    async (label, failStream) => {
+      const sendFrame = vi.fn(() => label !== 'a send failure')
+      const streams = new MobileRelayRpcStreams({
+        nextId: () => 'stream-1',
+        sendFrame,
+        waitForConnected: async () => {}
+      })
+      const events: unknown[] = []
+      let dispose = (): void => {}
+      dispose = streams.subscribe(
+        'terminal.subscribe',
+        { terminal: 'term', client: { id: 'phone', type: 'mobile' } },
+        (event) => {
+          events.push(event)
+          dispose()
+        }
+      )
+      await Promise.resolve()
+      failStream(streams)
+      dispose()
+
+      expect(events).toEqual([expect.objectContaining({ type: 'error' })])
+      expect(sendFrame).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it('emits a connection-wait rejection exactly once without sending or cancelling', async () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => true)

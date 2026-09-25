@@ -79,6 +79,69 @@ describe('RpcClientStreamRegistry', () => {
     ])
   })
 
+  it.each([
+    ['a streamed end', (id: string) => streamingResponse(id, { type: 'end' })],
+    [
+      'a final end reply',
+      (id: string): RpcResponse => ({
+        id,
+        ok: true,
+        result: { type: 'end' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    ],
+    [
+      'an error reply',
+      (id: string): RpcResponse => ({
+        id,
+        ok: false,
+        error: { code: 'runtime_error', message: 'failed' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    ]
+  ])('sends no terminal unsubscribe when the listener disposes on %s', (_label, ending) => {
+    const { registry, sent } = createRegistry()
+    const events: unknown[] = []
+    let dispose = (): void => {}
+    dispose = registry.subscribe(
+      'terminal.subscribe',
+      { terminal: 'term-1', client: { id: 'phone', type: 'mobile' } },
+      (event) => {
+        events.push(event)
+        // The session hook disposes synchronously on end/error; a slot-named unsubscribe here
+        // would retire a newer same-slot stream on the host.
+        dispose()
+      }
+    )
+    const request = sent[0]!
+
+    registry.handleResponse(ending(request.id))
+    dispose()
+
+    expect(events).toHaveLength(1)
+    expect(sent).toEqual([request])
+    expect(registry.size()).toBe(0)
+  })
+
+  it('does not replay a terminal stream the host already ended', () => {
+    const { registry, sent, setState } = createRegistry()
+    registry.subscribe(
+      'terminal.subscribe',
+      { terminal: 'term-1', client: { id: 'phone' } },
+      () => {}
+    )
+    const request = sent[0]!
+    registry.handleResponse(streamingResponse(request.id, { type: 'subscribed', streamId: 7 }))
+    registry.handleResponse(streamingResponse(request.id, { type: 'end' }))
+
+    setState('connecting')
+    registry.markForReplay()
+    setState('connected')
+    registry.replayAfterAuthentication()
+
+    expect(sent).toEqual([request])
+  })
+
   it('keeps a disposed browser tombstone until ready can be unsubscribed', () => {
     const { registry, sent } = createRegistry()
     const dispose = registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})
