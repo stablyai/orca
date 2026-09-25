@@ -132,7 +132,7 @@ importers:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
       react-native:
-        specifier: ^0.83.10
+        specifier: 0.83.10
         version: 0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8)
       react-native-gesture-handler:
         specifier: ^2.31.2
