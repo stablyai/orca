@@ -1,3 +1,4 @@
+import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import { Platform, type Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -80,8 +81,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const bufferedTerminalDraftState = useBufferedTerminalDrafts({ activeHandle, activeHandleRef })
   const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
-  const pendingActiveSessionTabIdRef = useRef<string | null>(null)
-  const pendingActiveTerminalHandleRef = useRef<string | null>(null)
+  const pendingSelectionRef = useRef<PendingSessionSelection | null>(null)
   // Why: remember the page id to activate its session tab once it syncs (bridge auto-activate flags only webContents, not the app-level active tab).
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
   const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
@@ -182,8 +182,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     webReadyHandlesRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    pendingActiveSessionTabIdRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     pendingBrowserFocusPageIdRef,
     switchSessionTabRef,
     pendingTerminalActivationAttemptRef,

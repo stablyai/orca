@@ -144,7 +144,7 @@ export function sessionScreenTabMountAdapters(
             initializedHandlesRef: { current: new Set([HANDLE]) },
             activeHandleRef,
             activeSessionTabTypeRef: { current: 'terminal' },
-            pendingActiveTerminalHandleRef: { current: null },
+            pendingSelectionRef: { current: null },
             pendingBrowserFocusPageIdRef: { current: null },
             scheduleDelayedAction: (callback: () => void, delayMs: number) => {
               timers.push(setTimeout(callback, delayMs))

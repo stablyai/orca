@@ -1,3 +1,4 @@
+import { pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback } from 'react'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
@@ -15,7 +16,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     activeSessionTab,
     unsubscribeTerminal,
     measureViewportOnce,
@@ -63,7 +64,8 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       // Why: first subscribe may skip (no WebView ref); await measure so it carries the viewport, else it races measureViewportOnce and skips.
       // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
       const isIntendedActive = () =>
-        handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
+        handle === activeHandleRef.current ||
+        pendingSelectionWantsHandle(pendingSelectionRef.current, handle)
       if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
         void (async () => {
           await measureViewportOnce(handle)

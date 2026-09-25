@@ -34,10 +34,13 @@ describe('mobile session last-tab close', () => {
     const block = sessionRouteSource.slice(start, end)
 
     const followsHost = block.indexOf("const followsHost = result.navigationIntent === 'follow'")
-    const pendingHandle = block.indexOf('const pendingActiveTerminalHandle = followsHost')
+    const pendingHandle = block.indexOf(
+      'const pendingActiveTerminalHandle = pendingSelectionHandle(pendingSelectionRef.current)'
+    )
 
     expect(followsHost).toBeGreaterThanOrEqual(0)
     expect(pendingHandle).toBeGreaterThan(followsHost)
-    expect(block.slice(pendingHandle, pendingHandle + 150)).toContain('? null')
+    // The follow branch drops the handle half before the handle is read.
+    expect(block.slice(followsHost, pendingHandle)).toContain('withoutPendingHandle(')
   })
 })

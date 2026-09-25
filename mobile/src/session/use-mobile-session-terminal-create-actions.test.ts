@@ -1,3 +1,4 @@
+import { launchedSelection, type PendingSessionSelection } from './pending-session-selection'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -59,8 +60,7 @@ function createScope(client: RpcClient) {
     initializedHandlesRef: { current: new Set<string>() },
     activeHandleRef: { current: 'existing-terminal' },
     activeSessionTabTypeRef: { current: 'terminal' },
-    pendingActiveSessionTabIdRef: { current: null },
-    pendingActiveTerminalHandleRef: { current: null },
+    pendingSelectionRef: { current: null as PendingSessionSelection | null },
     scheduleDelayedAction: vi.fn(),
     showToast: vi.fn(),
     unsubscribeTerminal: vi.fn(),
@@ -111,7 +111,11 @@ describe('mobile + Codex tab creation routing', () => {
       'session.tabs.createTerminal',
       expect.anything()
     )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('agent-session:codex_session_1')
+    // The chat's tab is found by its session in the next snapshot, never by a predicted id.
+    expect(scope.pendingSelectionRef.current).toEqual(
+      launchedSelection({ sessionId: 'codex_session_1' })
+    )
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
     expect(scope.setActiveHandle).toHaveBeenCalledWith(null)
     expect(scope.unsubscribeTerminal).toHaveBeenCalledWith('existing-terminal')
   })
@@ -378,8 +382,11 @@ describe('optimistic placement of a created tab', () => {
     await createTerminal(scope)
 
     expect(scope.setSessionTabs).not.toHaveBeenCalled()
-    expect(scope.pendingActiveSessionTabIdRef.current).toBe('terminal-tab-1')
-    expect(scope.pendingActiveTerminalHandleRef.current).toBe('terminal-1')
+    expect(scope.pendingSelectionRef.current).toEqual({
+      kind: 'terminal',
+      handle: 'terminal-1',
+      tabId: 'terminal-tab-1'
+    })
     expect(scope.subscribeToTerminal).toHaveBeenCalledWith('terminal-1')
   })
 

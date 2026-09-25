@@ -13,8 +13,19 @@ import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
+import { launchAgentInExistingWorkspace } from './mobile-existing-agent-launch'
+import { AGENT_PROMPT_NOT_SENT_MESSAGE } from './pr-ai-triage-launch'
+import { launchedSelection, withoutPendingHandle } from './pending-session-selection'
 import { placeCreatedSessionTab } from '../../../src/shared/session-tab-placement'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+
+const NOTES_NOT_SENT_MESSAGE = "The agent started, but the notes weren't sent."
+
+/** Agent launches that `agent.launch` can carry: bare, or with a prompt to submit. A shell command
+ *  or an unsent draft stays a plain terminal. */
+function launchesThroughHost(options: MobileQuickCommandLaunch['options'] | undefined): boolean {
+  return options?.startupCommand === undefined && options?.enter !== false
+}
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
@@ -28,7 +39,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     activeSessionTabId,
-    activeSessionTabIdRef,
     setActiveSessionTabId,
     setCreating,
     creatingTerminalRef,
@@ -39,8 +49,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     initializedHandlesRef,
     activeHandleRef,
     activeSessionTabTypeRef,
-    pendingActiveSessionTabIdRef,
-    pendingActiveTerminalHandleRef,
+    pendingSelectionRef,
     scheduleDelayedAction,
     showToast,
     unsubscribeTerminal,
@@ -79,6 +88,57 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     }
 
     try {
+      if (agent && launchesThroughHost(options)) {
+        const prompt = options?.agentPrompt ?? options?.initialPrompt
+        const launched = await launchAgentInExistingWorkspace({
+          client,
+          hostCapabilities,
+          worktreeId,
+          agent,
+          ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),
+          ...(options?.agentPrompt
+            ? { launchSource: 'quick_command' }
+            : options?.initialPrompt
+              ? { launchSource: 'diff_notes_send' }
+              : {})
+        })
+        if (launched.kind === 'launched') {
+          const { outcome, warning } = launched.result
+          pendingSelectionRef.current = launchedSelection(
+            outcome.kind === 'structured'
+              ? { sessionId: outcome.sessionId }
+              : { handle: outcome.handle }
+          )
+          // Refresh if the reply beats its published tab frame.
+          scheduleDelayedAction(() => void fetchSessionTabs(), 500)
+          if (launched.promptDelivered === false) {
+            triggerError()
+            showToast(
+              options?.initialPrompt ? NOTES_NOT_SENT_MESSAGE : AGENT_PROMPT_NOT_SENT_MESSAGE,
+              2400
+            )
+          } else if (launched.promptDelivered && options?.initialPrompt) {
+            triggerSuccess()
+            showToast(options.successToast ?? 'Notes sent')
+            options.onPromptSent?.()
+          } else if (warning?.trim()) {
+            showToast(warning.trim(), 2400)
+          }
+          return
+        }
+        if (launched.kind === 'failed') {
+          reportCreateFailure(launched.message)
+          return
+        }
+        if (launched.kind === 'unknown') {
+          // Never start a second agent when the first may already be running.
+          setCreateError(launched.message)
+          triggerError()
+          showToast(launched.message, 1800)
+          return
+        }
+        // COMPAT(agent.launch.v2): hosts before v1.4.206 keep the paths below; remove once none remain.
+      }
       // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
       if (isAgentSessionHandleProvider(agent) && options === undefined) {
         const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
@@ -88,12 +148,9 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
             unsubscribeTerminal(previous)
             initializedHandlesRef.current.delete(previous)
           }
-          const tabId = `agent-session:${structured.sessionId}`
-          pendingActiveSessionTabIdRef.current = tabId
-          pendingActiveTerminalHandleRef.current = null
+          // Found by session in the next snapshot, never by a predicted tab id.
+          pendingSelectionRef.current = launchedSelection({ sessionId: structured.sessionId })
           activeSessionTabTypeRef.current = 'agent-session'
-          activeSessionTabIdRef.current = tabId
-          setActiveSessionTabId(tabId)
           activeHandleRef.current = null
           setActiveHandle(null)
           // Refresh if the create response beats its published tab frame.
@@ -138,7 +195,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         unsubscribeTerminal(prev)
         initializedHandlesRef.current.delete(prev)
       }
-      pendingActiveSessionTabIdRef.current = created.id
+      pendingSelectionRef.current = { kind: 'tab', tabId: created.id }
       activeSessionTabTypeRef.current = 'terminal'
       setActiveSessionTabId(created.id)
       // An older headed host places after the parent while an older headless host places after the
@@ -157,7 +214,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         const createdHandle = created.terminal
         defaultTerminalHandlesToLiveInput([createdHandle])
         // Why: snapshots lag the create RPC; without this marker applySessionTabs reverts the active handle, blanking the new pane.
-        pendingActiveTerminalHandleRef.current = createdHandle
+        pendingSelectionRef.current = { kind: 'terminal', handle: createdHandle, tabId: created.id }
         activeHandleRef.current = createdHandle
         setActiveHandle(createdHandle)
         setTerminals((prev) => {
@@ -220,7 +277,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         }
       } else {
         // Why: a prior pending handle must not outlive a create that returned no terminal; web-ready subscribe gates on this ref.
-        pendingActiveTerminalHandleRef.current = null
+        pendingSelectionRef.current = withoutPendingHandle(pendingSelectionRef.current)
         activeHandleRef.current = null
         setActiveHandle(null)
       }

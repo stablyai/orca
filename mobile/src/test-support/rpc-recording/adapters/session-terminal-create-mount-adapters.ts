@@ -1,3 +1,4 @@
+import type { PendingSessionSelection } from '../../../session/pending-session-selection'
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -56,6 +57,12 @@ function declaredAgent(value: unknown): TuiAgent | undefined {
  * State is the tab and terminal lists the hook publishes, the active handle and tab, and the create
  * error, because those are what a refused or unreadable create leaves on the screen.
  */
+const AGENT_LAUNCH_HOST_CAPABILITIES = [
+  'agent.launch.v2',
+  'agent.launch.replay.v1',
+  'agent.launch.replay-required.v1'
+]
+
 export function sessionTerminalCreateMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -81,8 +88,7 @@ export function sessionTerminalCreateMountAdapters(
       const activeSessionTabTypeRef: { current: MobileSessionTabType | null } = {
         current: 'terminal'
       }
-      const pendingActiveSessionTabIdRef: { current: string | null } = { current: null }
-      const pendingActiveTerminalHandleRef: { current: string | null } = { current: null }
+      const pendingSelectionRef: { current: PendingSessionSelection | null } = { current: null }
       const creatingTerminalRef = { current: false }
       const initializedHandlesRef = { current: new Set([PREVIOUS_HANDLE]) }
       const deviceTokenRef: { current: string | null } = { current: null }
@@ -126,8 +132,7 @@ export function sessionTerminalCreateMountAdapters(
             initializedHandlesRef,
             activeHandleRef,
             activeSessionTabTypeRef,
-            pendingActiveSessionTabIdRef,
-            pendingActiveTerminalHandleRef,
+            pendingSelectionRef,
             scheduleDelayedAction: (fn: () => void, ms: number) => {
               effect('schedule-delayed-action', { delayMs: ms })
               setTimeout(fn, ms)
@@ -151,10 +156,13 @@ export function sessionTerminalCreateMountAdapters(
             activeSessionTabId =
               typeof args.activeSessionTabId === 'string' ? args.activeSessionTabId : null
             activeSessionTabIdRef.current = activeSessionTabId
-            hostCapabilities =
-              args.supportsSplitGroupPlacement === false
+            hostCapabilities = [
+              ...(args.supportsSplitGroupPlacement === false
                 ? []
-                : [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+                : [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]),
+              // A host new enough to route the launch itself.
+              ...(args.agentLaunch === true ? AGENT_LAUNCH_HOST_CAPABILITIES : [])
+            ]
             deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
             return hook.mount()
           }
@@ -196,8 +204,7 @@ export function sessionTerminalCreateMountAdapters(
           createError,
           terminals: terminals.map((terminal) => terminal.handle),
           sessionTabs: sessionTabs.map((tab) => tab.id),
-          pendingActiveTerminalHandle: pendingActiveTerminalHandleRef.current,
-          pendingActiveSessionTabId: pendingActiveSessionTabIdRef.current,
+          pendingSelection: pendingSelectionRef.current,
           initializedHandles: [...initializedHandlesRef.current].sort()
         }),
         dispose: hook.unmount
