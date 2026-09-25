@@ -350,9 +350,10 @@ export function shouldBypassXtermKeyboardEvent(
     // Why: window-level handlers already consume other Cmd chords before xterm
     // sees them in Electron. Web clients still need paste to bubble to
     // Chromium's native paste event instead of xterm's Kitty encoder.
+    // Unselected Cmd+C belongs to an app that negotiated Kitty keyboard reporting.
+    const appOwnsCopy = !hasSelection && (options.kittyKeyboardFlags ?? 0) !== 0
     return (
-      (matchesClipboardBinding('Mod+C', event, 'darwin') &&
-        (hasSelection || (options.kittyKeyboardFlags ?? 0) === 0)) ||
+      (matchesClipboardBinding('Mod+C', event, 'darwin') && !appOwnsCopy) ||
       matchesClipboardBinding('Mod+V', event, 'darwin')
     )
   }
