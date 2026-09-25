@@ -557,8 +557,8 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
   }
 
   // The root's pid and start time are the lease's identity, and they are provably dead: latching
-  // the session would strand a signed-out user. A descendant seen alive is not the conversation's
-  // writer, so it does not hold the session either.
+  // the session would strand a signed-out user. The lease follows the root, so a descendant seen
+  // alive does not hold the session either.
   it.each(['unverifiable', 'live'] as const)(
     'releases on a first-hand root exit with its tree %s while still carrying the CLI diagnostic',
     async (tree) => {

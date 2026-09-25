@@ -390,7 +390,7 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   // The root's death is first-hand. Its descendants were never snapshottable, or one was seen
-  // alive; either way the root was the only writer, so the reservation goes with it.
+  // alive; either way the lease follows the root, so the reservation goes with it.
   it.each(['unverifiable', 'live'] as const)(
     'releases a session whose CLI self-exited during create with its tree %s, with its diagnostic intact',
     async (tree) => {
