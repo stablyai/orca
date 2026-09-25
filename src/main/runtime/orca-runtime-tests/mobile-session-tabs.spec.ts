@@ -313,7 +313,8 @@ describe('OrcaRuntimeService', () => {
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, `tab-1::${rightLeafId}`)
 
     expect(kill).toHaveBeenCalledWith('pty-right')
-    expect(closeTerminal).not.toHaveBeenCalled()
+    // Only the leaf-addressed notice for the closed pane; never a whole-tab close.
+    expect(closeTerminal).toHaveBeenCalledExactlyOnceWith('tab-1', rightLeafId)
   })
 
   it('closes the whole mobile terminal tab when addressed by parent tab id', async () => {
