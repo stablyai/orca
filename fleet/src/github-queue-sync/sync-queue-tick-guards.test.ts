@@ -269,4 +269,137 @@ describe('syncQueueTick guards wire-up', () => {
     assert.equal(listActiveCalls, 1, 'listActiveIssues chỉ được gọi đúng 1 lần (tải lười) trong suốt cả tick');
     assert.deepEqual(report.dispatched, [1, 2, 3]);
   });
+
+  it('holdingStatuses không chứa in-progress (ví dụ: ["claimed"]): khoá cùng tick vẫn có hiệu lực', async () => {
+    const github = new InMemoryGithub();
+    github.addIssue(10, { body: buildIssueBody({ scope: 'src/a.ts' }), labels: [...READY_LABELS] });
+    github.addIssue(11, { body: buildIssueBody({ scope: 'src/*.ts' }), labels: [...READY_LABELS] });
+
+    const report = await syncQueueTick({
+      github: github.port(),
+      runId: 'fleet-test',
+      dispatchWorker: okWorker,
+      holdingStatuses: ['claimed'],
+    });
+
+    assert.deepEqual(report.dispatched, [10]);
+    assert.deepEqual(report.skipped, [
+      { issue: 11, reason: 'scope-overlap', blockedBy: [10] },
+    ]);
+  });
+
+  it('W9: readIssue lỗi trên issue active → gán scope ["**"] (fail-closed), log và hoãn ready candidate', async () => {
+    const github = new InMemoryGithub();
+    github.addIssue(50, { body: buildIssueBody({ scope: 'src/a.ts' }), labels: ['status:in-progress'] });
+    github.addIssue(51, { body: buildIssueBody({ scope: 'other/b.ts' }), labels: [...READY_LABELS] });
+
+    const logs: string[] = [];
+    const originalPort = github.port();
+    const portWithErr = {
+      ...originalPort,
+      readIssue: async (num: number) => {
+        if (num === 50) {
+          throw new Error('Network timeout reading active issue');
+        }
+        return originalPort.readIssue(num);
+      },
+    };
+
+    const report = await syncQueueTick({
+      github: portWithErr,
+      runId: 'fleet-test',
+      dispatchWorker: okWorker,
+      log: (msg) => logs.push(msg),
+    });
+
+    assert.equal(report.dispatched.length, 0);
+    assert.deepEqual(report.skipped, [
+      { issue: 51, reason: 'scope-overlap', blockedBy: [50] },
+    ]);
+    assert.ok(logs.some((l) => l.includes('Không đọc được issue #50')));
+  });
+
+  it('W10: loadHolders không được gọi readIssue với issue có trạng thái không thuộc holdingStatuses', async () => {
+    const github = new InMemoryGithub();
+    // Issue 80 là status:review (không nằm trong holdingStatuses mặc định ['claimed', 'in-progress'])
+    github.addIssue(80, { body: buildIssueBody({ scope: 'src/a.ts' }), labels: ['status:review'] });
+    github.addIssue(81, { body: buildIssueBody({ scope: 'src/a.ts' }), labels: [...READY_LABELS] });
+
+    const readCalls: number[] = [];
+    const originalPort = github.port();
+    const portSpy = {
+      ...originalPort,
+      readIssue: async (num: number) => {
+        readCalls.push(num);
+        return originalPort.readIssue(num);
+      },
+    };
+
+    const report = await syncQueueTick({
+      github: portSpy,
+      runId: 'fleet-test',
+      dispatchWorker: okWorker,
+    });
+
+    // Issue 80 không thuộc holdingStatuses nên KHÔNG được gọi readIssue trong loadHolders
+    assert.ok(!readCalls.includes(80), 'loadHolders không được readIssue với issue status:review khi holdingStatuses mặc định');
+    // Issue 81 được dispatch
+    assert.deepEqual(report.dispatched, [81]);
+  });
+
+  it('Sau khi dispatchWorker thành công, lỗi ở bước cập nhật GitHub không làm mồ côi worker và không trả về ready/blocked', async () => {
+    // Ca (a): upsertProgressComment lỗi
+    const githubA = new InMemoryGithub();
+    githubA.addIssue(90, { body: buildIssueBody({ scope: 'src/a.ts' }), labels: [...READY_LABELS] });
+
+    const portA = {
+      ...githubA.port(),
+      updateComment: async () => {
+        throw new Error('GitHub 502 Bad Gateway');
+      },
+      addComment: async (num: number, body: string) => {
+        if (body.includes('Tiến độ')) {
+          throw new Error('GitHub 502 Bad Gateway');
+        }
+        return githubA.port().addComment(num, body);
+      },
+    };
+
+    const reportA = await syncQueueTick({
+      github: portA,
+      runId: 'fleet-test',
+      dispatchWorker: okWorker,
+    });
+
+    assert.deepEqual(reportA.dispatched, [90]);
+    assert.equal(reportA.failed.length, 1);
+    assert.ok(reportA.failed[0]?.error.startsWith('Sau khi giao worker:'));
+    assert.deepEqual(githubA.labelsOf(90).filter((l) => l.startsWith('status:')), ['status:in-progress']);
+
+    // Ca (b): moveTo (changeLabels sang in-progress) lỗi
+    const githubB = new InMemoryGithub();
+    githubB.addIssue(91, { body: buildIssueBody({ scope: 'src/b.ts' }), labels: [...READY_LABELS] });
+
+    const portB = {
+      ...githubB.port(),
+      changeLabels: async (num: number, change: { add: readonly string[]; remove: readonly string[] }) => {
+        if (change.add.includes('status:in-progress')) {
+          throw new Error('GitHub label error');
+        }
+        return githubB.port().changeLabels(num, change);
+      },
+    };
+
+    const reportB = await syncQueueTick({
+      github: portB,
+      runId: 'fleet-test',
+      dispatchWorker: okWorker,
+    });
+
+    assert.deepEqual(reportB.dispatched, [91]);
+    assert.equal(reportB.failed.length, 1);
+    assert.ok(reportB.failed[0]?.error.startsWith('Sau khi giao worker:'));
+    // Vì moveTo lỗi nên nhãn vẫn là status:claimed (vẫn giữ khoá ở tick sau)
+    assert.deepEqual(githubB.labelsOf(91).filter((l) => l.startsWith('status:')), ['status:claimed']);
+  });
 });

@@ -143,23 +143,9 @@ export async function syncQueueTick(deps: QueueSyncDeps): Promise<TickReport> {
 
     const claimedLabels = [...issue.labels.filter((label) => label !== 'status:ready'), 'status:claimed'];
     const spawnFailuresBefore = comments.filter((comment) => comment.body.includes(SPAWN_FAILURE_MARKER)).length;
+    let started: { readonly dispatchId: string; readonly worktree: string };
     try {
-      const started = await deps.dispatchWorker({ issueNumber, title: issue.title, agent: verdict.agent, form: verdict.form });
-      await moveTo(github, issueNumber, claimedLabels, 'in-progress');
-      await upsertProgressComment(github, issueNumber, {
-        worktree: started.worktree,
-        agent: verdict.agent,
-        dispatchId: started.dispatchId,
-        rows: [],
-        updatedAt: now()
-      });
-      report.dispatched.push(issueNumber);
-      // Dispatch thành công -> thêm vào currentHolders (status: 'in-progress') để giữ khoá cho candidate sau:
-      currentHolders.push({
-        issueNumber,
-        scope: verdict.form.scopePatterns,
-        status: 'in-progress',
-      });
+      started = await deps.dispatchWorker({ issueNumber, title: issue.title, agent: verdict.agent, form: verdict.form });
     } catch (error) {
       // Khởi chạy lỗi: trả hàng đợi, nhưng đủ số lần thì chặn (tránh vòng spawn vô hạn tốn tiền agent).
       const blocked = spawnFailuresBefore + 1 >= MAX_SPAWN_FAILURES;
@@ -173,6 +159,36 @@ export async function syncQueueTick(deps: QueueSyncDeps): Promise<TickReport> {
           (blocked ? 'Đã đặt `status:blocked`; sửa nguyên nhân rồi gắn lại `status:ready`.' : 'Trả về `status:ready`.')
       );
       report.failed.push({ issue: issueNumber, error: reason });
+      return;
+    }
+
+    report.dispatched.push(issueNumber);
+    // Dispatch thành công -> thêm vào currentHolders theo status: holdingStatuses[0] (nếu holdingStatuses không rỗng):
+    const holdStatus = holdingStatuses[0];
+    if (holdStatus !== undefined) {
+      currentHolders.push({
+        issueNumber,
+        scope: verdict.form.scopePatterns,
+        status: holdStatus,
+      });
+    }
+
+    // Bước cập nhật trạng thái GitHub sau khi worker đã chạy nằm trong try/catch riêng:
+    try {
+      await moveTo(github, issueNumber, claimedLabels, 'in-progress');
+      await upsertProgressComment(github, issueNumber, {
+        worktree: started.worktree,
+        agent: verdict.agent,
+        dispatchId: started.dispatchId,
+        rows: [],
+        updatedAt: now()
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      const msg = `Sau khi giao worker: cập nhật trạng thái GitHub thất bại: ${reason}`;
+      deps.log?.(`[sync-queue-tick] #${issueNumber} ${msg}`);
+      report.failed.push({ issue: issueNumber, error: msg });
+      // Không trả về ready hay blocked vì worker đã chạy thật
     }
   }
 
