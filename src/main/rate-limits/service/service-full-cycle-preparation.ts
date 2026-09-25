@@ -6,6 +6,7 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
+import { probeLocalAntigravityLanguageServer } from '../antigravity-local-probe'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
 import type {
   ClaudeRuntimeAuthPreparation,
@@ -37,7 +38,8 @@ export type FetchAllCyclePrepared = {
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>
+    PromiseSettledResult<ProviderRateLimits>,
+    PromiseSettledResult<ProviderRateLimits | null>
   ]
   grokResultPromise: Promise<
     { status: 'fulfilled'; value: ProviderRateLimits } | { status: 'rejected'; reason: unknown }
@@ -144,7 +146,15 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      antigravityResult
+    ] =
       await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
@@ -185,7 +195,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               models: miniMaxModels,
               endpointMode: miniMaxEndpoint,
               apiKey: miniMaxApiKey
-            })
+            }),
+        probeLocalAntigravityLanguageServer({ signal })
       ])
 
     if (signal.aborted) {
@@ -213,7 +224,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        antigravityResult
       ],
       grokResultPromise
     }

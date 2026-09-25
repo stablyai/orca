@@ -12,7 +12,13 @@ const ANTIGRAVITY_QUOTA_UNREADABLE_REASON =
 
 export function deriveAntigravityRateLimits(gemini: ProviderRateLimits): ProviderRateLimits {
   if (gemini.status === 'ok') {
-    return { ...gemini, provider: 'antigravity' }
+    return {
+      ...gemini,
+      provider: 'antigravity',
+      // Why: Antigravity distinguishes the 5-hour session and weekly windows cleanly,
+      // without masking the session window behind model-named buckets.
+      buckets: undefined
+    }
   }
   return {
     provider: 'antigravity',

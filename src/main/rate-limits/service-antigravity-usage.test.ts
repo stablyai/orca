@@ -3,11 +3,16 @@ import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { probeLocalAntigravityLanguageServer } from './antigravity-local-probe'
 import {
   errorProvider,
   okProvider,
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
+
+vi.mock('./antigravity-local-probe', () => ({
+  probeLocalAntigravityLanguageServer: vi.fn()
+}))
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
@@ -50,8 +55,45 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
 describe('RateLimitService Antigravity usage', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
+    vi.mocked(probeLocalAntigravityLanguageServer).mockResolvedValue(null)
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
+  })
+
+  it('uses local Antigravity Language Server quota when detected', async () => {
+    vi.mocked(probeLocalAntigravityLanguageServer).mockResolvedValue({
+      provider: 'antigravity',
+      session: {
+        usedPercent: 25,
+        windowMinutes: 300,
+        resetsAt: 1_700_000_300_000,
+        resetDescription: '4h 59m'
+      },
+      weekly: {
+        usedPercent: 40,
+        windowMinutes: 10080,
+        resetsAt: 1_700_600_000_000,
+        resetDescription: '6d 23h'
+      },
+      planType: 'Pro',
+      updatedAt: 1_700_000_000_000,
+      error: null,
+      status: 'ok',
+      buckets: undefined
+    })
+
+    const service = new RateLimitService()
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.antigravity?.status).toBe('ok')
+    expect(state.antigravity?.provider).toBe('antigravity')
+    expect(state.antigravity?.session?.usedPercent).toBe(25)
+    expect(state.antigravity?.session?.windowMinutes).toBe(300)
+    expect(state.antigravity?.weekly?.usedPercent).toBe(40)
+    expect(state.antigravity?.weekly?.windowMinutes).toBe(10080)
+    expect(state.antigravity?.planType).toBe('Pro')
+    expect(state.antigravity?.buckets).toBeUndefined()
   })
 
   it('does not republish a Gemini failure as an Antigravity refresh failure', async () => {

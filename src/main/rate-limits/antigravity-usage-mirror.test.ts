@@ -28,6 +28,22 @@ describe('deriveAntigravityRateLimits', () => {
     expect(antigravity.status).toBe('ok')
     expect(antigravity.session?.usedPercent).toBe(42)
     expect(antigravity.error).toBeNull()
+    expect(antigravity.buckets).toBeUndefined()
+  })
+
+  it('mirrors weekly quota and removes model buckets for clean 5h and weekly presentation', () => {
+    const gemini = {
+      ...geminiSnapshot('ok', null, 42),
+      weekly: { usedPercent: 15, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+      buckets: [
+        { name: 'Pro', usedPercent: 42, windowMinutes: 300, resetsAt: null, resetDescription: null }
+      ]
+    }
+    const antigravity = deriveAntigravityRateLimits(gemini)
+
+    expect(antigravity.session?.usedPercent).toBe(42)
+    expect(antigravity.weekly?.usedPercent).toBe(15)
+    expect(antigravity.buckets).toBeUndefined()
   })
 
   it('reports unavailable without quoting the Gemini failure', () => {

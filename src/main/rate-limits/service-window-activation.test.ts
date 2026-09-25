@@ -19,6 +19,10 @@ import {
   unavailableProvider
 } from './rate-limit-service-test-harness'
 
+vi.mock('./antigravity-local-probe', () => ({
+  probeLocalAntigravityLanguageServer: vi.fn().mockResolvedValue(null)
+}))
+
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
   fetchManagedAccountUsage: vi.fn()

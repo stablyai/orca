@@ -32,7 +32,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        antigravityResult
       ],
       grokResultPromise
     } = prepared
@@ -79,8 +80,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
+    const antigravityLocal =
+      antigravityResult.status === 'fulfilled' ? antigravityResult.value : null
+    // Why: Antigravity prefers the direct local probe; if unavailable, it falls back to mirroring shared Gemini quota.
+    const antigravity = antigravityLocal ?? deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
