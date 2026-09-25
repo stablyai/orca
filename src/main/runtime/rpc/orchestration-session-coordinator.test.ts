@@ -242,6 +242,31 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
     })
   })
 
+  it("wakes the previous coordinator's waiting check as fenced when another session takes over", async () => {
+    const runId = await runCreate(SESSION_X)
+    const waiter = vi.spyOn(h.runtime, 'waitForMessage')
+    const waiting = h.dispatch(
+      orchestrationRequest(
+        'orchestration.check',
+        { run: runId, wait: true, timeoutMs: 5_000 },
+        {
+          sessionId: SESSION_X
+        }
+      )
+    )
+    await vi.waitFor(() => expect(waiter).toHaveBeenCalledWith(`run:${runId}`, expect.anything()))
+
+    await as(SESSION_Y, 'orchestration.runUse', { id: runId })
+
+    expect(await waiting).toMatchObject({
+      ok: false,
+      error: {
+        code: 'consumer_fenced',
+        message: 'This mailbox consumer was replaced while waiting.'
+      }
+    })
+  })
+
   it('stops counting a coordinator Orca session id once an older binary rebinds the Run to a terminal', async () => {
     const runId = await runCreate(SESSION_X)
     // An older binary's bindRun rewrites handle and pane and bumps the generation, never the Orca session id.

@@ -8,6 +8,7 @@ import { checkDirectMailbox } from './check-direct'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { capSessionCallerWaitMs } from '../../../../orchestration/session-caller-wait-cap'
 import {
   callerHoldsDispatchPane,
   dispatchFenced,
@@ -19,7 +20,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
     name: 'orchestration.check',
     params: CheckParams,
     handler: async (
-      params,
+      requested,
       {
         orchestrationCompatibilityEvidence,
         orchestrationCaller,
@@ -30,9 +31,16 @@ export const ORCHESTRATION_CHECK_METHODS = [
         recordMutationReceipt
       }
     ) => {
-      if (params.wait === true && orchestrationCaller) {
-        throw waitRequiresTerminal(orchestrationCaller.sessionId)
-      }
+      const params =
+        requested.wait && orchestrationCaller
+          ? {
+              ...requested,
+              timeoutMs: capSessionCallerWaitMs(
+                requested.timeoutMs ?? undefined,
+                orchestrationCaller
+              )
+            }
+          : requested
       const db = runtime.getOrchestrationDb()
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)
@@ -116,15 +124,3 @@ export const ORCHESTRATION_CHECK_METHODS = [
     }
   })
 ]
-
-/**
- * A structured session, chat or worker, runs turn by turn through a shell tool with its own
- * timeout, so a blocking wait is killed mid-wait and retried. Only a terminal agent may block.
- */
-function waitRequiresTerminal(sessionId: string): OrchestrationError {
-  return new OrchestrationError(
-    'wait_requires_terminal',
-    `Agent session ${sessionId} runs turn by turn, so check --wait would outlive your shell tool; only an agent in a terminal can wait. Run check without --wait, process and --ack what it returns, then end your turn: Orca starts a new turn in this session when mail arrives. No effects were applied.`,
-    { effectsApplied: false }
-  )
-}

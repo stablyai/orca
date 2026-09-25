@@ -65,9 +65,6 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
 - Use the executable you used to run `skills get` for the entire run. In the
   examples below, replace `ORCA` with it; do not create a shell variable or run
   `ORCA` literally. If it fails, report that exact error instead of switching.
-- Your address is `caller.address` in `ORCA status --json`: `session:<id>` in a
-  chat (a chat worker too; it survives `/clear`), your handle in a terminal.
-  Never name another agent with `--from`/`--terminal`.
 - A successful `orchestration send` proves durable enqueue; its wake or nudge is
   best-effort attention only and does not prove the recipient read or accepted it.
 
@@ -75,14 +72,15 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
 
 The injected preamble is authoritative. A dispatched worker must:
 
-1. Do only the current Task. Ask the coordinator only with the preamble's `ask`
-   command, never a local question TUI; resume its message ID after a timeout.
+1. Do only the current Task and use the preamble's `ask` command for a blocking
+   coordinator question. Never open a local question TUI the coordinator cannot
+   answer. Resume the same message ID after an ask timeout.
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
    liveness, not completion.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
-   new file, after a test run — and once more immediately before `worker_done`,
-   with the preamble's own `check` command.
-4. Send `worker_done` exactly once, as the dispatched worker, with a
+   new file, after a test run — and once more immediately before `worker_done`:
+   `ORCA orchestration check --terminal <your_handle> --json`.
+4. Send `worker_done` exactly once, from the dispatched terminal, with a
    three-sentence executive summary, both lifecycle IDs, and explicit
    `--outcome succeeded` or `--outcome failed`. Never encode failure only in prose.
 5. Append `--files-modified` and `--report-path` only with real values when
@@ -114,12 +112,11 @@ dependencies or a retry of a known Task. Use dependencies only for real ordering
 and prefer parallel waves over chains deeper than three or four steps; nested
 workers obey the depth limit, and a new Run does not reset the caller's depth.
 
-A consuming `check` takes its caller from the environment in a chat or Orca
-terminal; elsewhere pass your own `--terminal <handle>`, never `--from`. It
-returns the bound Run's oldest FIFO Delivery and replays that batch until
-acknowledged. Process every message: reply to questions, validate each
-`worker_done` against the expected active Dispatch, and decide each settled
-terminal's next owner before the ack:
+A consuming `check` names its caller with `--terminal <handle>`, never `--from`;
+omit it inside the coordinator's own Orca terminal. It returns the bound Run's
+oldest FIFO Delivery and replays that batch until acknowledged. Process every
+message: reply to questions, validate each `worker_done` against the expected
+active Dispatch, and decide each settled terminal's next owner before the ack:
 
 ```text
 ORCA orchestration reply --id <message_id> --body "<answer>" --json
@@ -143,8 +140,7 @@ worker's own observation of process exit, or a transcript whose final agent turn
 sent no `worker_done`. Then load `references/recovery-and-cleanup.md` and choose
 `worker-stop` or `worker-abandon` explicitly. `unverifiable` is absence,
 including when `worker-show` reports `agentWait` null. Absence never authorizes
-stop, abandon, retry, or release; keep waiting or inspect. A chat coordinator
-ends its turn instead; Orca refuses its `check --wait` (`references/coordinator-loop.md`).
+stop, abandon, retry, or release; keep waiting or inspect.
 
 `worker-start` is the normal path, composing placement, terminal readiness,
 prompt injection, and supervised resource ownership. `dispatch --inject` leaves
@@ -189,7 +185,7 @@ older CLI rejects `--full`, keep this kernel's safety floor, use that command's
 
 | Action gate                                                                                                   | Bundled reference                         |
 | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Chat coordination, expanded DAG waves, launch model/effort, same-terminal reuse, or review ownership          | `references/coordinator-loop.md`          |
+| Expanded DAG waves, launch model/effort, same-terminal reuse, or review ownership                             | `references/coordinator-loop.md`          |
 | You are a dispatched worker and the live preamble does not answer your question, or `check` returned an error | `references/worker-contract.md`           |
 | New worktree, exact workspace, SSH, WSL, or connected-server placement                                        | `references/placement-and-remote.md`      |
 | Inbox replay, follow-up messages, group addresses, or decision gates                                          | `references/messaging-and-gates.md`       |
