@@ -39,7 +39,6 @@ jobs:
       contents: write
 
     outputs:
-      tag: ${{ steps.release.outputs.tag }}
       publish_release: ${{ steps.release.outputs.publish_release }}
 
     defaults:
@@ -175,8 +174,8 @@ jobs:
     if: needs.android-build.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
 
-    # Why: serializes only the rolling upload, so an older run cannot pass the
-    # newest-version check and then clobber a newer APK; versioned releases stay parallel.
+    # Why: serialized so each run reads the release list after the previous upload
+    # lands; versioned releases stay outside the group and run in parallel.
     concurrency:
       group: mobile-android-latest
       cancel-in-progress: false
@@ -185,48 +184,40 @@ jobs:
       contents: write
 
     steps:
-      - name: Download APK artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: orca-mobile-apk
-          path: ${{ runner.temp }}/apk
-
       - name: Update rolling latest Android release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.android-build.outputs.tag }}
         run: |
           set -euo pipefail
-          tag="$RELEASE_TAG"
           latest_tag="mobile-android-latest"
 
-          # Why: a re-run of an older version must not replace a newer latest APK.
-          # Paginated so the check never misses an Android release behind desktop ones.
+          # Why: publish the newest release's APK rather than this run's, so an older
+          # re-run or a queued run GitHub dropped can never leave the link stale.
+          # Paginated so no Android release is missed behind desktop ones.
           releases="$(
             gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
               --jq '.[] | select(.draft | not) | .tag_name'
           )"
           newest_tag="$(printf '%s\n' "$releases" | grep '^mobile-android-v' | sort -V | tail -1 || true)"
           if [ -z "$newest_tag" ]; then
-            echo "::error::No published mobile-android-v* release found, expected $tag"
+            echo "::error::No published mobile-android-v* release found"
             exit 1
           fi
-          if [ "$newest_tag" != "$tag" ]; then
-            echo "Skipping: $tag is not the newest Android release ($newest_tag)"
-            exit 0
-          fi
+          echo "Publishing $newest_tag as $latest_tag"
 
+          apk_dir="$RUNNER_TEMP/apk"
+          gh release download "$newest_tag" --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --dir "$apk_dir"
           shopt -s nullglob
-          apks=("$RUNNER_TEMP"/apk/*.apk)
+          apks=("$apk_dir"/*.apk)
           if [ "${#apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one release APK, found ${#apks[@]}"
+            echo "::error::Expected exactly one APK on $newest_tag, found ${#apks[@]}"
             exit 1
           fi
           stable_apk="$RUNNER_TEMP/orca-android.apk"
           cp "${apks[0]}" "$stable_apk"
 
           # Why: only the APK is kept current; the tag and its source archives stay at first publish.
-          notes="Always the newest Orca Mobile Android APK. It is currently [$tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag); use that release for its source and changelog."
+          notes="Always the newest Orca Mobile Android APK. It is currently [$newest_tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$newest_tag); use that release for its source and changelog."
           if gh release view "$latest_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$latest_tag" --repo "$GITHUB_REPOSITORY" --clobber "$stable_apk"
             gh release edit "$latest_tag" --repo "$GITHUB_REPOSITORY" --notes "$notes"
