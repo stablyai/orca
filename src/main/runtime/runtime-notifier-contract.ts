@@ -117,7 +117,8 @@ export type RuntimeNotifier = {
     baseVersion: string,
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
-  closeTerminal(tabId: string, paneRuntimeId?: number): void
+  /** With leafId, drops that one split pane main already closed; without it, closes the tab. */
+  closeTerminal(tabId: string, leafId?: string): void
   closeTerminalTab?(
     tabId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }

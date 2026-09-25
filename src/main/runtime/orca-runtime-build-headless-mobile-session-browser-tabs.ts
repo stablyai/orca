@@ -123,7 +123,10 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     })
   }
 
-  /** Commits a split pane's close once its process was stopped; no session means nothing persisted. */
+  /**
+   * Commits a split pane's close that main started once its process was stopped, then tells the
+   * desktop renderer to drop that leaf. No session means nothing persisted to remove.
+   */
   protected closeTerminalLeaf(worktreeId: string, tabId: string, leafId: string): void {
     try {
       // Why force: the process is already stopped, so a pin must not fail the close after the fact.
@@ -133,6 +136,9 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         throw error
       }
     }
+    // Why: no exit may ever arrive to remove the pane. The notice is leaf-addressed, so it and the
+    // renderer's exit handling are each a no-op after the other.
+    this.notifier?.closeTerminal(tabId, leafId)
   }
 
   protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {

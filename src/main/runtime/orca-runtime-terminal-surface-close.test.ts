@@ -145,8 +145,9 @@ describe('CLI close of one pane in a split tab', () => {
       root: { type: 'leaf', leafId: SIBLING_LEAF_ID },
       ptyIdsByLeafId: { [SIBLING_LEAF_ID]: SIBLING_PTY_ID }
     })
+    // No exit arrives to remove the pane, so the desktop renderer is told to drop that leaf.
+    expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
     expect(harness.closeTerminalTab).not.toHaveBeenCalled()
-    expect(harness.closeTerminal).not.toHaveBeenCalled()
   })
 })
 
@@ -165,5 +166,6 @@ describe('mobile close of one pane in a split tab', () => {
     expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]).toMatchObject({
       root: { type: 'leaf', leafId: SIBLING_LEAF_ID }
     })
+    expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
   })
 })

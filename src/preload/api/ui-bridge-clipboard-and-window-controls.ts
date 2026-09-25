@@ -49,12 +49,10 @@ export const uiClipboardAndWindowControlsApi = {
   respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse): void => {
     ipcRenderer.send('ui:mobileMarkdownResponse', response)
   },
-  onCloseTerminal: (
-    callback: (data: { tabId: string; paneRuntimeId?: number }) => void
-  ): (() => void) => {
+  onCloseTerminal: (callback: (data: { tabId: string; leafId?: string }) => void): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { tabId: string; paneRuntimeId?: number }
+      data: { tabId: string; leafId?: string }
     ) => callback(data)
     ipcRenderer.on('ui:closeTerminal', listener)
     return () => ipcRenderer.removeListener('ui:closeTerminal', listener)

@@ -181,9 +181,15 @@ export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
   const leafId =
     capturedPanesByTabId.get(tabId)?.panes.find((pane) => pane.ptyId === ptyId)?.leafId ??
     Object.entries(layout?.ptyIdsByLeafId ?? {}).find(([, boundPtyId]) => boundPtyId === ptyId)?.[0]
-  if (!leafId) {
-    return
+  if (leafId) {
+    collapseParkedTerminalLeaf(tabId, leafId, ptyId)
   }
+}
+
+/** Removes one leaf from a parked tab's stored layout; a no-op once the leaf is gone. */
+export function collapseParkedTerminalLeaf(tabId: string, leafId: string, ptyId?: string): void {
+  const state = useAppStore.getState()
+  const layout = state.terminalLayoutsByTabId[tabId]
   const detached = detachTerminalLayoutLeaf(layout, leafId)
   if (!detached) {
     return
@@ -191,7 +197,7 @@ export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
   const terminalTab = Object.values(state.tabsByWorktree)
     .flat()
     .find((candidate) => candidate.id === tabId)
-  if (shouldClearLaunchAgentForClosedPane(terminalTab, ptyId)) {
+  if (shouldClearLaunchAgentForClosedPane(terminalTab, ptyId ?? layout?.ptyIdsByLeafId?.[leafId])) {
     state.clearTabLaunchAgent(tabId)
   }
   state.setTabLayout(tabId, detached.sourceLayout)

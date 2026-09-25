@@ -182,8 +182,6 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    // Why: in a multi-pane tab the renderer's exit handler removes the killed pane from view; an
-    // extra IPC close would race it and close the whole tab. Membership is committed below.
     const siblingCount = this.countLeavesInTab(leaf.tabId)
     const ptyIdsToKill =
       siblingCount <= 1
@@ -199,9 +197,8 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
       : false
     if (siblingCount > 1) {
       this.closeTerminalLeaf(leaf.worktreeId, leaf.tabId, leaf.leafId)
-    }
-    if (siblingCount > 1 ? !ptyKilled : !this.notifier?.closeTerminalTab) {
-      this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
+    } else if (!this.notifier?.closeTerminalTab) {
+      this.notifier?.closeTerminal(leaf.tabId)
     }
     return this.describeTerminalClose(handle, leaf.tabId, leaf.ptyId ?? null, ptyKilled)
   }
