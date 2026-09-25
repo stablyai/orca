@@ -1,7 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { createWorkerMaintenanceFixture } from './profile-state-maintenance-fixture'
 import { profileStateJsonExportPaths } from '../profile-state/profile-state-export-path'
+import { openProfileStateDatabase } from '../profile-state/profile-state-database'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -57,5 +58,53 @@ describe('maintenance compatibility checkpoint', () => {
     expect(readState().settings.theme).toBe('light')
     await (await store.beginProfileMaintenance()).resume()
     expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('light')
+  })
+
+  it('resumes after the worker cannot read JSON before staging compatibility acceptance', async () => {
+    const { store, dataFile, readState } = await createWorkerMaintenanceFixture()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mkdirSync(dataFile)
+    store.updateSettings({ theme: 'dark' })
+
+    await expect(store.beginProfileMaintenance()).rejects.toMatchObject({
+      outcome: 'known-failure'
+    })
+    expect(readState().settings.theme).toBe('dark')
+    rmSync(dataFile, { recursive: true })
+    await store.runDurableMutation(() => {
+      store.updateSettings({ theme: 'light' })
+      return { value: undefined }
+    })
+    expect(readState().settings.theme).toBe('light')
+    await (await store.beginProfileMaintenance()).resume()
+    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('light')
+  })
+
+  it('keeps the writer fenced when promotion fails after publishing canonical JSON', async () => {
+    const { store, authority, dataFile, databaseFile, profileId, readState } =
+      await createWorkerMaintenanceFixture()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await authority.writeJsonCompatibilityExportAsync(dataFile)
+    const opened = openProfileStateDatabase(databaseFile, profileId)
+    try {
+      opened.db.exec(`
+        CREATE TRIGGER reject_acceptance BEFORE INSERT ON profile_state_meta
+        WHEN NEW.key = 'legacy_json_acceptance'
+          AND json_type(NEW.value, '$.pending') IS NULL
+        BEGIN SELECT RAISE(ABORT, 'injected promotion failure'); END
+      `)
+    } finally {
+      opened.db.close()
+    }
+    store.updateSettings({ theme: 'dark' })
+
+    await expect(store.beginProfileMaintenance()).rejects.toMatchObject({
+      outcome: 'indeterminate'
+    })
+    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('dark')
+    expect(readState().settings.theme).toBe('dark')
+    await expect(store.runDurableMutation(() => ({ value: undefined }))).rejects.toThrow(
+      'finalized'
+    )
   })
 })

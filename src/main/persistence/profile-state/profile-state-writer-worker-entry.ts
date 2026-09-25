@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
+import { ProfileStateExportPreparationError } from './profile-state-authority-exports'
 import {
   encodeProfileStateWriterError,
   ProfileStateWriterError
@@ -117,10 +118,11 @@ async function accept(value: unknown): Promise<void> {
   } catch (error) {
     const failure = encodeProfileStateWriterError(
       error,
-      value.command === 'export-json' ||
-        value.command === 'export-latest' ||
-        value.command === 'export-compatibility' ||
-        value.command === 'close'
+      !(error instanceof ProfileStateExportPreparationError) &&
+        (value.command === 'export-json' ||
+          value.command === 'export-latest' ||
+          value.command === 'export-compatibility' ||
+          value.command === 'close')
     )
     reply({ id: value.id, ok: false, error: failure })
     stopping ||= failure.outcome === 'indeterminate'
