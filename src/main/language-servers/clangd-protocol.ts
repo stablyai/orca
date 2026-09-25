@@ -6,15 +6,19 @@ import type {
   LanguageServerDefinitionLocation,
   LanguageServerHoverContent
 } from '../../shared/language-server-navigation-types'
-import { nativePathToLspUri } from './uri-mapping'
 import {
   SEMANTIC_TOKEN_CLIENT_MODIFIERS,
   SEMANTIC_TOKEN_CLIENT_TYPES
 } from './semantic-token-legend-decoder'
 
 /** The initialize params verified against clangd 23 in the spike (findings §5). */
-export function buildClangdInitializeParams(rootPath: string, processId: number): unknown {
-  const rootUri = nativePathToLspUri(rootPath)
+export function buildClangdInitializeParams(
+  rootPath: string,
+  processId: number,
+  /** Host-local path -> LSP URI mapper (native drive form or WSL guest form). */
+  pathToLspUri: (filePath: string) => string
+): unknown {
+  const rootUri = pathToLspUri(rootPath)
   const rootName = rootPath.split(/[\\/]/).pop() ?? rootPath
   return {
     processId,

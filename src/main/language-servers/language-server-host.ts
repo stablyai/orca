@@ -4,10 +4,17 @@
 // S3 (ticket 13): the D9 compile-db strategy runs at session start — detect
 // an existing db, else CMake-generate one; on failure degrade + .clangd
 // fallback. clangd is pointed at the resolved dir explicitly (no symlink).
-import { buildClangdLaunch, resolveClangdProgram } from './clangd-launch'
+// Ticket 16: the per-host seam (native spawnProcess vs WSL wsl.exe --exec,
+// native file: URI vs WSL UNC<->guest mapping, native PATH vs guest PATH)
+// is selected per worktree through `selectHostAdapter` so the session +
+// lifecycle machinery are host-agnostic.
 import { openClangdSession, type ClangdSession } from './clangd-session'
-import { normalizeNativeFilePath } from './uri-mapping'
-import { resolveSessionCompileDb } from './language-server-session-db'
+import {
+  normalizeHostFileKey,
+  selectHostAdapter,
+  type LanguageServerHostAdapter
+} from './language-server-host-adapter'
+import { buildDbStrategyHooks } from './language-server-session-db'
 import {
   clearIdleTimer,
   evictLeastRecentlyUsed,
@@ -35,7 +42,9 @@ export function createLanguageServerHost(
   events: LanguageServerHostEvents = {},
   openSession: typeof openClangdSession = openClangdSession,
   versionGate: ClangdVersionGate | null = null,
-  dbStrategyFactory: CompileDbStrategyFactory | null = null
+  dbStrategyFactory: CompileDbStrategyFactory | null = null,
+  /** Test seam: override host-adapter selection (native vs WSL) without a real distro. */
+  selectAdapter: (worktreeRoot: string) => LanguageServerHostAdapter = selectHostAdapter
 ): LanguageServerHost {
   const sessionsByKey = new Map<string, SessionEntry>()
   const sessionKeyByDocument = new Map<string, string>()
@@ -58,7 +67,10 @@ export function createLanguageServerHost(
   }
 
   function ensureSession(worktreeRoot: string): Promise<ClangdSession> {
-    const key = normalizeNativeFilePath(worktreeRoot)
+    const key = normalizeHostFileKey(worktreeRoot)
+    // Select the host adapter once per session: native (spawnProcess + local
+    // PATH) or WSL (wsl.exe --exec + guest PATH), per the worktree's path kind.
+    const adapter = selectAdapter(worktreeRoot)
     const existing = sessionsByKey.get(key)
     if (existing) {
       if (existing.session?.died) {
@@ -75,28 +87,28 @@ export function createLanguageServerHost(
         return Promise.resolve(existing.session)
       }
     }
-    const program = resolveClangdProgram()
+    const program = adapter.resolveClangdProgram()
     const startPromise = (async () => {
       // Version gate (spec D7): probe before spawning. <12/absent -> reject,
-      // 12-15 -> suggest-upgrade, >=16 -> ok.
-      if (versionGate) {
-        const gate = await versionGate(program)
-        const gateEntry = sessionsByKey.get(key)
-        if (gateEntry) {
-          gateEntry.gate = gate
-        }
-        if (gate.kind === 'reject') {
-          if (gate.message) {
-            events.onDegraded?.(gate.message)
-          }
-          dropSession(key)
-          throw new Error(gate.message ?? 'clangd unavailable')
-        }
-        if (gate.kind === 'suggest-upgrade' && gate.message) {
+      // 12-15 -> suggest-upgrade, >=16 -> ok. The injected gate wins (tests);
+      // production uses the adapter's gate (native PATH or guest clangd).
+      const gateProbe = versionGate ?? ((p: string) => adapter.resolveClangdVersionGate(p))
+      const gate = await gateProbe(program)
+      const gateEntry = sessionsByKey.get(key)
+      if (gateEntry) {
+        gateEntry.gate = gate
+      }
+      if (gate.kind === 'reject') {
+        if (gate.message) {
           events.onDegraded?.(gate.message)
-        } else if (gate.kind === 'ok') {
-          events.onDegraded?.(null)
         }
+        dropSession(key)
+        throw new Error(gate.message ?? 'clangd unavailable')
+      }
+      if (gate.kind === 'suggest-upgrade' && gate.message) {
+        events.onDegraded?.(gate.message)
+      } else if (gate.kind === 'ok') {
+        events.onDegraded?.(null)
       }
       // LRU cap: evict before the 4th session materializes (spec §6).
       const liveCount = [...sessionsByKey.values()].filter(
@@ -106,27 +118,33 @@ export function createLanguageServerHost(
         await evictLeastRecentlyUsed(sessionsByKey, events, log, dropSession)
       }
       // D9 compile-db strategy (spec §6): detect or CMake-generate the db
-      // before spawn; on failure clangd still starts in single-file mode.
-      const { resolution: dbResolution, strategy } = await resolveSessionCompileDb(
-        key,
-        events,
-        log,
-        dbStrategyFactory
-      )
+      // before spawn; on failure clangd still starts in single-file mode. The
+      // injected factory wins (tests); production uses the adapter's strategy
+      // (native: CMake generation; WSL: detection-only — guest cmake is out of scope).
+      const dbStrategy = dbStrategyFactory
+        ? dbStrategyFactory(key, buildDbStrategyHooks(events, log))
+        : adapter.createDbStrategy(key, buildDbStrategyHooks(events, log))
+      const strategy = dbStrategy
+      const dbResolution = await strategy.resolve()
       const strategyEntry = sessionsByKey.get(key)
       if (strategyEntry) {
         strategyEntry.dbStrategy = strategy
       } else {
         strategy.dispose()
       }
-      const launch = buildClangdLaunch(key, { compileCommandsDir: dbResolution.compileCommandsDir })
+      const launch = await adapter.buildLaunch(key, {
+        compileCommandsDir: dbResolution.compileCommandsDir
+      })
       log(
         `[language-servers] starting clangd for ${key}: ${launch.program} ${launch.args.join(' ')}`
       )
       const session = await openSession({
         program: launch.program,
         args: launch.args,
+        cwd: launch.cwd,
+        env: launch.env,
         rootPath: key,
+        adapter,
         onStatus: (text) => events.onStatus?.(text),
         onLog: log,
         onExit: (error) => {
@@ -164,7 +182,7 @@ export function createLanguageServerHost(
   }
 
   function sessionForDocument(filePath: string): ClangdSession | null {
-    const key = normalizeNativeFilePath(filePath)
+    const key = normalizeHostFileKey(filePath)
     const ownerKey = sessionKeyByDocument.get(key)
     if (!ownerKey) {
       return null
@@ -199,9 +217,9 @@ export function createLanguageServerHost(
     },
     async openDocument({ worktreeRoot, filePath, text }) {
       try {
-        const sessionKey = normalizeNativeFilePath(worktreeRoot)
+        const sessionKey = normalizeHostFileKey(worktreeRoot)
         const session = await ensureSession(worktreeRoot)
-        const key = normalizeNativeFilePath(filePath)
+        const key = normalizeHostFileKey(filePath)
         const entry = sessionsByKey.get(sessionKey)
         if (entry) {
           entry.openDocuments.add(key)
@@ -223,15 +241,15 @@ export function createLanguageServerHost(
         return { ok: false as const, error: `no language-server session owns ${filePath}` }
       }
       try {
-        const normalized = session.didChange(normalizeNativeFilePath(filePath), version, changes)
-        touchSessionLocal(sessionKeyByDocument.get(normalizeNativeFilePath(filePath)) ?? '')
+        const normalized = session.didChange(normalizeHostFileKey(filePath), version, changes)
+        touchSessionLocal(sessionKeyByDocument.get(normalizeHostFileKey(filePath)) ?? '')
         return { ok: true as const, version: normalized }
       } catch (error) {
         return { ok: false as const, error: error instanceof Error ? error.message : String(error) }
       }
     },
     closeDocument({ filePath }) {
-      const key = normalizeNativeFilePath(filePath)
+      const key = normalizeHostFileKey(filePath)
       const ownerKey = sessionKeyByDocument.get(key)
       const session = sessionForDocument(filePath)
       if (!session) {
@@ -261,35 +279,35 @@ export function createLanguageServerHost(
       if (!session) {
         throw new Error(`no language-server session owns ${filePath}`)
       }
-      return session.definition(normalizeNativeFilePath(filePath), position)
+      return session.definition(normalizeHostFileKey(filePath), position)
     },
     async references({ filePath, position }) {
       const session = sessionForDocument(filePath)
       if (!session) {
         throw new Error(`no language-server session owns ${filePath}`)
       }
-      return session.references(normalizeNativeFilePath(filePath), position)
+      return session.references(normalizeHostFileKey(filePath), position)
     },
     async declaration({ filePath, position }) {
       const session = sessionForDocument(filePath)
       if (!session) {
         throw new Error(`no language-server session owns ${filePath}`)
       }
-      return session.declaration(normalizeNativeFilePath(filePath), position)
+      return session.declaration(normalizeHostFileKey(filePath), position)
     },
     async hover({ filePath, position }) {
       const session = sessionForDocument(filePath)
       if (!session) {
         throw new Error(`no language-server session owns ${filePath}`)
       }
-      return session.hover(normalizeNativeFilePath(filePath), position)
+      return session.hover(normalizeHostFileKey(filePath), position)
     },
     async semanticTokens({ filePath }) {
       const session = sessionForDocument(filePath)
       if (!session) {
         throw new Error(`no language-server session owns ${filePath}`)
       }
-      return session.semanticTokensFull(normalizeNativeFilePath(filePath))
+      return session.semanticTokensFull(normalizeHostFileKey(filePath))
     },
     async shutdownAll() {
       const entries = [...sessionsByKey.values()]

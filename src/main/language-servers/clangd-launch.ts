@@ -132,6 +132,8 @@ export async function resolveClangdVersionGate(
 const CLANGD_INSTALL_HINT =
   "clangd 12+ is required for C/C++ navigation. Install LLVM/Clang tools (e.g. `winget install LLVM.LLVM` on Windows, `brew install llvm` on macOS, or your distro's `clangd` package)."
 
+export { CLANGD_INSTALL_HINT }
+
 function messageForGate(kind: ClangdVersionGateKind, major: number | null): string | null {
   if (kind === 'ok') {
     return null

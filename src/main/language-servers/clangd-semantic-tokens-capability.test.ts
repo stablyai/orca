@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildClangdInitializeParams } from './clangd-protocol'
+import { nativePathToLspUri } from './uri-mapping'
 
 describe('buildClangdInitializeParams — semanticTokens capability (S5)', () => {
-  const params = buildClangdInitializeParams('D:\\repo', 1234) as {
+  const params = buildClangdInitializeParams('D:\\repo', 1234, nativePathToLspUri) as {
     capabilities?: {
       textDocument?: {
         semanticTokens?: {

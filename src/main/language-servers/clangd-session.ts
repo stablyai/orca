@@ -1,13 +1,10 @@
-// clangd protocol session on top of the JSON-RPC client + native process
-// adapter. The initialize shape, server-request answers and result mapping
-// live in clangd-protocol.ts; this module owns lifecycle and the document
-// table. Shutdown ladder per spec D8: shutdown -> exit -> grace -> tree kill.
+// clangd protocol session on top of the JSON-RPC client + host-adapter process
+// opener. Initialize shape + result mapping live in clangd-protocol.ts; this
+// module owns lifecycle + the document table. Host-agnostic: the adapter
+// supplies path mappers (Orca identity <-> LSP `file:` URI) + the process
+// opener (native spawnProcess or WSL wsl.exe). Shutdown: shutdown -> exit -> tree kill.
 import { createLspJsonRpcClient, type LspJsonRpcClient } from './lsp-jsonrpc-client'
-import {
-  openNativeLanguageServerProcess,
-  NATIVE_LANGUAGE_SERVER_GRACEFUL_EXIT_MS,
-  type NativeLanguageServerProcess
-} from './native-language-server-process'
+import { NATIVE_LANGUAGE_SERVER_GRACEFUL_EXIT_MS } from './native-language-server-process'
 import {
   answerClangdServerRequest,
   buildClangdInitializeParams,
@@ -20,7 +17,11 @@ import {
   decodeSemanticTokensFullResult,
   type SemanticTokenLegend
 } from './semantic-token-legend-decoder'
-import { lspUriToNativePath, nativePathToLspUri, normalizeNativeFilePath } from './uri-mapping'
+import { createNativeHostAdapter } from './native-language-server-adapter'
+import type {
+  LanguageServerHostAdapter,
+  LanguageServerProcessHandle
+} from './language-server-host-adapter'
 import { lspLanguageForFile } from './clangd-session-language-id'
 import type { ClangdSession, ClangdSessionOptions } from './clangd-session-types'
 export type { ClangdSession, ClangdSessionOptions } from './clangd-session-types'
@@ -68,13 +69,14 @@ function sleep(ms: number): Promise<void> {
 export async function openClangdSession(options: ClangdSessionOptions): Promise<ClangdSession> {
   const log = (line: string): void => options.onLog?.(line)
   const progress = createClangdProgressTracker()
+  // Host adapter: defaults to native (S1 callers); WSL binds UNC<->guest mappers + wsl.exe spawn.
+  const adapter: LanguageServerHostAdapter = options.adapter ?? createNativeHostAdapter()
 
   let client: LspJsonRpcClient | null = null
   let stopping = false
   let died: Error | null = null
   let serverVersion: string | null = null
-  // The server's semantic-token legend, captured at initialize (spike findings §1:
-  // clangd returns its OWN names, not LSP standard — decode is BY NAME).
+  // Server semantic-token legend, captured at initialize (decoded BY NAME — spike §1).
   let semanticLegend: SemanticTokenLegend | null = null
 
   const documents = new Map<string, OpenDocument>()
@@ -89,8 +91,13 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
     options.onExit?.(died)
   }
 
-  const processHandle: NativeLanguageServerProcess = openNativeLanguageServerProcess(
-    { program: options.program, args: options.args, cwd: options.rootPath },
+  const processHandle: LanguageServerProcessHandle = adapter.openProcess(
+    {
+      program: options.program,
+      args: options.args,
+      cwd: options.cwd ?? options.rootPath,
+      env: options.env
+    },
     {
       onStdoutChunk: (chunk) => client?.feed(chunk),
       onStderrLine: (line) => log(`[clangd] ${line}`),
@@ -128,7 +135,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: publishDiagnostics params are the wire-deserialized LSP payload; `uri`/`version` are read through optional chaining and typeof-checked before use.
       const p = params as { uri?: string; version?: number | null } | null
       if (p?.uri && typeof p.version === 'number') {
-        const doc = documents.get(lspUriToNativePath(p.uri))
+        const doc = documents.get(adapter.lspUriToPath(p.uri))
         if (doc) {
           doc.version = Math.max(doc.version, p.version)
         }
@@ -149,7 +156,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
   async function handshake(): Promise<void> {
     const result = (await client!.request(
       'initialize',
-      buildClangdInitializeParams(options.rootPath, process.pid),
+      buildClangdInitializeParams(options.rootPath, process.pid, adapter.pathToLspUri),
       { timeoutMs: INITIALIZE_TIMEOUT_MS }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the initialize result is the wire-deserialized LSP InitializeResult; `positionEncoding` is verified against utf-16 (throws otherwise), `referencesProvider`/`declarationProvider`/`semanticTokensProvider.legend` are read through typeof/optional-chaining guards before use, and `serverInfo.version` is read through optional chaining.
     )) as {
@@ -186,7 +193,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
   }
 
   function documentFor(filePath: string): OpenDocument {
-    const key = normalizeNativeFilePath(filePath)
+    const key = adapter.normalizeKey(filePath)
     const doc = documents.get(key)
     if (!doc) {
       throw new ClangdDocumentNotOpenError(key)
@@ -218,11 +225,11 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
       return died
     },
     hasDocument(filePath: string): boolean {
-      return documents.has(normalizeNativeFilePath(filePath))
+      return documents.has(adapter.normalizeKey(filePath))
     },
     didOpen(filePath: string, text: string): void {
-      const key = normalizeNativeFilePath(filePath)
-      const uri = nativePathToLspUri(key)
+      const key = adapter.normalizeKey(filePath)
+      const uri = adapter.pathToLspUri(key)
       documents.set(key, { uri, version: 1 })
       client?.notify('textDocument/didOpen', {
         textDocument: { uri, languageId: lspLanguageForFile(key), version: 1, text }
@@ -251,7 +258,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
       return doc.version
     },
     didClose(filePath: string): void {
-      const key = normalizeNativeFilePath(filePath)
+      const key = adapter.normalizeKey(filePath)
       const doc = documentFor(filePath)
       documents.delete(key)
       client?.notify('textDocument/didClose', { textDocument: { uri: doc.uri } })
@@ -264,7 +271,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
         'textDocument/definition',
         positionParams(filePath, position)
       )
-      return mapClangdDefinitionResult(result, lspUriToNativePath)
+      return mapClangdDefinitionResult(result, adapter.lspUriToPath)
     },
     async references(
       filePath: string,
@@ -277,7 +284,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
         context: { includeDeclaration: true }
       }
       const result = await client!.request('textDocument/references', params)
-      return mapClangdLocationResult(result, lspUriToNativePath)
+      return mapClangdLocationResult(result, adapter.lspUriToPath)
     },
     async declaration(
       filePath: string,
@@ -287,7 +294,7 @@ export async function openClangdSession(options: ClangdSessionOptions): Promise<
         'textDocument/declaration',
         positionParams(filePath, position)
       )
-      return mapClangdLocationResult(result, lspUriToNativePath)
+      return mapClangdLocationResult(result, adapter.lspUriToPath)
     },
     async hover(
       filePath: string,

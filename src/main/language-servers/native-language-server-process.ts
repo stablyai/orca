@@ -9,6 +9,8 @@ export type NativeLanguageServerLaunch = {
   program: string
   args: readonly string[]
   cwd: string
+  /** Host env override; native omits (inherits process.env), WSL sets WSL_UTF8. */
+  env?: NodeJS.ProcessEnv
 }
 
 export type NativeLanguageServerProcessHandlers = {
@@ -66,6 +68,7 @@ export function openNativeLanguageServerProcess(
     program: launch.program,
     args: launch.args,
     cwd: launch.cwd,
+    env: launch.env,
     stdio: ['pipe', 'pipe', 'pipe']
   })
 

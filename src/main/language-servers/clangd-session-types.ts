@@ -1,6 +1,7 @@
 // Pure type declarations for the clangd session, split out so the session
 // module stays under its line budget (mirrors language-server-host-types.ts).
 import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { LanguageServerHostAdapter } from './language-server-host-adapter'
 import type {
   LanguageServerDefinitionLocation,
   LanguageServerDocumentChange,
@@ -12,8 +13,14 @@ import type {
 export type ClangdSessionOptions = {
   program: string
   args: readonly string[]
-  /** Worktree root in native path form; session cwd + rootUri. */
+  /** Worktree root in Orca file-identity form; session rootUri + routing key. */
   rootPath: string
+  /** Process cwd; native = rootPath, WSL = the wsl.exe interop spawn dir. */
+  cwd?: string
+  /** Process env override; WSL sets WSL_UTF8, native omits (inherits process.env). */
+  env?: NodeJS.ProcessEnv
+  /** Host adapter: path mappers + process opener (defaults to native). */
+  adapter?: LanguageServerHostAdapter
   /** `$/progress` projection for the status line; null clears it. */
   onStatus?: (text: string | null) => void
   onLog?: (line: string) => void

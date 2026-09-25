@@ -5,6 +5,7 @@ import type { CompileDbStrategy, CompileDbStrategyFactory } from './language-ser
 import {
   createLanguageServerHost,
   LANGUAGE_SERVER_IDLE_TIMEOUT_MS,
+  type ClangdVersionGate,
   type LanguageServerHost
 } from './language-server-host'
 import type { LanguageServerDocumentChange } from '../../shared/language-server-navigation-types'
@@ -49,6 +50,11 @@ function noopDbStrategyFactory(): CompileDbStrategyFactory {
     }) as unknown as CompileDbStrategy
 }
 
+/** An always-ok version gate so lifecycle tests skip the real clangd probe. */
+function okVersionGate(): ClangdVersionGate {
+  return async () => ({ kind: 'ok', major: 18, message: null })
+}
+
 function hostFrom(stub: SessionStub): LanguageServerHost {
   return createLanguageServerHost(
     {},
@@ -56,7 +62,7 @@ function hostFrom(stub: SessionStub): LanguageServerHost {
       stub.startCalls.push({ program: options.program, rootPath: options.rootPath })
       return stub.session
     }) as unknown as typeof openClangdSession,
-    null,
+    okVersionGate(),
     noopDbStrategyFactory()
   )
 }
@@ -161,7 +167,7 @@ describe('createLanguageServerHost', () => {
         statusEmitter.emit = options.onStatus ?? null
         return stub.session
       }) as unknown as typeof openClangdSession,
-      null,
+      okVersionGate(),
       noopDbStrategyFactory()
     )
     await host.openDocument({ worktreeRoot: 'D:\\p', filePath: 'D:\\p\\a.cpp', text: 'x' })
@@ -189,7 +195,7 @@ describe('createLanguageServerHost', () => {
       (async () => {
         throw new Error('clangd not found')
       }) as unknown as typeof openClangdSession,
-      null,
+      okVersionGate(),
       noopDbStrategyFactory()
     )
     const result = await host.openDocument({
@@ -305,7 +311,7 @@ describe('createLanguageServerHost — LRU cap (spec D6)', () => {
         stub.startCalls.push({ program: options.program, rootPath: options.rootPath })
         return stub.session
       }) as unknown as typeof openClangdSession,
-      null,
+      okVersionGate(),
       noopDbStrategyFactory()
     )
 
@@ -338,7 +344,7 @@ describe('createLanguageServerHost — LRU cap (spec D6)', () => {
         stub.startCalls.push({ program: options.program, rootPath: options.rootPath })
         return stub.session
       }) as unknown as typeof openClangdSession,
-      null,
+      okVersionGate(),
       noopDbStrategyFactory()
     )
 
@@ -446,7 +452,7 @@ describe('createLanguageServerHost — compile-db degraded state (spec §6, S3)'
         stub.startCalls.push({ program: options.program, rootPath: options.rootPath })
         return stub.session
       }) as unknown as typeof openClangdSession,
-      null,
+      okVersionGate(),
       failingDbFactory
     )
     const result = await host.openDocument({
@@ -478,7 +484,7 @@ describe('createLanguageServerHost — compile-db degraded state (spec §6, S3)'
         expect(options.args).toContain('--compile-commands-dir=D:\\p\\build')
         return stub.session
       }) as unknown as typeof openClangdSession,
-      null,
+      okVersionGate(),
       dirDbFactory
     )
     await host.openDocument({ worktreeRoot: 'D:/p', filePath: 'D:/p/a.cpp', text: 'x' })
@@ -500,7 +506,7 @@ describe('createLanguageServerHost — compile-db degraded state (spec §6, S3)'
         stub.startCalls.push({ program: options.program, rootPath: options.rootPath })
         return stub.session
       }) as unknown as typeof openClangdSession,
-      null,
+      okVersionGate(),
       trackingDbFactory
     )
     await host.openDocument({ worktreeRoot: 'D:/p', filePath: 'D:/p/a.cpp', text: 'x' })
