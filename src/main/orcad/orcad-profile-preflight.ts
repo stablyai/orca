@@ -4,9 +4,10 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { preflightProfileStateRuntime } from '../persistence/profile-state/profile-state-runtime-preflight'
 import {
-  ORCAD_PROFILE_PREFLIGHT_FLAG,
+  ORCAD_STARTUP_PREFLIGHT_FLAG,
   ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
   parseOrcadProfilePreflight,
+  orcadProfilePreflightResponseSchema,
   type OrcadProfilePreflightResponse
 } from '../../shared/orcad-profile-preflight'
 import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
@@ -15,6 +16,7 @@ import { ORCAD_VERSION_FILENAME, orcadBunRuntimeFilename } from '../../shared/or
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
 import { runProcess } from '../../shared/child-process/run-process'
 import { preflightOrcadBunNativeRuntime } from './orcad-bun-native-preflight'
+import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
 
 /** Check every packaged start before a profile index, data-root lock or import is touched. */
 export async function preflightBundledOrcadStartup(): Promise<void> {
@@ -22,33 +24,47 @@ export async function preflightBundledOrcadStartup(): Promise<void> {
     return
   }
   const directory = resolveOrcadInstallRoot()
-  const identity = await readOrcadArtifactIdentity(directory)
-  if ((await readFile(join(directory, ORCAD_VERSION_FILENAME), 'utf8')).trim() !== identity) {
-    throw new Error('The installed Orca runtime does not match its artifact version')
-  }
+  const identity = await readInstalledVersion(directory)
   const nonce = randomUUID()
-  // A Windows PTY probe assigns its process to a job inherited by future children.
+  // Keep disposable SQLite ownership and native state out of the serving process.
   const result = await runProcess({
     program: join(directory, orcadBunRuntimeFilename(process.platform)),
-    args: [join(directory, 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, nonce],
+    args: [join(directory, 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, nonce],
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
     timeoutMs: ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS,
     maxOutputBytes: 64 * 1024,
     terminationBarrier: true
   })
   if (result.code !== 0 || result.timedOut || result.outputTruncated) {
-    throw new Error(`The bundled Orca runtime failed readiness: ${result.stderr}`)
+    const Failure = result.code === 78 ? OrcadBundledRuntimeError : Error
+    throw new Failure(`The bundled Orca runtime failed readiness: ${result.stderr}`)
   }
-  parseOrcadProfilePreflight(result.stdout, nonce, ORCAD_BUN_VERSION, identity)
+  try {
+    parseOrcadProfilePreflight(result.stdout, nonce, ORCAD_BUN_VERSION, identity)
+  } catch (cause) {
+    throw new OrcadBundledRuntimeError('The bundled runtime returned invalid readiness identity', {
+      cause
+    })
+  }
 }
 
 /** Only disposable state is opened; no server, profile index or host adapters are installed. */
-export async function runOrcadProfilePreflight(nonce: string | undefined): Promise<void> {
+export async function runOrcadProfilePreflight(
+  nonce: string | undefined,
+  options: { nativeFeatures?: boolean } = {}
+): Promise<void> {
   const checkedNonce = z.string().uuid().parse(nonce)
-  const artifactVersion = await readOrcadArtifactIdentity(resolveOrcadInstallRoot())
+  let artifactVersion: string
+  try {
+    artifactVersion = await readOrcadArtifactIdentity(resolveOrcadInstallRoot())
+  } catch (cause) {
+    throw new OrcadBundledRuntimeError('The bundled Orca artifacts are incomplete or altered', {
+      cause
+    })
+  }
   const result = await preflightProfileStateRuntime()
   if (process.versions.bun) {
-    await preflightOrcadBunNativeRuntime()
+    await preflightOrcadBunNativeRuntime(options)
   }
   const response: OrcadProfilePreflightResponse = {
     type: 'orca_profile_state_ready',
@@ -59,4 +75,19 @@ export async function runOrcadProfilePreflight(nonce: string | undefined): Promi
     ...result
   }
   console.log(JSON.stringify(response))
+}
+
+async function readInstalledVersion(directory: string): Promise<string> {
+  try {
+    return orcadProfilePreflightResponseSchema.shape.artifactVersion.parse(
+      (await readFile(join(directory, ORCAD_VERSION_FILENAME), 'utf8')).trim()
+    )
+  } catch (cause) {
+    throw new OrcadBundledRuntimeError(
+      'The installed Orca artifact version is missing or invalid',
+      {
+        cause
+      }
+    )
+  }
 }

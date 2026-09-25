@@ -2,7 +2,10 @@
 import process from 'node:process'
 import { main, resolveOrcadExitCode } from './orcad-entry'
 import { runOrcadNativePreflight } from './orcad-native-preflight'
-import { ORCAD_PROFILE_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
+import {
+  ORCAD_PROFILE_PREFLIGHT_FLAG,
+  ORCAD_STARTUP_PREFLIGHT_FLAG
+} from '../../shared/orcad-profile-preflight'
 import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
 import { handoffToBundledOrcad } from './orcad-bundled-runtime'
 
@@ -29,8 +32,14 @@ function failStartup(error: unknown): void {
 
 try {
   if (!handoffToBundledOrcad()) {
-    if (process.argv[2] === ORCAD_PROFILE_PREFLIGHT_FLAG && process.argv.length === 4) {
-      void runOrcadProfilePreflight(process.argv[3]).catch(failStartup)
+    const flag = process.argv[2]
+    if (
+      (flag === ORCAD_PROFILE_PREFLIGHT_FLAG || flag === ORCAD_STARTUP_PREFLIGHT_FLAG) &&
+      process.argv.length === 4
+    ) {
+      void runOrcadProfilePreflight(process.argv[3], {
+        nativeFeatures: flag === ORCAD_PROFILE_PREFLIGHT_FLAG
+      }).catch(failStartup)
     } else {
       void preflightBundledOrcadStartup()
         .then(() => {

@@ -29,6 +29,7 @@ it.each([false, true])(
     expect(artifacts).not.toContain(isWindows ? 'bun-runtime' : 'bun-runtime.exe')
     expect(artifacts).toContain('profile-state-writer-worker-entry.js')
     expect(artifacts).toContain('profile-state-backup-worker-entry.js')
+    expect(artifacts.includes('windows-process-tree.node')).toBe(isWindows)
   }
 )
 

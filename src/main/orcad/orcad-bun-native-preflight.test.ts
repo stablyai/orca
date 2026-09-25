@@ -61,6 +61,29 @@ afterEach(() => {
 })
 
 describe('bundled native readiness', () => {
+  it('keeps runtime startup independent of PTY or watcher probe availability', async () => {
+    fixture.pty.mockRejectedValue(new Error('PTY spawn health check timed out'))
+    fixture.subscribe.mockRejectedValue(new Error('ENOSPC: watch limit reached'))
+    await preflightOrcadBunNativeRuntime({ nativeFeatures: false })
+    expect(fixture.pty).not.toHaveBeenCalled()
+    expect(fixture.subscribe).not.toHaveBeenCalled()
+  })
+
+  it('still requires Windows ownership support on normal startup', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    fixture.startTime.mockReturnValue(false)
+    await expect(preflightOrcadBunNativeRuntime({ nativeFeatures: false })).rejects.toThrow(
+      'Windows process table'
+    )
+  })
+
+  it('does not admit a failed PTY in explicit qualification', async () => {
+    fixture.pty.mockRejectedValue(new Error('PTY spawn health check timed out'))
+    await expect(preflightOrcadBunNativeRuntime()).rejects.toThrow(
+      'PTY spawn health check timed out'
+    )
+  })
+
   it('awaits actual watcher delivery and unsubscribe before disposing temporary state', async () => {
     await preflightOrcadBunNativeRuntime()
     expect(fixture.pty).toHaveBeenCalledOnce()

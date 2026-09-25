@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const ORCAD_PROFILE_PREFLIGHT_FLAG = '--orcad-profile-state-preflight'
+export const ORCAD_STARTUP_PREFLIGHT_FLAG = '--orcad-startup-preflight'
 export const ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS = 90_000
 // Server startup follows the disposable native/SQLite probe on every bundled launch.
 export const ORCAD_STARTUP_READINESS_TIMEOUT_MS = ORCAD_PROFILE_PREFLIGHT_TIMEOUT_MS + 90_000

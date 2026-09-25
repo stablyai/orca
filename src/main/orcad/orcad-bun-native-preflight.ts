@@ -12,9 +12,15 @@ import {
 } from '../windows/windows-process-table'
 
 /** The candidate process owns disposable PTY and watcher probes before it touches user state. */
-export async function preflightOrcadBunNativeRuntime(): Promise<void> {
+export async function preflightOrcadBunNativeRuntime(
+  options: { nativeFeatures?: boolean } = {}
+): Promise<void> {
   if (process.platform === 'win32') {
     await preflightWindowsProcessIdentity()
+  }
+  // Runtime health checks can degrade independently; artifact qualification remains strict.
+  if (options.nativeFeatures === false) {
+    return
   }
   await runPtySpawnHealthProbe()
   const directory = await mkdtemp(join(tmpdir(), 'orca-native-ready-'))

@@ -2,7 +2,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
-import { ORCAD_PROFILE_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
+import { ORCAD_STARTUP_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
+import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
+import { resolveOrcadExitCode } from './orcad-exit-code'
 import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
 
 const fixture = vi.hoisted(() => ({
@@ -70,7 +72,7 @@ describe('bundled Orca startup readiness', () => {
       expect(fixture.run).toHaveBeenCalledOnce()
       expect(fixture.run).toHaveBeenCalledWith({
         program: join('/slot', platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'),
-        args: [join('/slot', 'orcad.js'), ORCAD_PROFILE_PREFLIGHT_FLAG, expect.any(String)],
+        args: [join('/slot', 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
         env: expect.objectContaining({ ORCA_BACKGROUND_LAUNCH: '1' }),
         timeoutMs: 90_000,
         maxOutputBytes: 64 * 1024,
@@ -89,11 +91,42 @@ describe('bundled Orca startup readiness', () => {
     expect(fixture.run).not.toHaveBeenCalled()
   })
 
-  it('refuses altered artifacts before launching a probe', async () => {
-    fixture.readVersion.mockResolvedValue('0.1.0+bbbbbbbbbbbb')
-    await expect(preflightBundledOrcadStartup()).rejects.toThrow('artifact version')
-    expect(fixture.run).not.toHaveBeenCalled()
+  it('hashes installed bytes only in the isolated child', async () => {
+    await preflightBundledOrcadStartup()
+    expect(fixture.identity).not.toHaveBeenCalled()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await runOrcadProfilePreflight(nonce, { nativeFeatures: false })
+    expect(fixture.identity).toHaveBeenCalledOnce()
   })
+
+  it.each(['missing artifact', 'corrupt build target'])(
+    'classifies %s as a configuration fault before testing SQLite',
+    async (message) => {
+      fixture.identity.mockRejectedValue(new Error(message))
+      const failure = await runOrcadProfilePreflight(nonce).catch((error: unknown) => error)
+      expect(failure).toBeInstanceOf(OrcadBundledRuntimeError)
+      expect(resolveOrcadExitCode(failure)).toBe(78)
+      expect(fixture.sql).not.toHaveBeenCalled()
+    }
+  )
+
+  it('classifies changed artifact bytes as configuration faults on normal startup', async () => {
+    fixture.readVersion.mockResolvedValue('0.1.0+bbbbbbbbbbbb')
+    await expect(preflightBundledOrcadStartup()).rejects.toThrow(OrcadBundledRuntimeError)
+  })
+
+  it.each([undefined, 'broken-version'])(
+    'classifies an unreadable or malformed version marker as configuration: %s',
+    async (version) => {
+      if (version === undefined) {
+        fixture.readVersion.mockRejectedValue(new Error('ENOENT'))
+      } else {
+        fixture.readVersion.mockResolvedValue(version)
+      }
+      await expect(preflightBundledOrcadStartup()).rejects.toThrow(OrcadBundledRuntimeError)
+      expect(fixture.run).not.toHaveBeenCalled()
+    }
+  )
 
   it('awaits probe termination before permitting server startup', async () => {
     const exit = Promise.withResolvers<ProcessResult>()
@@ -121,9 +154,28 @@ describe('bundled Orca startup readiness', () => {
     }
   )
 
+  it('preserves configuration exit status from the isolated child', async () => {
+    fixture.run.mockImplementation(async (spec) => ({ ...readyResult(spec.args?.[2]), code: 78 }))
+    const failure = await preflightBundledOrcadStartup().catch((error: unknown) => error)
+    expect(resolveOrcadExitCode(failure)).toBe(78)
+  })
+
+  it('keeps transient SQLite readiness failures retryable', async () => {
+    fixture.sql.mockRejectedValue(new Error('SQLITE_BUSY'))
+    const failure = await runOrcadProfilePreflight(nonce).catch((error: unknown) => error)
+    expect(resolveOrcadExitCode(failure)).toBe(1)
+  })
+
+  it('leaves optional native probes to runtime health on normal startup', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await runOrcadProfilePreflight(nonce, { nativeFeatures: false })
+    expect(fixture.sql).toHaveBeenCalledOnce()
+    expect(fixture.native).toHaveBeenCalledWith({ nativeFeatures: false })
+  })
+
   it('rejects stale output from a different challenge', async () => {
     fixture.run.mockResolvedValue(readyResult(nonce))
-    await expect(preflightBundledOrcadStartup()).rejects.toThrow('expected candidate runtime')
+    await expect(preflightBundledOrcadStartup()).rejects.toThrow('invalid readiness identity')
   })
 
   it('rechecks the child artifact identity against the verified installed version', async () => {
@@ -131,7 +183,7 @@ describe('bundled Orca startup readiness', () => {
       const result = readyResult(spec.args?.[2])
       return { ...result, stdout: result.stdout.replace(identity, '0.1.0+bbbbbbbbbbbb') }
     })
-    await expect(preflightBundledOrcadStartup()).rejects.toThrow('expected candidate runtime')
+    await expect(preflightBundledOrcadStartup()).rejects.toThrow('invalid readiness identity')
   })
 
   it('runs disposable probes directly in the command child without recursive spawning', async () => {

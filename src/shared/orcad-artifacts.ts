@@ -98,7 +98,7 @@ export function orcadArtifactFilenames(target = ''): string[] {
       ? orcadBunRuntimeFilename(target)
       : artifact.filename
   )
-  if (target.startsWith('win32-')) {
+  if (target === 'win32' || target.startsWith('win32-')) {
     filenames.push(ORCAD_WINDOWS_PROCESS_TREE_FILENAME)
   }
   return filenames
