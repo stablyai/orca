@@ -24,7 +24,7 @@ async function testConnection() {
     console.log('Kết quả status.get:', JSON.stringify(status, null, 2));
 
   } catch (err) {
-    console.error('\n❌ Kết quả kiểm tra:', err.message);
+    console.error('\n❌ Kết quả kiểm tra:', err instanceof Error ? err.message : String(err));
     console.log('\n💡 Giải thích: Nếu app Orca chưa được bật, Named Pipe chưa được tạo. Hãy chạy Start-Process "C:\\Users\\Admim\\AppData\\Local\\Programs\\orca\\Orca.exe" để mở app.');
   }
 }

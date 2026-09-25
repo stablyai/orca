@@ -8,6 +8,8 @@
     "orca-fleet": "./dist/cli.js"
   },
   "scripts": {
+    "test": "node --test \"src/**/*.test.ts\"",
+    "typecheck": "node ../node_modules/typescript/bin/tsc -p tsconfig.json",
     "test:ping": "node src/test-connection.js"
   },
   "keywords": [
@@ -19,5 +21,8 @@
     "mcp"
   ],
   "author": "hungdaimedia",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  }
 }
