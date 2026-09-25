@@ -287,12 +287,10 @@ describe('a chat that closes', () => {
       })
       .mockImplementation(closeJournal)
 
-    await expect(host.close(SESSION)).rejects.toMatchObject({
-      step: 'forget-session',
-      cause: expect.objectContaining({ message: 'journal close result lost' })
-    })
+    // The child stopped and its lease went back; only the conversation's close is left to retry.
+    await expect(host.close(SESSION)).rejects.toThrow('journal close result lost')
     expect(host.hasSession(SESSION)).toBe(true)
-    expect(host['sessions'].get(SESSION)?.hasProviderChild).toBe(false)
+    expect(host['sessions'].get(SESSION)?.child).toBeNull()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       ownerProcess: null
@@ -330,7 +328,7 @@ describe('a chat that closes', () => {
 
     await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
     // The child is proven gone, but the wind-down it owes is not done: nothing settled, no release.
-    expect(session!.hasProviderChild).toBe(false)
+    expect(session!.child).toBeNull()
     expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
 
     await expect(host.close(SESSION)).resolves.toBeUndefined()
@@ -784,7 +782,7 @@ describe('a quit over an eviction that never got its retry', () => {
     failNextDrain()
 
     await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
-    expect(host['sessions'].get(SESSION)?.hasProviderChild).toBe(false)
+    expect(host['sessions'].get(SESSION)?.child).toBeNull()
     expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
 
     await host.flushAllStreamedEvents()

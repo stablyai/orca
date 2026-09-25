@@ -145,7 +145,7 @@ export type HarnessJournal = {
   appendItem: (envelope: unknown, body: { kind: string; text: string }) => Promise<void>
 }
 
-export type HarnessSession = { journal: HarnessJournal; hasProviderChild: boolean; fence?: number }
+export type HarnessSession = { journal: HarnessJournal; child: { fence: number } | null }
 
 export function journal(
   items: AgentJournalRenderItem[],

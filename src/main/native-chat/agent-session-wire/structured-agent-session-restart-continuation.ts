@@ -44,7 +44,9 @@ export type StructuredAgentSessionContinuationOutcome = {
 
 /** The slice of the host one continuation needs. Structural so this module never imports the host. */
 export type StructuredAgentSessionContinuationHost = {
-  sessions: ReadonlyMap<string, { journal: AgentSessionJournal; fence: number }>
+  sessions: ReadonlyMap<string, { journal: AgentSessionJournal }>
+  /** The fence a conversation write carries; null when the session is not open. */
+  conversationFence: (sessionId: string) => number | null
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
@@ -72,7 +74,7 @@ export function restartContinuationDeps(
   marker: AgentSessionResumeMarker
 ): StructuredAgentSessionContinuationDeps {
   return {
-    currentFence: (sessionId) => host.sessions.get(sessionId)?.fence ?? null,
+    currentFence: host.conversationFence,
     send: (input) =>
       host.send({
         ...input,
@@ -107,17 +109,18 @@ export function noteRestartReattachFailed(
 
 /** Writes a host-authored status note into the chat. */
 function restartNoteWriter(
-  host: Pick<StructuredAgentSessionContinuationHost, 'sessions' | 'now'>
+  host: Pick<StructuredAgentSessionContinuationHost, 'sessions' | 'conversationFence' | 'now'>
 ): StructuredAgentSessionContinuationDeps['note'] {
   return async (sessionId, text, tone) => {
     const session = host.sessions.get(sessionId)
-    if (!session) {
+    const fence = host.conversationFence(sessionId)
+    if (!session || fence === null) {
       return
     }
     await session.journal.appendItem(
       { provider: 'orca', clientMessageId: `restart-continuation:${sessionId}:${host.now()}` },
       { kind: 'status', text, ...(tone ? { tone } : {}) },
-      { fence: session.fence }
+      { fence }
     )
   }
 }

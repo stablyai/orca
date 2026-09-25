@@ -87,7 +87,7 @@ describe('a session whose journal is still the pre-SQLite format', () => {
       .items.map((entry) => (entry.body.kind === 'status' ? entry.body.text : ''))
     expect(disclosed.join('')).toContain(transcript)
     // Publishing it costs no agent process; acquisition still waits for the user.
-    expect(restored!.session.hasProviderChild).toBe(false)
+    expect(restored!.session.child).toBeNull()
   })
 
   it('is published for a remnant whose log is gone', async () => {

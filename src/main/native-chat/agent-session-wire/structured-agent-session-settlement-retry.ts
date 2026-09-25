@@ -1,60 +1,43 @@
-import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import { attachJournal } from './structured-agent-session-attach'
-import type {
-  StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
-} from './structured-agent-session-host-types'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLeaseStore } from './structured-agent-session-lease-release'
 import { turnVerdictFromDeathEvidence } from './structured-agent-session-stale-turn-verdict'
 import {
   captureUnfinishedStructuredAgentSessionWork,
   settleStructuredAgentSessionDeadGeneration,
-  unfinishedStructuredAgentSessionWorkWasInterrupted
+  unfinishedStructuredAgentSessionWorkWasInterrupted,
+  type DeadGenerationJournal
 } from './structured-agent-session-dead-generation-settlement'
 
+/** Retries a durable provider-exit settlement against the conversation's own journal. The retry is
+ *  for an earlier child, so it writes at the record's fence and leaves the conversation — and any
+ *  message queued for the next child — alone. */
 export async function retryPendingStructuredAgentSessionSettlement(input: {
   deps: StructuredAgentSessionHostDeps
-  sessions: Map<string, StructuredAgentSessionHostSession>
   sessionId: string
-  params: AgentSessionAttachParams
+  /** The conversation's journal, opened through the host's one open when it is closed. */
+  openJournal: () => Promise<AgentSessionJournal | null>
   now: () => number
 }): Promise<boolean> {
   const record = input.deps.store.getRecord(input.sessionId)
   if (!record?.lease.settlementRetryRequired || !record.lease.settlementRetryId) {
     return true
   }
-  let journal = input.sessions.get(input.sessionId)?.journal
-  if (!journal) {
-    try {
-      journal = (
-        await attachJournal({
-          record,
-          params: input.params,
-          journalRoot: input.deps.journalRoot,
-          adapter: input.deps.adapter
-        })
-      ).journal
-    } catch (error) {
-      input.deps.onEventSinkError?.({ sessionId: input.sessionId, error })
-      return false
-    }
+  let journal: AgentSessionJournal | null
+  try {
+    journal = await input.openJournal()
+  } catch (error) {
+    input.deps.onEventSinkError?.({ sessionId: input.sessionId, error })
+    return false
   }
-  const current = input.sessions.get(input.sessionId)
-  const retrySession =
-    current ??
-    ({
-      journal,
-      params: input.params,
-      fence: record.lease.runtimeFence,
-      hasProviderChild: false,
-      acquisitionGeneration: null
-    } as StructuredAgentSessionHostSession)
-  return retryLoadedStructuredAgentSessionSettlement({
-    deps: input.deps,
-    sessionId: input.sessionId,
-    session: retrySession,
-    now: input.now
-  })
+  return journal
+    ? retryLoadedStructuredAgentSessionSettlement({
+        deps: input.deps,
+        sessionId: input.sessionId,
+        journal,
+        now: input.now
+      })
+    : false
 }
 
 export async function retryLoadedStructuredAgentSessionSettlement(input: {
@@ -63,23 +46,23 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
     onEventSinkError?: StructuredAgentSessionHostDeps['onEventSinkError']
   }
   sessionId: string
-  session: Pick<StructuredAgentSessionHostSession, 'journal' | 'fence' | 'acquisitionGeneration'>
+  journal: DeadGenerationJournal
   now: () => number
 }): Promise<boolean> {
   const record = input.deps.store.getRecord(input.sessionId)
   if (!record?.lease.settlementRetryRequired || !record.lease.settlementRetryId) {
     return true
   }
-  const retrySession = input.session
-  retrySession.fence = record.lease.runtimeFence
+  const { journal } = input
+  const fence = record.lease.runtimeFence
   const onError = (id: string, error: unknown): void =>
     input.deps.onEventSinkError?.({ sessionId: id, error })
   // Only an observed exit earns an end time; a probe-proven death never saw one.
   const verdict = turnVerdictFromDeathEvidence(record.lease.deathEvidence)
   const ok = await settleStructuredAgentSessionDeadGeneration({
-    journal: retrySession.journal,
+    journal,
     sessionId: input.sessionId,
-    fence: retrySession.fence,
+    fence,
     settlementId: record.lease.settlementRetryId,
     pendingSubmissionReason: 'provider_exited_before_acknowledgement',
     verdict,
@@ -90,8 +73,8 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
     showUnexpectedExitOutcome:
       verdict.state === 'interrupted' &&
       unfinishedStructuredAgentSessionWorkWasInterrupted(
-        captureUnfinishedStructuredAgentSessionWork(retrySession.journal),
-        retrySession.journal,
+        captureUnfinishedStructuredAgentSessionWork(journal),
+        journal,
         verdict.completedAt
       ),
     ...(record.lease.deathEvidence?.detail

@@ -15,6 +15,7 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionStartFailureText } from './structured-agent-session-send-preparation'
 import { settleInterruptedCompaction } from './structured-compaction-recovery'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
@@ -44,6 +45,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     adapter: deps.adapter,
     serialize: input.serialize,
     ensureProviderChild: input.ensureProviderChild,
+    conversationFence: (sessionId) =>
+      structuredAgentSessionConversationFence(deps.store, sessionId),
     startFailureText: (sessionId, cause) =>
       structuredAgentSessionStartFailureText(deps.store.getRecord(sessionId), cause),
     onError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
@@ -82,9 +85,10 @@ async function settleInterruptedCommands(
   sessionId: string,
   session: StructuredAgentSessionHostSession
 ): Promise<void> {
+  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
   try {
-    await settleInterruptedCompaction(deps.store, sessionId, session.journal, session.fence)
-    await recoverStructuredRewind(deps.store, sessionId, session.journal, session.fence)
+    await settleInterruptedCompaction(deps.store, sessionId, session.journal, fence)
+    await recoverStructuredRewind(deps.store, sessionId, session.journal, fence)
   } catch (error) {
     deps.onEventSinkError?.({ sessionId, error })
   }

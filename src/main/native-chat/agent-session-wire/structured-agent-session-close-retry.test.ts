@@ -78,10 +78,7 @@ function hostSession(journal: AgentSessionJournal): StructuredAgentSessionHostSe
   return {
     journal,
     params: {} as StructuredAgentSessionHostSession['params'],
-    fence: 1,
-    hasProviderChild: false,
-    providerChildPhase: 'ready',
-    acquisitionGeneration: null
+    child: null
   }
 }
 

@@ -1,4 +1,4 @@
-// Releasing one structured session's resources.
+// Stopping one structured session's provider child and handing its lease back.
 //
 // Teardown is a DATA list, not a method body, for the reason this file exists at all: the host
 // tracked which sessions were live in a map, and tore them down at three unrelated call sites
@@ -30,10 +30,9 @@ export type StructuredAgentSessionEvictionContext = {
   hasProviderChild?: boolean
   eventSink: DeferredStructuredAgentSessionEventSink
   adapter: StructuredAgentSessionAdapter
-  /** Closes the session's journal handle and drops the map entry. Async and
-   *  awaited: `close()` is ordered behind queued writes, and a delete that
-   *  returns while the close is still queued leaves nothing to retry. */
-  forget: () => Promise<void>
+  /** Tells the adapter the released lease is done with, so it drops this child's route and index.
+   *  The conversation stays: stopping the agent never closes its journal. */
+  acknowledgeRelease: () => Promise<void> | void
   /** Drops the cached sink so a later attach mints a fresh one. */
   discardSink: () => void
   /** Fires right before the stop, while the child's turn and background roster are still live. A
@@ -126,11 +125,11 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
     // these two; eviction has to as well.
     { name: 'discard-sink', run: (context) => context.discardSink() },
     // Why here and not last: the durable lease still names a process this host just stopped, and a
-    // record left claiming a live owner is one nothing can resume — the next surface to open the
-    // chat would find a session it may not acquire. Placed BEFORE forget so a release that cannot
-    // be written aborts while the session is still indexed, which is what makes the retry real.
+    // record left claiming a live owner is one nothing can resume — the next send would find a
+    // session it may not acquire. Placed BEFORE the acknowledgement so a release that cannot be
+    // written aborts while the adapter still routes the session, which is what makes the retry real.
     { name: 'release-lease', run: (context) => context.releaseLease() },
-    { name: 'forget-session', run: (context) => context.forget() }
+    { name: 'acknowledge-release', run: (context) => context.acknowledgeRelease() }
   ]
 
 export class StructuredAgentSessionEvictionError extends Error {

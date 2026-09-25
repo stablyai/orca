@@ -70,8 +70,14 @@ export function createStructuredAgentSessionHostRestore(
   const restorer = new StructuredAgentSessionReadableRestorer({
     openDeps: deps,
     supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
-    retrySettlement: (sessionId, params) =>
-      retryPendingStructuredAgentSessionSettlement({ deps, sessions, sessionId, params, now }),
+    // Runs once the restorer indexed the conversation, so it retries into that one handle.
+    retrySettlement: (sessionId) =>
+      retryPendingStructuredAgentSessionSettlement({
+        deps,
+        sessionId,
+        openJournal: async () => sessions.get(sessionId)?.journal ?? null,
+        now
+      }),
     ...wiring
   })
   const gate = new StructuredAgentSessionRestartRestoreGate()

@@ -96,14 +96,7 @@ export async function openStructuredAgentSessionConversationJournal(
     deps.onEventSinkError?.({ sessionId, error })
   }
   return {
-    session: {
-      journal: opened.journal,
-      params,
-      fence,
-      hasProviderChild: false,
-      providerChildPhase: 'ready',
-      acquisitionGeneration: null
-    },
+    session: { journal: opened.journal, params, child: null },
     reset: opened.recovery?.reset ?? null
   }
 }

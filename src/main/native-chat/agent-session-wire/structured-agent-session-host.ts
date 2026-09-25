@@ -20,6 +20,7 @@ import { attachStructuredAgentSession } from './structured-agent-session-attach-
 import {
   createStructuredAgentSessionHolds,
   evictHeldStructuredAgentSession,
+  stopStructuredAgentSessionAgentUnderSerialize,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
 import type {
@@ -173,7 +174,14 @@ export class StructuredAgentSessionHost {
       runtimeState: this.runtimeState,
       sessions: this.sessions,
       now: () => this.now(),
-      forgetStatus: this.clientDelivery.forgetStatus
+      forgetStatus: this.clientDelivery.forgetStatus,
+      publishStatus: this.clientDelivery.publishStatus,
+      publishFence: (sessionId) => {
+        const journal = this.sessions.get(sessionId)?.journal
+        if (journal) {
+          this.subscribers.snapshot(sessionId, journal)
+        }
+      }
     }
   }
 
@@ -261,7 +269,8 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       openConversation: this.conversationDelivery.open,
       wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
-      stopStartingChild: (sessionId) => this.closeUnderSerialize(sessionId),
+      stopAgent: (sessionId) =>
+        stopStructuredAgentSessionAgentUnderSerialize(this.lifetimeContext(), sessionId),
       now: () => this.now()
     }
   }

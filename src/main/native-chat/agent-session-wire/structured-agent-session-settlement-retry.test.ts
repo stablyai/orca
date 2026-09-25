@@ -45,7 +45,7 @@ function retry(settlementId: string, deathEvidence: AgentSessionDeathEvidence) {
   return retryLoadedStructuredAgentSessionSettlement({
     deps: { store: store() },
     sessionId: SESSION,
-    session: { journal, fence: FENCE, acquisitionGeneration: null },
+    journal,
     now: () => 2_000
   })
 }

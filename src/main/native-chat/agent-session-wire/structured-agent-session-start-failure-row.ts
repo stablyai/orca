@@ -9,7 +9,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
  * is still queued: a start whose messages Stop withdrew did not fail anyone.
  */
 export async function recordStructuredAgentSessionStartFailure(
-  session: Pick<StructuredAgentSessionHostSession, 'journal' | 'fence'>,
+  session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
   text: string
 ): Promise<void> {
   const oldest = oldestQueuedSubmission(session)

@@ -135,10 +135,7 @@ async function workingSession(): Promise<{
           accountHome: ownerRecord().accountHome,
           runtimeKind: 'native'
         },
-        fence: 1,
-        hasProviderChild: true,
-        providerChildPhase: 'ready',
-        acquisitionGeneration: null
+        child: { generation: null, fence: 1, phase: 'ready' }
       }
     ]
   ])

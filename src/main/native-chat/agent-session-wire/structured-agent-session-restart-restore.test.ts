@@ -37,8 +37,7 @@ describe('restart journal restoration', () => {
         session: {
           journal: {},
           params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
-          fence: 1,
-          hasProviderChild: false,
+          child: null,
           sessionId
         },
         reset: null
@@ -94,7 +93,7 @@ describe('restart journal restoration', () => {
         journal: {},
         params,
         fence: 4,
-        hasProviderChild: false,
+        child: null,
         acquisitionGeneration: null
       },
       reset: null
@@ -132,7 +131,7 @@ describe('restart journal restoration', () => {
         journal: {},
         params: {},
         fence: 4,
-        hasProviderChild: false,
+        child: null,
         acquisitionGeneration: null
       },
       reset: null

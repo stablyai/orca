@@ -392,6 +392,15 @@ describe('a start the chat needed and did not get', () => {
 describe('an attach that fails after indexing its child', () => {
   it('leaves no child behind, so the next send starts one and is delivered', async () => {
     await host.close(SESSION)
+    const owned: boolean[] = []
+    host.subscribeStatus({
+      id: 'list-1',
+      emit: (event) => {
+        if (event.type === 'status') {
+          owned.push(event.session.hostExecutionOwned === true)
+        }
+      }
+    })
     const first = await accept('hello')
     // The attach's own success record is the step after `onAttached` indexed the child.
     const record = vi.spyOn(store, 'recordOperationOutcome')
@@ -403,6 +412,9 @@ describe('an attach that fails after indexing its child', () => {
       return AgentSessionRecordStore.prototype.recordOperationOutcome.call(store, input)
     })
     await eventually(() => expect(submission(first)?.dispatchState).toBe('rejected'))
+    // Nothing was indexed, so nothing had to be taken back: no list ever showed a child.
+    expect(host['sessions'].get(SESSION)?.child).toBeNull()
+    expect(owned).not.toContain(true)
     const acquiresBefore = acquire.mock.calls.length
 
     const next = await accept('after the failure')

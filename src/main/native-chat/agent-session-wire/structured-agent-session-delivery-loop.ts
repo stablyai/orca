@@ -24,6 +24,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   /** Gives the session a provider child if it has none; for a caller inside `serialize`. */
   ensureProviderChild: (sessionId: string) => Promise<StructuredAgentSessionResumeOutcome>
+  /** The fence the conversation's own writes carry; see `structuredAgentSessionConversationFence`. */
+  conversationFence: (sessionId: string) => number
   /** What the chat says when the session could not be made ready. */
   startFailureText: (sessionId: string, cause: AgentSessionWireRefusal) => string
   onError: (sessionId: string, error: unknown) => void
@@ -99,7 +101,7 @@ export class StructuredAgentSessionDeliveryLoop {
       return this.stop(sessionId)
     }
     await session.journal.rejectQueuedSubmissions(
-      session.fence,
+      this.deps.conversationFence(sessionId),
       DISPATCH_REJECTED_HOST_RESTARTED,
       // A handle closes only with nothing queued, so one an earlier handle wrote is a leftover.
       (submission) => session.journal.wroteBeforeOpen(submission.acceptedSequence)
@@ -116,7 +118,8 @@ export class StructuredAgentSessionDeliveryLoop {
       return this.stop(sessionId)
     }
     // Re-derived here, not carried from the start: the child may have gone since.
-    if (!session.hasProviderChild) {
+    const { child } = session
+    if (!child) {
       return 'continue'
     }
     const next = oldestQueuedSubmission(session)
@@ -127,9 +130,9 @@ export class StructuredAgentSessionDeliveryLoop {
       {
         sessionId,
         journal: session.journal,
-        fence: session.fence,
+        fence: child.fence,
         adapter: this.deps.adapter,
-        providerChildPhase: () => this.deps.sessions.get(sessionId)?.providerChildPhase
+        providerChildPhase: () => this.deps.sessions.get(sessionId)?.child?.phase
       },
       next
     )
@@ -139,7 +142,10 @@ export class StructuredAgentSessionDeliveryLoop {
   private async fail(sessionId: string, text: string): Promise<Step> {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
-      await recordStructuredAgentSessionStartFailure(session, text)
+      await recordStructuredAgentSessionStartFailure(
+        { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
+        text
+      )
     }
     return this.stop(sessionId)
   }

@@ -41,9 +41,7 @@ export type StructuredAgentSessionStatusSubscriber = {
 type StatusFeedSession = {
   journal: AgentSessionJournal
   params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
-  hasProviderChild?: boolean
-  providerChildPhase?: StructuredAgentSessionProviderChildPhase
-  fence?: number
+  child?: { phase: StructuredAgentSessionProviderChildPhase } | null
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
@@ -238,7 +236,9 @@ export class StructuredAgentSessionStatusFeed {
     // An unreadable journal projects as "no turn": the chat itself shows the reset.
     const cursor = journal.cursor()
     const readOnly = journal.isReadOnly
-    const fence = session.fence
+    const record = this.deps.getRecord(sessionId)
+    // The conversation's fence, which a child's end moves: its unanswered sends stop counting.
+    const fence = record?.lease.runtimeFence
     let projection = this.journalProjections.get(journal)
     if (
       !projection ||
@@ -262,7 +262,6 @@ export class StructuredAgentSessionStatusFeed {
       }
       this.journalProjections.set(journal, projection)
     }
-    const record = this.deps.getRecord(sessionId)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     // The journal has no model: the record's acknowledged options are where a mid-session
     // switch lands, so the row follows whichever is in force.
@@ -277,13 +276,8 @@ export class StructuredAgentSessionStatusFeed {
       sessionId,
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
-      ...(session.hasProviderChild
-        ? {
-            hostExecutionOwned: true as const,
-            ...(session.providerChildPhase
-              ? { hostExecutionPhase: session.providerChildPhase }
-              : {})
-          }
+      ...(session.child
+        ? { hostExecutionOwned: true as const, hostExecutionPhase: session.child.phase }
         : {}),
       ...projection.summary,
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'

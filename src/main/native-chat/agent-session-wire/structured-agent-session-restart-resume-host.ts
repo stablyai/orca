@@ -41,8 +41,9 @@ import {
   type StructuredAgentSessionContinuationOutcome
 } from './structured-agent-session-restart-continuation'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 
-type LiveSession = { journal: AgentSessionJournal; hasProviderChild: boolean; fence: number }
+type LiveSession = { journal: AgentSessionJournal; child: { fence: number } | null }
 
 export type StructuredAgentSessionRestartResumeSurfaces = {
   revealSession: (sessionId: string) => Promise<{ readable: boolean }>
@@ -152,6 +153,10 @@ export function createStructuredAgentSessionRestartResume(
   const continuationHost: StructuredAgentSessionContinuationHost = {
     ...surfaces,
     sessions,
+    conversationFence: (sessionId) =>
+      sessions.has(sessionId)
+        ? structuredAgentSessionConversationFence(deps.store, sessionId)
+        : null,
     stillResumable: (marker, options) =>
       derive([marker], 'may-be-held', options).candidates.length === 1
   }

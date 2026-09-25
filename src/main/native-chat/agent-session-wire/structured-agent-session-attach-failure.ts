@@ -24,6 +24,7 @@ export async function settlePostAcquisitionAttachFailure(
           ? 'root-exit-observed'
           : 'exit-proven'
   }
+  input.onAcquisitionReleased?.(cause)
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,

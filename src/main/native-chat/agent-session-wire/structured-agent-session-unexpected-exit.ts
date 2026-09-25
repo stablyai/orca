@@ -1,8 +1,6 @@
-import type {
-  StructuredAgentSessionEndedEvent,
-  StructuredAgentSessionProviderChildPhase
-} from './structured-agent-session-adapter'
+import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import { endProviderChild } from './structured-agent-session-provider-child'
 import {
   releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit,
   type StructuredAgentSessionLeaseStore
@@ -30,13 +28,10 @@ export type StructuredAgentSessionRecoveryTicket = {
   stableSettlementId: string
 }
 
-export type StructuredAgentSessionUnexpectedExitSession = {
-  journal: DeadGenerationJournal
-  hasProviderChild: boolean
-  fence: number
-  acquisitionGeneration: string | null
-  providerChildPhase?: StructuredAgentSessionProviderChildPhase
-}
+export type StructuredAgentSessionUnexpectedExitSession = Pick<
+  StructuredAgentSessionHostSession,
+  'child' | 'lastEndedChild'
+> & { journal: DeadGenerationJournal }
 
 export type StructuredAgentSessionUnexpectedExitContext<
   TSession extends StructuredAgentSessionUnexpectedExitSession = StructuredAgentSessionHostSession
@@ -66,24 +61,35 @@ export async function settleUnexpectedStructuredAgentSessionExit<
   const observedAt = event.observedAt ?? context.now()
   return context.serialize(unexpectedEvent.sessionId, async () => {
     const session = context.sessions.get(unexpectedEvent.sessionId)
+    const child = session?.child
     if (
-      !session?.hasProviderChild ||
-      session.fence !== unexpectedEvent.fence ||
-      session.acquisitionGeneration !== unexpectedEvent.acquisitionGeneration
+      !session ||
+      !child ||
+      child.fence !== unexpectedEvent.fence ||
+      child.generation !== unexpectedEvent.acquisitionGeneration
     ) {
-      return null
-    }
-    const record = context.store.getRecord(unexpectedEvent.sessionId)
-    if (!record || record.lease.handoffStage !== null) {
-      // An acquisition or recovery already owns this lease's transition.
-      session.hasProviderChild = false
-      context.publishStatus?.(unexpectedEvent.sessionId)
       return null
     }
     // The host's own phase decides, so a provider that omits the flag still gets a start that
     // failed told as one: the row says so, and nothing resumes into the same failure.
     const exitedDuringStartup =
-      unexpectedEvent.startupUnproven === true || session.providerChildPhase === 'starting'
+      unexpectedEvent.startupUnproven === true || child.phase === 'starting'
+    const endChild = (): void => {
+      endProviderChild(session, {
+        generation: child.generation,
+        fence: child.fence,
+        cause: 'exit',
+        reason: unexpectedEvent.reason,
+        duringStartup: exitedDuringStartup
+      })
+      context.publishStatus?.(unexpectedEvent.sessionId)
+    }
+    const record = context.store.getRecord(unexpectedEvent.sessionId)
+    if (!record || record.lease.handoffStage !== null) {
+      // An acquisition or recovery already owns this lease's transition.
+      endChild()
+      return null
+    }
 
     let settlementFailed = false
     const stableSettlementId = providerExitSettlementId(unexpectedEvent)
@@ -103,7 +109,8 @@ export async function settleUnexpectedStructuredAgentSessionExit<
       settlementFailed = !(await retryUnexpectedExitSettlement({
         context,
         event: unexpectedEvent,
-        session,
+        journal: session.journal,
+        fence: child.fence,
         stableSettlementId,
         verdict: { state: 'interrupted', completedAt: observedAt },
         exitedDuringStartup,
@@ -125,7 +132,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
           sessionId: unexpectedEvent.sessionId,
           expectedFence: unexpectedEvent.fence,
           expectedAcquisitionGeneration: unexpectedEvent.acquisitionGeneration,
-          acquisitionGeneration: session.acquisitionGeneration,
+          acquisitionGeneration: child.generation,
           now: context.now(),
           exitObservedAt: observedAt,
           ...(settlementFailed
@@ -141,10 +148,8 @@ export async function settleUnexpectedStructuredAgentSessionExit<
       } catch (error) {
         context.onBarrierError?.(unexpectedEvent.sessionId, error)
       } finally {
-        session.hasProviderChild = false
-        context.publishStatus?.(unexpectedEvent.sessionId)
+        endChild()
         if (released) {
-          session.fence = released.lease.runtimeFence
           context.publishFence(unexpectedEvent.sessionId, session)
         }
       }
@@ -170,10 +175,7 @@ export function isStructuredAgentSessionRecoveryTicketCurrent(
     store: Pick<StructuredAgentSessionLeaseStore, 'getRecord'>
     sessions: Map<
       string,
-      Pick<
-        StructuredAgentSessionUnexpectedExitSession,
-        'hasProviderChild' | 'fence' | 'acquisitionGeneration'
-      >
+      Pick<StructuredAgentSessionUnexpectedExitSession, 'child' | 'lastEndedChild'>
     >
     hasResumeCapableHolder: (sessionId: string) => boolean
   },
@@ -182,9 +184,9 @@ export function isStructuredAgentSessionRecoveryTicketCurrent(
   const session = context.sessions.get(ticket.sessionId)
   const record = context.store.getRecord(ticket.sessionId)
   return (
-    session?.hasProviderChild === false &&
-    session.fence === ticket.releasedFence &&
-    session.acquisitionGeneration === ticket.deadAcquisitionGeneration &&
+    session !== undefined &&
+    session.child === null &&
+    session.lastEndedChild?.generation === ticket.deadAcquisitionGeneration &&
     record?.lease.runtimeFence === ticket.releasedFence &&
     record.lease.claimStatus === 'released' &&
     record.lease.handoffStage === null &&
@@ -195,16 +197,17 @@ export function isStructuredAgentSessionRecoveryTicketCurrent(
 async function retryUnexpectedExitSettlement(input: {
   context: Pick<StructuredAgentSessionUnexpectedExitContext, 'onBarrierError'>
   event: UnexpectedExitLifecycleEvent
-  session: Pick<StructuredAgentSessionUnexpectedExitSession, 'journal' | 'fence'>
+  journal: DeadGenerationJournal
+  fence: number
   stableSettlementId: string
   verdict: StructuredAgentSessionTurnVerdict
   exitedDuringStartup: boolean
   showUnexpectedExitOutcome?: boolean
 }): Promise<boolean> {
   return settleStructuredAgentSessionDeadGeneration({
-    journal: input.session.journal,
+    journal: input.journal,
     sessionId: input.event.sessionId,
-    fence: input.session.fence,
+    fence: input.fence,
     settlementId: input.stableSettlementId,
     verdict: input.verdict,
     pendingSubmissionReason: 'provider_exited_before_acknowledgement',

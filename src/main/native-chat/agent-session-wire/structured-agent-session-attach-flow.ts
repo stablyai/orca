@@ -69,6 +69,8 @@ export type AttachFlowInput = {
   beforeJournalOpen?: () => Promise<void> | void
   /** The host's open conversation, which the attach adopts rather than opening a second one. */
   openConversation?: (sessionId: string) => Promise<AgentSessionJournal>
+  /** A failure after acquisition released the session's acquisition; `cause` is that failure. */
+  onAcquisitionReleased?: (cause: unknown) => void
 }
 
 export async function performAttach(

@@ -37,10 +37,7 @@ function session(journal: AgentSessionJournal) {
   return {
     journal,
     params: hostTestAttachParams(null),
-    fence: 0,
-    hasProviderChild: false,
-    providerChildPhase: 'ready' as const,
-    acquisitionGeneration: null
+    child: null
   }
 }
 

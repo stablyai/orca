@@ -23,6 +23,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import {
   admitAndRunAgentSessionMutation,
   type AgentSessionMutationRequest
@@ -55,8 +56,8 @@ export type StructuredAgentSessionMutationContext = {
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
   /** A message was accepted: the session's delivery loop hands it over. */
   wakeDelivery: (sessionId: string) => void
-  /** Stops a provider child that has not proven its start; inside the caller's serialize. */
-  stopStartingChild: (sessionId: string) => Promise<void>
+  /** Stops the session's provider child, keeping its conversation; inside the caller's serialize. */
+  stopAgent: (sessionId: string) => Promise<void>
   now: () => number
 }
 
@@ -78,7 +79,7 @@ function mutate<TValue>(
       prepareSession,
       publish: (journal) => context.publish(envelope.sessionId, journal),
       flushStreamedEvents: context.flushStreamedEvents,
-      providerChildPhase: () => context.sessions.get(envelope.sessionId)?.providerChildPhase,
+      providerChildPhase: () => context.sessions.get(envelope.sessionId)?.child?.phase,
       now: () => context.now()
     })
   )
@@ -154,13 +155,13 @@ export function cancelStructuredAgentSessionTurn(
           ctx.fence,
           DISPATCH_REJECTED_CANCELLED
         )
-        const session = context.sessions.get(ctx.sessionId)
-        if (session?.hasProviderChild && session.providerChildPhase === 'starting') {
-          // A start that may never land is the one thing here Stop has to end.
-          await context.stopStartingChild(ctx.sessionId)
+        const child = context.sessions.get(ctx.sessionId)?.child
+        if (child?.phase === 'starting') {
+          // A start that may never land is the one thing here Stop has to end; the chat stays.
+          await context.stopAgent(ctx.sessionId)
           return { ok: true, value: { turnId: params.turnId, cancelled: true } }
         }
-        return session?.hasProviderChild
+        return child
           ? plan.run(ctx)
           : { ok: true, value: { turnId: params.turnId, cancelled: withdrawn.length > 0 } }
       }
@@ -210,7 +211,12 @@ export function readStructuredAgentSessionOptions(
     if (!context.deps.adapter.readOptions) {
       throw new Error('structured_agent_session_options_unsupported')
     }
-    const options = await context.deps.adapter.readOptions({ sessionId, fence: session.fence })
+    const options = await context.deps.adapter.readOptions({
+      sessionId,
+      fence:
+        session.child?.fence ??
+        structuredAgentSessionConversationFence(context.deps.store, sessionId)
+    })
     return {
       ...options,
       rewind:
@@ -244,6 +250,7 @@ export async function settleStructuredAgentSessionLateDispatch(
   if (!session) {
     return
   }
+  const fence = structuredAgentSessionConversationFence(context.deps.store, input.sessionId)
   // The journal queue drains before close; the host queue would defer this past teardown.
   await session.journal.resolveDispatch(
     'providerIdentity' in input
@@ -251,13 +258,13 @@ export async function settleStructuredAgentSessionLateDispatch(
           clientMessageId: input.clientMessageId,
           state: 'accepted',
           providerIdentity: input.providerIdentity,
-          fence: session.fence
+          fence
         }
       : {
           clientMessageId: input.clientMessageId,
           state: 'rejected',
           reason: input.reason,
-          fence: session.fence
+          fence
         }
   )
 }
@@ -275,7 +282,9 @@ export async function settleStructuredAgentSessionLateDispatch(
  * it never makes a send re-deliverable, because the provider may well have run it.
  */
 export async function releaseStructuredAgentSessionUnansweredDispatches(
-  context: Pick<StructuredAgentSessionMutationContext, 'sessions'>,
+  context: Pick<StructuredAgentSessionMutationContext, 'sessions'> & {
+    deps: { store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'> }
+  },
   input: { sessionId: string; reason: string }
 ): Promise<void> {
   const session = context.sessions.get(input.sessionId)
@@ -294,7 +303,7 @@ export async function releaseStructuredAgentSessionUnansweredDispatches(
       state: 'unknown',
       // The earlier reason names a sharper fact than this one does.
       reason: entry.reason ?? input.reason,
-      fence: session.fence,
+      fence: structuredAgentSessionConversationFence(context.deps.store, input.sessionId),
       recovered: true
     })
   }

@@ -33,9 +33,14 @@ function recoveryContext(input: {
   resumeCapable?: boolean
 }) {
   const session = {
-    hasProviderChild: false,
-    fence: 8,
-    acquisitionGeneration: input.generation ?? GENERATION
+    child: null,
+    lastEndedChild: {
+      generation: input.generation ?? GENERATION,
+      fence: 7,
+      cause: 'exit',
+      reason: null,
+      duringStartup: false
+    }
   } as StructuredAgentSessionHostSession
   const record = {
     lease: {
@@ -128,9 +133,7 @@ describe('provider-exit recovery tickets', () => {
       .mockRejectedValueOnce(new Error('journal unavailable'))
       .mockResolvedValue({ epoch: 'epoch-1', sequence: 2 })
     const session = {
-      hasProviderChild: true,
-      fence: 7,
-      acquisitionGeneration: GENERATION,
+      child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
@@ -174,7 +177,7 @@ describe('provider-exit recovery tickets', () => {
       retryLoadedStructuredAgentSessionSettlement({
         deps: { store } as never,
         sessionId: SESSION,
-        session: { journal: session.journal, fence: 8, acquisitionGeneration: null },
+        journal: session.journal,
         now: () => now
       })
     ).resolves.toBe(true)
@@ -199,9 +202,7 @@ describe('provider-exit recovery tickets', () => {
       lifecycleItem('turn-2', 2, { state: 'running', startedAt: 30 })
     ]
     const session = {
-      hasProviderChild: true,
-      fence: 7,
-      acquisitionGeneration: GENERATION,
+      child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         snapshot: () => ({ items }),
         appendLifecycleBatch,
@@ -250,7 +251,7 @@ describe('provider-exit recovery tickets', () => {
       7,
       'provider_exited_before_acknowledgement'
     )
-    expect(session.hasProviderChild).toBe(false)
+    expect(session.child).toBeNull()
     // The running row is revised to interrupted at exit receipt, never tombstoned.
     expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
       settlementId: `dead-generation:provider-exit:${SESSION}:7:${GENERATION}`,
@@ -307,9 +308,7 @@ describe('provider-exit recovery tickets', () => {
         sequence: 3
       }))
       const session: StructuredAgentSessionUnexpectedExitSession = {
-        hasProviderChild: true,
-        fence: 7,
-        acquisitionGeneration: GENERATION,
+        child: { generation: GENERATION, fence: 7, phase: 'ready' },
         journal: {
           snapshot: () => ({ items }),
           appendLifecycleBatch,
@@ -365,9 +364,7 @@ describe('provider-exit recovery tickets', () => {
   it('settles a submission the dead child never acknowledged', async () => {
     const markPendingSubmissionsUnknown = vi.fn(async () => ['client-1'])
     const session: StructuredAgentSessionUnexpectedExitSession = {
-      hasProviderChild: true,
-      fence: 7,
-      acquisitionGeneration: GENERATION,
+      child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
@@ -414,9 +411,7 @@ describe('provider-exit recovery tickets', () => {
 
   it('does not release or reacquire while terminal settlement retry is still failing', async () => {
     const session: StructuredAgentSessionUnexpectedExitSession = {
-      hasProviderChild: true,
-      fence: 7,
-      acquisitionGeneration: GENERATION,
+      child: { generation: GENERATION, fence: 7, phase: 'ready' },
       journal: {
         markPendingSubmissionsUnknown: vi.fn(async () => []),
         rejectPendingSubmissions: vi.fn(async () => []),
@@ -453,8 +448,7 @@ describe('provider-exit recovery tickets', () => {
     const result = await settleUnexpectedStructuredAgentSessionExit(context, event)
 
     expect(result).toBeNull()
-    expect(session.hasProviderChild).toBe(false)
-    expect(session.fence).toBe(8)
+    expect(session.child).toBeNull()
     expect(publishFence).toHaveBeenCalledTimes(1)
     expect(release).toHaveBeenCalledTimes(2)
   })

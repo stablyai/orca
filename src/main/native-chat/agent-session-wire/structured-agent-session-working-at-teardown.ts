@@ -138,8 +138,7 @@ function liveTasks(
 type WorkingCandidateSession = {
   journal: AgentSessionJournal
   /** Only this host generation's own child counts. A restored-for-reading journal has none. */
-  hasProviderChild: boolean
-  fence?: number
+  child: { fence: number } | null
 }
 
 /** The offer one session is owed, taken right before teardown stops its provider child; null when
@@ -157,12 +156,12 @@ export function structuredAgentSessionWorkingAtStop(input: {
 }): AgentSessionResumeMarker | null {
   const { sessionId, session } = input
   // A journal this host cannot read tells us nothing about what the turn was doing.
-  if (!session?.hasProviderChild || session.journal.isReadOnly) {
+  if (!session?.child || session.journal.isReadOnly) {
     return null
   }
   const snapshot = session.journal.snapshot()
   const roster = input.backgroundTasks(sessionId)
-  const status = structuredAgentSessionShownStatus(snapshot, roster, session.fence)
+  const status = structuredAgentSessionShownStatus(snapshot, roster, session.child.fence)
   if (status.state === 'done') {
     return null
   }
