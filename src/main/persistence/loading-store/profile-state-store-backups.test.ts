@@ -136,15 +136,17 @@ describe('Store automatic SQLite recovery snapshots', () => {
 
   it('acknowledges a routine flush while the previous recovery backup is still running', async () => {
     const state = await fixture()
-    const realSnapshot = backupExecution.runProfileStateBackup
+    const realSnapshot = snapshots.writeProfileStateDatabaseSnapshotAsync
     const started = Promise.withResolvers<void>()
     const gate = Promise.withResolvers<void>()
     releases.push(gate.resolve)
-    vi.spyOn(backupExecution, 'runProfileStateBackup').mockImplementationOnce(async (job) => {
-      started.resolve()
-      await gate.promise
-      await realSnapshot(job)
-    })
+    vi.spyOn(snapshots, 'writeProfileStateDatabaseSnapshotAsync').mockImplementationOnce(
+      async (db, target) => {
+        started.resolve()
+        await gate.promise
+        await realSnapshot(db, target)
+      }
+    )
     state.store.updateSettings({ theme: 'dark' })
     state.store.flushOrThrow()
     await started.promise

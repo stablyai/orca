@@ -3,10 +3,9 @@ import { fixture } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { commitPtyIpcSpawn } from '../../ipc/pty/ipc/spawn-commit'
 import { createPtyIpcSpawnState } from '../../ipc/pty/ipc/spawn-state'
-import type { PtySpawnIpcDeps } from '../../ipc/pty/ipc/spawn-types'
 import { commitRuntimePtySpawn } from '../../ipc/pty/runtime/spawn-commit'
 import { createRuntimePtySpawnState } from '../../ipc/pty/runtime/spawn-state'
-import type { PtyRuntimeControllerDeps } from '../../ipc/pty/runtime/controller-deps'
+import { createPtySpawnCommitDependencies } from './pty-spawn-commit-dependencies-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -45,10 +44,9 @@ it.each(['ipc', 'runtime'])(
     const preAllocatedHandle = runtime.createPreAllocatedTerminalHandle()
     const surface = runtime.waitForCreatedSurface()
     runtime.onPtySpawned(binding.ptyId, binding.incarnationId)
+    const deps = createPtySpawnCommitDependencies(runtime, store)
     let commit: () => Promise<unknown>
     if (controller === 'ipc') {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; its real runtime/store and publication callback are provided.
-      const deps = { runtime, store, sendPtySpawnedToRenderer: vi.fn() } as PtySpawnIpcDeps
       const ctx = createPtyIpcSpawnState(deps, { ...binding, cols: 80, rows: 24 })
       ctx.result = { id: binding.ptyId, incarnationId: binding.incarnationId }
       ctx.metadataLeafId = binding.leafId
@@ -56,8 +54,6 @@ it.each(['ipc', 'runtime'])(
       ctx.preAllocatedHandle = preAllocatedHandle
       commit = () => commitPtyIpcSpawn(ctx)
     } else {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only commit runs; its real runtime/store and publication callback are provided.
-      const deps = { runtime, store, sendPtySpawnedToRenderer: vi.fn() } as PtyRuntimeControllerDeps
       const ctx = createRuntimePtySpawnState(deps, {
         ...binding,
         cols: 80,
