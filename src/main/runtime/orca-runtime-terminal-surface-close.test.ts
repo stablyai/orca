@@ -191,6 +191,29 @@ describe('CLI close of one pane in a split tab', () => {
     expect(harness.closeTerminalTab).not.toHaveBeenCalled()
   })
 
+  it('commits the pane removal when the handle names a live PTY', async () => {
+    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+    harness.syncSplitFixtureGraph()
+    // Graph without the leaf: the handle resolves through the PTY, as for a runtime-owned pane.
+    harness.syncFixtureTabWithoutLeaf()
+    harness.setVerifiedStopResult(true)
+    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (candidate) => candidate.ptyId === PTY_ID
+    )!
+
+    await expect(harness.runtime.closeTerminal(terminal.handle)).resolves.toMatchObject({
+      tabId: TAB_ID,
+      ptyKilled: true
+    })
+
+    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
+      type: 'leaf',
+      leafId: SIBLING_LEAF_ID
+    })
+    expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+  })
+
   it('keeps the sibling when the stop delivers the exit before the pane commit', async () => {
     const harness = createHarness()
     harness.syncSplitFixtureGraph()
