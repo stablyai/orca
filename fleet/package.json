@@ -1,0 +1,23 @@
+{
+  "name": "@hungdai/orca-fleet",
+  "version": "0.1.0",
+  "description": "Multi-agent orchestration sidecar and MCP bridge for Orca ADE",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "orca-fleet": "./dist/cli.js"
+  },
+  "scripts": {
+    "test:ping": "node src/test-connection.js"
+  },
+  "keywords": [
+    "orca",
+    "agent",
+    "orchestrator",
+    "fleet",
+    "antigravity",
+    "mcp"
+  ],
+  "author": "hungdaimedia",
+  "license": "MIT"
+}
