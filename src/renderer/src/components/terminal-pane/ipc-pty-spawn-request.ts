@@ -24,6 +24,7 @@ export async function spawnIpcPty(
     commandDelivery,
     launchConfig,
     resumeProviderSession,
+    codexAccountSwitchRestart,
     launchToken,
     launchAgent,
     startupCommandDelivery,
@@ -59,6 +60,9 @@ export async function spawnIpcPty(
       : {}),
     ...((connectOptions.resumeProviderSession ?? resumeProviderSession)
       ? { resumeProviderSession: connectOptions.resumeProviderSession ?? resumeProviderSession }
+      : {}),
+    ...((connectOptions.codexAccountSwitchRestart ?? codexAccountSwitchRestart)
+      ? { codexAccountSwitchRestart: true }
       : {}),
     ...((connectOptions.launchToken ?? launchToken)
       ? { launchToken: connectOptions.launchToken ?? launchToken }
