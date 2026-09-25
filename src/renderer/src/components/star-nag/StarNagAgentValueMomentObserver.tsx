@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
+import { isCleanAgentTurnCompletion } from '../../../../shared/agent-status-display-state'
 
 // Why: leave a short quiet window after agents finish so the prompt does not
 // interrupt follow-up typing or status churn from the completed run.
@@ -32,11 +33,11 @@ function hasSuccessfulDoneTransition(
     if (
       previousEntry &&
       previousEntry.state !== 'done' &&
-      entry.state === 'done' &&
+      // Why: a failed or cancelled turn is not a value moment.
+      isCleanAgentTurnCompletion(entry) &&
       // Why: a session-boundary done is an idle connect (STA-3386), not a value moment —
       // a stale working row + resume would otherwise nag on launch.
       entry.sessionBoundary !== true &&
-      !entry.interrupted &&
       hasMeaningfulPrompt(entry)
     ) {
       return true

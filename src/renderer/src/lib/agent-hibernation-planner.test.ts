@@ -110,6 +110,17 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
     ).toEqual([])
+    // Why: a turn that ended in the provider's error, or a native cancellation, did not end cleanly.
+    for (const outcome of ['failure', 'cancellation'] as const) {
+      const unclean = entry({ mainAgent: { state: 'done', outcome, stateStartedAt: OLD } })
+      expect(
+        plannedWorktrees(snapshot({ agentStatusByPaneKey: { [unclean.paneKey]: unclean } }))
+      ).toEqual([])
+    }
+    const clean = entry({ mainAgent: { state: 'done', outcome: 'success', stateStartedAt: OLD } })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [clean.paneKey]: clean } }))
+    ).toEqual(['wt-bg'])
     const noSession = entry({ providerSession: undefined })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))

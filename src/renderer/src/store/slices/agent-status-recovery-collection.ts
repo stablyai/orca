@@ -19,6 +19,7 @@ import {
 } from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
+import { isCleanAgentTurnCompletion } from '../../../../shared/agent-status-display-state'
 
 export function collectSleepingAgentSessionRecordsForWorktree(
   state: AppState,
@@ -151,9 +152,8 @@ export function collectHibernatedCompletionEvidenceForWorktree(
     const agentType = entry.agentType
     if (
       !allowedPaneKeys.has(paneKey) ||
-      entry.state !== 'done' ||
-      agentType === undefined ||
-      entry.interrupted === true
+      !isCleanAgentTurnCompletion(entry) ||
+      agentType === undefined
     ) {
       continue
     }
