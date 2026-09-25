@@ -6,4 +6,8 @@ export type PrimaryStateWriteOperationsContext = {
   runtime: PrimaryStateWriteOperationsRuntime
   serialization: StateSerializationSecretHandlingOperations
   backups: BackupRecoveryRotationOperations
+  queuedSnapshot?: {
+    completion: Promise<void>
+    capture: { skipIfClean: boolean; pendingSnapshotFileWork: Promise<void> | null }
+  }
 }
