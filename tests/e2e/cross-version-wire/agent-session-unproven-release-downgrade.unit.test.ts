@@ -78,6 +78,7 @@ test('an older build loads, and starts over, a lease released with no death evid
       checkout,
       'src/main/runtime/agent-session-record-store.ts'
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release exports this class with the open/read/reconcile/reserve members called below; a missing one fails the test.
     const OldStore = baseline.AgentSessionRecordStore as {
       open: (args: { directory: string; hostId: string }) => Promise<AgentSessionRecordStore>
     }
