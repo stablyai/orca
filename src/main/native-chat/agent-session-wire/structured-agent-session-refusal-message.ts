@@ -12,11 +12,6 @@ import type { AgentSessionWireRefusalCode } from '../../../shared/agent-session-
 
 function ownerDescription(record: AgentSessionRecord): string {
   const owner = record.lease.ownerProcess
-  if (record.lease.claimStatus === 'conflicted') {
-    return owner
-      ? `Two runtimes claimed this session and Orca cannot yet prove that ${ownerDescription(record)} has exited. Quit that process, or reopen this chat once it is gone, and Orca will take the session back.`
-      : 'Two runtimes claimed this session and the record names no process to check. Quit any other Orca or agent process using this workspace, then reopen this chat.'
-  }
   return owner ? `process ${owner.pid} on ${owner.hostId}` : 'a process it never got to record'
 }
 

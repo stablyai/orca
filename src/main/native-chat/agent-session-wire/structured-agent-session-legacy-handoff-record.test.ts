@@ -220,6 +220,15 @@ describe('a record an older build left mid terminal handoff', () => {
       ok: false,
       refusal: { code: 'agent_session_conflict' }
     })
+    // Opening the chat names the process to quit.
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_conflict',
+        message: expect.stringContaining('process 4242 on local has exited')
+      }
+    })
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(acquire).not.toHaveBeenCalled()
 
