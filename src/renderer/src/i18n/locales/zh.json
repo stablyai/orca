@@ -3230,6 +3230,9 @@
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "主机不可用",
             "54f29b7c0d": "正在加载主机..."
+          },
+          "TerminalRestoringPlaceholder": {
+            "restoring": "正在恢复终端…"
           }
         }
       },

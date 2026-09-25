@@ -3230,6 +3230,9 @@
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "ホストが利用不可",
             "54f29b7c0d": "ホストを読み込み中…"
+          },
+          "TerminalRestoringPlaceholder": {
+            "restoring": "ターミナルを復元中…"
           }
         }
       },

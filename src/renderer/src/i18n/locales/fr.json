@@ -3333,6 +3333,9 @@
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Hôte indisponible",
             "54f29b7c0d": "Chargement de l'hôte…"
+          },
+          "TerminalRestoringPlaceholder": {
+            "restoring": "Restauration du terminal…"
           }
         }
       },

@@ -2916,6 +2916,9 @@
             "retryingBody": "Orca is retrying automatically. This terminal will resume if the connection returns.",
             "disconnectedBody": "Automatic retries stopped. Reconnect to resume this terminal session.",
             "reconnectButton": "Reconnect"
+          },
+          "TerminalRestoringPlaceholder": {
+            "restoring": "Restaurando terminal…"
           }
         }
       },
