@@ -335,6 +335,13 @@ export class OrcaRuntimeWithRuntimeId {
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+    // Why the runtime's own emulator: a provider snapshot would be a host round trip per tick.
+    readVisibleScreen: (ptyId) =>
+      this.headlessTerminals.has(ptyId)
+        ? this.readHeadlessVisibleTerminalState(ptyId).then(
+            (screen) => screen?.lines.join('\n') ?? null
+          )
+        : null,
     getLiveLeaf: (leaf) => this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId)) ?? leaf,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })

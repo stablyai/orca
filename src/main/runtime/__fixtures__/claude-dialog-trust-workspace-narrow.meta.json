@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-25T21:03:00.000Z",
+  "platform": "darwin",
+  "command": ["claude"],
+  "cols": 60,
+  "rows": 30,
+  "note": "Claude Code v2.1.280, macOS arm64, first launch in an untrusted folder with an isolated CLAUDE_CONFIG_DIR (no operator config touched); a narrow pane, where Claude wraps the dialog's opening question across lines; capture ends with the trust dialog owning the screen",
+  "exitCode": null
+}

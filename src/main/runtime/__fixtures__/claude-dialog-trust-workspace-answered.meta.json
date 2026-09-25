@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-25T21:10:00.000Z",
+  "platform": "darwin",
+  "command": ["claude"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Claude Code v2.1.280, macOS arm64, first launch in an untrusted folder with an isolated CLAUDE_CONFIG_DIR (the trust answer went to a throwaway config); Down then Enter picked 'Yes, I trust this folder' and the capture ends on the idle composer; API-key auth",
+  "exitCode": null
+}

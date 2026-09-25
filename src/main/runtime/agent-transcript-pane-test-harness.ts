@@ -13,6 +13,8 @@ export type TranscriptPaneOptions = {
   foregroundProcess: string | null
   data: string
   launchAgent?: TuiAgent
+  /** The capture's recorded PTY size, so the runtime's screen model wraps as the pane did. */
+  size?: { cols: number; rows: number }
   /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
   /** Simulates a PTY controller whose foreground probe never settles. */
@@ -39,6 +41,7 @@ export async function createTranscriptPane(
     spawn: vi.fn().mockResolvedValue({ id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }),
     write: () => true,
     kill: () => true,
+    getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {
       options.onForegroundProbe?.()
       return options.foregroundProbeHangs === true

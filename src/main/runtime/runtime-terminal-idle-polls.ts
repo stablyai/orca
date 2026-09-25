@@ -1,5 +1,8 @@
 import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
-import type { RuntimeTerminalWait } from '../../shared/runtime-types'
+import type {
+  RuntimeTerminalWait,
+  RuntimeTerminalWaitBlockedReason
+} from '../../shared/runtime-types'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview,
@@ -42,6 +45,8 @@ type RuntimeTerminalIdlePollDependencies = {
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
+  /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
+  readVisibleScreen(ptyId: string): Promise<string | null> | null
   /** Re-read the record the waiter registered against; see `liveLeaf` below. */
   getLiveLeaf(leaf: RuntimeLeafRecord): RuntimeLeafRecord
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
@@ -53,12 +58,14 @@ type IdlePollEntry =
       waiter: TerminalWaiter
       leaf: RuntimeLeafRecord
       foregroundPollInFlight: boolean
+      screenReadInFlight: boolean
     }
   | {
       kind: 'pty'
       waiter: TerminalWaiter
       pty: RuntimePtyWorktreeRecord
       foregroundPollInFlight: boolean
+      screenReadInFlight: boolean
     }
 
 export class RuntimeTerminalIdlePolls {
@@ -68,11 +75,23 @@ export class RuntimeTerminalIdlePolls {
   constructor(private readonly deps: RuntimeTerminalIdlePollDependencies) {}
 
   startLeaf(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
-    this.start({ kind: 'leaf', waiter, leaf, foregroundPollInFlight: false })
+    this.start({
+      kind: 'leaf',
+      waiter,
+      leaf,
+      foregroundPollInFlight: false,
+      screenReadInFlight: false
+    })
   }
 
   startPty(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
-    this.start({ kind: 'pty', waiter, pty, foregroundPollInFlight: false })
+    this.start({
+      kind: 'pty',
+      waiter,
+      pty,
+      foregroundPollInFlight: false,
+      screenReadInFlight: false
+    })
   }
 
   /** Test/diagnostic seam: live sweep handles, which must stay at most one. */
@@ -138,6 +157,26 @@ export class RuntimeTerminalIdlePolls {
         this.stop(entry)
         this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
         return
+      }
+      const screenCheck = leaf.ptyId ? this.readScreenBlockedReason(entry, leaf.ptyId) : null
+      if (screenCheck) {
+        const screenBlockedReason = await screenCheck
+        if (!this.entries.has(entry)) {
+          return
+        }
+        if (screenBlockedReason) {
+          this.stop(entry)
+          this.deps.resolve(
+            waiter,
+            buildTerminalWaitBlockedResult(
+              waiter.handle,
+              'tui-idle',
+              this.deps.getLiveLeaf(entry.leaf),
+              screenBlockedReason
+            )
+          )
+          return
+        }
       }
       if (
         leaf.lastAgentStatus === null &&
@@ -207,6 +246,21 @@ export class RuntimeTerminalIdlePolls {
         this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
         return
       }
+      const screenCheck = this.readScreenBlockedReason(entry, pty.ptyId)
+      if (screenCheck) {
+        const screenBlockedReason = await screenCheck
+        if (!this.entries.has(entry)) {
+          return
+        }
+        if (screenBlockedReason) {
+          this.stop(entry)
+          this.deps.resolve(
+            waiter,
+            buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, screenBlockedReason)
+          )
+          return
+        }
+      }
       if (
         pty.lastAgentStatus === null &&
         quietForegroundProcessProvesTuiIdle(agent) &&
@@ -235,6 +289,24 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = false
       }
     }
+  }
+
+  /** Why the screen too: a dialog that parks the cursor above its own options (Claude's
+   *  workspace trust) loses those rows from the line tail; the rendered screen still has them. */
+  private readScreenBlockedReason(
+    entry: IdlePollEntry,
+    ptyId: string
+  ): Promise<RuntimeTerminalWaitBlockedReason | null> | null {
+    const screenRead = entry.screenReadInFlight ? null : this.deps.readVisibleScreen(ptyId)
+    if (!screenRead) {
+      return null
+    }
+    entry.screenReadInFlight = true
+    return screenRead
+      .then((screen) => (screen ? detectTerminalWaitBlockedReason(screen) : null))
+      .finally(() => {
+        entry.screenReadInFlight = false
+      })
   }
 
   private stop(entry: IdlePollEntry): void {
