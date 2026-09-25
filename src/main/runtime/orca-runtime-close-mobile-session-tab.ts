@@ -238,9 +238,9 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
           })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         } else if (retirement.hasPersistedTab) {
-          this.commitHeadlessTerminalTabRetirement(worktreeId, tab.parentTabId, {
-            force: options.force
-          })
+          // Why: the renderer's close normally commits this through its own intent; this covers
+          // a renderer that acknowledged a tab it no longer listed.
+          this.closeTerminalSurface(worktreeId, tab.parentTabId, { force: options.force })
         }
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return finishCommittedClose()
@@ -268,6 +268,8 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
           if (this.ptyController?.kill(pty.ptyId) !== true) {
             throw new Error('terminal_close_failed')
           }
+          // Why: the pane's removal is this close's own commit, not a side effect of its exit.
+          this.closeTerminalLeaf(worktreeId, tab.parentTabId, tab.leafId)
           return finishCommittedClose()
         }
         this.notifier.closeTerminal(tab.parentTabId)

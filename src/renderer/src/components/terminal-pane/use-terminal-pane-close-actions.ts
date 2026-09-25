@@ -16,6 +16,7 @@ import { clearPaneTerminalError } from './terminal-error-accumulation'
 import type { TerminalPaneBindingController } from './use-terminal-pane-layout-bindings'
 import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane'
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
+import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
 
 export function useTerminalPaneCloseActions(controller: TerminalPaneBindingController) {
   const confirmedCloseRef = useRef<(() => void) | null>(null)
@@ -50,6 +51,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
+          commitTerminalSurfaceClose({ worktreeId, tabId, leafId })
           retireUnboundIpcTerminalPane({
             getState: useAppStore.getState,
             tabId,
@@ -82,7 +84,8 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       onCloseTab,
       syncPanePtyLayoutBinding,
       syncPanePtyLayoutBindingForLeaf,
-      tabId
+      tabId,
+      worktreeId
     ]
   )
   const getCloseDialogCopyKind = useCallback(

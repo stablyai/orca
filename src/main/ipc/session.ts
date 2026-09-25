@@ -1,11 +1,12 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
 
-export function registerSessionHandlers(store: Store): void {
+export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
   // Why: hostId is an optional second arg so an older renderer that invokes
   // these channels without it keeps reading/writing the 'local' partition
   // exactly as before. Channel names stay stable.
@@ -27,6 +28,21 @@ export function registerSessionHandlers(store: Store): void {
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     store.patchWorkspaceSession(args, hostId)
   })
+
+  // Why: a renderer save cannot shrink membership main owns, so each close commits it explicitly.
+  ipcMain.handle(
+    'session:close-terminal-surface',
+    (_event, args: { worktreeId: string; tabId: string; leafId?: string }) => {
+      if (typeof args?.worktreeId !== 'string' || typeof args.tabId !== 'string') {
+        throw new Error('invalid_terminal_surface')
+      }
+      runtime.closeTerminalSurfaceFromRenderer({
+        worktreeId: args.worktreeId,
+        tabId: args.tabId,
+        ...(typeof args.leafId === 'string' ? { leafId: args.leafId } : {})
+      })
+    }
+  )
 
   ipcMain.handle('session:flush', () => {
     // Why: durable lifecycle RPCs must propagate disk failures instead of

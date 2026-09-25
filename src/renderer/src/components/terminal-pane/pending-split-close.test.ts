@@ -191,3 +191,15 @@ it('retires a local folder-workspace split without a git worktree row', async ()
   await p.connecting
   expect(window.api.pty.kill).toHaveBeenCalledTimes(2)
 })
+
+it('commits the explicit split close in main by its leaf', async () => {
+  const p = await preparePendingSplitClose()
+  const closeTerminalSurface = vi.fn().mockResolvedValue(undefined)
+  Object.assign(window.api, { session: { ...window.api.session, closeTerminalSurface } })
+  p.actions.executeClosePane(1)
+  expect(closeTerminalSurface).toHaveBeenCalledExactlyOnceWith({
+    worktreeId: 'workspace',
+    tabId: p.tabId,
+    leafId: p.leafId
+  })
+})

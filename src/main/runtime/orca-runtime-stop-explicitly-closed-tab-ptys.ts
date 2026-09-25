@@ -5,6 +5,7 @@ import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verd
 import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import { countTerminalLayoutLeaves } from './headless-terminal-split-layout'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 
 export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithFocusTerminal {
   protected async stopExplicitlyClosedTabPtys(
@@ -155,6 +156,11 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
       const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+      const leafId = surface?.tab.leafId ?? parsePaneKey(pty.pty.paneKey ?? '')?.leafId
+      if (ptyKilled && siblingCount > 1 && leafId) {
+        // Why: the pane's removal is this close's own commit, not a side effect of its exit.
+        this.closeTerminalLeaf(pty.pty.worktreeId, tabId, leafId)
+      }
       if (!ptyKilled || siblingCount <= 1) {
         if (surface) {
           // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
@@ -176,7 +182,8 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    // Why: in a multi-pane tab, killing the PTY is enough (renderer's exit handler closes the pane); an extra IPC close would race it and close the whole tab.
+    // Why: in a multi-pane tab the renderer's exit handler removes the killed pane from view; an
+    // extra IPC close would race it and close the whole tab. Membership is committed below.
     const siblingCount = this.countLeavesInTab(leaf.tabId)
     const ptyIdsToKill =
       siblingCount <= 1
@@ -190,6 +197,9 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     const ptyKilled = leaf.ptyId
       ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
       : false
+    if (siblingCount > 1) {
+      this.closeTerminalLeaf(leaf.worktreeId, leaf.tabId, leaf.leafId)
+    }
     if (siblingCount > 1 ? !ptyKilled : !this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
     }

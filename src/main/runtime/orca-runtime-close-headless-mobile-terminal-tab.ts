@@ -36,11 +36,10 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       )
       return proof ? [proof] : []
     })
-    const projectedPtyIds = this.commitHeadlessTerminalTabRetirement(
-      worktreeId,
-      closedParentTabId,
-      { allowMissing: options.allowMissingPersistedTab, force: options.force }
-    )
+    const projectedPtyIds = this.closeTerminalSurface(worktreeId, closedParentTabId, {
+      allowMissing: options.allowMissingPersistedTab,
+      force: options.force
+    })
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
     if (options.authorizedPty) {
       options.authorizedPty.runtimeSessionOwned = false

@@ -7,11 +7,9 @@ import type {
 } from '../../shared/runtime-types'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { Tab } from '../../shared/tab-types'
-import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { closeTerminalSurfaceInWorkspaceSession } from './terminal-surface-close'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   // Why: headless serve backs browser panes with offscreen WebContents that live
@@ -78,18 +76,20 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
-  protected commitHeadlessTerminalTabRetirement(
+  /**
+   * The one close transaction every explicit terminal close reaches: commit the membership
+   * removal in the owning host's partition, then flush. Callers publish and kill afterwards.
+   */
+  protected closeTerminalSurface(
     worktreeId: string,
-    parentTabId: string,
-    options: { allowMissing?: boolean; force?: boolean } = {}
+    tabId: string,
+    options: { leafId?: string; allowMissing?: boolean; force?: boolean } = {}
   ): string[] {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
       throw new Error('workspace_session_unavailable')
     }
-    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId, {
-      force: options.force
-    })
+    const result = closeTerminalSurfaceInWorkspaceSession(session, worktreeId, tabId, options)
     if (result.pinned) {
       throw new Error('terminal_tab_pinned')
     }
@@ -97,25 +97,42 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       if (!options.allowMissing) {
         throw new Error('tab_not_found')
       }
+      return []
     }
-    const persisted = result.closed
-      ? advanceTerminalTopologyRevision(result.session, worktreeId)
-      : session
-    this.setWorkspaceSessionForWorktree(worktreeId, persisted)
-    const staged = this.getWorkspaceSessionForWorktree(worktreeId)
+    this.setWorkspaceSessionForWorktree(worktreeId, result.session)
     try {
       this.store.flushOrThrow()
     } catch (error) {
-      const current = this.getWorkspaceSessionForWorktree(worktreeId)
-      if (staged && current) {
-        const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
-        if (rolledBack !== current) {
-          this.setWorkspaceSessionForWorktree(worktreeId, rolledBack)
-        }
-      }
-      throw error
+      // Why no rollback: bookkeeping must not undo a user's close or skip its kill; the removal
+      // stays in memory and the next flush writes it. Only host-started retirements roll back.
+      console.error('[runtime] failed to flush terminal close:', error)
     }
     return result.ptyIdsToKill
+  }
+
+  /** The desktop renderer's close intent: the renderer already ran its pin guard and owns the kill. */
+  closeTerminalSurfaceFromRenderer(args: {
+    worktreeId: string
+    tabId: string
+    leafId?: string
+  }): void {
+    this.closeTerminalSurface(args.worktreeId, args.tabId, {
+      leafId: args.leafId,
+      allowMissing: true,
+      force: true
+    })
+  }
+
+  /** Commits a split pane's close once its process was stopped; no session means nothing persisted. */
+  protected closeTerminalLeaf(worktreeId: string, tabId: string, leafId: string): void {
+    try {
+      // Why force: the process is already stopped, so a pin must not fail the close after the fact.
+      this.closeTerminalSurface(worktreeId, tabId, { leafId, allowMissing: true, force: true })
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+        throw error
+      }
+    }
   }
 
   protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
