@@ -327,7 +327,7 @@ describe('deriving what was working at teardown', () => {
   // Accepted while the agent was starting and never handed over: the chat shows working, but no
   // agent had the message, and quit rejects it as never sent.
   it('marks nothing for a session whose only work is a message still queued', () => {
-    const queued = { ...submission('msg-1', 'pending'), handoverRecorded: true }
+    const queued = { ...submission('msg-1', 'pending'), handoverRecorded: true as const }
     expect(
       markersAtTeardown({
         sessions: new Map([
@@ -351,10 +351,10 @@ describe('deriving what was working at teardown', () => {
   it('marks a message handed over and not yet answered, and a turn a queued one waits behind', () => {
     const handedOver = {
       ...submission('msg-1', 'pending'),
-      handoverRecorded: true,
+      handoverRecorded: true as const,
       handedOverAt: NOW
     }
-    const queued = { ...submission('msg-2', 'pending'), handoverRecorded: true }
+    const queued = { ...submission('msg-2', 'pending'), handoverRecorded: true as const }
     const markers = markersAtTeardown({
       sessions: new Map([
         [
