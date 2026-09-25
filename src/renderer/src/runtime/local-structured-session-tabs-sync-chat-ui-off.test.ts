@@ -46,14 +46,21 @@ const priorApi = window.api
 const unsubscribe = vi.fn()
 const subscribe = vi.fn(async () => ({ unsubscribe }))
 const call = vi.fn(async () => ({ ok: true, result: { snapshots: [inventoryWithOpenChat()] } }))
+const hasLocalStructuredAgentSessions = vi.fn(async () => true)
+
+function setChatUi(experimentalNativeChat: boolean): void {
+  useAppStore.setState({ settings: { ...getDefaultSettings(''), experimentalNativeChat } })
+}
 
 beforeEach(() => {
   unsubscribe.mockClear()
   subscribe.mockClear()
   call.mockClear()
+  hasLocalStructuredAgentSessions.mockReset().mockResolvedValue(true)
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
+      app: { hasLocalStructuredAgentSessions },
       runtime: {
         getStatus: vi.fn(async () => ({
           capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
@@ -77,29 +84,56 @@ afterEach(() => {
   Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
 })
 
-describe('local structured session tab sync with Chat UI off', () => {
-  it('mirrors the host chats and keeps them through a Chat UI toggle', async () => {
+describe('local structured session tab sync', () => {
+  it('costs a user who never had a structured chat nothing but the existence check', async () => {
+    hasLocalStructuredAgentSessions.mockResolvedValue(false)
+    const { unmount } = renderHook(() => useLocalStructuredSessionTabsSync())
+    await vi.waitFor(() => expect(hasLocalStructuredAgentSessions).toHaveBeenCalledOnce())
+    await act(async () => {})
+
+    expect(call).not.toHaveBeenCalled()
+    expect(subscribe).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  it('mirrors chats the host holds with Chat UI off', async () => {
     const { unmount } = renderHook(() => useLocalStructuredSessionTabsSync())
     await vi.waitFor(() => expect(subscribe).toHaveBeenCalledOnce())
 
     expect(call).toHaveBeenCalledWith({ method: 'session.tabs.listAll', params: {} })
     expect(openChatIds()).toEqual(['codex-1'])
+    unmount()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
 
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
-      })
-    })
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
-      })
-    })
+  it('starts when Chat UI comes on, without asking the host', async () => {
+    hasLocalStructuredAgentSessions.mockResolvedValue(false)
+    const { unmount } = renderHook(() => useLocalStructuredSessionTabsSync())
+    await vi.waitFor(() => expect(hasLocalStructuredAgentSessions).toHaveBeenCalledOnce())
+    expect(subscribe).not.toHaveBeenCalled()
+
+    await act(async () => setChatUi(true))
+
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledOnce())
+    expect(hasLocalStructuredAgentSessions).toHaveBeenCalledOnce()
+    unmount()
+  })
+
+  it('keeps running and keeps open chats when Chat UI goes off', async () => {
+    setChatUi(true)
+    const { unmount } = renderHook(() => useLocalStructuredSessionTabsSync())
+    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledOnce())
+    expect(openChatIds()).toEqual(['codex-1'])
+
+    await act(async () => setChatUi(false))
+    await act(async () => setChatUi(true))
+    await act(async () => setChatUi(false))
 
     // The setting decides how new launches open; it neither retracts nor re-subscribes the mirror.
     expect(openChatIds()).toEqual(['codex-1'])
     expect(unsubscribe).not.toHaveBeenCalled()
     expect(subscribe).toHaveBeenCalledOnce()
+    expect(hasLocalStructuredAgentSessions).not.toHaveBeenCalled()
     unmount()
   })
 })

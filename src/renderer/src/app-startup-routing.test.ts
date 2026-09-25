@@ -366,13 +366,18 @@ describe('renderer startup runtime routing', () => {
     expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
   })
 
-  it('projects open structured chats at startup whatever the Chat UI setting', () => {
-    const source = readSource(STARTUP_HYDRATION_PATH)
+  it('projects structured chats at startup only when some may exist', () => {
+    const source = readSource('src/renderer/src/runtime/local-structured-session-tabs-sync.ts')
     const projectIndex = source.indexOf("timeRendererStartupStep('project-structured-session-tabs'")
 
+    expect(readSource(STARTUP_HYDRATION_PATH)).toContain(
+      'await restoreLocalStructuredSessionTabsAtStartup()'
+    )
     expect(projectIndex).toBeGreaterThanOrEqual(0)
-    // Chat UI governs how new launches open; chats that already exist come back regardless.
-    expect(source.slice(projectIndex - 180, projectIndex)).not.toContain('settings')
+    // Chat UI on, or the host holds a record: never the full census for a machine with neither.
+    expect(source.slice(projectIndex - 180, projectIndex)).toContain(
+      'await localStructuredSessionsMayExist(useAppStore.getState().settings)'
+    )
   })
 
   it('probes local runtime capabilities before any startup gate can hold the answer back', () => {
@@ -409,9 +414,7 @@ describe('renderer startup runtime routing', () => {
       "timeRendererStartupStep('prepare-terminal-startup-restoration'"
     )
     const reconnectIndex = appSource.indexOf("timeRendererStartupStep('reconnect-terminals'")
-    const projectIndex = appSource.indexOf(
-      "timeRendererStartupStep('project-structured-session-tabs'"
-    )
+    const projectIndex = appSource.indexOf('await restoreLocalStructuredSessionTabsAtStartup()')
     const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
     const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
     const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)

@@ -148,12 +148,24 @@ it('keeps next-launch preference out of the current resume action', async () => 
 })
 
 // Chat UI decides how new launches open; a chat that was working is still offered back.
-it('offers the resume with Chat UI off', async () => {
-  rpc.mockResolvedValue({ sessions: offered })
-  useAppStore.setState({ settings: { ...getDefaultSettings(''), experimentalNativeChat: false } })
-  await mount(<NativeChatResumeOnRestartModal />)
+it('offers the resume with Chat UI off when the host holds structured chats', async () => {
+  const priorApi = window.api
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...priorApi,
+      app: { ...priorApi?.app, hasLocalStructuredAgentSessions: async () => true }
+    }
+  })
+  try {
+    rpc.mockResolvedValue({ sessions: offered })
+    useAppStore.setState({ settings: { ...getDefaultSettings(''), experimentalNativeChat: false } })
+    await mount(<NativeChatResumeOnRestartModal />)
 
-  expect(button('Resume 2 chats')).toBeTruthy()
+    expect(button('Resume 2 chats')).toBeTruthy()
+  } finally {
+    Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
+  }
 })
 
 // One primary action and one way out of it; the body copy carries the transparency.

@@ -260,6 +260,16 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
     await getStructuredAgentSessionHost()?.reconcileRestartLeases()
   }
 
+  /** Whether this host holds any structured session record, without installing the host to ask:
+   *  no store on disk means none, and startup already installs the host when one is. */
+  hasStructuredAgentSessionRecords(): boolean {
+    const host = getStructuredAgentSessionHost()
+    if (host) {
+      return host.deps.store.listRecords().length > 0
+    }
+    return this.hasPersistedStructuredAgentSessionStore()
+  }
+
   protected hasPersistedStructuredAgentSessionStore(): boolean {
     return hasPersistedStructuredAgentSessionStoreOnDisk(getProfileUserDataPath())
   }

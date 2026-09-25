@@ -36,6 +36,7 @@ export function latchLocalStructuredSessionRestore(start: () => Promise<void>): 
 
 export function resetLocalStructuredSessionVersionForTests(): void {
   syncGeneration += 1
+  restorePromise = null
   localStructuredSessionVersionByWorktree.clear()
   localStructuredSessionEpochHistoryByWorktree.clear()
 }

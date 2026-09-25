@@ -168,14 +168,42 @@ describe('NativeChatResumeStatusSegment', () => {
     ])
   })
 
-  it('offers chats that were working even with Chat UI off', async () => {
-    rpc.mockResolvedValue({ sessions: candidates })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
-    })
-    await mount()
+  describe('with Chat UI off', () => {
+    const priorApi = window.api
+    const hasLocalStructuredAgentSessions = vi.fn()
 
-    expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
+    beforeEach(() => {
+      hasLocalStructuredAgentSessions.mockReset()
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { ...priorApi, app: { ...priorApi?.app, hasLocalStructuredAgentSessions } }
+      })
+      useAppStore.setState({
+        settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
+      })
+    })
+
+    afterEach(() => {
+      Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
+    })
+
+    it('offers chats that were working when the host holds structured chats', async () => {
+      hasLocalStructuredAgentSessions.mockResolvedValue(true)
+      rpc.mockResolvedValue({ sessions: candidates })
+      await mount()
+
+      expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
+    })
+
+    it('never asks the host, or starts it, when there is no structured chat', async () => {
+      hasLocalStructuredAgentSessions.mockResolvedValue(false)
+      rpc.mockResolvedValue({ sessions: candidates })
+      await mount()
+
+      expect(hasLocalStructuredAgentSessions).toHaveBeenCalledOnce()
+      expect(rpc).not.toHaveBeenCalled()
+      expect(screen.queryByRole('button')).toBeNull()
+    })
   })
 
   it('waits for settings, which carry the resume preference, before asking the host', async () => {
