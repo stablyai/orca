@@ -79,14 +79,10 @@ const DEFAULT_READINESS_TIMEOUT_MS = 90_000
 const READINESS_POLL_MS = 500
 const STOP_WAIT_SECONDS = 20
 
-function exec(
-  options: OrcadDeployOptions,
-  command: string,
-  signal = options.signal
-): Promise<string> {
+function exec(options: OrcadDeployOptions, command: string): Promise<string> {
   return execCommand(options.conn, command, {
     wrapCommand: options.host.commandDialect !== 'powershell',
-    signal
+    signal: options.signal
   })
 }
 
@@ -169,9 +165,8 @@ async function captureSnapshot(
         'way back. Refusing to activate.'
     )
   }
+  // Empty profiles need no rollback snapshot.
   if (capture === 'empty') {
-    // Nothing on the host to lose: a first deployment. Rollback will correctly report that
-    // it has no snapshot, rather than restoring an archive of nothing over a populated root.
     return null
   }
   return {
