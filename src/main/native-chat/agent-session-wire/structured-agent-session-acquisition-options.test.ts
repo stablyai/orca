@@ -107,7 +107,7 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
   expect(record).not.toBeNull()
   const lease = record!.lease
   const durableState = lease.handoffStage ?? lease.claimStatus
-  expect(['live', 'released', 'recovering', 'manual-recovery']).toContain(durableState)
+  expect(['live', 'released', 'recovering']).toContain(durableState)
   expect(lease.handoffStage).not.toBe('new-owner-proving')
 }
 

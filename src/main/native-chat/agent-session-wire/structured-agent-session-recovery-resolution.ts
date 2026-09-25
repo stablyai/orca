@@ -1,7 +1,7 @@
 /**
- * Exits from the `recovering` stage (and the legacy `manual-recovery` one). A session lands there
- * when evidence about its owner was unavailable; this re-asks with present-time evidence and always
- * concludes. A dead owner is evicted on proof. A live one is stopped by identity and evicted once
+ * Exits from the `recovering` stage. A session lands there when evidence about its owner was
+ * unavailable; this re-asks with present-time evidence and always concludes. A dead owner is
+ * evicted on proof. A live one is stopped by identity and evicted once
  * proven gone. One that outlives the stop, or whose identity cannot be verified, is released
  * anyway: its transport died with the runtime that held it, so nothing can drive it, and no signal
  * is sent to a pid that cannot be verified as the one recorded. Only a conflicted claim, which is
@@ -38,18 +38,12 @@ const UNRESOLVED_REFUSALS: ReadonlySet<string> = new Set([
   'agent_session_identity_required'
 ])
 
-function isRecoveryStage(record: AgentSessionRecord): boolean {
-  return (
-    record.lease.handoffStage === 'recovering' || record.lease.handoffStage === 'manual-recovery'
-  )
-}
-
 export async function resolveStructuredSessionRecovery(
   deps: StructuredSessionRecoveryResolutionDeps,
   sessionId: string
 ): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
   const record = deps.store.getRecord(sessionId)
-  if (!record || !isRecoveryStage(record)) {
+  if (record?.lease.handoffStage !== 'recovering') {
     return 'not-applicable'
   }
   let probe = await deps.probeRecord(record)

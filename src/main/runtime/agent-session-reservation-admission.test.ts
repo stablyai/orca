@@ -232,7 +232,7 @@ describe('re-create over a failed create', () => {
   it('refuses when the record bound a conversation, or its attempt may still run', () => {
     const bound = failedCreate({ providerHandleChain: [adoptedLink()] })
     const unproven = failedCreate({
-      lease: { ...EXITED, claimStatus: 'reserved', handoffStage: 'manual-recovery' }
+      lease: { ...EXITED, claimStatus: 'reserved', handoffStage: 'recovering' }
     })
     // Released so a send can start over, but nothing proved the attempt gone.
     const releasedUnproven = failedCreate({ lease: { ...EXITED, deathEvidence: null } })

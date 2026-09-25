@@ -12,12 +12,7 @@ import {
 } from './agent-session-record.test-fixture'
 
 const CLAIMS: AgentSessionClaimStatus[] = ['reserved', 'live', 'conflicted', 'released']
-const STAGES: (AgentSessionHandoffStage | null)[] = [
-  null,
-  'new-owner-proving',
-  'recovering',
-  'manual-recovery'
-]
+const STAGES: (AgentSessionHandoffStage | null)[] = [null, 'new-owner-proving', 'recovering']
 
 function persisted(overrides: Partial<PersistedAgentSessionLease>): PersistedAgentSessionLease {
   return { ...agentSessionLeaseFixture(), ...overrides }
@@ -36,7 +31,7 @@ describe('normalizing a lease the removed terminal handoff wrote', () => {
     }
   })
 
-  it.each(['preparing', 'old-owner-stopped'] as const)(
+  it.each(['preparing', 'old-owner-stopped', 'manual-recovery'] as const)(
     'maps the %s stage to recovering and keeps its operation id',
     (handoffStage) => {
       const lease = persisted({ handoffStage, handoffOperationId: 'op-handoff' })

@@ -239,10 +239,7 @@ export function releaseUnprovenAgentSessionOwner(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
-  if (
-    record.lease.handoffStage !== 'recovering' &&
-    record.lease.handoffStage !== 'manual-recovery'
-  ) {
+  if (record.lease.handoffStage !== 'recovering') {
     throw new Error('agent_session_ownership_unknown')
   }
   return releasedAgentSessionLease(record, nextAgentSessionFence(record.lease), null, args.now)

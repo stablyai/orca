@@ -618,7 +618,7 @@ describe('restart', () => {
         ...record.lease,
         // How a terminal owner an older build recorded loads.
         claimStatus: 'conflicted',
-        handoffStage: 'manual-recovery'
+        handoffStage: 'recovering'
       }
     }))
     await reboot(async () => ({ outcome: 'pid-absent' }))

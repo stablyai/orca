@@ -90,10 +90,10 @@ async function liveOwner(store: AgentSessionRecordStore) {
   })
 }
 
-async function latch(store: AgentSessionRecordStore, stage: 'recovering' | 'manual-recovery') {
+async function latch(store: AgentSessionRecordStore) {
   return store.transitionHandoff(SESSION, (record) => ({
     ...record,
-    lease: { ...record.lease, handoffStage: stage }
+    lease: { ...record.lease, handoffStage: 'recovering' }
   }))
 }
 
@@ -120,7 +120,7 @@ describe('structured session recovery resolution', () => {
   it('releases an ownerless reservation: nothing it recorded can be holding it', async () => {
     const store = await openStore()
     await reserve(store)
-    await latch(store, 'recovering')
+    await latch(store)
 
     const result = await resolveStructuredSessionRecovery(
       deps(store, () => ({ outcome: 'indeterminate', reason: 'no scan' })),
@@ -140,7 +140,7 @@ describe('structured session recovery resolution', () => {
   it('evicts a latched owner the probe now proves dead, without a stop request', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'manual-recovery')
+    await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(
@@ -161,7 +161,7 @@ describe('structured session recovery resolution', () => {
   it('stops a live identity-matched orphan and evicts only after absence is proven', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'recovering')
+    await latch(store)
     let alive = true
     const stopOwnerProcess = vi.fn(() => {
       alive = false
@@ -192,7 +192,7 @@ describe('structured session recovery resolution', () => {
   it('releases an owner that survives the stop ladder, with no death evidence', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'recovering')
+    await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(
@@ -220,7 +220,7 @@ describe('structured session recovery resolution', () => {
   it('releases an owner whose identity cannot be verified, and signals nothing', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'recovering')
+    await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(

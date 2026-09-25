@@ -143,13 +143,10 @@ describe('acquisition compare-and-swap', () => {
     })
   })
 
-  it.each([
-    ['recovering', 'agent_session_ownership_unknown'],
-    ['manual-recovery', 'agent_session_ownership_unknown']
-  ] as const)('refuses acquisition in stage %s', (handoffStage, code) => {
-    expect(acquire(lease({ handoffStage }), { outcome: 'pid-absent' })).toEqual({
+  it('refuses acquisition in the recovering stage', () => {
+    expect(acquire(lease({ handoffStage: 'recovering' }), { outcome: 'pid-absent' })).toEqual({
       decision: 'refused',
-      code
+      code: 'agent_session_ownership_unknown'
     })
   })
 
@@ -279,7 +276,7 @@ describe('restart reconciliation', () => {
     ).toEqual({ disposition: 'free', reason: 'lease has no owner and no reservation' })
   })
 
-  it.each([null, 'manual-recovery'] as const)(
+  it.each([null, 'recovering'] as const)(
     'releases an ownerless reservation at stage %s, with evidence only when a scan proved nothing spawned',
     (handoffStage) => {
       // A child commits its identity at spawn; one spawned in the moment before lost its stdio

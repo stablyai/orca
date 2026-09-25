@@ -122,7 +122,8 @@ async function establishOwner(
   })
 }
 
-/** The shape the removed conflict marker wrote. No shipped build called it; a record may carry it. */
+/** The shape the removed conflict marker wrote, as it decodes. No shipped build called it; a record
+ *  may carry it. */
 async function markLegacyConflicted(
   store: AgentSessionRecordStore,
   lease: Partial<AgentSessionLease> = {}
@@ -135,7 +136,7 @@ async function markLegacyConflicted(
     lease: {
       ...record.lease,
       claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery',
+      handoffStage: 'recovering',
       ...lease
     }
   }))

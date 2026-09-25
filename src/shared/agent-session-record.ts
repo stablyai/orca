@@ -61,10 +61,8 @@ export type AgentSessionLaunchArgs = string[]
  *  away at decode (agent-session-legacy-handoff-lease). */
 export type AgentSessionOwnerRuntimeKind = 'native'
 
-/** The acquisition stage. The removed terminal handoff's stages are mapped away at decode;
- *  `manual-recovery` was written only by the removed ownerless-reservation latch and stays so
- *  older records load, and restart reconciliation overwrites it like any other. */
-export type AgentSessionHandoffStage = 'new-owner-proving' | 'recovering' | 'manual-recovery'
+/** The acquisition stage. Stages only older builds wrote are mapped away at decode. */
+export type AgentSessionHandoffStage = 'new-owner-proving' | 'recovering'
 
 /**
  * PID-reuse-safe process identity. `spawnToken` is the only element available on every platform:
