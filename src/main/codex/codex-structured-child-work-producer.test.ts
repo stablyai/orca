@@ -1,5 +1,5 @@
 // A Codex session's frames, through the real adapter, into the host's child records: the order the
-// host receives them in, and whether the parent row the records imply is today's row.
+// host receives them in, and the parent row they fold to, written out step by step.
 
 import { describe, expect, it } from 'vitest'
 import { foldAgentLeadStatus } from '../../shared/agent-lead-status-fold'
@@ -158,22 +158,35 @@ describe('Codex structured child-work producer', () => {
     ])
   })
 
-  it('records the parent state today reads, frame by frame, while adding outcome and activity', async () => {
+  it("folds the parent from the records, frame by frame, with each child's outcome and activity", async () => {
     const { adapter, send, records, byDescription, display } = await producer()
     const steps: {
       frame: Frame
       lead: 'working' | 'done'
-      childWaits?: true
+      live: ReturnType<typeof agentChildWorkLiveness>
+      parent: ReturnType<typeof foldAgentLeadStatus>
       check?: () => void
     }[] = [
-      { frame: turn('turn/started', THREAD_ID, 'p1'), lead: 'working' },
+      {
+        frame: turn('turn/started', THREAD_ID, 'p1'),
+        lead: 'working',
+        live: null,
+        parent: { stateName: 'working' }
+      },
       // Codex reports the child's turn before its announcement.
       {
         frame: turn('turn/started', REVIEWER, 'r1'),
         lead: 'working',
+        live: null,
+        parent: { stateName: 'working' },
         check: () => expect(records()).toEqual([])
       },
-      { frame: spawned(REVIEWER, 'review', 'p1'), lead: 'working' },
+      {
+        frame: spawned(REVIEWER, 'review', 'p1'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
       {
         frame: item('item/started', REVIEWER, 'r1', {
           type: 'commandExecution',
@@ -183,6 +196,8 @@ describe('Codex structured child-work producer', () => {
           status: 'inProgress'
         }),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('review')?.operation).toMatchObject({
             toolName: 'Bash',
@@ -200,6 +215,8 @@ describe('Codex structured child-work producer', () => {
           status: 'inProgress'
         }),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('npm run dev')?.parentChildWorkId).toBe(
             byDescription('review')?.childWorkId
@@ -215,6 +232,8 @@ describe('Codex structured child-work producer', () => {
           exitCode: 0
         }),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () => expect(byDescription('review')?.operation).toBeUndefined()
       },
       {
@@ -223,32 +242,39 @@ describe('Codex structured child-work producer', () => {
           id: 'msg-1',
           text: 'Dev server is up'
         }),
-        lead: 'working'
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
       },
       // The parent's turn ends first; its child keeps running.
       {
         frame: turn('turn/completed', THREAD_ID, 'p1'),
         lead: 'done',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('review')).toMatchObject({ membership: 'live', state: 'working' })
       },
-      // The legacy task list carries no child state, so only the records can say a child waits,
-      // and the shared fold ranks that wait above the parent's own state.
+      // Only the records say a child waits, and the shared fold ranks that wait above the parent's
+      // own state.
       {
         frame: status(REVIEWER, ['waitingOnApproval']),
         lead: 'done',
-        childWaits: true,
-        check: () => {
-          expect(byDescription('review')?.state).toBe('waiting')
-          expect(agentChildWorkLiveness(adapter.backgroundTaskState('session-1')?.tasks)).toBe(
-            'working'
-          )
-        }
+        live: 'waiting',
+        parent: { stateName: 'waiting' },
+        check: () => expect(byDescription('review')?.state).toBe('waiting')
       },
-      { frame: status(REVIEWER, []), lead: 'done' },
+      {
+        frame: status(REVIEWER, []),
+        lead: 'done',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
       {
         frame: turn('turn/completed', REVIEWER, 'r1'),
         lead: 'done',
+        live: 'monitoring',
+        parent: { stateName: 'working', workingMode: 'monitoring' },
         check: () => {
           expect(byDescription('review')).toMatchObject({
             membership: 'settled',
@@ -259,11 +285,18 @@ describe('Codex structured child-work producer', () => {
           expect(display('review')).toBe('monitoring')
         }
       },
-      { frame: turn('turn/started', THREAD_ID, 'p2'), lead: 'working' },
+      {
+        frame: turn('turn/started', THREAD_ID, 'p2'),
+        lead: 'working',
+        live: 'monitoring',
+        parent: { stateName: 'working' }
+      },
       // The parent asks the finished child a follow-up: the same record, a new run.
       {
         frame: turn('turn/started', REVIEWER, 'r2'),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('review')).toMatchObject({
             childWorkId: 'child-1',
@@ -272,10 +305,30 @@ describe('Codex structured child-work producer', () => {
             previousInvocations: [expect.objectContaining({ outcome: 'succeeded' })]
           })
       },
-      { frame: spawned(TESTER, 'test', 'p2'), lead: 'working' },
-      { frame: turn('turn/started', TESTER, 't1'), lead: 'working' },
-      { frame: spawned(LINTER, 'lint', 'p2'), lead: 'working' },
-      { frame: turn('turn/started', LINTER, 'l1'), lead: 'working' },
+      {
+        frame: spawned(TESTER, 'test', 'p2'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
+      {
+        frame: turn('turn/started', TESTER, 't1'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
+      {
+        frame: spawned(LINTER, 'lint', 'p2'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
+      {
+        frame: turn('turn/started', LINTER, 'l1'),
+        lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
       // Codex ends this child's turn with an error it will not retry, and no turn/completed.
       {
         frame: {
@@ -283,22 +336,33 @@ describe('Codex structured child-work producer', () => {
           params: { threadId: LINTER, turnId: 'l1', willRetry: false, error: { message: 'boom' } }
         },
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('lint')).toMatchObject({ membership: 'settled', outcome: 'failed' })
       },
       {
         frame: turn('turn/completed', REVIEWER, 'r2', 'interrupted'),
         lead: 'working',
+        live: 'working',
+        parent: { stateName: 'working' },
         check: () =>
           expect(byDescription('review')).toMatchObject({
             membership: 'settled',
             outcome: 'cancelled'
           })
       },
-      { frame: turn('turn/completed', THREAD_ID, 'p2'), lead: 'done' },
+      {
+        frame: turn('turn/completed', THREAD_ID, 'p2'),
+        lead: 'done',
+        live: 'working',
+        parent: { stateName: 'working' }
+      },
       {
         frame: turn('turn/completed', TESTER, 't1', 'failed'),
         lead: 'done',
+        live: 'monitoring',
+        parent: { stateName: 'working', workingMode: 'monitoring' },
         check: () =>
           expect(byDescription('test')).toMatchObject({ membership: 'settled', outcome: 'failed' })
       },
@@ -312,6 +376,8 @@ describe('Codex structured child-work producer', () => {
           exitCode: 0
         }),
         lead: 'done',
+        live: null,
+        parent: { stateName: 'done' },
         check: () => {
           expect(byDescription('npm run dev')).toMatchObject({
             membership: 'settled',
@@ -323,15 +389,11 @@ describe('Codex structured child-work producer', () => {
     ]
     for (const [index, step] of steps.entries()) {
       send(step.frame)
-      const legacy = agentChildWorkLiveness(adapter.backgroundTaskState('session-1')?.tasks)
-      const recorded = agentChildWorkLiveness(
+      const live = agentChildWorkLiveness(
         records().filter((record) => record.membership === 'live')
       )
-      const expected = step.childWaits ? 'waiting' : legacy
-      const fold = (childWorkLiveness: typeof legacy) =>
-        foldAgentLeadStatus({ leadState: step.lead, childWorkLiveness })
-      expect({ index, parent: fold(recorded) }).toEqual({ index, parent: fold(expected) })
-      expect({ index, liveness: recorded }).toEqual({ index, liveness: expected })
+      const parent = foldAgentLeadStatus({ leadState: step.lead, childWorkLiveness: live })
+      expect({ index, live, parent }).toEqual({ index, live: step.live, parent: step.parent })
       step.check?.()
     }
     const settled = records()
