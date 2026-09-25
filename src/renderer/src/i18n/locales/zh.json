@@ -17223,6 +17223,11 @@
   },
   "components": {
     "native-chat": {
+      "contextMenu": {
+        "orchestrationAddressCopied": "已复制编排地址",
+        "orchestrationAddressCopyFailed": "复制编排地址失败",
+        "copyOrchestrationAddress": "复制编排地址"
+      },
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",
         "send": "发送",
@@ -17559,11 +17564,6 @@
         "notFound": "未找到文件：{{value0}}",
         "unverifiable": "无法检查 {{value0}}：{{value1}}",
         "unresolved": "无法在此工作区中解析 {{value0}}"
-      },
-      "contextMenu": {
-        "orchestrationAddressCopied": "已复制编排地址",
-        "orchestrationAddressCopyFailed": "复制编排地址失败",
-        "copyOrchestrationAddress": "复制编排地址"
       },
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",

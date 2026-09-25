@@ -17258,6 +17258,11 @@
       }
     },
     "native-chat": {
+      "contextMenu": {
+        "orchestrationAddressCopied": "오케스트레이션 주소를 복사했습니다",
+        "orchestrationAddressCopyFailed": "오케스트레이션 주소를 복사하지 못했습니다",
+        "copyOrchestrationAddress": "오케스트레이션 주소 복사"
+      },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
         "send": "보내기",
@@ -17594,11 +17599,6 @@
         "notFound": "파일을 찾을 수 없습니다: {{value0}}",
         "unverifiable": "{{value0}}을(를) 확인하지 못했습니다: {{value1}}",
         "unresolved": "이 워크스페이스에서 {{value0}}을(를) 찾을 수 없습니다"
-      },
-      "contextMenu": {
-        "orchestrationAddressCopied": "오케스트레이션 주소를 복사했습니다",
-        "orchestrationAddressCopyFailed": "오케스트레이션 주소를 복사하지 못했습니다",
-        "copyOrchestrationAddress": "오케스트레이션 주소 복사"
       },
       "contextUsage": {
         "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
