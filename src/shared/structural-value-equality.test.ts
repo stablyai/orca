@@ -10,6 +10,38 @@ const comparators = [
 ] as const
 
 describe.each(comparators)('%s', (_name, valuesEqual) => {
+  it('compares deep records and arrays without consuming the call stack', () => {
+    const json = `${'{"n":['.repeat(3000)}0${']}'.repeat(3000)}`
+    expect(valuesEqual(JSON.parse(json), JSON.parse(json))).toBe(true)
+    expect(valuesEqual(JSON.parse(json), JSON.parse(json.replace('0', '1')))).toBe(false)
+  })
+
+  it('preserves sparse-array iteration and short-circuit property reads', () => {
+    const sparse: unknown[] = []
+    sparse.length = 1
+    expect(valuesEqual(sparse, [1])).toBe(true)
+    expect(valuesEqual([1], sparse)).toBe(false)
+    const reads: string[] = []
+    const a = {
+      get first() {
+        reads.push('first')
+        return { value: 1 }
+      },
+      get second() {
+        reads.push('second')
+        return 2
+      }
+    }
+    expect(valuesEqual(a, { first: { value: 9 }, second: 2 })).toBe(false)
+    expect(reads).toEqual(['first'])
+  })
+
+  it('compares nested own prototype keys as data', () => {
+    const json = '{"nested":{"__proto__":{"value":1}}}'
+    expect(valuesEqual(JSON.parse(json), JSON.parse(json))).toBe(true)
+    expect(valuesEqual(JSON.parse(json), { nested: {} })).toBe(false)
+  })
+
   it('compares primitives and identical references', () => {
     expect(valuesEqual('a', 'a')).toBe(true)
     expect(valuesEqual('a', 'b')).toBe(false)

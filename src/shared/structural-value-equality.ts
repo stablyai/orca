@@ -28,33 +28,57 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function valuesEqual(a: unknown, b: unknown, policy: ValueEqualityPolicy): boolean {
+  const pending = [compareValueChildren(a, b, policy)]
+  while (pending.length > 0) {
+    const next = pending.at(-1)!.next()
+    if (next.done) {
+      if (!next.value) {
+        return false
+      }
+      pending.pop()
+    } else {
+      pending.push(compareValueChildren(next.value[0], next.value[1], policy))
+    }
+  }
+  return true
+}
+
+// Suspend each parent to preserve short-circuit reads and sparse-array every semantics.
+function* compareValueChildren(
+  a: unknown,
+  b: unknown,
+  policy: ValueEqualityPolicy
+): Generator<[unknown, unknown], boolean> {
   if (policy.sameValueLeaves ? Object.is(a, b) : a === b) {
     return true
   }
   if (Array.isArray(a) || Array.isArray(b)) {
-    return (
-      Array.isArray(a) &&
-      Array.isArray(b) &&
-      a.length === b.length &&
-      a.every((item, index) => valuesEqual(item, b[index], policy))
-    )
-  }
-  if (!isPlainRecord(a) || !isPlainRecord(b)) {
-    return false
-  }
-  if (policy.absentKeyEqualsUndefined) {
-    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      if (!valuesEqual(a[key], b[key], policy)) {
-        return false
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false
+    }
+    const length = a.length
+    for (let index = 0; index < length; index += 1) {
+      if (index in a) {
+        yield [a[index], b[index]]
       }
     }
     return true
   }
-  const keys = Object.keys(a)
-  if (keys.length !== Object.keys(b).length) {
+  if (!isPlainRecord(a) || !isPlainRecord(b)) {
     return false
   }
-  return keys.every((key) => Object.hasOwn(b, key) && valuesEqual(a[key], b[key], policy))
+  const ownKeys = Object.keys(a)
+  const keys = policy.absentKeyEqualsUndefined ? new Set([...ownKeys, ...Object.keys(b)]) : ownKeys
+  if (!policy.absentKeyEqualsUndefined && ownKeys.length !== Object.keys(b).length) {
+    return false
+  }
+  for (const key of keys) {
+    if (!policy.absentKeyEqualsUndefined && !Object.hasOwn(b, key)) {
+      return false
+    }
+    yield [a[key], b[key]]
+  }
+  return true
 }
 
 /**

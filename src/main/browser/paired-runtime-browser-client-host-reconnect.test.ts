@@ -66,38 +66,64 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
     await host.close()
   })
 
-  it('replays a completed mutation without executing its handler twice', async () => {
-    const attempts = mockAttempts()
-    const handler = vi.fn(() => ({ status: 'completed' as const }))
-    const onError = vi.fn()
-    const host = new PairedRuntimeBrowserClientHost({
-      pairing,
-      authorityRuntimeId: 'runtime-a',
-      browserHostClientId: 'host-a',
-      hostCapabilities: ['webview'],
-      handler,
-      getPageInventory: () => [],
-      onError
-    })
-    const starting = host.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    attempts[0]!.callbacks.onResponse(readyResponse())
-    await starting
-    attempts[0]!.callbacks.onResponse(commandResponse())
-    await vi.waitFor(() => expect(attempts[0]!.sendRequest).toHaveBeenCalledOnce())
+  it.each(['createPage', 'automation'] as const)(
+    'replays completed %s after reconnect without executing twice',
+    async (type) => {
+      const attempts = mockAttempts()
+      const handler = vi.fn(() => ({ status: 'completed' as const }))
+      const onError = vi.fn()
+      const host = new PairedRuntimeBrowserClientHost({
+        pairing,
+        authorityRuntimeId: 'runtime-a',
+        browserHostClientId: 'host-a',
+        hostCapabilities: ['webview'],
+        handler,
+        getPageInventory: () => [],
+        onError
+      })
+      const starting = host.start()
+      await vi.waitFor(() => expect(attempts).toHaveLength(1))
+      attempts[0]!.callbacks.onResponse(readyResponse())
+      await starting
+      const response = commandResponse()
+      const replayedResponse =
+        type === 'automation'
+          ? {
+              ...response,
+              result: {
+                ...response.result,
+                commandSequence: 2,
+                commandId: 'snapshot-a',
+                command: {
+                  type: 'automation' as const,
+                  method: 'browser.snapshot' as const,
+                  params: {}
+                }
+              }
+            }
+          : response
+      if (type === 'automation') {
+        attempts[0]!.callbacks.onResponse(response)
+        await vi.waitFor(() => expect(attempts[0]!.sendRequest).toHaveBeenCalledOnce())
+        attempts[0]!.sendRequest.mockClear()
+        handler.mockClear()
+      }
+      attempts[0]!.callbacks.onResponse(replayedResponse)
+      await vi.waitFor(() => expect(attempts[0]!.sendRequest).toHaveBeenCalledOnce())
 
-    attempts[0]!.callbacks.onError(
-      new RemoteRuntimeClientError('remote_runtime_unavailable', 'transport failed')
-    )
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    attempts[1]!.callbacks.onResponse(readyResponse())
-    attempts[1]!.callbacks.onResponse(commandResponse())
-    await vi.waitFor(() => expect(attempts[1]!.sendRequest).toHaveBeenCalledOnce())
+      attempts[0]!.callbacks.onError(
+        new RemoteRuntimeClientError('remote_runtime_unavailable', 'transport failed')
+      )
+      await vi.waitFor(() => expect(attempts).toHaveLength(2))
+      attempts[1]!.callbacks.onResponse(readyResponse())
+      attempts[1]!.callbacks.onResponse(replayedResponse)
+      await vi.waitFor(() => expect(attempts[1]!.sendRequest).toHaveBeenCalledOnce())
 
-    expect(handler).toHaveBeenCalledOnce()
-    expect(onError).not.toHaveBeenCalled()
-    await host.close()
-  })
+      expect(handler).toHaveBeenCalledOnce()
+      expect(onError).not.toHaveBeenCalled()
+      await host.close()
+    }
+  )
 })
 
 function mockAttempts(): {

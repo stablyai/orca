@@ -78,25 +78,25 @@ export class BrowserClientHostCommandDispatcher {
       throw new Error('browser_host_command_dispatcher_closed')
     }
     assertBrowserClientHostCommandAuthority(this.authority, command)
-    const acceptedCommand = snapshotCommandEvent(command)
     const admission = selectCommandPage(
       this.pages,
       this.maxPages,
       this.retiredGenerationFloor,
-      acceptedCommand
+      command
     )
     const { page } = admission
-    const existing = findExistingCommand(page, acceptedCommand)
+    const existing = findExistingCommand(page, command)
     if (existing) {
       return existing.promise
     }
-    assertNewPageCommand(page, acceptedCommand)
+    assertNewPageCommand(page, command)
     if (this.activeCommands >= this.maxActiveCommands) {
       throw new Error('browser_host_command_capacity')
     }
     if (page.queue.length >= this.maxQueuedCommandsPerPage) {
       throw new Error('browser_host_page_command_capacity')
     }
+    const acceptedCommand = snapshotCommandEvent(command)
     const previousPage = this.pages.get(acceptedCommand.browserPageId)
     admission.commit()
     recordNewPageCommand(page, acceptedCommand)

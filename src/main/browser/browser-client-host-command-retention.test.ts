@@ -161,15 +161,20 @@ it('releases completed results on close while preserving pending native page cus
 it('discards late closed records while retaining a sibling pending handler', async () => {
   const first = deferred<BrowserClientHostCommandResult>()
   const second = deferred<BrowserClientHostCommandResult>()
+  const acceptedInputs = new Map<string, WeakRef<object>>()
   const dispatcher = new BrowserClientHostCommandDispatcher({
     authority,
     joinTimeoutMs: 15,
-    handler: (event) =>
-      event.command.type === 'createPage'
+    handler: (event) => {
+      if (event.command.type === 'automation') {
+        acceptedInputs.set(event.browserPageId, new WeakRef(event.command.params))
+      }
+      return event.command.type === 'createPage'
         ? { status: 'completed' }
         : event.browserPageId === 'page-a'
           ? first.promise
           : second.promise
+    }
   })
   for (const page of ['page-a', 'page-b']) {
     await dispatcher.dispatch(
@@ -189,7 +194,9 @@ it('discards late closed records while retaining a sibling pending handler', asy
     first.resolve({ status: 'completed' })
     await collect()
     expect(a.input.deref()).toBeUndefined()
-    expect(b.input.deref()).toBeDefined()
+    expect(b.input.deref()).toBeUndefined()
+    expect(acceptedInputs.get('page-a')?.deref()).toBeUndefined()
+    expect(acceptedInputs.get('page-b')?.deref()).toBeDefined()
     expect(await dispatcher.close()).toBe(false)
   } finally {
     first.resolve({ status: 'completed' })
@@ -198,4 +205,5 @@ it('discards late closed records while retaining a sibling pending handler', asy
   }
   await collect()
   expect(b.input.deref()).toBeUndefined()
+  expect(acceptedInputs.get('page-b')?.deref()).toBeUndefined()
 })

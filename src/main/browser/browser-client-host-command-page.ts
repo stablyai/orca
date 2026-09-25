@@ -2,6 +2,7 @@ import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult
 } from '../../shared/browser-client-host-protocol'
+import { structuralValuesEqual } from '../../shared/structural-value-equality'
 import {
   createPageState,
   type CommandRecord,
@@ -87,6 +88,12 @@ function commandsMatch(
 ): boolean {
   if (first.command.type !== second.command.type) {
     return false
+  }
+  if (first.command.type === 'automation' && second.command.type === 'automation') {
+    return (
+      first.command.method === second.command.method &&
+      structuralValuesEqual(first.command.params, second.command.params)
+    )
   }
   if (first.command.type === 'navigate' && second.command.type === 'navigate') {
     return first.command.url === second.command.url
