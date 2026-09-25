@@ -217,7 +217,11 @@ export function NativeChatToolRun({
     <div className="mt-3">
       {standaloneRows}
       {hasAskCall ? (
-        <NativeChatAwaitingInputRow subject={askSubject} pending={askIsActive} />
+        <NativeChatAwaitingInputRow
+          subject={askSubject}
+          pending={askIsActive}
+          disclosureKey={disclosureId === undefined ? undefined : `ask:${disclosureId}`}
+        />
       ) : null}
       {!showsHeader ? null : (
         // One element for the run's whole life. Live and settled are states of

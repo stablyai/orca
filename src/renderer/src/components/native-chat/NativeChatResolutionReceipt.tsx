@@ -8,10 +8,14 @@ import {
 } from './native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
-  body
+  body,
+  disclosureId
 }: {
   body: NativeChatResolvedPrompt
+  /** Message this receipt stands in for; keys the question row's disclosure. */
+  disclosureId?: string
 }): React.JSX.Element | null {
+  const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject: NativeChatAskRowSubject | null =
     body.kind !== 'question'
       ? null
@@ -31,7 +35,7 @@ export function NativeChatResolutionReceipt({
           }
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
-      <NativeChatAwaitingInputRow subject={subject} pending />
+      <NativeChatAwaitingInputRow subject={subject} pending disclosureKey={askDisclosureKey} />
     ) : null
   }
   const { resolution } = body
@@ -43,7 +47,11 @@ export function NativeChatResolutionReceipt({
       data-native-chat-receipt={body.kind}
     >
       {body.kind === 'question' ? (
-        <NativeChatAwaitingInputRow pending={false} subject={subject} />
+        <NativeChatAwaitingInputRow
+          pending={false}
+          subject={subject}
+          disclosureKey={askDisclosureKey}
+        />
       ) : (
         <div className="font-medium">{title}</div>
       )}
