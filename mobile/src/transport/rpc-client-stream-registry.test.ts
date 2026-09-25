@@ -145,32 +145,33 @@ describe('RpcClientStreamRegistry', () => {
     })
   })
 
-  it('drops a held session tabs unsubscribe when the stream ends or reconnects first', () => {
+  it('drops a held session tabs unsubscribe when the subscribe fails or reconnects first', () => {
     const { registry, sent } = createRegistry()
-    const disposeEnded = registry.subscribe(
+    const events: unknown[] = []
+    const disposeFailed = registry.subscribe(
       'session.tabs.subscribe',
       { worktree: 'wt-1' },
-      () => {}
+      (event) => events.push(event)
     )
     const disposeReplayed = registry.subscribe(
       'session.tabs.subscribe',
       { worktree: 'wt-2' },
       () => {}
     )
-    const ended = sent[0]!
-    disposeEnded()
+    const failed = sent[0]!
+    disposeFailed()
     disposeReplayed()
 
     registry.handleResponse({
-      id: ended.id,
-      ok: true,
-      result: { type: 'end' },
-      _meta: { runtimeId: 'runtime-1' }
+      id: failed.id,
+      ok: false,
+      error: { code: 'worktree_not_found', message: 'Worktree not found' }
     })
     registry.markForReplay()
     registry.replayAfterAuthentication()
 
     expect(sent).toHaveLength(2)
+    expect(events).toEqual([])
     expect(registry.size()).toBe(0)
   })
 
