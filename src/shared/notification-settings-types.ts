@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { AgentStatusTurnEnding } from './agent-status-display-state'
 
 export type NotificationSettings = {
   enabled: boolean
@@ -43,7 +44,8 @@ export type NotificationDispatchRequest = {
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string
-  agentInterrupted?: boolean
+  /** How the main agent's turn ended when it did not end cleanly; picks "failed" or "stopped". */
+  agentTurnEnding?: AgentStatusTurnEnding
   /**
    * Which lane raised this, so the click handler knows how to reveal the subject. Absent means the
    * terminal lane, which is every sender that predates structured chat.

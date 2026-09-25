@@ -230,16 +230,24 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(indicators().paneDot).toBe('agent-completion')
   })
 
-  it('words a successful turn as finished and a stopped one through the shipped interrupted flag', () => {
+  it('words a successful turn as finished, a failed one as failed and a cancelled one as stopped', () => {
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     // 'done' is the host's report that the turn settled, not a reading of the status row: main
     // words a 'working' state as "working", which would announce a finished turn as unfinished.
     expect(onlyDispatch()).toMatchObject({
       source: 'agent-task-complete',
       surface: 'agent-session',
-      agentState: 'done',
-      agentInterrupted: false
+      agentState: 'done'
     })
+    expect(onlyDispatch()).not.toHaveProperty('agentTurnEnding')
+
+    dispatched.length = 0
+    seed()
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(),
+      completion({ outcome: 'failure', turnId: 'turn-3' })
+    )
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnEnding: 'failure' })
 
     dispatched.length = 0
     seed()
@@ -247,7 +255,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       structuredTab(),
       completion({ outcome: 'cancellation', turnId: 'turn-2' })
     )
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: true })
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnEnding: 'cancellation' })
   })
 
   it('says done even while the status row still reads working, because the host settled the turn', () => {
@@ -270,7 +278,8 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       }
     })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: false })
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
+    expect(onlyDispatch()).not.toHaveProperty('agentTurnEnding')
   })
 
   it('delivers an id the acknowledgement round trip dismisses when the user reads the chat', () => {
