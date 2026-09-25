@@ -234,7 +234,11 @@ describe('useHostStatusGates', () => {
       .mockRejectedValueOnce(new Error('request timed out'))
       .mockResolvedValueOnce({
         ok: true,
-        result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
+        result: {
+          capabilities: ['browser.screencast.v1'],
+          floatingWorkspaceEnabled: true,
+          machineName: 'studio'
+        }
       })
     const client = { sendRequest } as unknown as RpcClient
     let gates: HostStatusGates | null = null
@@ -256,6 +260,7 @@ describe('useHostStatusGates', () => {
         statusPending: false,
         statusReadable: false
       })
+      expect(recordDescriptorFromStatusMock).not.toHaveBeenCalled()
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_000)
@@ -266,6 +271,10 @@ describe('useHostStatusGates', () => {
         statusPending: false,
         statusReadable: true
       })
+      expect(recordDescriptorFromStatusMock).toHaveBeenCalledWith(
+        'host-1',
+        expect.objectContaining({ machineName: 'studio' })
+      )
     } finally {
       renderer?.unmount()
       vi.useRealTimers()
