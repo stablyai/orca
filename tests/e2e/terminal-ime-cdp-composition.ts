@@ -131,12 +131,20 @@ export async function dispatchPlainEnter(session: CDPSession): Promise<void> {
  * `Input.imeSetComposition` opens a genuine Chromium composition session — the same one a native
  * input source would — so preedit geometry can be asserted with no system input source at all.
  */
-export async function setImeComposition(session: CDPSession, text: string): Promise<void> {
-  const length = Array.from(text).length
+/**
+ * `insertionPoint` places the IME caret inside the preedit (default: its end), as ←/→ does. It is
+ * in UTF-16 code units, like the selection Chromium applies; a code-point count would land inside
+ * a surrogate pair.
+ */
+export async function setImeComposition(
+  session: CDPSession,
+  text: string,
+  insertionPoint = text.length
+): Promise<void> {
   await session.send('Input.imeSetComposition', {
     text,
-    selectionStart: length,
-    selectionEnd: length
+    selectionStart: insertionPoint,
+    selectionEnd: insertionPoint
   })
 }
 
