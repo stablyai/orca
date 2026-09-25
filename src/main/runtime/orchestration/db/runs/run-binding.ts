@@ -5,7 +5,7 @@ import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
 import {
-  addressSpellingsOf,
+  mailboxAddressOf,
   runBoundToCoordinator,
   runCoordinatorKey
 } from '../../orchestration-caller-identity'
@@ -122,11 +122,14 @@ export function bindRun(
       )
     }
     this.unbindOtherRunsForCoordinator(coordinator, params.runId)
-    // Every address of the coordinator being replaced and of the one binding now.
+    // The mailbox address of the coordinator being replaced and of the one binding now.
     for (const address of new Set([
-      ...addressSpellingsOf(runCoordinatorKey(run)),
-      ...addressSpellingsOf(coordinator)
+      mailboxAddressOf(runCoordinatorKey(run)),
+      mailboxAddressOf(coordinator)
     ])) {
+      if (address === null) {
+        continue
+      }
       this.rememberRunCoordinatorHandle(params.runId, address)
       this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address)
     }

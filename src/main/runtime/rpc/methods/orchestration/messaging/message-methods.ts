@@ -10,6 +10,7 @@ import {
   stripMutationReplayNudge
 } from '../../../orchestration-mutation-executor'
 import { exposeMessage } from './mailbox-message-receipt'
+import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
 import {
   ReplyParams,
@@ -137,7 +138,10 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       const db = runtime.getOrchestrationDb()
       // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
       const messages = params.terminal
-        ? db.getAllMessagesForHandle(params.terminal, params.limit)
+        ? db.getAllMessagesForHandle(
+            resolveOrchestrationParty(params.terminal, db).address,
+            params.limit
+          )
         : db.getInbox(params.limit)
       return { messages, count: messages.length }
     }

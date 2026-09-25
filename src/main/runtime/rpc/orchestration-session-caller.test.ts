@@ -27,25 +27,26 @@ import {
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 import {
-  claimsOrchestrationSession,
+  needsOrchestrationCallerResolution,
   ORCHESTRATION_CALLER_PARAM
 } from './orchestration-session-caller'
+import { ORCHESTRATION_TARGET_PARAM } from '../orchestration/orchestration-party'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-// Fields that name a party. They name the caller only in the methods ORCHESTRATION_CALLER_PARAM lists.
-const PARTY_NAMING_FIELDS = ['from', 'terminal', 'callerTerminalHandle'] as const
-// Methods with such a field that never reads it as the caller's identity, for any caller.
-const NAMES_A_PARTY_BUT_NOT_THE_CALLER: Readonly<Record<string, string>> = {
-  'orchestration.run': 'retired; refused before any handler',
-  'orchestration.runShow': 'reads a Run by id; `from` is unused',
-  'orchestration.dispatchShow': '`from` only fills the preview preamble text',
-  'orchestration.inbox': '`terminal` is a read filter over stored mail',
-  'orchestration.federationAttachStart': '`terminal` names the remote worker terminal',
-  'orchestration.workerTerminalUserInput': '`terminal` names the worker terminal'
+// Fields that can name a party: the caller in ORCHESTRATION_CALLER_PARAM, a target in ORCHESTRATION_TARGET_PARAM.
+const PARTY_NAMING_FIELDS = ['to', 'from', 'terminal', 'callerTerminalHandle'] as const
+// `method field` pairs with such a field that is neither, so never resolves as a party.
+const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
+  'orchestration.run from': 'retired; refused before any handler',
+  'orchestration.runShow from': 'reads a Run by id; `from` is unused',
+  'orchestration.dispatchShow from': '`from` only fills the preview preamble text',
+  'orchestration.workerStart terminal': 'adopts an existing PTY pane, which a session never has',
+  'orchestration.federationAttachStart terminal': 'names the remote worker terminal',
+  'orchestration.workerTerminalUserInput terminal': 'names the worker terminal'
 }
 
 /** One request per identity-consulting method, valid enough to reach the dispatcher entry. */
@@ -79,32 +80,33 @@ describe('orchestration session callers at the dispatch entry', () => {
     vi.restoreAllMocks()
   })
 
-  it('lists exactly the methods whose params name their caller, and classifies every other one', () => {
+  it('classifies every party-naming field as the caller, a resolved target, or neither', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
     const partyNaming = [...registry.values()]
-      .filter((method) => {
+      .flatMap((method) => {
         const schema = method.params
-        return (
-          schema instanceof ZodObject &&
-          PARTY_NAMING_FIELDS.some((field) => Object.hasOwn(schema.shape, field))
-        )
+        return schema instanceof ZodObject
+          ? PARTY_NAMING_FIELDS.filter((field) => Object.hasOwn(schema.shape, field)).map(
+              (field) => `${method.name} ${field}`
+            )
+          : []
       })
-      .map((method) => method.name)
       .sort()
 
-    // The population: 41 registered methods, 21 of which carry a party-naming field.
+    // The population: 41 registered methods carrying 25 party-naming fields.
     expect(registry.size).toBe(41)
-    expect(partyNaming).toHaveLength(21)
+    expect(partyNaming).toHaveLength(25)
     expect(partyNaming).toEqual(
       [
-        ...Object.keys(ORCHESTRATION_CALLER_PARAM),
-        ...Object.keys(NAMES_A_PARTY_BUT_NOT_THE_CALLER)
+        ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(
+          ([method, field]) => `${method} ${field}`
+        ),
+        ...Object.entries(ORCHESTRATION_TARGET_PARAM).map(
+          ([method, field]) => `${method} ${field}`
+        ),
+        ...Object.keys(NAMES_NO_RESOLVED_PARTY)
       ].sort()
     )
-    for (const [method, field] of Object.entries(ORCHESTRATION_CALLER_PARAM)) {
-      const schema = registry.get(method)?.params
-      expect(schema instanceof ZodObject && Object.hasOwn(schema.shape, field), method).toBe(true)
-    }
     expect(Object.keys(MINIMAL_PARAMS).sort()).toEqual(
       Object.keys(ORCHESTRATION_CALLER_PARAM).sort()
     )
@@ -387,7 +389,7 @@ describe('orchestration session callers at the dispatch entry', () => {
       objective: 'o',
       from: 'term_worker'
     })
-    expect(claimsOrchestrationSession(request)).toBe(false)
+    expect(needsOrchestrationCallerResolution(request)).toBe(false)
 
     const run = resultOf(await h.dispatch(request)).run
     expect(run).toMatchObject({ coordinator_handle: 'term_worker' })

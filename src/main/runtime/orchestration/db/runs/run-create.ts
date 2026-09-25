@@ -2,7 +2,7 @@ import type { RunRow } from '../../types'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
-import { addressSpellingsOf } from '../../orchestration-caller-identity'
+import { mailboxAddressOf } from '../../orchestration-caller-identity'
 
 // ── Runs ──
 
@@ -39,7 +39,8 @@ export function createRun(
         coordinator.paneKey,
         coordinator.orcaSessionId
       )
-    for (const address of addressSpellingsOf(coordinator)) {
+    const address = mailboxAddressOf(coordinator)
+    if (address !== null) {
       this.rememberRunCoordinatorHandle(id, address)
     }
     this.db.exec('COMMIT')

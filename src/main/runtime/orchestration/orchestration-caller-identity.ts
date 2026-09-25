@@ -41,18 +41,15 @@ export function hasRunBindingKey(caller: OrchestrationCoordinatorKey): boolean {
   return caller.paneKey !== null || caller.orcaSessionId !== null
 }
 
-/**
- * Every address one party is reachable at. A structured worker has two, its handle and its session
- * address, so every consumer that remembers, reroutes or compares a party's mail takes this set.
- */
-export function addressSpellingsOf(
+/** The one address a party reads mail at and is sent mail at; null for a key naming nobody. */
+export function mailboxAddressOf(
   party: Pick<OrchestrationCoordinatorKey, 'terminalHandle' | 'orcaSessionId'>
-): string[] {
-  const sessionAddress =
-    party.orcaSessionId === null ? null : formatOrcaSessionAddress(party.orcaSessionId)
-  return [...new Set([party.terminalHandle, sessionAddress])].filter(
-    (address): address is string => address !== null
-  )
+): string | null {
+  // Handle first because a worker's mail and Dispatch rows are keyed by it today; flips when sessions become canonical.
+  if (party.terminalHandle !== null) {
+    return party.terminalHandle
+  }
+  return party.orcaSessionId === null ? null : formatOrcaSessionAddress(party.orcaSessionId)
 }
 
 /** Who a Run's binding names now; an Orca session id an older binding left behind is not part of it. */

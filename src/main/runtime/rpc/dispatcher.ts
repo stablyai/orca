@@ -24,7 +24,7 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
 import {
-  claimsOrchestrationSession,
+  needsOrchestrationCallerResolution,
   resolveOrchestrationSessionCaller,
   type ResolvedOrchestrationRequest
 } from './orchestration-session-caller'
@@ -75,7 +75,7 @@ export class RpcDispatcher {
     }
 
     let resolved: ResolvedOrchestrationRequest = { request }
-    if (claimsOrchestrationSession(request)) {
+    if (needsOrchestrationCallerResolution(request)) {
       try {
         resolved = await resolveOrchestrationSessionCaller(this.runtime, request, options)
       } catch (error) {

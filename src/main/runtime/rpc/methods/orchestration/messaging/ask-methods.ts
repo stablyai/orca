@@ -6,9 +6,10 @@ import { AskParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
 import {
-  addressSpellingsOf,
+  mailboxAddressOf,
   runCoordinatorKey
 } from '../../../../orchestration/orchestration-caller-identity'
+import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 
 export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
@@ -94,7 +95,8 @@ export const ORCHESTRATION_ASK_METHODS = [
         if (
           params.to &&
           params.to !== `run:${run.id}` &&
-          !addressSpellingsOf(runCoordinatorKey(run)).includes(params.to)
+          resolveOrchestrationParty(params.to, db).address !==
+            mailboxAddressOf(runCoordinatorKey(run))
         ) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',

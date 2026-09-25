@@ -1,6 +1,6 @@
 import type { RunRow } from '../../types'
 import {
-  addressSpellingsOf,
+  mailboxAddressOf,
   runBoundToCoordinator,
   runCoordinatorKey,
   type OrchestrationCoordinatorKey
@@ -164,7 +164,8 @@ export function unbindOtherRunsForCoordinator(
 ): void {
   for (const run of this.runsBoundToCoordinator(caller)) {
     if (run.id !== exceptRunId) {
-      for (const address of addressSpellingsOf(runCoordinatorKey(run))) {
+      const address = mailboxAddressOf(runCoordinatorKey(run))
+      if (address !== null) {
         this.routeAllUnreadDirectMessagesToRunMailbox(run.id, address)
       }
       this.db

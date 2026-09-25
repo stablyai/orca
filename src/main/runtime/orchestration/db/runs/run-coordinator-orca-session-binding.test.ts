@@ -50,8 +50,7 @@ describe('Run binding by Orca session id', () => {
     return {
       terminalHandle: mintStructuredWorkerHandle(),
       paneKey: mintStructuredWorkerPaneKey(sessionId),
-      orcaSessionId: sessionId,
-      address: formatOrcaSessionAddress(sessionId)
+      orcaSessionId: sessionId
     }
   }
 
@@ -182,7 +181,7 @@ describe('Run binding by Orca session id', () => {
     expect(db.getCurrentRunForCoordinator(chat(worker.orcaSessionId))).toBeUndefined()
   })
 
-  it('remembers a coordinating structured worker at its handle and its session address', () => {
+  it('remembers a coordinating structured worker at its handle, and the v42 trigger its inert session address', () => {
     db = new OrchestrationDb(':memory:')
     const worker = structuredWorker()
     const run = db.createRun({
@@ -250,7 +249,7 @@ describe('Run binding by Orca session id', () => {
     expect(db.getCurrentRunForCoordinator(chat(WORKER_SESSION))?.id).toBe(run.id)
   })
 
-  it("reroutes and remembers both of each worker's addresses when one takes a Run from another", () => {
+  it("reroutes and remembers each worker's one mailbox address when one takes a Run from another", () => {
     db = new OrchestrationDb(':memory:')
     const first = structuredWorker()
     const second = structuredWorker(OTHER_WORKER_SESSION)
@@ -260,7 +259,8 @@ describe('Run binding by Orca session id', () => {
       coordinatorPaneKey: first.paneKey,
       coordinatorOrcaSessionId: first.orcaSessionId
     })
-    const addresses = [first.terminalHandle, first.address, second.terminalHandle, second.address]
+    // A worker's mailbox address is its handle; nothing writes mail to its session address.
+    const addresses = [first.terminalHandle, second.terminalHandle]
     const stray = addresses.map((address) => strayMail(run.id, address))
 
     db.bindRun({
@@ -278,7 +278,7 @@ describe('Run binding by Orca session id', () => {
     }
   })
 
-  it("reroutes both of a worker's addresses when its next Run unbinds the last", () => {
+  it("reroutes a worker's mailbox address when its next Run unbinds the last", () => {
     db = new OrchestrationDb(':memory:')
     const worker = structuredWorker()
     const bind = {
@@ -287,134 +287,13 @@ describe('Run binding by Orca session id', () => {
       coordinatorOrcaSessionId: worker.orcaSessionId
     }
     const last = db.createRun({ objective: 'last', ...bind })
-    const stray = [worker.terminalHandle, worker.address].map((address) =>
-      strayMail(last.id, address)
-    )
+    const stray = [strayMail(last.id, worker.terminalHandle)]
 
     db.createRun({ objective: 'next', ...bind })
 
     for (const id of stray) {
       expect(db.getMessageById(id)?.to_handle).toBe(`run:${last.id}`)
     }
-  })
-})
-
-describe('mail owned by an active Dispatch assignee addressed by its session address', () => {
-  let db: OrchestrationDb
-
-  afterEach(() => {
-    db?.close()
-  })
-
-  /** A structured worker that coordinates its own Run and is also an active assignee in it. */
-  function workerCoordinatingItsOwnDispatch() {
-    const handle = mintStructuredWorkerHandle()
-    const paneKey = mintStructuredWorkerPaneKey(WORKER_SESSION)
-    const run = db.createRun({
-      objective: 'nested',
-      coordinatorHandle: handle,
-      coordinatorPaneKey: paneKey,
-      coordinatorOrcaSessionId: WORKER_SESSION
-    })
-    const dispatch = db.createDispatchContext({
-      taskId: db.createTask({ runId: run.id, spec: 'own work' }).id,
-      assigneeHandle: handle,
-      assigneePaneKey: paneKey,
-      processIncarnation: structuredWorkerProcessIncarnation(WORKER_SESSION),
-      creator: { kind: 'system' },
-      maxDepth: UNCAPPED
-    })
-    return { run, dispatch, handle }
-  }
-
-  it('keeps mail to the session address out of the Run mailbox, as it does for the handle', () => {
-    db = new OrchestrationDb(':memory:')
-    const { run } = workerCoordinatingItsOwnDispatch()
-
-    expect(
-      db.insertMessage({
-        from: 'term_x',
-        to: WORKER_ADDRESS,
-        subject: 's',
-        body: '',
-        runId: run.id
-      }).to_handle
-    ).toBe(WORKER_ADDRESS)
-  })
-
-  it('leaves that mail in place when the Run is rebound', () => {
-    db = new OrchestrationDb(':memory:')
-    const { run } = workerCoordinatingItsOwnDispatch()
-    const mail = db.insertMessage({
-      from: 'term_x',
-      to: WORKER_ADDRESS,
-      subject: 's',
-      body: '',
-      runId: run.id
-    })
-
-    db.routeAllUnreadDirectMessagesToRunMailbox(run.id, WORKER_ADDRESS)
-
-    expect(db.getMessageById(mail.id)?.to_handle).toBe(WORKER_ADDRESS)
-  })
-
-  it("sweeps the session's stray mail from another Run into its Dispatch mailbox", () => {
-    db = new OrchestrationDb(':memory:')
-    const { run, dispatch } = workerCoordinatingItsOwnDispatch()
-    db.createRun({
-      objective: 'elsewhere',
-      coordinatorHandle: 'term_c',
-      coordinatorPaneKey: OTHER_PANE
-    })
-    const stray = db.insertMessage({
-      from: 'term_x',
-      to: WORKER_ADDRESS,
-      subject: 's',
-      body: '',
-      runId: run.id
-    })
-
-    const routed = db.routeForeignDirectMessagesToOwnedMailboxes(WORKER_ADDRESS)
-
-    expect(routed.routedCount).toBe(1)
-    expect(db.getMessageById(stray.id)?.to_handle).toBe(`dispatch:${dispatch.id}`)
-  })
-})
-
-describe('stray mail to a session address that is only an assignee', () => {
-  let db: OrchestrationDb
-
-  afterEach(() => {
-    db?.close()
-  })
-
-  it('sweeps it into the Dispatch mailbox, as stray mail to an assignee handle is', () => {
-    db = new OrchestrationDb(':memory:')
-    const run = db.createRun({
-      objective: 'pty coordinator',
-      coordinatorHandle: 'term_c',
-      coordinatorPaneKey: OTHER_PANE
-    })
-    const dispatch = db.createDispatchContext({
-      taskId: db.createTask({ runId: run.id, spec: 'work' }).id,
-      assigneeHandle: mintStructuredWorkerHandle(),
-      assigneePaneKey: mintStructuredWorkerPaneKey(WORKER_SESSION),
-      processIncarnation: structuredWorkerProcessIncarnation(WORKER_SESSION),
-      creator: { kind: 'system' },
-      maxDepth: UNCAPPED
-    })
-    // The worker coordinates nothing, so no address cache entry can claim this mail.
-    const stray = db.insertMessage({
-      from: 'term_c',
-      to: WORKER_ADDRESS,
-      subject: 's',
-      body: '',
-      runId: run.id
-    })
-    expect(db.getMessageById(stray.id)?.to_handle).toBe(WORKER_ADDRESS)
-
-    expect(db.routeForeignDirectMessagesToOwnedMailboxes(WORKER_ADDRESS).routedCount).toBe(1)
-    expect(db.getMessageById(stray.id)?.to_handle).toBe(`dispatch:${dispatch.id}`)
   })
 })
 

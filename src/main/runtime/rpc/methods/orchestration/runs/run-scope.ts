@@ -11,8 +11,7 @@ import {
   type OrchestrationCallerIdentity,
   type OrchestrationSessionCaller
 } from '../../../../orchestration/orchestration-caller-identity'
-import { resolveStructuredWorkerIdentity } from '../../../../structured-worker-authority'
-import { isOrcaSessionId } from '../../../../../../shared/orca-session-address'
+import { resolveDeclaredCallerParty } from '../../../../orchestration/orchestration-party'
 
 export type RunScopeParams = {
   runId?: string
@@ -47,8 +46,7 @@ export function assertCallerHandleMatchesEvidence(
 
 /**
  * The caller as Run binding and mail routing see it. A session the dispatch entry resolved is the
- * caller outright; otherwise it is the declared terminal handle and the pane it resolved to, plus
- * the Orca session id a structured worker's handle was minted for.
+ * caller outright; otherwise it is the party the declared handle names, at the pane it resolved to.
  */
 export function orchestrationCallerIdentity(
   runtime: OrcaRuntimeService,
@@ -61,13 +59,8 @@ export function orchestrationCallerIdentity(
   if (caller.session) {
     return caller.session
   }
-  const worker = resolveStructuredWorkerIdentity(caller.handle, runtime.getOrchestrationDb())
-  return {
-    address: caller.handle,
-    terminalHandle: caller.handle,
-    paneKey: caller.paneKey ?? null,
-    orcaSessionId: worker && isOrcaSessionId(worker.sessionId) ? worker.sessionId : null
-  }
+  const party = resolveDeclaredCallerParty(caller.handle, runtime.getOrchestrationDb())
+  return { ...party, paneKey: caller.paneKey ?? null }
 }
 
 export type OrchestrationCallerParams = {
