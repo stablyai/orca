@@ -99,6 +99,33 @@ describe('RpcClientStreamRegistry', () => {
     })
   })
 
+  it('releases a replayed browser stream replaced by a new one before its ready', () => {
+    const { registry, sent } = createRegistry()
+    registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})
+    const replayedId = sent[0]!.id
+    registry.handleResponse(
+      streamingResponse(replayedId, { type: 'ready', subscriptionId: 'page-1-old-connection' })
+    )
+
+    registry.markForReplay()
+    registry.replayAfterAuthentication()
+    registry.subscribe('browser.screencast', { page: 'page-2' }, () => {})
+    const replacementId = sent.at(-1)!.id
+    registry.handleResponse(
+      streamingResponse(replayedId, { type: 'ready', subscriptionId: 'page-1-new-connection' })
+    )
+    registry.handleResponse(
+      streamingResponse(replacementId, { type: 'ready', subscriptionId: 'page-2' })
+    )
+
+    expect(
+      sent
+        .filter((request) => request.method === 'browser.screencast.unsubscribe')
+        .map((request) => request.params)
+    ).toEqual([{ subscriptionId: 'page-1-new-connection' }])
+    expect(registry.size()).toBe(1)
+  })
+
   describe.each([
     ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe', null],
     ['browser.screencast', 'browser.screencast.unsubscribe', { page: 'page-1' }]
