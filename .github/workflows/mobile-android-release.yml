@@ -38,6 +38,10 @@ jobs:
     permissions:
       contents: write
 
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      publish_release: ${{ steps.release.outputs.publish_release }}
+
     defaults:
       run:
         working-directory: mobile
@@ -164,30 +168,56 @@ jobs:
               android/app/build/outputs/apk/release/*.apk
           fi
 
-      # Why: desktop releases own GitHub's releases/latest, so Android needs its own
-      # fixed-URL release for README, docs and in-app download links to point at.
+  # Why: desktop releases own GitHub's releases/latest, so Android needs its own
+  # fixed-URL release for README, docs and in-app download links to point at.
+  android-latest:
+    needs: android-build
+    if: needs.android-build.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+
+    # Why: serializes only the rolling upload, so an older run cannot pass the
+    # newest-version check and then clobber a newer APK; versioned releases stay parallel.
+    concurrency:
+      group: mobile-android-latest
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: orca-mobile-apk
+          path: ${{ runner.temp }}/apk
+
       - name: Update rolling latest Android release
-        if: steps.release.outputs.publish_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.android-build.outputs.tag }}
         run: |
           set -euo pipefail
-          tag="${{ steps.release.outputs.tag }}"
+          tag="$RELEASE_TAG"
           latest_tag="mobile-android-latest"
 
           # Why: a re-run of an older version must not replace a newer latest APK.
-          newest_tag="$(
-            gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,isDraft \
-              --jq '.[] | select(.isDraft | not) | .tagName' \
-              | grep '^mobile-android-v' | sort -V | tail -1 || true
+          # Paginated so the check never misses an Android release behind desktop ones.
+          releases="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq '.[] | select(.draft | not) | .tag_name'
           )"
+          newest_tag="$(printf '%s\n' "$releases" | grep '^mobile-android-v' | sort -V | tail -1 || true)"
+          if [ -z "$newest_tag" ]; then
+            echo "::error::No published mobile-android-v* release found, expected $tag"
+            exit 1
+          fi
           if [ "$newest_tag" != "$tag" ]; then
             echo "Skipping: $tag is not the newest Android release ($newest_tag)"
             exit 0
           fi
 
           shopt -s nullglob
-          apks=(android/app/build/outputs/apk/release/*.apk)
+          apks=("$RUNNER_TEMP"/apk/*.apk)
           if [ "${#apks[@]}" -ne 1 ]; then
             echo "::error::Expected exactly one release APK, found ${#apks[@]}"
             exit 1
