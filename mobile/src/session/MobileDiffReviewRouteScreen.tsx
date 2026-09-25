@@ -52,12 +52,13 @@ export function MobileDiffReviewRouteScreen() {
     )
   }, [hostId, name, router, worktreeId])
 
-  const { hostCapabilities, statusPending } = useHostProtocolGates()
+  const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const controller = useMobileDiffReviewController({
     client,
     connState,
     hostCapabilities,
     hostStatusPending: statusPending,
+    hostStatusReadable: statusReadable,
     hostId,
     worktreeId,
     name,

@@ -25,10 +25,12 @@ type Input = {
   worktreeId: string
   hostCapabilities: readonly string[]
   hostStatusPending: boolean
+  hostStatusReadable: boolean
 }
 
 export function useMobilePrAiTriage(input: Input) {
-  const { client, connState, worktreeId, hostCapabilities, hostStatusPending } = input
+  const { client, connState, worktreeId, hostCapabilities, hostStatusPending, hostStatusReadable } =
+    input
   const [busyKey, setBusyKey] = useState<PrAiTriageKey | null>(null)
   const [error, setError] = useState<string | null>(null)
   // The agent started without its prompt; kept so the user can paste it in themselves.
@@ -36,10 +38,11 @@ export function useMobilePrAiTriage(input: Input) {
   // Synchronous lock: setBusyKey commits async, so a fast double-tap could pass the
   // busyKey check twice before either render. The ref flips immediately and dedupes.
   const inFlightRef = useRef(false)
-  const availability: MobileAgentLaunchAvailability = resolveMobileAgentLaunchAvailability(
+  const availability: MobileAgentLaunchAvailability = resolveMobileAgentLaunchAvailability({
     hostCapabilities,
-    hostStatusPending
-  )
+    statusPending: hostStatusPending,
+    statusReadable: hostStatusReadable
+  })
 
   const launch = useCallback(
     async (key: PrAiTriageKey, buildPrompt: () => string): Promise<boolean> => {

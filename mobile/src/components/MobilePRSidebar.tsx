@@ -90,13 +90,14 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  const { hostCapabilities, statusPending } = useHostProtocolGates()
+  const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const triage = useMobilePrAiTriage({
     client,
     connState,
     worktreeId,
     hostCapabilities,
-    hostStatusPending: statusPending
+    hostStatusPending: statusPending,
+    hostStatusReadable: statusReadable
   })
   // Keyed on the PR payload identity so overrides re-fetch with each PR refetch
   // instead of staying a stale one-shot snapshot for the whole session.

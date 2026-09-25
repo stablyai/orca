@@ -35,6 +35,7 @@ type ControllerInput = {
   connState: ConnectionState
   hostCapabilities: readonly string[]
   hostStatusPending: boolean
+  hostStatusReadable: boolean
   hostId: string
   worktreeId: string
   name: string
@@ -51,6 +52,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     connState,
     hostCapabilities,
     hostStatusPending,
+    hostStatusReadable,
     hostId,
     worktreeId,
     name,
@@ -264,10 +266,11 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   return {
     ...interactions,
     ...prSidebar,
-    agentLaunchAvailability: resolveMobileAgentLaunchAvailability(
+    agentLaunchAvailability: resolveMobileAgentLaunchAvailability({
       hostCapabilities,
-      hostStatusPending
-    ),
+      statusPending: hostStatusPending,
+      statusReadable: hostStatusReadable
+    }),
     // Exposed so the screen can thread the RPC client + worktree into the PR
     // sidebar's lazy check-detail fetches (U5) and mutation actions (U6).
     client,

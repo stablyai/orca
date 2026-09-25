@@ -20,7 +20,8 @@ type Params = {
 }
 
 export function useMobileCommitFailureRecovery({ client, connState, worktreeId, failure }: Params) {
-  const { hostCapabilities, statusPending } = useHostProtocolGates()
+  const hostStatus = useHostProtocolGates()
+  const { hostCapabilities } = hostStatus
   const [launching, setLaunching] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
   // The agent started without its prompt; kept so the user can paste it in themselves. Keyed by the
@@ -31,7 +32,7 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
   } | null>(null)
   const undeliveredPrompt = undelivered?.failure === failure ? undelivered.prompt : null
   const summary = useMemo(() => (failure ? summarizeCommitFailure(failure.error) : null), [failure])
-  const availability = resolveMobileAgentLaunchAvailability(hostCapabilities, statusPending)
+  const availability = resolveMobileAgentLaunchAvailability(hostStatus)
 
   useEffect(() => {
     setLaunchError(null)
