@@ -256,3 +256,40 @@ describe('client-hosted grab lifecycle', () => {
     ).toBeNull()
   })
 })
+
+describe('client-hosted unsaved comment card', () => {
+  const commentPlaceholder = 'Describe what the agent should change here...'
+
+  async function openCommentCard() {
+    mocks.awaitGrabSelection.mockImplementation(async ({ opId }: { opId: string }) => ({
+      opId,
+      kind: 'selected',
+      payload
+    }))
+    const pane = renderPane()
+    fireEvent.click(annotateButton())
+    fireEvent.change(await screen.findByPlaceholderText(commentPlaceholder), {
+      target: { value: 'half-written' }
+    })
+    return pane
+  }
+
+  // Why: its element rects belong to the document it was picked on, which may be gone on return.
+  it('drops the card when the pane deactivates', async () => {
+    const pane = await openCommentCard()
+
+    pane.update({ isActive: false })
+    pane.update({ isActive: true })
+
+    await waitFor(() => expect(screen.queryByPlaceholderText(commentPlaceholder)).toBeNull())
+    expect(useAppStore.getState().browserAnnotationsByPageId['page-a']).toBeUndefined()
+  })
+
+  it('drops the card when the host replaces the guest', async () => {
+    const pane = await openCommentCard()
+
+    pane.update({ placement: { ...placement, pageHostGeneration: 8 } })
+
+    await waitFor(() => expect(screen.queryByPlaceholderText(commentPlaceholder)).toBeNull())
+  })
+})
