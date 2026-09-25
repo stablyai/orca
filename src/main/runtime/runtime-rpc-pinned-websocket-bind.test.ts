@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { connect, createServer, type Server } from 'node:net'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,14 +17,24 @@ const FALLBACK_PORT_FILE = 'mobile-ws-fallback-port.json'
 
 const holders: Server[] = []
 const servers: OrcaRuntimeRpcServer[] = []
+const tempDirs: string[] = []
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop()))
   await Promise.all(
     holders.splice(0).map((holder) => new Promise<void>((resolve) => holder.close(() => resolve())))
   )
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
   vi.restoreAllMocks()
 })
+
+function makeUserDataPath(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-ws-pin-'))
+  tempDirs.push(dir)
+  return dir
+}
 
 async function listenLoopback(port: number): Promise<Server> {
   const holder = createServer()
@@ -88,7 +98,7 @@ function startPinned(
 
 describe('OrcaRuntimeRpcServer desktop pinned WebSocket bind', () => {
   it('listens only on the pinned loopback host and port, ignoring a stale fallback port', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-ws-pin-'))
+    const userDataPath = makeUserDataPath()
     const port = await reserveFreePort()
     const staleFallbackPort = await reserveFreePort()
     writeFileSync(
@@ -116,7 +126,7 @@ describe('OrcaRuntimeRpcServer desktop pinned WebSocket bind', () => {
   })
 
   it('refuses a pairing widen and keeps serving the pinned endpoint', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-ws-pin-'))
+    const userDataPath = makeUserDataPath()
     const port = await reserveFreePort()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -138,7 +148,7 @@ describe('OrcaRuntimeRpcServer desktop pinned WebSocket bind', () => {
   })
 
   it('fails closed when the pinned port is occupied instead of relocating', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-ws-pin-'))
+    const userDataPath = makeUserDataPath()
     const port = await reserveFreePort()
     await listenLoopback(port)
     const staleFallbackPort = await reserveFreePort()
@@ -158,12 +168,13 @@ describe('OrcaRuntimeRpcServer desktop pinned WebSocket bind', () => {
     expect(JSON.parse(readFileSync(join(userDataPath, FALLBACK_PORT_FILE), 'utf8'))).toEqual({
       port: staleFallbackPort
     })
-    // Why: pairing identity stays loaded so relay/push and the paired-device list keep working.
+    // Why: saved grants and the paired-device list survive the failure, but no client (direct or relay)
+    // can connect until the listener is fixed — the mobile socket wiring is dropped with the transport.
     expect(server.getDeviceRegistry()).not.toBeNull()
   })
 
   it('keeps the endpoint and the paired device across a restart once a network device connected', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-ws-pin-'))
+    const userDataPath = makeUserDataPath()
     // Why: unpinned, a connected network-reach device makes the next launch bind 0.0.0.0 (STA-2370).
     const registry = new DeviceRegistry(userDataPath)
     const device = registry.getOrCreatePendingDevice('Work PC', 'runtime', 'network')
@@ -190,7 +201,7 @@ describe('OrcaRuntimeRpcServer desktop pinned WebSocket bind', () => {
   })
 
   it('does not listen at all when the pin is invalid', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-ws-pin-'))
+    const userDataPath = makeUserDataPath()
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const server = startPinned(userDataPath, { status: 'invalid', reason: '"port" must be ...' })
@@ -202,7 +213,7 @@ describe('OrcaRuntimeRpcServer desktop pinned WebSocket bind', () => {
   })
 
   it('keeps the default relocation when no pin is configured', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-ws-pin-'))
+    const userDataPath = makeUserDataPath()
     const port = await reserveFreePort()
     await listenLoopback(port)
     vi.spyOn(console, 'warn').mockImplementation(() => {})

@@ -41,10 +41,16 @@ export function parseWsPinnedBindConfig(raw: string): WsPinnedBindConfig {
   const port = 'port' in parsed ? parsed.port : undefined
   // Why literal IPs only: listen() resolves a hostname through DNS, so the interface bound would be
   // decided by resolver state the operator cannot see (same rule as orcad --bind).
-  if (typeof host !== 'string' || isIP(host) === 0) {
+  // Why loopback only: the pin fronts an operator's own forwarder (Tailscale Serve, SSH -L); a wildcard,
+  // LAN, or tailnet address would expose the listener directly. IPv6 is exactly "::1" — zoned, expanded,
+  // and IPv4-mapped spellings are rejected, not normalized.
+  if (
+    typeof host !== 'string' ||
+    (host !== '::1' && !(isIP(host) === 4 && host.startsWith('127.')))
+  ) {
     return {
       status: 'invalid',
-      reason: '"host" must be a literal IP address string such as "127.0.0.1" or "::1"'
+      reason: '"host" must be a loopback IP address: 127.0.0.1 (any 127.x.x.x) or ::1'
     }
   }
   // Why no 0: an OS-assigned port is exactly the relocation this pin exists to forbid.
@@ -67,7 +73,8 @@ export function readWsPinnedBindConfig(userDataPath: string): WsPinnedBindConfig
       reason: `the file could not be read (${error instanceof Error ? error.message : String(error)})`
     }
   }
-  return parseWsPinnedBindConfig(raw)
+  // Why: Windows PowerShell 5.1 `Set-Content -Encoding UTF8` prefixes a BOM, which JSON.parse rejects.
+  return parseWsPinnedBindConfig(raw.startsWith('\uFEFF') ? raw.slice(1) : raw)
 }
 
 // Why invalid still pins loopback + strict: an unreadable pin must fail closed — no listener at all — rather
