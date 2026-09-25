@@ -3,10 +3,10 @@
   "family": "session.create-terminal",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "7fd1555d20f57f5dfbba821354a06df46114e155",
+  "baseline": "fd01f5ee4829e3d6ec9ee0ff0038cbd5737492c4",
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "fa7d9fd6428e89282f08e04fefba4289000eb3aed1462489a2f11efed374382c",
+  "adapterSha256": "1d81a80a67fa46c9a22b99812d5b096a3945bf9a51b0d9b7348f6b27f070286b",
   "scenarioSha256": "62930616f1017ffd4b74546c80b17f3aa3bcee52a6ad62ec144d95872fd31321",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -191,27 +191,26 @@
       "ordinal": 8,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"review these notes\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "4c528a84c114": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "",
-      "creating": true,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
     "4d318de3b635": {
       "name": "unsubscribe-terminal",
       "ordinal": 3,
       "value": {
         "handle": "terminal-0"
       }
+    },
+    "4e377b1c4bf7": {
+      "activeHandle": "terminal-1",
+      "activeSessionTabId": "tab-1",
+      "createError": "",
+      "creating": false,
+      "initializedHandles": [],
+      "pendingSelection": {
+        "handle": "terminal-1",
+        "kind": "terminal",
+        "tabId": "tab-1"
+      },
+      "sessionTabs": ["tab-1"],
+      "terminals": ["terminal-1"]
     },
     "50740799b9d0": {
       "name": "terminal.send#1",
@@ -343,6 +342,18 @@
           }
         }
       }
+    },
+    "6275ace50da2": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
     },
     "6414ba3fbfbd": {
       "name": "terminal.send#1",
@@ -644,17 +655,6 @@
         "$rpc": "undefined"
       }
     },
-    "f30a8fc69921": {
-      "activeHandle": "terminal-1",
-      "activeSessionTabId": "tab-1",
-      "createError": "",
-      "creating": false,
-      "initializedHandles": [],
-      "pendingActiveSessionTabId": "tab-1",
-      "pendingActiveTerminalHandle": "terminal-1",
-      "sessionTabs": ["tab-1"],
-      "terminals": ["terminal-1"]
-    },
     "fb6329365e0b": {
       "name": "default-live-input",
       "ordinal": 4,
@@ -713,7 +713,7 @@
             "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
           },
-          "state": "4c528a84c114",
+          "state": "6275ace50da2",
           "effects": []
         }
       },
@@ -726,7 +726,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "95bcf41e673e"]
         }
       },
@@ -739,7 +739,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -758,7 +758,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -777,7 +777,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -797,7 +797,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -816,7 +816,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -836,7 +836,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -855,7 +855,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -875,7 +875,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -894,7 +894,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -914,7 +914,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -933,7 +933,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -953,7 +953,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -972,7 +972,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -992,7 +992,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1011,7 +1011,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1031,7 +1031,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1050,7 +1050,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1070,7 +1070,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1089,7 +1089,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1109,7 +1109,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1128,7 +1128,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1148,7 +1148,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
@@ -1167,7 +1167,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "4e377b1c4bf7",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",

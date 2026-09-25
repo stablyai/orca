@@ -1,0 +1,222 @@
+{
+  "operation": "session.create-terminal",
+  "family": "session.create-terminal",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "fd01f5ee4829e3d6ec9ee0ff0038cbd5737492c4",
+  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "1d81a80a67fa46c9a22b99812d5b096a3945bf9a51b0d9b7348f6b27f070286b",
+  "scenarioSha256": "15e559dd83b44c3b93a416715b8bb9cb7c68f586b63ee840847e1065d10a1000",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0e3a24adf091": {
+      "name": "toast",
+      "ordinal": 4,
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Notes sent"
+      }
+    },
+    "21e2b9cf755e": {
+      "name": "fetch-session-tabs",
+      "ordinal": 5,
+      "value": {}
+    },
+    "426e1e26b80f": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
+        "kind": "launched",
+        "snapshotsLeft": 5,
+        "surface": {
+          "handle": "terminal-1"
+        }
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "58b0e0dd5b03": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "launchSource": "diff_notes_send",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "prompt": {
+              "delivery": "submit",
+              "text": "review these notes"
+            },
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "5e8df49fa6ba": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "launchSource": "diff_notes_send",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "prompt": {
+              "delivery": "submit",
+              "text": "review these notes"
+            },
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "outcome": {
+              "handle": "terminal-1",
+              "kind": "terminal"
+            },
+            "prompt": {
+              "delivery": "submit",
+              "outcome": "handed-to-terminal"
+            },
+            "receipt": {
+              "detail": "Started a terminal agent.",
+              "mode": "terminal",
+              "preferred": "terminal",
+              "reason": "user_default"
+            },
+            "worktreeId": "wt-1"
+          }
+        }
+      }
+    },
+    "6275ace50da2": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "",
+      "creating": true,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "6c91cd9369cd": {
+      "name": "schedule-delayed-action",
+      "ordinal": 3,
+      "value": {
+        "delayMs": 500
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "cb033899b2c8": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"codex\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:wt-1\"},\"prompt\":{\"text\":\"review these notes\",\"delivery\":\"submit\"},\"launchSource\":\"diff_notes_send\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-create-terminal-diff-notes-launched",
+    "checkpoints": [
+      {
+        "id": "creating",
+        "observation": {
+          "sender": ["58b0e0dd5b03"],
+          "payloads": ["cb033899b2c8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "9270aeb7d9c6"
+          },
+          "state": "6275ace50da2",
+          "effects": []
+        }
+      },
+      {
+        "id": "notes-sent",
+        "observation": {
+          "sender": ["5e8df49fa6ba"],
+          "payloads": ["cb033899b2c8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "426e1e26b80f",
+          "effects": ["6c91cd9369cd", "0e3a24adf091"]
+        }
+      },
+      {
+        "id": "tabs-refreshed",
+        "observation": {
+          "sender": ["5e8df49fa6ba"],
+          "payloads": ["cb033899b2c8"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "create": "eb79a9b3682a"
+          },
+          "state": "426e1e26b80f",
+          "effects": ["6c91cd9369cd", "0e3a24adf091", "21e2b9cf755e"]
+        }
+      }
+    ]
+  }
+}
