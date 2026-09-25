@@ -3,7 +3,7 @@ import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
-import { relayWebSocketUrl } from './mobile-relay-connect-url'
+import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 
 const MobileAccessEndpointSchema = z
   .object({
@@ -61,7 +61,13 @@ export function toStoredMobileRelayHostOverlay(
   return MobileRelayHostOverlaySchema.parse({
     v: 2,
     hostId,
-    endpoints: [{ id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }],
+    endpoints: [
+      {
+        id: 'relay-primary',
+        kind: 'relay',
+        url: relayConnectWebSocketUrl(relay.cellUrl, relay.relayHostId)
+      }
+    ],
     relayHostId: relay.relayHostId,
     relay
   })

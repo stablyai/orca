@@ -9,7 +9,7 @@ import {
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
-import { relayWebSocketUrl } from './mobile-relay-connect-url'
+import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 
 // Native WebSockets normally emit close immediately after error; bound the
 // missing-close case so a dead socket cannot leave recovery pending forever.
@@ -55,7 +55,7 @@ export class MobileRelayE2eeLink {
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
     this.socket = (options.createSocket ?? ((url) => new WebSocket(url)))(
-      relayWebSocketUrl(options.endpoint)
+      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
     )
     const session = MobileE2EEV2ClientSession.create({
       desktopPublicKeyB64: options.desktopPublicKeyB64,

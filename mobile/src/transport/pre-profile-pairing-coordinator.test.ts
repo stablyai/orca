@@ -108,7 +108,7 @@ function dependencies(client: RpcClient, events: string[]) {
       id: hostId,
       name: 'Blue Whale'
     })),
-    saveHost: vi.fn(async (_host: HostProfile) => {
+    savePairedHost: vi.fn(async (_host: HostProfile) => {
       events.push('save-host')
     }),
     saveJournal: vi.fn(async (_journal: MobileRelayPairingJournal) => {
@@ -171,7 +171,7 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-    expect(deps.saveHost).toHaveBeenCalledWith({
+    expect(deps.savePairedHost).toHaveBeenCalledWith({
       id: `host-${now}`,
       name: 'Blue Whale',
       endpoint: directOffer.endpoint,
@@ -201,7 +201,7 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: 'host-existing' })
-    expect(deps.saveHost).toHaveBeenCalledWith({
+    expect(deps.savePairedHost).toHaveBeenCalledWith({
       id: 'host-existing',
       name: 'Studio Mac',
       endpoint: directOffer.endpoint,
@@ -238,7 +238,7 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-    expect(deps.saveHost).toHaveBeenCalledOnce()
+    expect(deps.savePairedHost).toHaveBeenCalledOnce()
     expect(deps.recordDescriptorFromStatus).not.toHaveBeenCalled()
   })
 
@@ -256,7 +256,7 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-    expect(deps.saveHost).toHaveBeenCalledOnce()
+    expect(deps.savePairedHost).toHaveBeenCalledOnce()
   })
 
   it('journals before connecting and publishes only after authoritative direct install', async () => {
@@ -327,7 +327,7 @@ describe('pre-profile pairing coordinator', () => {
       reqId: journal!.metadata.installReqId,
       newResumeTokenHash: journal!.metadata.pendingResumeTokenHash
     })
-    expect(deps.saveHost).toHaveBeenCalledWith(
+    expect(deps.savePairedHost).toHaveBeenCalledWith(
       expect.objectContaining({
         id: `host-${now}`,
         endpoint: directOffer.endpoint,
@@ -348,7 +348,7 @@ describe('pre-profile pairing coordinator', () => {
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
-    expect(deps.saveHost).toHaveBeenCalledWith(
+    expect(deps.savePairedHost).toHaveBeenCalledWith(
       expect.not.objectContaining({ relay: expect.anything() })
     )
     expect(events).toEqual([
@@ -380,7 +380,7 @@ describe('pre-profile pairing coordinator', () => {
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
-    expect(deps.saveHost).toHaveBeenCalledWith(
+    expect(deps.savePairedHost).toHaveBeenCalledWith(
       expect.not.objectContaining({ relay: expect.anything() })
     )
     expect(events).toEqual([
@@ -542,6 +542,6 @@ describe('pre-profile pairing coordinator', () => {
 
     await expect(attempt.result).rejects.toThrow(/cancelled/)
     expect(client.close).toHaveBeenCalledOnce()
-    expect(deps.saveHost).not.toHaveBeenCalled()
+    expect(deps.savePairedHost).not.toHaveBeenCalled()
   })
 })

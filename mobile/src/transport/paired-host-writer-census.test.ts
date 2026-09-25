@@ -14,24 +14,26 @@ import { censusSourceFiles } from '../test-support/census-source-files'
 const MOBILE_DIR = fileURLToPath(new URL('../../', import.meta.url))
 
 const PAIRING_WRITERS = [
-  'src/transport/host-store.ts',
-  'src/transport/host-store.web.ts',
   'src/transport/mobile-relay-pairing-recovery.ts',
   'src/transport/pre-profile-pairing-coordinator.ts'
 ]
 
-function referencingFiles(): string[] {
+// A value import of `savePairedHost` from the host store, at any relative depth.
+const IMPORTS_PAIRED_HOST_WRITER =
+  /import\s*\{[^}]*\bsavePairedHost\b[^}]*\}\s*from\s*['"](?:\.{1,2}\/)+(?:[\w-]+\/)*host-store['"]/
+
+function importingFiles(): string[] {
   return ['src', 'app']
     .flatMap((directory) => censusSourceFiles(join(MOBILE_DIR, directory)))
     .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
-    .filter((file) => /\bsavePairedHost\b/.test(readFileSync(file, 'utf8')))
+    .filter((file) => IMPORTS_PAIRED_HOST_WRITER.test(readFileSync(file, 'utf8')))
     .map((file) => relative(MOBILE_DIR, file))
     .sort()
 }
 
 describe('full host profile writes', () => {
   it('are reachable only from pairing', () => {
-    // Also the presence precondition: the store itself must match, or the matcher is broken.
-    expect(referencingFiles()).toEqual(PAIRING_WRITERS)
+    // Also the presence precondition: both creators must match, or the matcher is broken.
+    expect(importingFiles()).toEqual(PAIRING_WRITERS)
   })
 })

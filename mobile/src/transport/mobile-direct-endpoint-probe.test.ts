@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from './rpc-client'
-import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
-import type { ConnectionState, HostProfile, RpcResponse } from './types'
+import {
+  directPathForEndpoint,
+  openAuthenticatedDirectEndpoint
+} from './mobile-direct-endpoint-probe'
+import type { ConnectionState, RpcResponse } from './types'
 
 class FakeClient implements RpcClient {
   readonly sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
@@ -34,33 +37,14 @@ class FakeClient implements RpcClient {
   }
 }
 
-const host: HostProfile = {
-  id: 'host-1',
-  name: 'Blue Whale',
-  endpoint: 'ws://100.64.0.2:6768',
-  deviceToken: 'device-token',
-  publicKeyB64: 'A'.repeat(44),
-  lastConnected: 1
-}
-
 describe('mobile direct endpoint probe', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('dials only the saved endpoint and reports its path', async () => {
-    const openDirect = vi.fn(() => {
-      const client = new FakeClient('connecting')
-      setTimeout(() => client.publishState('connected'), 100)
-      return client
-    })
-
-    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
-    await vi.advanceTimersByTimeAsync(100)
-    const result = await probing
-
-    expect(openDirect.mock.calls).toEqual([[host.endpoint]])
-    expect(result?.path).toBe('tailscale')
-    expect(result?.client.close).not.toHaveBeenCalled()
+  it('classifies a tailnet endpoint apart from a LAN one', () => {
+    expect(directPathForEndpoint('ws://100.64.0.2:6768')).toBe('tailscale')
+    expect(directPathForEndpoint('wss://desk.tail1234.ts.net:6768')).toBe('tailscale')
+    expect(directPathForEndpoint('ws://192.168.1.10:6768')).toBe('lan')
   })
 
   it('fails a whole dead LAN in seconds instead of holding the 12s bound', async () => {
@@ -75,7 +59,7 @@ describe('mobile direct endpoint probe', () => {
       return client
     })
 
-    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
     await vi.advanceTimersByTimeAsync(20)
     await vi.advanceTimersByTimeAsync(2_000)
     await expect(probing).resolves.toBeNull()
@@ -89,41 +73,37 @@ describe('mobile direct endpoint probe', () => {
   it('rides out one access-point flap that the first redial recovers', async () => {
     // 'reconnecting' is published on any socket close, so a single RST on the first
     // dial must not book a direct failure and its 60s cooldown.
-    const openDirect = vi.fn((endpoint: string) => {
+    const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
-      if (endpoint.includes('100.64.0.2')) {
-        setTimeout(() => client.publishState('reconnecting'), 20)
-        setTimeout(() => client.publishState('connected'), 600)
-      }
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      setTimeout(() => client.publishState('connected'), 600)
       return client
     })
 
-    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
     await vi.advanceTimersByTimeAsync(600)
     const result = await probing
 
-    expect(result?.path).toBe('tailscale')
-    expect(result?.client.close).not.toHaveBeenCalled()
+    expect(result).not.toBeNull()
+    expect(result?.close).not.toHaveBeenCalled()
   })
 
   it('extends the grace once when the redial reaches a handshake', async () => {
     // The redial fires at 500ms, but 'connected' waits on the Noise handshake and a
     // capability RPC, so real work needs more than one grace window.
-    const openDirect = vi.fn((endpoint: string) => {
+    const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
-      if (endpoint.includes('100.64.0.2')) {
-        setTimeout(() => client.publishState('reconnecting'), 20)
-        setTimeout(() => client.publishState('handshaking'), 1_500)
-        // Past the first grace window: only the re-arm keeps this probe alive.
-        setTimeout(() => client.publishState('connected'), 3_000)
-      }
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      setTimeout(() => client.publishState('handshaking'), 1_500)
+      // Past the first grace window: only the re-arm keeps this probe alive.
+      setTimeout(() => client.publishState('connected'), 3_000)
       return client
     })
 
-    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
     await vi.advanceTimersByTimeAsync(3_000)
 
-    expect((await probing)?.path).toBe('tailscale')
+    expect(await probing).not.toBeNull()
   })
 
   it('fails a handshake that stalls, one grace after it started', async () => {
@@ -136,7 +116,7 @@ describe('mobile direct endpoint probe', () => {
       return client
     })
 
-    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
     await vi.advanceTimersByTimeAsync(3_499)
     let settled = false
     void probing.then(() => {
@@ -157,7 +137,7 @@ describe('mobile direct endpoint probe', () => {
       return client
     })
 
-    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    const probing = openAuthenticatedDirectEndpoint(openDirect, 12_000)
     await vi.advanceTimersByTimeAsync(2_019)
     let settled = false
     void probing.then(() => {

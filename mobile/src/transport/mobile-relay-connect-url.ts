@@ -5,7 +5,3 @@ export function relayConnectWebSocketUrl(baseUrl: string, relayHostId: string): 
   url.pathname = `/v1/connect/${encodeURIComponent(relayHostId)}`
   return url.toString()
 }
-
-export function relayWebSocketUrl(relay: { cellUrl: string; relayHostId: string }): string {
-  return relayConnectWebSocketUrl(relay.cellUrl, relay.relayHostId)
-}

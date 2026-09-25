@@ -81,18 +81,32 @@ export function isDirectorResolutionFailure(error: Error): boolean {
   )
 }
 
-// Why: a stopped supervisor's host may be removed or re-paired; its successor owns routing.
-export async function adoptRelayRouting(
-  host: HostProfile,
-  relay: MobileRelayEndpoint,
-  dependencies: Pick<MobileEndpointSupervisorDependencies, 'saveRelayRouting'>,
-  stopped: boolean
-): Promise<HostProfile> {
-  if (stopped) {
-    return host
+/** The relay a supervisor dials; a learned move is persisted as routing, never as a profile. */
+export class SupervisedRelayRouting {
+  private relay: MobileRelayEndpoint | undefined
+  private readonly hostId: string
+
+  constructor(
+    host: Pick<HostProfile, 'id' | 'relay'>,
+    private readonly dependencies: Pick<MobileEndpointSupervisorDependencies, 'setRelayRouting'>,
+    private readonly isStopped: () => boolean
+  ) {
+    this.relay = host.relay
+    this.hostId = host.id
   }
-  await dependencies.saveRelayRouting(host.id, relay)
-  return { ...host, relay }
+
+  current(): MobileRelayEndpoint | undefined {
+    return this.relay
+  }
+
+  async adopt(relay: MobileRelayEndpoint): Promise<void> {
+    // Why: a stopped supervisor's host may be removed or re-paired; its successor owns routing.
+    if (this.isStopped()) {
+      return
+    }
+    await this.dependencies.setRelayRouting(this.hostId, relay)
+    this.relay = relay
+  }
 }
 
 export function encodeBase64Url(value: Uint8Array): string {

@@ -4,8 +4,8 @@ import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import {
-  adoptRelayRouting,
   liveRelayLeaseExpiry,
+  SupervisedRelayRouting,
   suspendRelayIfStillConnected
 } from './mobile-endpoint-supervisor-support'
 import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
@@ -36,6 +36,7 @@ const FAILURE_COOLDOWN_MS = 60_000
 
 export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
+  private readonly relayRouting: SupervisedRelayRouting
   private stopped = false
   private operationInFlight = false
   private pendingReplace = false
@@ -54,9 +55,10 @@ export class MobileEndpointSupervisor {
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
-    private host: HostProfile,
+    private readonly host: HostProfile,
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
+    this.relayRouting = new SupervisedRelayRouting(host, dependencies, () => this.stopped)
     this.hysteresis = new MobileEndpointHysteresis(dependencies.now(), {
       directSuccessesRequired: 3,
       directObservationMs: DIRECT_OBSERVATION_MS,
@@ -93,11 +95,9 @@ export class MobileEndpointSupervisor {
       writeBundle: dependencies.writeBundle,
       isActive: () => this.isActive(),
       isForeground: () => this.backgroundGrace.isForeground(),
-      relay: () => this.host.relay,
+      relay: () => this.relayRouting.current(),
       resolveRelay: dependencies.resolveRelay,
-      persistResolvedRelay: async (resolved) => {
-        this.host = await adoptRelayRouting(this.host, resolved, dependencies, this.stopped)
-      },
+      persistResolvedRelay: (resolved) => this.relayRouting.adopt(resolved),
       bundle: () => this.bundle,
       adoptBundle: (bundle) => (this.bundle = bundle),
       recordMigration: () => {
@@ -116,7 +116,6 @@ export class MobileEndpointSupervisor {
     })
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
-      host: () => this.host,
       canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
@@ -149,7 +148,7 @@ export class MobileEndpointSupervisor {
 
   async start(): Promise<void> {
     this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
-    if (this.stopped || !this.host.relay) {
+    if (this.stopped || !this.relayRouting.current()) {
       return
     }
     if (!this.bundle) {
@@ -211,7 +210,7 @@ export class MobileEndpointSupervisor {
   // shared cooldown and any session left stale-'connected' by a half-open socket
   // comes down; lease rotation clears it because armRetry owns its own retry.
   private async recoverRelay(forceReplacement = false, ownsRecovery = false): Promise<void> {
-    if (!this.isActive() || !this.host.relay) {
+    if (!this.isActive() || !this.relayRouting.current()) {
       return
     }
     if (this.operationInFlight) {
@@ -325,7 +324,7 @@ export class MobileEndpointSupervisor {
       this.bundle = result.bundle
       // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
       credentialRefreshed = true
-      this.host = await adoptRelayRouting(this.host, result.relay, this.dependencies, this.stopped)
+      await this.relayRouting.adopt(result.relay)
     } catch {
       // Why: pending material remains durable; the next authenticated direct
       // opportunity must reconcile it before creating another install key.

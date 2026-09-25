@@ -44,7 +44,7 @@ vi.mock('./host-credential-cleanup', () => ({
 import {
   loadHostCatalog,
   loadHosts,
-  MobileRelayUpgradeHostRemovedError,
+  RelayRoutingHostRemovedError,
   removeHost,
   resolvePairingHostIdentity,
   resetHostStoreForTests,
@@ -564,7 +564,7 @@ describe('host-store list mutations', () => {
     storedHostsRaw = JSON.stringify([HOST_TWO])
 
     await expect(setRelayRouting(HOST_ONE.id, HOST_ONE_RELAY)).rejects.toBeInstanceOf(
-      MobileRelayUpgradeHostRemovedError
+      RelayRoutingHostRemovedError
     )
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])

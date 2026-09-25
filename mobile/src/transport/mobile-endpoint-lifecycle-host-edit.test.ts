@@ -86,6 +86,10 @@ async function startWithPendingResolution(): Promise<{
   return { logical, lifecycle, settle: (value) => settle(value) }
 }
 
+function overlayWrites(): number {
+  return asyncStorageMock.setItem.mock.calls.filter(([key]) => key === OVERLAY_KEY).length
+}
+
 async function expectEditKept(expectedRelay: MobileRelayEndpoint): Promise<void> {
   const [saved] = await loadHosts()
   expect(saved).toMatchObject({
@@ -162,14 +166,40 @@ describe('mobile endpoint lifecycle host edits', () => {
     mockCredentialRotation(logical)
     const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
     await updateHostNameAndEndpoint(host.id, { personalName: 'Renamed', endpoint: EDITED_ENDPOINT })
-    const overlayWrites = (): number =>
-      asyncStorageMock.setItem.mock.calls.filter(([key]) => key === OVERLAY_KEY).length
 
     logical.publishState('connected')
     await vi.waitFor(() => expect(overlayWrites()).toBe(1))
 
     await expectEditKept(relay)
     lifecycle.stop()
+  })
+
+  it('does not persist relay routing from a rotation that finishes after stop', async () => {
+    readBundleMock.mockResolvedValue({
+      ...bundle,
+      current: { ...bundle.current, expiresAt: Date.now() + 60_000 }
+    })
+    let finishCredentialWrite: () => void = () => {}
+    writeBundleMock.mockResolvedValueOnce().mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishCredentialWrite = resolve
+      })
+    )
+    const logical = new FakeLogicalClient('connected', 'lan')
+    mockCredentialRotation(logical)
+    const lifecycle = startMobileEndpointLifecycle(logical, host, () => {})
+    await updateHostNameAndEndpoint(host.id, { personalName: 'Renamed', endpoint: EDITED_ENDPOINT })
+
+    logical.publishState('connected')
+    await vi.waitFor(() => expect(writeBundleMock).toHaveBeenCalledTimes(2))
+    lifecycle.stop()
+    finishCredentialWrite()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // The rotated bundle itself stays durable; only the stale relay routing write is skipped.
+    expect(writeBundleMock).toHaveBeenCalledTimes(2)
+    expect(overlayWrites()).toBe(0)
+    await expectEditKept(relay)
   })
 
   it('keeps an edit made while a direct-only host was being upgraded to relay', async () => {

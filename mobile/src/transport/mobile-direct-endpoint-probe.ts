@@ -1,6 +1,5 @@
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
-import type { HostProfile } from './types'
 
 export function directPathForEndpoint(endpoint: string): Exclude<MobileConnectionPath, 'relay'> {
   try {
@@ -85,17 +84,16 @@ function waitForAuthenticatedSession(
 }
 
 export async function openAuthenticatedDirectEndpoint(
-  host: HostProfile,
-  openDirect: (endpoint: string) => RpcClient,
+  openDirect: () => RpcClient,
   timeoutMs: number,
   signal?: AbortSignal
-): Promise<{ client: RpcClient; path: Exclude<MobileConnectionPath, 'relay'> } | null> {
+): Promise<RpcClient | null> {
   if (signal?.aborted) {
     return null
   }
   let client: RpcClient
   try {
-    client = openDirect(host.endpoint)
+    client = openDirect()
   } catch {
     return null
   }
@@ -109,5 +107,5 @@ export async function openAuthenticatedDirectEndpoint(
     client.close()
     return null
   }
-  return { client, path: directPathForEndpoint(host.endpoint) }
+  return client
 }

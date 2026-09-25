@@ -149,7 +149,7 @@ function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
 // The page's host-store sibling keeps its own no-op, so only the native store reaches persistence.
 export { updateHostDescriptor } from './host-descriptor-persistence'
 
-export class MobileRelayUpgradeHostRemovedError extends Error {}
+export class RelayRoutingHostRemovedError extends Error {}
 
 /**
  * Relay routing learned after pairing (director re-resolution, rotation, direct upgrade). Takes no
@@ -161,7 +161,7 @@ export async function setRelayRouting(hostId: string, relay: MobileRelayEndpoint
     const hosts = await readStoredHostProfilesForMutation()
     if (!hosts.some(({ id }) => id === hostId)) {
       // Why: an in-flight relay learner must not resurrect a host the user removed.
-      throw new MobileRelayUpgradeHostRemovedError('mobile relay host was removed')
+      throw new RelayRoutingHostRemovedError('mobile relay host was removed')
     }
     wrote = await saveMobileRelayHostRouting(hostId, relay)
   })

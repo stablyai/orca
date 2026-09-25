@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   loadHosts,
-  MobileRelayUpgradeHostRemovedError,
+  RelayRoutingHostRemovedError,
   resetHostStoreForTests,
   setRelayRouting,
   updateHostNameAndEndpoint
@@ -211,7 +211,7 @@ describe('relay routing after a host edit', () => {
     storage.set(OVERLAY_KEY, '[]')
 
     await expect(setRelayRouting('host-1', relay)).rejects.toBeInstanceOf(
-      MobileRelayUpgradeHostRemovedError
+      RelayRoutingHostRemovedError
     )
 
     expect(writesTo(OVERLAY_KEY)).toEqual([])

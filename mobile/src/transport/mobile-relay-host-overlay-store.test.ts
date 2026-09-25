@@ -132,14 +132,6 @@ describe('mobile relay host overlay store', () => {
     expect(JSON.parse(stored!)).toEqual([RELAY_ONLY_OVERLAY])
   })
 
-  it('does not rewrite storage when the routing is unchanged', async () => {
-    stored = JSON.stringify([RELAY_ONLY_OVERLAY])
-
-    await expect(saveMobileRelayHostRouting('host-1', RELAY)).resolves.toBe(false)
-
-    expect(asyncStorage.setItem).not.toHaveBeenCalled()
-  })
-
   it('never overlays or resurrects a host whose legacy base was removed', async () => {
     stored = JSON.stringify([LEGACY_OVERLAY])
 

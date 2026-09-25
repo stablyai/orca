@@ -7,7 +7,7 @@ import {
 } from './mobile-relay-host-overlay'
 
 const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
-let overlayMutation: Promise<void> = Promise.resolve()
+let overlayMutation: Promise<unknown> = Promise.resolve()
 
 function parseOverlays(raw: string | null): MobileRelayHostOverlay[] | null {
   if (raw === null) {
@@ -39,15 +39,16 @@ async function readOverlaysForMutation(): Promise<MobileRelayHostOverlay[]> {
 
 async function mutateOverlays(
   update: (overlays: MobileRelayHostOverlay[]) => MobileRelayHostOverlay[]
-): Promise<void> {
+): Promise<boolean> {
   const mutation = overlayMutation.then(async () => {
     const current = await readOverlaysForMutation()
     const next = update(current)
-    // Why: direct-only saves commonly have no overlay to remove; avoid a full
-    // AsyncStorage write when cleanup leaves the durable list unchanged.
-    if (next !== current) {
-      await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next))
+    // Why: an update handing back the list it read changed nothing; skip the full AsyncStorage write.
+    if (next === current) {
+      return false
     }
+    await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next))
+    return true
   })
   overlayMutation = mutation.catch(() => {})
   return mutation
@@ -73,16 +74,14 @@ export async function loadMobileRelayHostOverlayState(
 }
 
 /** Resolves whether storage changed. */
-export async function saveMobileRelayHostRouting(
+export function saveMobileRelayHostRouting(
   hostId: string,
   relay: MobileRelayEndpoint
 ): Promise<boolean> {
   const validated = toStoredMobileRelayHostOverlay(hostId, relay)
-  let wrote = false
-  await mutateOverlays((overlays) => {
+  return mutateOverlays((overlays) => {
     const index = overlays.findIndex((overlay) => overlay.hostId === hostId)
     if (index === -1) {
-      wrote = true
       return [...overlays, validated]
     }
     // Why: a failing relay loop re-resolves the same cell every retry. Both sides are this
@@ -90,30 +89,21 @@ export async function saveMobileRelayHostRouting(
     if (JSON.stringify(overlays[index]) === JSON.stringify(validated)) {
       return overlays
     }
-    wrote = true
     const next = overlays.slice()
     next[index] = validated
     return next
   })
-  return wrote
 }
 
 export function removeMobileRelayHostOverlay(hostId: string): Promise<void> {
   return removeMobileRelayHostOverlays([hostId])
 }
 
-export function removeMobileRelayHostOverlays(hostIds: readonly string[]): Promise<void> {
+export async function removeMobileRelayHostOverlays(hostIds: readonly string[]): Promise<void> {
   const targets = new Set(hostIds)
-  let removed = false
-  return mutateOverlays((overlays) => {
-    const next = overlays.filter((overlay) => {
-      if (!targets.has(overlay.hostId)) {
-        return true
-      }
-      removed = true
-      return false
-    })
-    return removed ? next : overlays
+  await mutateOverlays((overlays) => {
+    const next = overlays.filter((overlay) => !targets.has(overlay.hostId))
+    return next.length === overlays.length ? overlays : next
   })
 }
 
