@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ptyProcesses, ptyShellName } from './local-pty-provider-state'
+import { ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import {
   confirmLocalPtyShellForeground,
   inspectLocalPtyChildProcesses
@@ -29,7 +29,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   ptyProcesses.clear()
-  ptyShellName.clear()
+  ptyShellPath.clear()
   Object.defineProperty(process, 'platform', originalPlatform)
   vi.restoreAllMocks()
 })
@@ -56,12 +56,13 @@ describe('Bun in-process Windows shell identity', () => {
       signalProcess: vi.fn()
     }
     ptyProcesses.set('gated-shell', proc)
-    ptyShellName.set('gated-shell', 'cmd.exe')
+    const shellPath = 'C:\\Windows\\System32\\cmd.exe'
+    ptyShellPath.set('gated-shell', shellPath)
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true)
     expect(await getLocalPtyCwd('gated-shell')).toBe('C:\\work')
     expect(cwd).toHaveBeenCalledWith(1201)
     expect(await confirmLocalPtyShellForeground('gated-shell')).toBe(true)
-    expect(confirm).toHaveBeenCalledWith(1201, 'cmd.exe', expect.any(Object))
+    expect(confirm).toHaveBeenCalledWith(1201, shellPath, expect.any(Object))
     await sendLocalPtySignal('gated-shell', 'SIGTERM')
     expect(proc.signalProcess).toHaveBeenCalledWith('SIGTERM')
     expect(kill).not.toHaveBeenCalled()

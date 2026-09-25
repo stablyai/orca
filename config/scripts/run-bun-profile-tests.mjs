@@ -87,6 +87,7 @@ run(runtimePath, [
               'tests/e2e/daemon-running-work-probe.unit.test.ts',
               'src/main/daemon/pty-subprocess/windows-bun-pty-gate.integration.test.ts',
               'src/main/providers/local-pty-bun-artifact.integration.test.ts',
+              'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
               'src/main/orcad/orcad-bun-launcher.integration.test.ts',
               'config/scripts/zip-extractor-command.test.mjs'
             ]
