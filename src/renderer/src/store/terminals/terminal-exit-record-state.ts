@@ -33,8 +33,8 @@ export function createTerminalExitRecordActions(
   return {
     replaceTerminalExitRecords: (records: TerminalExitRecord[]) => {
       set((s) => {
-        // Why: every mounted pane subscribes to the pending map, so an unchanged push must keep
-        // both references or an exit anywhere re-renders every pane.
+        // Why: every store publication visits every pane's listeners, so a push that changes
+        // nothing must publish nothing.
         const terminalExitRecordsByLeafId = hasSameExitRecords(
           s.terminalExitRecordsByLeafId,
           records
