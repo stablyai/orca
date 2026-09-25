@@ -1,12 +1,13 @@
 import { build } from 'esbuild'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
 import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 const runtimePath =
   process.env.BUN_EXECUTABLE ?? resolve('out/orcad', orcadBunRuntimeFilename(process.platform))
@@ -72,7 +73,7 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
     })
   })
 
-  afterEach(async () => {
+  afterEach(() => {
     for (const child of children) {
       child.kill('SIGKILL')
     }
@@ -83,7 +84,7 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
       } catch {}
     }
     runtimes.clear()
-    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    removeTreeSync(directory)
   })
 
   function launch(
