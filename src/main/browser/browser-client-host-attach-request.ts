@@ -54,6 +54,7 @@ export function createBrowserClientHostAttachRequest(
     authorityRuntimeId: options.authorityRuntimeId,
     browserHostClientId: options.browserHostClientId,
     hostCapabilities: [...options.hostCapabilities],
+    supportedAutomationMethods: options.supportedAutomationMethods,
     ...(pageCommandProtocolVersion ? { pageCommandProtocolVersion } : {}),
     ...(pageInventoryProtocolVersion
       ? {

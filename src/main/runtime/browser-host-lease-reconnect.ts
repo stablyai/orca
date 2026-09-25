@@ -1,3 +1,8 @@
+import {
+  BrowserClientAutomationSupportedMethods,
+  sameBrowserClientAutomationMethods,
+  type BrowserClientAutomationMethod
+} from '../../shared/browser-client-automation-protocol'
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
 import type {
   BrowserHostLeaseHandle,
@@ -9,6 +14,7 @@ import { createBrowserHostFence } from './browser-host-lease-fence'
 
 type BrowserHostReconnectAttach = {
   connectionId: string
+  supportedAutomationMethods?: readonly BrowserClientAutomationMethod[]
   hostCapabilities: readonly string[]
   pageCommandProtocolVersion?: 1
   pageReconciliationProtocolVersion?: 1
@@ -56,6 +62,16 @@ export class BrowserHostLeaseReconnectController {
       !sameCapabilities(state.lease.hostCapabilities, input.hostCapabilities)
     ) {
       return undefined
+    }
+    if (
+      !sameBrowserClientAutomationMethods(
+        state.lease.supportedAutomationMethods,
+        input.supportedAutomationMethods === undefined
+          ? undefined
+          : BrowserClientAutomationSupportedMethods.parse(input.supportedAutomationMethods)
+      )
+    ) {
+      throw new Error('browser_host_automation_methods_changed')
     }
     if (state.status === 'active') {
       for (const route of state.routes) {

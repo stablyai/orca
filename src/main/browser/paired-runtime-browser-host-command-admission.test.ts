@@ -151,6 +151,93 @@ describe('paired runtime browser host command admission', () => {
     }
   )
 
+  it.each(
+    [undefined, [], ['browser.snapshot'], ['browser.exec'], ['click']].map((echo) => ({ echo }))
+  )('refuses an absent, mismatched, or malformed method echo %j', async ({ echo }) => {
+    const { callbacks, close } = await subscribeLease()
+    const onPageCommand = vi.fn()
+    const lease = createLease({
+      hostCapabilities: ['webview', 'automation-v1'],
+      supportedAutomationMethods: ['browser.click'],
+      pageCommandProtocolVersion: 1,
+      onPageCommand
+    })
+    const starting = lease.start()
+    const rejected = expect(starting).rejects.toThrow('Invalid browser host lease response')
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse({
+      id: 'browser-host',
+      ok: true,
+      result: {
+        type: 'ready',
+        authorityEpoch: 'epoch-a',
+        browserHostGeneration: 4,
+        pageCommandProtocolVersion: 1,
+        supportedAutomationMethods: echo
+      },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    await rejected
+    expect(close).toHaveBeenCalledOnce()
+    expect(onPageCommand).not.toHaveBeenCalled()
+  })
+
+  it.each(['browser.pdf', 'browser.exec'] as const)(
+    'rejects forged unsupported %s before the receiver callback',
+    async (method) => {
+      const { callbacks, close } = await subscribeLease()
+      const onPageCommand = vi.fn(() => ({ status: 'completed' as const }))
+      const onError = vi.fn()
+      const lease = createLease({
+        hostCapabilities: ['webview', 'automation-v1'],
+        supportedAutomationMethods: ['browser.click'],
+        pageCommandProtocolVersion: 1,
+        onPageCommand,
+        onError
+      })
+      const starting = lease.start()
+      await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+      callbacks.current!.onResponse({
+        id: 'browser-host',
+        ok: true,
+        result: {
+          type: 'ready',
+          authorityEpoch: 'epoch-a',
+          browserHostGeneration: 4,
+          pageCommandProtocolVersion: 1,
+          supportedAutomationMethods: ['browser.click']
+        },
+        _meta: { runtimeId: 'runtime-a' }
+      })
+      await starting
+      callbacks.current!.onResponse({
+        id: 'browser-host',
+        ok: true,
+        result: {
+          type: 'command',
+          pageCommandProtocolVersion: 1,
+          authorityRuntimeId: 'runtime-a',
+          authorityEpoch: 'epoch-a',
+          browserHostClientId: 'host-a',
+          browserHostGeneration: 4,
+          browserPageId: 'page-a',
+          pageHostGeneration: 1,
+          commandSequence: 1,
+          commandId: 'command-a',
+          // The envelope cannot widen the locally negotiated set.
+          supportedAutomationMethods: ['browser.pdf'],
+          command: { type: 'automation', method, params: { command: 'pdf out.pdf' } }
+        },
+        _meta: { runtimeId: 'runtime-a' }
+      })
+      await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+      expect(onPageCommand).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'browser_client_automation_method_unsupported' })
+      )
+    }
+  )
+
   it('refuses an inventory refresh on a lease that never negotiated reconnect', async () => {
     const { callbacks, close } = await subscribeLease()
     const lease = createLease({

@@ -42,6 +42,48 @@ function runtime(cleanups = new Map<string, () => void>()): OrcaRuntimeService {
 }
 
 describe('browser.clientHost.attach RPC', () => {
+  it.each([{ methods: [] }, { methods: ['browser.snapshot', 'browser.click', 'browser.click'] }])(
+    'echoes the normalized optional supported method set %j from the authenticated lease',
+    async ({ methods }) => {
+      const cleanups = new Map<string, () => void>()
+      const hostRuntime = runtime(cleanups)
+      const dispatcher = new RpcDispatcher({
+        runtime: hostRuntime,
+        methods: BROWSER_CLIENT_HOST_METHODS
+      })
+      const replies: string[] = []
+      const attach = request('host-a', 1)
+      const dispatch = dispatcher.dispatchStreaming(
+        {
+          ...attach,
+          params: {
+            ...attach.params,
+            hostCapabilities: ['webview', 'automation-v1'],
+            supportedAutomationMethods: methods,
+            pairedDeviceId: 'forged-device'
+          }
+        },
+        (reply) => replies.push(reply),
+        {
+          connectionId: 'connection-a',
+          clientKind: 'runtime',
+          pairedDeviceId: 'device-a',
+          clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+        }
+      )
+      await vi.waitFor(() => expect(replies).toHaveLength(1))
+      const expected = [...new Set(methods)].sort()
+      expect(JSON.parse(replies[0]!).result).toMatchObject({ supportedAutomationMethods: expected })
+      expect(getBrowserHostLeaseRegistry(hostRuntime).select('host-a')).toMatchObject({
+        supportedAutomationMethods: expected,
+        pairedDeviceId: 'device-a',
+        connectionId: 'connection-a'
+      })
+      cleanups.get('browser-client-host:host-a')?.()
+      await dispatch
+    }
+  )
+
   it('registers the authenticated client-host methods in production', () => {
     expect(ALL_RPC_METHODS.some((method) => method.name === 'browser.clientHost.attach')).toBe(true)
     expect(

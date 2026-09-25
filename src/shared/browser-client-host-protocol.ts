@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import {
   BrowserClientAutomationCommand,
-  BrowserClientAutomationResult
+  BrowserClientAutomationResult,
+  BrowserClientAutomationSupportedMethods,
+  refineBrowserClientAutomationNegotiation
 } from './browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION } from './browser-client-file-channel-protocol'
 
@@ -10,7 +12,7 @@ const Identity = z.string().min(1).max(256)
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES = 384
 const PageInventoryIdentity = Identity.refine(
   (value) =>
-    browserClientHostJsonByteLength(value) <=
+    new TextEncoder().encode(JSON.stringify(value)).byteLength <=
     BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES,
   'Browser page inventory identity exceeds its JSON byte budget'
 )
@@ -100,11 +102,7 @@ export const BrowserClientHostedPageInventoryList = z
 export function browserClientHostedPageInventoryByteLength(
   pages: readonly BrowserClientHostedPageInventory[]
 ): number {
-  return browserClientHostJsonByteLength(pages)
-}
-
-function browserClientHostJsonByteLength(value: unknown): number {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength
+  return new TextEncoder().encode(JSON.stringify(pages)).byteLength
 }
 
 export const BrowserClientHostAttachParams = z
@@ -112,6 +110,7 @@ export const BrowserClientHostAttachParams = z
     authorityRuntimeId: Identity,
     browserHostClientId: Identity,
     hostCapabilities: z.array(z.string().min(1).max(128)).max(32),
+    supportedAutomationMethods: BrowserClientAutomationSupportedMethods.optional(),
     pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
     pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
     pageInventory: BrowserClientHostedPageInventoryList.optional(),
@@ -119,6 +118,7 @@ export const BrowserClientHostAttachParams = z
     pageReconciliationProtocolVersion: PageReconciliationProtocolVersion.optional(),
     fileChannelProtocolVersion: FileChannelProtocolVersion.optional()
   })
+  .superRefine(refineBrowserClientAutomationNegotiation)
   .superRefine((params, context) => {
     if (
       params.fileChannelProtocolVersion !== undefined &&
@@ -169,6 +169,7 @@ export const BrowserClientHostAttachParams = z
 
 export const BrowserClientHostReady = z.object({
   type: z.literal('ready'),
+  supportedAutomationMethods: BrowserClientAutomationSupportedMethods.optional(),
   authorityEpoch: Identity,
   browserHostGeneration: Generation,
   pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
@@ -186,6 +187,7 @@ const BrowserClientHostRevoked = z.object({
 })
 
 export const BrowserClientHostLeaseAuthority = BrowserHostLeaseAuthority.extend({
+  supportedAutomationMethods: BrowserClientAutomationSupportedMethods.optional(),
   pageCommandProtocolVersion: PageCommandProtocolVersion.optional(),
   pageInventoryProtocolVersion: PageInventoryProtocolVersion.optional(),
   leaseReconnectProtocolVersion: LeaseReconnectProtocolVersion.optional(),
