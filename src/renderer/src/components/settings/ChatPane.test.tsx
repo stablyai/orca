@@ -360,7 +360,7 @@ describe('ChatPane', () => {
     expect(container.querySelector(SHELL_ENV_TOGGLE)).toBeNull()
   })
 
-  it('keeps the Chat UI switch reachable when a search matches only a child row', () => {
+  it('keeps the Chat UI switch and default view reachable when a search matches only a structured row', () => {
     useAppStore.setState({ settingsSearchQuery: 'variables' })
     const { container } = renderSetting({
       experimentalNativeChat: true,
@@ -368,8 +368,30 @@ describe('ChatPane', () => {
     })
 
     expect(container.querySelector(CHAT_UI_TOGGLE)).not.toBeNull()
+    expect(container.querySelector('#chat-default-view')).not.toBeNull()
     expect(container.querySelector('#chat-shell-environment')).not.toBeNull()
-    expect(container.querySelector('#chat-default-view')).toBeNull()
     expect(container.querySelector('#chat-resume-on-restart')).toBeNull()
+  })
+
+  it('shows the default view that unlocks a searched structured row under Terminal chat', () => {
+    useAppStore.setState({ settingsSearchQuery: 'resume' })
+    const { container } = renderSetting({
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: false
+    })
+
+    expect(container.querySelector('#chat-default-view')).not.toBeNull()
+    expect(container.querySelector('#chat-resume-on-restart')).toBeNull()
+  })
+
+  it('hides the default view when a search matches neither it nor a structured row', () => {
+    useAppStore.setState({ settingsSearchQuery: 'grok' })
+    const { container } = renderSetting({
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    })
+
+    expect(container.querySelector(CHAT_UI_TOGGLE)).not.toBeNull()
+    expect(container.querySelector('#chat-default-view')).toBeNull()
   })
 })
