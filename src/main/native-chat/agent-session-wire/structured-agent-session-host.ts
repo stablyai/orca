@@ -14,11 +14,7 @@ import type { AgentSessionSubscribeInput } from './structured-agent-session-subs
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import * as providerSupport from './structured-agent-session-provider-support'
 import { createStructuredAgentSessionHostRestore } from './structured-agent-session-reveal'
-import {
-  createStructuredAgentSessionHostHandoff,
-  refreshRecoverableStructuredHandoffStatus,
-  type StructuredAgentSessionHostHandoff
-} from './structured-agent-session-host-handoff'
+import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import {
@@ -75,7 +71,6 @@ export class StructuredAgentSessionHost {
   private readonly reconcileLeases: (
     sessionId: string
   ) => Promise<SessionWire.AgentSessionWireRefusal | null>
-  private readonly handoffs: StructuredAgentSessionHostHandoff
   private readonly restore: ReturnType<typeof createStructuredAgentSessionHostRestore>
   private readonly holds: StructuredAgentSessionHolds
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
@@ -89,35 +84,16 @@ export class StructuredAgentSessionHost {
       this.sessions,
       this.subscribers,
       (sessionId) => this.requireSession(sessionId),
-      (sessionId) => this.handoffs.status(sessionId),
       this.clientDelivery.publishStatus
     )
-    this.runtimeState = new StructuredAgentSessionHostRuntimeState(
-      deps,
-      (record) => this.restoreRenewedHandoff(record.sessionId),
-      (record, probe) =>
-        this.sessions.has(record.sessionId)
-          ? this.serialize(record.sessionId, () =>
-              this.handoffs.recoverDeadTuiOwner(record.sessionId, record.lease.runtimeFence, probe)
-            )
-          : Promise.resolve(),
-      (sessionId, error) => this.eventRecovery.recoverAfterSinkFailure(sessionId, error)
+    this.runtimeState = new StructuredAgentSessionHostRuntimeState(deps, (sessionId, error) =>
+      this.eventRecovery.recoverAfterSinkFailure(sessionId, error)
     )
     this.reconcileLeases = createRestartReconciler({
       store: deps.store,
       probe: (record) => this.runtimeState.probeRecord(record),
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
       now: () => this.now()
-    })
-    this.handoffs = createStructuredAgentSessionHostHandoff(deps, {
-      session: (sessionId) => this.requireSession(sessionId),
-      findSession: (sessionId) => this.sessions.get(sessionId),
-      eventSinks: this.runtimeState,
-      flush: (sessionId) => this.flushStreamedEvents(sessionId),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      subscribers: this.subscribers,
-      publishStatus: this.clientDelivery.publishStatus,
-      now: this.now
     })
     this.holds = createStructuredAgentSessionHolds(
       () => this.attachContext(),
@@ -133,8 +109,7 @@ export class StructuredAgentSessionHost {
       onReadable: (sessionId, restored) => {
         this.sessions.set(sessionId, restored)
         this.clientDelivery.publishRestored(sessionId)
-      },
-      restoreHandoff: (sessionId) => this.handoffs.restore(sessionId)
+      }
     })
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
       deps,
@@ -203,7 +178,6 @@ export class StructuredAgentSessionHost {
    *  on disk, so the same session can be attached again. */
   close(sessionId: string): Promise<void> {
     return this.serialize(sessionId, async () => {
-      await this.handoffs.closeRetainedTuiOwner(sessionId)
       await evictHeldStructuredAgentSession(this.lifetimeContext(), sessionId)
       this.clientDelivery.closeSession(sessionId)
       // The holders now look at a session that is gone; a failed eviction throws above, keeping them.
@@ -236,14 +210,6 @@ export class StructuredAgentSessionHost {
 
   private serialize = this.tasks.serialize.bind(this.tasks)
 
-  private restoreRenewedHandoff(sessionId: string): Promise<void> {
-    return this.serialize(sessionId, async () => {
-      if (this.sessions.has(sessionId)) {
-        await refreshRecoverableStructuredHandoffStatus(this.handoffs, this.deps.store, sessionId)
-      }
-    })
-  }
-
   attach(
     caller: StructuredAgentSessionCaller,
     params: AgentSessionAttachParams
@@ -260,7 +226,6 @@ export class StructuredAgentSessionHost {
     await flushStructuredAgentSessionHost({
       ...this.lifetimeContext(),
       holds: this.holds,
-      handoffs: this.handoffs,
       tasks: this.tasks,
       restartResume: this.restartResume,
       serialize: this.serialize,
@@ -293,12 +258,6 @@ export class StructuredAgentSessionHost {
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 
-  requestHandoff = (
-    caller: StructuredAgentSessionCaller,
-    params: SessionWire.AgentSessionHandoffRequest
-  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionHandoffResult>> =>
-    this.handoffs.request(caller.callerKey, params)
-
   rewind = (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
 
@@ -312,9 +271,14 @@ export class StructuredAgentSessionHost {
 
   async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
     this.requireSession(sessionId)
-    return this.serialize(sessionId, () =>
-      refreshRecoverableStructuredHandoffStatus(this.handoffs, this.deps.store, sessionId)
-    )
+    // Queued behind an in-flight attach, so a starting chat answers with its settled owner.
+    return this.serialize(sessionId, async () => {
+      const record = this.deps.store.getRecord(sessionId)
+      if (!record) {
+        throw new Error('agent_session_identity_required')
+      }
+      return structuredAgentSessionOwnerStatus(record)
+    })
   }
 
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request) =>

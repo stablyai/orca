@@ -607,13 +607,14 @@ describe('restart', () => {
     expect(listRecords).toHaveBeenCalledTimes(restoreReads)
   })
 
-  it('clears stale TUI recovery at restart, and reacquires the native owner when a surface holds it', async () => {
+  it('clears a stale conflicted recovery at restart, and reacquires the native owner when a surface holds it', async () => {
     await attach()
     await store.transitionHandoff(SESSION, (record) => ({
       ...record,
       lease: {
         ...record.lease,
-        runtimeKind: 'tui',
+        // How a terminal owner an older build recorded loads.
+        claimStatus: 'conflicted',
         handoffStage: 'manual-recovery'
       }
     }))
@@ -637,6 +638,31 @@ describe('restart', () => {
       phase: 'idle',
       stage: null
     })
+  })
+
+  it('answers the owner status of a starting chat once its start settles', async () => {
+    await attach()
+    await reboot(async () => ({ outcome: 'pid-absent' }))
+    await host.restoreReadableSessions()
+    const started = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const settled = acquire.getMockImplementation()
+    if (!settled) {
+      throw new Error('missing acquire implementation')
+    }
+    acquire.mockImplementationOnce(async (input) => {
+      started.resolve()
+      await release.promise
+      return settled(input)
+    })
+
+    const hold = host.hold(SESSION, 'surface-1')
+    await started.promise
+    const status = host.handoffStatus(SESSION)
+    release.resolve()
+    await hold
+
+    await expect(status).resolves.toMatchObject({ owner: 'native', stage: null })
   })
 
   it("keeps a session whose owner cannot be probed out of a live writer's hands", async () => {
@@ -706,7 +732,8 @@ describe('subscribe', () => {
       emit: (event) => events.push(event),
       cursor: first.cursor
     })
-    expect(events[0]).toMatchObject({ type: 'batch', handoff: { owner: 'native', phase: 'idle' } })
+    expect(events[0]).toMatchObject({ type: 'batch' })
+    expect(events[0]).not.toHaveProperty('handoff')
 
     const second = hostTestMessage('and a timeout')
     await host.send(CALLER, {

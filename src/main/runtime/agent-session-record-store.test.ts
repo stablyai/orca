@@ -9,7 +9,6 @@ import type {
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import { setStoredAgentSessionHandoffStage } from './agent-session-handoff-record-transitions'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
 import {
@@ -58,7 +57,6 @@ function reserveRequest(
     location: NATIVE,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude-work' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
@@ -777,27 +775,6 @@ describe('orphans, claim keys, checkpoints, and unreadable rows', () => {
       now: NOW
     })
     expect(advanced.lease.journalCheckpoint).toEqual({ epoch: 3, sequence: 0 })
-  })
-
-  it('rejects a handoff stage change under a different operation id', async () => {
-    const store = await open()
-    await establishOwner(store)
-    await setStoredAgentSessionHandoffStage(store, {
-      sessionId: 'session-alpha',
-      fence: 1,
-      stage: 'preparing',
-      handoffOperationId: 'op-1',
-      now: NOW
-    })
-    await expect(
-      setStoredAgentSessionHandoffStage(store, {
-        sessionId: 'session-alpha',
-        fence: 1,
-        stage: 'old-owner-stopped',
-        handoffOperationId: 'op-2',
-        now: NOW
-      })
-    ).rejects.toThrow('agent_session_operation_conflict')
   })
 
   it.each([

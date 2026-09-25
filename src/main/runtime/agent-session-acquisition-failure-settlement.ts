@@ -74,7 +74,6 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
   }
   assertFence(record.lease, args.fence)
   if (
-    record.lease.runtimeKind !== 'native' ||
     record.lease.claimStatus !== 'live' ||
     record.lease.handoffStage !== null ||
     record.lease.ownerProcess?.spawnToken !== args.spawnToken ||

@@ -21,7 +21,6 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionLaunchArgs,
   AgentSessionLaunchEnv,
-  AgentSessionOwnerRuntimeKind,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
@@ -61,7 +60,8 @@ export type AgentSessionAttachParams = {
   provider: AgentSessionHandleProvider
   agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
-  runtimeKind: AgentSessionOwnerRuntimeKind
+  /** Always `native`; kept on the params because the operation fingerprint covers it. */
+  runtimeKind: 'native'
   /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
   options?: Readonly<Record<string, string>>
   /** The tab id a create reserves for this chat; absent records the id clients derive. Never on
@@ -181,7 +181,7 @@ export type AttachedJournal = {
  * record store handed this host the lease and before `onAttached` starts a
  * provider child, so nothing can be appending to the provider's history while it
  * is read, and the window stays valid until the resume consumes it. Every other
- * settlement site — a proven child exit, a handoff suspend — runs while the host
+ * settlement site — a proven child exit — runs while the host
  * may still start another child, and a read there could be overtaken before it
  * is acted on. Orca still never re-sends: this decides state only.
  */
@@ -324,7 +324,6 @@ export function reserveRequestFor(input: {
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
-    runtimeKind: params.runtimeKind,
     ...(params.adopt
       ? {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry

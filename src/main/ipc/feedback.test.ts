@@ -16,7 +16,10 @@ vi.mock('electron', () => ({
   net: { fetch: (...args: unknown[]) => fetchMock(...args) }
 }))
 
-import { MAX_FEEDBACK_IMAGE_RESPONSE_BYTES } from './feedback-image-attachments'
+import {
+  MAX_FEEDBACK_IMAGE_RESPONSE_BYTES,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES
+} from './feedback-image-attachments'
 import { registerFeedbackHandlers, submitFeedback } from './feedback'
 
 function okResponse(): Response {
@@ -516,6 +519,77 @@ describe('submitFeedback', () => {
         error: 'request timed out after 60 seconds'
       })
       expect(requestInit().signal).toMatchObject({ aborted: true })
+    })
+
+    it('resends the report as text-only JSON when the host rejects the image payload', async () => {
+      fetchMock.mockResolvedValueOnce(errorResponse(413)).mockResolvedValueOnce(okResponse())
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage(), pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false,
+        imagesFailure: { status: 413, error: 'status 413' }
+      })
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(requestInit(0).body).toBeInstanceOf(FormData)
+      expect(fetchMock.mock.calls[1]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
+      expect(requestInit(1).headers).toEqual({ 'Content-Type': 'application/json' })
+      expect(postedBody(1)).toMatchObject({
+        feedback: 'images attached',
+        submissionType: 'feedback',
+        githubLogin: 'someone'
+      })
+      expect(postedBody(1)).not.toHaveProperty('images')
+    })
+
+    it('keeps both failures when the text-only resend also fails', async () => {
+      fetchMock.mockResolvedValueOnce(errorResponse(413)).mockResolvedValueOnce(errorResponse(503))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: false,
+        status: 503,
+        error: 'status 413; retry: status 503'
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it.each([401, 429, 500, 502])(
+      'does not resend an image submission rejected with status %s',
+      async (status) => {
+        fetchMock.mockResolvedValueOnce(errorResponse(status))
+
+        await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+          ok: false,
+          status,
+          error: `status ${status}`
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+      }
+    )
+
+    it('does not resend an image submission after a network error', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('upload network failed'))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: false,
+        status: null,
+        error: 'upload network failed'
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects an image set over the total byte budget before any request is made', async () => {
+      const half = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
+
+      const result = await submitFeedback(
+        imageSubmitArgs([pngImage(half), pngImage(half), pngImage(1)])
+      )
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: `Image attachments must total ${MAX_FEEDBACK_IMAGE_TOTAL_BYTES} bytes or fewer.`
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
     })
 
     it('rejects unsupported image types before any request is made', async () => {

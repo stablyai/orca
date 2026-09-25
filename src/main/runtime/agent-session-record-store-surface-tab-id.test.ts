@@ -48,7 +48,6 @@ function reserveRequest(
     location: NATIVE,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude-work' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',

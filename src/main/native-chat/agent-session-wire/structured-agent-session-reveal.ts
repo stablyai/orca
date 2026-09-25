@@ -52,7 +52,7 @@ export async function revealStructuredAgentSession(
 /**
  * The host's whole readable-restore surface: the startup sweep and the on-demand reveal.
  *
- * Bundled the way the handoff and lifetime collaborators are, because the two share the restorer
+ * Bundled the way the lifetime collaborators are, because the two share the restorer
  * and differ only in who is asking — startup, once, for everything; a surface, later, for one.
  */
 export function createStructuredAgentSessionHostRestore(

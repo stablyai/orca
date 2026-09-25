@@ -96,7 +96,7 @@ export const AttachParams = z
     provider: z.enum(['codex', 'claude']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
-    runtimeKind: z.enum(['native', 'tui']),
+    runtimeKind: z.literal('native'),
     providerHandle: ProviderHandle
   })
   .strict()
@@ -213,15 +213,6 @@ export const SetOptionParams = z
     envelope: MutationEnvelope,
     key: Identifier('Invalid option key'),
     value: z.string().max(MAX_OPTION_LABEL)
-  })
-  .strict()
-
-export const HandoffParams = z
-  .object({
-    envelope: MutationEnvelope,
-    direction: z.enum(['to-tui', 'to-native']),
-    mode: z.enum(['now', 'after-turn', 'stop-turn']),
-    action: z.enum(['start', 'cancel-queued', 'retry', 'recover']).optional()
   })
   .strict()
 

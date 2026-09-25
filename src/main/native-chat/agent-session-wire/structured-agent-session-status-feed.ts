@@ -264,8 +264,8 @@ export class StructuredAgentSessionStatusFeed {
     }
     const record = this.deps.getRecord(sessionId)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
-    // The journal has no model: the record's acknowledged options are where an owner
-    // handoff or a mid-session switch lands, so the row follows whichever is in force.
+    // The journal has no model: the record's acknowledged options are where a mid-session
+    // switch lands, so the row follows whichever is in force.
     const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
     // Usage is dropped here on purpose: a `task_progress` tick would otherwise fail the
     // equality check and re-broadcast a full summary to every remote subscriber for a
