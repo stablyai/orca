@@ -8,6 +8,7 @@ export type WorkingTreeCarryIo = {
   sumEntrySizes: (root: string, relativePaths: readonly string[]) => Promise<number>
   copyEntry: (fromRoot: string, toRoot: string, relativePath: string) => Promise<void>
   removeEntry: (root: string, relativePath: string) => Promise<void>
+  entryExists: (root: string, relativePath: string) => Promise<boolean>
 }
 
 export type WorkingTreeCarryFailureReason =
@@ -86,14 +87,23 @@ export async function carryWorkingTreeChanges(
   }
   const stashCommit = (await io.git(['stash', 'create'], sourcePath)).trim()
   // Why: paths the stash adds land untracked in the target after `reset -q`; rollback must delete them explicitly.
+  // Why: --no-renames keeps a renamed-to path classified as 'A' regardless of diff.renames config.
   const stashAddedPaths = stashCommit
     ? splitNulSeparated(
         await io.git(
-          ['diff', '--name-only', '-z', '--diff-filter=A', 'HEAD', stashCommit],
+          ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=A', 'HEAD', stashCommit],
           sourcePath
         )
       )
     : []
+  // Why: a pre-existing (often ignored) target file at any path we're about to write would be silently clobbered.
+  const candidatePaths = [...stashAddedPaths, ...untracked]
+  const collisions = await Promise.all(
+    candidatePaths.map((relativePath) => io.entryExists(targetPath, relativePath))
+  )
+  if (collisions.some(Boolean)) {
+    return { ok: false, reason: 'target_dirty' }
+  }
   const writtenPaths: string[] = []
   try {
     if (stashCommit) {

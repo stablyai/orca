@@ -1,6 +1,7 @@
 import { constants as fsConstants } from 'node:fs'
 import { chmod, copyFile, lstat, mkdir, readlink, rm, symlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { isDefinitiveAbsence } from './definitive-filesystem-absence'
 
 // Why: git reports paths with '/', so split before joining with the host separator.
 function resolveEntryPath(root: string, relativePath: string): string {
@@ -41,4 +42,19 @@ export async function removeNodeWorkingTreeEntry(
 ): Promise<void> {
   // Why: no `recursive` so an unexpected directory errors instead of being deleted wholesale.
   await rm(resolveEntryPath(root, relativePath), { force: true })
+}
+
+export async function nodeWorkingTreeEntryExists(
+  root: string,
+  relativePath: string
+): Promise<boolean> {
+  try {
+    await lstat(resolveEntryPath(root, relativePath))
+    return true
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return false
+    }
+    throw error
+  }
 }

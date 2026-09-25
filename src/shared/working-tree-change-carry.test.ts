@@ -21,6 +21,7 @@ import {
 } from './working-tree-change-carry'
 import {
   copyNodeWorkingTreeEntry,
+  nodeWorkingTreeEntryExists,
   removeNodeWorkingTreeEntry,
   sumNodeEntrySizes
 } from './working-tree-change-carry-node-fs'
@@ -40,7 +41,8 @@ const io: WorkingTreeCarryIo = {
   git: async (args, cwd) => git(cwd, ...args),
   sumEntrySizes: sumNodeEntrySizes,
   copyEntry: copyNodeWorkingTreeEntry,
-  removeEntry: removeNodeWorkingTreeEntry
+  removeEntry: removeNodeWorkingTreeEntry,
+  entryExists: nodeWorkingTreeEntryExists
 }
 
 function createRepoWithChild(extraFiles: Record<string, string> = {}): {
@@ -273,5 +275,49 @@ describe('carryWorkingTreeChanges', () => {
     if (!result.ok) {
       expect(result.detail).toContain('simulated rollback failure')
     }
+  })
+
+  it('rolls back a staged rename when a later copy fails', async () => {
+    const { source, target } = createRepoWithChild({ 'to-rename.txt': 'base\n' })
+    git(source, 'mv', 'to-rename.txt', 'renamed.txt')
+    writeFileSync(join(source, 'copy-a.txt'), 'a\n')
+    writeFileSync(join(source, 'copy-b.txt'), 'b\n')
+
+    const result = await carryWorkingTreeChanges(ioFailingOnCopyB(), source, target)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'apply_failed',
+      detail: expect.stringContaining('simulated copy failure')
+    })
+    expect(git(target, 'status', '--porcelain', '--untracked-files=normal')).toBe('')
+    expect(existsSync(join(target, 'renamed.txt'))).toBe(false)
+    expect(readFileSync(join(target, 'to-rename.txt'), 'utf8')).toBe('base\n')
+  })
+
+  it('refuses without writing when an untracked source file collides with an existing target file', async () => {
+    const { source, target } = createRepoWithChild({ '.gitignore': 'ignored.log\n.env\n' })
+    // Why: unstage the ignore rule so `.env` becomes an untracked (carriable) file in the source.
+    writeFileSync(join(source, '.gitignore'), 'ignored.log\n')
+    writeFileSync(join(source, '.env'), 'source-secret\n')
+    writeFileSync(join(target, '.env'), 'target-secret\n')
+
+    const result = await carryWorkingTreeChanges(io, source, target)
+
+    expect(result).toEqual({ ok: false, reason: 'target_dirty' })
+    expect(readFileSync(join(target, '.env'), 'utf8')).toBe('target-secret\n')
+    expect(git(target, 'status', '--porcelain', '--untracked-files=normal')).toBe('')
+  })
+
+  it('refuses without writing when a force-added staged file collides with an existing ignored target file', async () => {
+    const { source, target } = createRepoWithChild({ '.gitignore': 'ignored.log\n.env\n' })
+    writeFileSync(join(source, '.env'), 'source-secret\n')
+    git(source, 'add', '-f', '.env')
+    writeFileSync(join(target, '.env'), 'target-secret\n')
+
+    const result = await carryWorkingTreeChanges(io, source, target)
+
+    expect(result).toEqual({ ok: false, reason: 'target_dirty' })
+    expect(readFileSync(join(target, '.env'), 'utf8')).toBe('target-secret\n')
   })
 })
