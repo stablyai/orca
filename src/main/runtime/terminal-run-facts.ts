@@ -2,12 +2,23 @@ import {
   spawnCommitBindingOrigin,
   type PtySpawnCommitOrigin
 } from '../persistence/loading-store/pty-binding-span'
+import { isTerminalQueryReply } from '../../shared/terminal-query-reply'
 
 export type TerminalRunFacts = {
   /** This process was started for its pane, not reattached, adopted or cold-restored. */
   freshSpawn: boolean
   /** When any client first sent this process input a person produced; null if none has. */
   firstUserInputAt: number | null
+}
+
+// Why: a paired client's xterm answers focus changes (CSI I / CSI O) through input that carries no
+// provenance; the desktop renderer already excludes them via xterm's user-input signal.
+// oxlint-disable-next-line no-control-regex -- focus reports are ESC-framed sequences by definition.
+const TERMINAL_FOCUS_REPORTS_ONLY_RE = new RegExp('^(?:\\u001b\\[[IO])+$')
+
+/** Input with no provenance that no person typed: a whole terminal reply or only focus reports. */
+export function isUntypedTerminalInput(payload: string): boolean {
+  return isTerminalQueryReply(payload) || TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
 }
 
 export type TerminalSpawnCommit = Parameters<typeof spawnCommitBindingOrigin>[0] & {

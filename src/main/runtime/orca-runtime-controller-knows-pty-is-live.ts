@@ -3,7 +3,7 @@ import { OrcaRuntimeWithResolveTerminalPane } from './orca-runtime-resolve-termi
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from './proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
-import { isTerminalQueryReply } from '../../shared/terminal-query-reply'
+import { isUntypedTerminalInput } from './terminal-run-facts'
 import type { RuntimeAgentPromptWriteOptions } from './runtime-terminal-contracts'
 import {
   assertTerminalInputWithinLimitWithYield,
@@ -13,11 +13,6 @@ import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
-
-// Why: a paired client's xterm answers focus changes (CSI I / CSI O) through stream input, which
-// carries no provenance; the desktop renderer already excludes them via xterm's user-input signal.
-// oxlint-disable-next-line no-control-regex -- focus reports are ESC-framed sequences by definition.
-const TERMINAL_FOCUS_REPORTS_ONLY_RE = new RegExp('^(?:\\u001b\\[[IO])+$')
 
 export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
@@ -172,11 +167,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
   private withUserInputTag<
     T extends { reserveWrite?: (ptyId: string) => void; inputKind?: string }
   >(payload: string, options: T): T {
-    if (
-      options.inputKind === 'query-reply' ||
-      isTerminalQueryReply(payload) ||
-      TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
-    ) {
+    if (options.inputKind === 'query-reply' || isUntypedTerminalInput(payload)) {
       return options
     }
     return {

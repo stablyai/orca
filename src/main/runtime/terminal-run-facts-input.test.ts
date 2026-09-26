@@ -112,6 +112,38 @@ describe('run facts: input from clients other than the local renderer', () => {
     expect(run.firstUserInputAt()).toBeNull()
   })
 
+  it('records nothing for the focus-in a desktop renderer sends on reattaching a remote pane', async () => {
+    const run = await createFreshRun()
+
+    await sendTerminalStreamInput(run.runtime, {
+      terminal: run.handle,
+      text: '\x1b[I',
+      client: undefined,
+      isMobile: false
+    })
+
+    expect(run.firstUserInputAt()).toBeNull()
+  })
+
+  it('records dashboard preview typing before the write that could end the process', async () => {
+    const run = await createFreshRun()
+
+    await expect(run.runtime.writeTerminalPreviewInput(PTY_ID, 'exit\r')).resolves.toBe(true)
+
+    expect(run.firstUserInputAt()).not.toBeNull()
+    expect(run.inputRecordedAtWrite).toEqual([true])
+  })
+
+  it('records nothing for dashboard preview bytes that are only a reply or focus reports', async () => {
+    const run = await createFreshRun()
+
+    await expect(run.runtime.writeTerminalPreviewInput(PTY_ID, '\x1b[3;4R')).resolves.toBe(true)
+    await expect(run.runtime.writeTerminalPreviewInput(PTY_ID, '\x1b[O\x1b[I')).resolves.toBe(true)
+
+    expect(run.inputRecordedAtWrite).toEqual([false, false])
+    expect(run.firstUserInputAt()).toBeNull()
+  })
+
   it('records a reply mixed with a keystroke', async () => {
     const run = await createFreshRun()
 
