@@ -5,7 +5,7 @@
  * C5 moves agent session history to the web: `app/h/_layout.tsx` and
  * `app/h/[hostId]/agent-history/[worktreeId].web.tsx` and everything they import. The suite next
  * door proves the whole corpus replays byte-identically or in a named class, but it proves it as
- * counts over 787 goldens, and a count cannot tell this domain's regression from another domain's
+ * counts over 786 goldens, and a count cannot tell this domain's regression from another domain's
  * improvement. These 125 are the ones whose divergence would be this domain's.
  *
  * C1's 20 families are a strict subset of these 25, and their verdicts are inherited from

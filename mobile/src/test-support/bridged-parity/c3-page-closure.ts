@@ -12,7 +12,7 @@ import type { PageClosurePins } from './page-closure'
  * this repository's own and 10 are under `src/files`, the preview 3666 / 330 / 19, and their union
  * is 342 local modules. 26 families and 116 goldens are recorded at a site inside that union, each
  * pinned by id to the verdict it gives — the instrument C1, C2 and C5 use, for the reason
- * `BRIDGED_PARITY_BASELINE` cannot serve: it is counts over 787 goldens, so one of the other 671
+ * `BRIDGED_PARITY_BASELINE` cannot serve: it is counts over 786 goldens, so one of the other 670
  * can pay for a closure golden that stopped replaying.
  *
  * The entries are the `.web.tsx` files, not the route switches beside them. Measured from the

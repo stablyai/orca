@@ -2,7 +2,7 @@
  * What a bridged-replay divergence is called, decided by a rule rather than by reading a message.
  *
  * Beside the recorder rather than inside it. Reading a failure cannot change what a recording
- * records, so `recorderSha256` must not cover this: a tightened rule would otherwise re-record 787
+ * records, so `recorderSha256` must not cover this: a tightened rule would otherwise re-record 786
  * headers to say nothing. The recorder's own directory is digested whole, which is why this lives
  * one level up in `test-support`.
  */
@@ -165,7 +165,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 }
 
 /**
- * What this tree measures, per class, over all 787 goldens.
+ * What this tree measures, per class, over all 786 goldens.
  *
  * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
  * in both directions, and this module's test pins their sum to the size of the corpus. A class that
