@@ -7,6 +7,7 @@ import type { ProjectGroupImportResult } from '../../../shared/project-group-typ
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
+import { getLocalGitRepoAccessBlocker } from '../../git/git-safe-directory'
 import { isGitRepo, getRepoName } from '../../git/repo'
 import {
   createNestedProjectGroupResolver,
@@ -92,6 +93,13 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
               continue
             }
             importRepoPath = await importTargetResolver.resolveLocal(repoPath)
+            // Why: marker-based isGitRepo can accept an owned-by-Administrators checkout while
+            // Git itself refuses every worktree scan (#12627).
+            const accessBlocker = await getLocalGitRepoAccessBlocker(importRepoPath)
+            if (accessBlocker) {
+              results.push({ path: repoPath, status: 'failed', error: accessBlocker })
+              continue
+            }
           }
           const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
           const alreadyImportedProjectId =
