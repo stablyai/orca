@@ -5,24 +5,24 @@ export type TerminalSurfaceCloseTarget =
 
 export type TerminalPaneCloseTarget = Extract<TerminalSurfaceCloseTarget, { kind: 'pane' }>
 
-function readNonEmptyString(value: object, key: string): string | null {
-  const field: unknown = Reflect.get(value, key)
-  return typeof field === 'string' && field.length > 0 ? field : null
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
 }
 
 /** Validates a close target that crossed a process boundary; anything malformed is rejected. */
 export function parseTerminalSurfaceCloseTarget(value: unknown): TerminalSurfaceCloseTarget | null {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== 'object' || value === null || !('kind' in value) || !('tabId' in value)) {
     return null
   }
-  const kind: unknown = Reflect.get(value, 'kind')
-  const tabId = readNonEmptyString(value, 'tabId')
-  if (!tabId) {
+  const { kind, tabId } = value
+  if (!isNonEmptyString(tabId)) {
     return null
   }
   if (kind === 'tab') {
     return { kind, tabId }
   }
-  const leafId = readNonEmptyString(value, 'leafId')
-  return kind === 'pane' && leafId ? { kind, tabId, leafId } : null
+  if (kind !== 'pane' || !('leafId' in value) || !isNonEmptyString(value.leafId)) {
+    return null
+  }
+  return { kind, tabId, leafId: value.leafId }
 }
