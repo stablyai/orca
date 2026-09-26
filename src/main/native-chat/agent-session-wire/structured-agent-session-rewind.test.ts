@@ -9,6 +9,7 @@ import {
   agentJournalSubmissionKey
 } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type {
@@ -423,6 +424,98 @@ describe('host rewind', () => {
       { itemId: agentJournalItemKey(turnRow('kept')), body: keptTurn }
     ])
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+  })
+
+  it('keeps each kept turn opened by the message that opened it, under its provider key', async () => {
+    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    const message = (turnId: string, ordinal = 0) => ({
+      provider: 'codex' as const,
+      threadId: HOST_TEST_THREAD,
+      turnId,
+      ordinal
+    })
+    const turnRow = (turnId: string) => ({
+      provider: 'legacy' as const,
+      agent: 'codex',
+      sessionId: HOST_TEST_SESSION,
+      recordId: `turn-lifecycle:${turnId}`
+    })
+    for (const turnId of ['kept', 'drop']) {
+      const body = hostTestMessage(turnId)
+      const clientOperationId = hostTestOperationId()
+      vi.mocked(adapter.dispatch).mockResolvedValueOnce({
+        state: 'accepted',
+        providerIdentity: message(turnId)
+      })
+      expect(
+        await host.send(caller, {
+          body,
+          envelope: {
+            sessionId: HOST_TEST_SESSION,
+            clientOperationId,
+            expectedRuntimeFence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+            payloadFingerprint: computeAgentSessionPayloadFingerprint({
+              method: 'agentSession.send',
+              sessionId: HOST_TEST_SESSION,
+              fields: { body }
+            })
+          }
+        })
+      ).toMatchObject({ ok: true })
+      await vi.waitFor(async () =>
+        expect(
+          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+            (entry) => entry.clientMessageId === clientOperationId
+          )?.dispatchState
+        ).toBe('accepted')
+      )
+      // As the translator writes it: the turn names the submission that opened it.
+      sink.appendItem(
+        turnRow(turnId),
+        {
+          kind: 'turn',
+          turnId,
+          state: 'completed',
+          outcome: 'success',
+          userItemId: agentJournalSubmissionKey(clientOperationId),
+          startedAt: HOST_TEST_NOW - 2_000,
+          completedAt: HOST_TEST_NOW - 1_000
+        },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      sink.appendItem(
+        message(turnId, 1),
+        { ...hostTestMessage(`answer ${turnId}`), role: 'assistant' },
+        { turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turnRow(turnId)) } }
+      )
+      await host.flushStreamedEvents(HOST_TEST_SESSION)
+    }
+    const items = [
+      { identity: message('kept'), body: hostTestMessage('kept') },
+      {
+        identity: message('kept', 1),
+        body: { ...hostTestMessage('answer kept'), role: 'assistant' as const }
+      }
+    ]
+    rewind.mockImplementationOnce(async (input) => {
+      await input.onPrepared?.(items)
+      await input.onReverted?.()
+      return { ok: true, items }
+    })
+    const target = (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.at(-1)!
+    expect(
+      await host.rewind(caller, await params(agentJournalSubmissionKey(target.clientMessageId)))
+    ).toMatchObject({ ok: true })
+
+    const rebuilt = await host.journalSnapshot(HOST_TEST_SESSION)
+    const membership = nativeChatTurnMembership(
+      rebuilt.items.flatMap(({ itemId, body }) =>
+        body.kind === 'message' ? [{ id: itemId, role: body.role }] : []
+      ),
+      rebuilt
+    )
+    const opener = agentJournalItemKey(message('kept'))
+    expect(membership.turnKeys).toEqual([opener, opener])
   })
 
   it('keeps a host goal row when interrupted Codex rewind recovery rebuilds provider history', async () => {
