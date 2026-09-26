@@ -161,7 +161,8 @@ export type TerminalSurfaceCloseOptions = {
   allowMissing?: boolean
   force?: boolean
   reason?: RuntimeSessionTabCloseReason
-  /** The desktop renderer's own close: its layout owner already removed the tab. */
+  /** The desktop renderer's own close: its layout owner already removed the tab. Goes away with
+   *  D1, once main owns the terminal layout. */
   closedByLayoutOwner?: boolean
 }
 
