@@ -43,7 +43,7 @@ import {
 } from '../git/repo'
 import { getBranchConflictKindViaExec } from '../git/repo-branch-conflict'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
-import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
+import { resolveGitUsernameForBranchPrefix, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import {
   hasLocalWorktreeBaseRef,
@@ -2365,7 +2365,7 @@ async function performLocalWorktreeCreate(
   // both before awaiting removes one serial git/config round trip from create.
   const usernamePromise =
     !args.branchNameOverride && settings.branchPrefix === 'git-username'
-      ? resolveLocalGitUsername(repo.path)
+      ? resolveGitUsernameForBranchPrefix(repo.path)
       : Promise.resolve('')
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,

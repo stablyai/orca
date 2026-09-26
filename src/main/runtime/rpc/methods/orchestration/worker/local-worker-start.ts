@@ -130,7 +130,12 @@ export async function startLocalWorker(args: {
   const task = started.task
   if (resolvedWorktree) {
     effects.push(
-      { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
+      {
+        kind: 'worktree',
+        action: 'reused',
+        id: resolvedWorktree.id,
+        branch: resolvedWorktree.branch
+      },
       { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
     )
   }

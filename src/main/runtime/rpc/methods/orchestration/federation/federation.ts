@@ -123,7 +123,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           effects.push({
             kind: 'worktree',
             action: 'created_top_level',
-            id: created.worktree.id
+            id: created.worktree.id,
+            branch: created.worktree.branch
           })
           setup = {
             requested: setupDecision,
@@ -156,7 +157,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             )
           })
           effects.push(
-            { kind: 'worktree', action: 'reused', id: worktree.id },
+            { kind: 'worktree', action: 'reused', id: worktree.id, branch: worktree.git.branch },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
           )
           if (terminalHandle) {

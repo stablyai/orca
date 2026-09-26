@@ -144,8 +144,22 @@ describe('orchestration federation', () => {
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
     })
-    const fx = JSON.parse(attachment?.effects ?? '[]') as { kind?: string; state?: string }[]
+    const fx = JSON.parse(attachment?.effects ?? '[]') as {
+      kind?: string
+      state?: string
+      action?: string
+      branch?: string
+    }[]
     expect(fx.some((x) => x.kind === 'dispatch_input' && x.state === 'accepted')).toBe(true)
+    expect(fx).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'worktree',
+          action: 'created_top_level',
+          branch: 'octocat/windows-worker'
+        })
+      ])
+    )
     expect(workerDb.listTasks()).toHaveLength(0)
     const create = vi.mocked(workerRuntime.createManagedWorktree).mock.calls[0]?.[0]
     expect([create.activate, create.runHooks]).toEqual([false, false])
@@ -253,6 +267,33 @@ describe('orchestration federation', () => {
     })
     expect(homeDb.getTask(task.id)?.status).toBe('failed')
     expect(workerRuntime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('returns a definite failed receipt for a remote git-username probe timeout', async () => {
+    const timeoutMessage = 'could not resolve the git-username branch prefix: gh login probe timed out'
+    vi.mocked(workerRuntime.createManagedWorktree).mockRejectedValueOnce(
+      Object.assign(new Error(timeoutMessage), { code: 'git_username_probe_timeout' })
+    )
+    const task = createHomeTask()
+
+    const response = await homeDispatcher.dispatch(startRequest(task.id))
+    const dispatch = homeDb.getDispatchContext(task.id)!
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'failed',
+        failedStage: 'worktree_create',
+        lastError: timeoutMessage
+      }
+    })
+    expect(response).not.toMatchObject({ ok: true, result: { state: 'outcome_unknown' } })
+    expect(homeDb.getTask(task.id)?.status).toBe('failed')
+    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)).toMatchObject({
+      state: 'failed',
+      stage: 'worktree_create',
+      last_error: timeoutMessage
+    })
   })
 
   it('starts a legacy federation worker through its negotiated protocol', async () => {

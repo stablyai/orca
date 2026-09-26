@@ -111,7 +111,7 @@ describe('orchestration new-worktree workers', () => {
     const hookFound = options?.hookFound ?? true
     const state = options?.state ?? (hookFound ? 'running' : 'not_configured')
     vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
-      worktree: { id: 'repo::created', repoId: 'repo' },
+      worktree: { id: 'repo::created', repoId: 'repo', branch: 'octocat/new-worker' },
       startupTerminal: { spawned: true, handle: 'term_worker' },
       setupReceipt: {
         requested: state === 'skipped' ? 'skip' : 'run',
@@ -152,7 +152,8 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({
           kind: 'worktree',
           action: 'created_top_level',
-          id: 'repo::created'
+          id: 'repo::created',
+          branch: 'octocat/new-worker'
         }),
         expect.objectContaining({
           kind: 'terminal',

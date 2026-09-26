@@ -1,3 +1,5 @@
+import { GIT_USERNAME_PROBE_TIMEOUT_ERROR_CODE } from '../../../../../git/git-username'
+
 export type FederationEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
   action?: string
@@ -12,6 +14,7 @@ export type FederationEffect = {
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
+  branch?: string
 }
 
 export function appendFederationTerminalEffects(
@@ -72,6 +75,9 @@ export function isFederationEffectUnknown(error: unknown, stage: string): boolea
       : ''
   if (code === 'operation_unknown') {
     return true
+  }
+  if (code === GIT_USERNAME_PROBE_TIMEOUT_ERROR_CODE) {
+    return false
   }
   if (!['worktree_create', 'terminal_create', 'dispatch_input'].includes(stage)) {
     return false
