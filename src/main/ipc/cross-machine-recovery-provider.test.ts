@@ -182,6 +182,27 @@ describe('cross-machine recovery provider bridge', () => {
     })
   })
 
+  it('drops an oversized unterminated stderr line and keeps parsing later progress', async () => {
+    const child = fakeChild()
+    const provider = createCrossMachineRecoveryProvider(() => 'cc-sync')
+    const pending = provider.pickup(sender, {
+      clientInstanceId: 'c',
+      operationId: 'op-4',
+      selector: 'a/b',
+      resume: []
+    })
+    child.stderr.emit('data', Buffer.from('x'.repeat(5000)))
+    child.stderr.emit('data', Buffer.from('{"phase":"orca-import"}\n{"phase":"select"}\n'))
+    child.stderr.emit('data', Buffer.from('y'.repeat(5000)))
+    child.stderr.emit('data', Buffer.from('{"phase":"orca-resume"}'))
+    child.stdout.emit('data', Buffer.from(JSON.stringify(PICKUP)))
+    child.emit('close', 0)
+    await expect(pending).resolves.toEqual({ ok: true, value: PICKUP })
+    expect(sender.send.mock.calls).toEqual([
+      [PICKUP_PROGRESS_CHANNEL, { operationId: 'op-4', progress: { phase: 'select' } }]
+    ])
+  })
+
   it('cancels a pickup by signalling its process group', async () => {
     const child = fakeChild()
     const provider = createCrossMachineRecoveryProvider(() => 'cc-sync')

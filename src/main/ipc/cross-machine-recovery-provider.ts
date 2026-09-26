@@ -204,7 +204,9 @@ export function createCrossMachineRecoveryProvider(getProviderPath: () => string
       })
       child.once('close', (code) => {
         pickups.delete(args.operationId)
-        forwardProgress(pendingLine)
+        if (!discardingLine) {
+          forwardProgress(pendingLine)
+        }
         if (stdout.truncated()) {
           resolve(fail('output-too-large', 'The recovery provider answer was too large.'))
           return
