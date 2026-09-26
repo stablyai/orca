@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
+import { Profiler } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { TerminalExitRecord } from '../../../../shared/terminal-surface-exit'
@@ -30,7 +31,13 @@ const processExit: PaneProcessExit = {
   startup: null
 }
 
-function renderExitedPane({ isActive }: { isActive: boolean }) {
+function renderExitedPane({
+  isActive,
+  onRender = () => {}
+}: {
+  isActive: boolean
+  onRender?: () => void
+}) {
   const handleRestartExitedPane = vi.fn()
   const controller = {
     handleCloseExitedPane: vi.fn(),
@@ -40,8 +47,11 @@ function renderExitedPane({ isActive }: { isActive: boolean }) {
     paneProcessExitsByPaneId: { [PANE_ID]: processExit }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the exit portals read only these five controller members.
+  const portalsController = controller as unknown as TerminalPaneController
   render(
-    <TerminalPaneProcessExitPortals controller={controller as unknown as TerminalPaneController} />
+    <Profiler id="exit-portals" onRender={onRender}>
+      <TerminalPaneProcessExitPortals controller={portalsController} />
+    </Profiler>
   )
   return { handleRestartExitedPane }
 }
@@ -72,6 +82,22 @@ describe('a restart main routes to an exited pane', () => {
     const { handleRestartExitedPane } = renderExitedPane({ isActive: true })
 
     expect(handleRestartExitedPane).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-render an exited pane for an exit or a restart request on another leaf', () => {
+    useAppStore.getState().replaceTerminalExitRecords([exitRecord(LEAF_ID)])
+    const onRender = vi.fn()
+    renderExitedPane({ isActive: true, onRender })
+    onRender.mockClear()
+
+    act(() =>
+      useAppStore
+        .getState()
+        .replaceTerminalExitRecords([exitRecord(LEAF_ID), exitRecord(OTHER_LEAF_ID)])
+    )
+    act(() => useAppStore.getState().requestExitedTerminalRestart(OTHER_LEAF_ID))
+
+    expect(onRender).not.toHaveBeenCalled()
   })
 
   it("leaves another pane's request pending for the pane that holds that leaf", () => {
