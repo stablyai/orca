@@ -74,6 +74,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ui: createWebUiApi(),
     ...createWebDiagnosticsApi(),
     ...createWebWorkspaceSessionApi(),
+    // Why: recovery imports target this computer's desktop runtime; the web client never hosts one.
+    crossMachineRecovery: {
+      onApply: () => () => {},
+      reply: () => {},
+      resumeLocal: () => Promise.reject(new Error('recovery_unsupported'))
+    },
     ...createWebOnboardingApi(),
     ...createWebGithubCacheApi(),
     runtime: createWebRuntimeApi(),

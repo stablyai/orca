@@ -4,6 +4,7 @@ import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-win
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
+import { installCrossMachineRecoveryApplyBridge } from '../../store/slices/cross-machine-recovery-apply'
 import { useAppStore } from '../../store'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
@@ -58,6 +59,7 @@ export function installAppLifetimeIpcEvents(
   const directSshRuntime = createDirectSshBridgeRuntime()
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
+  unsubs.push(installCrossMachineRecoveryApplyBridge(useAppStore, window.api))
   unsubs.push(attachMobileMarkdownBridge())
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))

@@ -58,6 +58,7 @@ import { hooksApi } from './api/hooks-bridge'
 import { ephemeralVmApi } from './api/ephemeral-vm-bridge'
 import { cacheApi } from './api/cache-bridge'
 import { sessionApi } from './api/session-bridge'
+import { crossMachineRecoveryApi } from './api/cross-machine-recovery-bridge'
 import { remoteWorkspaceApi } from './api/remote-workspace-bridge'
 import { updaterApi } from './api/updater-bridge'
 import { docPreviewApi } from './api/doc-preview-bridge'
@@ -159,6 +160,7 @@ const api = {
   cache: cacheApi,
   session: sessionApi,
   remoteWorkspace: remoteWorkspaceApi,
+  crossMachineRecovery: crossMachineRecoveryApi,
   updater: updaterApi,
   docPreview: docPreviewApi,
   notebook: notebookApi,
