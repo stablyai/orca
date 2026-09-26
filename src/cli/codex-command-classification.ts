@@ -83,10 +83,16 @@ type CodexCommandToken = {
   index: number
 }
 
-function tokenizeLeadingShellWords(command: string, limit: number): string[] {
-  const tokens: string[] = []
+type ShellWord = {
+  value: string
+  quoted: boolean
+}
+
+/** Yields shell words and whether each word started with a quote. */
+function* tokenizeLeadingShellWords(command: string): Generator<ShellWord, undefined> {
   let current = ''
   let quote: '"' | "'" | null = null
+  let quoted = false
 
   for (let i = 0; i < command.length; i += 1) {
     const ch = command[i]
@@ -100,25 +106,25 @@ function tokenizeLeadingShellWords(command: string, limit: number): string[] {
     }
     if (ch === '"' || ch === "'") {
       quote = ch
+      if (!current) {
+        quoted = true
+      }
       continue
     }
     if (/\s/.test(ch)) {
       if (current) {
-        tokens.push(current)
-        if (tokens.length >= limit) {
-          return tokens
-        }
+        yield { value: current, quoted }
         current = ''
+        quoted = false
       }
       continue
     }
     current += ch
   }
 
-  if (current && tokens.length < limit) {
-    tokens.push(current)
+  if (current) {
+    yield { value: current, quoted }
   }
-  return tokens
 }
 
 function commandBasename(command: string): string {
@@ -134,37 +140,46 @@ function isClaudeExecutable(command: string): boolean {
   return command === 'claude' || command === 'claude.exe' || command === 'claude.cmd'
 }
 
+/** True when token is a NAME=value word the shell or env would treat as an assignment. */
 function isShellAssignment(token: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)
 }
 
-function stripShellLaunchPrefix(tokens: string[]): string[] {
-  const remaining = [...tokens]
-  while (remaining[0] && isShellAssignment(remaining[0])) {
-    remaining.shift()
+/** True when NAME=value is unquoted, so the shell would apply it as a prefix assignment. */
+function isUnquotedShellAssignment(token: ShellWord | undefined): boolean {
+  // Why: quoted `NAME=value` is a command name, not a shell assignment.
+  return Boolean(token && !token.quoted && isShellAssignment(token.value))
+}
+
+/** Drop leading assignments, one `exec`, and `env` argv until the real command. */
+function stripShellLaunchPrefix(tokens: Generator<ShellWord, undefined>): string[] {
+  let token = tokens.next().value
+  while (isUnquotedShellAssignment(token)) {
+    token = tokens.next().value
   }
-  if (remaining[0] && commandBasename(remaining[0]) === 'env') {
-    remaining.shift()
-    while (remaining[0]) {
-      const token = remaining[0]
-      if (isShellAssignment(token)) {
-        remaining.shift()
-        continue
+  if (token?.value === 'exec') {
+    token = tokens.next().value
+  }
+  if (token && commandBasename(token.value) === 'env') {
+    token = tokens.next().value
+    while (token) {
+      if (token.value === '-u' || token.value === '--unset') {
+        tokens.next()
+      } else if (!isShellAssignment(token.value) && !token.value.startsWith('-')) {
+        break
       }
-      if (token === '-u' || token === '--unset') {
-        remaining.splice(0, 2)
-        continue
-      }
-      if (token.startsWith('--unset=')) {
-        remaining.shift()
-        continue
-      }
-      if (token.startsWith('-')) {
-        remaining.shift()
-        continue
-      }
+      token = tokens.next().value
+    }
+  }
+
+  const remaining: string[] = []
+  while (token) {
+    remaining.push(token.value)
+    // Why: bound provider argv scanning without counting environment assignments.
+    if (remaining.length >= 32) {
       break
     }
+    token = tokens.next().value
   }
   return remaining
 }
@@ -268,14 +283,13 @@ function isNonInteractiveCodexSubcommand(tokens: string[]): boolean {
   return CODEX_NON_INTERACTIVE_SUBCOMMANDS.has(normalizedSubcommand)
 }
 
+/** True when `command` launches interactive Codex, including `exec`/`env` prefixes. */
 export function shouldUseRendererBackedCodexTerminal(command: string | undefined): boolean {
   if (!command) {
     return false
   }
 
-  const tokens = stripShellLaunchPrefix(
-    tokenizeLeadingShellWords(command.trim(), 32).filter((token) => token.length > 0)
-  )
+  const tokens = stripShellLaunchPrefix(tokenizeLeadingShellWords(command.trim()))
 
   const executable = tokens[0] ? commandBasename(tokens[0]) : ''
   if (!isCodexExecutable(executable)) {
@@ -285,14 +299,13 @@ export function shouldUseRendererBackedCodexTerminal(command: string | undefined
   return !isNonInteractiveCodexSubcommand(tokens)
 }
 
+/** True when `command` launches interactive Codex or Claude, including `exec`/`env` prefixes. */
 export function shouldUseRendererBackedInteractiveTerminal(command: string | undefined): boolean {
   if (!command) {
     return false
   }
 
-  const tokens = stripShellLaunchPrefix(
-    tokenizeLeadingShellWords(command.trim(), 32).filter((token) => token.length > 0)
-  )
+  const tokens = stripShellLaunchPrefix(tokenizeLeadingShellWords(command.trim()))
 
   const executable = tokens[0] ? commandBasename(tokens[0]) : ''
   if (isCodexExecutable(executable)) {
