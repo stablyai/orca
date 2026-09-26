@@ -41,6 +41,7 @@ import { registerSettingsHandlers } from '../settings'
 import { registerDiagnosticsHandlers } from '../diagnostics'
 import { registerSkillsHandlers } from '../skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
+import { registerCrossMachineRecoveryPresentationHandlers } from '../cross-machine-recovery-presentation-ipc'
 import { registerWorkspaceSpaceHandlers } from '../workspace-space'
 import { registerWorkspacePortHandlers } from '../workspace-ports'
 import { registerLocalhostWorktreeLabelHandlers } from '../localhost-worktree-labels'
@@ -184,6 +185,7 @@ export function registerCoreHandlers(
   registerSettingsHandlers(store, agentAwakeService)
   registerSkillsHandlers(store, runtime)
   registerSkillDeleteIpcHandlers(store, runtime)
+  registerCrossMachineRecoveryPresentationHandlers()
   if (automations) {
     registerAutomationHandlers(store, automations)
   }

@@ -236,6 +236,9 @@ vi.mock('../skills', () => ({
 vi.mock('../skill-delete/handlers', () => ({
   registerSkillDeleteIpcHandlers: registerSkillDeleteIpcHandlersMock
 }))
+vi.mock('../cross-machine-recovery-presentation-ipc', () => ({
+  registerCrossMachineRecoveryPresentationHandlers: vi.fn()
+}))
 
 vi.mock('../workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock

@@ -57,6 +57,7 @@ import { emulatorApi } from './api/emulator-bridge'
 import { hooksApi } from './api/hooks-bridge'
 import { ephemeralVmApi } from './api/ephemeral-vm-bridge'
 import { cacheApi } from './api/cache-bridge'
+import { crossMachineRecoveryPresentationApi } from './api/cross-machine-recovery-presentation-bridge'
 import { sessionApi } from './api/session-bridge'
 import { remoteWorkspaceApi } from './api/remote-workspace-bridge'
 import { updaterApi } from './api/updater-bridge'
@@ -157,6 +158,7 @@ const api = {
   hooks: hooksApi,
   ephemeralVm: ephemeralVmApi,
   cache: cacheApi,
+  crossMachineRecoveryPresentation: crossMachineRecoveryPresentationApi,
   session: sessionApi,
   remoteWorkspace: remoteWorkspaceApi,
   updater: updaterApi,
