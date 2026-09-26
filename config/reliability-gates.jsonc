@@ -23,20 +23,9 @@
         "issue-command read and write",
         "hosted-review own-store host resolution"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Actual hydration and authoritative desktop owner selection with mocked filesystem, Git, inspection and provider boundaries; synthetic local/SSH/runtime rows. No physical provider or native platform certification.",
       "motivatingLinks": [
@@ -47,9 +36,7 @@
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
       ],
-      "testFiles": [
-        "src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
-      ],
+      "testFiles": ["src/main/ipc/hooks/worktree-hook-execution-host.test.ts"],
       "assertionRefs": [
         {
           "file": "src/main/ipc/hooks/worktree-hook-execution-host.test.ts",
@@ -97,6 +84,85 @@
         "Retain exact route, no-local-fallback and authority oracles; obtain CI soak and physical host evidence before promotion."
       ],
       "demotionRule": "Keep experimental until soak; investigate authority/routing failures without replacing exact-target or no-local-I/O assertions."
+    },
+    {
+      "id": "runtime-files.renderer-document-watch-ownership",
+      "title": "Filesystem watches stay owned by their renderer document",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "ipc-contract",
+      "surfaces": [
+        "desktop file explorer watchers",
+        "desktop editor file watchers",
+        "direct SSH file watchers"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "wsl"],
+      "coverageNotes": "Actual desktop local/WSL subscription and SSH watcher controller logic under mocked filesystem/provider handles on macOS. Document events use an EventEmitter sender. Live remote/native Windows/Linux/WSL and rendered reload reattachment are unproved; PTY/process liveness and wire formats are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/ipc/filesystem-watcher-listener-lifecycle.ts"
+      ],
+      "invariant": "A replaced or crashed renderer document retains no file watches or pending ownership and cannot recreate them from an old asynchronous continuation. Shared roots retain live sibling owners; blocked and same-document navigation retain the current document. Shutdown removes registered lifecycle listeners.",
+      "oracle": "Run repeated reloads/crash, pending local/SSH installation cancellation with late success, aborted-install joiners, reconnect retry snapshots, failed-removal restoration and shutdown/reopen. Require zero obsolete roots/intent/listeners, no stale setup/retry, physical handle disposal and preservation of sibling notifications and same-tick remote handoff.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
+        "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
+        "src/main/ipc/filesystem-watcher-remote-cancellation.test.ts",
+        "src/main/ipc/filesystem-watcher-native-capacity.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
+          "assertions": [
+            "retains zero roots and listeners across 15 reloads and a renderer crash",
+            "does not revive a cancelled %s setup for a joiner whose document reloaded",
+            "does not re-arm an old provider snapshot into the same WebContents after replacement",
+            "does not restore a replaced sibling document after an awaited %s removal recovery",
+            "keeps same-document and blocked navigations alive, and removes lifecycle listeners at shutdown"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 1.08,
+          "summary": "45 tests across four focused suites pass. Broader watcher suite passes 146 plus one existing skipped; isolated publication without sibling #22995 passes 145 plus one existing skipped."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Focused deterministic IPC-contract suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Seven permanent regressions fail with HEAD source substituted: cancelled joiner resurrection for local and SSH, restoration into replaced local/SSH documents, stale provider retry, shutdown listener retention, and root retention. All 13 document ownership cases pass after the change."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "15 reloads plus crash: retained local/SSH/desired roots 16→0 each; pending setup aborted; sender lifecycle listeners 1→0. Actual ownership modules with synthetic handles; no native process/heap/latency claim. No new timer, polling, process scan or provider fanout; existing root cleanup runs at document end."
+      },
+      "knownGaps": [
+        "No native Windows/Linux/WSL or live SSH execution.",
+        "No rendered Electron reload-reattachment/paint run or CI soak; broader watcher process isolation is a separate gate."
+      ],
+      "promotionCriteria": [
+        "Retain lifecycle, count and sibling-delivery assertions and add cross-platform and rendered reload evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak evidence; investigate lifecycle failures without suppressing assertions or retrying unexplained failures."
     },
     {
       "id": "agent-session.journal-streaming-replay",

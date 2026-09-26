@@ -1,3 +1,5 @@
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
+import { registerWatcherSenderCleanup } from './filesystem-watcher-listener-lifecycle'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { isWatcherRemovalInProgressError } from './watcher-removal-gate'
 import type {
@@ -74,6 +76,7 @@ async function rearmDormantRemoteWatcher(
   }
 
   const listeners = Array.from(desired.listeners.values())
+  const signals = listeners.map(registerWatcherSenderCleanup)
   let results: Awaited<ReturnType<InstallRemoteWatcher>>[]
   try {
     results = await Promise.all(
@@ -84,6 +87,9 @@ async function rearmDormantRemoteWatcher(
       // Why: removal owns the key now and either forgets the intent or restores the watch itself.
       return
     }
+    if (!listeners.some((listener, index) => isCurrentWatcherSender(listener, signals[index]))) {
+      return
+    }
     scheduleDormantRemoteWatcherRearmCore(
       connectionId,
       worktreePath,
@@ -92,10 +98,16 @@ async function rearmDormantRemoteWatcher(
     )
     return
   }
+  if (!listeners.some((listener, index) => isCurrentWatcherSender(listener, signals[index]))) {
+    return
+  }
   dependencies.requestResync(
     key,
     worktreePath,
-    listeners.filter((_, index) => results[index] === 'installed')
+    listeners.filter(
+      (listener, index) =>
+        results[index] === 'installed' && isCurrentWatcherSender(listener, signals[index])
+    )
   )
   // Why: 'cancelled' means shutdown or the last listener left, so only a refusal stays dormant.
   if (results.some((result) => result === 'unavailable' || result === 'capacity')) {

@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 import type { RemoteWatcherInstallToken } from './filesystem-watcher-lifecycle-state'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
+import { registerWatcherSenderCleanup } from './filesystem-watcher-listener-lifecycle'
 import {
   installRemoteWatcherCore,
   type RemoteWatcherTerminalErrorHandler
@@ -14,14 +15,16 @@ export function installRemoteWatcher(
   sender: WebContents,
   connectionId: string,
   worktreePath: string,
-  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration
+  generation = watcherLifecycleState.remoteWatcherLifecycleGeneration,
+  senderSignal = registerWatcherSenderCleanup(sender)
 ) {
   return installRemoteWatcherCore(
     sender,
     connectionId,
     worktreePath,
     handleRemoteWatcherTerminalError,
-    generation
+    generation,
+    senderSignal
   )
 }
 

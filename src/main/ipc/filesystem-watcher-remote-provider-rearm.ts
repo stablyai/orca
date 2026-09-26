@@ -1,3 +1,4 @@
+import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WebContents } from 'electron'
 import { isWatcherRemovalInProgressError } from './watcher-removal-gate'
 import type {
@@ -5,7 +6,10 @@ import type {
   RequestRemoteWatcherResync
 } from './filesystem-watcher-remote-retry'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
-import { clearDormantRemoteWatcher } from './filesystem-watcher-listener-lifecycle'
+import {
+  clearDormantRemoteWatcher,
+  registerWatcherSenderCleanup
+} from './filesystem-watcher-listener-lifecycle'
 
 type ScheduleRemoteWatcherRetry = (
   sender: WebContents,
@@ -79,24 +83,33 @@ export function reinstallRemoteWatchersForConnectionCore(
     watcherLifecycleState.loggedUnavailableRemoteWatchers.delete(key)
 
     const listeners = Array.from(desired.listeners.values())
+    const signals = listeners.map(registerWatcherSenderCleanup)
+    const liveListeners = () =>
+      listeners.filter((listener, index) => isCurrentWatcherSender(listener, signals[index]))
     void Promise.all(
       listeners.map((listener) =>
         dependencies.install(listener, desired.connectionId, desired.worktreePath)
       )
     )
       .then((results) => {
+        if (liveListeners().length === 0) {
+          return
+        }
         // Why: events between the transport dropping and this reinstall are gone for good.
         dependencies.requestResync(
           key,
           desired.worktreePath,
-          listeners.filter((_, index) => results[index] === 'installed')
+          listeners.filter(
+            (listener, index) =>
+              results[index] === 'installed' && isCurrentWatcherSender(listener, signals[index])
+          )
         )
         if (results.some((result) => result === 'capacity')) {
           dependencies.scheduleDormant(desired.connectionId, desired.worktreePath)
           return
         }
         if (results.some((result) => result === 'unavailable')) {
-          for (const listener of listeners) {
+          for (const listener of liveListeners()) {
             dependencies.scheduleRetry(
               listener,
               desired.connectionId,
@@ -111,7 +124,7 @@ export function reinstallRemoteWatchersForConnectionCore(
         if (isWatcherRemovalInProgressError(error)) {
           return
         }
-        for (const listener of listeners) {
+        for (const listener of liveListeners()) {
           dependencies.scheduleRetry(
             listener,
             desired.connectionId,

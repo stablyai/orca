@@ -336,7 +336,7 @@ describe('local filesystem watcher flush serialization', () => {
     // Why real timers: fake-timers' refresh() revives a cleared handle, but Node's is a no-op — the bug only shows on real Timeouts.
     vi.useRealTimers()
     statMock.mockResolvedValue({ isDirectory: () => true })
-    const listener = { ...sender, id: 7, once: vi.fn() }
+    const listener = { ...sender, id: 7, removeListener: vi.fn(), once: vi.fn() }
     try {
       await subscribeLocalWatcher('/repo', listener as never)
       watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])

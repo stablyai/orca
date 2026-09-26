@@ -8,7 +8,10 @@ export async function closeAllWatchers(): Promise<void> {
   // Why: drop the intent with the rest of the state, but keep the provider-registration
   // subscription — a new fs:watchWorktree reopens the subsystem and still needs the re-arm hook.
   watcherLifecycleState.desiredRemoteWatchers.clear()
-  watcherLifecycleState.senderCleanupRegistered.clear()
+  for (const lifetime of watcherLifecycleState.senderLifetimes.values()) {
+    lifetime.dispose()
+  }
+  watcherLifecycleState.senderLifetimes.clear()
   watcherLifecycleState.unwatchableRoots.clear()
   watcherLifecycleState.suspendedLocalWatcherListeners.clear()
   watcherLifecycleState.suspendedRemoteWatcherListeners.clear()

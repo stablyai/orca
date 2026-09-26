@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock, statMock, subscribeViaWatcherProcessMock, disposeWatcherProcessMock } =
@@ -71,7 +72,7 @@ describe('native filesystem watcher capacity recovery', () => {
     subscribeViaWatcherProcessMock
       .mockRejectedValueOnce(new WatcherChildCapacityError())
       .mockResolvedValueOnce({ unsubscribe })
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const args = { worktreePath: '/tmp/native-capacity-root' }
 
     await handlers['fs:watchWorktree']({ sender }, args)
@@ -86,7 +87,7 @@ describe('native filesystem watcher capacity recovery', () => {
   it('cancels the native capacity wait when its renderer unwatches', async () => {
     const releases = fillWatcherChildCapacity()
     subscribeViaWatcherProcessMock.mockRejectedValue(new WatcherChildCapacityError())
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     const args = { worktreePath: '/tmp/native-capacity-root' }
 
     await handlers['fs:watchWorktree']({ sender }, args)

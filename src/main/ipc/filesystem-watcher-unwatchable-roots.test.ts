@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { statSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -52,7 +53,7 @@ describe('filesystem watcher unwatchable root cache', () => {
 
   it('releases the install record when the root is a file', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     vi.mocked(stat).mockResolvedValue(statSync(new URL(import.meta.url)))
     try {
       await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/not-directory' })
@@ -66,7 +67,7 @@ describe('filesystem watcher unwatchable root cache', () => {
 
   it('evicts oldest failed local roots while suppressing recent retries', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1)
     vi.mocked(stat).mockRejectedValue(new Error('missing'))
 
     for (let i = 0; i < 257; i += 1) {
