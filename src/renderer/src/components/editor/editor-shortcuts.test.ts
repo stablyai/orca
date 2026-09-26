@@ -320,12 +320,12 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
     container: HTMLDivElement
     dispose: () => void
     input: HTMLTextAreaElement
-    goToDiff: ReturnType<typeof vi.fn>
+    navigate: ReturnType<typeof vi.fn>
     onDownstreamKeyDown: ReturnType<typeof vi.fn>
   } {
     const container = document.createElement('div')
     const input = document.createElement('textarea')
-    const goToDiff = vi.fn()
+    const navigate = vi.fn()
     const onDownstreamKeyDown = vi.fn()
     container.appendChild(input)
     document.body.appendChild(container)
@@ -335,10 +335,10 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
       container,
       dispose: installMonacoDiffChangeNavigationShortcut({
         getContainerDomNode: () => container,
-        goToDiff
+        navigate
       }),
       input,
-      goToDiff,
+      navigate,
       onDownstreamKeyDown
     }
   }
@@ -352,7 +352,7 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
     const event = dispatchKeyDown(fixture.input, { key, code: key, shiftKey })
 
     expect(event.defaultPrevented).toBe(true)
-    expect(fixture.goToDiff).toHaveBeenCalledWith(direction)
+    expect(fixture.navigate).toHaveBeenCalledWith(direction)
     expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
     fixture.dispose()
   })
@@ -367,7 +367,7 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
     })
 
     expect(event.defaultPrevented).toBe(true)
-    expect(fixture.goToDiff).not.toHaveBeenCalled()
+    expect(fixture.navigate).not.toHaveBeenCalled()
     expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
     fixture.dispose()
   })
@@ -392,7 +392,7 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
     expect(defaultEvent.defaultPrevented).toBe(false)
     expect(customEvent.defaultPrevented).toBe(true)
     expect(disposedEvent.defaultPrevented).toBe(false)
-    expect(fixture.goToDiff).toHaveBeenCalledTimes(1)
-    expect(fixture.goToDiff).toHaveBeenCalledWith('next')
+    expect(fixture.navigate).toHaveBeenCalledTimes(1)
+    expect(fixture.navigate).toHaveBeenCalledWith('next')
   })
 })
