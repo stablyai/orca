@@ -13,6 +13,18 @@ export type ProcessTableRow = {
   command: string
 }
 
+/**
+ * Whether a `tty=` field names a real controlling terminal. `ps` spells "none"
+ * differently per platform — `?` on Linux, `??` on macOS, `-` on some builds —
+ * so every check that distinguishes "no terminal" from "another terminal" has to
+ * accept all three or a terminal-less child reads as a child on someone else's
+ * terminal. Raw values stay in the row; only this predicate interprets them, and
+ * a true result narrows the field to the `string` a fence needs.
+ */
+export function hasControllingTerminal(tty: string | undefined): tty is string {
+  return !!tty && tty !== '?' && tty !== '??' && tty !== '-'
+}
+
 // Why guarded: this module is the renderer-safe half of the process-table pair, and the renderer
 // runs sandboxed with contextIsolation, where a bare `process` read throws at module evaluation
 // and takes the whole chunk — and the app — down with it. Only hosts ever run these argv.

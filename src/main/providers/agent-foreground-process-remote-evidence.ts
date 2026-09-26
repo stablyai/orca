@@ -5,7 +5,7 @@ import type {
   WindowsFence
 } from '../../shared/foreground-process-evidence'
 import { buildProcessTableIndex, type ProcessTableIndex } from '../../shared/process-table-index'
-import type { ProcessTableRow } from '../../shared/process-table-snapshot'
+import { hasControllingTerminal, type ProcessTableRow } from '../../shared/process-table-snapshot'
 import type {
   BatchedForegroundProcessRequest,
   BatchedForegroundProcessResult,
@@ -58,7 +58,7 @@ export function resolveRemoteForegroundEvidenceFromRows(
   if (!root || root.pgid === undefined || root.tpgid === undefined) {
     return { ...metadata, verdict: 'unverifiable', reason: 'anchor_missing' }
   }
-  if (!root.tty || root.tty === '?' || root.tpgid <= 0 || !root.startTime) {
+  if (!hasControllingTerminal(root.tty) || root.tpgid <= 0 || !root.startTime) {
     return { ...metadata, verdict: 'unverifiable', reason: 'fence_incomplete' }
   }
   const index = buildProcessTableIndex(rows)
@@ -73,7 +73,7 @@ export function resolveRemoteForegroundEvidenceFromRows(
   const descendants = collectDescendantRows(index, root.pid)
   // A child that owns another terminal/session is outside this PTY's
   // authority. Do not silently treat it as an idle shell.
-  if (descendants.some((row) => row.tty !== undefined && row.tty !== '?' && row.tty !== root.tty)) {
+  if (descendants.some((row) => hasControllingTerminal(row.tty) && row.tty !== root.tty)) {
     return { ...metadata, verdict: 'unverifiable', reason: 'tty_boundary' }
   }
   // Multiplexers can make a descendant appear foreground while the user is
@@ -82,9 +82,7 @@ export function resolveRemoteForegroundEvidenceFromRows(
   if ([root, ...descendants].some((row) => /(?:^|\s)(?:tmux|screen)(?:\s|$)/i.test(row.command))) {
     return { ...metadata, verdict: 'unverifiable', reason: 'multiplexer_boundary' }
   }
-  if (
-    descendants.some((row) => row.pgid === root.tpgid && (row.tty === undefined || row.tty === '?'))
-  ) {
+  if (descendants.some((row) => row.pgid === root.tpgid && !hasControllingTerminal(row.tty))) {
     return { ...metadata, verdict: 'unverifiable', reason: 'fence_incomplete' }
   }
   const foreground = descendants.filter((row) => row.pgid === root.tpgid && row.tty === root.tty)

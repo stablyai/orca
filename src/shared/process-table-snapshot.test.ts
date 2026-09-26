@@ -17,6 +17,7 @@ import {
   resetProcessTableSnapshotForTests
 } from './process-table-snapshot-reader'
 import {
+  hasControllingTerminal,
   parseProcessTableRows,
   parseStrictProcessTableRows,
   ProcessTableCaptureError
@@ -340,6 +341,41 @@ describe('parseProcessTableRows', () => {
   it('tolerates CRLF and skips header/blank/non-matching lines', () => {
     const rows = parseProcessTableRows('  PID PPID STAT COMMAND\r\n42 1 Ss /sbin/launchd\r\n\r\n')
     expect(rows).toEqual([{ pid: 42, ppid: 1, stat: 'Ss', command: '/sbin/launchd' }])
+  })
+})
+
+describe('hasControllingTerminal', () => {
+  it.each(['?', '??', '-', '', undefined])(
+    'reads %s as "no controlling terminal" rather than as another one',
+    (tty) => {
+      expect(hasControllingTerminal(tty)).toBe(false)
+    }
+  )
+
+  it.each(['ttys003', '/dev/ttys003', 'pts/3'])('accepts a real terminal (%s)', (tty) => {
+    expect(hasControllingTerminal(tty)).toBe(true)
+  })
+
+  it('classifies the `??` a real macOS capture carries', () => {
+    // Verbatim `ps -axo pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command=` row:
+    // launchd has no controlling terminal, and macOS spells that `??` where
+    // Linux prints `?`. The parser keeps the raw field; this reads it.
+    const rows = parseProcessTableRows(
+      '    1     0     1     0 Ss   ??       Sat Sep 26 13:44:29 2026     /sbin/launchd'
+    )
+    expect(rows).toEqual([
+      {
+        pid: 1,
+        ppid: 0,
+        pgid: 1,
+        tpgid: 0,
+        stat: 'Ss',
+        tty: '??',
+        startTime: 'Sat Sep 26 13:44:29 2026',
+        command: '/sbin/launchd'
+      }
+    ])
+    expect(hasControllingTerminal(rows[0]?.tty)).toBe(false)
   })
 })
 
