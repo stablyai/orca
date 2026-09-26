@@ -18,6 +18,11 @@ const ORCA_SHELL_WRAPPER_ENV = [
 ] as const
 export const POWERLEVEL10K_WIZARD_DISABLE_ENV = 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
 
+/** Win32 preflight only validates explicit native Windows paths (`C:\` or UNC). */
+export function platformNativePtyCwd(posixCwd: string, windowsCwd: string): string {
+  return process.platform === 'win32' ? windowsCwd : posixCwd
+}
+
 /**
  * Makes the daemon look like it is sitting in a deleted cwd, without moving the
  * test process there.
