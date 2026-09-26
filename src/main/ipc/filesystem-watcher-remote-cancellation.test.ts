@@ -17,7 +17,11 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   onSshFilesystemProviderRegistered: () => () => {}
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import {
+  closeAllWatchers,
+  closeRemoteWatcherForWorktreePath,
+  registerFilesystemWatcherHandlers
+} from './filesystem-watcher'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -168,6 +172,39 @@ describe('remote filesystem watcher cancellation', () => {
     expect(installs.get('/shutdown')?.signal?.aborted).toBe(true)
     installs.get('/shutdown')?.resolve(vi.fn())
     await shutdownWatch
+  })
+
+  it('aborts pending SSH setup during worktree removal', async () => {
+    let watchSignal: AbortSignal | undefined
+    let resolveWatch: ((unwatch: () => void) => void) | undefined
+    const lateUnwatch = vi.fn()
+    const watchMock = vi.fn(
+      (_rootPath: string, _callback: unknown, options?: { signal?: AbortSignal }) => {
+        watchSignal = options?.signal
+        return new Promise<() => void>((resolve) => {
+          resolveWatch = resolve
+        })
+      }
+    )
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+    const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
+    const watch = Promise.resolve(
+      handlers['fs:watchWorktree'](
+        { sender },
+        { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
+      )
+    )
+
+    try {
+      await Promise.resolve()
+      expect(watchMock).toHaveBeenCalledTimes(1)
+      await closeRemoteWatcherForWorktreePath('conn-1', '/home/me/repo')
+      expect(watchSignal?.aborted).toBe(true)
+    } finally {
+      resolveWatch?.(lateUnwatch)
+      await watch
+    }
+    expect(lateUnwatch).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the shared install alive when a replacement sender joins before the deferred abort fires', async () => {
