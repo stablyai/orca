@@ -31,6 +31,10 @@ type FileLinkHitTestDeps = {
   openWithSystemDefault?: boolean
 }
 
+// Why: a slow probe from an earlier click must not open its file after the
+// user has already clicked somewhere else.
+let latestProbedClickGesture = 0
+
 export function openFilePathLinkAtBufferPosition(
   buffer: { getLine(y: number): IBufferLine | undefined },
   position: { x: number; y: number },
@@ -133,7 +137,11 @@ export function openFilePathLinkAtBufferPosition(
   // path glued to the next row; opening the first unprobed guess fails silently
   // when the hover probe has not answered yet, so probe them all first.
   const pathExists = createTerminalPathExistenceBatch()
-  void Promise.all(
+  const gesture = ++latestProbedClickGesture
+  // Why: allSettled so one candidate's probe error (permission, transport) does
+  // not discard a sibling that resolved; a lost host connection rejects every
+  // probe and the click opens nothing rather than a guessed path.
+  void Promise.allSettled(
     uncached.map(async (candidate) => {
       const exists = await pathExists(
         fileContext,
@@ -145,20 +153,17 @@ export function openFilePathLinkAtBufferPosition(
       }
       return exists ? candidate : null
     })
-  ).then(
-    (probed) => {
-      const existing = probed
-        .filter((candidate): candidate is (typeof matches)[number] => candidate !== null)
-        .sort(byLongestPath)[0]
-      if (existing) {
-        openMatch(existing)
-      }
-    },
-    () => {
-      // Why: a lost host connection is not evidence the file is missing; the
-      // click simply does nothing rather than opening a guessed path.
+  ).then((settled) => {
+    if (gesture !== latestProbedClickGesture) {
+      return
     }
-  )
+    const existing = settled
+      .flatMap((result) => (result.status === 'fulfilled' && result.value ? [result.value] : []))
+      .sort(byLongestPath)[0]
+    if (existing) {
+      openMatch(existing)
+    }
+  })
   return true
 }
 

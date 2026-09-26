@@ -288,6 +288,30 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(pathExistsCache.get('active\0/root/.claude/settings.jsonroot@ubuntu')).toBe(false)
   })
 
+  it('drops a slow probed click once a later click has been made', async () => {
+    setPlatform('Macintosh')
+    const firstProbe = createDeferred<boolean>()
+    vi.mocked(window.api.shell.pathExists).mockImplementation(async (path: string) =>
+      path === '/root/.claude/settings.json' ? firstProbe.promise : false
+    )
+    const buffer = makeBuffer([
+      makeBufferLine('/root/.claude/settings.json'),
+      makeBufferLine('root@ubuntu:/mnt/data/sniper_eco_paper_final# ')
+    ])
+    const deps = {
+      startupCwd: '/mnt/data/sniper_eco_paper_final',
+      worktreeId: 'wt-1',
+      worktreePath: '/mnt/data/sniper_eco_paper_final',
+      runtimeEnvironmentId: null
+    }
+
+    openFilePathLinkAtBufferPosition(buffer, { x: 8, y: 1 }, 80, deps)
+    openFilePathLinkAtBufferPosition(buffer, { x: 8, y: 1 }, 80, deps)
+    firstProbe.resolve(true)
+    await flushAsyncWork()
+    expect(statMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not open an unknown trailing-slash directory from direct fallback', async () => {
     setPlatform('Macintosh')
 
