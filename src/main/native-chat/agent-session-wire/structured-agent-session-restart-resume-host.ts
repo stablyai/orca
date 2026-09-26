@@ -37,10 +37,7 @@ import {
   createStructuredAgentSessionRestartOfferWithdrawal,
   type StructuredAgentSessionRestartOfferSession
 } from './structured-agent-session-restart-offer-withdrawal'
-import {
-  STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER,
-  type StructuredAgentSessionRestartResumeSurfaces
-} from './structured-agent-session-restart-resume-wiring'
+import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 
@@ -95,11 +92,6 @@ export function createStructuredAgentSessionRestartResume(
   const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
     sessions,
     ...(deps.recoveryCapsule ? { capsule: deps.recoveryCapsule } : {}),
-    isContinuation: (clientMessageId) =>
-      deps.store.getOperationRow(
-        STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER,
-        clientMessageId
-      ) !== null,
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
@@ -156,7 +148,7 @@ export function createStructuredAgentSessionRestartResume(
   const run = async (
     sessionIds: readonly string[] | undefined,
     owner: string,
-    continueOne: (marker: AgentSessionResumeMarker, operationId: string) => Promise<void>
+    continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>
   ) => {
     // An explicit action supersedes teardown witnesses captured by this host. The durable mutation
     // lane below also drains a publication already in flight before completion.
@@ -171,22 +163,25 @@ export function createStructuredAgentSessionRestartResume(
       return null
     }
     const operationId = randomUUID()
+    const actionAt = surfaces.now()
+    // Recorded on the offer as it is reserved, so a rejected one is told apart for as long as the
+    // offer lasts.
+    const continuationFor = (marker: AgentSessionResumeMarker) =>
+      restartContinuationId(marker.sessionId, marker, operationId, actionAt)
     const reserved =
       (await enqueueRecoveryOperation(
         () =>
           deps.recoveryCapsule?.beginResume(
             eligible.map((candidate) => candidate.sessionId),
             operationId,
-            surfaces.now()
+            actionAt,
+            continuationFor
           ) ?? Promise.resolve([])
       )) ?? []
     const markersBySession = new Map(reserved.map((marker) => [marker.sessionId, marker]))
     const candidates = derive(reserved, 'may-be-held').candidates
     const releases = reserved.map((marker) =>
-      withdrawal.begin(
-        marker.sessionId,
-        restartContinuationId(marker.sessionId, marker, operationId)
-      )
+      withdrawal.begin(marker.sessionId, continuationFor(marker))
     )
     try {
       const outcomes = await resumeStructuredAgentSessionsFromRestart(
@@ -199,7 +194,7 @@ export function createStructuredAgentSessionRestartResume(
           resume: async (sessionId) => {
             const marker = markersBySession.get(sessionId)
             if (marker) {
-              await continueOne(marker, operationId)
+              await continueOne(marker, continuationFor(marker))
             }
           }
         },
@@ -235,12 +230,12 @@ export function createStructuredAgentSessionRestartResume(
     const verdicts: Promise<void>[] = []
     // A chat holds its slot until its agent took the continuation or its start failed, so a batch
     // never starts more agents at once than the runner allows; the provider's answer comes after.
-    const action = await run(sessionIds, owner, async (marker, operationId) => {
+    const action = await run(sessionIds, owner, async (marker, continuationId) => {
       const started = await startStructuredAgentSessionContinuation(
         restartContinuationDeps(continuationHost, marker),
         marker.sessionId,
         marker,
-        operationId
+        continuationId
       )
       if ('done' in started) {
         continued.push(started.done)

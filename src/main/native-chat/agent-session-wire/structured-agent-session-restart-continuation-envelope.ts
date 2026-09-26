@@ -18,13 +18,15 @@ export function restartContinuationBody(marker: AgentSessionResumeMarker): Agent
 }
 
 /** One resume action's continuation: the same action sends it once, and a retry is a new action
- *  with a new message, never a replay of the one that failed. */
+ *  with a new message, never a replay of the one that failed. Dated by the action, not the quit:
+ *  the ledger refuses a new id dated more than a day back, and an offer has no expiry. */
 export function restartContinuationId(
   sessionId: string,
   marker: AgentSessionResumeMarker,
-  operationId: string
+  operationId: string,
+  actionAt: number
 ): string {
-  return `${marker.recordedAt.toString().padStart(13, '0')}-${createHash('sha256')
+  return `${Math.trunc(actionAt).toString().padStart(13, '0')}-${createHash('sha256')
     .update(
       JSON.stringify([
         marker.teardownId,
@@ -44,14 +46,14 @@ export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,
   marker: AgentSessionResumeMarker,
-  operationId: string
+  continuationId: string
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
   const body = restartContinuationBody(marker)
   return {
     body,
     envelope: {
       sessionId,
-      clientOperationId: restartContinuationId(sessionId, marker, operationId),
+      clientOperationId: continuationId,
       expectedRuntimeFence: fence,
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.send',

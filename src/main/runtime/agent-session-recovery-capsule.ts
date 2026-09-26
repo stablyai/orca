@@ -12,6 +12,7 @@ import {
 import { withFileTransactionLock } from '../file-transaction-lock'
 import {
   MAX_FAILURE_FIELD_LENGTH,
+  markerWithContinuation,
   normalizeState,
   parseState,
   shouldReplaceMarker,
@@ -103,14 +104,19 @@ export class AgentSessionRecoveryCapsule {
   beginResume(
     sessionIds: readonly string[] | undefined,
     operationId: string,
-    now: number
+    now: number,
+    /** The continuation this action sends for a marker, recorded on the offer it reserves. */
+    continuationFor?: (marker: AgentSessionResumeMarker) => string
   ): Promise<AgentSessionResumeMarker[]> {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
       const requested = sessionIds === undefined ? null : new Set(sessionIds)
       const selected: AgentSessionResumeMarker[] = []
-      const reserve = (marker: AgentSessionResumeMarker): RecoveryEntry => {
+      const reserve = (offer: AgentSessionResumeMarker): RecoveryEntry => {
+        const marker = continuationFor
+          ? markerWithContinuation(offer, continuationFor(offer))
+          : offer
         selected.push(marker)
         return { state: 'in-progress', operationId, startedAt: now, marker }
       }

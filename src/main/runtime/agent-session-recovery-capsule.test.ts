@@ -9,6 +9,7 @@ import {
   NOW,
   SESSION
 } from '../native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
+import { AGENT_SESSION_RESUME_MAX_CONTINUATIONS } from '../../shared/agent-session-resume-marker'
 import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE,
@@ -184,6 +185,35 @@ describe('durable restart offers', () => {
     expect(await capsule.list(later)).toEqual([])
     expect(await capsule.beginResume(undefined, 'operation-e', later)).toEqual([])
     expect(await capsule.listFailed(later)).toHaveLength(1)
+  })
+
+  it("records each action's continuation on the offer it reserves and files it with the failure", async () => {
+    await capsule.record([marker()], NOW)
+    const continuationFor = (operationId: string) => () => `continuation-${operationId}`
+
+    expect(
+      await capsule.beginResume([SESSION], 'operation-a', NOW, continuationFor('operation-a'))
+    ).toEqual([marker({ continuations: ['continuation-operation-a'] })])
+    await capsule.failResume('operation-a', [failure()], NOW)
+    await capsule.beginResume([SESSION], 'operation-b', NOW + 1, continuationFor('operation-b'))
+    await capsule.failResume('operation-b', [failure({ failedAt: NOW + 1 })], NOW + 1)
+
+    expect((await capsule.listFailed(NOW + 1))[0]?.marker.continuations).toEqual([
+      'continuation-operation-a',
+      'continuation-operation-b'
+    ])
+  })
+
+  it('keeps only the newest continuations an offer is bounded to', async () => {
+    await capsule.record([marker()], NOW)
+    for (let attempt = 0; attempt <= AGENT_SESSION_RESUME_MAX_CONTINUATIONS; attempt += 1) {
+      await capsule.beginResume([SESSION], `operation-${attempt}`, NOW, () => `c-${attempt}`)
+      await capsule.rollbackResume(`operation-${attempt}`, NOW)
+    }
+
+    const [offer] = await capsule.list(NOW)
+    expect(offer?.continuations).toHaveLength(AGENT_SESSION_RESUME_MAX_CONTINUATIONS)
+    expect(offer?.continuations?.at(-1)).toBe(`c-${AGENT_SESSION_RESUME_MAX_CONTINUATIONS}`)
   })
 
   it('refiles a failed retry with its new reason', async () => {

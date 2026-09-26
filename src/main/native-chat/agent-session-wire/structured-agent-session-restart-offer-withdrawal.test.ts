@@ -222,6 +222,43 @@ it('keeps a failure not retryable after the user moved on and the sweep closed t
   expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: false }])
 })
 
+const DAY_AND_AN_HOUR = 25 * 60 * 60 * 1000
+
+// An offer has no expiry; the ledger refuses a new id dated more than a day back.
+it('resumes more than a day after the quit', async () => {
+  const state = await offered()
+  const { host, clock, dispatch } = state
+  clock.now += DAY_AND_AN_HOUR
+
+  const resumed = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+
+  expect(resumed.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
+  expect(sentTexts(dispatch)).toHaveLength(1)
+  expect(await host.restartResume.listFailures()).toEqual([])
+})
+
+// The offer remembers its own continuations; nothing about them expires before the offer does.
+it('keeps a failed resume retryable more than a day later, after the ledger pruned its row', async () => {
+  const state = await offered()
+  const { host, clock, store } = state
+  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  expect(first.failed).toMatchObject([{ sessionId: SESSION, retryable: true }])
+  clock.now += DAY_AND_AN_HOUR
+  // What an app restart does to the operation ledger a day on.
+  await store.reconcileOnRestart({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reconciliation only reads the probe outcome.
+    probe: async () => ({ outcome: 'pid-absent' }) as never,
+    now: clock.now
+  })
+
+  expect(await host.restartResume.listFailures()).toMatchObject([
+    { sessionId: SESSION, retryable: true }
+  ])
+  const retried = await host.restartResume.continueAfterRestart([SESSION], 'retry')
+  expect(retried.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
+})
+
 // Resume that runs by itself at launch goes through the same call a click does, and the same rule
 // decides: whichever of the two was accepted first since the restart wins.
 it("refuses an automatic continuation when the user's message was accepted first, and writes nothing", async () => {
@@ -308,7 +345,6 @@ describe('reading the chat against where the offer was taken', () => {
     const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
       sessions: new Map([[SESSION, session as never]]),
-      isContinuation: (id) => input.continuations?.includes(id) === true,
       now: () => NOW,
       enqueue: (operation) => operation()
     })
@@ -319,7 +355,8 @@ describe('reading the chat against where the offer was taken', () => {
       trigger: 'quit',
       providerHandleRoot: 'codex:"thread"',
       teardownId: 'teardown-1',
-      ...(journalCursor ? { journalCursor } : {})
+      ...(journalCursor ? { journalCursor } : {}),
+      ...(input.continuations ? { continuations: input.continuations } : {})
     })
   }
 
