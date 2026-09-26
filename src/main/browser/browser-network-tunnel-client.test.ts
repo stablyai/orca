@@ -13,7 +13,7 @@ import {
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-} from './browser-network-tunnel-stream-state'
+} from '../../shared/browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 
 function frame(

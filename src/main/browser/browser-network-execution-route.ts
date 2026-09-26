@@ -1,7 +1,7 @@
 import { connect } from 'node:net'
 import { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSocket } from '../../shared/browser-network-tunnel-stream-state'
 
 export type BrowserNetworkExecutionRoute = {
   key: string

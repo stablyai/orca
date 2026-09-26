@@ -13,15 +13,15 @@ import {
   queueBrowserNetworkDestinationData,
   writeBrowserNetworkDestination
 } from './browser-network-tunnel-destination-flow'
-import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
-import { handleBrowserNetworkTunnelHeartbeat } from './browser-network-tunnel-heartbeat'
+import { BrowserNetworkTunnelFrameSender } from '../../shared/browser-network-tunnel-frame-sender'
+import { handleBrowserNetworkTunnelHeartbeat } from '../../shared/browser-network-tunnel-heartbeat'
 import { createBrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   validateBrowserNetworkTunnelGeneration,
   type BrowserNetworkTunnelSessionOptions,
   type BrowserNetworkTunnelStream
-} from './browser-network-tunnel-stream-state'
+} from '../../shared/browser-network-tunnel-stream-state'
 import { retireBrowserNetworkTunnelStream } from './browser-network-tunnel-stream-lifecycle'
 
 export class BrowserNetworkTunnelSession {

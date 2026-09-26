@@ -1,4 +1,7 @@
-import { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
+import type {
+  BrowserNetworkTunnelClientSocket,
+  BrowserNetworkTunnelClientSocketCallbacks
+} from './browser-network-tunnel-client-socket'
 import type { BrowserNetworkTunnelSourceFlowStream } from './browser-network-tunnel-source-flow'
 import type { BrowserNetworkTunnelSourceReceiveStream } from './browser-network-tunnel-source-receive-flow'
 import {
@@ -9,36 +12,34 @@ import {
 export type BrowserNetworkTunnelClientStream = BrowserNetworkTunnelSourceFlowStream &
   BrowserNetworkTunnelSourceReceiveStream & {
     id: number
-    socket: BrowserNetworkTunnelDuplex
+    socket: BrowserNetworkTunnelClientSocket
     closed: boolean
     localEnded: boolean
     localHalfCloseSent: boolean
     remoteClosed: boolean
     connectTimeout: ReturnType<typeof setTimeout>
-    resolveOpen: (socket: BrowserNetworkTunnelDuplex) => void
+    resolveOpen: () => void
     rejectOpen: (error: Error) => void
   }
 
-type BrowserNetworkTunnelClientStreamCallbacks = {
-  writeBytes: (bytes: Uint8Array<ArrayBufferLike>, callback: (error?: Error | null) => void) => void
-  requestRead: () => void
-  consumeReadBytes: (bytes: number) => void
-  finishWrite: (callback: (error?: Error | null) => void) => void
-  destroyStream: (error: Error | null, callback: (error?: Error | null) => void) => void
+type BrowserNetworkTunnelClientStreamCallbacks = BrowserNetworkTunnelClientSocketCallbacks & {
   onConnectTimeout: (stream: BrowserNetworkTunnelClientStream) => void
 }
 
-export function createBrowserNetworkTunnelClientStream(
+export function createBrowserNetworkTunnelClientStream<
+  Socket extends BrowserNetworkTunnelClientSocket
+>(
   id: number,
+  createSocket: (callbacks: BrowserNetworkTunnelClientSocketCallbacks) => Socket,
   callbacks: BrowserNetworkTunnelClientStreamCallbacks
-): { stream: BrowserNetworkTunnelClientStream; opening: Promise<BrowserNetworkTunnelDuplex> } {
-  let resolveOpen = (_socket: BrowserNetworkTunnelDuplex): void => {}
+): { stream: BrowserNetworkTunnelClientStream; opening: Promise<Socket> } {
+  let resolveOpen = (): void => {}
   let rejectOpen = (_error: Error): void => {}
-  const opening = new Promise<BrowserNetworkTunnelDuplex>((resolve, reject) => {
-    resolveOpen = resolve
+  const opening = new Promise<Socket>((resolve, reject) => {
+    resolveOpen = () => resolve(socket)
     rejectOpen = reject
   })
-  const socket = new BrowserNetworkTunnelDuplex(callbacks)
+  const socket = createSocket(callbacks)
   const stream: BrowserNetworkTunnelClientStream = {
     id,
     socket,

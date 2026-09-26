@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSocket } from '../../shared/browser-network-tunnel-stream-state'
 
 const SOCKS_VERSION = 5
 const SOCKS_NO_AUTH = 0

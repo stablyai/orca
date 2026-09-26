@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import type { BrowserNetworkTunnelSocket } from '../../shared/browser-network-tunnel-stream-state'
 
 class PairedSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
   destroyed = false
