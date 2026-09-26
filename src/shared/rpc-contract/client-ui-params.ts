@@ -4,6 +4,7 @@ import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from '../worktree/card-properties'
+import { AGENT_ROW_DISPLAY_FIELDS } from '../agent-row-display-fields'
 import { isPluginPanelTabKey } from '../plugins/plugin-manifest'
 import { isFeatureInteractionId } from '../feature-interactions'
 import type { FeatureInteractionId } from '../feature-interactions'
@@ -169,6 +170,7 @@ export const UiUpdateFields = z
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
+    agentRowDisplayFields: z.array(z.enum(AGENT_ROW_DISPLAY_FIELDS)).optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),

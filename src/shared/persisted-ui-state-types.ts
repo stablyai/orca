@@ -10,6 +10,7 @@ import type { CustomPet } from './pet-types'
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,
+  AgentRowDisplayField,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   RightSidebarExplorerView,
@@ -96,6 +97,8 @@ export type PersistedUIState = {
   /** One-shot migration flag for deriving card properties from the two worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
+  /** Which optional agent-row fields are visible; absent means all on. */
+  agentRowDisplayFields?: AgentRowDisplayField[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number
