@@ -161,7 +161,9 @@ describe('OrcaRuntimeService', () => {
       }
     }
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
