@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
+import { setMainHttpClient } from '../network/http-client'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import {
@@ -44,6 +45,7 @@ function mockFetchJson(value: unknown): void {
 describe('Orca cloud client', () => {
   beforeEach(() => {
     fetchMock.mockReset()
+    setMainHttpClient(null)
     vi.stubGlobal('fetch', fetchMock)
   })
 
@@ -92,6 +94,40 @@ describe('Orca cloud client', () => {
         })
       })
     )
+  })
+
+  it('sends the auth-code exchange through the proxy-aware main client', async () => {
+    const mainClientFetch = vi.fn(async () =>
+      Response.json({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresAt: 999,
+        cloud: {
+          cloudProfileId: 'cloud-profile-1',
+          userId: 'user-1',
+          email: 'nina@example.com'
+        },
+        capabilities: { flags: {}, refreshedAt: 1 }
+      })
+    )
+    setMainHttpClient({ fetch: mainClientFetch, proxySession: () => null })
+
+    await expect(
+      exchangeOrcaCloudAuthCode(config, {
+        code: 'code',
+        codeVerifier: 'verifier',
+        nonce: 'nonce',
+        redirectUri: 'http://127.0.0.1:4100/auth/callback',
+        state: 'state',
+        localProfileId: 'local-default'
+      })
+    ).resolves.toMatchObject({ accessToken: 'access-token' })
+    // The port is what carries the app's configured proxy; global fetch is not covered by it.
+    expect(mainClientFetch).toHaveBeenCalledWith(
+      config.sessionEndpoint,
+      expect.objectContaining({ method: 'POST' })
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('normalizes organization selection response metadata', async () => {
