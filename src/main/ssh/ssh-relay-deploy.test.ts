@@ -479,7 +479,7 @@ describe('deployAndLaunchRelay', () => {
     }
   )
 
-  it('does not retry until the surviving first-attempt probe settles', async () => {
+  it('lets the surviving probe finish before retrying a refused SSH session', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
@@ -488,13 +488,19 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     let releaseRemoteHome: (home: string) => void = () => {}
     let remoteHomeSettled = false
-    mockExecCommand.mockReturnValueOnce(
-      new Promise<string>((resolve) => {
-        releaseRemoteHome = (home: string) => {
-          remoteHomeSettled = true
-          resolve(home)
-        }
-      })
+    const cancelledProbe = Object.assign(new Error('system SSH probe cancellation unconfirmed'), {
+      name: 'AbortError',
+      sshChannelCloseConfirmed: false
+    })
+    mockExecCommand.mockImplementationOnce(
+      (_conn, _command, options) =>
+        new Promise<string>((resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(cancelledProbe), { once: true })
+          releaseRemoteHome = (home: string) => {
+            remoteHomeSettled = true
+            resolve(home)
+          }
+        })
     )
     vi.mocked(resolveRemoteNodePath).mockImplementationOnce(() => Promise.reject(sessionLimitError))
     vi.mocked(resolveRemoteNodePath).mockImplementationOnce(() => {
@@ -504,7 +510,7 @@ describe('deployAndLaunchRelay', () => {
       return Promise.resolve('/usr/bin/node')
     })
 
-    const deployPromise = deployAndLaunchRelay(conn)
+    const deployPromise = deployAndLaunchRelay(conn).catch((error: unknown) => error)
     await vi.waitFor(() => expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1))
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
@@ -514,7 +520,7 @@ describe('deployAndLaunchRelay', () => {
     queueLaunchNamespaceAndDeadSocketProbe()
     mockExecCommand.mockResolvedValueOnce('READY') // socket poll
     releaseRemoteHome('/home/user')
-    await deployPromise
+    await expect(deployPromise).resolves.toHaveProperty('transport')
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
   })
 

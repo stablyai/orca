@@ -328,7 +328,10 @@ async function resolveRelayBootstrapState(
     signal?.throwIfAborted()
     return { ...installState, nodePath }
   } catch (err) {
-    abortController.abort()
+    // Let an admitted probe finish before retrying a refused parallel session.
+    if (!isSshSessionLimitError(err)) {
+      abortController.abort()
+    }
     const settled = await Promise.allSettled([installStatePromise, nodePathPromise])
     const unconfirmed = settled.find(
       (result) => result.status === 'rejected' && isUnconfirmedSshCommandTermination(result.reason)
