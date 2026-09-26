@@ -57,19 +57,19 @@ describe('formatTerminalClose', () => {
     )
   })
 
-  it('promises the reconnect replay only for a stop the SSH relay never answered', () => {
-    expect(
-      formatTerminalClose({
-        close: {
-          handle: 'term_remote',
-          tabId: 'tab-1',
-          ptyKilled: false,
-          ptyStopVerdict: 'unverifiable',
-          ptyStopReason: 'SSH connection lost, reconnecting...'
-        }
-      })
-    ).toBe(
+  it('promises the reconnect replay only when the host recorded the kill for it', () => {
+    const close = {
+      handle: 'term_remote',
+      tabId: 'tab-1',
+      ptyKilled: false,
+      ptyStopVerdict: 'unverifiable' as const,
+      ptyStopReason: 'SSH connection lost, reconnecting...'
+    }
+    expect(formatTerminalClose({ close: { ...close, pendingKillRecorded: true } })).toBe(
       'Closed terminal term_remote. The PTY was not confirmed stopped: SSH connection lost, reconnecting... The kill retries when the host reconnects.'
+    )
+    expect(formatTerminalClose({ close })).toBe(
+      'Closed terminal term_remote. The PTY was not confirmed stopped: SSH connection lost, reconnecting...'
     )
   })
 

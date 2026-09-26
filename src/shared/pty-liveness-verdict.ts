@@ -27,19 +27,15 @@ export function describeUnconfirmedStop(reason: string): string {
   return `The PTY was not confirmed stopped: ${endSentence(reason)}`
 }
 
-// The SSH relay transport's own failure texts (ssh-channel-multiplexer.ts). A stop that failed
-// this way is followed by a kill whose failure is recorded and replayed on the next handshake.
-const UNDELIVERED_SSH_STOP_REASONS = [
-  /^Request "pty\.shutdown" timed out after \d+ms$/u,
-  /^SSH connection lost, reconnecting/u
-]
-
-/** The unconfirmed-stop sentence, plus the reconnect replay only where a kill order backs it. */
-export function describeUnconfirmedStopWithRetry(reason: string): string {
-  const retries = UNDELIVERED_SSH_STOP_REASONS.some((pattern) => pattern.test(reason.trim()))
-  return retries
-    ? `${describeUnconfirmedStop(reason)} The kill retries when the host reconnects.`
-    : describeUnconfirmedStop(reason)
+/** A close's unconfirmed-stop sentence; it promises a retry only when the host recorded one. */
+export function describeUnconfirmedCloseStop(close: {
+  ptyStopReason?: string
+  pendingKillRecorded?: true
+}): string {
+  const sentence = describeUnconfirmedStop(close.ptyStopReason ?? 'its host could not be reached')
+  return close.pendingKillRecorded === true
+    ? `${sentence} The kill retries when the host reconnects.`
+    : sentence
 }
 
 /** Words a close whose PTY teardown was never confirmed, for a stop receipt. */

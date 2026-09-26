@@ -368,6 +368,36 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
   })
 
+  it.each([true, false])(
+    'promises a retry only when the stop recorded a replayable kill (recorded: %s)',
+    async (recorded) => {
+      const harness = createHarness()
+      const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+      harness.setVerifiedStopResult(false)
+      const recordUnconfirmedStop = vi.fn(() => {
+        // The order must exist before the follow-up kill, whose own failure lands only later.
+        expect(harness.kill).not.toHaveBeenCalled()
+        return recorded
+      })
+      const controller = harness.runtime['ptyController']
+      if (!controller) {
+        throw new Error('fixture has no PTY controller')
+      }
+      Object.assign(controller, { recordUnconfirmedStop })
+
+      const closing = harness.runtime.closeTerminal(handle)
+      await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalled())
+      harness.retirePersistedTab()
+      harness.acknowledged.resolve()
+
+      const close = await closing
+      expect(recordUnconfirmedStop).toHaveBeenCalledWith(PTY_ID)
+      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+      expect(close.ptyStopVerdict).toBe('unverifiable')
+      expect(close.pendingKillRecorded).toBe(recorded ? true : undefined)
+    }
+  )
+
   it('leaves a confirmed kill receipt free of any stop verdict', async () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals

@@ -6,17 +6,23 @@ import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 
+/** How an explicit close's stop of its addressed PTY ended. */
+type ExplicitCloseStop = { stopped: boolean; pendingKillRecorded: boolean }
+
+const NO_STOP: ExplicitCloseStop = { stopped: false, pendingKillRecorded: false }
+
 export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithFocusTerminal {
   protected async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string
-  ): Promise<boolean> {
-    let addressedPtyStopped = false
+  ): Promise<ExplicitCloseStop> {
+    let addressedPtyStop = NO_STOP
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
       this.markPtyStopRequested(ptyId)
       const expectedIncarnationId = this.ptysById.get(ptyId)?.incarnationId
       let stopped = false
+      let pendingKillRecorded = false
       if (this.ptyController?.stopAndWait) {
         try {
           stopped = await this.ptyController.stopAndWait(ptyId, { deadlineMs })
@@ -41,6 +47,8 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             verdict?.status === 'unverifiable' &&
             verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
           if (!providerAlreadyRetiredPty) {
+            // Why before the kill: its own failure is recorded only once its RPC settles.
+            pendingKillRecorded = this.ptyController.recordUnconfirmedStop?.(ptyId) === true
             this.ptyController.kill(ptyId)
             if (!verdict || verdict.status === 'live') {
               this.markPtyLivenessUnverifiable(
@@ -54,35 +62,35 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         stopped = this.ptyController?.kill(ptyId) ?? false
       }
       if (ptyId === addressedPtyId) {
-        addressedPtyStopped = stopped
+        addressedPtyStop = { stopped, pendingKillRecorded }
       }
     }
-    return addressedPtyStopped
+    return addressedPtyStop
   }
 
   protected describeTerminalClose(
     handle: string,
     tabId: string,
     ptyId: string | null,
-    ptyKilled: boolean
+    stop: ExplicitCloseStop
   ): RuntimeTerminalClose {
-    if (ptyKilled || !ptyId) {
-      return { handle, tabId, ptyKilled }
+    const close: RuntimeTerminalClose = {
+      handle,
+      tabId,
+      ptyKilled: stop.stopped,
+      ...(stop.pendingKillRecorded ? { pendingKillRecorded: true as const } : {})
+    }
+    if (stop.stopped || !ptyId) {
+      return close
     }
     const verdict = this.getPtyLivenessVerdict(ptyId)
     if (verdict?.status === 'unverifiable') {
-      return {
-        handle,
-        tabId,
-        ptyKilled,
-        ptyStopVerdict: 'unverifiable',
-        ptyStopReason: verdict.reason
-      }
+      return { ...close, ptyStopVerdict: 'unverifiable', ptyStopReason: verdict.reason }
     }
     if (verdict?.status === 'live') {
-      return { handle, tabId, ptyKilled, ptyStopVerdict: 'live' }
+      return { ...close, ptyStopVerdict: 'live' }
     }
-    return { handle, tabId, ptyKilled }
+    return close
   }
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
@@ -124,8 +132,8 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           }
           this.notifier.closeTerminal?.(tabId)
         }
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+        const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
       if (closesTab && surface && ptyCloseAuthority && !this.tabs.has(surface.tab.parentTabId)) {
         try {
@@ -138,20 +146,20 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
             throw error
           }
-          const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+          const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
           this.notifier?.closeTerminal(tabId)
-          return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+          return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
         }
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+        const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
       if (closesTab && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
         await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+        const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
       }
-      const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
+      const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
       if (!closesTab) {
         // Why: the pane's removal is this close's own commit, not a side effect of its exit. An
         // unconfirmed stop is unverifiable, never a reason to close the live siblings with it.
@@ -173,7 +181,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
       } else {
         this.notifier?.closeTerminal(tabId)
       }
-      return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+      return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -187,15 +195,15 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     if (closesTab && this.notifier?.closeTerminalTab) {
       await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
     }
-    const ptyKilled = leaf.ptyId
+    const stop = leaf.ptyId
       ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
-      : false
+      : NO_STOP
     if (!closesTab) {
       this.closeTerminalPane(leaf.worktreeId, paneTarget)
     } else if (!this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId)
     }
-    return this.describeTerminalClose(handle, leaf.tabId, leaf.ptyId ?? null, ptyKilled)
+    return this.describeTerminalClose(handle, leaf.tabId, leaf.ptyId ?? null, stop)
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {

@@ -1,4 +1,4 @@
-import { PTY_LIVE_NOTE, describeUnconfirmedStopWithRetry } from '../shared/pty-liveness-verdict'
+import { PTY_LIVE_NOTE, describeUnconfirmedCloseStop } from '../shared/pty-liveness-verdict'
 import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
@@ -254,7 +254,7 @@ function describePtyStop(close: RuntimeTerminalClose): string {
     return ` ${PTY_LIVE_NOTE}`
   }
   if (close.ptyStopVerdict === 'unverifiable') {
-    return ` ${describeUnconfirmedStopWithRetry(close.ptyStopReason ?? 'its host could not be reached')}`
+    return ` ${describeUnconfirmedCloseStop(close)}`
   }
   return ''
 }
