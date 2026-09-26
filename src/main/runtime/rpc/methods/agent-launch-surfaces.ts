@@ -41,7 +41,9 @@ import { paneIdentity } from '../../runtime-terminal-pane-identity'
 export function agentLaunchSurfaceFactory(
   context: RpcContext,
   attachOperationId?: string,
-  operationCallerKey?: string
+  operationCallerKey?: string,
+  // False when the launch selects the chat for its paired caller instead of for everyone.
+  activateChat = true
 ): AgentLaunchSurfaceFactory {
   return {
     createStructuredSession: async ({
@@ -77,7 +79,7 @@ export function agentLaunchSurfaceFactory(
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         // The user asked for this chat, so it takes the surface — unlike a dispatched worker.
-        activate: true
+        activate: activateChat
       })
       if (!created.ok) {
         // The caller named this session, so a taken id is its answer, not an opaque refusal; and not
