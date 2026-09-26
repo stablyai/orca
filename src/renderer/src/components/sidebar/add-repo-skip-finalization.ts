@@ -21,7 +21,9 @@ export function finalizeImportedRepoAfterSkip(
   state: AddRepoSkipFinalizationState,
   importedRepoId: string
 ): void {
-  const importedWorktrees = state.worktreesByRepo[importedRepoId] ?? []
+  const importedWorktrees = (state.worktreesByRepo[importedRepoId] ?? []).filter(
+    (worktree) => !worktree.isArchived
+  )
   const importedRepo = state.repos.find((repo) => repo.id === importedRepoId)
 
   // Why: Skip means "do not open or create a worktree", not "hide the

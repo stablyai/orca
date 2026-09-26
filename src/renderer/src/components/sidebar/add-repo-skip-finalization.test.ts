@@ -117,6 +117,47 @@ describe('finalizeImportedRepoAfterSkip', () => {
     expect(state.setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
   })
 
+  it.each([false, true])(
+    'ignores archived siblings when revealing a folder root after Skip (root archived: %s)',
+    (rootArchived) => {
+      const state = makeState({
+        hideDefaultBranchWorkspace: true,
+        showSleepingWorkspaces: false,
+        alwaysShowDefaultBranchWorkspace: false,
+        repos: [{ id: 'folder-new', kind: 'folder' }],
+        worktreesByRepo: {
+          'folder-new': [
+            makeWorktree({
+              id: 'folder-new::/notes',
+              repoId: 'folder-new',
+              isMainWorktree: true,
+              head: '',
+              branch: '',
+              isArchived: rootArchived
+            }),
+            makeWorktree({
+              id: 'folder-new::/notes::workspace:archived',
+              repoId: 'folder-new',
+              head: '',
+              branch: '',
+              isArchived: true
+            })
+          ]
+        }
+      })
+
+      finalizeImportedRepoAfterSkip(state, 'folder-new')
+
+      if (rootArchived) {
+        expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
+        expect(state.setAlwaysShowDefaultBranchWorkspace).not.toHaveBeenCalled()
+      } else {
+        expect(state.setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
+        expect(state.setAlwaysShowDefaultBranchWorkspace).toHaveBeenCalledWith(true)
+      }
+    }
+  )
+
   it('re-enables the default-branch exemption when the import would land asleep and hidden', () => {
     const state = makeState({
       showSleepingWorkspaces: false,

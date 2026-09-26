@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
@@ -46,7 +47,12 @@ function folderProjectRows(repo: Repo): { root: Worktree; instance: Worktree } {
   }
 }
 
-function visibleWithHideDefault(repos: Repo[], worktrees: Worktree[]): string[] {
+function visibleWithHideDefault(
+  repos: Repo[],
+  worktrees: Worktree[],
+  worktreeLineageById: Record<string, WorktreeLineage> = {},
+  injectLineageAncestors = true
+): string[] {
   const worktreesByRepo: Record<string, Worktree[]> = {}
   for (const worktree of worktrees) {
     ;(worktreesByRepo[worktree.repoId] ??= []).push(worktree)
@@ -70,7 +76,8 @@ function visibleWithHideDefault(repos: Repo[], worktrees: Worktree[]): string[] 
       repoMap: new Map(repos.map((repo) => [repo.id, repo])),
       workspaceHostScope: 'all',
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
-      worktreeLineageById: {}
+      worktreeLineageById,
+      injectLineageAncestors
     }
   )
 }
@@ -90,6 +97,30 @@ describe('"Hide default branch" on folder projects', () => {
     const { root, instance } = folderProjectRows(repo)
 
     expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
+  })
+
+  it('preserves the sidebar hierarchy exception for a folder root with a visible child', () => {
+    const repo = makeRepo('notes', '/notes', 'folder')
+    const rows = folderProjectRows(repo)
+    const root = { ...rows.root, instanceId: 'root-instance' }
+    const child = { ...rows.instance, instanceId: 'child-instance' }
+    const lineage: WorktreeLineage = {
+      worktreeId: child.id,
+      worktreeInstanceId: child.instanceId,
+      parentWorktreeId: root.id,
+      parentWorktreeInstanceId: root.instanceId,
+      origin: 'cli',
+      capture: { source: 'terminal-context', confidence: 'inferred' },
+      createdAt: 1
+    }
+
+    expect(visibleWithHideDefault([repo], [root, child], { [child.id]: lineage })).toEqual([
+      root.id,
+      child.id
+    ])
+    expect(visibleWithHideDefault([repo], [root, child], { [child.id]: lineage }, false)).toEqual([
+      child.id
+    ])
   })
 
   it('keeps an empty-branch git main visible: detached HEAD, or an SSH row synthesized offline', () => {
