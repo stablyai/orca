@@ -159,4 +159,59 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
 
     expect(fsProvider.writeFile).not.toHaveBeenCalled()
   })
+
+  it.each(['codex', 'copilot'] as const)(
+    'leaves the remote %s config untouched when the read fails',
+    async (preset) => {
+      const fsProvider = makeFsProvider({
+        readFile: vi.fn(async () => {
+          throw new Error('file stream stalled')
+        })
+      })
+      mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+      await expect(
+        markRemoteAgentWorkspaceTrusted({ preset, connectionId: 'ssh-1', workspacePath: '/repo' })
+      ).rejects.toThrow()
+
+      expect(fsProvider.writeFile).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['codex', 'copilot'] as const)(
+    'leaves the remote %s config untouched when the read comes back binary',
+    async (preset) => {
+      const fsProvider = makeFsProvider({
+        readFile: vi.fn(async () => ({ content: 'AAEC', isBinary: true }))
+      })
+      mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+      await expect(
+        markRemoteAgentWorkspaceTrusted({ preset, connectionId: 'ssh-1', workspacePath: '/repo' })
+      ).rejects.toThrow()
+
+      expect(fsProvider.writeFile).not.toHaveBeenCalled()
+    }
+  )
+
+  it('creates the remote Codex config when the relay reports it missing', async () => {
+    // The relay rebuilds remote errors without Node's .code; only the message survives.
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => {
+        throw new Error("ENOENT: no such file or directory, stat '/home/u/.codex/config.toml'")
+      })
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'codex',
+      connectionId: 'ssh-1',
+      workspacePath: '/repo'
+    })
+
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      '/home/u/.codex/config.toml',
+      '[projects."/real/repo"]\ntrust_level = "trusted"\n'
+    )
+  })
 })
