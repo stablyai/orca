@@ -19,7 +19,12 @@ import type {
   SessionAccumulator
 } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
-import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
+import {
+  extractString,
+  normalizeFullFirstUserPromptText,
+  normalizeTitleText,
+  parseJsonObject
+} from './session-scanner-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -106,6 +111,7 @@ function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: str
     }
     accumulator.messageCount++
     accumulator.title ??= normalizeTitleText(request)
+    accumulator.firstUserPrompt ??= normalizeFullFirstUserPromptText(request)
     addPreviewMessage(accumulator, { role: 'user', text: request, timestamp: record.created_at })
     return
   }

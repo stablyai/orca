@@ -164,4 +164,63 @@ describe('Antigravity AI Vault discovery', () => {
     expect(result.sessions[0]?.title).toMatch(/\.\.\.$/)
     expect(result.sessions[0]?.cwd).toBeNull()
   })
+
+  it('attributes workspace for long first prompt when history matches full prompt', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-long-prompt-match-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const sessionId = 'ffffffff-aaaa-4bbb-8ccc-dddddddddddd'
+    const longPrompt = `${'implement feature '.repeat(10)}in project alpha`
+    const workspace = join(root, 'project-alpha')
+    await writeAntigravityTranscript(roots.antigravityBrainDir, sessionId, [
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        created_at: '2026-07-15T11:39:10.000Z',
+        content: `<USER_REQUEST>${longPrompt}</USER_REQUEST>`
+      }
+    ])
+    await writeAntigravityHistory(roots.antigravityBrainDir, [
+      {
+        display: longPrompt,
+        timestamp: Date.parse('2026-07-15T11:39:10.100Z'),
+        workspace
+      }
+    ])
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'linux' })
+
+    expect(result.sessions[0]?.title).toMatch(/\.\.\.$/)
+    expect(result.sessions[0]?.cwd).toBe(workspace)
+  })
+
+  it('attributes workspace from history conversationId even when title is truncated', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-conversation-id-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const sessionId = '11111111-2222-4333-8444-555555555555'
+    const longPrompt = 'orchestration workflow task '.repeat(8)
+    const workspace = join(root, 'orchestration-repo')
+    await writeAntigravityTranscript(roots.antigravityBrainDir, sessionId, [
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        created_at: '2026-07-15T11:39:10.000Z',
+        content: `<USER_REQUEST>${longPrompt}</USER_REQUEST>`
+      }
+    ])
+    await writeAntigravityHistory(roots.antigravityBrainDir, [
+      {
+        display: 'unrelated later follow-up turn',
+        timestamp: Date.parse('2026-07-15T11:45:00.000Z'),
+        workspace,
+        conversationId: sessionId
+      }
+    ])
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'linux' })
+
+    expect(result.sessions[0]?.title).toMatch(/\.\.\.$/)
+    expect(result.sessions[0]?.cwd).toBe(workspace)
+  })
 })

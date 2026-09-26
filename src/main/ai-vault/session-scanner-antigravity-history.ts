@@ -1,7 +1,14 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { normalizeTitleText, parseJsonObject, timestampMs } from './session-scanner-values'
+import {
+  extractString,
+  normalizeFullFirstUserPromptText,
+  normalizeTitleText,
+  parseJsonObject,
+  shouldCaptureFullFirstUserPrompt,
+  timestampMs
+} from './session-scanner-values'
 
 const HISTORY_MATCH_WINDOW_MS = 2_000
 
@@ -28,7 +35,11 @@ type AntigravityHistoryEntry = {
   workspace: string
 }
 
-type AntigravityHistoryIndex = Map<string, AntigravityHistoryEntry[]>
+type AntigravityHistoryIndex = {
+  byConversationId: Map<string, string>
+  byFullPrompt: Map<string, AntigravityHistoryEntry[]>
+  byTitle: Map<string, AntigravityHistoryEntry[]>
+}
 
 export type AntigravityWorkspaceResolver = {
   enrich(session: AiVaultSession, historyPath: string): Promise<AiVaultSession>
@@ -41,44 +52,84 @@ export function createAntigravityWorkspaceResolver(
 
   return {
     async enrich(session, historyPath) {
-      if (session.agent !== 'antigravity' || session.cwd) {
+      if (session.agent !== 'antigravity') {
         return session
       }
-      let index = indexes.get(historyPath)
-      if (!index) {
-        // Why: a read failure is transient (a stalled WSL distro refuses here),
-        // so it must not be memoized — every later session under this history
-        // file would inherit the rejection for the process lifetime.
-        const pending: Promise<AntigravityHistoryIndex> = readHistory(historyPath)
-          .then(indexAntigravityHistory)
-          .catch((error: unknown) => {
-            if (indexes.get(historyPath) === pending) {
-              indexes.delete(historyPath)
-            }
-            throw error
-          })
-        index = pending
-        indexes.set(historyPath, pending)
+      let baseSession = session
+      if (!session.cwd) {
+        let index = indexes.get(historyPath)
+        if (!index) {
+          // Why: a read failure is transient (a stalled WSL distro refuses here),
+          // so it must not be memoized — every later session under this history
+          // file would inherit the rejection for the process lifetime.
+          const pending: Promise<AntigravityHistoryIndex> = readHistory(historyPath)
+            .then(indexAntigravityHistory)
+            .catch((error: unknown) => {
+              if (indexes.get(historyPath) === pending) {
+                indexes.delete(historyPath)
+              }
+              throw error
+            })
+          index = pending
+          indexes.set(historyPath, pending)
+        }
+        const workspace = findAntigravityWorkspace(session, await index)
+        if (workspace) {
+          baseSession = { ...session, cwd: workspace }
+        }
       }
-      const workspace = findAntigravityWorkspace(session, await index)
-      return workspace ? { ...session, cwd: workspace } : session
+      // Why: list scans omit firstUserPrompt from IPC payloads; retain only for on-demand capture.
+      if (shouldCaptureFullFirstUserPrompt()) {
+        return baseSession
+      }
+      const { firstUserPrompt: _firstUserPrompt, ...cleanSession } = baseSession
+      return cleanSession
     }
   }
 }
 
 function indexAntigravityHistory(content: string | null): AntigravityHistoryIndex {
-  const index: AntigravityHistoryIndex = new Map()
+  const index: AntigravityHistoryIndex = {
+    byConversationId: new Map(),
+    byFullPrompt: new Map(),
+    byTitle: new Map()
+  }
   for (const line of content?.split(/\r?\n/) ?? []) {
     const record = parseJsonObject(line)
-    const display = typeof record?.display === 'string' ? normalizeTitleText(record.display) : null
     const workspace = typeof record?.workspace === 'string' ? record.workspace.trim() : ''
-    const entryTimestampMs = timestampMs(record?.timestamp)
-    if (!display || !workspace || !Number.isFinite(entryTimestampMs)) {
+    if (!workspace) {
       continue
     }
-    const entries = index.get(display) ?? []
-    entries.push({ timestampMs: entryTimestampMs, workspace })
-    index.set(display, entries)
+    const conversationId =
+      extractString(record?.conversationId) ??
+      extractString(record?.conversation_id) ??
+      extractString(record?.sessionId) ??
+      extractString(record?.session_id)
+    // Why: preserve the initial workspace if a session subsequently changed directories.
+    if (conversationId && !index.byConversationId.has(conversationId)) {
+      index.byConversationId.set(conversationId, workspace)
+    }
+
+    const entryTimestampMs = timestampMs(record?.timestamp)
+    if (!Number.isFinite(entryTimestampMs)) {
+      continue
+    }
+
+    if (typeof record?.display === 'string') {
+      const fullPrompt = normalizeFullFirstUserPromptText(record.display)
+      if (fullPrompt) {
+        const fullEntries = index.byFullPrompt.get(fullPrompt) ?? []
+        fullEntries.push({ timestampMs: entryTimestampMs, workspace })
+        index.byFullPrompt.set(fullPrompt, fullEntries)
+      }
+
+      const display = normalizeTitleText(record.display)
+      if (display) {
+        const titleEntries = index.byTitle.get(display) ?? []
+        titleEntries.push({ timestampMs: entryTimestampMs, workspace })
+        index.byTitle.set(display, titleEntries)
+      }
+    }
   }
   return index
 }
@@ -87,19 +138,39 @@ function findAntigravityWorkspace(
   session: AiVaultSession,
   index: AntigravityHistoryIndex
 ): string | null {
+  // Why: conversation id is unambiguous evidence for cwd regardless of title truncation or turns.
+  if (session.sessionId) {
+    const workspace = index.byConversationId.get(session.sessionId)
+    if (workspace) {
+      return workspace
+    }
+  }
+
+  const firstUserMessage = session.previewMessages.find((message) => message.role === 'user')
+  const promptTimestampMs = timestampMs(firstUserMessage?.timestamp ?? session.createdAt)
+  if (!Number.isFinite(promptTimestampMs)) {
+    return null
+  }
+
+  // Why: untruncated prompt matching avoids collisions without dropping valid long prompts.
+  if (session.firstUserPrompt) {
+    const fullMatches = (index.byFullPrompt.get(session.firstUserPrompt) ?? []).filter(
+      (entry) => Math.abs(entry.timestampMs - promptTimestampMs) <= HISTORY_MATCH_WINDOW_MS
+    )
+    if (fullMatches.length === 1) {
+      return fullMatches[0]?.workspace ?? null
+    }
+    if (fullMatches.length > 1) {
+      return null
+    }
+  }
+
   // Why: truncated titles are not prompt identities; long worker prompts often
   // share the same 96-character prefix across unrelated workspaces.
   if (session.title.endsWith('...')) {
     return null
   }
-  const firstTitledUserTimestamp = session.previewMessages.find(
-    (message) => message.role === 'user' && normalizeTitleText(message.text) === session.title
-  )?.timestamp
-  const promptTimestampMs = timestampMs(firstTitledUserTimestamp ?? session.createdAt)
-  if (!Number.isFinite(promptTimestampMs)) {
-    return null
-  }
-  const matches = (index.get(session.title) ?? []).filter(
+  const matches = (index.byTitle.get(session.title) ?? []).filter(
     (entry) => Math.abs(entry.timestampMs - promptTimestampMs) <= HISTORY_MATCH_WINDOW_MS
   )
   // Why: history rows have no conversation id. A unique prompt/time match is
