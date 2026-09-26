@@ -11,6 +11,108 @@
   },
   "gates": [
     {
+      "id": "terminal-preview.connection-settings-ownership",
+      "title": "Terminal preview connections survive unrelated settings updates",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "dashboard terminal preview connection",
+        "preview settings updates",
+        "preview box fit and grid claim"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "remote-runtime"
+      ],
+      "coverageNotes": "Mounted production component and real settings action with cloned IPC replies, inert xterm/input adapters, and simulated metrics. Local/remote-qualified renderer identities covered; no physical provider, native geometry, focus, IME or rendered app claim.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/dashboard-popout/AgentTerminalPreview.tsx"
+      ],
+      "invariant": "Equal composed theme with unchanged PTY, mode, contrast and font/shaping settings keeps the current preview owner. Relevant changes replace it once, preserve explicit fit/grid negotiation, and reject retired pending completions.",
+      "oracle": "Ten unrelated settings replies produce one connect and xterm construction, no pre-unmount teardown, then one final cleanup. Changed colors/mode/contrast/font/shaping replace owners; pending retired connections never construct and obsolete grid claims are canceled.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx",
+          "assertions": [
+            "keeps one preview connection across ten unrelated settings snapshots",
+            "ignores an old pending connection after a relevant theme change",
+            "does not install a terminal after unmounting a pending connection"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx",
+          "assertions": [
+            "ignores a pending connection retired by a metric change",
+            "cancels an obsolete metric owner grid claim before the next change"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx",
+          "result": "passed",
+          "durationSeconds": 2.23,
+          "summary": "63 tests /5 suites pass. Lifetime regressions: original 7 fail/7 pass, candidate14 pass; all8 metric/shaping cases pass both original and corrected candidate."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Focused deterministic suites; local elapsed recorded, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local checks and independent adverse review only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original reconnects/reconstructs11 times for10 unrelated updates; candidate1. Seven of14 lifetime cases fail original. Original and corrected candidate both pass all8 geometry preservation cases."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Ten unrelated settings replies: connect/constructor11 to1, pre-unmount unsubscribe/dispose10 to0. One previous-theme ref and shallow comparison added; CPU/heap overhead unmeasured. No timer/polling/subprocess/subscriber added; broad settings render/composition work remains."
+      },
+      "knownGaps": [
+        "No rendered Electron screenshot/video, native focus/input/IME, real xterm font/ligature or physical PTY validation.",
+        "No live SSH/WSL/relay or Linux/Windows run. Provider/wire ownership and folder/git workspace paths unchanged.",
+        "Selection/buffer/input state now persists across unrelated and live cursor/scroll updates instead of incidental resets. Small comparison/ref overhead unmeasured.",
+        "No CI soak, heap, main snapshot serialization or frame latency claim."
+      ],
+      "promotionCriteria": [
+        "Retain count, stale-owner and explicit metric fit/grid oracles; add rendered native and provider/platform evidence plus CI soak."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate failures without weakening owner counts, changed-theme behavior, fit/grid claims or late-disposal assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
