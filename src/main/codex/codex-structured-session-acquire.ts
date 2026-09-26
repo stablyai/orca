@@ -8,7 +8,7 @@ import {
   closeFailedCodexAcquisition,
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
-import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { CodexBackgroundTaskTracker, codexChildWorkSink } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
@@ -43,6 +43,8 @@ import {
 import type { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
+
+const TURN_BOUNDARIES: ReadonlySet<string> = new Set(['turn/started', 'turn/completed'])
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -138,7 +140,7 @@ export async function acquireCodexStructuredSession(input: {
       {
         onNotification: (method, params) => {
           // Stamped at receipt, ahead of any pre-publication buffering or retry.
-          const observedAt = isCodexTurnBoundary(method) ? (deps.now?.() ?? Date.now()) : undefined
+          const observedAt = TURN_BOUNDARIES.has(method) ? (deps.now?.() ?? Date.now()) : undefined
           const dispatchSequenceAtReceipt =
             method === 'turn/started' ? dispatchEchoes.latestSequence() : undefined
           input.deliver(
@@ -240,6 +242,8 @@ export async function acquireCodexStructuredSession(input: {
       throw new Error(`codex app-server for session ${sessionId} exited while being acquired`)
     }
     acquisitions.deleteIfCurrent(sessionId, attempt)
+    // Where this session's child work goes: the host's records, after each frame is journaled.
+    const sink = codexChildWorkSink(sessionId, deps)
     const session: CodexSession = {
       connection,
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
@@ -254,7 +258,7 @@ export async function acquireCodexStructuredSession(input: {
       ...(catalogAccess ? { catalogAccess } : {}),
       dispatchEchoes,
       translator,
-      backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions),
+      backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions, sink),
       forceCloseUnexpected: (reason) =>
         input.forceCloseUnexpected(
           sessionId,
@@ -298,8 +302,4 @@ export async function acquireCodexStructuredSession(input: {
   } finally {
     attempt.finish()
   }
-}
-
-function isCodexTurnBoundary(method: string): boolean {
-  return method === 'turn/started' || method === 'turn/completed'
 }

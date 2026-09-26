@@ -13,9 +13,9 @@ import type {
   AgentChildWorkState
 } from './agent-status-child-work'
 
-/** How the provider names one child. `id` is the stable handle today's wire already publishes
- *  (a Claude task id); `runId` names the current run when the provider mints one per run (the
- *  spawn call), and a different one is the provider starting the child again. */
+/** How the provider names one child. `id` is the stable handle: a task id, or the child's own
+ *  thread. `runId` names the current run when the provider mints one per run (a task's spawn
+ *  call, a thread's turn), and a different one is the provider starting the child again. */
 export type AgentChildWorkEvidenceHandle = {
   idKind: Extract<AgentChildWorkAliasKind, 'task_id' | 'thread_id'>
   id: string

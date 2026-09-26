@@ -159,6 +159,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       if (session.backgroundTasks.observe(event)) {
         this.deps.onBackgroundTasksChanged?.(event.sessionId, session.backgroundTasks.state)
       }
+      // After the journal and the parent's republished row, never ahead of either.
+      session.backgroundTasks.publishChildWork()
     }
     if (event.type === 'ended') {
       this.compactions.ended(event.sessionId)
