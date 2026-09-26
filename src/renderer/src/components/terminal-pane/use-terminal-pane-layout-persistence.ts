@@ -18,7 +18,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     clearedScrollbackLeafIdsRef,
     chatLeafId,
     containerRef,
-    effectiveChatViewMode,
+    isChatViewMode,
     expandedPaneIdRef,
     managerRef,
     paneCount,
@@ -34,10 +34,10 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     terminalTab,
     worktreeId
   } = controller
-  const chatOwnerRef = useRef({ chatLeafId, effectiveChatViewMode })
+  const chatOwnerRef = useRef({ chatLeafId, isChatViewMode })
   useLayoutEffect(() => {
-    chatOwnerRef.current = { chatLeafId, effectiveChatViewMode }
-  }, [chatLeafId, effectiveChatViewMode])
+    chatOwnerRef.current = { chatLeafId, isChatViewMode }
+  }, [chatLeafId, isChatViewMode])
   const persistLayoutSnapshot = useCallback((): void => {
     const manager = managerRef.current
     const container = containerRef.current
@@ -56,12 +56,8 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     const currentPanes = manager.getPanes()
     const currentLeafIds = new Set(currentPanes.map((pane) => pane.leafId))
     // PaneManager retains this callback for its entire mount.
-    const { chatLeafId, effectiveChatViewMode } = chatOwnerRef.current
-    if (
-      effectiveChatViewMode &&
-      chatLeafId &&
-      currentPanes.some((pane) => pane.leafId === chatLeafId)
-    ) {
+    const { chatLeafId, isChatViewMode } = chatOwnerRef.current
+    if (isChatViewMode && chatLeafId && currentPanes.some((pane) => pane.leafId === chatLeafId)) {
       layout.chatLeafId = chatLeafId
     }
     const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
@@ -139,7 +135,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
 
   useEffect(() => {
     persistLayoutSnapshot()
-  }, [chatLeafId, effectiveChatViewMode, persistLayoutSnapshot])
+  }, [chatLeafId, isChatViewMode, persistLayoutSnapshot])
 
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {

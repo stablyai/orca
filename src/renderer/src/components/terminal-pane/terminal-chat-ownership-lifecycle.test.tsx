@@ -8,6 +8,7 @@ import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-per
 import { resolveNativeChatLeafRoute } from '../native-chat/native-chat-leaf-routing'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
+import type { RemotePaneLayoutPusher } from './remote-pane-layout-push'
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
@@ -28,21 +29,38 @@ const mocks = vi.hoisted(() => {
     },
     setTabViewMode: (_id: string, mode: string) => {
       state.unifiedTabsByWorktree = { wt: [{ ...tab, viewMode: mode }] }
+    },
+    toggleTabViewMode: (id: string): void => {
+      state.setTabViewMode(
+        id,
+        state.unifiedTabsByWorktree.wt[0].viewMode === 'chat' ? 'terminal' : 'chat'
+      )
     }
   }
   return { state }
 })
-vi.mock('../../store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
-    {
-      getState: () => mocks.state
+vi.mock('../../store', async () => {
+  const { create } = await import('zustand')
+  const { terminalLayoutEqual } = await import('@/lib/terminal-layout-equality')
+  mocks.state.setTabLayout = (id, layout) => {
+    if (terminalLayoutEqual(mocks.state.terminalLayoutsByTabId[id], layout)) {
+      return
     }
-  )
-}))
+    mocks.state.terminalLayoutsByTabId = { ...mocks.state.terminalLayoutsByTabId, [id]: layout }
+    useAppStore.setState({ terminalLayoutsByTabId: mocks.state.terminalLayoutsByTabId })
+  }
+  mocks.state.setTabViewMode = (_id, mode) => {
+    mocks.state.unifiedTabsByWorktree = {
+      wt: [{ ...mocks.state.unifiedTabsByWorktree.wt[0], viewMode: mode }]
+    }
+    useAppStore.setState({ unifiedTabsByWorktree: mocks.state.unifiedTabsByWorktree })
+  }
+  const useAppStore = create(() => mocks.state)
+  return { useAppStore }
+})
 vi.mock('@/runtime/web-runtime-session', () => ({ clearWebRuntimeTerminalBuffer: vi.fn() }))
 
-function makeFixture(paneIds = [1, 2]) {
+function makeFixture(paneIds = [1, 2], remotePusher?: RemotePaneLayoutPusher) {
   const container = document.createElement('div')
   const split = document.createElement('div')
   split.className = 'pane-split'
@@ -75,7 +93,7 @@ function makeFixture(paneIds = [1, 2]) {
     paneTitles: {},
     paneTitlesRef: { current: {} },
     paneTransportsRef: { current: new Map() },
-    remotePaneLayoutPusherRef: { current: null },
+    remotePaneLayoutPusherRef: { current: remotePusher ?? null },
     removedTitleLeafIdsRef: { current: new Set<string>() },
     setPaneTitles: vi.fn()
   }
@@ -117,8 +135,9 @@ function useFixture(fixture: ReturnType<typeof makeFixture>, initialOwner: strin
 }
 
 beforeEach(() => {
+  mocks.state.settings.experimentalNativeChat = true
   mocks.state.setTabViewMode('tab', 'chat')
-  mocks.state.terminalLayoutsByTabId.tab = {
+  mocks.state.setTabLayout('tab', {
     root: {
       type: 'split',
       direction: 'vertical',
@@ -128,11 +147,46 @@ beforeEach(() => {
     activeLeafId: LEFT,
     expandedLeafId: null,
     chatLeafId: RIGHT
-  }
+  })
 })
 afterEach(cleanup)
 
 describe('terminal chat ownership lifecycle', () => {
+  it('batches a pane toggle into chat and back without selecting the active sibling', () => {
+    mocks.state.setTabViewMode('tab', 'terminal')
+    const fixture = makeFixture()
+    const hook = renderHook(() => useFixture(fixture, null))
+    act(() => hook.result.current.toggleNativeChatForLeaf(RIGHT))
+    expect(hook.result.current.chatLeafId).toBe(RIGHT)
+    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('chat')
+    expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBe(RIGHT)
+    act(() => hook.result.current.toggleNativeChatForLeaf(RIGHT))
+    expect(hook.result.current.chatLeafId).toBeNull()
+    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
+    expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
+  })
+
+  it('preserves the saved owner when this client disables native chat', () => {
+    const push = vi.fn()
+    const fixture = makeFixture(undefined, { push })
+    mocks.state.terminalLayoutsByTabId.tab.ptyIdsByLeafId = {
+      [LEFT]: 'remote:host:terminal',
+      [RIGHT]: 'remote:host:chat'
+    }
+    const hook = renderHook(() => useFixture(fixture, RIGHT))
+    mocks.state.settings.experimentalNativeChat = false
+    hook.rerender()
+    hook.result.current.persistLayoutSnapshot()
+    expect(hook.result.current.effectiveChatViewMode).toBe(false)
+    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('chat')
+    expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBe(RIGHT)
+    expect(push).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        layout: expect.objectContaining({ chatLeafId: RIGHT })
+      })
+    )
+  })
+
   it('clears ownership when the tab-bar turns chat off, then targets the active sibling', () => {
     const fixture = makeFixture()
     const hook = renderHook(() => useFixture(fixture, RIGHT))
@@ -196,7 +250,7 @@ describe('terminal chat ownership lifecycle', () => {
     }
     original.unmount()
     const saved = session.value.terminalLayoutsByTabId.tab!
-    mocks.state.terminalLayoutsByTabId.tab = saved
+    mocks.state.setTabLayout('tab', saved)
     expect(saved.activeLeafId).toBe(LEFT)
     expect(saved.root).toMatchObject({ first: { leafId: LEFT }, second: { leafId: RIGHT } })
     const restored = makeFixture([20, 10])
