@@ -26,7 +26,6 @@ import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
 import type { AgentLaunchModeReceipt } from './agent-launch-mode'
 import type { AgentLaunchExecution, CreatedSurface } from './agent-launch-executor'
 import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
-import type { AgentPromptTarget } from '../runtime/runtime-terminal-contracts'
 
 export const HANDED_TO_TERMINAL: AgentLaunchPromptDisposal = { outcome: 'handed-to-terminal' }
 const NOT_DELIVERED: AgentLaunchPromptDisposal = { outcome: 'not-delivered' }
@@ -44,7 +43,7 @@ export async function settleLaunchPromptDisposal(
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
-  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, 'just-launched-agent')
+  return deliverTerminalLaunchPrompt(execution, created.outcome.handle)
 }
 
 /**
@@ -83,18 +82,13 @@ async function deliverStructuredLaunchPrompt(
  */
 export async function deliverTerminalLaunchPrompt(
   execution: AgentLaunchExecution,
-  handle: string,
-  promptTarget?: AgentPromptTarget
+  handle: string
 ): Promise<AgentLaunchPromptDisposal> {
   const { intent, surfaces } = execution
   if (!intent.prompt || intent.prompt.delivery !== 'submit') {
     return NOT_DELIVERED
   }
-  const delivered = await surfaces.deliverTerminalPrompt?.({
-    handle,
-    prompt: intent.prompt,
-    ...(promptTarget ? { promptTarget } : {})
-  })
+  const delivered = await surfaces.deliverTerminalPrompt?.({ handle, prompt: intent.prompt })
   return delivered ? HANDED_TO_TERMINAL : NOT_DELIVERED
 }
 

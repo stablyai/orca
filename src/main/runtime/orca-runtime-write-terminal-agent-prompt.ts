@@ -109,8 +109,16 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
-    const queued = Boolean(options.acceptQueued && options.requestId)
-    const binding = queued ? this.getTerminalPromptRequestBinding(handle) : null
+    if (!options.acceptQueued || !options.requestId) {
+      await verifyAgentPromptSubmission({
+        baseline,
+        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+        timeoutMs: effectTimeoutMs,
+        signal: options.signal
+      })
+      return { submits: 1 }
+    }
+    const binding = this.getTerminalPromptRequestBinding(handle)
     const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
     const launchAgent = this.ptysById.get(ptyId)?.launchAgent
     const settlementAgent = isTerminalSendSettlementAgent(foregroundAgent)
@@ -118,38 +126,24 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       : isTerminalSendSettlementAgent(launchAgent)
         ? launchAgent
         : null
-    const inputAccepted: RuntimeTerminalPromptDelivery | undefined = binding
-      ? {
-          requestId: options.requestId,
-          stages: ['input_accepted'],
-          provider: settlementAgent ?? 'unsupported',
-          observation: settlementAgent ? 'supported' : 'unsupported',
-          processIncarnation: binding.processIncarnation,
-          generation,
-          baselineWorkingSequence: baseline.workingSequence,
-          baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
-          baselinePermissionSequence: baseline.permissionSequence
-        }
-      : undefined
-    if (inputAccepted) {
-      const checkpoint: RuntimeTerminalSend = {
-        handle,
-        accepted: true,
-        bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
-        prompt: inputAccepted
-      }
-      // The prompt is in the pane now, so record its receipt without waiting out the retry delay.
-      options.onInputAccepted?.(checkpoint)
-      if (settlementAgent) {
-        this.registerAgentPromptRequest(
-          ptyId,
-          generation,
-          options.requestId,
-          baseline.workingSequence,
-          baseline.explicitWorkingStartedAt
-        )
-      }
+    const inputAccepted: RuntimeTerminalPromptDelivery = {
+      requestId: options.requestId,
+      stages: ['input_accepted'],
+      provider: settlementAgent ?? 'unsupported',
+      observation: settlementAgent ? 'supported' : 'unsupported',
+      processIncarnation: binding.processIncarnation,
+      generation,
+      baselineWorkingSequence: baseline.workingSequence,
+      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
+      baselinePermissionSequence: baseline.permissionSequence
     }
+    const checkpoint: RuntimeTerminalSend = {
+      handle,
+      accepted: true,
+      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
+      prompt: inputAccepted
+    }
+    options.onInputAccepted?.(checkpoint)
     const retry = submitWithPaste
       ? 'none'
       : await writeAgentPromptSubmitRetry({
@@ -170,21 +164,19 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
           write: (data) => this.ptyController?.write(ptyId, data) === true
         })
     const submits = retry === 'written' ? 2 : 1
-    if (!inputAccepted) {
-      await verifyAgentPromptSubmission({
-        baseline,
-        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-        timeoutMs: effectTimeoutMs,
-        signal: options.signal
-      })
-      return { submits }
-    }
     // Providers without a lifecycle verifier still get an honest accepted
     // receipt; they must not fail a Dispatch merely because Orca cannot prove
     // submission through hooks.
     if (!settlementAgent) {
       return { submits, prompt: inputAccepted }
     }
+    this.registerAgentPromptRequest(
+      ptyId,
+      generation,
+      options.requestId,
+      baseline.workingSequence,
+      baseline.explicitWorkingStartedAt
+    )
     try {
       await verifyAgentPromptSubmission({
         baseline,

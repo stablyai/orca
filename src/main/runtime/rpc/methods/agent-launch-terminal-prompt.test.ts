@@ -63,19 +63,6 @@ describe('writing a launch prompt into a terminal agent', () => {
     // agent would be reported as undelivered while its prompt sat in the pane.
     expect(options.acceptQueued).toBe(true)
     expect(options.requestId).toEqual(expect.any(String))
-    expect(options).not.toHaveProperty('promptTarget')
-  })
-
-  it('marks the prompt for an agent this launch just started', async () => {
-    const stub = runtimeStub({})
-    await deliverTerminalAgentLaunchPrompt({
-      runtime: stub.runtime,
-      handle: 'term_1',
-      text: 'do the thing',
-      promptTarget: 'just-launched-agent'
-    })
-
-    expect(stub.sendTerminalAgentPrompt.mock.calls[0]![2].promptTarget).toBe('just-launched-agent')
   })
 
   it('does not write when the composer never opened', async () => {
