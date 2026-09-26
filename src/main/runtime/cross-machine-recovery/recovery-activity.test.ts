@@ -81,6 +81,7 @@ async function publish(
 }
 
 function runtimeWith(repos: Partial<Repo>[], metaById: Record<string, Partial<WorktreeMeta>>) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readRecoveryActivity reads only the store's repos and worktree meta from this host state.
   return {
     readCrossMachineRecoveryHostState: () => ({
       store: {

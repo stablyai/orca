@@ -1,7 +1,8 @@
-import { RESUMABLE_TUI_AGENTS, type ResumableTuiAgent } from '../../../shared/agent-session-resume'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentSessionRecord
+import {
+  RESUMABLE_TUI_AGENTS,
+  type AgentProviderSessionMetadata,
+  type ResumableTuiAgent,
+  type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'

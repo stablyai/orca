@@ -145,6 +145,16 @@ const CENSUS: readonly CensusRow[] = [
     role: 'exact-worker provider session selection, matched on pane key'
   },
   {
+    path: 'main/runtime/cross-machine-recovery/recovery-runtime-host.ts',
+    kind: 'consumes',
+    role: 'cross-machine recovery resume refuses a provider session already live on this host'
+  },
+  {
+    path: 'main/runtime/orca-runtime-cross-machine-recovery-host.ts',
+    kind: 'wiring',
+    role: 'binds the runtime hook snapshot into the cross-machine recovery import/resume host'
+  },
+  {
     path: 'main/runtime/orca-runtime-cross-machine-recovery.ts',
     kind: 'consumes',
     role: 'cross-machine recovery export live bindings, matched on pane key'

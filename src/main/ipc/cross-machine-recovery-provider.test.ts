@@ -23,6 +23,7 @@ import {
   registerCrossMachineRecoveryProviderHandlers
 } from './cross-machine-recovery-provider'
 import { getDefaultSettings } from '../../shared/constants'
+import type { ProcessResult } from '../../shared/child-process/process-spec'
 
 const LIST = {
   version: 1,
@@ -44,7 +45,7 @@ const PICKUP = {
   }
 }
 
-function processResult(overrides: object) {
+function processResult(overrides: Partial<ProcessResult>): ProcessResult {
   return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false, ...overrides }
 }
 

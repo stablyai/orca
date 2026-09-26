@@ -238,6 +238,9 @@ vi.mock('../skills', () => ({
 vi.mock('../skill-delete/handlers', () => ({
   registerSkillDeleteIpcHandlers: registerSkillDeleteIpcHandlersMock
 }))
+vi.mock('../cross-machine-recovery-local', () => ({
+  registerCrossMachineRecoveryLocalHandlers: vi.fn()
+}))
 vi.mock('../cross-machine-recovery-presentation-ipc', () => ({
   registerCrossMachineRecoveryPresentationHandlers: vi.fn()
 }))

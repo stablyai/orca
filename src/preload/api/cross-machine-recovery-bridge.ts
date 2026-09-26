@@ -6,12 +6,22 @@ import {
   type CrossMachineRecoveryApplyRequest
 } from '../../shared/cross-machine-recovery-session-ops'
 import type { PreloadApi } from '../api-types'
-import type { CrossMachineRecoveryPickupProgressEvent } from '../../shared/cross-machine-recovery-provider-ipc'
+import type {
+  CrossMachineRecoveryInspectArgs,
+  CrossMachineRecoveryListArgs,
+  CrossMachineRecoveryPickupArgs,
+  CrossMachineRecoveryPickupProgressEvent
+} from '../../shared/cross-machine-recovery-provider-ipc'
+
+type ProviderCallArgs =
+  | CrossMachineRecoveryListArgs
+  | CrossMachineRecoveryInspectArgs
+  | CrossMachineRecoveryPickupArgs
 
 const getClientInstanceId = (): Promise<string> =>
   ipcRenderer.invoke('crossMachineRecovery:getClientInstanceId')
 
-async function invokeAsClient<T>(channel: string, args: object): Promise<T> {
+async function invokeAsClient<T>(channel: string, args: ProviderCallArgs): Promise<T> {
   return ipcRenderer.invoke(channel, { ...args, clientInstanceId: await getClientInstanceId() })
 }
 
