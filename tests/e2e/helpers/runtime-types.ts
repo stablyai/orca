@@ -10,6 +10,7 @@ import type { BrowserWorkspace } from '../../../src/shared/browser-workspace-typ
 import type { Repo } from '../../../src/shared/repo-types'
 import type { WorkspaceVisibleTabType } from '../../../src/shared/tab-types'
 import type { TerminalTab } from '../../../src/shared/terminal-tab-types'
+import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
 import type { Worktree } from '../../../src/shared/worktree/types'
 import type { DictationMeterState } from '../../../src/renderer/src/components/dictation/dictation-audio-meter'
 
@@ -39,6 +40,7 @@ export type PaneManagerLike = {
   resetWebglTextureAtlases(): void
   hasWebglRenderer(paneId: number): boolean
   getNumericIdForLeaf(leafId: string): number | null
+  movePane: PaneManager['movePane']
 }
 
 export type ExplorerFileSummary = Pick<OpenFile, 'id' | 'filePath' | 'relativePath'>

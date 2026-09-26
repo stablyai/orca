@@ -117,7 +117,12 @@ function shortcutState(): AppShortcutState {
 }
 
 function shortcutInput(): ShortcutDispatchInput {
-  return { target: null, defaultPrevented: false, preventDefault: vi.fn() }
+  return {
+    target: null,
+    defaultPrevented: false,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn()
+  }
 }
 
 function runRename(state: AppShortcutState = shortcutState()): boolean | undefined {

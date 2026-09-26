@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.e2e.json",
+  "include": [
+    "../tests/e2e/diff-note-line-range.spec.ts",
+    "../tests/e2e/folder-review-notes.spec.ts",
+    "../tests/e2e/review-notes-delivery.spec.ts",
+    "../src/renderer/src/env.d.ts",
+    "../src/types/**/*"
+  ]
+}

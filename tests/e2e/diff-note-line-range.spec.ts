@@ -198,6 +198,12 @@ test.describe('Diff note line range', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+    await orcaPage.evaluate(async () => {
+      await window.__store!.getState().updateSettings({ uiLanguage: 'en' })
+      await window
+        .__store!.getState()
+        .setKeybindingOverride('sourceControl.sendReviewNotes', ['Mod+Shift+Enter'])
+    })
   })
 
   test('dragging the gutter selects a range, keeps it lit, and saves one ranged note', async ({
@@ -365,25 +371,59 @@ test.describe('Diff note line range', () => {
     expect(await readNotes(orcaPage, worktreeId)).toEqual([])
   })
 
-  test('the Add Review Note chord turns an editor selection into a ranged note', async ({
-    orcaPage
-  }) => {
-    const worktreeId = await waitForActiveWorktree(orcaPage)
-    await seedDiffFile(orcaPage, worktreeId, 'src/diff-note-range-chord.ts')
+  for (const surface of ['single', 'combined'] as const) {
+    test(`the Add Review Note chord saves a ranged note in the ${surface} diff`, async ({
+      orcaPage,
+      electronApp
+    }, testInfo) => {
+      const worktreeId = await waitForActiveWorktree(orcaPage)
+      await seedDiffFile(orcaPage, worktreeId, 'src/diff-note-range-chord.ts')
+      if (surface === 'combined') {
+        await orcaPage.evaluate(async (wId) => {
+          const state = window.__store!.getState()
+          const worktree = Object.values(state.worktreesByRepo)
+            .flat()
+            .find((entry) => entry.id === wId)!
+          const status = await window.api.git.status({ worktreePath: worktree.path })
+          state.openAllDiffs(wId, worktree.path, undefined, 'unstaged', status.entries)
+        }, worktreeId)
+        await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
+      }
 
-    // Click the code column, not the gutter: Monaco still owns that side.
-    const line = await gutterPoint(orcaPage, 5)
-    await orcaPage.mouse.click(line.x + 220, line.y)
-    await orcaPage.keyboard.press('Shift+ArrowDown')
-    await orcaPage.keyboard.press('Shift+ArrowDown')
+      // Click the code column, not the gutter: Monaco still owns that side.
+      const line = await gutterPoint(orcaPage, 5)
+      await orcaPage.mouse.click(line.x + 220, line.y)
+      await orcaPage.keyboard.press('Shift+ArrowDown')
+      await orcaPage.keyboard.press('Shift+ArrowDown')
 
-    await pressShortcut(orcaPage, 'KeyA', { shift: true })
+      await pressShortcut(orcaPage, 'KeyA', { shift: true })
 
-    await expect(orcaPage.locator(COMPOSER_LABEL)).toHaveText('Lines 5-7')
-    await submitNote(orcaPage, 'Range from the keyboard.')
+      await expect(orcaPage.locator(COMPOSER_LABEL)).toHaveText('Lines 5-7')
+      const draft = orcaPage.locator(COMPOSER_TEXTAREA)
+      await draft.fill('Range from the keyboard.')
+      await pressShortcut(orcaPage, 'KeyA', { shift: true })
+      await expect(draft).toHaveCount(1)
+      await expect(draft).toHaveValue('Range from the keyboard.')
+      await orcaPage.keyboard.press('Enter')
+      await expect(orcaPage.locator(COMPOSER)).toHaveCount(0)
+      await expect(orcaPage.locator('.orca-diff-comment-card').first()).toContainText(
+        'Range from the keyboard.'
+      )
 
-    expect(await readNotes(orcaPage, worktreeId)).toEqual([
-      { startLine: 5, lineNumber: 7, body: 'Range from the keyboard.' }
-    ])
-  })
+      await orcaPage.locator('.orca-diff-comment-card').first().getByTitle('Edit note').click()
+      const editDraft = orcaPage.locator('.orca-diff-comment-card textarea').first()
+      await expect(editDraft).toHaveValue('Range from the keyboard.')
+      await pressShortcut(orcaPage, 'Enter', { shift: true })
+      await expect(orcaPage.getByRole('menu').getByText('New agent', { exact: true })).toBeVisible()
+      await expect(editDraft).toHaveValue('Range from the keyboard.')
+      const screenshot = testInfo.outputPath(`${surface}-diff-notes.png`)
+      await orcaPage.screenshot({ path: screenshot })
+      await testInfo.attach(`${surface} diff notes`, { path: screenshot, contentType: 'image/png' })
+      expect(
+        await electronApp.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows().every((window) => !window.isVisible())
+        )
+      ).toBe(true)
+    })
+  }
 })

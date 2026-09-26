@@ -1,15 +1,22 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Selection } from 'monaco-editor'
 import type { editor as MonacoEditor } from 'monaco-editor'
+import { createFakeDiffCommentEditor } from './diff-comment-editor-test-fixture'
+import type { DiffCommentLineTarget } from './diff-comment-line-range'
 
 const storeFixture = vi.hoisted(() => ({
   activeGroupIdByWorktree: {},
-  clearDeliveredDiffComments: vi.fn()
+  clearDeliveredDiffComments: vi.fn(),
+  keybindings: { 'editor.addReviewNote': ['Ctrl+L'] }
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof storeFixture) => unknown) => selector(storeFixture)
+  useAppStore: Object.assign(
+    (selector: (state: typeof storeFixture) => unknown) => selector(storeFixture),
+    { getState: () => storeFixture }
+  )
 }))
 
 import { useDiffCommentDecorator } from './useDiffCommentDecorator'
@@ -69,5 +76,71 @@ describe('useDiffCommentDecorator model lifecycle', () => {
     expect(disposeMouseMove).toHaveBeenCalledOnce()
     expect(disposeMouseLeave).toHaveBeenCalledOnce()
     expect(disposeScroll).toHaveBeenCalledOnce()
+  })
+
+  it('opens a diff note from the configured shortcut and preserves an open draft', () => {
+    const { editor, domNode: editorDomNode } = createFakeDiffCommentEditor({ lineCount: 8 })
+    const input = document.createElement('textarea')
+    editorDomNode.appendChild(input)
+    let positionLine = 4
+    editor.getSelection = () => new Selection(positionLine, 1, positionLine, 1)
+    const onAddCommentClick = vi.fn()
+    const hook = renderHook<void, { pendingCommentTarget: DiffCommentLineTarget | null }>(
+      ({ pendingCommentTarget }) =>
+        useDiffCommentDecorator({
+          editor,
+          filePath: 'notes.ts',
+          worktreeId: 'worktree-1',
+          comments: [],
+          commentableLineNumbers: [4, 5],
+          addNoteShortcutEnabled: true,
+          pendingCommentTarget,
+          onAddCommentClick,
+          onDeleteComment: vi.fn()
+        }),
+      { initialProps: { pendingCommentTarget: null } }
+    )
+    const event = new KeyboardEvent('keydown', {
+      key: 'l',
+      code: 'KeyL',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+
+    input.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(onAddCommentClick).toHaveBeenCalledWith({
+      lineNumber: 4,
+      startLine: undefined,
+      top: 80
+    })
+
+    hook.rerender({ pendingCommentTarget: { lineNumber: 4 } })
+    positionLine = 5
+    const openDraftEvent = new KeyboardEvent('keydown', {
+      key: 'l',
+      code: 'KeyL',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    input.dispatchEvent(openDraftEvent)
+
+    expect(openDraftEvent.defaultPrevented).toBe(true)
+    expect(onAddCommentClick).toHaveBeenCalledOnce()
+
+    hook.unmount()
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'l',
+        code: 'KeyL',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    expect(onAddCommentClick).toHaveBeenCalledOnce()
   })
 })

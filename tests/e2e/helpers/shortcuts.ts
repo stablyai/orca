@@ -30,7 +30,7 @@ export async function pressShortcut(
   key: string,
   options: ShortcutOptions = {}
 ): Promise<void> {
-  const parts = [await getModifierKey(page)]
+  const parts: string[] = [await getModifierKey(page)]
   if (options.shift) {
     parts.push('Shift')
   }

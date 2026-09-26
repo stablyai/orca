@@ -10,6 +10,7 @@ export type ConnectedSshTestTarget = {
 type SshTestConnectionOptions = {
   remotePath: string
   displayName: string
+  kind?: 'git' | 'folder'
   seedInitialTab?: boolean
 }
 
@@ -19,7 +20,7 @@ export async function connectSshTestTarget(
   options: SshTestConnectionOptions
 ): Promise<ConnectedSshTestTarget> {
   return page.evaluate(
-    async ({ target, remotePath, displayName, seedInitialTab }) => {
+    async ({ target, remotePath, displayName, kind, seedInitialTab }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
@@ -58,7 +59,8 @@ export async function connectSshTestTarget(
         const result = await window.api.repos.addRemote({
           connectionId: createdTarget.id,
           remotePath,
-          displayName
+          displayName,
+          kind
         })
         if ('error' in result) {
           throw new Error(result.error)
@@ -149,6 +151,7 @@ export async function connectSshTestTarget(
       target,
       remotePath: options.remotePath,
       displayName: options.displayName,
+      kind: options.kind,
       seedInitialTab: options.seedInitialTab ?? true
     }
   )

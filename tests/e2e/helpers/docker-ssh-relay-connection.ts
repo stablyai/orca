@@ -16,6 +16,7 @@ export type ConnectedDockerSshRelayTarget = {
 type DockerSshRelayConnectionOptions = {
   relayGracePeriodSeconds?: number
   remotePath?: string
+  kind?: 'git' | 'folder'
   viaProxyJump?: boolean
   /**
    * Seed a terminal tab when the worktree has none. Default true.
@@ -50,6 +51,7 @@ export async function connectDockerSshRelayTarget(
         options.remotePath ??
         (viaProxyJump ? DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH : DOCKER_SSH_RELAY_REMOTE_REPO_PATH),
       displayName: viaProxyJump ? 'Docker SSH ProxyJump E2E' : 'Docker SSH Relay E2E',
+      kind: options.kind,
       seedInitialTab: options.seedInitialTab
     }
   )

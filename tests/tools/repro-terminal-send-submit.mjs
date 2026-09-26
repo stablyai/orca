@@ -314,6 +314,7 @@ async function fakeAgentMain() {
   const reportPath = argValue('report')
   const marker = argValue('marker')
   const timeoutMs = parsePositiveInteger('timeout-ms', DEFAULT_TIMEOUT_MS)
+  const composerRenderMs = parsePositiveInteger('composer-render-ms', COMPOSER_RENDER_MS)
   const pasteFramingRequired = !hasFlag('allow-unframed-paste')
   const swallowFirstEnter = hasFlag('swallow-first-enter')
   const permissionBeforeSend = hasFlag('permission-before-send')
@@ -330,6 +331,9 @@ async function fakeAgentMain() {
     process.stdout.write(`\x1b]0;${title}\x07OpenAI Codex\nmodel: fake\ndirectory: fixture\n> `)
     if (permissionBeforeSend) {
       process.stdout.write('\nPermission required\nAllow once\nAllow always\nReject\n')
+    }
+    if (hasFlag('announce-paste-ready')) {
+      process.stdout.write('\x1b[?2004h\r\n› ')
     }
   }, 100)
 
@@ -356,6 +360,8 @@ async function fakeAgentMain() {
       pasteFramingRequired,
       hasBracketedPasteFrame,
       markerReceived: input.includes(marker),
+      receivedInput: input,
+      cwd: process.cwd(),
       receivedBytes: Buffer.byteLength(input, 'utf8')
     }
     await writeFile(reportPath, JSON.stringify(report, null, 2))
@@ -389,11 +395,16 @@ async function fakeAgentMain() {
             ? input.slice(pasteStart + BEGIN.length, pasteEnd)
             : input
         process.stdout.write(`\x1b[?25h\x1b[2J\x1b[H› ${composer}`)
-      }, COMPOSER_RENDER_MS)
+      }, composerRenderMs)
     }
     let nextCarriage = input.indexOf('\r', countedCarriages)
     while (nextCarriage !== -1) {
       countedCarriages = nextCarriage + 1
+      // Bracketed-paste newlines are text, not submission keys.
+      if (input.lastIndexOf(BEGIN, nextCarriage) > input.lastIndexOf(END, nextCarriage)) {
+        nextCarriage = input.indexOf('\r', countedCarriages)
+        continue
+      }
       if (composerReady) {
         receivedEnters += 1
         if (swallowFirstEnter && swallowedEnters === 0) {

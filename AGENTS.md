@@ -43,6 +43,11 @@ Avoid type assertions except `as const`. Unavoidable casts need a line-specific 
 
 # Verifying Changes
 
+- For feature work and behavior-changing fixes, build and run the affected app flow before calling the work complete; unit tests and typechecks alone are insufficient.
+- For Electron UI changes, use the background Playwright fixture and CDP to exercise real clicks/shortcuts and assert visible DOM results. Store/API calls may prepare fixtures, but must not replace the interaction under test.
+- Capture and inspect screenshots of the affected states, test applicable git/folder workspace and SSH cases, and report what ran, what passed, and any unverified cases. Add or extend a focused E2E regression when the behavior crosses UI/IPC boundaries.
+- Fix failures and rerun the affected checks until required scenarios pass. For send/execute flows, verify the receiving process and execution host, not just the menu or success toast; do not report completion with required runtime checks unfinished.
+- Rebuild current sources in `e2e` mode before the first launch; use `SKIP_BUILD=1` only while that build remains current. Keep isolated profiles and `ORCA_BACKGROUND_LAUNCH=1` for every run.
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
 - **Test**: `pnpm test [path/to/file.test.ts]`
 - **Lint**: `oxlint`, or `pnpm run check:code-quality:changed` for changed files (full `pnpm lint` is slow); format with `pnpm format`
