@@ -79,7 +79,7 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * golden, the 103 recorded at a call site the C1 page owns, because a count over 786 cannot tell a
  * domain's regression from another domain's improvement.
  *
- * 1. **result-absent-settlement, 341** and **2. result-absent-observation, 3.**
+ * 1. **result-absent-settlement, 340** and **2. result-absent-observation, 3.**
  *    `{ ok: true }` with no `result` key is refused by the page's reader and by `isRpcResponse`
  *    alike, so this one is not a bridge defect: the recorder injects that partition at the scripted
  *    sender port, below the frame validation both sides do, which is what the README means by not
