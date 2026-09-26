@@ -105,7 +105,7 @@ async function readAdmittedHookSettingsFromDisk(): Promise<
   }
   const state = readPersistedState(await getDataPath())
   return {
-    agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled !== false,
+    agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled === true,
     disabledTuiAgents: normalizeDisabledTuiAgents(state.settings?.disabledTuiAgents)
   }
 }

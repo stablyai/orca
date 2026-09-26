@@ -40,7 +40,8 @@ type RemoveOptions = {
 export function isAgentStatusHooksEnabled(
   settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
 ): boolean {
-  return settings?.agentStatusHooksEnabled !== false
+  // Why: silently hooking into other tools' configs needs an explicit opt-in, not an unset default.
+  return settings?.agentStatusHooksEnabled === true
 }
 
 export type StartupManagedHookAction = 'install' | 'skip'

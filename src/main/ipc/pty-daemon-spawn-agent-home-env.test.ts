@@ -517,7 +517,13 @@ describe('registerPtyHandlers', () => {
         process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS =
           '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
         handlers.clear()
-        registerPtyHandlers(mainWindow as never, runtime as never)
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          // Why: this test pins hook env plumbing on the runtime spawn path, not the consent gate.
+          (() => ({ agentStatusHooksEnabled: true })) as never
+        )
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
 
         await controller.spawn({ cols: 80, rows: 24, worktreeId: 'wt-runtime', env: {} })

@@ -25,6 +25,8 @@ export function createMockDeps(): SshRelaySessionTestDeps {
   const mockConn = {} as SshConnection
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The relay fixture implements the Store methods exercised by session establishment and teardown.
   const mockStore = {
+    // Why: these suites pin remote hook delivery, not the consent gate itself.
+    getSettings: vi.fn().mockReturnValue({ agentStatusHooksEnabled: true }),
     getRepos: vi.fn().mockReturnValue([]),
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
     upsertSshPtyConsumerRecovery: vi.fn(),

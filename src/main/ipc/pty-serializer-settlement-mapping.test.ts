@@ -491,7 +491,10 @@ describe('registerPtyHandlers', () => {
     }
 
     try {
-      registerPtyHandlers(mainWindow as never, runtime as never)
+      // Why: this test pins WSL terminal-handle env forwarding, not the consent gate.
+      registerPtyHandlers(mainWindow as never, runtime as never, undefined, (() => ({
+        agentStatusHooksEnabled: true
+      })) as never)
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
