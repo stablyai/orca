@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-change-counts'
+import {
+  getDeleteWorktreeDirtyFiles,
+  orderDeleteWorktreeStatusHydrationTargets
+} from './delete-worktree-dirty-changes'
 
 function worktree(id: string, hostId?: Worktree['hostId']): Worktree {
   return {
@@ -43,5 +46,20 @@ describe('delete-worktree status hydration ordering', () => {
         activeExecutionHostId: 'ssh:builder'
       }).map((target) => target.id)
     ).toEqual(['active', 'visible-a', 'visible-b', 'descendant-a', 'descendant-b'])
+  })
+})
+
+describe('delete-worktree dirty files', () => {
+  it('lists a path staged and unstaged once, with its dominant status', () => {
+    expect(
+      getDeleteWorktreeDirtyFiles([
+        { path: 'src/a.ts', status: 'added', area: 'staged' },
+        { path: 'src/a.ts', status: 'modified', area: 'unstaged' },
+        { path: 'notes.md', status: 'untracked', area: 'untracked' }
+      ])
+    ).toEqual([
+      { path: 'src/a.ts', status: 'modified' },
+      { path: 'notes.md', status: 'untracked' }
+    ])
   })
 })

@@ -5255,7 +5255,8 @@
           "86f0ae1257": "Delete Workspaces"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk."
+          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk.",
+          "4f1c9a7d2e": "and {{value0}} more"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "more",

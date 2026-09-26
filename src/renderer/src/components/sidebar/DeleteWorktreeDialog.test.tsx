@@ -285,10 +285,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
 
     const markup = renderToStaticMarkup(
-      <DeleteWorktreeLineageNotice
-        descendants={[child]}
-        dirtyChangeCountsByWorktreeId={new Map()}
-      />
+      <DeleteWorktreeLineageNotice descendants={[child]} dirtyChangesByWorktreeId={new Map()} />
     )
 
     expect(markup).toContain('min-w-0 max-w-full overflow-hidden rounded-md')
@@ -351,7 +348,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
 
     expect(markup).toContain('2 uncommitted or untracked changes')
-    expect(markup).toContain('Deleting this workspace permanently removes these changes from disk.')
+    expect(markup).not.toContain('src/file.ts')
     expect(markup).not.toContain('Also delete local branch')
   })
 

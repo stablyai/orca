@@ -4,6 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import type { DeleteWorktreeDirtyFile } from './delete-worktree-dirty-changes'
 import type { AppState } from '@/store/types'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import {
@@ -43,7 +44,7 @@ export function DeleteWorktreeTargetPreview({
   collisionWorktrees,
   hostLabelById,
   deleteStateByWorktreeId,
-  dirtyChangeCountsByWorktreeId
+  dirtyChangesByWorktreeId
 }: {
   isBatchDelete: boolean
   worktree: Worktree | null
@@ -51,7 +52,7 @@ export function DeleteWorktreeTargetPreview({
   collisionWorktrees: readonly Worktree[]
   hostLabelById: ReadonlyMap<ExecutionHostId, string>
   deleteStateByWorktreeId: AppState['deleteStateByWorktreeId']
-  dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
+  dirtyChangesByWorktreeId: ReadonlyMap<string, readonly DeleteWorktreeDirtyFile[]>
 }): JSX.Element | null {
   const targetIdPrefix = useId()
   const collisionIds = getCollisionIds(collisionWorktrees)
@@ -88,7 +89,7 @@ export function DeleteWorktreeTargetPreview({
                       </div>
                     ) : null}
                     <DeleteWorktreeDirtyChangeHint
-                      changeCount={dirtyChangeCountsByWorktreeId.get(
+                      files={dirtyChangesByWorktreeId.get(
                         item.hostId ? getWorktreeHostIdentity(item) : item.id
                       )}
                     />
@@ -137,7 +138,7 @@ export function DeleteWorktreeTargetPreview({
         </div>
       ) : null}
       <DeleteWorktreeDirtyChangeHint
-        changeCount={dirtyChangeCountsByWorktreeId.get(
+        files={dirtyChangesByWorktreeId.get(
           worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
         )}
       />

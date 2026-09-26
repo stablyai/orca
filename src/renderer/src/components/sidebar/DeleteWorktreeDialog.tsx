@@ -21,7 +21,7 @@ import { DeleteWorktreeDialogDescription } from './DeleteWorktreeDialogDescripti
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
-import { getDeleteWorktreeDirtyChangeCounts } from './delete-worktree-dirty-change-counts'
+import { getDeleteWorktreeDirtyChanges } from './delete-worktree-dirty-changes'
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
@@ -176,8 +176,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     visibleTargets: worktrees,
     repoMap
   })
-  const dirtyChangeCountsByWorktreeId = useMemo(() => {
-    return getDeleteWorktreeDirtyChangeCounts({
+  const dirtyChangesByWorktreeId = useMemo(() => {
+    return getDeleteWorktreeDirtyChanges({
       deleteTargets,
       deleteStateByWorktreeId,
       gitStatusByWorktree,
@@ -382,13 +382,13 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           collisionWorktrees={allWorktrees}
           hostLabelById={hostLabelById}
           deleteStateByWorktreeId={deleteStateByWorktreeId}
-          dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
+          dirtyChangesByWorktreeId={dirtyChangesByWorktreeId}
         />
 
         {hasLineageChildren && (
           <DeleteWorktreeLineageNotice
             descendants={lineageDelete.descendants}
-            dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
+            dirtyChangesByWorktreeId={dirtyChangesByWorktreeId}
           />
         )}
 

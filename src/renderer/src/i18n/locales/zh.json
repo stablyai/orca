@@ -5065,7 +5065,8 @@
           "86f0ae1257": "删除工作区"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "删除此工作区将从磁盘中永久删除这些更改。"
+          "8e2994ce28": "删除此工作区将从磁盘中永久删除这些更改。",
+          "4f1c9a7d2e": "以及另外 {{value0}} 个"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "更多的",

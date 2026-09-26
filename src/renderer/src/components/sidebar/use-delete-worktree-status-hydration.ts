@@ -10,7 +10,7 @@ import type { GitStatusResult } from '../../../../shared/git-status-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
-import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-change-counts'
+import { orderDeleteWorktreeStatusHydrationTargets } from './delete-worktree-dirty-changes'
 
 const EMPTY_STATUS_BY_IDENTITY = new Map<string, GitStatusResult['entries']>()
 

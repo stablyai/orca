@@ -4314,7 +4314,8 @@
           "86f0ae1257": "Eliminar espacios de trabajo"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "Al eliminar este espacio de trabajo de forma permanente, estos cambios se eliminan del disco."
+          "8e2994ce28": "Al eliminar este espacio de trabajo de forma permanente, estos cambios se eliminan del disco.",
+          "4f1c9a7d2e": "y {{value0}} más"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "más",

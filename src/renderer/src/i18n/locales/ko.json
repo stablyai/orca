@@ -5065,7 +5065,8 @@
           "86f0ae1257": "워크스페이스 삭제"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "이 워크스페이스를 삭제하면 이러한 변경 사항이 디스크에서 영구적으로 제거됩니다."
+          "8e2994ce28": "이 워크스페이스를 삭제하면 이러한 변경 사항이 디스크에서 영구적으로 제거됩니다.",
+          "4f1c9a7d2e": "외 {{value0}}개"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "더",

@@ -1,7 +1,9 @@
 import type { Repo } from '../../../../shared/repo-types'
+import type { GitFileStatus, GitStatusEntry } from '../../../../shared/git-status-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDeleteState } from '../../store/slices/worktree-helpers'
+import { buildStatusMap } from '../right-sidebar/status-display'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
 
 export function orderDeleteWorktreeStatusHydrationTargets({
@@ -29,7 +31,16 @@ export function orderDeleteWorktreeStatusHydrationTargets({
 }
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
-export function getDeleteWorktreeDirtyChangeCounts({
+export type DeleteWorktreeDirtyFile = { path: string; status: GitFileStatus }
+
+// Why: staged and unstaged edits to one path are separate entries; list each file once.
+export function getDeleteWorktreeDirtyFiles(
+  entries: readonly GitStatusEntry[]
+): DeleteWorktreeDirtyFile[] {
+  return Array.from(buildStatusMap(entries), ([path, status]) => ({ path, status }))
+}
+
+export function getDeleteWorktreeDirtyChanges({
   deleteTargets,
   deleteStateByWorktreeId,
   gitStatusByWorktree,
@@ -38,11 +49,11 @@ export function getDeleteWorktreeDirtyChangeCounts({
 }: {
   deleteTargets: readonly Worktree[]
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState | undefined>
-  gitStatusByWorktree: Record<string, readonly unknown[] | undefined>
-  gitStatusByWorktreeIdentity?: ReadonlyMap<string, readonly unknown[]>
+  gitStatusByWorktree: Record<string, readonly GitStatusEntry[] | undefined>
+  gitStatusByWorktreeIdentity?: ReadonlyMap<string, readonly GitStatusEntry[]>
   repoMap: ReadonlyMap<string, Repo>
-}): Map<string, number> {
-  const result = new Map<string, number>()
+}): Map<string, DeleteWorktreeDirtyFile[]> {
+  const result = new Map<string, DeleteWorktreeDirtyFile[]>()
   for (const item of deleteTargets) {
     if (item.isMainWorktree || isFolderWorkspaceDelete(repoMap, item)) {
       continue
@@ -52,17 +63,15 @@ export function getDeleteWorktreeDirtyChangeCounts({
       item,
       deleteStateByWorktreeId
     )?.forceDeleteReason
-    const changeCount = (
-      item.hostId
-        ? gitStatusByWorktreeIdentity?.get(getWorktreeHostIdentity(item))
-        : gitStatusByWorktree[item.id]
-    )?.length
-    if ((changeCount ?? 0) > 0) {
-      result.set(resultKey, changeCount ?? 0)
+    const entries = item.hostId
+      ? gitStatusByWorktreeIdentity?.get(getWorktreeHostIdentity(item))
+      : gitStatusByWorktree[item.id]
+    if (entries && entries.length > 0) {
+      result.set(resultKey, getDeleteWorktreeDirtyFiles(entries))
     } else if (forceDeleteReason === 'dirty') {
       // Why: Git proved the worktree dirty even when renderer status has not
-      // loaded; keep the warning visible without inventing a file count.
-      result.set(resultKey, 0)
+      // loaded; keep the warning visible without inventing a file list.
+      result.set(resultKey, [])
     }
   }
   return result

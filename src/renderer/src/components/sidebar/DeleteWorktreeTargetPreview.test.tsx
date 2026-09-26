@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
+import type { DeleteWorktreeDirtyFile } from './delete-worktree-dirty-changes'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -47,17 +49,20 @@ function renderPreview(args: {
   worktree?: Worktree | null
   isBatchDelete?: boolean
   hostLabelById?: ReadonlyMap<ExecutionHostId, string>
+  dirtyChangesByWorktreeId?: ReadonlyMap<string, readonly DeleteWorktreeDirtyFile[]>
 }): void {
   render(
-    <DeleteWorktreeTargetPreview
-      isBatchDelete={args.isBatchDelete ?? true}
-      worktree={args.worktree ?? null}
-      worktrees={args.worktrees}
-      collisionWorktrees={args.collisionWorktrees ?? args.worktrees}
-      hostLabelById={args.hostLabelById ?? savedHostLabels}
-      deleteStateByWorktreeId={{}}
-      dirtyChangeCountsByWorktreeId={new Map()}
-    />
+    <TooltipProvider>
+      <DeleteWorktreeTargetPreview
+        isBatchDelete={args.isBatchDelete ?? true}
+        worktree={args.worktree ?? null}
+        worktrees={args.worktrees}
+        collisionWorktrees={args.collisionWorktrees ?? args.worktrees}
+        hostLabelById={args.hostLabelById ?? savedHostLabels}
+        deleteStateByWorktreeId={{}}
+        dirtyChangesByWorktreeId={args.dirtyChangesByWorktreeId ?? new Map()}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -150,5 +155,50 @@ describe('DeleteWorktreeTargetPreview host labels', () => {
     const target = screen.getByRole('region', { name: 'alpha /work/alpha' })
     expect(target).toHaveAccessibleName('alpha /work/alpha')
     expect(within(target).queryByText('QA Linux')).not.toBeInTheDocument()
+  })
+})
+
+describe('DeleteWorktreeTargetPreview dirty files', () => {
+  it('expands the dirty warning into the files that will be deleted', () => {
+    const worktree = makeWorktree('one', 'alpha')
+    const files: DeleteWorktreeDirtyFile[] = [
+      { path: 'src/app.ts', status: 'modified' },
+      { path: 'scratch.txt', status: 'untracked' },
+      ...Array.from({ length: 10 }, (_, index) => ({
+        path: `build/out-${index}.js`,
+        status: 'added' as const
+      }))
+    ]
+    renderPreview({
+      isBatchDelete: false,
+      worktree,
+      worktrees: [worktree],
+      dirtyChangesByWorktreeId: new Map([['one', files]])
+    })
+
+    expect(screen.queryByText('src/app.ts')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /12 uncommitted or untracked changes/ }))
+
+    expect(screen.getByText('src/app.ts')).toBeVisible()
+    expect(screen.getByText('scratch.txt')).toBeVisible()
+    expect(screen.getByText('build/out-7.js')).toBeVisible()
+    expect(screen.queryByText('build/out-8.js')).not.toBeInTheDocument()
+    expect(screen.getByText('and 2 more')).toBeVisible()
+    expect(
+      screen.getByText('Deleting this workspace permanently removes these changes from disk.')
+    ).toBeVisible()
+  })
+
+  it('keeps the warning without a file list when only the backend proved the workspace dirty', () => {
+    const worktree = makeWorktree('one', 'alpha')
+    renderPreview({
+      isBatchDelete: false,
+      worktree,
+      worktrees: [worktree],
+      dirtyChangesByWorktreeId: new Map([['one', []]])
+    })
+
+    expect(screen.getByText('Uncommitted or untracked changes')).toBeVisible()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })

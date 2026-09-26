@@ -5202,7 +5202,8 @@
           "86f0ae1257": "Supprimer les espaces de travail"
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "Supprimer cet espace de travail efface définitivement ces modifications du disque."
+          "8e2994ce28": "Supprimer cet espace de travail efface définitivement ces modifications du disque.",
+          "4f1c9a7d2e": "et {{value0}} de plus"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "de plus",
