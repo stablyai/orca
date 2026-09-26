@@ -125,7 +125,7 @@ function formatHostConnection(host: HostListEntry): string {
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
-  return [
+  const lines = [
     ...(status.target && status.target.kind === 'environment'
       ? [`target: environment ${status.target.environment}`]
       : []),
@@ -137,7 +137,14 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`
-  ].join('\n')
+  ]
+  if (status.daemon) {
+    lines.push(
+      `daemonReachable: ${status.daemon.reachable}`,
+      `daemonSessionCount: ${status.daemon.sessionCount ?? 'unknown'}`
+    )
+  }
+  return lines.join('\n')
 }
 
 export function formatStatus(status: CliStatusResult): string {

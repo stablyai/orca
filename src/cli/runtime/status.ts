@@ -2,6 +2,7 @@ import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import { findTransport } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
+import { getLocalDaemonStatus } from './local-daemon-sessions'
 import { sendRequest } from './transport'
 import {
   projectRemoteAppStatus,
@@ -15,6 +16,7 @@ export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 export async function getCliStatus(
   userDataPath: string
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
+  const daemon = await getLocalDaemonStatus(userDataPath)
   const metadata = tryReadMetadata(userDataPath)
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
   if (!transport || !metadata?.authToken) {
@@ -33,7 +35,8 @@ export async function getCliStatus(
       },
       graph: {
         state: 'not_running'
-      }
+      },
+      daemon
     })
   }
 
@@ -67,7 +70,8 @@ export async function getCliStatus(
       },
       graph: {
         state: graphState
-      }
+      },
+      daemon
     })
   } catch (error) {
     // Why: a denied caller cannot tell a live Orca from a dead one, so report the denial, not a state.
@@ -88,7 +92,8 @@ export async function getCliStatus(
       },
       graph: {
         state: running ? 'starting' : 'not_running'
-      }
+      },
+      daemon
     })
   }
 }

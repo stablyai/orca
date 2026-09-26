@@ -127,6 +127,11 @@ export type CliStatusResult = {
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
   }
+  daemon?: {
+    reachable: boolean
+    /** Null when a daemon may be live but its sessions could not be counted. */
+    sessionCount: number | null
+  }
 }
 
 export type RuntimeSyncedTab = {
