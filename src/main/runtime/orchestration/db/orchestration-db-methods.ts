@@ -15,6 +15,7 @@ import type { FederationRelayImportMethods } from './federation/federation-relay
 import type { FederationRelayItemMethods } from './federation/federation-relay-item'
 import type { RemoteDispatchAttachmentAuthorityMethods } from './federation/remote-dispatch-attachment-authority'
 import type { RemoteDispatchAttachmentCreateMethods } from './federation/remote-dispatch-attachment-create'
+import type { RemoteDispatchAttachmentReconcileMethods } from './federation/remote-dispatch-attachment-reconcile'
 import type { RemoteDispatchAttachmentReleaseMethods } from './federation/remote-dispatch-attachment-release'
 import type { RemoteDispatchAttachmentStopMethods } from './federation/remote-dispatch-attachment-stop'
 import type { RemoteQuestionStoreMethods } from './federation/remote-question-store'
@@ -115,6 +116,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   RemoteDispatchAttachmentAuthorityMethods &
   RemoteDispatchAttachmentReleaseMethods &
   RemoteDispatchAttachmentStopMethods &
+  RemoteDispatchAttachmentReconcileMethods &
   FederationRelayEnqueueMethods &
   FederationRelayAckMethods &
   FederationRelayImportMethods &
