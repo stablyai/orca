@@ -5,7 +5,10 @@
 import { existsSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_STATUS_PROJECTION_VERSION } from '../../../shared/structured-agent-session-saved-status'
+import {
+  STRUCTURED_AGENT_SESSION_STATUS_PROJECTION_VERSION,
+  type StructuredAgentSessionSavedStatus
+} from '../../../shared/structured-agent-session-saved-status'
 import { AgentSessionSavedStatusStore } from '../../runtime/agent-session-saved-status-store'
 import { journalDatabaseFile, journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import { HOST_TEST_NOW } from './structured-agent-session-host-test-data'
@@ -28,18 +31,43 @@ afterEach(async () => {
   await rig.dispose()
 })
 
+/** Every row the current run published for a session, in order. */
+function rowsOf(sessionId: string) {
+  return rig.statusEvents.flatMap((event) =>
+    event.type === 'status' && event.session.sessionId === sessionId
+      ? [event.session]
+      : event.type === 'snapshot'
+        ? event.sessions.filter((session) => session.sessionId === sessionId)
+        : []
+  )
+}
+
 function journalDir(sessionId: string): string {
   return journalDirectoryFor(rig.root, { workspaceId: 'workspace-1', sessionId })
 }
 
 /** A second run's send, then a crash with the turn still running and its child alive. */
 async function crashMidTurn(sessionId: string, text: string): Promise<void> {
-  const host = await rig.boot()
+  const recorded: StructuredAgentSessionSavedStatus[] = []
+  const host = await rig.boot({
+    savedStatus: {
+      read: (id) => rig.savedStatus.read(id),
+      prune: (keep) => rig.savedStatus.prune(keep),
+      record: (id, saved) => {
+        recorded.push(saved)
+        rig.savedStatus.record(id, saved)
+      }
+    }
+  })
   await host.restoreStartupSessions()
   await rig.chat(sessionId, { message: text })
-  // The flush timer fired: whatever the running turn left in the saved copy is on disk.
+  // Every publish of the running turn has run, and the flush timer fired: whatever it left in the
+  // saved copy is on disk.
+  await new Promise((resolve) => setTimeout(resolve, 0))
   rig.savedStatus.flush()
   await rig.crash()
+  // Only a settled chat is ever saved: a running turn writes nothing.
+  expect(recorded.filter((saved) => saved.projection.status === 'working')).toEqual([])
 }
 
 describe('listing from a saved status', () => {
@@ -136,22 +164,38 @@ describe('listing from a saved status', () => {
       status: 'idle',
       latestPrompt: 'second question'
     })
+    // Never shown in between: neither the settled turn before it nor the turn as still running.
+    expect(rowsOf('session-a').filter((row) => row.latestPrompt !== 'second question')).toEqual([])
+    expect(rowsOf('session-a').filter((row) => row.status === 'working')).toEqual([])
     expect(rig.store.getRecord('session-a')?.lease.settlementRetryRequired).toBeUndefined()
   })
 
-  it('lists what a quit mid-turn settled, never the finished turn before it (C10)', async () => {
-    await rig.chat('session-a', { message: 'first question' })
-    await rig.quit()
-    const second = await rig.boot()
-    await second.restoreStartupSessions()
-    await rig.chat('session-a', { message: 'second question' })
-    await rig.quit()
-    const host = await rig.boot()
+  it.each([
+    ['saved', true],
+    ['lost', false]
+  ])(
+    'lists what a quit mid-turn settled, never the finished turn before it, its save %s (C10)',
+    async (_case, saves) => {
+      await rig.chat('session-a', { message: 'first question' })
+      await rig.quit()
+      // A run whose saved-status writes never land: its entry stays at the first turn's position.
+      const dropped = {
+        read: (id: string) => rig.savedStatus.read(id),
+        prune: (keep: (id: string) => boolean) => rig.savedStatus.prune(keep),
+        record: () => {}
+      }
+      const second = await rig.boot(saves ? {} : { savedStatus: dropped })
+      await second.restoreStartupSessions()
+      await rig.chat('session-a', { message: 'second question' })
+      await rig.quit()
+      const host = await rig.boot()
 
-    await host.restoreStartupSessions()
+      await host.restoreStartupSessions()
 
-    expect(latestStatus(rig, 'session-a')).toMatchObject({ latestPrompt: 'second question' })
-  })
+      expect(latestStatus(rig, 'session-a')).toMatchObject({ latestPrompt: 'second question' })
+      expect(rowsOf('session-a').filter((row) => row.latestPrompt === 'first question')).toEqual([])
+    }
+  )
 
   it('drops saved copies of chats that no longer exist (C11)', async () => {
     await rig.chat('session-a', { message: 'first question' })

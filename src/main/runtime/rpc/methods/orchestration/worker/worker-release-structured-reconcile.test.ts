@@ -29,7 +29,8 @@ describe('structured worker release after a restart', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the release reads only the reconcile stubbed here.
         setStructuredAgentSessionHost({
           reconcileRestartLeases: async () => {
-            await Promise.resolve()
+            // A reconcile that probes processes settles after a macrotask, not a microtask.
+            await new Promise((resolve) => setTimeout(resolve, 0))
             order.push('reconcile')
           }
         } as never)

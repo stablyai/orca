@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -57,14 +58,22 @@ describe('journal cursor probe', () => {
     const journalDir = tempDir()
     const cursor = await settledJournal(journalDir)
     const dbPath = journalDatabaseFile(journalDir)
+    const sidecars = [`${dbPath}-wal`, `${dbPath}-shm`]
+    // As a cleanly closed journal leaves it: the main file alone. Its mode loosened, as a copied or
+    // restored profile can leave it, because SQLite gives new sidecars the main file's mode.
+    sidecars.forEach((path) => rmSync(path, { force: true }))
+    if (process.platform !== 'win32') {
+      chmodSync(dbPath, 0o644)
+    }
     const before = readFileSync(dbPath)
 
     expect(probeJournalCursor(journalDir, SESSION)).toEqual(cursor)
 
     expect(readFileSync(dbPath).equals(before)).toBe(true)
     if (process.platform !== 'win32') {
-      // A read-only open of a WAL file may leave sidecars behind; they stay owner-only.
-      for (const sidecar of [`${dbPath}-wal`, `${dbPath}-shm`].filter((path) => existsSync(path))) {
+      // A read-only open of a WAL file leaves its sidecars behind; they stay owner-only.
+      expect(sidecars.filter((path) => existsSync(path))).not.toEqual([])
+      for (const sidecar of sidecars.filter((path) => existsSync(path))) {
         expect(statSync(sidecar).mode & 0o777).toBe(0o600)
       }
     }
