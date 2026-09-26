@@ -15496,7 +15496,10 @@
             "2b3ce6d394": "취소",
             "e05063cfc1": "라인 {{value0}}",
             "c845170b3b": "라인 {{value0}}-{{value1}}",
-            "commentTooLarge": "댓글이 너무 길어 안전하게 제출할 수 없습니다."
+            "commentTooLarge": "댓글이 너무 길어 안전하게 제출할 수 없습니다.",
+            "f6c449191e": "AI에 대한 메모 추가",
+            "5fa4bfebaa": "메모 추가",
+            "5e9b3d0c2e": "추가 중..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "이 메모"
