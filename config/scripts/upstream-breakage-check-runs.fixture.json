@@ -1,0 +1,514 @@
+{
+  "_source": "Captured verbatim from GitHub: gh api repos/{owner}/{repo}/commits/<headRefOid>/check-runs",
+  "prs": {
+    "16917": {
+      "pr": {
+        "baseRefName": "main",
+        "headRefName": "brennanb2025/mob-create-flow-perf",
+        "headRefOid": "29be0cc2e032ef03b93ebda9c03809bf9f488c1f",
+        "mergedAt": "2026-08-28T22:45:54Z",
+        "number": 16917,
+        "title": "fix(mobile): create-worktree sheet dies after picking a source and loses the picked PR"
+      },
+      "runs": [
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "test",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "managed hooks on Node 18",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "e2e",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "detect changed e2e specs",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "Git compatibility",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "static analysis",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "package",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "cross-version wire compatibility",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "shell contracts",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "package (windows)",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "orcad browser provider",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "prepare test native cache node 24",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "typecheck",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:36Z",
+          "conclusion": "success",
+          "name": "verify",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "skipped",
+          "name": "xterm patch sync",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:29Z",
+          "conclusion": "success",
+          "name": "root directory guard",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:30Z",
+          "conclusion": "success",
+          "name": "detect code-relevant changes",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:23:12Z",
+          "conclusion": "success",
+          "name": "test vs non-test LoC",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T11:25:42Z",
+          "conclusion": "success",
+          "name": "verify",
+          "status": "completed"
+        }
+      ]
+    },
+    "17002": {
+      "pr": {
+        "baseRefName": "main",
+        "headRefName": "nwparker/headless-linux-server-doc-fixes",
+        "headRefOid": "3d4f9bb9158cf5aaa6f61f88afc63fa00f0add4a",
+        "mergedAt": "2026-08-28T09:37:52Z",
+        "number": 17002,
+        "title": "docs(headless-server): fix package list, extraction perms, and ldd command"
+      },
+      "runs": [
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "Git compatibility",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "prepare test native cache node 24",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "managed hooks on Node 18",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "xterm patch sync",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "test",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "shell contracts",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "package (windows)",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "e2e",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "package",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "orcad browser provider",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "static analysis",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "detect changed e2e specs",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "typecheck",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:30Z",
+          "conclusion": "skipped",
+          "name": "cross-version wire compatibility",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:35Z",
+          "conclusion": "success",
+          "name": "verify",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:29Z",
+          "conclusion": "success",
+          "name": "detect code-relevant changes",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:29Z",
+          "conclusion": "success",
+          "name": "root directory guard",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-28T09:13:13Z",
+          "conclusion": "success",
+          "name": "test vs non-test LoC",
+          "status": "completed"
+        }
+      ]
+    },
+    "17358": {
+      "pr": {
+        "baseRefName": "main",
+        "headRefName": "nwparker/react-purity-lint-cleanup",
+        "headRefOid": "fb2fde0bcc0290c96b5d5a7005d118dd89de63f5",
+        "mergedAt": "2026-08-30T08:17:29Z",
+        "number": 17358,
+        "title": "Consolidate the renderer now-clock and drop the epoch setState round-trip"
+      },
+      "runs": [
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:17:08Z",
+          "conclusion": "success",
+          "name": "verify",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:08:11Z",
+          "conclusion": "skipped",
+          "name": "e2e",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "skipped",
+          "name": "prepare test native cache node 24",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "skipped",
+          "name": "orcad browser provider",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "skipped",
+          "name": "managed hooks on Node 18",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "skipped",
+          "name": "cross-version wire compatibility",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "skipped",
+          "name": "xterm patch sync",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "skipped",
+          "name": "Git compatibility",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "skipped",
+          "name": "shell contracts",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:15:35Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 1/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:12:59Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 2/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:13:04Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 5/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:13:37Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 6/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:11:28Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 4/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:16:59Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 7/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:11:51Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 3/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:11:49Z",
+          "conclusion": "success",
+          "name": "test / tests node 24 8/8",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:13:14Z",
+          "conclusion": "success",
+          "name": "static analysis",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:11:58Z",
+          "conclusion": "success",
+          "name": "package (windows)",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:10:58Z",
+          "conclusion": "success",
+          "name": "package",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:08:11Z",
+          "conclusion": "success",
+          "name": "detect changed e2e specs",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:09:16Z",
+          "conclusion": "success",
+          "name": "typecheck",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:07:45Z",
+          "conclusion": "success",
+          "name": "root directory guard",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:30Z",
+          "conclusion": "success",
+          "name": "detect code-relevant changes",
+          "status": "completed"
+        },
+        {
+          "appSlug": "greptile-apps",
+          "completedAt": "2026-08-30T08:07:17Z",
+          "conclusion": "success",
+          "name": "Greptile Review",
+          "status": "completed"
+        },
+        {
+          "appSlug": "github-actions",
+          "completedAt": "2026-08-30T08:06:39Z",
+          "conclusion": "success",
+          "name": "test vs non-test LoC",
+          "status": "completed"
+        }
+      ]
+    }
+  },
+  "siblings": [
+    {
+      "baseRefName": "brennanb2025/claude-structured-mobile",
+      "headRefName": "brennanb2025/claude-structured-core-merge",
+      "number": 15356,
+      "title": "Merge codex-structured-core into Claude lane"
+    },
+    {
+      "baseRefName": "brennanb2025/claude-structured-mobile",
+      "headRefName": "brennanb2025/claude-lane-replay-waiter-identity",
+      "number": 15657,
+      "title": "fix(native-chat): adopt only the real user replay as a Claude send's identity"
+    },
+    {
+      "baseRefName": "brennanb2025/probe-liveness-coercion-r1",
+      "headRefName": "brennanb2025/window-close-guard-r1",
+      "number": 17044,
+      "title": "fix(terminal): ask before closing the window when a terminal probe could not answer"
+    },
+    {
+      "baseRefName": "brennanb2025/probe-liveness-coercion-r1",
+      "headRefName": "brennanb2025/pty-absence-verdict-r1",
+      "number": 17058,
+      "title": "fix(pty): tell a watched local exit apart from a lost route"
+    },
+    {
+      "baseRefName": "brennanb2025/probe-liveness-coercion-r1",
+      "headRefName": "brennanb2025/cleanup-post-confirm-liveness-r1",
+      "number": 17074,
+      "title": "fix(cleanup): stop deleting a workspace after confirm when it turns out to be busy"
+    }
+  ]
+}
