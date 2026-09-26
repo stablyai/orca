@@ -90,6 +90,139 @@ describe('selective profile domain serialization', () => {
     }
   })
 
+  it('reads later domains after earlier toJSON hooks replace or delete them', () => {
+    const buildState = () => {
+      const state: Record<string, unknown> = {
+        first: {
+          toJSON() {
+            state.replaced = { text: 'after' }
+            delete state.deleted
+            state.added = 'outside the captured keys'
+            return 'first'
+          }
+        },
+        replaced: { text: 'before' },
+        deleted: 'before'
+      }
+      return state
+    }
+    const domains = new Set(['deleted', 'replaced', 'first', 'added'])
+    const expected = previousReplacements(buildState(), domains)
+
+    expect(expected).toEqual([
+      { domain: 'deleted', payload: null },
+      { domain: 'replaced', payload: '{"text":"after"}' },
+      { domain: 'first', payload: '"first"' },
+      { domain: 'added', payload: null }
+    ])
+    expect(serializeSelectiveProfileStateDomains(buildState(), domains)).toEqual(expected)
+  })
+
+  it('interleaves domain getters and toJSON hooks in JSON property order', () => {
+    const buildState = (calls: string[]) => {
+      let text = 'before'
+      return {
+        get first() {
+          calls.push('get first')
+          return {
+            toJSON() {
+              calls.push('serialize first')
+              text = 'after'
+              return 'first'
+            }
+          }
+        },
+        get second() {
+          calls.push('get second')
+          return text
+        }
+      }
+    }
+    const domains = new Set(['first', 'second'])
+    const expectedCalls: string[] = []
+    const expected = previousReplacements(buildState(expectedCalls), domains)
+    const actualCalls: string[] = []
+
+    expect(serializeSelectiveProfileStateDomains(buildState(actualCalls), domains)).toEqual(
+      expected
+    )
+    expect(actualCalls).toEqual(expectedCalls)
+    expect(actualCalls).toEqual(['get first', 'serialize first', 'get second'])
+  })
+
+  it.each(['1.0', '1e999', '9007199254740993', '"\\u0061"', '"\ud800"', '"\\uD800"'])(
+    'normalizes raw JSON from a production domain hook like the previous path: %s',
+    (raw) => {
+      if (!('rawJSON' in JSON) || typeof JSON.rawJSON !== 'function') {
+        throw new Error('This test requires native JSON.rawJSON support')
+      }
+      const rawValue: unknown = JSON.rawJSON(raw)
+      const state = getDefaultPersistedState('/synthetic-profile')
+      const serialize = vi.fn(() => ({ ...state.workspaceSession, extension: rawValue }))
+      Object.defineProperty(state.workspaceSession, 'toJSON', { value: serialize })
+      const domains = new Set(['workspaceSession'])
+      const expected = previousReplacements({ workspaceSession: state.workspaceSession }, domains)
+      serialize.mockClear()
+      const serialization = new StateSerializationSecretHandlingOperations({
+        state,
+        protectedSecrets: new ProtectedSecretPersistence()
+      })
+
+      expect(serialization.buildStateDomainsToSave(domains)?.replacements).toEqual(expected)
+      expect(serialize).toHaveBeenCalledExactlyOnceWith('workspaceSession')
+    }
+  )
+
+  it('normalizes proxy key order without re-running its getters or toJSON', () => {
+    const read = vi.fn(() => 'one')
+    const value = new Proxy(
+      {
+        get 1() {
+          return read()
+        },
+        2: 'two'
+      },
+      { ownKeys: () => ['2', '1'] }
+    )
+    const serialize = vi.fn(() => value)
+    const state = { workspaceSession: { child: { toJSON: serialize } } }
+    const domains = new Set(['workspaceSession'])
+    const expected = previousReplacements(state, domains)
+    read.mockClear()
+    serialize.mockClear()
+
+    expect(serializeSelectiveProfileStateDomains(state, domains)).toEqual(expected)
+    expect(read).toHaveBeenCalledOnce()
+    expect(serialize).toHaveBeenCalledExactlyOnceWith('child')
+  })
+
+  it('captures production domain references before hooks replace runtime fields', () => {
+    const state = getDefaultPersistedState('/synthetic-profile')
+    state.worktreeIdentityAliases = { captured: ['identity'] }
+    const capturedAliases = state.worktreeIdentityAliases
+    const capturedAutomations = state.automations
+    Object.defineProperty(state.workspaceSession, 'toJSON', {
+      value: () => {
+        state.automations = []
+        delete state.worktreeIdentityAliases
+        return 'session'
+      }
+    })
+    const domains = new Set(['workspaceSession', 'automations', 'worktreeIdentityAliases'])
+    const serialization = new StateSerializationSecretHandlingOperations({
+      state,
+      protectedSecrets: new ProtectedSecretPersistence()
+    })
+
+    expect(serialization.buildStateDomainsToSave(domains)?.replacements).toEqual([
+      { domain: 'workspaceSession', payload: '"session"' },
+      { domain: 'automations', payload: JSON.stringify(capturedAutomations) },
+      { domain: 'worktreeIdentityAliases', payload: JSON.stringify(capturedAliases) }
+    ])
+    expect(state.automations).not.toBe(capturedAutomations)
+    expect(state.worktreeIdentityAliases).toBeUndefined()
+  })
+
   it('serializes each selected domain once without an aggregate parse or UTF-8 buffer', () => {
     const state = getDefaultPersistedState('/synthetic-profile')
     state.workspaceSession.activeTabId = 'x'.repeat(200_000)

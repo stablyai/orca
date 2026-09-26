@@ -140,6 +140,45 @@ describe('worker-owned Store writes', () => {
     expect(selective).toHaveBeenCalledOnce()
   })
 
+  it('preserves canonical domain bytes and revisions for raw JSON and proxy-valued hooks', async () => {
+    if (!('rawJSON' in JSON) || typeof JSON.rawJSON !== 'function') {
+      throw new Error('This test requires native JSON.rawJSON support')
+    }
+    const overflow: unknown = JSON.rawJSON('1e999')
+    const escaped: unknown = JSON.rawJSON('"\\u0061"')
+    const { store, authority, readState } = await fixture()
+    store.patchWorkspaceSession({ activeTabId: 'pending-tab' })
+    const session = store.getWorkspaceSession()
+    const keyOrder = new Proxy({ 1: 'one', 2: 'two' }, { ownKeys: () => ['2', '1'] })
+    const serialize = vi.fn(() => ({ ...session, activeTabId: escaped, overflow, keyOrder }))
+    Object.defineProperty(session, 'toJSON', { configurable: true, value: serialize })
+    const expected = JSON.stringify({
+      ...session,
+      activeTabId: 'a',
+      overflow: null,
+      keyOrder: {
+        1: 'one',
+        2: 'two'
+      }
+    })
+    try {
+      await store.flushPendingOrThrowAsync()
+      expect(authority.captures.at(-1)).toContainEqual({
+        domain: 'workspaceSession',
+        payload: expected
+      })
+      expect(readState().workspaceSession).toMatchObject({ activeTabId: 'a', overflow: null })
+      expect(serialize).toHaveBeenCalledOnce()
+      const revision = authority.inner.revision
+      store.setWorkspaceSession(session)
+      await store.flushPendingOrThrowAsync()
+      expect(authority.inner.revision).toBe(revision)
+      expect(serialize).toHaveBeenCalledTimes(2)
+    } finally {
+      Reflect.deleteProperty(session, 'toJSON')
+    }
+  })
+
   it('retains a newer edit after an older write is acknowledged', async () => {
     const { store, authority, readState } = await fixture()
     const gate = authority.pause()
