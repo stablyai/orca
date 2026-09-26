@@ -20275,6 +20275,81 @@
         "Default config paths are shared with GNOME on a disposable hosted CI runner; nested mode refuses non-GitHub-Actions execution."
       ],
       "demotionRule": "Keep experimental on unexplained failures; retain exact bytes and participation checks without retries, skips, or longer deadlines."
+    },
+    {
+      "id": "terminal-history.tombstone-rescan-ownership",
+      "title": "Shell-history cleanup coalesces scans while preserving deletion ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "main-filesystem-contract",
+      "surfaces": ["shell-history tombstone cleanup", "native and WSL history deletion"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "wsl"],
+      "coverageNotes": "Actual macOS temp-filesystem deletion and fake WSL cleanup ownership. Live Windows, Linux and WSL execution untested; SSH and daemon replay unaffected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23030"],
+      "invariant": "Only renamed tombstones are recursively removed, active plus retry admissions stay at 64, retries retain their delays and exhaustion behavior, and coalesced roots displaced by another root stay eligible for later completion scans.",
+      "oracle": "Drain 1,024 real directory entries in controlled batches with at most 32 directory scans and 64 active removals. Exercise queued late arrivals, mixed native/WSL roots, delayed failure retries, exhausted failures, cancellation and test-only flush without clock advancement.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts"
+      ],
+      "testFiles": [
+        "src/main/terminal-history-tombstone-scan-cost.test.ts",
+        "src/main/terminal-history-async-delete.test.ts",
+        "src/main/terminal-history-tombstone-retry.test.ts",
+        "src/main/terminal-history-gc-fs-call-count.test.ts",
+        "src/main/terminal-history-gc.test.ts",
+        "src/main/terminal-history.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/terminal-history-tombstone-scan-cost.test.ts",
+          "assertions": [
+            "drains 1024 tombstones without enumerating the backlog after every completion",
+            "keeps a second root eligible when another root consumes its rescan slots",
+            "preserves delayed failure retries while successful removals replenish the queue",
+            "does not restart exhausted retries when a different root frees more slots"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.89,
+          "summary": "86 tests across six suites passed; independent review reran 14 tests across three suites."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused temp-filesystem history tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local author and independent runs pass; CI/soak history not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The original production module enumerates 1,025 times for 1,024 tombstones and fails the unchanged bounded-scan oracle. Coalescing reduces the deterministic count to 17 while removing all entries."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "1,025 to 17 controlled scans. Five local real-FS samples: median 1,025 to 176 scans and 714.85 to 91.53 ms cleanup. One completion-triggered unref immediate; no polling. Refill waits one event-loop turn and may defer to next startup if process exits."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run native Windows and WSL history cleanup on real filesystems."
+      ],
+      "knownGaps": [
+        "No rendered UI latency measurement or physical Windows/Linux/WSL run.",
+        "Refill delay and unref immediate are explicit trade-offs; disk tombstones survive for next startup."
+      ],
+      "demotionRule": "Keep experimental or demote if coalescing strands previously eligible roots, crosses the admission cap, rearms exhausted retries through another root, or touches a recreated live history path."
     }
   ]
 }
