@@ -18,6 +18,13 @@ coverage, and release behavior:
   a newer push cancelled ordinary jobs while all eight unit shards remained
   queued and the replacement workflow remained pending. `!cancelled()` still
   evaluates after failed/skipped dependencies, without resisting cancellation.
+  Two other superseded PR runs reproduced this: at 04:27 UTC on September 26,
+  [36216165253](https://github.com/stablyai/orca/actions/runs/36216165253) and
+  [36215543186](https://github.com/stablyai/orca/actions/runs/36215543186) still held
+  11 runners, with two more obsolete jobs queued. They had consumed another
+  71.3 runner-minutes after replacement pushes. After rechecking current PR heads
+  and replacement runs, both obsolete runs were force-cancelled; their replacements
+  left the blocked pending state.
 - Combine root/README guards with change detection. A real sparse checkout kept
   all 29,487 index entries while materializing only 12 files (192 KB). This
   eliminates one runner allocation and checkout per PR. README link checks still
@@ -52,7 +59,7 @@ coverage, and release behavior:
   spent 40 seconds compiling the same Git 2.25.5 binary; main-branch warming
   makes that cache available to new PRs too.
 
-The next hosted trial also removes repeated work in mobile bundle checks. The
+The hosted trial also removes repeated work in mobile bundle checks. The
 builder keeps private snapshots of the default real output for read-only checks
 (15 identical builds become two), and haptics checks reuse each route closure
 (32 builds become eight). Determinism, custom inputs, malformed routes, stale
@@ -60,16 +67,24 @@ outputs, and tampered manifests retain independent builds. A mutation regression
 proves Buffer/manifest consumers cannot change another assertion's fixture.
 The grant census reuses parsed references for unchanged file contents, still
 reads source every time, and has a real-file edit invalidation regression.
-The first hosted mobile lane used 400 seconds for its 448 assertions; the grant
+The first hosted mobile lane used 400 seconds for its 448 tests; the grant
 census alone took 259 seconds. Locally, the same one-worker invocation of the
 three changed files fell from 243.07 seconds (101 passing tests) to 49.49 seconds
-(103 passing tests). Hosted before/after measurements are pending.
+(103 passing tests). Hosted run
+[36217238462](https://github.com/stablyai/orca/actions/runs/36217238462) retained
+the same 43 files and passed all 450 tests: the original 448 plus two regressions.
+Its test step fell from 400.26 to 205.17 seconds, and the complete job fell from
+498 to 298 seconds (40% less runner time). Builder, haptics, and grant-census file
+times fell from 73.70/88.94/258.58 seconds to 29.24/32.98/22.58 seconds.
 
-A four-worker unit trial is scoped to the four-core Linux unit step. No local,
-Windows, isolation, timeout, retry, or coverage settings change. The existing
-three-worker baseline and unchanged timing weights provide the comparison;
-retain the override only after the complete suite passes and aggregate active
-time improves. Failed timing reports never replace the checked-in baseline.
+Four workers are scoped to the four-core Linux unit step. No local, Windows,
+isolation, timeout, retry, or coverage settings change. With unchanged shard
+weights, the hosted trial reduced aggregate unit job time from 3,386 to 3,133
+seconds (7.5%). Seven shards passed; the sole failure was an outdated hook-order
+snapshot after main added three layout-persistence hooks. The snapshot was
+refreshed only after comparing the exact old and merged hook sequences. Final
+verification is linked from [PR #23053](https://github.com/stablyai/orca/pull/23053).
+Failed timing reports never replace the checked-in baseline.
 
 No account settings, paid services, or runner entitlements changed. Standard
 public-repository runners remain free. GitHub documents plan concurrency limits
@@ -94,11 +109,15 @@ and rechecked the same source in eight seconds. Unit shard 3 subsequently
 restored its pnpm/native cache keys successfully. Actual sharing across different
 PRs requires the producer to land on the default branch; this trial validates
 commands and key compatibility, not a completed default-branch rollout.
+The follow-up warmup built the Git binary in 40 seconds; the PR Git check restored
+that exact key and passed in 62 seconds overall. Its TypeScript refresh took
+seven seconds after restoring earlier incremental state.
 
 These are small observational samples from different revisions, not controlled
 benchmarks. The cold typecheck log confirms an incremental-cache miss. Queue
 changes must be separated from active duration and concurrent account traffic.
-Complete unit timing refresh and final PR validation are still in progress.
+The checked-in shard weights remain unchanged; the new reports make future
+refreshes possible from complete successful runs.
 
 ## September 5 audit
 
