@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
+import { isCrossMachineRecoveryRecord } from '../../../../shared/cross-machine-recovery-session-ops'
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
   return {
@@ -92,9 +93,14 @@ export function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): 
 }
 
 // Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
-// sleep or quit capture is the pane's only resume handle once its live row is gone.
+// sleep or quit capture is the pane's only resume handle once its live row is gone; a cross-machine
+// recovery record is the imported session's only handle until the user resumes it.
 export function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
-  return record.origin === 'worktree-sleep' || record.origin === 'quit'
+  return (
+    record.origin === 'worktree-sleep' ||
+    record.origin === 'quit' ||
+    isCrossMachineRecoveryRecord(record)
+  )
 }
 
 // Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead

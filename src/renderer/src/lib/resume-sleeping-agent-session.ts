@@ -24,6 +24,7 @@ import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
 import { sleepingRecordNamesAnotherExecutionHost } from './sleeping-record-execution-host-scope'
 import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
 import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
+import { isCrossMachineRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -234,7 +235,8 @@ export function resumeSleepingAgentSessionsForWorktree(
     return 0
   }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
-    .filter((record) => record.worktreeId === worktreeId)
+    // Why: activation never auto-launches an imported cross-machine session; Resume is explicit.
+    .filter((record) => record.worktreeId === worktreeId && !isCrossMachineRecoveryRecord(record))
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(
     (record) => !isInvalidWorktreeActivationRecord(record)

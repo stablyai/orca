@@ -1,11 +1,11 @@
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
-import { OrcaRuntimeWithCrossMachineRecovery } from './orca-runtime-cross-machine-recovery'
+import { OrcaRuntimeWithCrossMachineRecoveryHost } from './orca-runtime-cross-machine-recovery-host'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 
-class OrcaRuntimeService extends OrcaRuntimeWithCrossMachineRecovery {
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithCrossMachineRecovery>) {
+class OrcaRuntimeService extends OrcaRuntimeWithCrossMachineRecoveryHost {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithCrossMachineRecoveryHost>) {
     super(...args)
     // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
     // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC

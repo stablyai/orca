@@ -18424,5 +18424,10 @@
   },
   "common": {
     "retry": "重试"
+  },
+  "crossMachineRecovery": {
+    "recoveredSession": "已恢复的会话",
+    "resume": "继续",
+    "resumeFailed": "无法继续已恢复的会话"
   }
 }

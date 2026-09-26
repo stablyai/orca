@@ -18424,5 +18424,10 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "crossMachineRecovery": {
+    "recoveredSession": "Recovered session",
+    "resume": "Resume",
+    "resumeFailed": "Couldn't resume the recovered session"
   }
 }

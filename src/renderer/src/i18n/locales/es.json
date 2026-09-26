@@ -15299,5 +15299,10 @@
       "settingsLink": "Ajustes → Búsqueda de sesiones de agentes",
       "startSearching": "Empezar a buscar"
     }
+  },
+  "crossMachineRecovery": {
+    "recoveredSession": "Sesión recuperada",
+    "resume": "Reanudar",
+    "resumeFailed": "No se pudo reanudar la sesión recuperada"
   }
 }
