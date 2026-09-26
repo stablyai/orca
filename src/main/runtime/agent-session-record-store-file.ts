@@ -62,18 +62,18 @@ export type LoadedAgentSessionStore = {
   legacyHandoffLeasesNormalized: boolean
   /** sha256 of the primary bytes `state` was parsed from; null when no primary was parsed. */
   primarySha256: string | null
-  /** True when a row the primary holds as unreadable was taken from the backup's valid copy. */
-  salvagedFromBackup: boolean
+  /** True when `state` also rests on the backup: a row was salvaged from it, or it could not be read. */
+  dependsOnBackup: boolean
 }
 
 /**
- * The hash whose bytes alone determine `loaded.state`, or null when they do not. Salvage also read
- * the backup, so the same primary bytes can load differently once the backup changes.
+ * The hash whose bytes alone determine `loaded.state`, or null when they do not. Salvage also reads
+ * the backup, so the same primary bytes can load differently once the backup changes or is readable.
  */
 export function agentSessionStoreExactPrimarySha256(
   loaded: LoadedAgentSessionStore
 ): string | null {
-  return loaded.salvagedFromBackup ? null : loaded.primarySha256
+  return loaded.dependsOnBackup ? null : loaded.primarySha256
 }
 
 export function agentSessionStorePath(directory: string): string {
@@ -244,7 +244,8 @@ function parseState(
 
 /** A record the primary retained as unreadable may still have a valid copy in the previous
  *  committed state. Adopting it keeps the session reachable — the lease is re-adjudicated
- *  like any other — while the unreadable bytes stay quarantined verbatim. */
+ *  like any other — while the unreadable bytes stay quarantined verbatim. Returns whether the
+ *  result rests on the backup. */
 async function salvageUnreadableRecordsFromBackup(
   state: AgentSessionStoreState,
   backupFilePath: string,
@@ -259,8 +260,9 @@ async function salvageUnreadableRecordsFromBackup(
   let raw: string
   try {
     raw = await readFile(backupFilePath, 'utf-8')
-  } catch {
-    return false
+  } catch (error) {
+    // Why: a backup that failed to read may still hold the row, so the next load must look again.
+    return !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
   }
   const backup = parseState(raw, hostId)
   if (!backup) {
@@ -289,7 +291,7 @@ export async function loadAgentSessionStore(
   if (primaryBytes) {
     const parsed = parseState(primaryBytes.bytes.toString('utf-8'), hostId)
     if (parsed) {
-      const salvagedFromBackup = await salvageUnreadableRecordsFromBackup(
+      const dependsOnBackup = await salvageUnreadableRecordsFromBackup(
         parsed.state,
         backupPath(filePath),
         hostId
@@ -300,7 +302,7 @@ export async function loadAgentSessionStore(
         readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
         recoveredFromBackup: false,
         primarySha256: primaryBytes.sha256,
-        salvagedFromBackup
+        dependsOnBackup
       }
     }
     unusableStoreFound = true
@@ -320,7 +322,7 @@ export async function loadAgentSessionStore(
         readOnly: parsed.state.schemaVersion > AGENT_SESSION_STORE_SCHEMA_VERSION,
         recoveredFromBackup: true,
         primarySha256: null,
-        salvagedFromBackup: false
+        dependsOnBackup: false
       }
     }
     unusableStoreFound = true
@@ -336,6 +338,6 @@ export async function loadAgentSessionStore(
     needsRewrite: false,
     legacyHandoffLeasesNormalized: false,
     primarySha256: null,
-    salvagedFromBackup: false
+    dependsOnBackup: false
   }
 }

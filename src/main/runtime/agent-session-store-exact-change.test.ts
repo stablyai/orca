@@ -8,6 +8,7 @@ import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFsPromises from 'node:fs/promises'
 import type * as DurableFileWrite from '../durable-file-write'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { AgentSessionRecordStore } from './agent-session-record-store'
@@ -30,6 +31,20 @@ const publish = vi.hoisted((): PublishFault => ({
   reached: null,
   release: null
 }))
+
+const backupRead = vi.hoisted(() => ({ failNext: false }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  const readFile = async (...args: Parameters<typeof actual.readFile>) => {
+    if (backupRead.failNext && String(args[0]).endsWith('.bak')) {
+      backupRead.failNext = false
+      throw Object.assign(new Error('simulated transient read failure'), { code: 'EIO' })
+    }
+    return actual.readFile(...args)
+  }
+  return { ...actual, default: { ...actual, readFile }, readFile }
+})
 
 vi.mock('../durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
@@ -58,6 +73,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  backupRead.failNext = false
   publish.fail = false
   publish.reached = null
   publish.release = null
@@ -283,6 +299,20 @@ describe('a primary whose rows were salvaged from the backup', () => {
     await store.setSessionTabVisibility('session-beta', false)
 
     expect(store.getRecord('session-alpha')).toBeNull()
+  })
+
+  it('looks at the backup again when it could not be read', async () => {
+    await seedSalvageableRow()
+    backupRead.failNext = true
+    const store = await openStore()
+    expect(backupRead.failNext).toBe(false)
+    expect(store.getRecord('session-alpha')).toBeNull()
+
+    // Were the primary's hash trusted, this write would also copy the primary over the only valid row.
+    await store.setConversationName('session-beta', 'after a failed backup read')
+
+    expect(store.getRecord('session-alpha')).not.toBeNull()
+    expect((await openStore()).getRecord('session-alpha')).not.toBeNull()
   })
 
   it('stops depending on the backup once the salvaged row is written', async () => {
