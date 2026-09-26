@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { terminalDocumentDouble } from './document/document-terminal-double.test-support'
+import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
+import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
 /**
@@ -18,6 +20,8 @@ import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
  */
 /** Set for the length of one case; the factory throws it instead of building a document. */
 let startThrows: Error | null = null
+/** Set for the length of one case; the document builds this grid instead of xterm. */
+let gridTerminal: TerminalDocumentTerminal | null = null
 
 vi.mock('./document/create-terminal-document', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./document/create-terminal-document')>()
@@ -27,7 +31,8 @@ vi.mock('./document/create-terminal-document', async (importOriginal) => {
       if (startThrows) {
         throw startThrows
       }
-      return actual.createTerminalDocument(host)
+      const grid = gridTerminal
+      return actual.createTerminalDocument(grid ? { ...host, createTerminal: () => grid } : host)
     }
   }
 })
@@ -61,9 +66,11 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 50))
 const INIT = { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false } as const
 
 let renderer: ReactTestRenderer | null = null
+let restoreTransform: (() => void) | null = null
 
 beforeEach(() => {
   startThrows = null
+  gridTerminal = null
   document.body.innerHTML = ''
   document.head.innerHTML = ''
 })
@@ -71,6 +78,8 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  restoreTransform?.()
+  restoreTransform = null
 })
 
 describe('a stopped document takes its engines with it', () => {
@@ -242,5 +251,155 @@ describe('the component names the cause of a start that threw', () => {
     })
 
     expect(engineErrors).toEqual([])
+  })
+})
+
+const CELL = { width: 7.5, height: 15 }
+const FIT_390 = 390 / (7.5 * 55)
+
+/** A laid-out 55x40 grid whose cells scale with the font, as xterm's do. */
+function gridDouble(): TerminalDocumentTerminal {
+  const terminal = terminalDocumentDouble().terminal
+  const cell = () => {
+    const k = terminal.options.fontSize / 13
+    return { width: CELL.width * k, height: CELL.height * k }
+  }
+  const grid = Object.assign(terminal, {
+    cols: 55,
+    rows: 40,
+    _core: {
+      _renderService: {
+        get dimensions() {
+          return { css: { cell: cell() } }
+        }
+      }
+    }
+  })
+  grid.resize = (cols: number, rows: number) => {
+    grid.cols = cols
+    grid.rows = rows
+  }
+  return grid
+}
+
+/**
+ * A mounted page document over a grid, whose host box the case sets and pushes as RN layout does:
+ * react-native-web's `onLayout` reports a `display:none` screen as 0x0 and its return as the old box.
+ */
+async function mountedOverGrid() {
+  gridTerminal = gridDouble()
+  const host = plantHost()
+  let box = { width: 390, height: 600 }
+  host.getBoundingClientRect = () => new DOMRect(0, 134, box.width, box.height)
+  const mounted = mountTerminalWebDocument(host, () => {})
+  // Every surface transform the document writes; a refit writes one even when nothing moved. Read
+  // off the style prototype because an init swaps the surface element for a fresh one.
+  const scales: number[] = []
+  const proto: object = Object.getPrototypeOf(host.style)
+  const own = Object.getOwnPropertyDescriptor(proto, 'transform')!
+  const write = own.set!
+  Object.defineProperty(proto, 'transform', {
+    ...own,
+    set(this: CSSStyleDeclaration, value: string) {
+      const scale = /scale\(([^)]*)\)/.exec(String(value))
+      if (scale) {
+        scales.push(Number(scale[1]))
+      }
+      write.call(this, value)
+    }
+  })
+  restoreTransform = () => Object.defineProperty(proto, 'transform', own)
+  let id = 0
+  const send = (command: TerminalWebViewCommand) => mounted.send({ ...command, id: ++id })
+  const layOut = (width: number, height: number) => {
+    box = { width, height }
+    mounted.notifyViewport()
+  }
+  layOut(390, 600)
+  send({ type: 'init', cols: 55, rows: 40, initialData: '', preserveScroll: false })
+  await framesUntil(() => scales.at(-1) === FIT_390)
+  return { mounted, scales, send, layOut }
+}
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+async function framesUntil(done: () => boolean) {
+  for (let frame = 0; frame < 30 && !done(); frame++) {
+    await nextFrame()
+  }
+  expect(done()).toBe(true)
+}
+
+describe("the page pushes its terminal frame's box into the document", () => {
+  it('refits on a box RN laid out, through the host View, with no ResizeObserver of its own', () => {
+    let observers = 0
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor() {
+          observers += 1
+        }
+        observe() {}
+        disconnect() {}
+      }
+    )
+    try {
+      const host = plantHost()
+      host.getBoundingClientRect = () => new DOMRect(0, 134, 390, 600)
+      act(() => {
+        renderer = create(createElement(TerminalWebView, {}), { createNodeMock: () => host })
+      })
+      const surface = host.querySelector<HTMLElement>('#terminal-surface')!
+      expect(surface.style.transform).toBe('')
+      const laidOut = renderer!.root.findAll((node) => typeof node.props.onLayout === 'function')
+      expect(laidOut).toHaveLength(1)
+      act(() => {
+        laidOut[0]!.props.onLayout({ nativeEvent: { layout: { width: 390, height: 600 } } })
+      })
+      expect(surface.style.transform).toContain('scale(1)')
+      expect(observers).toBe(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('keeps pan and zoom across hide and show, and refits when the box really changes', async () => {
+    // Native never refits on navigation: its WebView keeps its size while another screen covers it.
+    const { mounted, scales, layOut } = await mountedOverGrid()
+    const fitted = scales.length
+    layOut(0, 0)
+    layOut(390, 600)
+    await nextFrame()
+    await nextFrame()
+    expect(scales).toHaveLength(fitted)
+
+    layOut(300, 600)
+    await framesUntil(() => scales.at(-1) === 300 / (7.5 * 55))
+    mounted.dispose()
+  })
+
+  it('fits a grid resized while hidden to the last box RN laid out, as the WebView does', async () => {
+    const { mounted, scales, send, layOut } = await mountedOverGrid()
+    layOut(0, 0)
+    send({ type: 'resize', cols: 80, rows: 40 })
+    await framesUntil(() => scales.at(-1) === 390 / (7.5 * 80))
+    const fitted = scales.length
+    layOut(390, 600)
+    await nextFrame()
+    expect(scales).toHaveLength(fitted)
+    mounted.dispose()
+  })
+
+  it('fits a text-scale change made while hidden to the last box RN laid out', async () => {
+    const { mounted, scales, send, layOut } = await mountedOverGrid()
+    layOut(0, 0)
+    send({ type: 'set-font-scale', fontScale: 0.8 })
+    // The smaller font's cells: fontPxForScale(0.8) = 10 px, so 390 / (7.5 x 10/13) = 67 columns.
+    await framesUntil(() => scales.at(-1) === 1)
+    const fitted = scales.length
+    layOut(390, 600)
+    await nextFrame()
+    expect(scales).toHaveLength(fitted)
+    mounted.dispose()
   })
 })

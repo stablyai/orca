@@ -25,6 +25,8 @@ import type { TerminalWebViewCommand } from './terminal-webview-messages'
 export type TerminalWebDocument = {
   /** Hands one host command to the document, as a bridge frame does inside the WebView. */
   send: (command: TerminalWebViewCommand & { id: number }) => void
+  /** RN laid the host out again: the page's counterpart of the WebView's window resize. */
+  notifyViewport: () => void
   dispose: () => void
 }
 
@@ -102,12 +104,14 @@ export function mountTerminalWebDocument(
   ensureDocumentStyle()
   host.classList.add(HOST_CLASS)
   host.innerHTML = TERMINAL_DOCUMENT_MARKUP
-  const started = startDocumentOrGiveTheHostBack(host, receive)
+  const viewport = pageViewport(host)
+  const started = startDocumentOrGiveTheHostBack(host, receive, viewport)
 
   return {
     send: (command) => {
       started.send(command)
     },
+    notifyViewport: viewport.notify,
     dispose: () => {
       started.stop()
       host.innerHTML = ''
@@ -128,10 +132,11 @@ export function mountTerminalWebDocument(
  */
 function startDocumentOrGiveTheHostBack(
   host: HTMLElement,
-  receive: (message: Record<string, unknown>) => void
+  receive: (message: Record<string, unknown>) => void,
+  viewport: PageViewport
 ) {
   try {
-    return startPageDocument(host, receive)
+    return startPageDocument(host, receive, viewport)
   } catch (error) {
     host.innerHTML = ''
     host.classList.remove(HOST_CLASS)
@@ -139,8 +144,45 @@ function startDocumentOrGiveTheHostBack(
   }
 }
 
+type PageViewport = ReturnType<typeof pageViewport>
+
+/**
+ * The host's box, pushed by RN layout. A WebView keeps its size under a covering screen; RN web lays
+ * that `display:none` host out as 0x0 and its return as the same box, so neither is a change. Sizes
+ * are the client rect's, since RN web's layout numbers are whole-pixel `offsetWidth`s.
+ */
+function pageViewport(host: HTMLElement) {
+  let laidOut = { width: 0, height: 0 }
+  let onChange: (() => void) | null = null
+  return {
+    rect: () => {
+      const box = host.getBoundingClientRect()
+      const size = box.width > 0 ? box : laidOut
+      return { left: box.left, top: box.top, width: size.width, height: size.height }
+    },
+    observe: (change: () => void) => {
+      onChange = change
+      return () => {
+        onChange = null
+      }
+    },
+    notify: () => {
+      const { width, height } = host.getBoundingClientRect()
+      if (width <= 0 || (width === laidOut.width && height === laidOut.height)) {
+        return
+      }
+      laidOut = { width, height }
+      onChange?.()
+    }
+  }
+}
+
 /** The eleven seams, as the page answers them. */
-function startPageDocument(host: HTMLElement, receive: (message: Record<string, unknown>) => void) {
+function startPageDocument(
+  host: HTMLElement,
+  receive: (message: Record<string, unknown>) => void,
+  viewport: PageViewport
+) {
   // Written by this document's own reporter: `startHostNotify` installs it through the seam below,
   // which here is a `window` error listener, and every error it forwards is appended before the
   // report that quotes it. What the page cannot have is the WebView head's half — a buffer open
@@ -187,17 +229,10 @@ function startPageDocument(host: HTMLElement, receive: (message: Record<string, 
     hasEngine: () => true,
 
     // The window here is the whole page, header and dock included; the grid is shown in the host.
-    viewportRect: () => {
-      const box = host.getBoundingClientRect()
-      return { left: box.left, top: box.top, width: box.width, height: box.height }
-    },
+    viewportRect: viewport.rect,
 
-    // The host resizes without the window: a dock growing, a panel docking beside it.
-    observeViewport: (onChange) => {
-      const observer = new ResizeObserver(onChange)
-      observer.observe(host)
-      return () => observer.disconnect()
-    },
+    // The host resizes without the window, and RN layout is what says so: the component pushes it.
+    observeViewport: viewport.observe,
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
     createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,
