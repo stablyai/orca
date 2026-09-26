@@ -41,7 +41,9 @@ vi.mock('@/components/ui/context-menu', () => ({
 }))
 
 vi.mock('../setup-guide/SetupGuideProgressRing', () => ({
-  SetupGuideProgressRing: () => <span data-testid="setup-progress-ring" />
+  SetupGuideProgressRing: ({ className }: { className?: string }) => (
+    <span data-testid="setup-progress-ring" className={className} />
+  )
 }))
 
 function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): FeatureWallSetupProgress {
@@ -179,7 +181,10 @@ describe('SetupGuideSidebarEntry', () => {
   })
 
   it('renders after persisted UI and setup progress are ready when setup is incomplete', () => {
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).toContain('Onboarding checklist')
+    const markup = renderToStaticMarkup(<SetupGuideSidebarEntry />)
+
+    expect(markup).toContain('Onboarding checklist')
+    expect(markup).toContain('text-green-600 dark:text-green-300')
   })
 
   it('keeps the visible entry mounted during transient setup progress refreshes', async () => {
