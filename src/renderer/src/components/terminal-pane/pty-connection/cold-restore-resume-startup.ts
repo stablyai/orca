@@ -12,6 +12,7 @@ import {
 } from '../../../../../shared/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
+  isDormantRecoveryRecord,
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../../shared/agent-session-resume'
@@ -27,7 +28,11 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     }
     const state = useAppStore.getState()
     const entry = state.agentStatusByPaneKey[session.cacheKey]
-    const sleepingRecordEntry = session.getSleepingRecordForPane(state)
+    const paneSleepingRecordEntry = session.getSleepingRecordForPane(state)
+    const sleepingRecordEntry =
+      paneSleepingRecordEntry && !isDormantRecoveryRecord(paneSleepingRecordEntry.record)
+        ? paneSleepingRecordEntry
+        : null
     const sleepingRecord = sleepingRecordEntry?.record
 
     const useLiveEntry = entry && entry.state !== 'done'

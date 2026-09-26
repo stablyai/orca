@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import {
   agentProviderSessionsEqual,
+  isDormantRecoveryRecord,
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
@@ -234,7 +235,7 @@ export function resumeSleepingAgentSessionsForWorktree(
     return 0
   }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
-    .filter((record) => record.worktreeId === worktreeId)
+    .filter((record) => record.worktreeId === worktreeId && !isDormantRecoveryRecord(record))
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(
     (record) => !isInvalidWorktreeActivationRecord(record)

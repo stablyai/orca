@@ -1,5 +1,10 @@
 import type { AgentStatusState } from './agent-status-types'
 import type { ResumableTuiAgent } from './agent-session-resume'
+import type {
+  RecoveryBindingKey,
+  RecoveryBindingSelector,
+  RecoveryOmittedBinding
+} from './cross-machine-recovery-binding-key'
 import type { GitHubRepositoryIdentity } from './github/pull-request-types'
 import type { RepoKind } from './repo-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
@@ -19,7 +24,8 @@ export const CROSS_MACHINE_RECOVERY_ERROR_CODES = [
   'recovery_descriptor_invalid',
   'recovery_descriptor_too_large',
   'recovery_session_live_locally',
-  'recovery_binding_not_found'
+  'recovery_binding_not_found',
+  'recovery_binding_ambiguous'
 ] as const
 
 export type CrossMachineRecoveryErrorCode = (typeof CROSS_MACHINE_RECOVERY_ERROR_CODES)[number]
@@ -186,8 +192,10 @@ export type OrcaRecoveryDescriptorV1 = {
   }
   layout: RecoveryLayout
   presentation: RecoveryPresentationExport
-  /** Live, dormant and structured sessions, deduped by providerSession.id with live winning. */
+  /** Live, dormant and structured sessions, one per recoveryBindingKeyString with live winning.
+   *  v1 exports only the agents in RECOVERY_V1_EXPORT_AGENTS; the rest are listed in omittedBindings. */
   bindings: RecoveryAgentBinding[]
+  omittedBindings: RecoveryOmittedBinding[]
 }
 
 export type RecoveryPresentationSource =
@@ -219,8 +227,9 @@ export type RecoveryImportRequest = {
   checkoutPath: string
   checkpointId: string
   pathMap?: RecoveryPathMapping[]
-  /** Provider session ids to resume after import; the rest import dormant. */
-  resume?: string[]
+  /** Bindings to resume after import; the rest import dormant. A bare provider session id must
+   *  name exactly one descriptor binding, else the import fails with recovery_binding_ambiguous. */
+  resume?: RecoveryBindingSelector[]
   preferClientInstanceId?: string
   activate?: boolean
   registerRepo?: boolean
@@ -237,7 +246,7 @@ export type RecoveryImportIdMap = {
 export type RecoveryImportBindingResult = {
   sourcePaneKey: string
   localPaneKey: string
-  providerSessionId: string
+  binding: RecoveryBindingKey
   status: 'dormant' | 'resumed' | 'refused'
   reason?: string
   terminalHandle?: string

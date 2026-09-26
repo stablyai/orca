@@ -13,7 +13,7 @@ export function pairedDevicePresentationClientKey(pairedDeviceId: string): strin
 }
 
 export type RecoveryPresentationWorkspaceRef =
-  | { kind: 'worktree'; worktreeId: string; instanceId?: string }
+  | { kind: 'worktree'; worktreeId: string; instanceId: string }
   | { kind: 'folder'; folderWorkspaceId: string }
 
 /** Ages relative to the publish, so the host can stamp absolute times on its own clock. */

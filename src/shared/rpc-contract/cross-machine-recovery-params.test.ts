@@ -6,6 +6,7 @@ import type { TerminalTab } from '../terminal-tab-types'
 import {
   CrossMachineRecoveryImportParams,
   CrossMachineRecoveryPresentationPublishParams,
+  CrossMachineRecoveryResumeParams,
   OrcaRecoveryDescriptorV1Schema
 } from './cross-machine-recovery-params'
 
@@ -105,7 +106,8 @@ function descriptor(recoveryLayout: RecoveryLayout = layout()): OrcaRecoveryDesc
         updatedAt: 2,
         lastHumanInputAt: null
       }
-    ]
+    ],
+    omittedBindings: []
   }
 }
 
@@ -163,6 +165,46 @@ describe('cross-machine recovery contract', () => {
     ).toBe(false)
   })
 
+  it('keys bindings by agent, key, id and the pi transcript path', () => {
+    const base = descriptor()
+    const [claude] = base.bindings
+    const pi = (sourcePaneKey: string, transcriptPath: string) => ({
+      ...claude,
+      sourcePaneKey,
+      agent: 'pi' as const,
+      providerSession: { key: 'session_id' as const, id: 'sess-1', transcriptPath }
+    })
+    const distinct = [claude, pi('tab-1:leaf-2', '/s/a.jsonl'), pi('tab-1:leaf-3', '/s/b.jsonl')]
+    expect(OrcaRecoveryDescriptorV1Schema.safeParse({ ...base, bindings: distinct }).success).toBe(
+      true
+    )
+    const duplicate = [claude, { ...claude, sourcePaneKey: 'tab-2:leaf-1' }]
+    expect(OrcaRecoveryDescriptorV1Schema.safeParse({ ...base, bindings: duplicate }).success).toBe(
+      false
+    )
+  })
+
+  it('selects resume targets by binding key or bare provider session id', () => {
+    const key = { agent: 'pi', key: 'session_id', id: 'sess-1', transcriptPath: '/s/a.jsonl' }
+    const params = { worktree: 'id:repo::/dst/wt', binding: key }
+    expect(CrossMachineRecoveryResumeParams.parse(params)).toEqual(params)
+    expect(
+      CrossMachineRecoveryResumeParams.safeParse({ ...params, binding: 'sess-1' }).success
+    ).toBe(true)
+    expect(
+      CrossMachineRecoveryResumeParams.safeParse({ ...params, binding: { ...key, extra: 1 } })
+        .success
+    ).toBe(false)
+    expect(
+      CrossMachineRecoveryImportParams.safeParse({
+        descriptor: {},
+        checkoutPath: '/dst/wt',
+        checkpointId: 'cp-1',
+        resume: [key, 'sess-2']
+      }).success
+    ).toBe(true)
+  })
+
   it('leaves descriptor validation to the import handler', () => {
     const parsed = CrossMachineRecoveryImportParams.safeParse({
       descriptor: { version: 99 },
@@ -206,6 +248,13 @@ describe('cross-machine recovery contract', () => {
       ]
     }
     expect(CrossMachineRecoveryPresentationPublishParams.parse(publish)).toEqual(publish)
+    const [row] = publish.workspaces
+    expect(
+      CrossMachineRecoveryPresentationPublishParams.safeParse({
+        ...publish,
+        workspaces: [{ ...row, workspace: { kind: 'worktree', worktreeId: 'repo::/src/wt' } }]
+      }).success
+    ).toBe(false)
     expect(
       CrossMachineRecoveryPresentationPublishParams.safeParse({
         ...publish,

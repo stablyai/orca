@@ -64,12 +64,15 @@ const StoredClientSchema = z
   })
   .strict()
 
-const StoreStateSchema = z.object({ version: z.literal(1), clients: z.array(StoredClientSchema) })
+const StoreStateSchema = z.object({
+  version: z.literal(1),
+  clients: z.array(StoredClientSchema.extend({ workspaces: z.array(z.unknown()) }))
+})
 
 type StoredClient = z.infer<typeof StoredClientSchema>
 
 export type RecoveryPresentationWorkspaceKey =
-  | { kind: 'worktree'; worktreeId: string; instanceId: string | null }
+  | { kind: 'worktree'; worktreeId: string; instanceId: string }
   | { kind: 'folder'; folderWorkspaceId: string }
 
 export type RecoveryPresentationWorkspaceViews = {
@@ -104,10 +107,7 @@ function matchesWorkspace(
   }
   // Why: a worktree path can be reused by a later workspace; a view pinned to another instance
   // describes the old one.
-  return (
-    ref.worktreeId === key.worktreeId &&
-    (ref.instanceId === undefined || key.instanceId === null || ref.instanceId === key.instanceId)
-  )
+  return ref.worktreeId === key.worktreeId && ref.instanceId === key.instanceId
 }
 
 function newest(values: readonly (number | null)[]): number | null {
@@ -243,7 +243,18 @@ export class CrossMachineRecoveryPresentationStore {
       return []
     }
     const parsed = StoreStateSchema.safeParse(json)
-    return parsed.success ? parsed.data.clients : []
+    if (!parsed.success) {
+      return []
+    }
+    // Why per row: an instance-less worktree row would match any later incarnation at that path,
+    // so it is dropped without costing the client's other views.
+    return parsed.data.clients.map((client) => ({
+      ...client,
+      workspaces: client.workspaces.flatMap((workspace) => {
+        const row = StoredWorkspaceSchema.safeParse(workspace)
+        return row.success ? [row.data] : []
+      })
+    }))
   }
 
   private async publish(clients: StoredClient[]): Promise<void> {
