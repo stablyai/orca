@@ -50,6 +50,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   remoteSessionIdsByTabId: true,
   lastVisitedAtByWorktreeId: true,
   defaultTerminalTabsAppliedByWorktreeId: true,
+  recoveryImportKeyByWorktreeId: true,
   sleepingAgentSessionsByPaneKey: true,
   terminalPtyIncarnationsByPaneKey: true,
   terminalTopologyRevisionByRepoId: true,
@@ -98,6 +99,17 @@ describe('workspaceSessionStateSchema field coverage', () => {
     expect(parsed.ok).toBe(true)
     expect(parsed.ok && parsed.value.closedTerminalTabTombstonesByTabId).toEqual({
       'tab-1': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1', ackRevision: 4 }
+    })
+  })
+
+  it('round-trips the recovery import marker through parseWorkspaceSession', () => {
+    const parsed = parseWorkspaceSession({
+      ...MINIMAL_SESSION,
+      recoveryImportKeyByWorktreeId: { 'repo-1::/repo/wt': 'import-key' }
+    })
+
+    expect(parsed.ok && parsed.value.recoveryImportKeyByWorktreeId).toEqual({
+      'repo-1::/repo/wt': 'import-key'
     })
   })
 

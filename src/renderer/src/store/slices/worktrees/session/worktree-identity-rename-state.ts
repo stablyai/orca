@@ -48,6 +48,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'showDotfilesByWorktree',
   'expandedDirs',
   'defaultTerminalTabsAppliedByWorktreeId',
+  'recoveryImportKeyByWorktreeId',
   'recentlyClosedTabKindsByWorktree'
 ] as const satisfies readonly (keyof AppState)[]
 

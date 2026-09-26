@@ -244,6 +244,7 @@ export function buildWorktreePurgeState(
     defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
       s.defaultTerminalTabsAppliedByWorktreeId
     ),
+    recoveryImportKeyByWorktreeId: omitByWorktree(s.recoveryImportKeyByWorktreeId),
     activeWorktreeId: removedActive ? null : s.activeWorktreeId,
     activeWorkspaceExecutionHostId: removedActive ? null : s.activeWorkspaceExecutionHostId,
     activeWorkspaceKey: (() => {

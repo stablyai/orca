@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { recoveryBindingKeyString } from '../../../shared/cross-machine-recovery-binding-key'
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
 import { resumeRecoveryBindingWithHost } from './recovery-resume'
@@ -9,11 +9,7 @@ const BINDING = { agent: 'claude' as const, key: 'session_id' as const, id: SESS
 
 describe('recovery import replay', () => {
   it('finishes an import that crashed between the layout apply and the provenance write', async () => {
-    const f = fixture()
-    const writeProvenance = f.host.updateRecoveryProvenance
-    f.host.updateRecoveryProvenance = vi
-      .fn(writeProvenance)
-      .mockRejectedValueOnce(new Error('crashed before provenance'))
+    const f = fixture({ rejectProvenanceOnce: new Error('crashed before provenance') })
     const request = { descriptor: descriptor(), checkoutPath: f.checkout, checkpointId: 'cp-1' }
     await expect(importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)).rejects.toThrow(
       'crashed before provenance'
@@ -33,12 +29,54 @@ describe('recovery import replay', () => {
     expect(f.ensureAgentSession).not.toHaveBeenCalled()
   })
 
+  it('finishes a binding-less import that crashed between the layout apply and the provenance write', async () => {
+    const f = fixture({ rejectProvenanceOnce: new Error('crashed before provenance') })
+    const request = {
+      descriptor: { ...descriptor(), bindings: [] },
+      checkoutPath: f.checkout,
+      checkpointId: 'cp-1'
+    }
+    await expect(importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)).rejects.toThrow(
+      'crashed before provenance'
+    )
+    const appliedTabs = f.getSession().tabsByWorktree[f.worktreeId]
+
+    const retry = await importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)
+
+    expect(retry).toMatchObject({ disposition: 'replayed', bindings: [] })
+    expect(f.host.getWorktreeMeta(f.worktreeId)?.recoveryProvenance).toEqual(retry.provenance)
+    expect(retry.provenance).toMatchObject({ importKey: retry.importKey, checkpointId: 'cp-1' })
+    expect(f.getSession().tabsByWorktree[f.worktreeId]).toEqual(appliedTabs)
+  })
+
+  it('never re-applies the layout of a crashed import after its tabs were closed', async () => {
+    const f = fixture({ rejectProvenanceOnce: new Error('crashed before provenance') })
+    const request = {
+      descriptor: { ...descriptor(), bindings: [] },
+      checkoutPath: f.checkout,
+      checkpointId: 'cp-1'
+    }
+    await expect(importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)).rejects.toThrow(
+      'crashed before provenance'
+    )
+    const crashed = f.getSession()
+    const closed = {
+      ...crashed,
+      tabsByWorktree: { ...crashed.tabsByWorktree, [f.worktreeId]: [] },
+      unifiedTabs: { ...crashed.unifiedTabs, [f.worktreeId]: [] },
+      openFilesByWorktree: { ...crashed.openFilesByWorktree, [f.worktreeId]: [] }
+    }
+    f.setSession(closed)
+
+    const retry = await importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)
+
+    expect(retry.disposition).toBe('replayed')
+    expect(f.getSession()).toEqual(closed)
+    expect(f.host.getWorktreeMeta(f.worktreeId)?.recoveryProvenance).toEqual(retry.provenance)
+  })
+
   it('still refuses a crashed import whose destination also holds a foreign record', async () => {
-    const f = fixture()
-    const writeProvenance = f.host.updateRecoveryProvenance
-    f.host.updateRecoveryProvenance = vi
-      .fn(writeProvenance)
-      .mockRejectedValueOnce(new Error('crashed before provenance'))
+    const f = fixture({ rejectProvenanceOnce: new Error('crashed before provenance') })
     const request = { descriptor: descriptor(), checkoutPath: f.checkout, checkpointId: 'cp-1' }
     await expect(
       importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)

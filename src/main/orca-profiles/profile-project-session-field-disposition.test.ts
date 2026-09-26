@@ -147,6 +147,7 @@ describe('workspace session field disposition census', () => {
       'activeGroupIdByWorktree',
       'lastVisitedAtByWorktreeId',
       'defaultTerminalTabsAppliedByWorktreeId',
+      'recoveryImportKeyByWorktreeId',
       'terminalTopologyRevisionByRepoId'
     ])
   })
@@ -161,6 +162,7 @@ describe('workspace session field disposition census', () => {
       'activeGroupIdByWorktree',
       'lastVisitedAtByWorktreeId',
       'defaultTerminalTabsAppliedByWorktreeId',
+      'recoveryImportKeyByWorktreeId',
       'terminalTopologyRevisionByRepoId'
     ])
   })

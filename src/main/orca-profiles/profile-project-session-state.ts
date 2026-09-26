@@ -94,6 +94,10 @@ export function mergeWorkspaceSessions(
       ...base.defaultTerminalTabsAppliedByWorktreeId,
       ...incoming.defaultTerminalTabsAppliedByWorktreeId
     },
+    recoveryImportKeyByWorktreeId: {
+      ...base.recoveryImportKeyByWorktreeId,
+      ...incoming.recoveryImportKeyByWorktreeId
+    },
     terminalPtyIncarnationsByPaneKey: {
       ...base.terminalPtyIncarnationsByPaneKey,
       ...incoming.terminalPtyIncarnationsByPaneKey

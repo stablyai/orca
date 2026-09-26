@@ -214,6 +214,7 @@ export function migrateWorktreeIdentity(
     }
     sessionChanged =
       moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId) || sessionChanged
+    sessionChanged = moveSessionKey(session.recoveryImportKeyByWorktreeId) || sessionChanged
     if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
       session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
         id === oldWorktreeId ? newWorktreeId : id

@@ -13,7 +13,7 @@ import type {
   RecoveryImportResult,
   RecoveryProvenance
 } from '../../../shared/cross-machine-recovery-descriptor'
-import { worktreeHasSessionTabs } from '../../../shared/cross-machine-recovery-session-ops'
+import { recoveryImportDestination } from '../../../shared/cross-machine-recovery-session-ops'
 import type { CrossMachineRecoveryImportParams } from '../../../shared/rpc-contract/cross-machine-recovery-params'
 import { OrcaRecoveryDescriptorV1Schema } from '../../../shared/rpc-contract/cross-machine-recovery-params'
 import { readRepoCommonDirFromGit } from '../../git/worktree-list-reader'
@@ -23,7 +23,7 @@ import {
   planRecoveryImport,
   type RecoveryPlanContext
 } from './recovery-import-plan'
-import { holdsOnlyRecoveryImport, replayRecoveryImport } from './recovery-import-replay'
+import { replayRecoveryImport } from './recovery-import-replay'
 import { resumeSelectedRecoveryBindings } from './recovery-resume'
 import { applyRecoverySessionIdMap } from './recovery-session-id-map'
 import type { CrossMachineRecoveryHost } from './recovery-runtime-host'
@@ -185,15 +185,19 @@ async function importIntoWorktree(
     },
     presentationSource: plan.presentationSource
   }
-  if (worktreeHasSessionTabs(session, worktree.id)) {
-    // Why: a crash between the layout apply and the provenance write leaves only this import's dormant records.
-    if (!holdsOnlyRecoveryImport(session, worktree.id, importKey)) {
-      throw new Error('recovery_destination_not_empty')
-    }
+  // Why: the layout write carries its importKey, so a crash before the provenance write replays.
+  const finishLanded = async (): Promise<RecoveryImportResult> => {
     if (!params.dryRun) {
       await host.updateRecoveryProvenance(worktree.id, () => provenance)
     }
     return await replayRecoveryImport(host, { ...replay, provenance })
+  }
+  const destination = recoveryImportDestination(session, worktree.id, importKey)
+  if (destination === 'occupied') {
+    throw new Error('recovery_destination_not_empty')
+  }
+  if (destination === 'landed') {
+    return await finishLanded()
   }
   const result = {
     ...base,
@@ -207,11 +211,15 @@ async function importIntoWorktree(
   }
   const outcome = await host.applyOp({
     kind: 'import',
+    importKey,
     fragment: plan.fragment,
     records: plan.bindings.flatMap((p) => (p.record ? [p.record] : []))
   })
   if (!outcome.ok) {
     throw new Error(outcome.code)
+  }
+  if (outcome.alreadyApplied) {
+    return await finishLanded()
   }
   await host.updateRecoveryProvenance(worktree.id, () => provenance)
   const bindings = await resumeSelectedRecoveryBindings(

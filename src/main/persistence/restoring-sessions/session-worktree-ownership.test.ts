@@ -32,7 +32,8 @@ const OWNER_KEYED_FIELD_VALUES = [
   ['tabGroupLayouts', { type: 'leaf', groupId: 'group-1' }],
   ['activeGroupIdByWorktree', 'group-1'],
   ['lastVisitedAtByWorktreeId', 0],
-  ['defaultTerminalTabsAppliedByWorktreeId', true]
+  ['defaultTerminalTabsAppliedByWorktreeId', true],
+  ['recoveryImportKeyByWorktreeId', 'import-key']
 ] as const satisfies readonly [keyof WorkspaceSessionState, unknown][]
 
 describe('workspace session worktree ownership', () => {

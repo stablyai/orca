@@ -27,7 +27,8 @@ const WORKSPACE_CHROME_SESSION_FIELDS = [
 // unfiltered regardless (the post-scan re-prune reaps stale entries).
 const WORKSPACE_HISTORY_SESSION_FIELDS = [
   'lastVisitedAtByWorktreeId',
-  'defaultTerminalTabsAppliedByWorktreeId'
+  'defaultTerminalTabsAppliedByWorktreeId',
+  'recoveryImportKeyByWorktreeId'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 // Why: selection markers can outlive their content and cannot restore anything by themselves.

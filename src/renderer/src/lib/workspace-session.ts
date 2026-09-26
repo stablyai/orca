@@ -60,11 +60,16 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'closedTerminalTabTombstonesByTabId'
 > & {
   activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
+  recoveryImportKeyByWorktreeId?: AppState['recoveryImportKeyByWorktreeId']
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
   clientHostedBrowserCloseIntentsByEnvironment?: AppState['clientHostedBrowserCloseIntentsByEnvironment']
   /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
   pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
   deferredSshSessionIdsByTabId?: AppState['deferredSshSessionIdsByTabId']
+}
+
+export function nonEmptyRecord<T>(record?: Record<string, T>): Record<string, T> | undefined {
+  return record && Object.keys(record).length > 0 ? record : undefined
 }
 
 // Why: shallow-equality gate for the debounced session writer; _exhaustive below keeps it in sync with the snapshot type.
@@ -100,6 +105,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
+  'recoveryImportKeyByWorktreeId',
   'closedTerminalTabTombstonesByTabId',
   'sleepingAgentSessionsByPaneKey',
   'clientHostedBrowserCloseIntentsByEnvironment',
@@ -325,11 +331,10 @@ export function buildWorkspaceSessionPayload(
     remoteSessionIdsByTabId: terminalSessionData.remoteSessionIdsByTabId,
     // Why: omit when empty so builds that never stamped focus-recency don't bloat the payload. See docs/cmd-j-empty-query-ordering.md.
     lastVisitedAtByWorktreeId: buildLastVisitedAtByWorktreeId(snapshot),
-    defaultTerminalTabsAppliedByWorktreeId:
-      snapshot.defaultTerminalTabsAppliedByWorktreeId &&
-      Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
-        ? snapshot.defaultTerminalTabsAppliedByWorktreeId
-        : undefined,
+    defaultTerminalTabsAppliedByWorktreeId: nonEmptyRecord(
+      snapshot.defaultTerminalTabsAppliedByWorktreeId
+    ),
+    recoveryImportKeyByWorktreeId: nonEmptyRecord(snapshot.recoveryImportKeyByWorktreeId),
     closedTerminalTabTombstonesByTabId: buildPersistedClosedTerminalTabTombstones(
       snapshot.closedTerminalTabTombstonesByTabId
     ),

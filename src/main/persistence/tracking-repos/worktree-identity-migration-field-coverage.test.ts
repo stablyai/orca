@@ -159,6 +159,9 @@ const REFERENCE_FIXTURES: Partial<Record<SessionField, Partial<WorkspaceSessionS
   defaultTerminalTabsAppliedByWorktreeId: {
     defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true }
   },
+  recoveryImportKeyByWorktreeId: {
+    recoveryImportKeyByWorktreeId: { [OLD]: 'import-key' }
+  },
   sleepingAgentSessionsByPaneKey: {
     sleepingAgentSessionsByPaneKey: {
       'tab-1:leaf': {

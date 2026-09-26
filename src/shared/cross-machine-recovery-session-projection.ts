@@ -35,6 +35,7 @@ export const RECOVERY_SESSION_FIELD_POLICY = {
   remoteSessionIdsByTabId: 'drop',
   lastVisitedAtByWorktreeId: 'drop',
   defaultTerminalTabsAppliedByWorktreeId: 'drop',
+  recoveryImportKeyByWorktreeId: 'drop',
   sleepingAgentSessionsByPaneKey: 'export',
   terminalPtyIncarnationsByPaneKey: 'drop',
   terminalTopologyRevisionByRepoId: 'drop',

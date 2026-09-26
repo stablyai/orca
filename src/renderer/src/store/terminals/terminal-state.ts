@@ -113,6 +113,8 @@ export type TerminalState = {
   /** Partition each restored session key was read from, so a write returns its rows there. */
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
+  /** Cross-machine recovery import whose layout each worktree holds; see WorkspaceSessionState. */
+  recoveryImportKeyByWorktreeId: Record<string, string>
   closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId
   hydrationSucceeded: boolean
   pendingReconnectWorktreeIds: string[]
