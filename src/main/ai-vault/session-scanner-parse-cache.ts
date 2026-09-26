@@ -51,6 +51,8 @@ function resumableStateFactoryFor(
   switch (candidate.agent) {
     case 'claude':
       return (messages) => createClaudeSessionResumeState(candidate.file, messages)
+    case 'openclaude':
+      return (messages) => createClaudeSessionResumeState(candidate.file, messages, 'openclaude')
     case 'codex':
       return (messages) =>
         createCodexSessionResumeState(candidate.file, candidate.codexHome, messages)

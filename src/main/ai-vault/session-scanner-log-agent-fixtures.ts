@@ -32,6 +32,20 @@ export async function writeLogAgentFixtures(
     ])
   )
 
+  await mkdir(join(roots.openclaudeProjectsDir, 'project'), { recursive: true })
+  await writeFile(
+    join(roots.openclaudeProjectsDir, 'project', 'openclaude-session.jsonl'),
+    jsonlBody([
+      {
+        type: 'user',
+        sessionId: 'openclaude-session',
+        timestamp: '2026-05-01T10:00:00.000Z',
+        cwd: '/tmp/openclaude',
+        message: { role: 'user', content: 'OpenClaude title' }
+      }
+    ])
+  )
+
   await mkdir(join(roots.codexSessionsDir, '2026', '05', '01'), { recursive: true })
   await writeFile(
     join(roots.codexSessionsDir, '2026', '05', '01', 'rollout-2026-codex-session.jsonl'),

@@ -64,7 +64,7 @@ export const AiVaultSessionTitlesParams = z.object({
   requests: z
     .array(
       z.object({
-        agent: z.enum(['claude', 'codex']),
+        agent: z.enum(['claude', 'openclaude', 'codex']),
         sessionId: z.string().min(1).max(512),
         transcriptPath: z.string().min(1).max(32_768).optional()
       })

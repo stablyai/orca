@@ -7,6 +7,10 @@ import { resolveOmpSessionsDir } from './omp-session-root'
 // the IPC listers use the root enumerations below to reject arbitrary paths.
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 
+// OpenClaude is a Claude Code fork: same `<projects>/<encoded-cwd>/<id>.jsonl`
+// layout under its own home, so it reuses the Claude parser and root shape.
+const OPENCLAUDE_PROJECTS_DIR = join(homedir(), '.openclaude', 'projects')
+
 // The local host and each WSL distro's `~/.claude/projects`. Callers reading
 // Claude session files by path use these roots to reject arbitrary paths.
 export function claudeProjectsRootDirs(args: {
@@ -16,6 +20,17 @@ export function claudeProjectsRootDirs(args: {
   return [
     args.claudeProjectsDir ?? CLAUDE_PROJECTS_DIR,
     ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.claude', 'projects'))
+  ]
+}
+
+// The local host and each WSL distro's `~/.openclaude/projects`.
+export function openclaudeProjectsRootDirs(args: {
+  openclaudeProjectsDir?: string
+  wslHomeDirs?: readonly string[]
+}): string[] {
+  return [
+    args.openclaudeProjectsDir ?? OPENCLAUDE_PROJECTS_DIR,
+    ...(args.wslHomeDirs ?? []).map((homeDir) => join(homeDir, '.openclaude', 'projects'))
   ]
 }
 
