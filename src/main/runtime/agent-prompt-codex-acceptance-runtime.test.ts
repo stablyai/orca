@@ -39,6 +39,7 @@ async function createCodexRuntime(
   let handle = ''
   const hook: HookRow = { state: 'done', stateStartedAt: Date.now() }
   const enterTimes: number[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared worktree store fixture implements only the lookups createTerminal reads.
   const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
     getAgentStatusSnapshot: () => [
       {
