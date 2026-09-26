@@ -121,9 +121,9 @@ beforeEach(() => {
 })
 
 describe.each([
-  { shape: 'canonical', fields: { executionHostId: 'ssh:host-a' as const } },
-  { shape: 'legacy', fields: { connectionId: 'host-a' } }
-])('$shape SSH listing', ({ fields }) => {
+  { hostEncoding: 'canonical', fields: { executionHostId: 'ssh:host-a' as const } },
+  { hostEncoding: 'legacy', fields: { connectionId: 'host-a' } }
+])('$hostEncoding SSH listing', ({ fields }) => {
   it.each(channels)('keeps %s on the direct SSH boundary', async (channel) => {
     fixture(fields)
     const result = await invoke(channel)
