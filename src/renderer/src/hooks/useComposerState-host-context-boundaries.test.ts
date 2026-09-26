@@ -454,15 +454,14 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain("branchAutoNameRef.current = ''")
   })
 
-  it('forces repo-scoped source reset when returning from folder target to a repo with the same id', () => {
+  // The caller half — that a project switch passes `forceResetStartFrom: isProjectGroupTarget`, and
+  // that the reset actually runs — is covered behaviourally against the real `handleRepoChange` in
+  // composer-state/project-target-actions.test.ts ("returning from a folder target to a repo with
+  // the same id"), so it survives renaming the local that holds the resolved repo id.
+  it('keeps the same-id early return escapable', () => {
     const handleRepoChange = COMPOSER_SOURCE.targetChange
     expect(handleRepoChange).toContain('forceResetStartFrom?: boolean')
     expect(handleRepoChange).toContain('value === repoId && !options.forceResetStartFrom')
-
-    const handleProjectChange = COMPOSER_SOURCE.projectTarget
-    expect(handleProjectChange).toContain(
-      'handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })'
-    )
   })
 
   it('keeps a Linear branch override when its workspace-scoped issue survives a repo change', () => {

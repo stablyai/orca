@@ -219,9 +219,9 @@ describe('buildProjectHostSetupOptions', () => {
     )
   })
 
-  it('collapses duplicate ready setups on one host to the setup creation actually uses', () => {
-    // Why: a linked worktree added as its own project projected a second ready `local` setup for the
-    // same project, which rendered as repeated identical "Local Mac" rows separated only by path.
+  it('offers every ready setup on one host so the sibling checkouts stay reachable', () => {
+    // Why (STA-6080): a linked worktree added as its own project projects a second ready `local`
+    // setup. Collapsing them left creation aimed at whichever came first, with no way to pick another.
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('main-checkout'), repo('worktree-a'), repo('worktree-b')],
@@ -236,18 +236,24 @@ describe('buildProjectHostSetupOptions', () => {
     })
 
     expect(options).toEqual([
-      expect.objectContaining({ id: 'main', kind: 'ready', label: LOCAL_HOST_LABEL })
+      expect.objectContaining({
+        id: 'main',
+        kind: 'ready',
+        label: LOCAL_HOST_LABEL,
+        path: '/Users/dev/projects/orca'
+      }),
+      expect.objectContaining({ id: 'dup-a', kind: 'ready', path: '/Users/dev/worktrees/pr-1908' }),
+      expect.objectContaining({ id: 'dup-b', kind: 'ready', path: '/Users/dev/worktrees/pr-3235' })
     ])
   })
 
-  it('keeps one ready choice per host when a project is set up on several hosts', () => {
+  it('lists each host once when a project has a single ready setup per host', () => {
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('local-repo'), repo('local-dup'), repo('remote-repo')],
       hosts: [host('local'), host('ssh:builder', { label: 'Builder' })],
       projectHostSetups: [
         setup('local', 'project-1', 'local', 'local-repo'),
-        setup('local-dup', 'project-1', 'local', 'local-dup'),
         setup('remote', 'project-1', 'ssh:builder', 'remote-repo')
       ]
     })

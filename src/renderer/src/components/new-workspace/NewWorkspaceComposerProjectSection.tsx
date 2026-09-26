@@ -36,6 +36,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   focusNameInput: () => void
   shouldShowRunTargetPicker: boolean
   projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
+  runTargetChoiceCandidates: NewWorkspaceComposerCardProps['runTargetChoiceCandidates']
   ephemeralVmRecipes: EphemeralVmRecipeOption[]
   handleProjectHostSetupChange: (setupId: string) => void
   handleAddSshHost: () => void
@@ -61,6 +62,7 @@ export function NewWorkspaceComposerProjectSection({
   focusNameInput,
   shouldShowRunTargetPicker,
   projectHostSetupOptions,
+  runTargetChoiceCandidates,
   selectedProjectHostSetupId,
   handleProjectHostSetupChange,
   ephemeralVmRecipes,
@@ -157,6 +159,15 @@ export function NewWorkspaceComposerProjectSection({
             onConnectHost={handleConnectRunTargetHost}
             onSetLocation={handleSetLocation}
           />
+          {runTargetChoiceCandidates && runTargetChoiceCandidates.length > 1 ? (
+            <p role="status" className="text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.NewWorkspaceComposerCard.runTargetChoiceRequired',
+                'This project is set up in {{value0}} places. Choose which one to create in.',
+                { value0: runTargetChoiceCandidates.length }
+              )}
+            </p>
+          ) : null}
           {ephemeralVmRecipeError ? (
             <p className="whitespace-pre-line text-[11px] text-destructive">
               {ephemeralVmRecipeError}

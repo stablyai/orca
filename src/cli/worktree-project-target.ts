@@ -1,4 +1,8 @@
 import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
+import {
+  chooseReadyProjectHostSetup,
+  isReadyProjectHostSetup
+} from '../shared/project-host-setup-choice'
 import type { ProjectHostSetup } from '../shared/project-types'
 import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
 import type { RuntimeClient } from './runtime-client'
@@ -59,11 +63,41 @@ function findReadySetupOnHost(
 ): ProjectHostSetup | undefined {
   const candidates = setups.filter((candidate) => candidate.projectId === projectId)
   if (!host) {
-    return candidates[0]
+    return pickSingleSetup(candidates, projectId, undefined)
   }
-  return (
-    candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
-    candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
+  const exact = candidates.filter(
+    (candidate) => normalizeExecutionHostId(candidate.hostId) === host.id
+  )
+  if (exact.length > 0) {
+    return pickSingleSetup(exact, projectId, host)
+  }
+  // Why: `local` means "the box that answered", which is the same machine as `runtime:<id>` only
+  // when the command already runs there, so the broader filter is a last resort, not a peer.
+  return pickSingleSetup(
+    candidates.filter((candidate) => hostFilterMatchesHostId(host, candidate.hostId)),
+    projectId,
+    host
+  )
+}
+
+function pickSingleSetup(
+  matches: readonly ProjectHostSetup[],
+  projectId: string | undefined,
+  host: ParsedExecutionHost | undefined
+): ProjectHostSetup | undefined {
+  const choice = chooseReadyProjectHostSetup(matches)
+  if (choice.status !== 'ambiguous') {
+    return choice.status === 'single' ? choice.setup : undefined
+  }
+  // Why: list the id alongside the path — the remedy we name is `--project-host-setup <id>`, so an
+  // error that prints only paths asks for something it never showed.
+  const listed = choice.candidates
+    .map((candidate) => `  ${terminalSafe(candidate.id)}  ${terminalSafe(candidate.path)}`)
+    .join('\n')
+  const where = host ? ` on ${host.id}` : ''
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `"${projectId}" has ${choice.candidates.length} ready setups${where}; pass --project-host-setup <id> to choose one:\n${listed}`
   )
 }
 
@@ -91,9 +125,9 @@ export async function resolveProjectCreateTarget(
     }
     throw error
   }
-  const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
+  const ready = result.result.setups.filter(isReadyProjectHostSetup)
   const setup = projectHostSetupId
-    ? ready.find((candidate) => candidate.id === projectHostSetupId)
+    ? findReadySetupById(ready, projectHostSetupId)
     : findReadySetupOnHost(ready, projectId, host)
   if (!setup) {
     throw new RuntimeClientError(
@@ -107,4 +141,29 @@ export async function resolveProjectCreateTarget(
     repoSelector: `id:${setup.repoId}`,
     setup
   }
+}
+
+function findReadySetupById(
+  setups: readonly ProjectHostSetup[],
+  requestedId: string
+): ProjectHostSetup | undefined {
+  // Raw ids take precedence for backwards compatibility; the escaped form is only a fallback for
+  // ids copied from the ambiguity diagnostic.
+  return (
+    setups.find((candidate) => candidate.id === requestedId) ??
+    setups.find((candidate) => terminalSafe(candidate.id) === requestedId)
+  )
+}
+
+// Why: setup ids and paths are persisted metadata printed straight to a terminal, so anything that
+// can move the cursor, change colour, reorder text, or hide characters could forge a setup line.
+// Backslash is escaped FIRST — otherwise an id containing the literal text "\u000a" renders
+// identically to one containing a real newline, and the printed id could not be copied back into
+// --project-host-setup unambiguously.
+function terminalSafe(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(
+    // eslint-disable-next-line no-control-regex
+    /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g,
+    (ch) => `\\u${ch.codePointAt(0)!.toString(16).padStart(4, '0')}`
+  )
 }
