@@ -49,11 +49,8 @@ const target = (state: VisibleBrowserLinkState, wt = WT) =>
   findVisibleBrowserLinkTarget(state, wt)?.targetGroupId
 
 describe('findVisibleBrowserLinkTarget', () => {
-  it('returns the group and the fixed-placement flag', () => {
-    expect(findVisibleBrowserLinkTarget(fixture(), WT)).toEqual({
-      targetGroupId: 'right',
-      placementFixed: true
-    })
+  it('returns the most recently focused browser group', () => {
+    expect(findVisibleBrowserLinkTarget(fixture(), WT)).toEqual({ targetGroupId: 'right' })
   })
 
   it('prefers the focused group when it shows a browser', () => {
