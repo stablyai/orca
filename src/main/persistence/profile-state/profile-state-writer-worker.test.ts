@@ -2,7 +2,7 @@ import { build } from 'esbuild'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
 import { openProfileStateDatabase } from './profile-state-database'
@@ -266,12 +266,26 @@ describe('persistent profile state write worker', () => {
       })
     `
       )
-      const client = clientFor(f.initialization, broken, 150)
+      const client = clientFor(f.initialization, broken)
       await client.ready
-      const failure = await client
-        .writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-        .catch((error: unknown) => error)
-      expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
+      if (mode === 'timeout') {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      }
+      try {
+        const failure = client
+          .writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
+          .catch((error: unknown) => error)
+        if (mode === 'timeout') {
+          await vi.advanceTimersByTimeAsync(5000)
+        }
+        const observedFailure = await failure
+        expect(profileStateWriterFailureOutcome(observedFailure)).toBe('indeterminate')
+        if (mode === 'timeout') {
+          expect(observedFailure).toMatchObject({ code: 'profile-state-writer-timeout' })
+        }
+      } finally {
+        vi.useRealTimers()
+      }
       await client.close()
       expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
       rmSync(f.root, { recursive: true })
