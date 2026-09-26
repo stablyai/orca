@@ -46,6 +46,14 @@ export const WORKTREE_HOST_UNRESOLVED_CODE = 'editor_host_workspace_unresolved'
 export const WORKTREE_HOST_UNRESOLVED_ERROR =
   "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
 
+/**
+ * Sentinel for files exceeding the host preview or transport budget (#21689).
+ */
+export const FILE_TOO_LARGE_CODE = 'file_too_large'
+
+/** English fallback for file-too-large errors; localized in EditorFileLoadErrorView. */
+export const FILE_TOO_LARGE_ERROR = 'This document is too large for the server to send in full.'
+
 export type FileContent = {
   content: string
   isBinary: boolean

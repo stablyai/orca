@@ -2,6 +2,7 @@ import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } 
 import type { OpenFile } from '@/store/slices/editor'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import {
+  FILE_TOO_LARGE_CODE,
   WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE,
   WORKTREE_HOST_UNRESOLVED_CODE,
   WORKTREE_HOST_UNRESOLVED_ERROR,
@@ -52,7 +53,11 @@ type UseEditorPanelFileLoadRetryParams = {
 export function shouldRetryFileLoadError(message: string, code?: string): boolean {
   // Terminal: a retry budget is spent; only an explicit Retry should restart it,
   // never the automatic backoff.
-  if (message === WORKTREE_OWNER_UNREACHABLE_ERROR || code === WORKTREE_HOST_UNRESOLVED_CODE) {
+  if (
+    message === WORKTREE_OWNER_UNREACHABLE_ERROR ||
+    code === WORKTREE_HOST_UNRESOLVED_CODE ||
+    code === FILE_TOO_LARGE_CODE
+  ) {
     return false
   }
   const lower = message.toLowerCase()
@@ -60,7 +65,8 @@ export function shouldRetryFileLoadError(message: string, code?: string): boolea
     !lower.includes('access denied') &&
     !lower.includes('enoent') &&
     !lower.includes('no such file') &&
-    !lower.includes('file too large')
+    !lower.includes('file too large') &&
+    !lower.includes(FILE_TOO_LARGE_CODE)
   )
 }
 

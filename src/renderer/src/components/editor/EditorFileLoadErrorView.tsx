@@ -1,7 +1,10 @@
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
+import {
+  FILE_TOO_LARGE_CODE,
+  WORKTREE_HOST_UNRESOLVED_CODE
+} from './editor-panel-content-types'
 
 // Why: `loadError` is stored as English so logs and non-view consumers stay readable; the
 // user-facing copy is keyed by the machine sentinel, never by the text, so localization
@@ -11,6 +14,12 @@ function localizeFileLoadError(message: string, code: string | undefined): strin
     return translate(
       'editor.fileLoad.hostUnresolved',
       "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
+    )
+  }
+  if (code === FILE_TOO_LARGE_CODE || message === FILE_TOO_LARGE_CODE) {
+    return translate(
+      'editor.fileLoad.fileTooLarge',
+      'This document is too large for the server to send in full.'
     )
   }
   return message
