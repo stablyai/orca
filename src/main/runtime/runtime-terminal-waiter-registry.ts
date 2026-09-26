@@ -63,6 +63,9 @@ export class RuntimeTerminalWaiterRegistry {
     if (waiter.cancelIdlePoll) {
       waiter.cancelIdlePoll()
     }
+    if (waiter.cancelVisibleProbe) {
+      waiter.cancelVisibleProbe()
+    }
     if (waiter.abortCleanup) {
       waiter.abortCleanup()
       waiter.abortCleanup = null
