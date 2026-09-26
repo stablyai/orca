@@ -20,6 +20,7 @@ export type WorktreeStatus =
   | 'interrupted'
   | 'done'
   | 'inactive'
+  | 'unverifiable'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -37,7 +38,8 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   permission: 'Needs permission',
   interrupted: 'Interrupted',
   done: 'Done',
-  inactive: 'Inactive'
+  inactive: 'Inactive',
+  unverifiable: 'Status unavailable — agent hooks are missing or unreadable'
 }
 
 export function getWorktreeStatus(
@@ -184,6 +186,8 @@ export function resolveWorktreeStatus(args: {
   hasInterrupted?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  /** No hook can reach Orca for this worktree's live agents, so no dot state is observed. */
+  hooksUnverifiable?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
@@ -214,6 +218,10 @@ export function resolveWorktreeStatus(args: {
   // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
   if (args.hasInterrupted) {
     return 'interrupted'
+  }
+  // Positive signals prove activity; inactive makes no agent-status claim.
+  if (args.hooksUnverifiable && heuristic !== 'inactive') {
+    return 'unverifiable'
   }
   if (args.hasLiveDone || args.hasRetainedDone) {
     return 'done'

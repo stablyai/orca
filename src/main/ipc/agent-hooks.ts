@@ -7,6 +7,10 @@ import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrup
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
 import { agentHookServer } from '../agent-hooks/server'
 import { getMigrationUnsupportedPtySnapshot } from '../agent-hooks/migration-unsupported-pty-state'
+import {
+  registerAgentHookInstallStatusIpc,
+  removeAgentHookInstallStatusIpc
+} from './agent-hook-install-status-ipc'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { registerAgentStatusRowTeardownIpcHandlers } from './agent-status-row-teardown-ipc'
 import { createAgentPaneAuthorityOwnership } from './agent-pane-authority-ownership'
@@ -73,4 +77,7 @@ export function registerAgentHookHandlers(
     'agentStatus:getMigrationUnsupportedSnapshot',
     (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()
   )
+
+  removeAgentHookInstallStatusIpc()
+  registerAgentHookInstallStatusIpc()
 }

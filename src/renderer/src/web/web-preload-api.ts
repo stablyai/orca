@@ -112,6 +112,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     codexAccounts: createCodexAccountsApi(),
     claudeAccounts: createClaudeAccountsApi(),
     cli: createCliApi(),
+    // Local hook config does not answer for a paired runtime host.
+    agentHooks: { installStatuses: () => Promise.resolve([]) },
     macosTccPrompts: createMacosTccPromptsApi(),
     codexConfigSync: {
       status: () =>
