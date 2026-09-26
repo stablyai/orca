@@ -13,11 +13,13 @@ import {
   isFloatingWorkspacePanelShortcutTarget,
   isFloatingWorkspaceTerminalInputTarget,
   isFloatingWorkspacePanelVisible,
+  launchFloatingWorkspaceAgentShortcut,
   matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
 import { matchFloatingWorkspacePanelOwnedAction } from './floating-workspace-shortcut-policy'
+import { toast } from 'sonner'
 
 const activateWebRuntimeSessionTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
@@ -25,6 +27,7 @@ const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 const createUntitledMarkdownFileWithTemplateSelectionMock = vi.hoisted(() => vi.fn())
 const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
 const isWebRuntimeSessionActiveMock = vi.hoisted(() => vi.fn())
+const launchAgentInNewTabMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
@@ -41,6 +44,10 @@ vi.mock('./create-untitled-markdown', () => ({
 vi.mock('./connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
+
+vi.mock('./launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchAgentInNewTabMock }))
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 vi.mock('./focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: focusTerminalTabSurfaceMock
@@ -781,5 +788,39 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
 
     expect(handleEmptyFloatingWorkspacePanelCloseShortcut(event, 'darwin')).toBe(false)
     expect(event.preventDefault).not.toHaveBeenCalled()
+  })
+})
+
+describe('launchFloatingWorkspaceAgentShortcut', () => {
+  const store = { activateTab: vi.fn(), setActiveTabForWorktree: vi.fn() }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('selects and focuses the new agent tab in the floating group', () => {
+    launchAgentInNewTabMock.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'agent-tab' }
+    })
+    launchFloatingWorkspaceAgentShortcut(store, 'claude')
+    expect(launchAgentInNewTabMock).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'claude', worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    )
+    expect(store.activateTab).toHaveBeenCalledWith('agent-tab')
+    expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('agent-tab')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('reports a launch command that could not be built', () => {
+    launchAgentInNewTabMock.mockReturnValue(null)
+    launchFloatingWorkspaceAgentShortcut(store, 'claude')
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(store.activateTab).not.toHaveBeenCalled()
+  })
+
+  it('reports a missing agent without launching anything', () => {
+    launchFloatingWorkspaceAgentShortcut(store, null)
+    expect(toast.message).toHaveBeenCalledTimes(1)
+    expect(launchAgentInNewTabMock).not.toHaveBeenCalled()
   })
 })

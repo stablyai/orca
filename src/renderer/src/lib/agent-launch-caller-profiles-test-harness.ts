@@ -60,7 +60,7 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
   },
   {
     id: 'floating-default-agent',
-    caller: 'src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx',
+    caller: 'src/renderer/src/lib/floating-workspace-tab-creation.ts',
     sourceMarkers: [
       'worktreeId: FLOATING_TERMINAL_WORKTREE_ID',
       "launchSource: 'shortcut'",

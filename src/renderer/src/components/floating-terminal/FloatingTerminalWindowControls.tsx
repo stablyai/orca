@@ -4,10 +4,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { createFloatingWorkspaceAgentTab } from '@/lib/floating-workspace-tab-creation'
 import { useAppStore } from '@/store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   isTuiAgentEnabled
@@ -38,8 +36,6 @@ export function FloatingTerminalWindowControls({
   onMinimize
 }: FloatingTerminalWindowControlsProps): React.JSX.Element {
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
-  const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
-  const activateTab = useAppStore((s) => s.activateTab)
   const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
   const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
 
@@ -64,20 +60,7 @@ export function FloatingTerminalWindowControls({
     if (!defaultAgent) {
       return
     }
-    // Why: the shared launcher owns the startup plan, the route and the tab identity, so this
-    // button stays one more caller of it rather than a second copy of new-agent-tab startup.
-    // Floating resolves the terminal-backed lane: a chat view over a PTY when the chat default is
-    // on, never a structured session.
-    const result = launchAgentInNewTab({
-      agent: defaultAgent,
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      launchSource: 'shortcut',
-      // Why: `agent-auto-ack-targets` relies on the floating panel's active tab never becoming the
-      // global `activeTabId`; activating here would also flip the main view off an open editor.
-      // This selects within the floating group below instead.
-      activate: false
-    })
-    if (!result) {
+    if (!createFloatingWorkspaceAgentTab(useAppStore.getState(), defaultAgent)) {
       toast.error(
         translate(
           'auto.components.floating.terminal.FloatingTerminalWindowControls.82da3701e7',
@@ -85,19 +68,8 @@ export function FloatingTerminalWindowControls({
           { value0: defaultAgentLabel ?? defaultAgent }
         )
       )
-      return
     }
-    if (result.surface.kind !== 'local-terminal') {
-      return
-    }
-    // Why: the floating panel renders its visible tab from the unified group's
-    // activeTabId. setActiveTabForWorktree only writes activeTabIdByWorktree, so
-    // the new agent tab would be appended but never selected/focused. activateTab
-    // selects it within the group, matching the empty-state tab creators.
-    setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, result.surface.tabId)
-    activateTab(result.surface.tabId)
-    focusTerminalTabSurface(result.surface.tabId)
-  }, [activateTab, defaultAgent, defaultAgentLabel, setActiveTabForWorktree])
+  }, [defaultAgent, defaultAgentLabel])
 
   return (
     <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>

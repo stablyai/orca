@@ -5,12 +5,20 @@ import {
   matchFloatingWorkspacePanelOwnedAction,
   matchFloatingWorkspacePanelShortcut
 } from '@/lib/floating-workspace-shortcut-policy'
-import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
+import {
+  isFloatingWorkspaceTerminalInputTarget,
+  launchFloatingWorkspaceAgentShortcut
+} from '@/lib/floating-workspace-terminal-actions'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rename-request'
+import { resolveTerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { KeybindingContext, KeybindingMatchOptions } from '../../../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  type KeybindingContext,
+  type KeybindingMatchOptions
+} from '../../../../shared/keybindings'
 import type {
   FloatingPanelShortcutInput,
   FloatingPanelShortcutResolution,
@@ -98,6 +106,15 @@ export function useFloatingTerminalPanelShortcuts({
       ) {
         return { kind: 'close', focusedFloatingTerminal }
       }
+      const agentShortcut = resolveTerminalAgentTabShortcut({
+        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        keybindings: state.keybindings,
+        matchShortcut: (actionId) =>
+          keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
+      })
+      if (agentShortcut.actionId) {
+        return { kind: 'agent', agent: agentShortcut.agent }
+      }
       const panelShortcut = matchFloatingWorkspacePanelShortcut(
         input,
         platform,
@@ -154,6 +171,11 @@ export function useFloatingTerminalPanelShortcuts({
         } else {
           onOpenChange(false)
         }
+        return 'handled'
+      }
+      if (resolution.kind === 'agent') {
+        consume()
+        launchFloatingWorkspaceAgentShortcut(useAppStore.getState(), resolution.agent)
         return 'handled'
       }
       if (resolution.kind === 'index') {
