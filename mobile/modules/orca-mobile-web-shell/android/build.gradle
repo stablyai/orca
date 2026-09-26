@@ -12,9 +12,16 @@ useDefaultAndroidSdkVersions()
 
 android {
   namespace 'expo.modules.orcamobilewebshell'
+  buildFeatures { buildConfig true }
+  defaultConfig {
+    buildConfigField 'boolean', 'BROWSER_FIXTURE', (findProperty('orcaBrowserFixture') == 'true').toString()
+  }
 }
 
 dependencies {
+  compileOnly 'com.facebook.react:react-android'
+  // React Native already supplies this version; OkHttp owns WebSocket framing.
+  implementation 'com.squareup.okhttp3:okhttp:4.9.2'
   // Already on the APK classpath at this exact version via react-native-webview
   // (node_modules/react-native-webview/android/gradle.properties), so this adds no artifact.
   implementation 'androidx.webkit:webkit:1.14.0'
@@ -22,4 +29,33 @@ dependencies {
   // test classpath or every manifest check would read null.
   testImplementation 'junit:junit:4.13.2'
   testImplementation 'org.json:json:20240303'
+}
+
+// Compile the real owner/task against deterministic Android/RN boundaries, outside android.jar.
+configurations { browserLifecycleCompiler }
+dependencies { browserLifecycleCompiler 'org.jetbrains.kotlin:kotlin-compiler-embeddable:2.1.20' }
+def lifecycleSources = files(
+  fileTree('../tests/browser-lifecycle') { include '*.kt' },
+  'src/main/java/expo/modules/orcamobilewebshell/BrowserGuestOwner.kt',
+  'src/main/java/expo/modules/orcamobilewebshell/BrowserGuestReactTask.kt'
+)
+def lifecycleClasses = layout.buildDirectory.dir('browser-lifecycle-classes')
+def compileLifecycle = tasks.register('compileBrowserLifecycle', JavaExec) {
+  inputs.files(lifecycleSources)
+  outputs.dir(lifecycleClasses)
+  classpath = configurations.browserLifecycleCompiler
+  mainClass = 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler'
+  doFirst {
+    delete(lifecycleClasses)
+    args = ['-no-stdlib', '-no-reflect', '-classpath', classpath.asPath,
+            '-d', lifecycleClasses.get().asFile.absolutePath] + lifecycleSources.files*.absolutePath
+  }
+}
+def testLifecycle = tasks.register('testBrowserLifecycle', JavaExec) {
+  dependsOn compileLifecycle
+  classpath = files(lifecycleClasses) + configurations.browserLifecycleCompiler
+  mainClass = 'expo.modules.orcamobilewebshell.BrowserLifecycleTestKt'
+}
+tasks.configureEach {
+  if (name == 'testDebugUnitTest') dependsOn testLifecycle
 }
