@@ -226,7 +226,7 @@ export function installActiveSessionTabsSubscription({
 
   return installWindowVisibilitySubscriptionParking([
     {
-      subscribe: (isCurrent) =>
+      subscribe: (isCurrent, { requestRetry }) =>
         window.api.runtimeEnvironments.subscribe(
           {
             selector: environmentId,
@@ -246,9 +246,14 @@ export function installActiveSessionTabsSubscription({
               }
               if (response.ok === false) {
                 console.warn('[web-session-tabs-sync] subscription failed:', response.error.message)
+                requestRetry()
                 return
               }
               const event = response.result as SessionTabsStreamEvent
+              if (event.type === 'end') {
+                requestRetry()
+                return
+              }
               if (event.type !== 'snapshot' && event.type !== 'updated') {
                 return
               }
@@ -276,6 +281,7 @@ export function installActiveSessionTabsSubscription({
                   }
                 })
             },
+            onClose: requestRetry,
             onError: (error) => {
               if (isCurrent()) {
                 console.warn('[web-session-tabs-sync] subscription error:', error.message)
