@@ -12,12 +12,12 @@ import type {
 import type { ReleaseBuild, ReleaseChannel } from '../shared/release-channel'
 import type { ReleaseBuildListOptions } from './updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './updater/updater-setup'
-import type { UpdateInstallMode } from './updater/updater-state'
+import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater/updater-state'
 
 // Keep one service instance so all public API calls share updater state and event listeners.
 const updater = new UpdaterSetup()
 
-export type { UpdateInstallMode, UpdaterSetupOptions }
+export type { PreQuitCleanupFailureMode, UpdateInstallMode, UpdaterSetupOptions }
 
 export function resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {
   return updater.resolveUpdateInstallMode(isServeMode)

@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
@@ -88,14 +89,17 @@ function createHost(): {
 } {
   let session = makePersistedSession()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store stub carries the four members this publication-order suite drives; the rest of Store is unreached.
-  const runtime = new OrcaRuntimeService({
-    getRepos: () => [LIVE_REPO],
-    getWorkspaceSession: () => session,
-    setWorkspaceSession: (next: WorkspaceSessionState) => {
-      session = next
-    },
-    flushOrThrow: vi.fn()
-  } as never)
+  const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
+    withDurableRuntimeStore({
+      getRepos: () => [LIVE_REPO],
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: (next: WorkspaceSessionState) => {
+        session = next
+      },
+      flushOrThrow: vi.fn()
+    }) as never
+  )
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -159,7 +163,7 @@ describe('retirement proof publication vs. renderer republication order', () => 
   it('publishes the proof when the exit lands before the renderer drops the surface', async () => {
     const { runtime, handle } = createHost()
 
-    runtime.onPtyExit('pty-left', 0, 'incarnation-a')
+    await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
     republishWithoutTheSurface(runtime)
 
     const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -174,7 +178,7 @@ describe('retirement proof publication vs. renderer republication order', () => 
 
     retirePersistedSurface()
     republishWithoutTheSurface(runtime)
-    runtime.onPtyExit('pty-left', 0, 'incarnation-a')
+    await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
     const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     expect(published.tabs).toEqual([])
@@ -185,7 +189,7 @@ describe('retirement proof publication vs. renderer republication order', () => 
 
   // Why a subscriber and not just the stored snapshot: a mirror only ever sees frames. A proof
   // that lands in state without a frame to carry it is the same silence from the client's side.
-  it('fans the proof out to a paired subscriber, not just into stored state', () => {
+  it('fans the proof out to a paired subscriber, not just into stored state', async () => {
     const { runtime, handle, retirePersistedSurface } = createHost()
     const frames: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged(
@@ -196,7 +200,7 @@ describe('retirement proof publication vs. renderer republication order', () => 
     try {
       retirePersistedSurface()
       republishWithoutTheSurface(runtime)
-      runtime.onPtyExit('pty-left', 0, 'incarnation-a')
+      await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
     } finally {
       unsubscribe()
     }

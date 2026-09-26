@@ -453,31 +453,7 @@ describeRender(
     }, 300_000)
 
     it('takes back the frames it is owed, not only the timers', async () => {
-      // The timer case above is witnessed by a 550 ms timeout, which every module's own stop
-      // cancels by the handle the scope holds. A frame is the other shape: `applyFitScale` asks
-      // for one through the scope's registry and never holds its id, so `stopFitScale` can only
-      // bump the token it tests itself against — the frame still runs. Nothing but
-      // `cancelDocumentFrames` takes it back.
-      //
-      // Two things have to be pinned down for that to be readable, and the first version of this
-      // case had neither.
-      //
-      // The witness has to be owed whenever the dispose lands. A single refit is not: the retry
-      // loop commits on its first attempt whenever the grid still measures, so one resize buys
-      // one frame and a dispose after it owes nothing — which agrees with an empty leak list for
-      // exactly the reason under test, once in five runs. So the refit is re-armed from a frame
-      // of the test's own, which leaves the document owed a frame at the end of every frame the
-      // browser serves, and dispose cannot land inside one.
-      //
-      // And the leak has to be counted from the moment dispose returned, not from the moment the
-      // host element left the DOM. React unmounts in two steps: the mutation phase detaches the
-      // host, and the passive cleanup that calls `dispose` runs after it — 1 ms apart here, 20 to
-      // 35 ms apart with the CPU throttled 20x, which is the CI runner this failed on. A frame
-      // served in that gap runs with a detached container while the document is still live and
-      // has not been asked to stop, and no registry could take it back. It went through
-      // `scheduleDocumentFrame` like every other; the old oracle called it a leak because it
-      // judged by the container rather than by dispose. Only what runs after the last statement
-      // of `dispose` is the document keeping something it gave up.
+      // Hold a real refit frame across disposal; ResizeObserver delivery cannot race the witness.
       let documentChunk = null
       const { page } = await openPage(PROBE_ROUTE, {
         scheduler: true,
@@ -492,72 +468,74 @@ describeRender(
           })
         }
       })
-      await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
-        timeout: 60_000,
-        polling: 100
-      })
-      await openProbeTerminal(page)
-      expect(documentChunk, 'the document was served as its own chunk').not.toBe(null)
-
-      await page.evaluate((chunk) => {
-        const state = globalThis.__orcaScheduler
-        state.disposed = null
-        state.watching = true
-        // `dispose` empties the host and drops its class last, after `cancelDocumentFrames`, so
-        // the class going is the moment it returned. Observed on the element rather than on the
-        // tree because React may have detached it already.
-        const host = document.querySelector('.orca-terminal-document-host')
-        const observer = new MutationObserver(() => {
-          if (state.disposed !== null || host.classList.contains('orca-terminal-document-host')) {
-            return
-          }
-          state.disposed = {
-            // A cancelled frame never runs, so it is still owed here. That is the point.
-            owed: state.scheduled.filter(
-              (entry) => entry.kind === 'frame' && !entry.fired && entry.caller.includes(chunk)
-            ).length,
-            leakedBefore: state.leaked.length
-          }
-          observer.disconnect()
+      try {
+        await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
+          timeout: 60_000,
+          polling: 100
         })
-        observer.observe(host, { attributes: true, attributeFilter: ['class'] })
-        // The page's refit follows the host's box, not the window, so the pulse resizes the host.
-        let narrow = false
-        const pulse = () => {
-          if (state.disposed !== null) {
-            return
-          }
-          narrow = !narrow
-          host.style.width = narrow ? '99%' : ''
-          requestAnimationFrame(pulse)
-        }
-        requestAnimationFrame(pulse)
-        globalThis.setTimeout(() => globalThis.__orcaTerminalProbe.setMounted(false), 200)
-      }, documentChunk)
-      await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
-      await page.evaluate(() => {
-        globalThis.__orcaTerminalReady = false
-        globalThis.__orcaTerminalProbe.setMounted(true)
-      })
-      await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
-        timeout: 60_000,
-        polling: 100
-      })
-      await openProbeTerminal(page)
-      await page.evaluate(() => new Promise((resolve) => globalThis.setTimeout(resolve, 3000)))
+        await openProbeTerminal(page)
+        expect(documentChunk, 'the document was served as its own chunk').not.toBe(null)
 
-      const scheduler = await page.evaluate(() => globalThis.__orcaScheduler)
-      expect(
-        scheduler.disposed?.owed,
-        'the document owed a frame at the moment dispose returned'
-      ).toBeGreaterThan(0)
-      expect(
-        scheduler.leaked
-          .slice(scheduler.disposed.leakedBefore)
-          .filter((entry) => entry.startsWith('frame ') && entry.includes(documentChunk))
-      ).toEqual([])
-      await page.unrouteAll({ behavior: 'ignoreErrors' })
-      await page.close()
+        await page.evaluate((chunk) => {
+          const state = globalThis.__orcaScheduler
+          state.disposed = null
+          state.watching = true
+          state.holdFramesFrom = chunk
+          const host = document.querySelector('.orca-terminal-document-host')
+          // Dispose drops this class after cancelling frames; DOM detachment precedes cleanup.
+          const observer = new MutationObserver(() => {
+            if (state.disposed !== null || host.classList.contains('orca-terminal-document-host')) {
+              return
+            }
+            state.disposed = {
+              owed: state.scheduled.filter(
+                (entry) => entry.kind === 'frame' && !entry.fired && entry.caller.includes(chunk)
+              ).length,
+              leakedBefore: state.leaked.length
+            }
+            observer.disconnect()
+          })
+          observer.observe(host, { attributes: true, attributeFilter: ['class'] })
+          host.style.width = '80%'
+        }, documentChunk)
+        await page.waitForFunction(() => globalThis.__orcaScheduler.heldFrames > 0, undefined, {
+          timeout: 30_000
+        })
+        await page.evaluate(() => globalThis.__orcaTerminalProbe.setMounted(false))
+        await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
+        await page.waitForFunction(() => globalThis.__orcaScheduler.disposed !== null)
+        await page.evaluate(() => {
+          globalThis.__orcaScheduler.holdFramesFrom = null
+          globalThis.__orcaTerminalReady = false
+          globalThis.__orcaTerminalProbe.setMounted(true)
+        })
+        await page.waitForFunction(() => globalThis.__orcaTerminalReady === true, {
+          timeout: 60_000,
+          polling: 100
+        })
+        await openProbeTerminal(page)
+        // Uncancelled work must actually run against the replacement, so the hold cannot hide leaks.
+        await page.evaluate(
+          () =>
+            new Promise((resolve) => {
+              globalThis.__orcaReleaseFrames()
+              requestAnimationFrame(() => requestAnimationFrame(resolve))
+            })
+        )
+
+        const scheduler = await page.evaluate(() => globalThis.__orcaScheduler)
+        expect(
+          scheduler.disposed?.owed,
+          'the document owed a frame at the moment dispose returned'
+        ).toBeGreaterThan(0)
+        expect(
+          scheduler.leaked
+            .slice(scheduler.disposed.leakedBefore)
+            .filter((entry) => entry.startsWith('frame ') && entry.includes(documentChunk))
+        ).toEqual([])
+      } finally {
+        await page.unrouteAll({ behavior: 'ignoreErrors' }).finally(() => page.close())
+      }
     }, 300_000)
 
     it('styles what it owns, and only that', async () => {

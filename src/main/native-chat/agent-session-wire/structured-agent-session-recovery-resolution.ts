@@ -1,8 +1,12 @@
 /**
- * Exits from latched recovery stages. A session lands in `recovering` / `manual-recovery`
- * when evidence about its owner was UNAVAILABLE; this module re-asks with present-time
- * evidence and releases the lease only on proof. A stop is a request — the lease moves only
- * after a later probe proves the process absent, never on a timeout.
+ * Exits from the `recovering` stage. A session lands there when evidence about its owner was
+ * unavailable; this re-asks with present-time evidence and always concludes. A dead owner is
+ * evicted on proof. A live one is stopped by identity and evicted once
+ * proven gone. One that outlives the stop, or whose identity cannot be verified, is released
+ * anyway: its transport died with the runtime that held it, so nothing can drive it, and no signal
+ * is sent to a pid that cannot be verified as the one recorded. Only a conflicted claim, which is
+ * how a terminal owner an older build recorded now loads, is waited out and never stopped: it is
+ * the user's own agent, and its exit is its way out.
  */
 
 import {
@@ -11,6 +15,7 @@ import {
   type AgentSessionOwnerProbe
 } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { releaseUnprovenAgentSessionOwner } from '../../runtime/agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 
 export type StructuredSessionRecoveryStopSignal = 'SIGTERM' | 'SIGKILL'
@@ -33,62 +38,46 @@ const UNRESOLVED_REFUSALS: ReadonlySet<string> = new Set([
   'agent_session_identity_required'
 ])
 
-/** Which latched records this module may re-ask about. */
-export function structuredSessionRecoveryIsResolvable(record: AgentSessionRecord): boolean {
-  if (record.lease.settlementRetryRequired) {
-    // Settlement latches are cleared only by a successful journal retry, never by owner probing.
-    return false
-  }
-  const { claimStatus, handoffStage, ownerProcess } = record.lease
-  if (handoffStage !== 'recovering' && handoffStage !== 'manual-recovery') {
-    return false
-  }
-  if (claimStatus === 'conflicted') {
-    // A conflict names one process. Re-asking is only meaningful against that name; with none
-    // recorded there is nothing present-time evidence could settle, and the user decides.
-    return ownerProcess !== null
-  }
-  return true
-}
-
-/** Stopping a matched owner is only Orca's call when Orca owned its transport. A conflicted claim
- *  means ownership was never settled — including a terminal an older build recorded as owner. */
-function recoveryMayStopOwner(record: AgentSessionRecord): boolean {
-  return record.lease.claimStatus !== 'conflicted'
-}
-
 export async function resolveStructuredSessionRecovery(
   deps: StructuredSessionRecoveryResolutionDeps,
   sessionId: string
 ): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
   const record = deps.store.getRecord(sessionId)
-  if (!record || !structuredSessionRecoveryIsResolvable(record)) {
+  if (record?.lease.handoffStage !== 'recovering') {
     return 'not-applicable'
   }
   let probe = await deps.probeRecord(record)
   const owner = record.lease.ownerProcess
-  if (
-    owner &&
-    owner.hostId === deps.store.hostId &&
-    isProvenAliveProbe(probe) &&
-    recoveryMayStopOwner(record)
-  ) {
-    // The owner is a live child of a runtime that no longer exists; its transport cannot be
-    // reconstructed, so the only way forward is to stop it and prove it gone.
+  if (owner && record.lease.claimStatus === 'conflicted' && !isProvenDeadProbe(probe)) {
+    // A terminal agent keeps its transport across a restart, so only proof of its exit is a way in.
+    return 'unresolved'
+  }
+  if (owner && isProvenAliveProbe(probe)) {
+    if (owner.hostId !== deps.store.hostId) {
+      return 'unresolved'
+    }
     probe = await stopOwnerAndReprobe(deps, record, owner.pid)
   }
   try {
-    await deps.store.evictProvenDeadOwner({
-      sessionId,
-      expectedFence: record.lease.runtimeFence,
-      probe,
-      now: deps.now()
-    })
+    await (owner && !isProvenDeadProbe(probe)
+      ? deps.store.transitionHandoff(sessionId, (latest) =>
+          releaseUnprovenAgentSessionOwner({
+            record: latest,
+            expectedFence: record.lease.runtimeFence,
+            now: deps.now()
+          })
+        )
+      : deps.store.evictProvenDeadOwner({
+          sessionId,
+          expectedFence: record.lease.runtimeFence,
+          probe,
+          now: deps.now()
+        }))
     return 'resolved'
   } catch (error) {
     const code = error instanceof Error ? error.message : String(error)
     if (UNRESOLVED_REFUSALS.has(code)) {
-      // No proof yet; the record is preserved untouched and the next attempt re-asks.
+      // The record moved under this resolution; the next attempt re-asks against what it is now.
       return 'unresolved'
     }
     throw error

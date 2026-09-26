@@ -145,7 +145,7 @@ describe('Codex reset-credit managed-home ownership', () => {
           }
         ]
       }
-      fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush(pendingLedger)
+      await fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush(pendingLedger)
       makeHomeUnsafe(fixture.managedHomePath)
 
       const settingsBefore = structuredClone(fixture.store.getSettings())
