@@ -116,6 +116,18 @@ describe('profile cloud session refresh', () => {
     expect(linkMock).toHaveBeenCalledTimes(1)
   })
 
+  it('raises an unreadable session file rather than reporting it as gone', async () => {
+    // Why not a result arm: 'reconnect-required' means the session is gone, and every caller
+    // treats it as a sign-out. EACCES/EBUSY/EMFILE leaves the file intact, so it belongs on the
+    // same throw channel as any other transient read failure.
+    readMock.mockReturnValue({ status: 'unreadable', persistence: 'none', error: 'EACCES' })
+
+    await expect(readFreshOrcaCloudSession(config, active, '/data')).rejects.toThrow(
+      'orca_cloud_session_unreadable'
+    )
+    expect(clearMock).not.toHaveBeenCalled()
+  })
+
   it('notifies subscribers when an auth failure clears the stored session', async () => {
     const invalidated = vi.fn()
     const unsubscribe = onOrcaCloudSessionInvalidated(invalidated)

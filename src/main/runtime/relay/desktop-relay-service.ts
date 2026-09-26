@@ -9,6 +9,7 @@ import type {
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { readRelayAuthContext } from './relay-auth-context'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import { relayOfflineReasonMintFailureCode } from './relay-offline-reason'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
@@ -16,10 +17,10 @@ import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
 } from './relay-revoke-outbox'
-import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference-reader'
+import { pairingAuthorizationForContext } from './relay-pairing-authorization'
 
 type DesktopRelayServiceOptions = {
   authConfig: OrcaCloudAuthConfig
@@ -27,21 +28,6 @@ type DesktopRelayServiceOptions = {
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
-}
-
-export function pairingAuthorizationForContext(
-  context: MobilePairingConnectionContext,
-  relayHostId: string
-): DeviceCredentialInstallAuthorization | null {
-  if (context.transport.transport === 'direct') {
-    return { mode: 'authenticated-direct', directAuthId: context.connectionId }
-  }
-  if (context.transport.relayHostId !== relayHostId) {
-    throw new Error('stale_relay_connection')
-  }
-  return context.transport.credentialKind === 'invite'
-    ? { mode: 'relay-basis', basisConnId: context.transport.basisConnId }
-    : null
 }
 
 // Why: a broker that died without arming a retry (sleep past token expiry,
@@ -299,17 +285,24 @@ export class DesktopRelayService {
     }
   }
 
+  // Why budget 0: getEndpoints is the LAN-connected phone's periodic "is relay
+  // available?" probe, and a null answer costs it nothing. It awaits an open
+  // already in flight but never sits through an armed retry, so a relay outage
+  // cannot stall the poll that a local connection is already serving.
   private async activeBrokerForDemand(): Promise<RelaySessionBroker | null> {
-    const broker = this.coordinator.getLiveBroker() ?? (await this.coordinator.waitForLiveBroker())
+    const broker = this.coordinator.getLiveBroker() ?? (await this.coordinator.waitForLiveBroker(0))
     return broker instanceof RelaySessionBroker ? broker : null
   }
 
   private async requireActiveBroker(): Promise<RelaySessionBroker> {
-    const broker = await this.activeBrokerForDemand()
-    if (!broker) {
+    const result = await this.coordinator.waitForLiveBrokerResult()
+    if (!result.broker) {
+      throw new Error(relayOfflineReasonMintFailureCode(result.offlineReason))
+    }
+    if (!(result.broker instanceof RelaySessionBroker)) {
       throw new Error('relay_control_not_active')
     }
-    return broker
+    return result.broker
   }
 
   private refreshDemand(): void {

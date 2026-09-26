@@ -225,6 +225,110 @@ describe('RelayAuthCoordinator transient recovery', () => {
     expect(coordinator.getActiveBroker()).toBeNull()
   })
 
+  it('waits through a scheduled retry instead of surfacing the cold-start failure', async () => {
+    // Why: a phone-initiated wait used to read the coordinator's own scheduled
+    // retry as "nothing more is coming" and returned null at once, surfacing
+    // relay_control_not_active for a hiccup fixed a moment later.
+    vi.useFakeTimers()
+    const broker = { closeNow: vi.fn() }
+    const openBroker = vi
+      .fn()
+      .mockRejectedValueOnce(new RelayHttpError('assignment', 500))
+      .mockResolvedValueOnce(broker)
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledOnce()
+
+    const waiter = coordinator.waitForLiveBroker()
+    await vi.advanceTimersByTimeAsync(501)
+    await expect(waiter).resolves.toBe(broker)
+  })
+
+  it('resolves a wait for a canceled retry instead of hanging', async () => {
+    vi.useFakeTimers()
+    const openBroker = vi.fn().mockRejectedValue(new RelayHttpError('assignment', 500))
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openBroker).toHaveBeenCalledOnce()
+
+    const waiter = coordinator.waitForLiveBrokerResult()
+    // Why: the waiter must actually be parked on the retry signal before the
+    // fence, or the test passes through the early-return branch without ever
+    // exercising the cancel wake-up.
+    await vi.advanceTimersByTimeAsync(0)
+    coordinator.fenceAndCloseNow()
+    await expect(waiter).resolves.toEqual({ broker: null, offlineReason: null })
+  })
+
+  it('gives up once its wait budget elapses during a sustained outage', async () => {
+    // Why: sitting through a retry must stay bounded — a real outage should
+    // fail the caller clearly instead of riding the backoff ladder forever.
+    vi.useFakeTimers()
+    const openBroker = vi.fn().mockRejectedValue(new RelayHttpError('assignment', 500))
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const waiter = coordinator.waitForLiveBroker(5_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await expect(waiter).resolves.toBeNull()
+    expect(openBroker.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('never cuts an in-flight open short: a slow first open past the budget still wins', async () => {
+    // Why: opens carry their own HTTP deadlines; the budget exists to bound the
+    // retry chain, not to turn a slow cold start into relay_control_not_active.
+    vi.useFakeTimers()
+    const broker = { closeNow: vi.fn() }
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: () => new Promise((resolve) => setTimeout(() => resolve(broker), 8_000)),
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    const waiter = coordinator.waitForLiveBrokerResult(1_000)
+    await vi.advanceTimersByTimeAsync(7_999)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(waiter).resolves.toEqual({ broker })
+  })
+
+  it('does not hold a signed-out waiter for the budget: a terminal cause arms no retry', async () => {
+    vi.useFakeTimers()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => null,
+      openBroker: vi.fn(),
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+
+    coordinator.reconcile()
+    const waiter = coordinator.waitForLiveBrokerResult(60_000)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(waiter).resolves.toEqual({ broker: null, offlineReason: 'signed-out' })
+  })
+
   it('does not carry a pending retry across an identity switch', async () => {
     vi.useFakeTimers()
     let current = context
