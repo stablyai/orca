@@ -21,6 +21,11 @@ const {
   releaseMock: vi.fn()
 }))
 
+// Field discovery is covered by jira-agile-fields.test.ts; keep search call sequences exact here.
+vi.mock('./jira-agile-fields', () => ({
+  getAgileFieldIds: async () => ({}),
+  agileFieldIdList: () => []
+}))
 vi.mock('./request-queue', () => ({ acquire: acquireMock, release: releaseMock }))
 
 vi.mock('./authenticated-request', () => ({

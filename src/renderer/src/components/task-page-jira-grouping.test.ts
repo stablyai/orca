@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { sortJiraIssues } from './jira-issue-sorter'
 import { groupJiraIssuesByStatus, TaskPageJiraIssueList } from './task-page-jira-issue-list'
+import { defaultJiraListColumnIds, visibleJiraListColumns } from './jira-list-columns'
 import {
   getSingleJiraProjectScope,
   loadTaskPageJiraProjectStatusOrder
@@ -172,6 +173,8 @@ describe('Jira issue status grouping', () => {
         TooltipProvider,
         null,
         React.createElement(TaskPageJiraIssueList, {
+          columns: visibleJiraListColumns(defaultJiraListColumnIds()),
+          gridTemplate: '',
           formatUpdatedAt: () => 'today',
           getStatusTone: () => 'border-border',
           issues: [
