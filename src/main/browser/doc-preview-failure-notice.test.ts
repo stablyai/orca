@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DOC_PREVIEW_LOAD_FAILURE_CHANNEL } from '../../shared/doc-preview-scheme'
-import { publishDocPreviewFailure, setDocPreviewFailureSink } from './doc-preview-failure-notice'
+import {
+  publishDocPreviewFailure,
+  restoreDocPreviewFailureSink,
+  setDocPreviewFailureSink
+} from './doc-preview-failure-notice'
 
 afterEach(() => {
   setDocPreviewFailureSink(null)
@@ -66,5 +70,40 @@ describe('publishDocPreviewFailure', () => {
     publishDocPreviewFailure(failure)
 
     expect(send).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('restoreDocPreviewFailureSink', () => {
+  const failure = {
+    grantId: 'e'.repeat(32),
+    relativePath: 'index.html',
+    reason: 'unreadable' as const
+  }
+
+  it('hands failures back to the main window when the floating host still owns the sink', () => {
+    const floatingSend = vi.fn()
+    const mainSend = vi.fn()
+    const floating = { send: floatingSend }
+    setDocPreviewFailureSink(floating)
+
+    restoreDocPreviewFailureSink(floating, { send: mainSend })
+
+    publishDocPreviewFailure(failure)
+    expect(mainSend).toHaveBeenCalledTimes(1)
+    expect(floatingSend).not.toHaveBeenCalled()
+  })
+
+  it('keeps a newer sink when the closing host no longer owns it', () => {
+    const floatingSend = vi.fn()
+    const mainSend = vi.fn()
+    const newerSend = vi.fn()
+    setDocPreviewFailureSink({ send: newerSend })
+
+    restoreDocPreviewFailureSink({ send: floatingSend }, { send: mainSend })
+
+    publishDocPreviewFailure(failure)
+    expect(newerSend).toHaveBeenCalledTimes(1)
+    expect(mainSend).not.toHaveBeenCalled()
+    expect(floatingSend).not.toHaveBeenCalled()
   })
 })

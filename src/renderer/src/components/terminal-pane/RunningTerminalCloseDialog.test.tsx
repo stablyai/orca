@@ -9,7 +9,12 @@ import {
   useRunningTerminalCloseConfirmStore,
   type RunningTerminalCloseConfirmRequest
 } from '@/store/running-terminal-close-confirm'
+import {
+  resetFloatingWorkspacePopoutSharedStateForTest,
+  setFloatingWorkspacePopoutDetached
+} from '@/components/floating-terminal/floating-workspace-popout-shared-state'
 import RunningTerminalCloseDialog from './RunningTerminalCloseDialog'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const initialState = useAppStore.getInitialState()
 const mountedRoots: Root[] = []
@@ -24,7 +29,8 @@ function advancePastGuard(): void {
 
 async function renderDialog(
   request: Partial<RunningTerminalCloseConfirmRequest> & { onConfirm: () => void },
-  updateSettings: AppState['updateSettings']
+  updateSettings: AppState['updateSettings'],
+  scope: 'main' | 'popout' = 'main'
 ): Promise<void> {
   useAppStore.setState({ updateSettings })
   useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
@@ -40,7 +46,7 @@ async function renderDialog(
   mountedRoots.push(root)
 
   await act(async () => {
-    root.render(<RunningTerminalCloseDialog />)
+    root.render(<RunningTerminalCloseDialog scope={scope} />)
   })
 }
 
@@ -76,6 +82,7 @@ describe('RunningTerminalCloseDialog', () => {
       advancePastGuard()
       useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
     }
+    resetFloatingWorkspacePopoutSharedStateForTest()
     vi.mocked(Date.now).mockRestore()
     await act(async () => {
       for (const root of mountedRoots.splice(0)) {
@@ -246,5 +253,39 @@ describe('RunningTerminalCloseDialog', () => {
     })
 
     expect(nextOnConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  describe('popout scoping', () => {
+    function seedFloatingTab(): void {
+      useAppStore.setState({
+        tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'tab-1' }] }
+      } as unknown as Partial<AppState>)
+    }
+
+    it('hides the main-document host for a floating tab while detached', async () => {
+      seedFloatingTab()
+      setFloatingWorkspacePopoutDetached(true)
+      await renderDialog({ onConfirm: vi.fn() }, vi.fn().mockResolvedValue(undefined), 'main')
+      expect(document.body.textContent).not.toContain('Stop running command?')
+    })
+
+    it('shows the popout host for a floating tab while detached', async () => {
+      seedFloatingTab()
+      setFloatingWorkspacePopoutDetached(true)
+      await renderDialog({ onConfirm: vi.fn() }, vi.fn().mockResolvedValue(undefined), 'popout')
+      expect(document.body.textContent).toContain('Stop running command?')
+    })
+
+    it('keeps the main-document host for a main-window tab while detached', async () => {
+      setFloatingWorkspacePopoutDetached(true)
+      await renderDialog({ onConfirm: vi.fn() }, vi.fn().mockResolvedValue(undefined), 'main')
+      expect(document.body.textContent).toContain('Stop running command?')
+    })
+
+    it('hides the popout host once docked', async () => {
+      seedFloatingTab()
+      await renderDialog({ onConfirm: vi.fn() }, vi.fn().mockResolvedValue(undefined), 'popout')
+      expect(document.body.textContent).not.toContain('Stop running command?')
+    })
   })
 })

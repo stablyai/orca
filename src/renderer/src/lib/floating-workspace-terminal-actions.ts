@@ -10,6 +10,7 @@ import {
 } from '@/components/terminal/tab-type-cycle'
 import type { AppState } from '@/store/types'
 import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
+import { getDomRealm } from './dom-realm'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
@@ -208,17 +209,33 @@ export function isFloatingWorkspacePanelFocused(
   doc: Pick<Document, 'activeElement'> | null = typeof document === 'undefined' ? null : document
 ): boolean {
   const active = doc?.activeElement
-  return active instanceof HTMLElement && active.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+  // Why: detached panel nodes live in the popout document — main-realm
+  // instanceof misses them, so check against the node's own realm (same
+  // HTMLElement-only membership as before, just realm-aware).
+  const { HTMLElement: RealmHTMLElement } = getDomRealm(
+    (active as Node | null)?.ownerDocument?.defaultView
+  )
+  return (
+    active instanceof RealmHTMLElement && active.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+  )
 }
 
 // Event-target-aware panel membership (vs isFloatingWorkspacePanelFocused which reads only activeElement).
 // Used for routing ownership when activeElement is transiently body/null during blur/IME churn (F6/F7).
 export function isEventTargetInsideFloatingWorkspacePanel(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+  const { HTMLElement: RealmHTMLElement } = getDomRealm(
+    (target as Node | null)?.ownerDocument?.defaultView
+  )
+  return (
+    target instanceof RealmHTMLElement && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+  )
 }
 
 export function isFloatingWorkspaceTerminalInputTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+  const { HTMLElement: RealmHTMLElement } = getDomRealm(
+    (target as Node | null)?.ownerDocument?.defaultView
+  )
+  if (!(target instanceof RealmHTMLElement)) {
     return false
   }
   if (target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) === null) {

@@ -1,10 +1,16 @@
+import { getDomRealm } from './dom-realm'
 import { getShortcutPlatform } from './shortcut-platform'
 
 // Why: shared across global keyboard listeners (App-level shortcuts and the
 // onboarding flow) so an in-progress text edit never gets hijacked by a
 // capture-phase keydown handler.
 export function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+  // Why: detached popout nodes live in another document — main-realm
+  // instanceof misses them and misroutes app-menu selection actions.
+  const { HTMLElement: RealmHTMLElement } = getDomRealm(
+    (target as Node | null)?.ownerDocument?.defaultView
+  )
+  if (!(target instanceof RealmHTMLElement)) {
     return false
   }
 

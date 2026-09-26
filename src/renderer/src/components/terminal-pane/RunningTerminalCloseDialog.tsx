@@ -1,12 +1,24 @@
+import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import {
+  isFloatingWorkspacePopoutDetached,
+  isFloatingWorkspaceTerminalTab,
+  subscribeFloatingWorkspacePopoutDetached
+} from '@/components/floating-terminal/floating-workspace-popout-shared-state'
 import CloseTerminalDialog from './CloseTerminalDialog'
 
 /** Hosts the running-process close confirmation for tab-level closes (tab-strip X,
  *  middle-click, tab menu, tab groups, floating panel) so they share the prompt Cmd+W
  *  already raised. Store-driven, like PinnedTabCloseDialog, because those closes run
  *  outside any pane's React tree. */
-export default function RunningTerminalCloseDialog(): React.JSX.Element {
+export default function RunningTerminalCloseDialog({
+  scope = 'main'
+}: {
+  // Why popout: the App host lives in the main document, so a floating-originated
+  // request while detached renders in the popout host instead — same store, one modal.
+  scope?: 'main' | 'popout'
+}): React.JSX.Element | null {
   const request = useRunningTerminalCloseConfirmStore((state) => state.runningTerminalCloseConfirm)
   const confirmClose = useRunningTerminalCloseConfirmStore(
     (state) => state.confirmRunningTerminalClose
@@ -21,7 +33,14 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element {
   // Why: this queue is async (it opens after a probe) while the pinned queue is synchronous,
   // so both can be pending at once. Wait rather than stack two modal overlays and focus traps.
   const pinnedRequest = useAppStore((state) => state.pinnedTabCloseConfirm)
-
+  const popoutDetached = useSyncExternalStore(
+    subscribeFloatingWorkspacePopoutDetached,
+    isFloatingWorkspacePopoutDetached
+  )
+  const floatingOrigin = request ? isFloatingWorkspaceTerminalTab(request.terminalTabId) : false
+  if (scope === 'popout' ? !(popoutDetached && floatingOrigin) : popoutDetached && floatingOrigin) {
+    return null
+  }
   return (
     <CloseTerminalDialog
       open={request !== null && pinnedRequest === null}

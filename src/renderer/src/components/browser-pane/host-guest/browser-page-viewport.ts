@@ -99,14 +99,15 @@ export function ensureBrowserPageViewport(
   if (!root) {
     return null
   }
-  const shell = document.createElement('div')
+  const doc = root.ownerDocument ?? document
+  const shell = doc.createElement('div')
   shell.dataset.browserPageViewportId = browserPageId
   shell.className = 'absolute inset-0 flex min-h-0 flex-col'
   shell.style.display = 'none'
   shell.inert = true
   shell.setAttribute('aria-hidden', 'true')
 
-  const chromeInset = document.createElement('div')
+  const chromeInset = doc.createElement('div')
   chromeInset.dataset.browserPageChromeInset = ''
   chromeInset.className = 'shrink-0'
   const rememberedInsetHeight = browserPageChromeInsetHeights.get(browserPageId)
@@ -114,15 +115,15 @@ export function ensureBrowserPageViewport(
     chromeInset.style.height = `${rememberedInsetHeight}px`
   }
 
-  const container = document.createElement('div')
+  const container = doc.createElement('div')
   container.dataset.browserPageContainer = ''
   container.className = 'relative flex min-h-0 flex-1 overflow-hidden bg-background'
 
-  const scroller = document.createElement('div')
+  const scroller = doc.createElement('div')
   scroller.dataset.browserPageScroller = ''
   scroller.className = 'scrollbar-sleek relative min-h-0 min-w-0 flex-1 overflow-hidden'
 
-  const content = document.createElement('div')
+  const content = doc.createElement('div')
   content.dataset.browserPageContent = ''
   content.className = 'relative mx-auto'
 

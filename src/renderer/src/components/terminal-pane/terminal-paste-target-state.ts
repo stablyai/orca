@@ -49,7 +49,7 @@ export function isTerminalPanePasteFocusCurrent({
   requireSameFocusedElement,
   activeElementAtDispatch,
   paneContainer,
-  activeElement = typeof document === 'undefined' ? null : document.activeElement
+  activeElement = paneContainer.ownerDocument?.activeElement ?? null
 }: TerminalPanePasteFocusState): boolean {
   if (!requireSameFocusedElement || activeElementAtDispatch === null) {
     return true

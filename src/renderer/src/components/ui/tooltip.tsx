@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 
+import { useResolvedPortalContainer } from '@/components/ui/portal-container-context'
 import { cn } from '@/lib/utils'
 
 function TooltipProvider({
@@ -24,8 +25,49 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
 }
 
-function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+function TooltipTrigger({
+  ref: consumerRef,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  const cleanupRef = React.useRef<(() => void) | null>(null)
+
+  // Why: Radix never sees a trigger pointerleave when focus jumps windows, so replay it on view blur to run its own close (also cancels a pending delayed open).
+  const setTriggerNode = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      // Why: React 19 refs may return a cleanup — retain it so unmount still
+      // releases consumer resources even though no call site passes one today.
+      const consumerCleanup = typeof consumerRef === 'function' ? consumerRef(node) : undefined
+      if (consumerRef && typeof consumerRef !== 'function') {
+        consumerRef.current = node
+      }
+      cleanupRef.current?.()
+      cleanupRef.current = null
+      const view = node?.ownerDocument?.defaultView
+      if (!node || !view || view.closed) {
+        if (typeof consumerCleanup === 'function') {
+          cleanupRef.current = consumerCleanup
+        }
+        return
+      }
+      const closeOnViewBlur = (): void => {
+        if (node.isConnected) {
+          node.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }))
+        }
+      }
+      view.addEventListener('blur', closeOnViewBlur)
+      cleanupRef.current = () => {
+        if (typeof consumerCleanup === 'function') {
+          consumerCleanup()
+        }
+        view.removeEventListener('blur', closeOnViewBlur)
+      }
+    },
+    [consumerRef]
+  )
+
+  React.useEffect(() => () => cleanupRef.current?.(), [])
+
+  return <TooltipPrimitive.Trigger ref={setTriggerNode} data-slot="tooltip-trigger" {...props} />
 }
 
 function TooltipContent({
@@ -33,10 +75,16 @@ function TooltipContent({
   sideOffset = 0,
   showArrow = true,
   children,
+  portalContainer,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content> & { showArrow?: boolean }) {
+}: React.ComponentProps<typeof TooltipPrimitive.Content> & {
+  showArrow?: boolean
+  portalContainer?: HTMLElement | null
+}) {
+  const resolvedContainer = useResolvedPortalContainer(portalContainer)
+
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={resolvedContainer}>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}

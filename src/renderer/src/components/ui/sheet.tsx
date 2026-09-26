@@ -5,6 +5,7 @@ import { XIcon } from 'lucide-react'
 import { Dialog as SheetPrimitive } from 'radix-ui'
 import { cva, type VariantProps } from 'class-variance-authority'
 
+import { useResolvedPortalContainer } from '@/components/ui/portal-container-context'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -16,8 +17,9 @@ function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Clo
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
-function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
-  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+function SheetPortal({ container, ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
+  const resolvedContainer = useResolvedPortalContainer(container ?? null)
+  return <SheetPrimitive.Portal data-slot="sheet-portal" container={resolvedContainer} {...props} />
 }
 
 function SheetOverlay({
