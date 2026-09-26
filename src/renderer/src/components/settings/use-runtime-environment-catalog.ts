@@ -50,8 +50,15 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
         // Why: drop store status for servers no longer saved so stale hosts don't
         // linger in the sidebar registry.
         useAppStore.getState().setRuntimeEnvironments(nextEnvironments)
+        // Keep mutation catalog updates, but do not start probes for a closed pane.
+        if (!mountedRef.current) {
+          return
+        }
         if (verified) {
           await useAppStore.getState().readRuntimeHostStatusSnapshots()
+          if (!mountedRef.current) {
+            return
+          }
         }
         if (mountedRef.current) {
           setEnvironments(visibleEnvironments)
