@@ -13,7 +13,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
@@ -33,6 +35,13 @@ import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { chooseInitialContinuationAgent } from './agent-session-continuation-selection'
+import { useContinuationTargetSelection } from './use-continuation-target-selection'
+import { prepareContinuationSourceForTarget } from './continuation-handoff'
+import { isContinuationTargetSelectable } from './continuation-target-options'
+import { toast } from 'sonner'
+import { getExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { AI_VAULT_HANDOFF_MAX_TRANSFER_MB } from '../../../../shared/ai-vault-session-handoff'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type AgentSessionContinuationDialogProps = {
   open: boolean
@@ -56,6 +65,9 @@ export function AgentSessionContinuationDialog({
   const [starting, setStarting] = useState(false)
   const [showStarting, setShowStarting] = useState(false)
   const disabledAgents = settings?.disabledTuiAgents ?? EMPTY_DISABLED_AGENTS
+  const target = useContinuationTargetSelection({ open, request })
+  const targetWorkspaceId = target.selectedOption?.workspaceId ?? request?.worktreeId ?? null
+  const showTargetPicker = Boolean(request?.origin) && target.groups.length > 0
 
   const agents = useMemo(
     () =>
@@ -76,7 +88,7 @@ export function AgentSessionContinuationDialog({
     setDetectedAgents([])
     setSelectedAgent(null)
     setContextMode('focused')
-    void detectAgentSessionContinuationAgents(request.worktreeId)
+    void detectAgentSessionContinuationAgents(targetWorkspaceId ?? request.worktreeId)
       .then((detected) => {
         if (cancelled) {
           return
@@ -108,7 +120,7 @@ export function AgentSessionContinuationDialog({
     return () => {
       cancelled = true
     }
-  }, [disabledAgents, open, request, settings?.defaultTuiAgent])
+  }, [disabledAgents, open, request, settings?.defaultTuiAgent, targetWorkspaceId])
 
   useEffect(() => {
     if (!starting) {
@@ -124,18 +136,41 @@ export function AgentSessionContinuationDialog({
     if (!request || !selectedAgent || starting) {
       return
     }
-    const prompt = buildAgentSessionContinuationPrompt(request.source, contextMode)
-    if (!prompt) {
+    const option = target.selectedOption
+    const movesWorkspace = Boolean(option && option.workspaceId !== request.worktreeId)
+    setStarting(true)
+
+    const prepared = await prepareContinuationSourceForTarget({
+      source: request.source,
+      origin: request.origin,
+      bridge: option?.bridge ?? { kind: 'same-host' },
+      targetExecutionHostId: option?.executionHostId ?? LOCAL_EXECUTION_HOST_ID,
+      sourceHostLabel: target.sourceHostLabel,
+      targetHostLabel: getExecutionHostDisplayLabel(
+        option?.executionHostId ?? LOCAL_EXECUTION_HOST_ID,
+        target.hostNames
+      )
+    })
+    if (prepared.kind === 'failed') {
+      setStarting(false)
+      toast.error(prepared.message)
       return
     }
-    setStarting(true)
+    // Why: a transcript too large to move cannot honour the full-transcript mode.
+    const effectiveMode = prepared.degradedToDigest ? 'focused' : contextMode
+    const prompt = buildAgentSessionContinuationPrompt(prepared.source, effectiveMode)
+    if (!prompt) {
+      setStarting(false)
+      return
+    }
+
     const launched = await launchAgentSessionContinuation({
       agent: selectedAgent,
       prompt,
-      worktreeId: request.worktreeId,
-      groupId: request.groupId,
-      workspacePath: request.workspacePath,
-      initialCwd: request.initialCwd,
+      worktreeId: option?.workspaceId ?? request.worktreeId,
+      ...(movesWorkspace ? {} : { groupId: request.groupId }),
+      workspacePath: option?.workspacePath ?? request.workspacePath,
+      initialCwd: movesWorkspace ? option?.workspacePath : request.initialCwd,
       launchSource: request.launchSource
     })
     setStarting(false)
@@ -148,6 +183,13 @@ export function AgentSessionContinuationDialog({
   const sourceAgentLabel = request?.source.sourceAgent
     ? getAgentLabel(request.source.sourceAgent)
     : null
+  // Why: the collapsed trigger must still say which host the session lands on.
+  const targetTriggerLabel = target.selectedOption
+    ? `${getExecutionHostDisplayLabel(target.selectedOption.executionHostId, target.hostNames)} · ${target.selectedOption.label}`
+    : undefined
+  const startsInPath = target.selectedOption?.workspacePath ?? request?.initialCwd ?? null
+  // Why: the target never blocks starting — an unreachable transcript degrades the
+  // context instead, so this keeps the original same-workspace flow always available.
   const startDisabled = detecting || starting || agents.length === 0 || !selectedAgent
 
   return (
@@ -192,6 +234,38 @@ export function AgentSessionContinuationDialog({
               </div>
             ) : null}
           </div>
+
+          {showTargetPicker ? (
+            <div className="min-w-0 space-y-1.5">
+              <label className="text-xs font-medium">
+                {translate('components.agentSessionContinuation.continueOn', 'Continue on')}
+              </label>
+              <Select
+                value={targetWorkspaceId ?? undefined}
+                onValueChange={target.setSelectedWorkspaceId}
+              >
+                <SelectTrigger className="min-w-0 w-full" size="sm">
+                  <SelectValue>{targetTriggerLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {target.groups.map((group) => (
+                    <SelectGroup key={group.executionHostId}>
+                      <SelectLabel>{group.hostLabel}</SelectLabel>
+                      {group.options.map((option) => (
+                        <SelectItem
+                          key={option.workspaceId}
+                          value={option.workspaceId}
+                          disabled={!isContinuationTargetSelectable(option)}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div className="min-w-0 space-y-1.5">
             <label className="text-xs font-medium">
@@ -253,7 +327,10 @@ export function AgentSessionContinuationDialog({
                     'Focused handoff (Recommended)'
                   )}
                 </SelectItem>
-                <SelectItem value="full" disabled={!hasFullContext}>
+                <SelectItem
+                  value="full"
+                  disabled={!hasFullContext || target.fullTranscriptBlockedReason !== null}
+                >
                   {translate(
                     'components.agentSessionContinuation.modeFull',
                     'Full session transcript'
@@ -261,6 +338,20 @@ export function AgentSessionContinuationDialog({
                 </SelectItem>
               </SelectContent>
             </Select>
+            {target.fullTranscriptBlockedReason && hasFullContext ? (
+              <p className="text-[11px] leading-4 text-status-warning">
+                {target.fullTranscriptBlockedReason === 'too-large'
+                  ? translate(
+                      'components.agentSessionContinuation.transcriptTooLarge',
+                      'This transcript is over {{limit}}, too large to copy to another host. The new session gets its most recent portion instead.',
+                      { limit: AI_VAULT_HANDOFF_MAX_TRANSFER_MB }
+                    )
+                  : translate(
+                      'components.agentSessionContinuation.transcriptNotStorableOnHost',
+                      'This host cannot store a transcript file, so the new session gets the most recent portion of it instead.'
+                    )}
+              </p>
+            ) : null}
             <p className="text-[11px] leading-4 text-muted-foreground">
               {contextMode === 'focused'
                 ? translate(
@@ -274,10 +365,10 @@ export function AgentSessionContinuationDialog({
             </p>
           </div>
 
-          {request?.initialCwd ? (
+          {startsInPath ? (
             <div className="text-[11px] text-muted-foreground">
               {translate('components.agentSessionContinuation.startsIn', 'Starts in:')}{' '}
-              <span className="break-all font-mono text-foreground/80">{request.initialCwd}</span>
+              <span className="break-all font-mono text-foreground/80">{startsInPath}</span>
             </div>
           ) : null}
         </div>

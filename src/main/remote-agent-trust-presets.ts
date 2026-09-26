@@ -1,19 +1,15 @@
 import type { AgentTrustPreset } from './agent-trust-presets'
 import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
-import { getActiveMultiplexer } from './ssh/ssh-target-registry'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
-import {
-  isWindowsAbsolutePathLike,
-  normalizeRuntimePathSeparators
-} from '../shared/cross-platform-path'
+import { resolveRemoteHomeDirectory } from './remote-home-directory'
 
 export async function markRemoteAgentWorkspaceTrusted(args: {
   preset: AgentTrustPreset
   connectionId: string
   workspacePath: string
 }): Promise<void> {
-  const home = await resolveRemoteHome(args.connectionId)
+  const home = await resolveRemoteHomeDirectory(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
   if (!home || !fsProvider) {
     return
@@ -33,29 +29,6 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   // first-launch trust prompt and will stall at agent_readiness. Falling through silently
   // matches the pre-existing behaviour for agy; it is recorded here rather than left as an
   // unexplained omission. Mirror markRemoteCopilotFolderTrusted once it can be tested.
-}
-
-async function resolveRemoteHome(connectionId: string): Promise<string | null> {
-  const mux = getActiveMultiplexer(connectionId)
-  if (!mux || mux.isDisposed?.()) {
-    return null
-  }
-  const result = (await mux.request('session.resolveHome', { path: '~' })) as {
-    resolvedPath?: unknown
-  }
-  const home =
-    typeof result.resolvedPath === 'string'
-      ? normalizeRuntimePathSeparators(result.resolvedPath.trim())
-      : ''
-  return home &&
-    (home.startsWith('/') || isWindowsAbsolutePathLike(home)) &&
-    !hasRemotePathControlCharacter(home)
-    ? home.replace(/\/$/, '')
-    : null
-}
-
-function hasRemotePathControlCharacter(value: string): boolean {
-  return value.includes(String.fromCharCode(0)) || value.includes('\r') || value.includes('\n')
 }
 
 async function canonicalizeRemoteWorkspacePath(

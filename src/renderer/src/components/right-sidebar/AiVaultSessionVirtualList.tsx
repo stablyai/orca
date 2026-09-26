@@ -42,6 +42,7 @@ export function AiVaultSessionVirtualList({
   getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
+  getSessionContinuationWorkspaceId,
   getSessionResumeActions,
   getSessionResumeInChat,
   onToggleGroup,
@@ -74,6 +75,7 @@ export function AiVaultSessionVirtualList({
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
+  getSessionContinuationWorkspaceId: (session: AiVaultSession) => string | null
   getSessionResumeInChat: (session: AiVaultSession) => AiVaultResumeInChatEligibility
   onToggleGroup: (key: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
@@ -218,6 +220,7 @@ export function AiVaultSessionVirtualList({
                 getSessionLiveState={getSessionLiveState}
                 getWorktreeInfo={getWorktreeInfo}
                 getSessionResumeState={getSessionResumeState}
+                getSessionContinuationWorkspaceId={getSessionContinuationWorkspaceId}
                 getSessionResumeActions={getSessionResumeActions}
                 getSessionResumeInChat={getSessionResumeInChat}
                 onToggleGroup={onToggleGroup}

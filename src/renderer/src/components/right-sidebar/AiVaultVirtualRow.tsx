@@ -45,6 +45,7 @@ export function AiVaultVirtualRow({
   getSessionLiveState,
   getWorktreeInfo,
   getSessionResumeState,
+  getSessionContinuationWorkspaceId,
   getSessionResumeActions,
   getSessionResumeInChat,
   onToggleGroup,
@@ -77,6 +78,7 @@ export function AiVaultVirtualRow({
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
+  getSessionContinuationWorkspaceId: (session: AiVaultSession) => string | null
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   getSessionResumeInChat: (session: AiVaultSession) => AiVaultResumeInChatEligibility
   onToggleGroup: (key: string) => void
@@ -113,10 +115,14 @@ export function AiVaultVirtualRow({
   const resumeState = row.type === 'session' ? getSessionResumeState(row.session) : null
   const resumeActions = row.type === 'session' ? getSessionResumeActions(row.session) : null
   const resumeInChat = row.type === 'session' ? getSessionResumeInChat(row.session) : null
+  // Why: continuation only needs the transcript text, so it is not bound to the
+  // resume target's host; the dialog's picker chooses where it actually lands.
+  const defaultContinuationWorkspaceId =
+    row.type === 'session' ? getSessionContinuationWorkspaceId(row.session) : null
   const continuationWorktreeId =
     row.type === 'session' &&
-    canContinueAiVaultSessionInNewSession(row.session, resumeState?.worktreeId)
-      ? resumeState?.worktreeId
+    canContinueAiVaultSessionInNewSession(row.session, defaultContinuationWorkspaceId)
+      ? defaultContinuationWorkspaceId
       : null
   // Gate resume on real content: a zero-turn transcript would resume into an
   // empty conversation, so it is never offered as normally resumable.

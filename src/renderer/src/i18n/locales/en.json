@@ -18081,7 +18081,14 @@
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
       "deliveryUnconfirmed": "Orca could not confirm {{agent}} received the session context. Check the new session, and paste it yourself if its input is empty.",
       "copyPrompt": "Copy prompt",
-      "launchFailed": "Could not start a new {{agent}} session."
+      "launchFailed": "Could not start a new {{agent}} session.",
+      "continueOn": "Continue on",
+      "handoffBinaryTranscript": "This Agent stores its sessions in a database rather than a readable transcript, so it cannot be moved to another host.",
+      "handoffSourceUnavailable": "Could not read the original session transcript from its host.",
+      "handoffTargetUnavailable": "Could not reach the selected host to place the session transcript.",
+      "handoffFailed": "Could not move the session transcript to the selected host.",
+      "transcriptTooLarge": "This transcript is over {{limit}}, too large to copy to another host. The new session gets its most recent portion instead.",
+      "transcriptNotStorableOnHost": "This host cannot store a transcript file, so the new session gets the most recent portion of it instead."
     },
     "status": {
       "bar": {

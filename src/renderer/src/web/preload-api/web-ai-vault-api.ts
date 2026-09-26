@@ -82,6 +82,10 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       callRuntimeResult<AiVaultPrepareSessionResumeResult>('aiVault.prepareSessionResume', args),
     // Why: no server-side RPC for subagent transcript listing yet, so report an empty (not erroring) result.
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
+    // Why: transcript handoff needs filesystem access on both hosts, which a
+    // browser client does not have; the paired runtime owns its own sessions.
+    prepareSessionHandoff: () =>
+      Promise.resolve({ kind: 'failed' as const, reason: 'target-unavailable' as const }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.
     getFirstUserPrompt: () => Promise.resolve({ prompt: null }),
     // Why: session deletion is local-only and has no runtime RPC; a web
