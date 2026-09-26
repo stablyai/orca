@@ -218,17 +218,12 @@ export class RuntimeProjectGroupController {
     const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      // Why: a mixed-host group has no single PTY target; forgetting the
-      // workspace must still succeed, so skip the sweep instead of failing.
-      let connectionId: string | null | undefined
-      try {
-        connectionId = this.deps.resolveFolderConnectionId(workspace)
-      } catch (error) {
-        console.warn(`[folder-workspace] skipping PTY teardown for ${worktreeId}:`, error)
-      }
-      if (connectionId !== undefined) {
-        await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
-      }
+      // Ambiguous groups resolve to the record authority, so the sweep targets
+      // the host the workspace was recorded on.
+      await this.deps.teardownFolderWorkspacePtys(
+        worktreeId,
+        this.deps.resolveFolderConnectionId(workspace)
+      )
       this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
     }
     const deleted = store.removeFolderWorkspace(folderWorkspaceId)

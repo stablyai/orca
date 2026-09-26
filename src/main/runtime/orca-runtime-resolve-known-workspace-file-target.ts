@@ -52,19 +52,17 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       targets.set(`${target.executionHostId}\0${worktree.id}`, target)
     }
     for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
-      try {
-        const candidateConnectionId = this.resolveFolderWorkspaceConnectionId(folderWorkspace)
-        const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-        const target = {
-          worktree,
-          executionHostId: candidateConnectionId
-            ? toSshExecutionHostId(candidateConnectionId)
-            : LOCAL_EXECUTION_HOST_ID
-        }
-        targets.set(`${target.executionHostId}\0${worktree.id}`, target)
-      } catch {
-        // An ambiguous folder workspace has no single filesystem authority.
+      // Why: ambiguity resolves to the record authority now, so the dead try/catch
+      // guarding the old throw is gone; routing matches main's worktree loop.
+      const candidateConnectionId = this.resolveFolderWorkspaceConnectionId(folderWorkspace)
+      const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+      const target = {
+        worktree,
+        executionHostId: candidateConnectionId
+          ? toSshExecutionHostId(candidateConnectionId)
+          : LOCAL_EXECUTION_HOST_ID
       }
+      targets.set(`${target.executionHostId}\0${worktree.id}`, target)
     }
 
     const owner = findRuntimeWorkspaceFileOwner(
