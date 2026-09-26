@@ -22,6 +22,8 @@ import { recoveryTestItem } from './cross-machine-recovery-test-items'
 
 const activate = vi.hoisted(() => vi.fn(() => ({ primaryTabId: null })))
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: activate }))
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError, warning: vi.fn() } }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root
@@ -271,6 +273,63 @@ it('re-runs exactly the request that diverged even after the list refreshes', as
     resume: ['recent'],
     onDivergence: 'replace'
   })
+})
+
+function deferPickup(): (result: typeof divergentFailure) => Promise<void> {
+  let resolve: (result: typeof divergentFailure) => void = () => {}
+  bridge.pickup.mockImplementationOnce(
+    () =>
+      new Promise((resolvePickup) => {
+        resolve = resolvePickup
+      })
+  )
+  return async (result) => act(async () => resolve(result))
+}
+
+function sessionCheckbox(sessionId: string): HTMLButtonElement {
+  const box = document.querySelector<HTMLButtonElement>(
+    `[data-testid="cross-machine-recovery-session"] button[role="checkbox"][aria-label="${sessionId}"]`
+  )
+  if (!box) {
+    throw new Error(`no checkbox ${sessionId}`)
+  }
+  return box
+}
+
+it('ignores a divergence answer for a resume selection changed while pickup ran', async () => {
+  const finishPickup = deferPickup()
+  await openDialog()
+  await act(async () => itemRow('ready-name').click())
+  await act(async () => buttonLabelled('Recover')?.click())
+  await act(async () => sessionCheckbox('recent').click())
+  expect(sessionCheckbox('recent').getAttribute('aria-checked')).toBe('false')
+
+  await finishPickup(divergentFailure)
+
+  expect(divergencePrompt()).toBeNull()
+  expect(document.querySelector('[role="alert"]')).toBeNull()
+  expect(toastError).toHaveBeenCalledWith('local copy is newer')
+  await act(async () => buttonLabelled('Recover')?.click())
+  expect(bridge.pickup).toHaveBeenCalledTimes(2)
+  expect(bridge.pickup.mock.calls[1][0]).toEqual(
+    expect.objectContaining({ selector: 'laptop/ready', resume: [] })
+  )
+})
+
+it('ignores a divergence answer after another workspace is selected while pickup ran', async () => {
+  const finishPickup = deferPickup()
+  await openDialog()
+  await act(async () => itemRow('ready-name').click())
+  await act(async () => buttonLabelled('Recover')?.click())
+  await act(async () => itemRow('other-name').click())
+
+  await finishPickup(divergentFailure)
+
+  expect(divergencePrompt()).toBeNull()
+  expect(buttonLabelled('Replace local')).toBeUndefined()
+  expect(document.querySelector('[role="alert"]')).toBeNull()
+  expect(toastError).toHaveBeenCalledTimes(1)
+  expect(bridge.pickup).toHaveBeenCalledTimes(1)
 })
 
 it('shows a newer partial checkpoint and the sessions it cannot recover', async () => {

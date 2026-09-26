@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -100,36 +100,44 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
       ? snapshot.status.value.local.host_name
       : null
 
+  const requestRevision = useRef(0)
+  const invalidateRequest = useCallback(() => {
+    requestRevision.current += 1
+    setError(null)
+    setDivergence(null)
+  }, [])
+
   const close = useCallback(() => {
     consumeCrossMachineRecoveryDialogRequest()
     setSelector(null)
     setOverrides(new Map())
-    setError(null)
-    setDivergence(null)
-  }, [])
+    invalidateRequest()
+  }, [invalidateRequest])
 
   // Why: a divergence prompt answers the request that failed, so any change to that request voids it.
   const selectWorkspace = useCallback(
     (next: string) => {
       if (next !== selector) {
         setSelector(next)
-        setError(null)
-        setDivergence(null)
+        invalidateRequest()
       }
     },
-    [selector]
+    [selector, invalidateRequest]
   )
 
-  const toggleResume = useCallback((sessionId: string, checked: boolean) => {
-    setOverrides((current) => new Map(current).set(sessionId, checked))
-    setError(null)
-    setDivergence(null)
-  }, [])
+  const toggleResume = useCallback(
+    (sessionId: string, checked: boolean) => {
+      setOverrides((current) => new Map(current).set(sessionId, checked))
+      invalidateRequest()
+    },
+    [invalidateRequest]
+  )
 
   const run = useCallback(
     async (request: RecoveryRequest, onDivergence?: CrossMachineRecoveryDivergence) => {
       setError(null)
       setDivergence(null)
+      const revision = requestRevision.current
       const handle = startRecoveryPickup({
         ...request,
         ...(onDivergence ? { onDivergence } : {}),
@@ -139,6 +147,11 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
       const result = await handle.result
       setPickup(null)
       setProgress(null)
+      if (!result.ok && revision !== requestRevision.current) {
+        // Why: the dialog now holds a different request, so this failure must not answer it inline.
+        toast.error(providerErrorMessage(result.error))
+        return
+      }
       if (!result.ok) {
         setError(providerErrorMessage(result.error))
         if (result.error.code === 'divergent-local-copy') {
