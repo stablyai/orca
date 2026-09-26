@@ -87,21 +87,23 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
         }
       }
+      if (!isAgentStatusHooksEnabled(store.getSettings())) {
+        // Why nothing at all: both branches below reach the user-global ~/.codex — the sweep
+        // directly, the runtime-user refresh through its legacy system-home cleanup — and match
+        // Orca entries by script filename, so THIS profile's off switch would delete the hook and
+        // trust records another profile installed (STA-5679). Removal stays on the Settings toggle.
+        return resumeHome
+      }
       const isSystemHome =
         normalizeRuntimePathForComparison(resumeHome) ===
         normalizeRuntimePathForComparison(systemHomePath)
-      const hooksEnabled = isAgentStatusHooksEnabled(store.getSettings())
       try {
-        if (isSystemHome) {
-          await ensureRealHomeCodexHookState({
-            hooksEnabled,
-            userDataPath: app.getPath('userData')
-          })
-        } else if (hooksEnabled) {
-          await codexHookService.installForLaunchPrep(resumeHome)
-        } else {
-          await codexHookService.refreshRuntimeUserHooksForLaunchPrep(resumeHome)
-        }
+        await (isSystemHome
+          ? ensureRealHomeCodexHookState({
+              hooksEnabled: true,
+              userDataPath: app.getPath('userData')
+            })
+          : codexHookService.installForLaunchPrep(resumeHome))
       } catch (error) {
         // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
         console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
