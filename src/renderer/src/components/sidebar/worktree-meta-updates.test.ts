@@ -26,7 +26,7 @@ function makeSnapshot(overrides: Partial<WorktreeMetaSnapshot> = {}): WorktreeMe
     comment: '',
     issueInput: '',
     issueProvider: 'github',
-    prInput: '',
+    reviewInput: '',
     ...overrides
   }
 }
@@ -37,7 +37,7 @@ function buildUpdates(
   draft: Partial<WorktreeMetaDraft>,
   snapshot: Partial<WorktreeMetaSnapshot> = {},
   live: WorktreeMetaLiveLinks = {},
-  reviewProvider: WorktreeReviewProvider = 'github'
+  reviewProvider: WorktreeReviewProvider | null = 'github'
 ): Partial<WorktreeMeta> {
   const updates = buildWorktreeMetaUpdates(
     makeDraft(draft),
@@ -63,7 +63,9 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(buildUpdates({ reviewInput: '!42' }, {}, {}, 'gitlab')).toEqual({
       linkedGitLabMR: 42
     })
-    expect(buildUpdates({ reviewInput: '' }, {}, {}, 'gitlab')).toEqual({ linkedGitLabMR: null })
+    expect(buildUpdates({ reviewInput: '' }, { reviewInput: '42' }, {}, 'gitlab')).toEqual({
+      linkedGitLabMR: null
+    })
   })
 
   it('accepts only positive MR references for the GitLab review row', () => {
@@ -198,19 +200,17 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(updates).not.toHaveProperty('linkedTaskSourceContext')
   })
 
-  // The row cannot render a GitLab or Jira issue, so clearing one would destroy a
-  // link the user was never shown — and neither has another editor to restore it.
-  it('leaves work items owned by other providers alone', () => {
-    for (const provider of ['jira', 'gitlab'] as const) {
-      const updates = buildUpdates(
-        { issueInput: '12' },
-        {},
-        { linkedWorkItemProvider: provider, linkedWorkItemType: 'issue' }
-      )
+  // The row cannot render a Jira issue, so clearing one would destroy a link the
+  // user was never shown — and it has no other editor to restore it from.
+  it('leaves work items owned by Jira alone', () => {
+    const updates = buildUpdates(
+      { issueInput: '12' },
+      {},
+      { linkedWorkItemProvider: 'jira', linkedWorkItemType: 'issue' }
+    )
 
-      expect(updates).not.toHaveProperty('linkedWorkItem')
-      expect(updates).not.toHaveProperty('linkedTaskSourceContext')
-    }
+    expect(updates).not.toHaveProperty('linkedWorkItem')
+    expect(updates).not.toHaveProperty('linkedTaskSourceContext')
   })
 
   // Only the spelling changed, so the field names the same issue it already
@@ -360,7 +360,7 @@ describe('buildWorktreeMetaUpdates', () => {
   })
 
   it('records suppression when the user clears an explicit PR link', () => {
-    expect(buildUpdates({ reviewInput: '' }, { prInput: '6934' }, { linkedPR: 6934 })).toEqual({
+    expect(buildUpdates({ reviewInput: '' }, { reviewInput: '6934' }, { linkedPR: 6934 })).toEqual({
       linkedPR: null,
       suppressedGitHubPR: 6934
     })
@@ -409,5 +409,187 @@ describe('buildWorktreeMetaUpdates', () => {
 
   it('clears a comment with empty string, never a present-undefined key', () => {
     expect(buildUpdates({ commentInput: '  ' }, { comment: 'old note' }).comment).toBe('')
+  })
+
+  describe('review link, unchanged field', () => {
+    it('writes nothing for an untouched GitLab MR on a comment-only save', () => {
+      expect(
+        buildUpdates(
+          { reviewInput: '77', commentInput: 'new note' },
+          { reviewInput: '77' },
+          { linkedGitLabMR: 77 },
+          'gitlab'
+        )
+      ).toEqual({ comment: 'new note' })
+    })
+
+    it('writes nothing for an untouched GitHub PR on a comment-only save', () => {
+      expect(
+        buildUpdates(
+          { reviewInput: '7', commentInput: 'new note' },
+          { reviewInput: '7' },
+          { linkedPR: 7 },
+          'github'
+        )
+      ).toEqual({ comment: 'new note' })
+    })
+
+    it('still writes a changed GitLab MR, from a bang number', () => {
+      expect(buildUpdates({ reviewInput: '!78' }, { reviewInput: '77' }, {}, 'gitlab')).toEqual({
+        linkedGitLabMR: 78
+      })
+    })
+
+    it('still writes a changed GitLab MR, from a self-hosted URL', () => {
+      expect(
+        buildUpdates(
+          { reviewInput: 'https://gitlab.critel.li/grp/sub/proj/-/merge_requests/9' },
+          { reviewInput: '' },
+          {},
+          'gitlab'
+        )
+      ).toEqual({ linkedGitLabMR: 9 })
+    })
+
+    it('clears the GitLab slot without touching GitHub suppression', () => {
+      expect(
+        buildUpdates(
+          { reviewInput: '' },
+          { reviewInput: '77' },
+          { linkedGitLabMR: 77, linkedPR: 5 },
+          'gitlab'
+        )
+      ).toEqual({ linkedGitLabMR: null })
+    })
+
+    it('leaves every slot alone for an unparseable value', () => {
+      expect(
+        buildUpdates(
+          { reviewInput: 'https://gitlab.com/g/p/-/issues/3' },
+          { reviewInput: '' },
+          {},
+          'gitlab'
+        )
+      ).toEqual({})
+    })
+
+    it.each(['bitbucket', 'azure-devops', 'gitea'] as const)(
+      'writes nothing for %s, which has no editor yet',
+      (provider) => {
+        expect(buildUpdates({ reviewInput: '5' }, { reviewInput: '' }, {}, provider)).toEqual({})
+      }
+    )
+
+    it('writes nothing when the review provider is not known yet', () => {
+      expect(
+        buildUpdates(
+          { reviewInput: '', commentInput: 'note' },
+          { reviewInput: '' },
+          { linkedPR: 6934 },
+          null
+        )
+      ).toEqual({ comment: 'note' })
+    })
+  })
+
+  describe('gitlab issue row', () => {
+    it('writes the number and displaces GitHub and Linear', () => {
+      expect(
+        buildUpdates(
+          { issueInput: '#43', issueProvider: 'gitlab' },
+          { issueInput: '42', issueProvider: 'github' },
+          { linkedIssue: 42, linkedLinearIssue: 'STA-335' }
+        )
+      ).toEqual({
+        linkedGitLabIssue: 43,
+        linkedIssue: null,
+        linkedLinearIssue: null,
+        linkedLinearIssueWorkspaceId: null,
+        linkedLinearIssueOrganizationUrlKey: null
+      })
+    })
+
+    it('displaces a stored GitLab issue when a GitHub issue is saved over it', () => {
+      expect(
+        buildUpdates({ issueInput: '5', issueProvider: 'github' }, {}, { linkedGitLabIssue: 43 })
+      ).toEqual({ linkedIssue: 5, linkedGitLabIssue: null })
+    })
+
+    it('displaces a stored GitLab issue when a Linear issue is saved over it', () => {
+      const updates = buildUpdates(
+        { issueInput: 'STA-335', issueProvider: 'linear' },
+        {},
+        { linkedGitLabIssue: 43 }
+      )
+      expect(updates.linkedGitLabIssue).toBeNull()
+    })
+
+    it('emits no GitLab clear for a workspace that never held one', () => {
+      expect(buildUpdates({ issueInput: '5', issueProvider: 'github' }, {}, {})).toEqual({
+        linkedIssue: 5
+      })
+    })
+
+    it('clearing drops the GitLab slot too', () => {
+      expect(
+        buildUpdates(
+          { issueInput: '', issueProvider: 'gitlab' },
+          { issueInput: '43', issueProvider: 'gitlab' },
+          { linkedGitLabIssue: 43 }
+        )
+      ).toEqual({ linkedIssue: null, linkedGitLabIssue: null })
+    })
+
+    it('treats 43, #43 and the issue URL as one link', () => {
+      expect(
+        buildUpdates(
+          { issueInput: 'https://gitlab.critel.li/g/p/-/issues/43', issueProvider: 'gitlab' },
+          { issueInput: '43', issueProvider: 'gitlab' },
+          { linkedGitLabIssue: 43 }
+        )
+      ).toEqual({})
+    })
+
+    it('keeps a creation-time GitLab linkedWorkItem when re-stating the same issue', () => {
+      expect(
+        buildUpdates(
+          { issueInput: '43', issueProvider: 'gitlab' },
+          { issueInput: '', issueProvider: 'github' },
+          { linkedGitLabIssue: 43, linkedWorkItemProvider: 'gitlab', linkedWorkItemType: 'issue' }
+        )
+      ).toEqual({ linkedGitLabIssue: 43, linkedIssue: null })
+    })
+
+    it('displaces a GitLab linkedWorkItem when a different issue is saved', () => {
+      const updates = buildUpdates(
+        { issueInput: '5', issueProvider: 'github' },
+        { issueInput: '43', issueProvider: 'gitlab' },
+        { linkedGitLabIssue: 43, linkedWorkItemProvider: 'gitlab', linkedWorkItemType: 'issue' }
+      )
+      expect(updates.linkedWorkItem).toBeNull()
+      expect(updates.linkedTaskSourceContext).toBeNull()
+    })
+
+    it('still protects a Jira linkedWorkItem, which has no editor in this row', () => {
+      expect(
+        'linkedWorkItem' in
+          buildUpdates(
+            { issueInput: '5', issueProvider: 'github' },
+            {},
+            { linkedWorkItemProvider: 'jira', linkedWorkItemType: 'issue' }
+          )
+      ).toBe(false)
+    })
+
+    it('never displaces a GitLab linkedWorkItem that describes an MR', () => {
+      expect(
+        'linkedWorkItem' in
+          buildUpdates(
+            { issueInput: '5', issueProvider: 'github' },
+            {},
+            { linkedWorkItemProvider: 'gitlab', linkedWorkItemType: 'mr' }
+          )
+      ).toBe(false)
+    })
   })
 })

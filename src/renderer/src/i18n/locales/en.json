@@ -494,7 +494,8 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "2b9f4e7c01": "Update the remote runtime to link GitLab issues and merge requests"
                 }
               }
             }
@@ -5813,7 +5814,8 @@
           "gitlabDescription": "Edit issue links, merge request links, and notes for this workspace.",
           "gitlabMR": "GitLab MR",
           "gitlabPlaceholder": "MR ! or GitLab URL",
-          "gitlabHelp": "Paste a merge request URL, or enter a number. Leave blank to remove the link."
+          "gitlabHelp": "Paste a merge request URL, or enter a number. Leave blank to remove the link.",
+          "4f8e2b7a19": "Edit issue links, review links, and notes for this workspace."
         },
         "WorktreeOpenInMenu": {
           "localOnly": "Local only",
@@ -6331,11 +6333,17 @@
           "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
           "ad78f9bee2": "Issue",
           "662ae142f8": "Issue #, or a GitHub or Linear URL",
-          "929c98d05a": "Issue provider"
+          "929c98d05a": "Issue provider",
+          "8d3f1b6a27": "GitLab",
+          "4c9e2a7d13": "Not a GitLab issue number or issue URL.",
+          "b1e7d4c802": "Couldn't open that issue. Orca only knows the URL of a GitLab issue a workspace was created from.",
+          "2f6a8c1e94": "Paste a GitHub, GitLab or Linear URL, or enter a number. Leave blank to remove the link.",
+          "6e1d9b3a55": "Issue #, or a GitHub, GitLab or Linear URL"
         },
         "worktreeIssueDisplacement": {
           "3f61c0a8d2": "Linear {{value}}",
-          "9c4b7e1f60": "GitHub #{{value}}"
+          "9c4b7e1f60": "GitHub #{{value}}",
+          "5e2a9d7c41": "GitLab #{{value}}"
         },
         "WorktreeCardSshHostControl": {
           "connectFailed": "SSH connection failed",
@@ -6438,6 +6446,12 @@
           "copied": "Command copied",
           "retry": "Retry now",
           "restored": "Git is working again. Worktrees refreshed."
+        },
+        "WorktreeReviewLinkField": {
+          "3c8a1f2e70": "Review link",
+          "9b4d6e0a13": "Checking which provider this repository uses...",
+          "e5f2a7c391": "{{providerName}} {{reviewLabel}} links can't be changed here yet.",
+          "1d7b9c4f28": "Paste a {{reviewLabel}} URL, or enter a number. Leave blank to remove the link."
         }
       },
       "shared": {

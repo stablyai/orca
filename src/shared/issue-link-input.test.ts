@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { getIssueLinkProviderFromUrl, parseIssueLinkInput } from './issue-link-input'
+import {
+  getIssueLinkProviderFromUrl,
+  ISSUE_LINK_PROVIDERS,
+  parseIssueLinkInput
+} from './issue-link-input'
 
 describe('getIssueLinkProviderFromUrl', () => {
   it('detects GitHub issue URLs', () => {
@@ -114,5 +118,50 @@ describe('parseIssueLinkInput', () => {
       expect(parseIssueLinkInput('not an issue', 'linear')).toBeNull()
       expect(parseIssueLinkInput('   ', 'linear')).toBeNull()
     })
+  })
+})
+
+describe('gitlab issues', () => {
+  it('lists gitlab as a provider', () => {
+    expect(ISSUE_LINK_PROVIDERS).toEqual(['github', 'gitlab', 'linear'])
+  })
+
+  it.each(['42', '#42'])('parses the bare number %s', (input) => {
+    expect(parseIssueLinkInput(input, 'gitlab')).toEqual({ provider: 'gitlab', number: 42 })
+  })
+
+  it.each([
+    'https://gitlab.critel.li/group/sub/project/-/issues/42',
+    'https://gitlab.critel.li:8443/group/project/-/work_items/42/detail'
+  ])('parses the self-hosted issue URL %s', (input) => {
+    expect(parseIssueLinkInput(input, 'gitlab')).toEqual({ provider: 'gitlab', number: 42 })
+  })
+
+  it.each([
+    '!42',
+    '0',
+    '#0',
+    '9'.repeat(400),
+    'STA-335',
+    'https://gitlab.com/g/p/-/merge_requests/42',
+    // Why: parseGitLabIssueOrMRLink does `new URL()` with no protocol check, so a
+    // non-http scheme reaches the path matcher and parses. The gate lives here,
+    // the same way parseGitLabMergeRequestNumberForMetaField gates its own URLs.
+    'ftp://gitlab.critel.li/g/p/-/issues/42'
+  ])('rejects %s', (input) => {
+    expect(parseIssueLinkInput(input, 'gitlab')).toBeNull()
+  })
+
+  it('detects gitlab from an issue URL on any host', () => {
+    expect(getIssueLinkProviderFromUrl('https://gitlab.critel.li/g/p/-/issues/42')).toBe('gitlab')
+    expect(getIssueLinkProviderFromUrl('https://gitlab.com/g/p/-/work_items/7')).toBe('gitlab')
+  })
+
+  it('does not flip the provider for a merge request URL', () => {
+    expect(getIssueLinkProviderFromUrl('https://gitlab.com/g/p/-/merge_requests/12')).toBeNull()
+  })
+
+  it('still detects github from a github issue URL', () => {
+    expect(getIssueLinkProviderFromUrl('https://github.com/o/r/issues/42')).toBe('github')
   })
 })

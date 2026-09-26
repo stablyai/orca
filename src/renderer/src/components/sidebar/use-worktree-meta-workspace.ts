@@ -19,6 +19,7 @@ export function useWorktreeMetaWorkspace(args: {
 }): {
   worktree: Worktree | undefined
   linkedIssue: number | null
+  linkedGitLabIssue: number | null
   linkedLinearIssue: string | null
   /** The persisted value and its provider, from one source so they cannot drift. */
   currentIssue: string
@@ -62,16 +63,27 @@ export function useWorktreeMetaWorkspace(args: {
   )
   const linkedIssue = worktree?.linkedIssue ?? null
   const linkedLinearIssue = worktree?.linkedLinearIssue ?? null
+  const linkedGitLabIssue = worktree?.linkedGitLabIssue ?? null
   // Why: `typeof` rather than a null check — an unhydrated projection can leave
   // linkedIssue undefined, which `!== null` would read as a GitHub link.
+  // GitHub before Linear before GitLab preserves today's precedence on legacy
+  // conflicting data.
   const currentProvider: IssueLinkProvider =
-    typeof linkedIssue === 'number' ? 'github' : linkedLinearIssue ? 'linear' : 'github'
+    typeof linkedIssue === 'number'
+      ? 'github'
+      : linkedLinearIssue
+        ? 'linear'
+        : typeof linkedGitLabIssue === 'number'
+          ? 'gitlab'
+          : 'github'
   const currentIssue =
     currentProvider === 'linear'
       ? (linkedLinearIssue ?? '')
-      : typeof linkedIssue === 'number'
-        ? String(linkedIssue)
-        : ''
+      : currentProvider === 'gitlab'
+        ? String(linkedGitLabIssue)
+        : typeof linkedIssue === 'number'
+          ? String(linkedIssue)
+          : ''
   // Why: displacement is decided against live state, not the frozen snapshot —
   // the dialog's warning reads the same values, so a link added by the CLI while
   // the dialog was open cannot outlive a save that promised to displace it.
@@ -79,6 +91,7 @@ export function useWorktreeMetaWorkspace(args: {
     () => ({
       linkedPR: worktree?.linkedPR ?? null,
       linkedIssue,
+      linkedGitLabIssue,
       linkedLinearIssue,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
       linkedWorkItemProvider: worktree?.linkedWorkItem?.provider ?? null,
@@ -86,6 +99,7 @@ export function useWorktreeMetaWorkspace(args: {
     }),
     [
       linkedIssue,
+      linkedGitLabIssue,
       linkedLinearIssue,
       worktree?.linkedPR,
       worktree?.linkedLinearIssueOrganizationUrlKey,
@@ -96,6 +110,7 @@ export function useWorktreeMetaWorkspace(args: {
   return {
     worktree,
     linkedIssue,
+    linkedGitLabIssue,
     linkedLinearIssue,
     currentIssue,
     currentProvider,

@@ -1948,6 +1948,10 @@
           "34f733dda2": "Go to Worktree",
           "3e5f66564e": "Workspace unavailable"
         },
+        "WorktreeIssueLinkField": {
+          "662ae142f8": "Issue #, or a GitHub or Linear URL",
+          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link."
+        },
         "WorktreeList": {
           "2ca6e29a3c": "repo",
           "45fbfe0335": "rename",
@@ -1961,7 +1965,11 @@
           "645fa4a0fd": "GH Issue",
           "65770ad0f0": "Edit GitHub links and notes for this workspace.",
           "741279e7b7": "Issue # or GitHub URL",
-          "7c454be4c5": "Paste an issue URL, or enter a number. Leave blank to remove the link."
+          "7c454be4c5": "Paste an issue URL, or enter a number. Leave blank to remove the link.",
+          "a0d191b7a7": "Edit issue links, pull request links, and notes for this workspace.",
+          "gitlabDescription": "Edit issue links, merge request links, and notes for this workspace.",
+          "gitlabHelp": "Paste a merge request URL, or enter a number. Leave blank to remove the link.",
+          "gitlabMR": "GitLab MR"
         },
         "WorktreeOpenInMenu": {
           "3ec372b664": "file-manager"
