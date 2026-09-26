@@ -391,7 +391,7 @@ describe('OrcaRuntimeService', () => {
       }
     ])
 
-    const draftUrl = 'https://github.com/stablyai/orca/issues/123'
+    const draftUrl = `https://gitlab.example.com/group/project-name/-/work_items/379?context=${'x'.repeat(20_000)}`
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
       name: 'runtime-startup-draft',
@@ -418,7 +418,12 @@ describe('OrcaRuntimeService', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(write).toHaveBeenCalledWith('pty-startup-draft', `\x1b[200~${draftUrl}\x1b[201~`)
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write.mock.calls.every(([ptyId]) => ptyId === 'pty-startup-draft')).toBe(true)
+    expect(write.mock.calls.map(([, data]) => data).join('')).toBe(`\x1b[200~${draftUrl}\x1b[201~`)
+    expect(write.mock.calls.every(([, data]) => Buffer.byteLength(data, 'utf8') <= 16 * 1024)).toBe(
+      true
+    )
   })
 
   it('keeps the 8s main-runtime startup readiness budget for agents without an override', async () => {

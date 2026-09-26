@@ -3,6 +3,7 @@ import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { isTerminalInputTooLarge, iterateTerminalInputChunks } from '../../shared/terminal-input'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
   WorktreeStartupDraftPaste,
@@ -19,7 +20,7 @@ export type WorktreeStartupReadinessHost = {
   hasChildProcesses?: (ptyId: string) => Promise<boolean>
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
-  write: (ptyId: string, data: string) => void
+  write: (ptyId: string, data: string) => boolean
 }
 
 export function pasteWorktreeStartupDraftWhenReady(
@@ -33,9 +34,27 @@ export function pasteWorktreeStartupDraftWhenReady(
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`)
+      return writeWorktreeStartupDraft(host, ptyId, draft.content)
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
+}
+
+async function writeWorktreeStartupDraft(
+  host: WorktreeStartupReadinessHost,
+  ptyId: string,
+  content: string
+): Promise<void> {
+  const payload = `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`
+  if (isTerminalInputTooLarge(payload)) {
+    throw new Error('startup_draft_too_large')
+  }
+  const chunks = iterateTerminalInputChunks(payload)
+  for (const chunk of chunks) {
+    if (!host.write(ptyId, chunk)) {
+      throw new Error('startup_draft_not_writable')
+    }
+    await Promise.resolve()
+  }
 }
 
 export function sendWorktreeStartupFollowupWhenReady(
