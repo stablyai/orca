@@ -7,7 +7,7 @@ import {
 } from './mobile-relay-host-overlay'
 
 const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
-let overlayMutation: Promise<unknown> = Promise.resolve()
+let overlayMutation: Promise<void> = Promise.resolve()
 
 function parseOverlays(raw: string | null): MobileRelayHostOverlay[] | null {
   if (raw === null) {
@@ -50,7 +50,10 @@ async function mutateOverlays(
     await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next))
     return true
   })
-  overlayMutation = mutation.catch(() => {})
+  overlayMutation = mutation.then(
+    () => {},
+    () => {}
+  )
   return mutation
 }
 

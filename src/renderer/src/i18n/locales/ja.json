@@ -34,7 +34,8 @@
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。クリックすると、CPU、メモリ、セッション、デーモンコントロール、ワークスペースディスクスキャンの情報を確認できます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
         "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
-        "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。"
+        "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。",
+        "cursorToggleDescription": "cursor-agent または Cursor IDE でサインインしている場合に Cursor プランの使用状況を表示します。"
       },
       "menuBarIcon": {
         "title": "メニューバーアイコンを表示",
@@ -869,7 +870,8 @@
             "tooMany": "画像は最大 {{maxCount}} 件まで添付できます。",
             "dimensionsTooLarge": "{{fileName}} は画像サイズが大きすぎるため、安全にプレビューできません。",
             "invalidImage": "{{fileName}} は有効な画像として読み取れません。",
-            "additionalErrors": "ほかに {{count}} 件の画像を添付できませんでした。"
+            "additionalErrors": "ほかに {{count}} 件の画像を添付できませんでした。",
+            "totalTooLarge": "{{fileName}} を追加すると添付ファイルの合計が {{maxSize}} を超えます。"
           }
         }
       },
@@ -3093,7 +3095,7 @@
             "missing": {
               "tui": {
                 "title": "This ZCode build has no terminal UI",
-                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+                "description": "Orca's hooks installed correctly — the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
               }
             }
           },
@@ -3666,7 +3668,8 @@
             "grokUsageMenu": "Grok の使用状況",
             "floatingTerminalNewActivity": "{{label}}、新規アクティビティ",
             "codexSignInSuccess": "Codex にサインインしました",
-            "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。"
+            "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。",
+            "cursorUsageMenu": "Cursor の使用状況"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3841,6 +3844,13 @@
               "noSubscription": {
                 "label": "サブスクリプションなし"
               }
+            },
+            "cursor": {
+              "expired": {
+                "label": "サインインの有効期限切れ",
+                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
+              },
+              "plan": "プラン"
             }
           },
           "SshTargetStatusRow": {
@@ -5204,7 +5214,9 @@
           "69969ba364": "送信中…",
           "imageReadFailed": "添付された画像を読み取れませんでした。もう一度添付してください。",
           "attachWhileSending": "現在のフィードバックの送信が完了してから、画像を追加してください。",
-          "imagesNotDelivered": "フィードバックを送信しましたが、画像が届いたかどうかは確認できませんでした。"
+          "imagesNotDelivered": "フィードバックを送信しましたが、画像が届いたかどうかは確認できませんでした。",
+          "imagesNotIncluded": "フィードバックを送信しました。スクリーンショットをアップロードできなかったため、含まれていません。",
+          "imagesRejected": "フィードバックを送信しました。スクリーンショットが大きすぎてアップロードできなかったため、含まれていません。"
         },
         "SidebarFilter": {
           "e3b3898218": "プロジェクトを追加",
@@ -6164,7 +6176,8 @@
         },
         "SidebarFeedbackImageAttachments": {
           "attachImages": "Attach",
-          "removeImage": "{{fileName}} を削除"
+          "removeImage": "{{fileName}} を削除",
+          "screenshotsHint": "スクリーンショットを最大 {{count}} 件、合計 {{maxSize}} まで添付できます"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "一致するワークスペースはありません",
@@ -8900,7 +8913,18 @@
             "b2c4e7f1a8": "終点",
             "3a9b6d2c4e": "APIキー",
             "5d8f1a3b7c": "中国",
-            "7e2a4b8c1d": "海外"
+            "7e2a4b8c1d": "海外",
+            "cursor": {
+              "description": "このコンピュータに既にある Cursor のサインイン（cursor-agent login）から読み取った月間プラン使用状況。",
+              "kw": {
+                "cursor": "cursor",
+                "rateLimit": "レート制限",
+                "spend": "追加料金",
+                "statusBar": "ステータスバー",
+                "usage": "使用量"
+              },
+              "title": "Cursor の使用状況"
+            }
           }
         },
         "advanced": {
@@ -9156,6 +9180,13 @@
               "close": "近い",
               "notification": "通知領域",
               "background": "背景"
+            },
+            "cursor": {
+              "description": "このコンピュータの Cursor サインインから月間 Cursor プラン使用状況を表示します。",
+              "kw": {
+                "cursor": "cursor"
+              },
+              "title": "Cursor の使用状況"
             }
           }
         },
@@ -11992,6 +12023,31 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "インライン画像",
           "fffab5890b": "SIXEL、iTerm2 (IIP)、および Kitty グラフィックスプロトコルを使用して、ターミナルに画像を直接表示します。"
+        },
+        "CursorAccountsSection": {
+          "dashboardLink": "Cursor ダッシュボード",
+          "expired": "サインインの有効期限が切れています — Orca を実行しているコンピュータで cursor-agent login を実行し、「使用状況を更新」をクリックしてください。",
+          "loading": "読み込み中…",
+          "noAllowance": "Cursor によると、このアカウントには使用量の割り当てがありません。",
+          "planTotal": "プラン",
+          "refreshUsage": "使用状況を更新",
+          "resets": "{{when}} にリセット",
+          "signedIn": "サインイン済み",
+          "signedInFrom": "サインイン済み。Orca は {{source}} に保存されたセッションを読み取ります。",
+          "signedInGeneric": "サインイン済み。Orca はこのコンピュータに保存された Cursor セッションを読み取ります。",
+          "signedOut": "このコンピュータに Cursor のサインインが見つかりません",
+          "signedOutHelp": "Cursor IDE でサインインするか、ターミナルで cursor-agent login を実行してから、ここで「使用状況を更新」をクリックしてください。",
+          "source": {
+            "cli": "Cursor CLI 認証ファイル",
+            "desktop": "Cursor IDE",
+            "keychain": "macOS キーチェーン（cursor-agent）"
+          },
+          "staleUsage": "最後に確認できた使用状況 — 最新の更新に失敗しました: {{reason}}",
+          "subtitle": "このコンピュータに既にある Cursor のサインインから、月間の Cursor プラン使用状況を表示します。Orca は読み取るだけで、Cursor のログインを変更することはありません。",
+          "title": "Cursor",
+          "usageDescription": "Cursor は請求サイクルとともにリセットされる 2 つのプールの利用に課金し、使い切るとオンデマンドの追加料金が発生します。",
+          "usageLabel": "使用量",
+          "usageTitle": "月間プラン使用状況"
         }
       },
       "right": {
@@ -14933,7 +14989,22 @@
           "noPython": "このコンピュータに Python が見つかりません。[python.org](https://www.python.org/downloads/) からインストールして、セルを再実行してください。",
           "kernelDied": "カーネルが停止しました。",
           "localOnly": "ノートブックセルはこのコンピュータ上のファイルでのみ実行できます。",
-          "pythonOnly": "Orca では Python ノートブックのみ実行できます。"
+          "pythonOnly": "Orca では Python ノートブックのみ実行できます。",
+          "commandCopied": "コマンドをコピーしました",
+          "createVenv": ".venv を作成",
+          "createVenvItem": "仮想環境を作成…",
+          "createVenvTitle": "仮想環境を作成しますか？",
+          "creatingButton": "作成中…",
+          "creatingVenvDescription": "{{folder}} に .venv を作成し、ipykernel をインストールしています。数分かかることがあります。",
+          "creatingVenvTitle": "仮想環境を作成中…",
+          "installingButton": "インストール中…",
+          "installingDescription": "pip で '{{env}}' に ipykernel をインストールしています。数分かかることがあります。",
+          "installingTitle": "ipykernel をインストール中…",
+          "kernelCreatingVenv": ".venv を作成中…",
+          "setupFailed": "処理に失敗しました。Python の出力:",
+          "tryAgain": "再試行",
+          "useAnotherPython": "別の Python を使用…",
+          "venvDescription": "Orca は '{{env}}' から {{folder}} に .venv を作成し、ipykernel をインストールして、このノートブックをそこで実行します。"
         },
         "MarkdownPreview": {
           "e4683f70c4": "キャンセル",
@@ -17156,6 +17227,13 @@
         "dispatchRejected": "Agent が “continue” メッセージを拒否しました。チャットを開いて自分で送信してください。",
         "unsupported": "このチャットは Orca で再開できません。開いて停止位置を確認してください。",
         "fallback": "Orca はこのチャットを再開できませんでした。開いて手動で続けてください。"
+      },
+      "web": {
+        "preloadApi": {
+          "cursorAccounts": {
+            "hostOnly": "Cursor のサインイン詳細は、Orca を実行しているコンピュータでのみ読み取れます。"
+          }
+        }
       }
     },
     "i18n": {
@@ -18186,6 +18264,52 @@
       "unassignedInstruction": "フォーカスされたペインで音声ディクテーションを開始する前に、ディクテーションショートカットを割り当てます。",
       "settingsInstruction": "いつでもモデル、ディクテーションモード、ショートカットを変更できます。",
       "settingsLink": "設定→音声"
+    },
+    "sessionSearch": {
+      "ageHours": "2時間前",
+      "ageMinutes": "12分前",
+      "ageYesterday": "1日前",
+      "agentsInstruction": "Agent も検索できます。「ログインタイムアウトを修正したセッションを探して」と頼んでみてください。",
+      "consentInstruction": "いつでも以下で変更またはオフにできます:",
+      "continueInBackground": "バックグラウンドで続行",
+      "demoHit1Age": "3日前",
+      "demoHit1Snippet": "[[ログインタイムアウト]]を 30 秒に引き上げ、トークン更新時の再試行を追加しました。",
+      "demoHit1Title": "不安定な認証リダイレクトの修正",
+      "demoHit2Age": "1週間前",
+      "demoHit2Snippet": "スリープ復帰後に[[ログイン]]ページが[[タイムアウト]]で止まるのはなぜですか？",
+      "demoHit2Title": "スリープ後のセッション更新",
+      "demoHit3Age": "2週間前",
+      "demoHit3Snippet": "[[ログインタイムアウト]]の経路をエンドツーエンドでカバーするテストを追加しました。",
+      "demoHit3Title": "認証 E2E の強化",
+      "demoHit4Age": "5日前",
+      "demoHit4Snippet": "[[ロールバック]]では新規インデックスを先に削除し、古いカラムを復元します。",
+      "demoHit4Title": "注文テーブルの移行",
+      "demoHit5Age": "3週間前",
+      "demoHit5Snippet": "再試行の前に[[移行]][[ロールバック]]計画を書いてもらえますか？",
+      "demoHit5Title": "ステージングのデプロイに失敗",
+      "demoHit6Age": "1か月前",
+      "demoHit6Snippet": "ここの[[移行]]は enum の名前変更を除きすべて可逆です。",
+      "demoHit6Title": "スキーマレビューメモ",
+      "demoQuery": "ログインタイムアウト",
+      "demoQuery2": "移行 ロールバック",
+      "demoRoleAssistant": "アシスタント",
+      "demoRoleUser": "ユーザー",
+      "enableFailed": "セッション検索をオンにできませんでした。再試行してください。",
+      "indexingDescription": "過去の Agent の会話を読み取り、検索できるようにしています。数分かかることがあります。",
+      "indexingTitle": "Agent セッションをインデックス作成中",
+      "progressStarting": "セッションを探しています…",
+      "readyDescription": "このコンピュータ上のすべての Agent セッションを、会話内容から検索できるようになりました。",
+      "readyTitle": "セッション検索の準備ができました",
+      "readyToast": "セッション検索の準備ができました",
+      "readyToastOpen": "オープン",
+      "recent1Text": "検索エントリをワークフロー配下に移動し、テストを更新しました。",
+      "recent1Title": "設定サイドバーの整理",
+      "recent2Text": "依存関係を更新し、ビルドが通ることを確認します。",
+      "recent2Title": "ロックファイルの更新",
+      "recent3Text": "メモの初版です。分野別にまとめています。",
+      "recent3Title": "リリースノートの下書き",
+      "settingsLink": "設定 → Agent セッションの検索",
+      "startSearching": "検索を開始"
     }
   },
   "quickOpen": {

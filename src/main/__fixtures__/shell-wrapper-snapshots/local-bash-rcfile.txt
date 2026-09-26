@@ -33,6 +33,13 @@ __orca_restore_agent_teams_path() {
   export PATH="${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
 }
 __orca_restore_agent_teams_path
+if [ -n "${ORCA_WSL_CLI_DIR:-}" ]; then
+  if [ -x "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" ]; then
+    export PATH="$ORCA_WSL_CLI_DIR${PATH:+:$PATH}"
+  else
+    printf 'Orca CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" >&2
+  fi
+fi
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"

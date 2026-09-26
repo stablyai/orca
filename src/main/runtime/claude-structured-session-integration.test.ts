@@ -349,6 +349,7 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   it('leaves unlisted shell exports out when inheritance is off', async () => {
+    vi.stubEnv('CODEX_LB_API_KEY', undefined)
     shellEnv = { ...shellEnv, CODEX_LB_API_KEY: 'shell-exported', LISTED_ONLY: 'yes' }
     shellEnvironmentPolicy = { inheritAll: false, names: ['LISTED_ONLY'] }
 

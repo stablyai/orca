@@ -76,7 +76,11 @@ describe('AutomationService zero-grace tick latency', () => {
     service.setWebContents({ isDestroyed: () => false, send: vi.fn() })
     service.start()
     service.setRendererReady()
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(() => {
+      if (store.listAutomations().some((automation) => automation.nextRunAt <= at)) {
+        throw new Error('Automation evaluation is still saving its next occurrence')
+      }
+    })
     service.stop()
   }
 

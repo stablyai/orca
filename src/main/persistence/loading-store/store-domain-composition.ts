@@ -65,6 +65,23 @@ import {
   installSshLeaseRecoveryOperationsContext
 } from './ssh-lease-recovery-operations'
 
+export type StoreDomainOperations = WriteSchedulingOperations &
+  PrimaryStateWriteOperations &
+  ProjectCollectionOperations &
+  RepoLifecycleOperations &
+  MobileTabSelectionPersistence &
+  SparsePresetPersistence &
+  AutomationPersistence &
+  MetadataLineageOperations &
+  ProfilePreferences &
+  SessionHostPartitionOperations &
+  SessionSnapshotOperations &
+  PtyBindingPersistenceOperations &
+  SshProfileOperations &
+  RetiredWorktreeNamePersistence &
+  SshLeaseRecoveryOperations &
+  WriteFlushBarrierOperations
+
 export type StoreDomains = {
   adaptation: LoadedStateAdaptationOperations
   backups: BackupRecoveryRotationOperations
