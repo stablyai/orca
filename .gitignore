@@ -147,6 +147,8 @@ docs/**
 !docs/reference/wsl-command-execution.md
 !docs/reference/wsl-probe-failure-semantics.md
 !docs/reference/xterm-patch-regeneration.md
+!docs/reference/serve-logging/
+!docs/reference/serve-logging/**
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

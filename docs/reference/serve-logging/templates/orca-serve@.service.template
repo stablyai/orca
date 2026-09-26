@@ -1,0 +1,179 @@
+# ============================================================================
+# orca-serve@.service.template — PRODUCTION systemd template unit (headless serve)
+#
+# `@PREFIX@` placeholders are substituted by install.sh at deploy time. In this
+# repo's model @PREFIX@ = /data/opt/revive/orca_serve. The unit is host-neutral and
+# instance-neutral: it carries ONLY structural, %i/@PREFIX@-derived env, plus the two
+# EnvironmentFile= lines that pull in the real config layer. Every per-host /
+# per-instance value lives in config (orca-serve.conf / instances/<slot>.env) — edit
+# config, never rebuild this unit. Installs to /etc/systemd/system/orca-serve@.service.
+#
+# `%i` = the slot name (factory|lesley|jessica|canary). Control per-slot:
+#   systemctl enable --now orca-serve@factory.service
+#   systemctl restart          orca-serve@lesley.service
+#
+# Everything below is DESIGN AUTHORITY: CONTRACT.md v2 §0 invariants (I1 nothing on the
+# boot drive), §1 instances, §2 config layer, §4 unit env. This template is the
+# reproducible source — do not diverge from the deployed unit's semantics.
+# ============================================================================
+
+[Unit]
+Description=Orca headless runtime (%i)
+Documentation=https://github.com/stablyai/orca
+After=network-online.target
+Wants=network-online.target
+
+# ---------------------------------------------------------------------------
+# RESTART CIRCUIT BREAKER (unit-level, before [Service])
+#
+# Counts starts in a rolling window; if the instance restarts >= StartLimitBurst
+# times within StartLimitIntervalSec, systemd stops trying and leaves the unit in a
+# "failed" (rate-limited) state instead of restart-looping forever. This is the
+# backstop that converts an infinite crash-loop into a diagnosable, contained outage.
+#
+# Tuning guidance: 60s/5 catches FAST crash-loops (immediate ExecStart/EXEC failure,
+# native crash before readiness) without false-tripping on legitimately slow Electron
+# starts — a single failed start can itself take up to TimeoutStartSec. Widen to
+# 300s/5 only if always-on slots prove to false-trip under heavy legitimate restarts.
+# ---------------------------------------------------------------------------
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Refuse to start if the data volume is not mounted — a clean mount error, not a
+# cascade of ENOENT/silent-defaults deeper in the start path.
+RequiresMountsFor=@PREFIX@
+
+[Service]
+# One service identity for ALL instances. Isolation is at the profile + port layer,
+# not the OS-user layer. svc_orca: uid/gid 985, Group=revive (gid 1200), nologin.
+User=svc_orca
+Group=revive
+WorkingDirectory=@PREFIX@
+Type=simple
+
+# ---------------------------------------------------------------------------
+# JOURNAL LOGGING — stdio is captured by journald AND tee'd to serve-fg.log.
+#
+# StandardOutput/StandardError=journal is the systemd-recommended default and makes
+# `journalctl -u orca-serve@<slot>` a complete record. The tee-to-file happens INSIDE
+# the launcher (serve-fg does `exec > >(tee -a $ORCA_SERVE_LOGDIR/serve-fg.log) 2>&1`)
+# so the file sink is additive and survives even a journald that drops/floods on this
+# unit. SyslogIdentifier pairs log lines with the instance name for cross-ring grep.
+# ---------------------------------------------------------------------------
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=orca-serve@%i
+
+# ---------------------------------------------------------------------------
+# CONFIG LAYER (CONTRACT §2) — shared host conf, then per-instance (last wins).
+# NO leading `-`: a missing file MUST fail loudly (misconfig, not a silent default).
+# ---------------------------------------------------------------------------
+EnvironmentFile=@PREFIX@/etc/orca-serve.conf
+EnvironmentFile=@PREFIX@/etc/instances/%i.env
+
+# ---------------------------------------------------------------------------
+# STRUCTURAL, %i-derived env — script data, stays in the unit (CONTRACT §4).
+# These are computed paths, not chosen values; they never move to config.
+# ---------------------------------------------------------------------------
+# HOME is the svc_orca ACCOUNT home (uid 985) — NOT @PREFIX@. Several lifecycle
+# scripts resolve $HOME/... defaults (e.g. ~/.local/state/orca-serve-poststart,
+# ~/.local/bin) and must land in the account's real home, not the serve prefix.
+Environment=HOME=/data/home/svc_orca
+Environment=PATH=@PREFIX@/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Runtime dir is per-instance (orca_serve/%i) so concurrent instances never share
+# /run/orca_serve/<slot>. %t = /run under the system manager (tmpfs, never the boot
+# drive). Auto-created 0700 svc_orca-owned, auto-removed on stop. The Unix-domain-socket
+# transport (o-*.sock) for local CLIs lives here.
+RuntimeDirectory=orca_serve/%i
+Environment=XDG_RUNTIME_DIR=%t/orca_serve/%i
+Environment=TMPDIR=@PREFIX@/state/%i/tmp
+Environment=ORCA_INSTANCE=%i
+Environment=XDG_CONFIG_HOME=@PREFIX@/state/%i/config
+Environment=ORCA_USER_DATA=@PREFIX@/state/%i/config
+
+# ORCA_CONFIG_DIR is the Electron *userData* dir and MUST carry the /orca leaf:
+# .../state/%i/config/orca. Without it the lifecycle hooks read one level too high,
+# the binding-drift check goes blind, and "Unknown environment" slips past upgrades.
+Environment=ORCA_CONFIG_DIR=@PREFIX@/state/%i/config/orca
+Environment=ORCA_SERVE_LOGDIR=@PREFIX@/state/%i/logs
+Environment=OSV_DIAG_DIR=@PREFIX@/state/%i/logs
+Environment=ORCA_DIR=@PREFIX@/share
+
+# The launcher resolves the build from ORCA_VERSION (set per-slot): share/serve-root-${ORCA_VERSION}
+# or the stable share/serve-root symlink when unset (factory chases latest). No AppImage pin here.
+# Per-instance change-queue / data-json / diagnostics paths (%i-keyed).
+Environment=ORCA_CHANGE_QUEUE_DIR=@PREFIX@/state/%i/change-queue
+Environment=ORCA_DATA_JSON=@PREFIX@/state/%i/config/orca/profiles/local-default/orca-data.json
+Environment=DIAG_CHANGE_QUEUE_DATA_JSON=@PREFIX@/state/%i/config/orca/profiles/local-default/orca-data.json
+Environment=DIAG_DIR=@PREFIX@/state/%i/diagnostics
+# Crash-loop guard state (poststart) — %i-keyed so slots never cross-contaminate.
+Environment=POSTSTART_STATE_DIR=@PREFIX@/state/%i/poststart
+Environment=OSV_SYSTEMD_SCOPE=system
+# *_BIN pins — full executable paths (CONTRACT §4 NOTE, fixes the v1 bare-dir
+# BIN/RESTORE_BIN bug). The lifecycle scripts read these exact var names, each a
+# full exec path, so the hooks resolve the real binaries regardless of PATH.
+Environment=ORCA_POSTSTART_BIN=@PREFIX@/bin/orca-serve-poststart
+Environment=ORCA_RESTORE_BIN=@PREFIX@/bin/orca-serve-restore
+Environment=OSV_BIN=@PREFIX@/bin/orca-serve-version
+Environment=DIAG_BIN=@PREFIX@/bin/orca-serve-diag
+
+# ---------------------------------------------------------------------------
+# RESOURCE LIMITS — bound a run-away renderer/pty leak instead of letting it OOM
+# the host. systemd applies these to the instance cgroup; when breached the unit is
+# killed (MemoryMax) or throttled (MemoryHigh) with a clean result code instead of a
+# kernel OOM kill. Tune per host workload; these are sane headless defaults.
+#
+# * MemoryHigh — soft ceiling: reclaim pressure before OOM. Set ~75% of MemoryMax.
+# * MemoryMax  — hard ceiling: exceed and the cgroup is OOM-killed (a *systemd*
+#                 result code, distinguishable from a bare kernel exit-137).
+# * LimitNOFILE — fd ceiling; EMFILE exhaustion is Bucket-2 in the matrix. Raise only
+#                 if the slot legitimately holds many concurrent PTYs/AGENT sessions.
+# * TasksMax   — bound thread/process fan-out (renderer + zygote + Xvfb + helpers).
+#                 Host-tuned via drop-in: the deploy host raises it to 16384
+#                 (40-tasksmax.conf); 512 here is the conservative headless default.
+# ---------------------------------------------------------------------------
+MemoryHigh=6G
+MemoryMax=8G
+LimitNOFILE=16384
+TasksMax=512
+
+# ---------------------------------------------------------------------------
+# LAUNCH + LIFECYCLE HOOKS
+#
+# Truly headless: DISPLAY/WAYLAND_DISPLAY intentionally UNSET — `orca serve` spawns
+# its own private Xvfb and disables GPU acceleration itself (upstream
+# headless-linux-server.md, v1.4.110). The managed-display host variant supplies
+# DISPLAY via a *.d/ drop-in; never set it here (that would defeat the native path's
+# own disable-gpu and SIGTRAP on GPU-less hosts).
+# ---------------------------------------------------------------------------
+UnsetEnvironment=DISPLAY WAYLAND_DISPLAY
+
+# `-` prefixes = fail-open: a failing hook never blocks the serve (the serve path is
+# primary; capture/queue/restore are additive).
+#   ExecStartPre   — apply the change-queue (governed pending changes) before boot.
+#   ExecStartPost  — detached deep-readiness + session restore (launch-poststart.sh
+#                    returns immediately; the heavy work runs in its own scope).
+#   ExecStopPost   — orca-serve-diag --phase before: snapshot state as the serve comes
+#                    down, so the NEXT start's 'after' bundle produces a clean delta.
+#   ExecStart      — the foreground launcher (does NOT detach; systemd owns it).
+# ---------------------------------------------------------------------------
+ExecStartPre=-@PREFIX@/bin/apply-queue.sh
+ExecStartPost=-@PREFIX@/bin/launch-poststart.sh
+ExecStopPost=-@PREFIX@/bin/orca-serve-diag --phase before
+ExecStart=@PREFIX@/bin/orca-serve-fg
+
+# ---------------------------------------------------------------------------
+# RESTART POLICY — always-on slots. The StartLimit block in [Unit] is the circuit
+# breaker for this; RestartSec means a single failure retries after 5s, while a
+# storm trips the StartLimit and lands the unit "failed" rather than looping.
+# TimeoutStartSec gives Electron time to come up (larger than a fast-restart window).
+# KillMode=mixed: SIGTERM the main serve, SIGKILL stragglers so stop completes.
+# ---------------------------------------------------------------------------
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

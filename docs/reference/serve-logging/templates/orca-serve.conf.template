@@ -1,0 +1,79 @@
+# ============================================================================
+# orca-serve.conf.template — SHARED HOST configuration (global, all instances inherit)
+#
+# Deployed to @PREFIX@/etc/orca-serve.conf = /data/opt/revive/orca_serve/etc/orca-serve.conf
+# and loaded by orca-serve@.service as the FIRST EnvironmentFile= line (before the
+# per-instance instances/<slot>.env, which may override any value here).
+#
+# Authoring rule (CONTRACT.md v2 §2): a value goes HERE if it could ever differ by HOST.
+# A value that differs by INSTANCE or VERSION goes in etc/instances/<slot>.env instead.
+# Never duplicate a value in both places. Every value below is config, not script data —
+# editing + redeploying this file must never require a script or unit rebuild.
+#
+# Copy to orca-serve.conf (drop the .template suffix) and set per-host values.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Host identity
+# ---------------------------------------------------------------------------
+# Which deployment environment this host is. Used by lifecycle scripts for
+# logging/labeling AND is the Orca environment id clients must resolve against.
+# Must exactly match a `name` in the environment registry the serve binds.
+#   mtl-02-dev-001  -> mtl-02
+#   lesleys-pc      -> pc
+# ---------------------------------------------------------------------------
+ORCA_ENVIRONMENT=mtl-02
+
+# The address clients pair to on this host (overlay/WireGuard IP). Remote clients
+# dial ws://<this>:6768 (or wss:// when proxied). Local/loopback hosts set 127.0.0.1.
+ORCA_PAIRING_ADDRESS=10.200.0.1
+
+# ---------------------------------------------------------------------------
+# Display strategy — the ONE knob that selects Xvfb wiring (CONTRACT §2a / DDR #3).
+#   native  -> Orca self-spawns its own Xvfb on :99 (DISPLAY unset) + the inlined
+#              stale-:99-lock guard drop-in. SERVER default.
+#   managed -> a systemd-owned orca-xvfb.service on :99 + a DISPLAY=:99 drop-in.
+#              WSL/PC default (native self-spawn SIGSEGVs there).
+# Flip this value and re-run install.sh; the installer rewires the display with ZERO
+# script edits.
+# ---------------------------------------------------------------------------
+ORCA_DISPLAY_MODE=native
+
+# ---------------------------------------------------------------------------
+# GPU / hardware policy
+# ---------------------------------------------------------------------------
+# Force software GL for GPU-less hosts. Missing on a GPU-less host => WebGL2
+# blocklisted => SIGTRAP / renderer crash (Bucket 1 in the matrix).
+LIBGL_ALWAYS_SOFTWARE=1
+
+# Policy: Chromium sandbox. Set 1 only where the headless runtime cannot sandbox
+# (documented host constraint); otherwise leave UNSET to keep the sandbox.
+# ELECTRON_DISABLE_SANDBOX=1
+
+# ---------------------------------------------------------------------------
+# Logging / diagnostics verbosity (HOST-wide default)
+#
+# There is exactly ONE verbosity knob for the serve: ELECTRON_ENABLE_LOGGING.
+# The runtime has NO app-level log-level facility. `ORCA_LOG_LEVEL` and `ORCA_DEBUG`
+# are not implemented anywhere in the Orca source, and `orca serve` has no
+# `--verbose` flag — its whole allowlist is help/json/pairing-code/environment/
+# port/pairing-address/mobile-pairing/no-pairing/project-root/recipe-json, and any
+# other flag is rejected as "Unknown flag --x for command: serve". Do not
+# reintroduce those three from an old runbook; see
+# docs/guides/orca-serve-logging-guide.md §2 for the real, evidence-backed levers.
+#
+# A slot may override the value below in instances/<slot>.env (that file is the
+# SECOND EnvironmentFile=, so it wins) — e.g. canary logging while factory stays quiet.
+# ---------------------------------------------------------------------------
+# Turn on Electron/Chromium internal logging (GPU, renderer, IPC channels) to the
+# served stderr -> journald + serve-fg.log. Leave UNSET/0 in steady state; enable
+# only while chasing a WebGL/GPU/native-crash fault.
+ELECTRON_ENABLE_LOGGING=0
+
+# ---------------------------------------------------------------------------
+# Any future host-wide tunable goes here — never in a script or in orca-serve@.service.
+#
+# DO NOT put per-user agent hub paths here (CLAUDE_CONFIG_DIR / GROK_HOME /
+# GH_CONFIG_DIR / …). Serve is shared infrastructure; per-user agent auth belongs in
+# instances/<slot>.env or the client-side .auth/<user> wrappers.
+# ---------------------------------------------------------------------------
