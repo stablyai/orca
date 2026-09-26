@@ -58,6 +58,7 @@ export function WorktreeCardDetailsHover({
   jiraIssue,
   review,
   comment,
+  issueReferenceTarget,
   automationProvenance,
   cliProvenance,
   children,
@@ -366,6 +367,7 @@ export function WorktreeCardDetailsHover({
                 <CommentMarkdownAsync
                   content={comment ?? ''}
                   className={COMMENT_MARKDOWN_CLASS_NAME}
+                  issueReferences={issueReferenceTarget}
                   // Mirrors remark-breaks so the fallback keeps the note's line count.
                   fallbackClassName="whitespace-pre-wrap"
                 />

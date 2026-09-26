@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { getIssueLinkProviderFromUrl, parseIssueLinkInput } from './issue-link-input'
+import {
+  getIssueLinkProviderFromUrl,
+  ISSUE_LINK_PROVIDERS,
+  isIssueLinkProvider,
+  parseIssueLinkInput
+} from './issue-link-input'
 
 describe('getIssueLinkProviderFromUrl', () => {
   it('detects GitHub issue URLs', () => {
@@ -41,6 +46,19 @@ describe('getIssueLinkProviderFromUrl', () => {
   it('returns null for empty input', () => {
     expect(getIssueLinkProviderFromUrl('')).toBeNull()
     expect(getIssueLinkProviderFromUrl('   ')).toBeNull()
+  })
+
+  it('detects GitLab issue and work-item URLs on any host', () => {
+    expect(getIssueLinkProviderFromUrl('https://gitlab.com/acme/app/-/issues/12')).toBe('gitlab')
+    expect(
+      getIssueLinkProviderFromUrl('https://gitlab.example.com/group/sub/app/-/work_items/12')
+    ).toBe('gitlab')
+  })
+
+  it('does not flip the provider for a GitLab merge request URL', () => {
+    expect(
+      getIssueLinkProviderFromUrl('https://gitlab.com/acme/app/-/merge_requests/12')
+    ).toBeNull()
   })
 })
 
@@ -114,5 +132,42 @@ describe('parseIssueLinkInput', () => {
       expect(parseIssueLinkInput('not an issue', 'linear')).toBeNull()
       expect(parseIssueLinkInput('   ', 'linear')).toBeNull()
     })
+  })
+
+  describe('gitlab provider', () => {
+    it('accepts bare and hash-prefixed numbers', () => {
+      expect(parseIssueLinkInput('12', 'gitlab')).toEqual({ provider: 'gitlab', number: 12 })
+      expect(parseIssueLinkInput('#12', 'gitlab')).toEqual({ provider: 'gitlab', number: 12 })
+    })
+
+    it('accepts issue and work-item URLs', () => {
+      expect(parseIssueLinkInput('https://gitlab.com/acme/app/-/issues/12', 'gitlab')).toEqual({
+        provider: 'gitlab',
+        number: 12
+      })
+      expect(
+        parseIssueLinkInput('https://gitlab.example.com/g/s/app/-/work_items/3', 'gitlab')
+      ).toEqual({ provider: 'gitlab', number: 3 })
+    })
+
+    // `!` is GitLab's MR sigil; an MR must never land in the issue slot.
+    it('rejects merge request URLs and !-prefixed numbers', () => {
+      expect(
+        parseIssueLinkInput('https://gitlab.com/acme/app/-/merge_requests/12', 'gitlab')
+      ).toBeNull()
+      expect(parseIssueLinkInput('!12', 'gitlab')).toBeNull()
+    })
+
+    it('rejects GitHub URLs, junk, and unsafe numbers', () => {
+      expect(parseIssueLinkInput('https://github.com/o/r/issues/12', 'gitlab')).toBeNull()
+      expect(parseIssueLinkInput('0', 'gitlab')).toBeNull()
+      expect(parseIssueLinkInput('STA-335', 'gitlab')).toBeNull()
+      expect(parseIssueLinkInput('9'.repeat(400), 'gitlab')).toBeNull()
+    })
+  })
+
+  it('offers gitlab in the dropdown order, next to github', () => {
+    expect(ISSUE_LINK_PROVIDERS).toEqual(['github', 'gitlab', 'linear'])
+    expect(isIssueLinkProvider('gitlab')).toBe(true)
   })
 })

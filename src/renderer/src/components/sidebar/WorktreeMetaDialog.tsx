@@ -83,6 +83,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const {
     worktree,
     linkedIssue,
+    linkedGitLabIssue,
     linkedLinearIssue,
     currentIssue,
     currentProvider,
@@ -120,7 +121,8 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
       issueProvider,
       linearOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
       linkedLinearIssue: worktree?.linkedLinearIssue ?? null,
-      linearSourceContext: worktree?.linkedTaskSourceContext ?? null
+      linearSourceContext: worktree?.linkedTaskSourceContext ?? null,
+      linkedWorkItem: worktree?.linkedWorkItem ?? null
     })
 
   const issueInputRef = useRef<HTMLInputElement>(null)
@@ -219,9 +221,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         snapshot,
         isFolderWorkspace,
         linkedIssue,
+        linkedGitLabIssue,
         linkedLinearIssue
       }),
-    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue]
+    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedGitLabIssue, linkedLinearIssue]
   )
 
   const handleOpenChange = useCallback(

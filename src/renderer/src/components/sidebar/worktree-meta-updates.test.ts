@@ -198,10 +198,11 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(updates).not.toHaveProperty('linkedTaskSourceContext')
   })
 
-  // The row cannot render a GitLab or Jira issue, so clearing one would destroy a
-  // link the user was never shown — and neither has another editor to restore it.
-  it('leaves work items owned by other providers alone', () => {
-    for (const provider of ['jira', 'gitlab'] as const) {
+  // Jira alone now: the issue row renders GitHub, GitLab and Linear, so a GitLab
+  // work item is displaceable — the user can see and restore it. Jira still has no
+  // slot in this row, so clearing one would destroy a link never shown.
+  it('leaves Jira-owned work items alone', () => {
+    for (const provider of ['jira'] as const) {
       const updates = buildUpdates(
         { issueInput: '12' },
         {},
@@ -211,6 +212,16 @@ describe('buildWorktreeMetaUpdates', () => {
       expect(updates).not.toHaveProperty('linkedWorkItem')
       expect(updates).not.toHaveProperty('linkedTaskSourceContext')
     }
+  })
+
+  it('displaces a GitLab-owned work item when a GitHub issue is linked', () => {
+    const updates = buildUpdates(
+      { issueInput: '12' },
+      {},
+      { linkedWorkItemProvider: 'gitlab', linkedWorkItemType: 'issue' }
+    )
+    expect(updates.linkedWorkItem).toBeNull()
+    expect(updates.linkedTaskSourceContext).toBeNull()
   })
 
   // Only the spelling changed, so the field names the same issue it already
@@ -409,5 +420,106 @@ describe('buildWorktreeMetaUpdates', () => {
 
   it('clears a comment with empty string, never a present-undefined key', () => {
     expect(buildUpdates({ commentInput: '  ' }, { comment: 'old note' }).comment).toBe('')
+  })
+})
+
+describe('GitLab issue slot', () => {
+  it('writes a GitLab number into linkedGitLabIssue and clears the GitHub slot', () => {
+    expect(buildUpdates({ issueInput: '7', issueProvider: 'gitlab' })).toEqual({
+      linkedGitLabIssue: 7,
+      linkedIssue: null
+    })
+  })
+
+  it('accepts a GitLab issue URL for the gitlab provider', () => {
+    expect(
+      buildUpdates({
+        issueInput: 'https://gitlab.example.com/g/app/-/issues/9',
+        issueProvider: 'gitlab'
+      })
+    ).toEqual({ linkedGitLabIssue: 9, linkedIssue: null })
+  })
+
+  it('leaves every link untouched for an MR URL in the gitlab issue field', () => {
+    expect(
+      buildUpdates({
+        issueInput: 'https://gitlab.com/g/app/-/merge_requests/9',
+        issueProvider: 'gitlab'
+      })
+    ).toEqual({})
+  })
+
+  // Presence gating, same as Linear: worktree.set parses in strip mode and the
+  // persistence gates key off PRESENCE, not value. A synthetic clear for a slot
+  // that was never filled is a key sent for nothing.
+  it('does not emit a GitLab clear for a workspace that never held one', () => {
+    expect(buildUpdates({ issueInput: '42' })).toEqual({ linkedIssue: 42 })
+    expect(buildUpdates({ issueInput: '' }, { issueInput: '42' })).toEqual({ linkedIssue: null })
+  })
+
+  it('clears a live GitLab issue when a GitHub number is saved', () => {
+    expect(
+      buildUpdates(
+        { issueInput: '42' },
+        { issueInput: '7', issueProvider: 'gitlab' },
+        { linkedGitLabIssue: 7 }
+      )
+    ).toEqual({ linkedIssue: 42, linkedGitLabIssue: null })
+  })
+
+  it('clears a live GitLab issue when a Linear identifier is saved', () => {
+    const updates = buildUpdates(
+      { issueInput: 'STA-335', issueProvider: 'linear' },
+      { issueInput: '7', issueProvider: 'gitlab' },
+      { linkedGitLabIssue: 7 }
+    )
+    expect(updates.linkedGitLabIssue).toBeNull()
+    expect(updates.linkedIssue).toBeNull()
+    expect(updates.linkedLinearIssue).toBe('STA-335')
+  })
+
+  it('clears a live GitLab issue when the field is blanked', () => {
+    expect(
+      buildUpdates(
+        { issueInput: '' },
+        { issueInput: '7', issueProvider: 'gitlab' },
+        { linkedGitLabIssue: 7 }
+      )
+    ).toEqual({ linkedIssue: null, linkedGitLabIssue: null })
+  })
+
+  it('treats 7, #7 and the issue URL as the same GitLab link (not dirty)', () => {
+    expect(
+      buildUpdates(
+        { issueInput: 'https://gitlab.com/g/app/-/issues/7', issueProvider: 'gitlab' },
+        { issueInput: '#7', issueProvider: 'gitlab' },
+        { linkedGitLabIssue: 7 }
+      )
+    ).toEqual({})
+  })
+
+  it('keeps the GitLab work item when the save re-states the same issue', () => {
+    expect(
+      buildUpdates(
+        { issueInput: '#7', issueProvider: 'gitlab' },
+        { issueInput: '', issueProvider: 'gitlab' },
+        { linkedWorkItemProvider: 'gitlab', linkedWorkItemType: 'issue', linkedGitLabIssue: 7 }
+      )
+    ).toEqual({ linkedGitLabIssue: 7, linkedIssue: null })
+  })
+
+  it('displaces a GitLab work item when a different GitLab issue is saved', () => {
+    expect(
+      buildUpdates(
+        { issueInput: '8', issueProvider: 'gitlab' },
+        { issueInput: '7', issueProvider: 'gitlab' },
+        { linkedWorkItemProvider: 'gitlab', linkedWorkItemType: 'issue', linkedGitLabIssue: 7 }
+      )
+    ).toEqual({
+      linkedGitLabIssue: 8,
+      linkedIssue: null,
+      linkedWorkItem: null,
+      linkedTaskSourceContext: null
+    })
   })
 })

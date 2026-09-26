@@ -1,3 +1,4 @@
+import { linkedIssueNumberForTemplate } from '../../../../../../shared/linked-issue-provider'
 import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
 import { SourceControlDialogLayer } from './dialog-layer'
 import type { SourceControlPanelReadyProps } from './panel-props'
@@ -106,7 +107,9 @@ export function SourceControlPanelDialogs({
       settings={settings}
       repo={activeRepo}
       discoveryHostKey={sourceControlAiDiscoveryHostKey}
-      linkedIssue={activeWorktree.linkedIssue ?? null}
+      // Why: the same picker generation uses, or the chip preview would show empty
+      // on a GitLab workspace while the generated text carries a real number.
+      linkedIssue={linkedIssueNumberForTemplate(activeWorktree)}
       onGenerateCommitMessage={(params) => {
         void handleGenerate({ sourceControlAiResolvedParams: params })
       }}

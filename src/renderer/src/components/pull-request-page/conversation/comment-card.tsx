@@ -155,7 +155,9 @@ export function ConversationCommentCard({
         <CommentMarkdown
           content={comment.body}
           variant="document"
-          githubRepo={markdownGitHubRepo}
+          issueReferences={
+            markdownGitHubRepo ? { provider: 'github', slug: markdownGitHubRepo } : null
+          }
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
         <CommentReactions reactions={comment.reactions} />

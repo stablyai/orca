@@ -9,7 +9,7 @@ export type OrcaHooks = {
     archive?: string // Runs before worktree is archived
   }
   setupAgentStartupPolicy?: SetupAgentStartupPolicy
-  issueCommand?: string // Shared default command for linked GitHub issues
+  issueCommand?: string // Shared default command for linked GitHub or GitLab issues
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
   environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
   environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes

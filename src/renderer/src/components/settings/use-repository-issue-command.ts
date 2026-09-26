@@ -81,8 +81,7 @@ export function useRepositoryIssueCommand({
       setIssueCommandSaveError(null)
     } catch (error) {
       console.error('[RepositoryHooksSection] Failed to write issue command:', error)
-      const message =
-        error instanceof Error ? error.message : 'Failed to save GitHub issue command.'
+      const message = error instanceof Error ? error.message : 'Failed to save issue command.'
       setIssueCommandSaveError(message)
       toast.error(message)
     }

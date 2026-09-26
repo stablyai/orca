@@ -19,7 +19,9 @@ export function GitHubMarkdownComposerPreviewPane({
         <CommentMarkdown
           content={value}
           variant="document"
-          githubRepo={previewGithubRepo}
+          issueReferences={
+            previewGithubRepo ? { provider: 'github', slug: previewGithubRepo } : null
+          }
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
       ) : (

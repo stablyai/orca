@@ -31,7 +31,12 @@ export type WorktreeMeta = {
   /** True when a user-authored label must survive branch changes. */
   displayNameIsPinned?: boolean
   comment: string
+  /** GitHub issue number. GitLab issues live in linkedGitLabIssue; the unprefixed
+   *  name predates multi-forge support and is deliberately kept — 700+ readers and
+   *  a settings migration, for no user-visible gain. */
   linkedIssue: number | null
+  /** GitHub PR number. GitLab MRs live in linkedGitLabMR; kept unprefixed for the
+   *  same reason as linkedIssue. */
   linkedPR: number | null
   /** GitHub PR hidden from branch discovery after an explicit unlink. */
   suppressedGitHubPR?: number | null

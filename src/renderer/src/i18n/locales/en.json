@@ -494,7 +494,8 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "gitlabIssueCapability": "Update the remote runtime to link GitLab issues"
                 }
               }
             }
@@ -6328,14 +6329,19 @@
           "2c245ac134": "Saving unlinks {{link}} — a workspace tracks one issue.",
           "d8c8a30d1f": "Couldn't open that issue. Check the identifier and your Linear connection.",
           "269198eeda": "Couldn't open that issue. Check the number and your GitHub connection.",
-          "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
+          "f047887705": "Paste a GitHub, GitLab or Linear URL, or enter a number. Leave blank to remove the link.",
           "ad78f9bee2": "Issue",
-          "662ae142f8": "Issue #, or a GitHub or Linear URL",
-          "929c98d05a": "Issue provider"
+          "662ae142f8": "Issue #, or a GitHub, GitLab or Linear URL",
+          "929c98d05a": "Issue provider",
+          "gitlabLabel": "GitLab",
+          "gitlabInvalid": "Not a GitLab issue number or issue URL.",
+          "gitlabOpenFailed": "Couldn't open that issue. Paste its GitLab URL to open it.",
+          "displacedThree": "Saving unlinks {{first}}, {{second}} and {{third}} — a workspace tracks one issue."
         },
         "worktreeIssueDisplacement": {
           "3f61c0a8d2": "Linear {{value}}",
-          "9c4b7e1f60": "GitHub #{{value}}"
+          "9c4b7e1f60": "GitHub #{{value}}",
+          "gitlabLabel": "GitLab #{{value}}"
         },
         "WorktreeCardSshHostControl": {
           "connectFailed": "SSH connection failed",
@@ -7966,7 +7972,7 @@
           "610d90fdbd": "Command source and orca.yaml details.",
           "52aef29e69": "Leave blank to use the repo default from",
           "4084720f47": "Complete {{artifact_url}}",
-          "13394103bd": "Custom GitHub Issue Command",
+          "13394103bd": "Custom Issue Command",
           "70ad20f883": "for the linked issue or PR URL.",
           "b997331366": "Optional override. Use",
           "2cc27dc12b": "Optional per-user override for the linked-issue command.",
@@ -10325,9 +10331,9 @@
             "9dc60d7f6d": "github",
             "ec70364df2": "workflow",
             "66b584bd6c": "issue command",
-            "2011a6a4f2": "github issue command",
+            "2011a6a4f2": "issue command",
             "d42d1e49c0": "File-based linked-issue command configured via orca.yaml and optional local override.",
-            "d86ea12d16": "Custom GitHub Issue Command",
+            "d86ea12d16": "Custom Issue Command",
             "c5e8bdbcbb": "skip by default",
             "a69c5cbe90": "run by default",
             "80c490b012": "ask",

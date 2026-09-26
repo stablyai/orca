@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { ChevronDown, ExternalLink, Github, LoaderCircle } from 'lucide-react'
+import { ChevronDown, ExternalLink, Github, Gitlab, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
@@ -32,6 +32,9 @@ export function issueAdornmentReserve(providerLabel: string): string {
 }
 
 function providerLabel(provider: IssueLinkProvider): string {
+  if (provider === 'gitlab') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.gitlabLabel', 'GitLab')
+  }
   return provider === 'linear'
     ? translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
     : translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
@@ -44,6 +47,9 @@ function ProviderIcon({
   provider: IssueLinkProvider
   className?: string
 }): React.JSX.Element {
+  if (provider === 'gitlab') {
+    return <Gitlab className={className} />
+  }
   return provider === 'linear' ? (
     <LinearIcon className={className} />
   ) : (
@@ -115,6 +121,12 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
       )
     }
     if (isInvalid) {
+      if (provider === 'gitlab') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.gitlabInvalid',
+          'Not a GitLab issue number or issue URL.'
+        )
+      }
       return provider === 'linear'
         ? translate(
             'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
@@ -128,6 +140,12 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
     // Why: ranked above displacement because it answers the click the user just
     // made, and it clears as soon as they edit the value that caused it.
     if (openIssueFailed) {
+      if (provider === 'gitlab') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.gitlabOpenFailed',
+          "Couldn't open that issue. Paste its GitLab URL to open it."
+        )
+      }
       return provider === 'linear'
         ? translate(
             'auto.components.sidebar.WorktreeIssueLinkField.d8c8a30d1f',
@@ -140,6 +158,17 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
     }
     // Whole sentences per arity rather than a joined list: a translated " and "
     // fragment would not survive languages that order or punctuate lists differently.
+    if (displacedLinkLabels && displacedLinkLabels.length > 2) {
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.displacedThree',
+        'Saving unlinks {{first}}, {{second}} and {{third}} — a workspace tracks one issue.',
+        {
+          first: displacedLinkLabels[0],
+          second: displacedLinkLabels[1],
+          third: displacedLinkLabels[2]
+        }
+      )
+    }
     if (displacedLinkLabels && displacedLinkLabels.length > 1) {
       return translate(
         'auto.components.sidebar.WorktreeIssueLinkField.72486800ff',
@@ -156,7 +185,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
     }
     return translate(
       'auto.components.sidebar.WorktreeIssueLinkField.f047887705',
-      'Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.'
+      'Paste a GitHub, GitLab or Linear URL, or enter a number. Leave blank to remove the link.'
     )
   }, [displacedLinkLabels, isInvalid, isReadOnly, openIssueFailed, provider])
 
@@ -177,7 +206,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
           aria-invalid={isInvalid || undefined}
           placeholder={translate(
             'auto.components.sidebar.WorktreeIssueLinkField.662ae142f8',
-            'Issue #, or a GitHub or Linear URL'
+            'Issue #, or a GitHub, GitLab or Linear URL'
           )}
           className="h-8 text-xs"
           style={{ paddingRight: issueAdornmentReserve(label) }}

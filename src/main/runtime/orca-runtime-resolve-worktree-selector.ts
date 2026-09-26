@@ -2,7 +2,11 @@
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from './orca-runtime-resolve-browser-network-execution-host-for-worktree'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdComparisonKey } from '../../shared/worktree/id'
-import { branchSelectorMatches, runtimePathsEqual } from './runtime-worktree-path-identity'
+import {
+  branchSelectorMatches,
+  issueSelectorMatches,
+  runtimePathsEqual
+} from './runtime-worktree-path-identity'
 import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../shared/execution-host'
 import type {
   WorktreeLineageInput,
@@ -83,10 +87,8 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
       // Keep display-name matching exact so duplicate names hit the same ambiguity path as other selectors.
       candidates = worktrees.filter((worktree) => worktree.displayName === selector.slice(5))
     } else if (selector.startsWith('issue:')) {
-      candidates = worktrees.filter(
-        (worktree) =>
-          worktree.linkedIssue !== null && String(worktree.linkedIssue) === selector.slice(6)
-      )
+      const wantedIssue = selector.slice(6)
+      candidates = worktrees.filter((worktree) => issueSelectorMatches(worktree, wantedIssue))
     } else {
       candidates = worktrees.filter(
         (worktree) =>

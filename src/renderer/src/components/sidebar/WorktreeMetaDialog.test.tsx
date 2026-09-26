@@ -192,7 +192,7 @@ function openDialog(
 }
 
 function issueInput(): HTMLInputElement {
-  return screen.getByPlaceholderText('Issue #, or a GitHub or Linear URL')
+  return screen.getByPlaceholderText('Issue #, or a GitHub, GitLab or Linear URL')
 }
 
 function providerChip(): HTMLButtonElement {
@@ -632,5 +632,98 @@ describe('WorktreeMetaDialog issue link row', () => {
 
     expect(updateWorktreeMeta).not.toHaveBeenCalled()
     expect(useAppStore.getState().activeModal).toBe('none')
+  })
+
+  it('seeds the issue value and chip from a GitLab link', () => {
+    openDialog({ worktree: { linkedGitLabIssue: 7 } })
+    expect(issueInput().value).toBe('7')
+    expect(providerChip().textContent).toContain('GitLab')
+  })
+
+  it('shows the GitLab chip and an empty field on a workspace that only tracks a GitLab MR', () => {
+    openDialog({ worktree: { linkedGitLabMR: 12 } })
+    expect(issueInput().value).toBe('')
+    expect(providerChip().textContent).toContain('GitLab')
+  })
+
+  it('offers GitLab in the provider dropdown', () => {
+    openDialog({ worktree: { linkedIssue: 42 } })
+    fireEvent.click(providerChip())
+    expect(screen.getByRole('menuitemradio', { name: 'GitLab' })).toBeTruthy()
+  })
+
+  it('flips to GitLab when a GitLab issue URL is pasted over a GitHub link', () => {
+    openDialog({ worktree: { linkedIssue: 42 } })
+    fireEvent.change(issueInput(), { target: { value: 'https://gitlab.com/acme/app/-/issues/9' } })
+    expect(providerChip().textContent).toContain('GitLab')
+    expect(
+      screen.getByText('Saving unlinks GitHub #42 — a workspace tracks one issue.')
+    ).toBeTruthy()
+  })
+
+  it('saves a GitLab number into linkedGitLabIssue and clears the GitHub slot', async () => {
+    openDialog({ worktree: { linkedIssue: 42 } })
+    fireEvent.click(providerChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'GitLab' }))
+    fireEvent.change(issueInput(), { target: { value: '7' } })
+    await act(async () => {
+      fireEvent.click(saveButton())
+    })
+    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual({
+      linkedGitLabIssue: 7,
+      linkedIssue: null
+    })
+  })
+
+  it('explains an MR URL in the GitLab issue field and blocks Save', () => {
+    openDialog({ worktree: { linkedGitLabIssue: 7 } })
+    fireEvent.change(issueInput(), {
+      target: { value: 'https://gitlab.com/acme/app/-/merge_requests/9' }
+    })
+    expect(screen.getByText('Not a GitLab issue number or issue URL.')).toBeTruthy()
+    expect(saveButton().disabled).toBe(true)
+  })
+
+  it('opens a pasted GitLab issue URL directly', () => {
+    openDialog({ worktree: { linkedGitLabIssue: 7 } })
+    fireEvent.change(issueInput(), {
+      target: { value: 'https://gitlab.example.com/g/app/-/issues/7' }
+    })
+    fireEvent.click(openIssueButton())
+    expect(openUrl).toHaveBeenCalledWith('https://gitlab.example.com/g/app/-/issues/7')
+  })
+
+  // The renderer has no GitLab issue fetcher; the work item recorded at creation
+  // is the only URL held for a bare number.
+  it('opens the persisted GitLab work item for a matching bare number', () => {
+    openDialog({
+      worktree: {
+        linkedGitLabIssue: 7,
+        linkedWorkItem: {
+          provider: 'gitlab',
+          type: 'issue',
+          number: 7,
+          title: 'Fix login',
+          url: 'https://gitlab.com/acme/app/-/issues/7'
+        }
+      }
+    })
+    fireEvent.click(openIssueButton())
+    expect(openUrl).toHaveBeenCalledWith('https://gitlab.com/acme/app/-/issues/7')
+  })
+
+  it('disables open for a bare GitLab number with no persisted work item', () => {
+    openDialog({ worktree: { linkedGitLabIssue: 7 } })
+    expect(openIssueButton().disabled).toBe(true)
+  })
+
+  it('names all three displaced links when a workspace somehow holds three', () => {
+    openDialog({ worktree: { linkedIssue: 42, linkedGitLabIssue: 7, linkedLinearIssue: 'STA-1' } })
+    fireEvent.click(providerChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Linear' }))
+    fireEvent.change(issueInput(), { target: { value: 'STA-9' } })
+    expect(screen.getByText(/GitHub #42/)).toBeTruthy()
+    expect(screen.getByText(/GitLab #7/)).toBeTruthy()
   })
 })

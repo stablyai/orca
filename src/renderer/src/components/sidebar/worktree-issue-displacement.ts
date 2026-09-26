@@ -7,6 +7,13 @@ import {
 } from './worktree-meta-updates'
 
 function formatLinkLabel(provider: IssueLinkProvider, value: string): string {
+  if (provider === 'gitlab') {
+    return translate(
+      'auto.components.sidebar.worktreeIssueDisplacement.gitlabLabel',
+      'GitLab #{{value}}',
+      { value }
+    )
+  }
   return provider === 'linear'
     ? translate(
         'auto.components.sidebar.worktreeIssueDisplacement.3f61c0a8d2',
@@ -29,9 +36,11 @@ export function getDisplacedLinkLabels(args: {
   snapshot: WorktreeMetaSnapshot
   isFolderWorkspace: boolean
   linkedIssue: number | null
+  linkedGitLabIssue: number | null
   linkedLinearIssue: string | null
 }): string[] | null {
-  const { draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue } = args
+  const { draft, snapshot, isFolderWorkspace, linkedIssue, linkedGitLabIssue, linkedLinearIssue } =
+    args
   if (isFolderWorkspace || !isIssueFieldDirty(draft, snapshot)) {
     return null
   }
@@ -43,6 +52,9 @@ export function getDisplacedLinkLabels(args: {
   }
   if (keeping !== 'github' && typeof linkedIssue === 'number') {
     displaced.push(formatLinkLabel('github', String(linkedIssue)))
+  }
+  if (keeping !== 'gitlab' && typeof linkedGitLabIssue === 'number') {
+    displaced.push(formatLinkLabel('gitlab', String(linkedGitLabIssue)))
   }
   return displaced.length > 0 ? displaced : null
 }

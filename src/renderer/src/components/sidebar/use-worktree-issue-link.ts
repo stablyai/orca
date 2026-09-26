@@ -7,6 +7,11 @@ import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import { buildLinearIssueUrl, parseLinearIssueInput } from '../../../../shared/linear/links'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import {
+  parseGitLabIssueOrMRLink,
+  parseGitLabIssueOrMRNumber
+} from '../../../../shared/new-workspace/gitlab-links'
+import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
 import { parseExplicitGitHubIssueUrl } from './worktree-meta-updates'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
 
@@ -52,6 +57,9 @@ export function useWorktreeIssueLink(args: {
   /** The persisted identifier the stored org key belongs to. */
   linkedLinearIssue?: string | null
   linearSourceContext?: TaskSourceContext | null
+  /** The work item the workspace was created from; the only URL held for a bare
+   *  GitLab number. */
+  linkedWorkItem?: WorkspaceLinkedItem | null
 }): {
   canOpenIssue: boolean
   openingIssue: boolean
@@ -67,9 +75,12 @@ export function useWorktreeIssueLink(args: {
     issueProvider,
     linearOrganizationUrlKey,
     linkedLinearIssue,
-    linearSourceContext
+    linearSourceContext,
+    linkedWorkItem
   } = args
   const isLinear = issueProvider === 'linear'
+  const isGitLab = issueProvider === 'gitlab'
+  const isGitHub = issueProvider === 'github'
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [openingIssue, setOpeningIssue] = useState(false)
@@ -92,12 +103,12 @@ export function useWorktreeIssueLink(args: {
   )
 
   const issueNumber = useMemo(
-    () => (isLinear ? null : parseGitHubIssueOrPRNumber(boundedInput)),
-    [isLinear, boundedInput]
+    () => (isGitHub ? parseGitHubIssueOrPRNumber(boundedInput) : null),
+    [isGitHub, boundedInput]
   )
   const issueUrlFromInput = useMemo(
-    () => (isLinear ? null : parseExplicitGitHubIssueUrl(boundedInput)),
-    [isLinear, boundedInput]
+    () => (isGitHub ? parseExplicitGitHubIssueUrl(boundedInput) : null),
+    [isGitHub, boundedInput]
   )
   const issueInputLooksLikeUrl = useMemo(
     () => /^https?:\/\//i.test(boundedInput.trim()),
@@ -127,6 +138,30 @@ export function useWorktreeIssueLink(args: {
     })
   }, [parsedLinearIssue, linkedLinearIssue, linearOrganizationUrlKey])
 
+  // Why: there is no runtime-routed GitLab-issue-by-number RPC (gitlab.workItemByPath
+  // needs host+path this dialog does not carry, and window.api.gl.issue is local-IPC,
+  // which would silently fail on an SSH execution host). A URL opens as typed; a bare
+  // number opens only when it names the work item recorded at creation.
+  const gitLabIssueUrl = useMemo(() => {
+    if (!isGitLab) {
+      return null
+    }
+    const trimmed = boundedInput.trim()
+    if (/^https?:\/\//i.test(trimmed)) {
+      return parseGitLabIssueOrMRLink(trimmed)?.type === 'issue' ? trimmed : null
+    }
+    if (trimmed.startsWith('!')) {
+      return null
+    }
+    const number = parseGitLabIssueOrMRNumber(trimmed)
+    return number !== null &&
+      linkedWorkItem?.provider === 'gitlab' &&
+      linkedWorkItem.type === 'issue' &&
+      linkedWorkItem.number === number
+      ? linkedWorkItem.url
+      : null
+  }, [isGitLab, boundedInput, linkedWorkItem])
+
   const issueRepo = useAppStore((s) => {
     const repoId = ownerRepoId ?? findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)?.repoId
     return repoId ? s.repos.find((repo) => repo.id === repoId) : undefined
@@ -151,9 +186,11 @@ export function useWorktreeIssueLink(args: {
   })
   const canOpenIssue = isLinear
     ? Boolean(parsedLinearIssue)
-    : issueInputLooksLikeUrl
-      ? Boolean(issueUrlFromInput)
-      : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
+    : isGitLab
+      ? Boolean(gitLabIssueUrl)
+      : issueInputLooksLikeUrl
+        ? Boolean(issueUrlFromInput)
+        : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const handleOpenIssue = useCallback(async () => {
     if (openingIssue) {
@@ -206,6 +243,13 @@ export function useWorktreeIssueLink(args: {
       return
     }
 
+    if (isGitLab) {
+      if (gitLabIssueUrl) {
+        void window.api.shell.openUrl(gitLabIssueUrl)
+      }
+      return
+    }
+
     if (issueUrlFromInput) {
       void window.api.shell.openUrl(issueUrlFromInput)
       return
@@ -246,6 +290,8 @@ export function useWorktreeIssueLink(args: {
     cachedIssueUrl,
     fetchIssue,
     fetchLinearIssue,
+    gitLabIssueUrl,
+    isGitLab,
     isLinear,
     issueInput,
     issueInputLooksLikeUrl,

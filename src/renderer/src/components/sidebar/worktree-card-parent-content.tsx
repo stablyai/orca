@@ -55,6 +55,7 @@ export function WorktreeCardParentContent({
     handleUnlinkReview
   } = card
   const {
+    issueReferenceTarget,
     titleOnlyCard,
     parentContentMarginLeft,
     showCombinedStatusSlot,
@@ -82,6 +83,7 @@ export function WorktreeCardParentContent({
         jiraIssue={hoverJiraIssue}
         review={hoverReview}
         comment={hoverComment}
+        issueReferenceTarget={issueReferenceTarget}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
         branchName={hoverBranchName}

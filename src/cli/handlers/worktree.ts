@@ -15,6 +15,7 @@ import {
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalNullableNumberFlag,
+  getOptionalNullablePositiveIntegerFlag,
   getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -225,6 +226,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       displayNameKind: 'user',
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+      linkedGitLabIssue: getOptionalPositiveIntegerFlag(flags, 'gitlab-issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
@@ -262,6 +264,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
+      linkedGitLabIssue: getOptionalNullablePositiveIntegerFlag(flags, 'gitlab-issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),

@@ -28,7 +28,7 @@ export type ResolvedIssueCommand = {
 }
 
 /**
- * Resolve the GitHub issue command using local override first, then tracked repo config.
+ * Resolve the linked-issue command using local override first, then tracked repo config.
  */
 export function readIssueCommand(repoPath: string): ResolvedIssueCommand {
   const filePath = getIssueCommandFilePath(repoPath)

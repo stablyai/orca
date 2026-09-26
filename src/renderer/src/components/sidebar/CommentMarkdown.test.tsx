@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
+import CommentMarkdown, { remarkIssueReferences } from './CommentMarkdown'
 import { NativeChatCodeBlock } from '@/components/native-chat/NativeChatCodeBlock'
 
 describe('CommentMarkdown', () => {
@@ -35,7 +35,7 @@ describe('CommentMarkdown', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"
-        githubRepo={{ owner: 'stablyai', repo: 'orca' }}
+        issueReferences={{ provider: 'github', slug: { owner: 'stablyai', repo: 'orca' } }}
         content="Automated fix-PR from pr-bug-scan for parent **#2316**."
       />
     )
@@ -48,7 +48,7 @@ describe('CommentMarkdown', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"
-        githubRepo={{ owner: 'stablyai', repo: 'orca' }}
+        issueReferences={{ provider: 'github', slug: { owner: 'stablyai', repo: 'orca' } }}
         content="See another-org/other-repo#42."
       />
     )
@@ -60,7 +60,7 @@ describe('CommentMarkdown', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"
-        githubRepo={{ owner: 'stablyai', repo: 'orca' }}
+        issueReferences={{ provider: 'github', slug: { owner: 'stablyai', repo: 'orca' } }}
         content="[`#2316`](https://example.com/already-linked) and `#2317`"
       />
     )
@@ -149,7 +149,10 @@ describe('CommentMarkdown', () => {
       ]
     }
 
-    const transform = remarkGitHubReferences({ owner: 'stablyai', repo: 'orca' })()
+    const transform = remarkIssueReferences({
+      provider: 'github',
+      slug: { owner: 'stablyai', repo: 'orca' }
+    })()
 
     expect(() => transform(tree)).not.toThrow()
     expect(tree.children[0]?.children).toHaveLength(referenceCount * 2 - 1)
@@ -299,5 +302,62 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('max-w-full')
     expect(markup).toContain('[overflow-wrap:anywhere]')
     expect(markup).toContain('overflow-x-auto')
+  })
+
+  it('builds #refs against the GitHub Enterprise host it was given', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content="see #12"
+        issueReferences={{
+          provider: 'github',
+          slug: { owner: 'acme', repo: 'app', host: 'github.acme.internal' }
+        }}
+      />
+    )
+    expect(markup).toContain('href="https://github.acme.internal/acme/app/issues/12"')
+  })
+
+  it('still defaults to github.com when no host is carried', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content="see #12"
+        issueReferences={{ provider: 'github', slug: { owner: 'acme', repo: 'app' } }}
+      />
+    )
+    expect(markup).toContain('href="https://github.com/acme/app/issues/12"')
+  })
+
+  it('builds #refs against a self-hosted GitLab project', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content="see #12"
+        issueReferences={{
+          provider: 'gitlab',
+          slug: { host: 'gitlab.acme.internal', path: 'group/sub/app' }
+        }}
+      />
+    )
+    expect(markup).toContain('href="https://gitlab.acme.internal/group/sub/app/-/issues/12"')
+  })
+
+  // GitLab group paths nest arbitrarily deep, so a two-segment capture would build
+  // a confidently wrong URL. Plain text beats a wrong link.
+  it('leaves owner/repo#N as plain text for a GitLab target', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        variant="document"
+        content="see other/proj#12"
+        issueReferences={{ provider: 'gitlab', slug: { host: 'gitlab.com', path: 'g/app' } }}
+      />
+    )
+    expect(markup).not.toContain('href="https://gitlab.com')
+  })
+
+  it('renders plain text when the workspace provider is unknown', () => {
+    const markup = renderToStaticMarkup(<CommentMarkdown variant="document" content="see #12" />)
+    expect(markup).not.toContain('<a')
   })
 })

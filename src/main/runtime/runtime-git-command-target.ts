@@ -10,7 +10,7 @@ import {
 import { SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from '../providers/ssh-git-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
-import type { PullRequestLinkedIssueMeta } from '../source-control/pull-request-linked-issue'
+import type { PullRequestLinkedIssueMeta } from '../../shared/linked-issue-provider'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }

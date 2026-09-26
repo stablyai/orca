@@ -121,6 +121,19 @@ async function persistWorktreeMetaUntracked(
       )
     )
   }
+  // task-source-context.v1 is a sound proxy for linkedGitLabIssue too: #2431 put
+  // the key on worktree.set and is an ancestor of #5071, which added the capability.
+  // Its own branch rather than the Linear one so the message names the right forge.
+  if (target.kind === 'environment' && 'linkedGitLabIssue' in updates) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
+      translate(
+        'auto.store.slices.worktrees.metadata.worktree.meta.persist.gitlabIssueCapability',
+        'Update the remote runtime to link GitLab issues'
+      )
+    )
+  }
   let compatibleUpdates = updates
   if (target.kind === 'environment' && 'suppressedGitHubPR' in updates) {
     if (typeof updates.suppressedGitHubPR === 'number' && updates.suppressedGitHubPR > 0) {

@@ -203,7 +203,12 @@ export function RepositoryPane({
       'Archive Script',
       'Advanced',
       'When to Run Setup',
-      'Custom GitHub Issue Command'
+      // Why: entry.title is the runtime-resolved translate() value, so a bare
+      // literal silently drops this setting from the section under any locale.
+      translate(
+        'auto.components.settings.RepositoryHooksSection.13394103bd',
+        'Custom Issue Command'
+      )
     ].includes(entry.title)
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
