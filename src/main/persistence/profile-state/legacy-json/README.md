@@ -19,7 +19,8 @@ offline settings command must first establish SQLite authority. The original
 JSON remains unchanged after import and may be much older than SQLite.
 
 Before using a JSON-only build, stop Orca and run the current bundled CLI's
-`orca profile state rollback --latest-json`. This exports the latest committed
+`orca profile state rollback --latest-json`. This converts only the active profile;
+it does not prepare other profiles for downgrade. It exports the latest committed
 SQLite state and selects that JSON after archiving the current database and
 recovery artifacts. Do this on the machine that owns the profile, including SSH
 hosts. An interrupted command preserves recovery evidence; inspect
