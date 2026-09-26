@@ -197,6 +197,15 @@ function clientCouldCreate(client: CorrelatedClient, createdAtMs: number): boole
 }
 
 /**
+ * Outcome of one evidence probe. `abstain` is not the same as `none`: it means
+ * a candidate's history was evicted so it cannot be ruled out as the creator,
+ * and therefore no other pane may be credited from the other signal either.
+ */
+type TieBreakOutcome = { kind: 'owner'; paneKey: string } | { kind: 'none' } | { kind: 'abstain' }
+
+const NO_OWNER: TieBreakOutcome = { kind: 'none' }
+
+/**
  * Break a same-directory tie on the pane whose OpenCode client had just
  * started. This is the only signal available when the creator was launched by
  * Orca with `--prompt`, since that prompt rides on the spawn command and the
@@ -207,7 +216,7 @@ function tieBreakByFreshLaunch(
   evidencing: readonly CorrelatedPane[],
   clients: readonly CorrelatedClient[],
   createdAtMs: number
-): string | null {
+): TieBreakOutcome {
   let best: CorrelatedPane | null = null
   let bestStart = Number.NEGATIVE_INFINITY
   let tied = false
@@ -243,7 +252,7 @@ function tieBreakByFreshLaunch(
       tied = true
     }
   }
-  return best && !tied ? best.paneKey : null
+  return best && !tied ? { kind: 'owner', paneKey: best.paneKey } : NO_OWNER
 }
 
 /**
@@ -255,14 +264,15 @@ function tieBreakByFreshLaunch(
  *
  * A pane whose stamps all postdate the row has had its earlier history evicted,
  * so it cannot be ruled out as the creator; crediting anyone else would be the
- * wrong-pane result this exists to prevent, and the round abstains instead. A
- * pane with no stamps at all is a launch candidate rather than an input one and
- * is simply not considered here.
+ * wrong-pane result this exists to prevent, and the round abstains instead — for
+ * the launch signal too, which is why `abstain` is distinct from `none`. A pane
+ * with no stamps at all is a launch candidate rather than an input one and is
+ * simply not considered here.
  */
 function tieBreakByRecentInput(
   evidencing: readonly CorrelatedPane[],
   createdAtMs: number
-): string | null {
+): TieBreakOutcome {
   let best: CorrelatedPane | null = null
   let bestAt = Number.NEGATIVE_INFINITY
   let tied = false
@@ -279,7 +289,7 @@ function tieBreakByRecentInput(
         // Every stamp we hold postdates the row, and two slots means at least
         // two writes since. An earlier submission may have been evicted —
         // unknowable, and not another pane's to claim.
-        return null
+        return { kind: 'abstain' }
       }
       // A single post-creation write cannot have created the row: submitting is
       // itself a write, and it would be the stamp we hold.
@@ -297,7 +307,7 @@ function tieBreakByRecentInput(
       tied = true
     }
   }
-  return best && !tied ? best.paneKey : null
+  return best && !tied ? { kind: 'owner', paneKey: best.paneKey } : NO_OWNER
 }
 
 /**
@@ -404,19 +414,27 @@ export function correlateOpenCodeSessionOwners(args: {
     )
     const [only] = evidencing
     if (evidencing.length !== 1 || !only) {
-      // Launch recency is consulted first: an Orca-launched agent carries its
-      // first prompt on the spawn command, so the creating pane never writes a
-      // keystroke and input alone would hand the session to a bystander.
-      const launchOwner = tieBreakByFreshLaunch(evidencing, clients, session.createdAtMs)
-      const inputOwner = tieBreakByRecentInput(evidencing, session.createdAtMs)
+      // Launch recency covers an Orca-launched agent, which carries its first
+      // prompt on the spawn command and so never writes a keystroke; input
+      // recency covers a prompt typed or dispatched in a shared directory.
+      const launch = tieBreakByFreshLaunch(evidencing, clients, session.createdAtMs)
+      const input = tieBreakByRecentInput(evidencing, session.createdAtMs)
+      // An evicted candidate cannot be ruled out as the creator, so no other
+      // pane may be credited — not even by a launch that would otherwise stand
+      // uncontradicted.
+      if (input.kind === 'abstain') {
+        continue
+      }
       // Why disagreement abstains: a pane that just booted and a pane that was
       // just written to explain this row equally well, and no evidence tells a
       // launched creator apart from an innocent pane someone happened to open
       // nearby. Picking a side would risk the wrong-pane result this file
       // exists to prevent, so only agreement is acted on.
-      const agreed = launchOwner === null || inputOwner === null || launchOwner === inputOwner
-      const owner = launchOwner ?? inputOwner
-      if (owner && agreed) {
+      const disagrees =
+        launch.kind === 'owner' && input.kind === 'owner' && launch.paneKey !== input.paneKey
+      const owner =
+        launch.kind === 'owner' ? launch.paneKey : input.kind === 'owner' ? input.paneKey : null
+      if (owner && !disagrees) {
         claim(session.id, owner, 'creation-correlation')
       }
       continue

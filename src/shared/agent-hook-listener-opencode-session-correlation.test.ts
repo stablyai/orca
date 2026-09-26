@@ -317,6 +317,27 @@ describe('correlateOpenCodeSessionOwners', () => {
     expect(results).toEqual([])
   })
 
+  it('does not credit a launch when another pane history was evicted', () => {
+    // pane-b wrote twice after the row, so its earlier history is gone and it
+    // cannot be ruled out as the creator. pane-a's fresh client alone must not
+    // take the session — the eviction abstain outranks a launch signal.
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        {
+          paneKey: 'pane-b',
+          directory: DIR,
+          lastInputAtMs: NOW - 10_000,
+          previousInputAtMs: NOW - 20_000
+        }
+      ],
+      clients: [client('pane-a', NOW - 65_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
+  })
+
   it('binds a fresh launch when no write disagrees', () => {
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_1', NOW - 60_000)],
