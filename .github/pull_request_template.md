@@ -12,7 +12,8 @@
 
 ## Linked Issue
 
-<!-- Link the issue this PR addresses, there should ALWAYS be one -->
+<!-- Link the issue this PR addresses, there should ALWAYS be one (for outside contributors) -->
+<!-- SPECIAL CASE: If you are a maintainer (member of stablyai org) AVOID opening needless issues. Only attach pre-existing ones -->
 
 Fixes #
 

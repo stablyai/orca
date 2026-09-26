@@ -409,7 +409,7 @@ describe('OrcaRuntimeService', () => {
       // republish would re-add the dead leaf on the echoing client and feed a
       // refuse→republish→re-echo loop.
       const { runtime, getSession, kill, closeTerminal } = makeSplitLeafRuntime()
-      runtime.onPtyExit('serve-right', 0)
+      await runtime.onPtyExit('serve-right', 0)
       const events: { worktree: string }[] = []
       const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
 

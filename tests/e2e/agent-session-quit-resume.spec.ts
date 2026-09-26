@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -14,40 +15,35 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-quit-resume-session'
 
 function stubPersistedResumeCommand(userDataDir: string): void {
-  const dataPath = path.join(
-    userDataDir,
-    'profiles',
-    DEFAULT_LOCAL_ORCA_PROFILE_ID,
-    'orca-data.json'
-  )
-  const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
-    workspaceSession?: {
-      sleepingAgentSessionsByPaneKey?: Record<
-        string,
-        {
-          providerSession?: { id?: unknown }
-          launchConfig?: {
-            agentCommand?: string
-            agentArgs?: string
-            agentEnv?: Record<string, string>
+  return mutateStoppedProfileState(userDataDir, (state) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+    const data = state as {
+      workspaceSession?: {
+        sleepingAgentSessionsByPaneKey?: Record<
+          string,
+          {
+            providerSession?: { id?: unknown }
+            launchConfig?: {
+              agentCommand?: string
+              agentArgs?: string
+              agentEnv?: Record<string, string>
+            }
           }
-        }
-      >
+        >
+      }
     }
-  }
-  const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
-    (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
-  )
-  if (!record) {
-    throw new Error('Expected a persisted resumable agent session')
-  }
-  record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
-  writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+    const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
+      (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
+    )
+    if (!record) {
+      throw new Error('Expected a persisted resumable agent session')
+    }
+    record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+  })
 }
 
 function readDaemonPid(userDataDir: string): number {

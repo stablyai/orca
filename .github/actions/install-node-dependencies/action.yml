@@ -50,8 +50,9 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version-file: package.json
-        cache: pnpm
+        cache: ${{ github.event_name != 'pull_request' && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        package-manager-cache: false
 
     - name: Setup requested Node.js
       id: requested-node
@@ -59,8 +60,31 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
-        cache: pnpm
+        cache: ${{ github.event_name != 'pull_request' && 'pnpm' || '' }}
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        package-manager-cache: false
+
+    # PR-local stores compete with reusable build caches for the repository quota.
+    - name: Resolve pnpm download store
+      id: pnpm-store
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        LOCKFILE_HASH: ${{ hashFiles(inputs.cache-dependency-path) }}
+      run: |
+        test -n "$LOCKFILE_HASH"
+        cache_path="$(pnpm store path --silent)"
+        test -n "$cache_path"
+        printf 'path=%s\n' "$cache_path" >> "$GITHUB_OUTPUT"
+        printf 'arch=%s\n' "$(node -p 'require("node:os").arch()')" >> "$GITHUB_OUTPUT"
+
+    # Match setup-node's key and path so existing default-branch stores remain reusable.
+    - name: Restore pnpm download store without saving
+      if: github.event_name == 'pull_request'
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
 
     - name: Validate native runtime
       shell: bash

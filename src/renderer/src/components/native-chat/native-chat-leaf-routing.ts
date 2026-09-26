@@ -107,6 +107,11 @@ export function resolveNativeChatLeafRoute(args: {
   if (!args.activeLeafId && !confirmedAgentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
+  if (args.chatLeafId && !args.chatLeafStillMounted && !confirmedAgentExit) {
+    // A user-closed chat pane is an explicit close, not an agent handoff. Do not
+    // retarget the chat surface to whichever sibling became active.
+    return { chatLeafId: null, exitChat: true }
+  }
   if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
   }

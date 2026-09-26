@@ -6,6 +6,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
@@ -80,7 +83,7 @@ vi.mock('./ssh-connection-utils', () => ({
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { parseUnameToRelayPlatform } from './relay-protocol'
-import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
+import { gcOldRelayVersions, isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
 import {
   makeMockConnection,
@@ -221,6 +224,7 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
     feed(repairSucceedsResponses())
     const deploys = { count: 0 }
     await recover(conn, deploys)
+    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
 
     const second = await recover(conn, deploys)

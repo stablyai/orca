@@ -166,8 +166,8 @@ describe('a send into a published session whose child ended before startup', () 
 
     await send('hello again', releasedFence)
 
-    // The client was current as of the lost owner, so the send is rebased onto the fence the
-    // resume published and admitted once, with no stale round trip.
+    // A send still fenced to the lost owner is admitted once against the restarted one, with no
+    // stale round trip.
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     expect(dispatch).toHaveBeenCalledOnce()

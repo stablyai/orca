@@ -52,8 +52,7 @@ export class StructuredAgentSessionLeaseRenewer {
           record.lease.ownerProcess !== null &&
           // A record parked in recovery has no transport the host can vouch for; renewing it
           // keeps an orphan pid's lease reading as a healthy owner.
-          record.lease.handoffStage !== 'recovering' &&
-          record.lease.handoffStage !== 'manual-recovery'
+          record.lease.handoffStage !== 'recovering'
       )
       const probes = await this.probe(records)
       const renewals: {

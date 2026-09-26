@@ -57,6 +57,16 @@ export function initializeMainProcessObservers(): void {
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
+  const profileStateStartup = state.profileStateStartup
+  if (profileStateStartup) {
+    track('profile_state_authority_selected', {
+      backend: profileStateStartup.backend,
+      classification: profileStateStartup.classification,
+      authority_mode: 'sqlite-established',
+      runtime: profileStateStartup.runtime,
+      migrated: profileStateStartup.migrated
+    })
+  }
   // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
   // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
   // number the watchdog exists to produce would sit unread on the user's disk. Must run after

@@ -246,7 +246,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
    * The worker's ACTIVE dispatch is preferred when it has one, so peer and coordinator nudges share
    * one operation-ledger budget and one set of retain rules. A worker BETWEEN dispatches is still
    * nudged, under a session-scoped budget: the mail is durable, the session is live, and a dispatch
-   * says nothing about whether delivery is safe — the idle gate and the lease fence do that.
+   * says nothing about whether delivery is safe — the idle gate and the writer lease do that.
    */
   protected resolveStructuredWorkerDirectMailboxTarget(
     handle: string

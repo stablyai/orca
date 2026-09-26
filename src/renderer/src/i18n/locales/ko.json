@@ -34,7 +34,8 @@
         "resourceUsageToggleDescription": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다.",
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
         "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
-        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다."
+        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다.",
+        "cursorToggleDescription": "cursor-agent 또는 Cursor IDE로 로그인한 경우 Cursor 플랜 사용량을 표시합니다."
       },
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
@@ -869,7 +870,8 @@
             "tooMany": "You can attach up to {{maxCount}} images.",
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
-            "additionalErrors": "{{count}} additional images could not be attached."
+            "additionalErrors": "{{count}} additional images could not be attached.",
+            "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다."
           }
         }
       },
@@ -3093,7 +3095,7 @@
             "missing": {
               "tui": {
                 "title": "This ZCode build has no terminal UI",
-                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+                "description": "Orca's hooks installed correctly — the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
               }
             }
           },
@@ -3666,7 +3668,8 @@
             "grokUsageMenu": "Grok 사용량",
             "floatingTerminalNewActivity": "{{label}}, 새 활동",
             "codexSignInSuccess": "Codex에 로그인했습니다",
-            "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요."
+            "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요.",
+            "cursorUsageMenu": "Cursor 사용량"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -3841,6 +3844,13 @@
               "noSubscription": {
                 "label": "구독 없음"
               }
+            },
+            "cursor": {
+              "expired": {
+                "label": "로그인 만료",
+                "message": "Orca가 실행 중인 컴퓨터의 터미널에서 cursor-agent login을 실행한 뒤 사용량을 다시 시도하세요."
+              },
+              "plan": "플랜"
             }
           },
           "SshTargetStatusRow": {
@@ -5204,7 +5214,9 @@
           "69969ba364": "전송 중…",
           "imageReadFailed": "Could not read the attached images. Try attaching them again.",
           "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
-          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed.",
+          "imagesNotIncluded": "피드백을 보냈습니다. 스크린샷을 업로드하지 못해 포함되지 않았습니다.",
+          "imagesRejected": "피드백을 보냈습니다. 스크린샷이 너무 커서 업로드하지 못해 포함되지 않았습니다."
         },
         "SidebarFilter": {
           "e3b3898218": "프로젝트 추가",
@@ -6164,7 +6176,8 @@
         },
         "SidebarFeedbackImageAttachments": {
           "attachImages": "Attach",
-          "removeImage": "Remove {{fileName}}"
+          "removeImage": "Remove {{fileName}}",
+          "screenshotsHint": "최대 {{count}}장, 총 {{maxSize}}까지 스크린샷을 첨부하세요."
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "일치하는 워크스페이스가 없습니다",
@@ -8863,7 +8876,18 @@
             "b2c4e7f1a8": "끝점",
             "3a9b6d2c4e": "API 키",
             "5d8f1a3b7c": "중국",
-            "7e2a4b8c1d": "해외"
+            "7e2a4b8c1d": "해외",
+            "cursor": {
+              "description": "이 컴퓨터에 이미 있는 Cursor 로그인(cursor-agent login)에서 읽은 월간 플랜 사용량입니다.",
+              "kw": {
+                "cursor": "cursor",
+                "rateLimit": "속도 제한",
+                "spend": "지출",
+                "statusBar": "상태 표시줄",
+                "usage": "사용량"
+              },
+              "title": "Cursor 사용량"
+            }
           }
         },
         "advanced": {
@@ -9119,6 +9143,13 @@
               "close": "닫다",
               "notification": "알림 영역",
               "background": "배경"
+            },
+            "cursor": {
+              "description": "이 컴퓨터의 Cursor 로그인에서 월간 Cursor 플랜 사용량을 표시합니다.",
+              "kw": {
+                "cursor": "cursor"
+              },
+              "title": "Cursor 사용량"
             }
           }
         },
@@ -11992,6 +12023,31 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "인라인 이미지",
           "fffab5890b": "SIXEL, iTerm2(IIP) 및 Kitty 그래픽 프로토콜을 사용하여 터미널에 이미지를 직접 표시합니다."
+        },
+        "CursorAccountsSection": {
+          "dashboardLink": "Cursor 대시보드",
+          "expired": "로그인이 만료되었습니다 — Orca가 실행 중인 컴퓨터에서 cursor-agent login을 실행한 뒤 사용량 새로고침을 클릭하세요.",
+          "loading": "로드 중…",
+          "noAllowance": "Cursor에서 이 계정에 사용 한도가 없다고 보고했습니다.",
+          "planTotal": "플랜",
+          "refreshUsage": "사용량 새로고침",
+          "resets": "{{when}}에 초기화",
+          "signedIn": "로그인됨",
+          "signedInFrom": "로그인되었습니다. Orca는 {{source}}에 저장된 세션을 읽습니다.",
+          "signedInGeneric": "로그인되었습니다. Orca는 이 컴퓨터에 저장된 Cursor 세션을 읽습니다.",
+          "signedOut": "이 컴퓨터에서 Cursor 로그인을 찾을 수 없습니다",
+          "signedOutHelp": "Cursor IDE로 로그인하거나 터미널에서 cursor-agent login을 실행한 뒤 여기서 사용량 새로고침을 클릭하세요.",
+          "source": {
+            "cli": "Cursor CLI 인증 파일",
+            "desktop": "Cursor IDE",
+            "keychain": "macOS 키체인(cursor-agent)"
+          },
+          "staleUsage": "마지막으로 확인된 사용량 — 최신 새로고침이 실패했습니다: {{reason}}",
+          "subtitle": "이 컴퓨터에 이미 있는 로그인에서 Cursor 월간 플랜 사용량을 보여줍니다. Orca는 읽기만 하며 Cursor 로그인을 변경하지 않습니다.",
+          "title": "Cursor",
+          "usageDescription": "Cursor는 요금 주기에 따라 초기화되는 두 가지 풀과, 소진 후에 발생하는 주문형 지출로 과금합니다.",
+          "usageLabel": "사용량",
+          "usageTitle": "월간 플랜 사용량"
         }
       },
       "right": {
@@ -14796,6 +14852,7 @@
           "f1aa04b5cf": "이 파일",
           "8b87612461": "보내지 않은 모든 메모"
         },
+        "diffCommentSaveFailed": "댓글을 저장하지 못했습니다.",
         "DiffSectionBody": {
           "35d6afb5be": "바이너리 파일이 변경됨",
           "cef4cf0ff5": "다시 시도",
@@ -14917,6 +14974,7 @@
           "notPython": "해당 파일은 Python 인터프리터가 아닙니다.",
           "interrupt": "중단",
           "restart": "커널 다시 시작",
+          "trustFirst": "먼저 셀을 실행하여 이 노트북을 신뢰하세요",
           "runAll": "모두 실행",
           "clearAll": "모든 출력 지우기",
           "notResponding": "응답 없음. 커널을 다시 시작하세요",
@@ -14932,7 +14990,22 @@
           "noPython": "이 컴퓨터에서 Python을 찾을 수 없습니다. [python.org](https://www.python.org/downloads/)에서 설치한 뒤 셀을 다시 실행하세요.",
           "kernelDied": "커널이 종료되었습니다.",
           "localOnly": "노트북 셀은 이 컴퓨터의 파일에 대해서만 실행할 수 있습니다.",
-          "pythonOnly": "Orca에서는 Python 노트북만 실행할 수 있습니다."
+          "pythonOnly": "Orca에서는 Python 노트북만 실행할 수 있습니다.",
+          "commandCopied": "명령이 복사되었습니다.",
+          "createVenv": ".venv 만들기",
+          "createVenvItem": "가상 환경 만들기…",
+          "createVenvTitle": "가상 환경을 만들까요?",
+          "creatingButton": "만드는 중…",
+          "creatingVenvDescription": "{{folder}}에 .venv를 만들고 ipykernel을 설치하고 있습니다. 1분 정도 걸릴 수 있습니다.",
+          "creatingVenvTitle": "가상 환경 만드는 중…",
+          "installingButton": "설치 중…",
+          "installingDescription": "pip로 '{{env}}'에 ipykernel을 설치하고 있습니다. 1분 정도 걸릴 수 있습니다.",
+          "installingTitle": "ipykernel 설치 중…",
+          "kernelCreatingVenv": ".venv 만드는 중…",
+          "setupFailed": "실패했습니다. Python 출력:",
+          "tryAgain": "다시 시도",
+          "useAnotherPython": "다른 Python 사용…",
+          "venvDescription": "Orca가 '{{env}}'에서 {{folder}}에 .venv를 만들고, ipykernel을 설치한 뒤 이 노트북을 거기서 실행합니다."
         },
         "MarkdownPreview": {
           "e4683f70c4": "취소",
@@ -17155,6 +17228,13 @@
         "dispatchRejected": "에이전트가 “continue” 메시지를 거부했습니다. 채팅을 열어 직접 보내세요.",
         "unsupported": "이 채팅은 Orca에서 재개할 수 없습니다. 열어서 중단된 위치를 확인하세요.",
         "fallback": "Orca가 이 채팅을 재개하지 못했습니다. 열어서 수동으로 계속하세요."
+      },
+      "web": {
+        "preloadApi": {
+          "cursorAccounts": {
+            "hostOnly": "Cursor 로그인 정보는 Orca가 실행 중인 컴퓨터에서만 읽을 수 있습니다."
+          }
+        }
       }
     },
     "i18n": {
@@ -17398,9 +17478,9 @@
         "responding": "Agent이 응답 중입니다.",
         "working": "일하고 있는…",
         "thinking": "생각",
-        "workingFor": "{{value0}}에서 근무",
-        "workedFor": "{{value0}}에서 근무함",
-        "toggleDetails": "회전 세부정보 전환"
+        "workingFor": "{{value0}} 작업 중",
+        "workedFor": "{{value0}} 작업 완료",
+        "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
       "toggle": {
@@ -17846,7 +17926,7 @@
           "justNow": "방금",
           "minutesAgo": "{{value0}}분 전",
           "hoursAgo": "{{value0}}시간 전",
-          "daysAgo": "{{value0}}d 전"
+          "daysAgo": "{{value0}}일 전"
         },
         "host": {
           "label": "호스트: {{value0}}",
@@ -17904,9 +17984,9 @@
     },
     "cmd-j": {
       "paletteSessionAge": {
-        "minutes": "{{value0}}m",
-        "hours": "{{value0}}h",
-        "days": "{{value0}}d",
+        "minutes": "{{value0}}분",
+        "hours": "{{value0}}시간",
+        "days": "{{value0}}일",
         "underOneMinute": "1분 미만"
       }
     },
@@ -18185,6 +18265,52 @@
       "unassignedInstruction": "초점이 맞춰진 창에서 음성 받아쓰기를 시작하기 전에 받아쓰기 바로가기를 할당하세요.",
       "settingsInstruction": "언제든지 모델, 받아쓰기 모드 또는 바로가기를 변경할 수 있습니다.",
       "settingsLink": "설정 → 음성"
+    },
+    "sessionSearch": {
+      "ageHours": "2시간",
+      "ageMinutes": "12분",
+      "ageYesterday": "1일",
+      "agentsInstruction": "에이전트도 검색할 수 있습니다. 에이전트에게 “로그인 시간 초과를 수정한 세션을 찾아줘”라고 요청해 보세요.",
+      "consentInstruction": "언제든지 다음에서 변경하거나 끄기",
+      "continueInBackground": "백그라운드에서 계속하기",
+      "demoHit1Age": "3일",
+      "demoHit1Snippet": "[[로그인 시간 초과]]를 30초로 늘리고 토큰 새로고침에 재시도를 추가했습니다.",
+      "demoHit1Title": "불안정한 인증 리디렉션 수정",
+      "demoHit2Age": "1주",
+      "demoHit2Snippet": "절전 모드 해제 후 [[로그인]] 페이지가 [[시간 초과]] 후에 멈추는 이유는 무엇인가요?",
+      "demoHit2Title": "절전 후 세션 새로고침",
+      "demoHit3Age": "2주",
+      "demoHit3Snippet": "[[로그인 시간 초과]] 경로를 처음부터 끝까지 다루는 테스트를 추가했습니다.",
+      "demoHit3Title": "인증 e2e 강화",
+      "demoHit4Age": "5일",
+      "demoHit4Snippet": "[[롤백]]이 새 인덱스를 먼저 삭제한 뒤 이전 컬럼을 복원합니다.",
+      "demoHit4Title": "주문 테이블 마이그레이션",
+      "demoHit5Age": "3주",
+      "demoHit5Snippet": "다시 시도하기 전에 [[마이그레이션]] [[롤백]] 계획을 작성해 줄 수 있나요?",
+      "demoHit5Title": "스테이징 배포 실패",
+      "demoHit6Age": "1개월",
+      "demoHit6Snippet": "여기의 모든 [[마이그레이션]]은 enum 이름 변경을 제외하고 되돌릴 수 있습니다.",
+      "demoHit6Title": "스키마 검토 메모",
+      "demoQuery": "로그인 시간 초과",
+      "demoQuery2": "마이그레이션 롤백",
+      "demoRoleAssistant": "어시스턴트",
+      "demoRoleUser": "사용자",
+      "enableFailed": "세션 검색을 켜지 못했습니다. 다시 시도하세요.",
+      "indexingDescription": "Orca가 이전 에이전트 대화를 읽어 검색할 수 있도록 준비하고 있습니다. 몇 분 정도 걸릴 수 있습니다.",
+      "indexingTitle": "에이전트 세션을 색인화하는 중",
+      "progressStarting": "세션을 찾는 중…",
+      "readyDescription": "이제 이 컴퓨터의 모든 에이전트 세션을 대화 내용으로 찾을 수 있습니다.",
+      "readyTitle": "세션 검색이 준비되었습니다",
+      "readyToast": "세션 검색이 준비되었습니다",
+      "readyToastOpen": "열기",
+      "recent1Text": "검색 항목을 워크플로 아래로 옮기고 테스트를 업데이트했습니다.",
+      "recent1Title": "설정 사이드바 정리",
+      "recent2Text": "의존성을 업데이트하고 빌드가 여전히 통과하는지 확인하세요.",
+      "recent2Title": "잠금 파일 업데이트",
+      "recent3Text": "초안 메모입니다. 영역별로 정리했습니다.",
+      "recent3Title": "릴리스 노트 초안",
+      "settingsLink": "설정 → 에이전트 세션 검색",
+      "startSearching": "검색 시작하기"
     }
   },
   "quickOpen": {

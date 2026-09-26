@@ -638,6 +638,15 @@ describe('wrapWindowsHookCommand', () => {
     )
   })
 
+  it('doubles typographic single quotes in the script path literal', () => {
+    const decoded = decodeWindowsHookCommand(
+      wrapWindowsHookCommand('C:\\Users\\O\u2019Brien\\.orca\\agent-hooks\\codex-hook.cmd')
+    )
+    expect(decoded).toContain(
+      "Test-Path -LiteralPath 'C:\\Users\\O\u2019\u2019Brien\\.orca\\agent-hooks\\codex-hook.cmd'"
+    )
+  })
+
   it('scopes environment variables inside the encoded launcher', () => {
     const command = wrapWindowsHookCommand('C:\\hooks\\copilot-hook.ps1', {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'

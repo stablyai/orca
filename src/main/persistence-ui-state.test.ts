@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { readFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs'
+import { rmSync, mkdtempSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cleanup-browse-state'
 import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
   testState,
   dataFile,
   writeDataFile,
@@ -55,7 +58,7 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 vi.mock('./telemetry/client', () => ({
@@ -74,7 +77,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── UI state ───────────────────────────────────────────────────────
@@ -165,7 +169,7 @@ describe('Store', () => {
       })
       vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
-      const persistedBefore = readFileSync(dataFile(), 'utf-8')
+      const persistedBefore = readPersistedStateJson(dataFile())
       store.onUIChanged((ui) => notifications.push(ui))
 
       store.updateUI({
@@ -181,7 +185,7 @@ describe('Store', () => {
       await store.waitForPendingWrite()
 
       expect(notifications).toEqual([])
-      expect(readFileSync(dataFile(), 'utf-8')).toBe(persistedBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(persistedBefore)
     } finally {
       vi.useRealTimers()
     }
@@ -193,7 +197,7 @@ describe('Store', () => {
     store.updateUI({ sidebarWidth: 321 })
     store.flush()
 
-    const raw = readFileSync(dataFile(), 'utf-8')
+    const raw = readPersistedStateJson(dataFile())
     // Compact payload: no newline-plus-indentation from JSON.stringify(_, null, 2).
     expect(raw).not.toMatch(/\n\s+"/)
     const parsed = JSON.parse(raw) as PersistedState
@@ -782,4 +786,39 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
+
+  it.each(['shutdown', 'freeze', 'maintenance'] as const)(
+    'rejects legacy SSH mutations before changing memory during %s',
+    async (gate) => {
+      const store = await createStore()
+      const recovery = {
+        targetId: 'ssh-1',
+        clientInstanceId: 'client-1',
+        serverBuildId: 'relay-build-1',
+        clientGeneration: 3,
+        ownerGeneration: 5,
+        ownerLease: 'secret-owner-lease'
+      }
+      await store.upsertSshPtyConsumerRecovery(recovery)
+      store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' })
+      await store.flushPendingOrThrowAsync()
+      const closing =
+        gate === 'shutdown'
+          ? store.flushAsync()
+          : gate === 'freeze'
+            ? store.freezeWritesAsync()
+            : store.beginProfileMaintenance()
+      await Promise.all(
+        [
+          store.upsertSshPtyConsumerRecovery({ ...recovery, clientInstanceId: 'refused-owner' }),
+          store.removeSshPtyConsumerRecovery('ssh-1'),
+          store.markSshRemotePtyLeasesAsync('ssh-1', 'terminated'),
+          store.markSshRemotePtyLeasesAttachedAsync('ssh-1', ['pty-1'])
+        ].map((operation) => expect(operation).rejects.toThrow('finalized profile persistence'))
+      )
+      expect(store.getSshPtyConsumerRecovery('ssh-1')).toEqual(recovery)
+      expect(store.getSshRemotePtyLeases('ssh-1')[0]?.state).toBe('detached')
+      await closing
+    }
+  )
 })

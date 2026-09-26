@@ -1,4 +1,3 @@
-import { readFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { normalizeProxyUrl } from '../../../shared/network-proxy'
 import { normalizeKagiSessionLink } from '../../../shared/browser-url'
@@ -9,10 +8,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../shared/project-groups'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
-import {
-  isStartupDiagnosticsEnabled,
-  logStartupDiagnostic
-} from '../../startup/startup-diagnostics'
+import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
@@ -38,28 +34,11 @@ import {
   projectHostSetupCompatibilityStateEqual
 } from '../tracking-repos/project-host-compatibility'
 import { backfillFolderScopeConnectionIds } from '../restoring-sessions/folder-scope-migration'
-import { hasStateBackup } from './backup-recovery-rotation'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
 
-type PersistenceStartupDetails = Record<string, unknown> | (() => Record<string, unknown>)
-
-function logPersistenceStartupMilestone(
-  event: string,
-  details: PersistenceStartupDetails = {}
-): void {
-  if (!isStartupDiagnosticsEnabled()) {
-    return
-  }
-  // Why: snapshot `t` before resolving lazy details — otherwise an expensive details closure is billed to the milestone it measures.
-  const t = Math.round(performance.now())
-  const resolvedDetails = typeof details === 'function' ? details() : details
-  logStartupDiagnostic(event, { t, ...resolvedDetails })
-}
-
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
 import type { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 
 type LoadedStateParsingOperationsRuntime = Pick<
@@ -75,31 +54,57 @@ type LoadedStateParsingOperationsRuntime = Pick<
 export class LoadedStateParsingOperations {
   constructor(
     private readonly runtime: LoadedStateParsingOperationsRuntime,
-    private readonly backups: BackupRecoveryRotationOperations,
     private readonly cohorts: LoadedCohortMigrationOperations
   ) {}
 
-  load(allowBackupRecovery = true): PersistedState {
+  /**
+   * Load the legacy storage representation supplied by a migration/importer.
+   *
+   * This deliberately uses the same decrypt, normalization, migration, and
+   * sidecar handling as a file load. An invalid imported document must fail
+   * closed instead of falling back to an unrelated on-disk backup.
+   */
+  loadSerialized(raw: string): PersistedState {
+    return this.loadInternal(raw)
+  }
+
+  /** Load only from an injected authority; never consult the legacy JSON path. */
+  loadFromAuthority(raw: string | undefined): PersistedState {
+    return this.loadInternal(raw)
+  }
+
+  loadParsedFromAuthority(parsed: Record<string, unknown> | undefined): PersistedState {
+    return this.loadInternal(undefined, parsed)
+  }
+
+  private loadInternal(serialized?: string, parsedInput?: Record<string, unknown>): PersistedState {
     // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
-    const dataFile = this.runtime.dataFile
-    const fileExistedOnLoad = existsSync(dataFile)
-    logPersistenceStartupMilestone('persistence-load-start', {
+    const fileExistedOnLoad = serialized !== undefined || parsedInput !== undefined
+    logStartupMilestone('persistence-load-start', {
       fileExists: fileExistedOnLoad
     })
 
     let result: PersistedState | null = null
+    let parsed: PersistedState | undefined
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
-        const raw = readFileSync(dataFile, 'utf-8')
-        logPersistenceStartupMilestone('persistence-read-done', {
-          bytes: Buffer.byteLength(raw),
-          durationMs: Math.round(performance.now() - readStartedAt)
-        })
-        logPersistenceStartupMilestone('persistence-json-parse-start')
-        const parsed = JSON.parse(raw) as PersistedState
-        logPersistenceStartupMilestone('persistence-json-parse-done')
-
+        const raw = parsedInput === undefined ? serialized : undefined
+        if (raw !== undefined) {
+          logStartupMilestone('persistence-read-done', {
+            bytes: Buffer.byteLength(raw),
+            durationMs: Math.round(performance.now() - readStartedAt)
+          })
+          logStartupMilestone('persistence-json-parse-start')
+          parsed = JSON.parse(raw)
+          logStartupMilestone('persistence-json-parse-done')
+        } else {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Legacy partial records enter the existing domain normalizers through this loader type.
+          parsed = parsedInput as PersistedState
+        }
+        if (parsed === undefined) {
+          throw new Error('Profile state startup snapshot is missing')
+        }
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = this.runtime.protectedSecrets.decrypt(
@@ -188,18 +193,8 @@ export class LoadedStateParsingOperations {
         })
       }
     } catch (err) {
-      console.error('[persistence] Failed to load primary state, trying backups:', err)
-    }
-
-    // Corrupt-file and no-file paths converge here; a corrupted install counts as existing, so it sees the opt-in banner.
-    if (result === null && allowBackupRecovery) {
-      const hasBackup = hasStateBackup(dataFile)
-      if (fileExistedOnLoad || hasBackup) {
-        if (this.backups.restoreFromBackup(dataFile)) {
-          return this.load(false)
-        }
-        console.error('[persistence] No usable state file or backup found, using defaults')
-      }
+      console.error('[persistence] Failed to load imported profile state:', err)
+      throw new Error('Failed to load imported profile state', { cause: err })
     }
 
     if (result === null) {
@@ -216,7 +211,6 @@ export class LoadedStateParsingOperations {
     if (migratedScrollback.changed) {
       this.runtime.loadNeedsSave = true
     }
-
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
@@ -293,7 +287,7 @@ export class LoadedStateParsingOperations {
       migrated.githubCache = readGithubCacheSnapshot(this.runtime.dataFile) ?? migrated.githubCache
     }
 
-    logPersistenceStartupMilestone('persistence-load-done', () => ({
+    logStartupMilestone('persistence-load-done', () => ({
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
     }))

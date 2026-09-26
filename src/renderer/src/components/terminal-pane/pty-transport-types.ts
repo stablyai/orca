@@ -278,6 +278,9 @@ export type IpcPtyTransportOptions = {
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
+  /** Asked when a fresh spawn resolves after this transport was destroyed: true keeps the PTY for
+   *  the pane's successor (disposed-spawn-retention.ts); absent or false kills it. */
+  retainDisposedSpawn?: () => boolean
   /** Rebind an existing pane after its provider replaces the PTY identity. */
   onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: string | null) => void
   onBell?: () => void

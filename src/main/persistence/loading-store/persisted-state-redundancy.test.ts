@@ -1,3 +1,8 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from '../../persistence-test-harness'
 /**
  * The store file re-serializes in full on a 1s debounce and re-parses in full at launch, so every
  * byte it carries is paid for on both. Two kinds of byte were provably redundant on a 4.2 MB real
@@ -8,7 +13,7 @@
  * rows, 200 browser history entries) and pin the only property that makes the omission safe: a file
  * written by the OLD serializer and a file written by the NEW one load to the same in-memory state.
  */
-import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -48,15 +53,16 @@ const LINKED_ROW_STRIDE = 40
 const RECENTLY = Date.now()
 
 const stores: InstanceType<typeof Store>[] = []
-afterEach(() => {
+afterEach(async () => {
   for (const store of stores.splice(0)) {
     store.freezeWrites()
   }
+  await closeTestStores()
   vi.restoreAllMocks()
 })
 
 function openStore(dataFile: string): InstanceType<typeof Store> {
-  const store = new Store({ dataFile })
+  const store = createSqliteTestStore(Store, { dataFile })
   stores.push(store)
   return store
 }
@@ -191,7 +197,7 @@ describe('persisted-state redundancy', () => {
     }
 
     loaded.flush()
-    const rewritten = readFileSync(dataFile, 'utf-8')
+    const rewritten = readPersistedStateJson(dataFile)
 
     // Only rows that actually hold a value still carry a slot: linkedPR + isPinned, 1 row in 40.
     expect(defaultedSlotOccurrences(rewritten)).toBe(
@@ -220,7 +226,7 @@ describe('persisted-state redundancy', () => {
 
     // A quiet app does not rewrite the file with new content on the next flush.
     reloaded.flush()
-    expect(readFileSync(dataFile, 'utf-8')).toBe(rewritten)
+    expect(readPersistedStateJson(dataFile)).toBe(rewritten)
   })
 
   it('loads an old-serializer file and a new-serializer file to the same state', () => {
@@ -231,7 +237,7 @@ describe('persisted-state redundancy', () => {
     fromLegacy.flush()
 
     const compactFile = tempDataFile()
-    writeFileSync(compactFile, readFileSync(legacyFile))
+    writeFileSync(compactFile, readPersistedStateJson(legacyFile))
     const fromCompact = openStore(compactFile)
 
     expect(fromCompact.getAllWorktreeMeta()).toEqual(fromLegacy.getAllWorktreeMeta())

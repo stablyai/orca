@@ -1,3 +1,8 @@
+import {
+  serializeCompleteProfileStateDomains,
+  serializeSelectiveProfileStateDomains
+} from './profile-state-authority-writes'
+import type { ProfileStateDomainReplacement } from './profile-state-authority'
 import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
@@ -30,7 +35,92 @@ export class StateSerializationSecretHandlingOperations {
     return durable
   }
 
-  buildStateToSave(): {
+  /** Serialize domains with complete secret handling; unknown domains fall back to a full write. */
+  buildStateDomainsToSave(domains: ReadonlySet<string>):
+    | {
+        replacements: ProfileStateDomainReplacement[]
+        protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+      }
+    | undefined {
+    // A later save must retry secrets deferred by any domain, until a durable commit succeeds.
+    if (this.runtime.protectedSecrets.hasPendingEncryption()) {
+      return undefined
+    }
+    const stateToSave: Record<string, unknown> = {}
+    const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
+    const encrypt = (slot: string, plaintext: string): string => {
+      const encrypted = this.runtime.protectedSecrets.encrypt(slot, plaintext)
+      if (encrypted.retentionUpdate) {
+        protectedSecretUpdates.push(encrypted.retentionUpdate)
+      }
+      return encrypted.blob
+    }
+    for (const domain of domains) {
+      switch (domain) {
+        case 'settings':
+          stateToSave[domain] = this.buildSettingsToSave(encrypt)
+          break
+        case 'workspaceSession':
+          stateToSave[domain] = this.runtime.state.workspaceSession
+          break
+        case 'automations':
+        case 'automationRuns':
+          stateToSave[domain] = this.runtime.state[domain]
+          break
+        case 'featureInteractionTelemetryBuckets':
+          stateToSave[domain] = this.runtime.state.featureInteractionTelemetryBuckets
+          break
+        case 'ui':
+          stateToSave[domain] = {
+            ...this.runtime.state.ui,
+            browserKagiSessionLink:
+              encrypt(
+                PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+                this.runtime.state.ui.browserKagiSessionLink ?? ''
+              ) || null
+          }
+          break
+        case 'worktreeMeta':
+          stateToSave[domain] = omitDefaultWorktreeMetaFieldsInMap(this.runtime.state.worktreeMeta)
+          break
+        case 'worktreeMetaByIdentity':
+          if (this.runtime.state.worktreeMetaByIdentity !== undefined) {
+            stateToSave[domain] = omitDefaultWorktreeMetaFieldsInMap(
+              projectWorktreeMetaByIdentityOntoLocators(
+                this.runtime.state.worktreeMetaByIdentity,
+                this.runtime.state
+              )
+            )
+          }
+          break
+        case 'worktreeIdentityAliases':
+          if (this.runtime.state.worktreeIdentityAliases !== undefined) {
+            stateToSave[domain] = this.runtime.state.worktreeIdentityAliases
+          }
+          break
+        case 'workspaceSessionsByHostId':
+          if (this.runtime.state.workspaceSessionsByHostId !== undefined) {
+            stateToSave[domain] = withoutRedundantPartitionGlobals(
+              this.runtime.state.workspaceSessionsByHostId,
+              this.runtime.state.workspaceSession
+            )
+          }
+          break
+        case 'sshRemotePtyLeases':
+          stateToSave[domain] = this.runtime.state.sshRemotePtyLeases
+          break
+        default:
+          return undefined
+      }
+    }
+    return {
+      replacements: serializeSelectiveProfileStateDomains(stateToSave, domains),
+      protectedSecretUpdates
+    }
+  }
+
+  buildStateToSave(serializeDomains = false): {
+    domains?: readonly ProfileStateDomainReplacement[]
     payload: Buffer
     stateHash: string
     protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
@@ -122,27 +212,31 @@ export class StateSerializationSecretHandlingOperations {
           )
         })
       ),
-      settings: {
-        ...stripRetiredGlobalSettings(this.runtime.state.settings),
-        opencodeSessionCookie: encryptToSentinel(
-          PROTECTED_SECRET_SLOT.opencodeSessionCookie,
-          this.runtime.state.settings.opencodeSessionCookie
-        ),
-        opencodeGoApiKey: encryptToSentinel(
-          PROTECTED_SECRET_SLOT.opencodeGoApiKey,
-          this.runtime.state.settings.opencodeGoApiKey ?? ''
-        ),
-        httpProxyUrl: encryptToSentinel(
-          PROTECTED_SECRET_SLOT.httpProxyUrl,
-          this.runtime.state.settings.httpProxyUrl ?? ''
-        )
-      },
+      settings: this.buildSettingsToSave(encryptToSentinel),
       ui: {
         ...this.runtime.state.ui,
         browserKagiSessionLink: encryptOptionalToSentinel(
           PROTECTED_SECRET_SLOT.browserKagiSessionLink,
           this.runtime.state.ui.browserKagiSessionLink
         )
+      }
+    }
+    if (
+      serializeDomains &&
+      !('toJSON' in stateToSave && typeof stateToSave.toJSON === 'function')
+    ) {
+      const serialized = serializeCompleteProfileStateDomains(
+        stateToSave,
+        secretSubs,
+        protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
+      )
+      return {
+        domains: serialized.domains,
+        stateHash: serialized.stateHash,
+        get payload() {
+          return serialized.payload
+        },
+        protectedSecretUpdates
       }
     }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
@@ -157,5 +251,23 @@ export class StateSerializationSecretHandlingOperations {
       protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
     )
     return { payload, stateHash, protectedSecretUpdates }
+  }
+
+  private buildSettingsToSave(encrypt: (slot: string, plaintext: string) => string) {
+    return {
+      ...stripRetiredGlobalSettings(this.runtime.state.settings),
+      opencodeSessionCookie: encrypt(
+        PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+        this.runtime.state.settings.opencodeSessionCookie
+      ),
+      opencodeGoApiKey: encrypt(
+        PROTECTED_SECRET_SLOT.opencodeGoApiKey,
+        this.runtime.state.settings.opencodeGoApiKey ?? ''
+      ),
+      httpProxyUrl: encrypt(
+        PROTECTED_SECRET_SLOT.httpProxyUrl,
+        this.runtime.state.settings.httpProxyUrl ?? ''
+      )
+    }
   }
 }
