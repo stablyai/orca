@@ -20,6 +20,7 @@ export type TerminalOutputTarget = ForegroundTerminalOutputTarget
 
 export type TerminalOutputBeforeWrite = (data: string) => void
 type TerminalBacklogRecoveryRequest = () => boolean
+export type TerminalBacklogRecoveryTarget = { element: HTMLElement }
 export type TerminalOutputParsedCallback = () => void
 type ForegroundRefreshSyncResolver = () => boolean
 
@@ -118,8 +119,8 @@ export const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 export const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
 setTerminalOutputDebugQueueReader(() => queuedByTerminal.values())
 const backlogRecoveryByTerminal = new WeakMap<
-  TerminalOutputTarget,
-  TerminalBacklogRecoveryRequest
+  TerminalOutputTarget | TerminalBacklogRecoveryTarget,
+  { request: TerminalBacklogRecoveryRequest; completion?: () => Promise<void> | null }
 >()
 let drainTimer: ReturnType<typeof setTimeout> | null = null
 let drainTimerDelayMs: number | null = null
@@ -217,16 +218,35 @@ export function requestRegisteredTerminalBacklogRecovery(terminal: TerminalOutpu
   if (!requestRecovery) {
     return false
   }
-  return requestRecovery()
+  return requestRecovery.request()
+}
+
+export function getTerminalBacklogRecoveryCompletion(
+  terminal: TerminalBacklogRecoveryTarget
+): Promise<void> | null {
+  return backlogRecoveryByTerminal.get(terminal)?.completion?.() ?? null
+}
+
+export function prepareTerminalBacklogRecovery(
+  terminal: TerminalBacklogRecoveryTarget
+): Promise<void> | null {
+  const recovery = backlogRecoveryByTerminal.get(terminal)
+  if (!recovery?.completion) {
+    return null
+  }
+  recovery.request()
+  return recovery.completion()
 }
 
 export function registerTerminalBacklogRecovery(
   terminal: TerminalOutputTarget,
-  requestRecovery: TerminalBacklogRecoveryRequest
+  requestRecovery: TerminalBacklogRecoveryRequest,
+  completion?: () => Promise<void> | null
 ): () => void {
-  backlogRecoveryByTerminal.set(terminal, requestRecovery)
+  const registration = { request: requestRecovery, completion }
+  backlogRecoveryByTerminal.set(terminal, registration)
   return () => {
-    if (backlogRecoveryByTerminal.get(terminal) === requestRecovery) {
+    if (backlogRecoveryByTerminal.get(terminal) === registration) {
       backlogRecoveryByTerminal.delete(terminal)
     }
   }

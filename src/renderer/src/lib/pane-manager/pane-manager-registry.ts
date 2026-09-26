@@ -114,10 +114,9 @@ export function getLivePaneCensus(): { managers: number; panes: number } {
 }
 
 /**
- * Iterates every live pane for the render-desync sentinel. Weakly-held manager
- * ids stay stable when an earlier manager unregisters without retaining it.
+ * Iterates live panes with stable manager-scoped ids, without retaining disposed managers.
  */
-export function forEachLivePaneForDesyncSentinel(
+export function forEachLivePane(
   visit: (paneKey: string, pane: { id: number; terminal: unknown }) => void
 ): void {
   for (const manager of liveManagers) {
@@ -140,6 +139,8 @@ export function forEachLivePaneForDesyncSentinel(
     }
   }
 }
+
+export const forEachLivePaneForDesyncSentinel = forEachLivePane
 
 export function refitAndRefreshAllTerminalPanes(): void {
   for (const manager of liveManagers) {

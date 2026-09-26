@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+import { useWorkspaceTerminalReveal } from './terminal/use-workspace-terminal-reveal'
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
 import type { TerminalController } from './use-terminal-controller'
@@ -27,11 +29,23 @@ export function TerminalSplitWorkspaceSurfaces({
   // remote controller needs each to drop `hidden` — the per-worktree surface hatch below cannot
   // override an ancestor that stopped compositing.
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!effectiveActiveLayout)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const { presentedWorktreeId, finishReveal } = useWorkspaceTerminalReveal(
+    containerRef,
+    renderedActiveWorktreeId,
+    activeView === 'terminal'
+  )
   if (!anyMountedWorktreeHasLayout) {
     return null
   }
   return (
     <div
+      ref={containerRef}
+      data-terminal-reveal-held={presentedWorktreeId !== renderedActiveWorktreeId || undefined}
+      aria-busy={presentedWorktreeId !== renderedActiveWorktreeId || undefined}
+      onKeyDownCapture={finishReveal}
+      onPointerDownCapture={finishReveal}
+      onWheelCapture={finishReveal}
       className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${
         effectiveActiveLayout
           ? ''
@@ -62,6 +76,7 @@ export function TerminalSplitWorkspaceSurfaces({
               layout={layout}
               focusedGroupId={activeGroupIdByWorktree[workspace.id]}
               isVisible={isVisible}
+              isPresented={activeView === 'terminal' && workspace.id === presentedWorktreeId}
               shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
               shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
               isForceParked={forceParkedTerminalWorktreeIds.has(workspace.id)}

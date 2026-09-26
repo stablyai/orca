@@ -21,7 +21,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreePath,
   layout,
   focusedGroupId,
-  isVisible,
+  isVisible: isSelected,
+  isPresented = isSelected,
   shouldMeasureHiddenWorktree,
   shouldColdParkTerminalPanes,
   isForceParked,
@@ -34,6 +35,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout: TabGroupLayoutNode
   focusedGroupId?: string
   isVisible: boolean
+  isPresented?: boolean
   shouldMeasureHiddenWorktree: boolean
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
@@ -41,6 +43,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
+  // Keep the outgoing renderer intact while the selected workspace catches up.
+  const isVisible = isSelected || isPresented
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
@@ -51,14 +55,15 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   return (
     <div
       className={
-        isVisible
+        isPresented
           ? 'absolute inset-0 flex'
-          : shouldKeepPaintable
+          : isSelected || shouldKeepPaintable
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
-      inert={!isVisible}
-      aria-hidden={!isVisible}
+      data-worktree-reveal-id={worktreeId}
+      inert={!isSelected}
+      aria-hidden={!isSelected}
     >
       <TabGroupSplitLayout
         layout={layout}
@@ -93,7 +98,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         worktreeId={worktreeId}
         isWorktreeActive={isVisible}
       />
-      <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
+      <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isSelected} />
     </div>
   )
 })
