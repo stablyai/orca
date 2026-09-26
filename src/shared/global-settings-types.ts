@@ -415,6 +415,8 @@ export type GlobalSettings = {
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
+  /** One-shot guard for repairing regression-backfilled agent defaults on active YOLO profiles. */
+  agentYoloDefaultsBackfillRepaired?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
   /** Dismissed freshness tuples: no write authority, just suppress re-nudging the same official placement/revision. */

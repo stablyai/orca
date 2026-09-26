@@ -43,10 +43,23 @@ const PERMISSION_AGENT_IDS = Object.keys(TUI_AGENT_CONFIG).filter(
   (agent): agent is TuiAgent => agent in YOLO_TUI_AGENT_ARGS || agent in YOLO_TUI_AGENT_ENV
 )
 
+/**
+ * Trims launch arguments or returns an empty string if undefined/null.
+ *
+ * @param value - The argument string to normalize.
+ * @returns The trimmed string or empty string.
+ */
 function normalizeArgs(value: string | null | undefined): string {
   return value?.trim() ?? ''
 }
 
+/**
+ * Compares two environment variable dictionaries for shallow equality.
+ *
+ * @param left - First environment map.
+ * @param right - Second environment map.
+ * @returns True if both records contain identical key-value pairs.
+ */
 function sameEnv(
   left: Record<string, string> | null | undefined,
   right: Record<string, string> | null | undefined
@@ -59,6 +72,13 @@ function sameEnv(
   return leftEntries.every(([name, value]) => right?.[name] === value)
 }
 
+/**
+ * Resolves the permission mode of an argument string against its YOLO counterpart.
+ *
+ * @param args - Configured argument string.
+ * @param yoloArgs - Expected YOLO argument string for this agent.
+ * @returns 'manual' if empty, 'yolo' if exact match, or 'mixed' if customized.
+ */
 function resolveAgentPermissionMode(args: string, yoloArgs: string): AgentPermissionMode {
   if (!args) {
     return 'manual'
@@ -66,6 +86,13 @@ function resolveAgentPermissionMode(args: string, yoloArgs: string): AgentPermis
   return args === yoloArgs ? 'yolo' : 'mixed'
 }
 
+/**
+ * Resolves the permission mode of an environment map against its YOLO counterpart.
+ *
+ * @param env - Configured environment map.
+ * @param yoloEnv - Expected YOLO environment map for this agent.
+ * @returns 'manual' if empty, 'yolo' if exact match, or 'mixed' if customized.
+ */
 function resolveAgentEnvPermissionMode(
   env: Record<string, string> | null | undefined,
   yoloEnv: Record<string, string> | undefined
@@ -76,6 +103,12 @@ function resolveAgentEnvPermissionMode(
   return sameEnv(env, yoloEnv) ? 'yolo' : 'mixed'
 }
 
+/**
+ * Combines an array of agent permission modes into an aggregate mode.
+ *
+ * @param modes - Array of resolved permission modes across evaluated agents.
+ * @returns 'yolo' if all are YOLO, 'manual' if all are manual, or 'mixed' otherwise.
+ */
 function combinePermissionModes(modes: AgentPermissionMode[]): AgentPermissionMode {
   let sawYolo = false
   let sawManual = false
@@ -97,6 +130,12 @@ function combinePermissionModes(modes: AgentPermissionMode[]): AgentPermissionMo
   return sawYolo ? 'yolo' : 'manual'
 }
 
+/**
+ * Resolves the active permission mode for a single agent based on its arguments and environment.
+ *
+ * @param args - Object containing agent identifier, arguments, and environment variables.
+ * @returns Resolved mode: 'yolo', 'manual', or 'mixed'.
+ */
 export function resolveTuiAgentPermissionMode(args: {
   agent: TuiAgent
   agentArgs?: string | null
@@ -118,6 +157,12 @@ export function resolveTuiAgentPermissionMode(args: {
   return combinePermissionModes(modes)
 }
 
+/**
+ * Resolves the overall permission mode across all known permission-capable agents.
+ *
+ * @param args - Configured default launch arguments and environment records.
+ * @returns Aggregate mode: 'yolo', 'manual', or 'mixed'.
+ */
 export function resolveAgentPermissionModeSummary(args: {
   agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
@@ -137,6 +182,61 @@ export function resolveAgentPermissionModeSummary(args: {
   return combinePermissionModes(modes)
 }
 
+/**
+ * Resolves the overall agent permission mode summary considering only configured agents.
+ *
+ * Unlike {@link resolveAgentPermissionModeSummary}, this function ignores agents that are not
+ * physically present in either `agentDefaultArgs` or `agentDefaultEnv`. It also allows excluding
+ * specific agents via `excludeAgents` to evaluate the baseline posture of a profile.
+ *
+ * @param args - The configured default arguments, environment variables, and optional excluded agents.
+ * @returns The resolved mode: `'yolo'` if all configured agents are YOLO, `'manual'` if all are manual or none configured, or `'mixed'`.
+ */
+export function resolveConfiguredAgentPermissionModeSummary(args: {
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
+  excludeAgents?: readonly TuiAgent[]
+}): AgentPermissionMode {
+  const modes: AgentPermissionMode[] = []
+  const excluded = new Set(args.excludeAgents ?? [])
+
+  for (const agent of PERMISSION_AGENT_IDS) {
+    if (excluded.has(agent)) {
+      continue
+    }
+    const hasArgs =
+      args.agentDefaultArgs &&
+      Object.hasOwn(args.agentDefaultArgs, agent) &&
+      typeof args.agentDefaultArgs[agent] === 'string'
+    const hasEnv =
+      args.agentDefaultEnv &&
+      Object.hasOwn(args.agentDefaultEnv, agent) &&
+      typeof args.agentDefaultEnv[agent] === 'object' &&
+      args.agentDefaultEnv[agent] !== null
+    if (!hasArgs && !hasEnv) {
+      continue
+    }
+    modes.push(
+      resolveTuiAgentPermissionMode({
+        agent,
+        agentArgs: args.agentDefaultArgs?.[agent],
+        agentEnv: args.agentDefaultEnv?.[agent]
+      })
+    )
+  }
+
+  if (modes.length === 0) {
+    return 'manual'
+  }
+  return combinePermissionModes(modes)
+}
+
+/**
+ * Applies a target permission mode ('yolo' or 'manual') to configured agent arguments and environment.
+ *
+ * @param args - Target mode and existing argument/environment records.
+ * @returns Updated records with the target permission mode applied to untouched/defaulted agents.
+ */
 export function applyAgentPermissionMode(args: {
   mode: Exclude<AgentPermissionMode, 'mixed'>
   agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null

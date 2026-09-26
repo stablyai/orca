@@ -10,6 +10,7 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../shared/tui-agent-launch-defaults'
+import { resolveConfiguredAgentPermissionModeSummary } from '../../../shared/tui-agent-permissions'
 
 export function buildWorkspaceDirHistoryForUpdate(
   current: GlobalSettings,
@@ -121,31 +122,96 @@ export function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): strin
   return `${normalizeRuntimePathForComparison(layout.path)}:${layout.nestWorkspaces}`
 }
 
+const REGRESSION_BACKFILLED_AGENTS: readonly (keyof typeof DEFAULT_TUI_AGENT_ARGS)[] = [
+  'ante',
+  'devin',
+  'trae',
+  'droid',
+  'muse',
+  'zcode'
+]
+
+/**
+ * Migrates agent default launch arguments and environment variables to match the active permission posture.
+ *
+ * For profiles migrated prior to agent additions, inherits the profile's active permission mode
+ * ('yolo', 'manual', or 'mixed') for newly added agents. Also executes a one-time repair for agents
+ * backfilled to manual by PR #17515 on profiles that were actively configured in YOLO mode.
+ *
+ * @param settings - The global settings object being loaded or updated.
+ * @returns The migrated agent default arguments, environment variables, and migration guard flags.
+ */
 export function migrateAgentYoloDefaults(
   settings: GlobalSettings | undefined
-): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
+): Pick<
+  GlobalSettings,
+  | 'agentDefaultArgs'
+  | 'agentDefaultEnv'
+  | 'agentYoloDefaultsMigrated'
+  | 'agentYoloDefaultsBackfillRepaired'
+> {
   const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
   const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
   if (existingArgs.devin === '--permission-mode bypass') {
     existingArgs.devin = DEFAULT_TUI_AGENT_ARGS.devin
   }
   if (settings?.agentYoloDefaultsMigrated === true) {
-    // Keep newly added agents manual for profiles migrated by an older build.
-    // Missing keys otherwise fall through to the current (possibly yolo) defaults.
-    for (const agent of Object.keys(DEFAULT_TUI_AGENT_ARGS)) {
-      if (!(agent in existingArgs)) {
-        existingArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
+    // Inherit the profile's active permission mode for newly added agents instead of forcing manual.
+    // Also repair agents that were backfilled to manual by PR #17515 if the profile's active posture is yolo.
+    const alreadyRepaired = settings?.agentYoloDefaultsBackfillRepaired === true
+    const backfilledArgsAgents = alreadyRepaired
+      ? []
+      : REGRESSION_BACKFILLED_AGENTS.filter((agent) => existingArgs[agent] === '')
+    const backfilledEnvGoose =
+      !alreadyRepaired &&
+      existingEnv.goose !== undefined &&
+      Object.keys(existingEnv.goose).length === 0
+
+    const isOtherwiseYolo =
+      !alreadyRepaired &&
+      resolveConfiguredAgentPermissionModeSummary({
+        agentDefaultArgs: existingArgs,
+        agentDefaultEnv: existingEnv,
+        excludeAgents: [
+          ...backfilledArgsAgents,
+          ...(backfilledEnvGoose ? (['goose'] as const) : [])
+        ]
+      }) === 'yolo'
+
+    if (isOtherwiseYolo) {
+      for (const agent of backfilledArgsAgents) {
+        existingArgs[agent] = DEFAULT_TUI_AGENT_ARGS[agent]
+      }
+      if (backfilledEnvGoose) {
+        existingEnv.goose = { ...DEFAULT_TUI_AGENT_ENV.goose }
       }
     }
-    for (const agent of Object.keys(DEFAULT_TUI_AGENT_ENV)) {
+
+    const permissionMode = isOtherwiseYolo
+      ? 'yolo'
+      : resolveConfiguredAgentPermissionModeSummary({
+          agentDefaultArgs: existingArgs,
+          agentDefaultEnv: existingEnv
+        })
+
+    const commandOverrides = settings?.agentCmdOverrides ?? {}
+    for (const [agent, args] of Object.entries(DEFAULT_TUI_AGENT_ARGS)) {
+      if (!(agent in existingArgs)) {
+        existingArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] =
+          agent in commandOverrides ? '' : permissionMode === 'yolo' ? args : ''
+      }
+    }
+    for (const [agent, env] of Object.entries(DEFAULT_TUI_AGENT_ENV)) {
       if (!(agent in existingEnv)) {
-        existingEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
+        existingEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] =
+          agent in commandOverrides ? {} : permissionMode === 'yolo' ? { ...env } : {}
       }
     }
     return {
       agentDefaultArgs: existingArgs,
       agentDefaultEnv: existingEnv,
-      agentYoloDefaultsMigrated: true
+      agentYoloDefaultsMigrated: true,
+      agentYoloDefaultsBackfillRepaired: true
     }
   }
 
@@ -178,6 +244,7 @@ export function migrateAgentYoloDefaults(
     // Why: legacy users could only customize launch defaults via command overrides, so those agents count as already user-owned.
     agentDefaultArgs: migratedArgs,
     agentDefaultEnv: migratedEnv,
-    agentYoloDefaultsMigrated: true
+    agentYoloDefaultsMigrated: true,
+    agentYoloDefaultsBackfillRepaired: true
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyAgentPermissionMode,
   resolveAgentPermissionModeSummary,
+  resolveConfiguredAgentPermissionModeSummary,
   resolveTuiAgentPermissionMode,
   YOLO_TUI_AGENT_ARGS,
   YOLO_TUI_AGENT_ENV
@@ -99,6 +100,48 @@ describe('tui agent permissions', () => {
         agent: 'goose',
         agentArgs: '',
         agentEnv: YOLO_TUI_AGENT_ENV.goose
+      })
+    ).toBe('yolo')
+  })
+
+  it('resolves configured permission mode summary from only present keys', () => {
+    expect(
+      resolveConfiguredAgentPermissionModeSummary({
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions' }
+      })
+    ).toBe('yolo')
+
+    expect(
+      resolveConfiguredAgentPermissionModeSummary({
+        agentDefaultArgs: { claude: '' }
+      })
+    ).toBe('manual')
+
+    expect(
+      resolveConfiguredAgentPermissionModeSummary({
+        agentDefaultArgs: { claude: '--dangerously-skip-permissions', codex: '' }
+      })
+    ).toBe('mixed')
+
+    expect(
+      resolveConfiguredAgentPermissionModeSummary({
+        agentDefaultArgs: {}
+      })
+    ).toBe('manual')
+  })
+
+  it('honors excluded agents in configured permission mode summary', () => {
+    expect(
+      resolveConfiguredAgentPermissionModeSummary({
+        agentDefaultArgs: {
+          claude: '--dangerously-skip-permissions',
+          droid: '',
+          muse: ''
+        },
+        agentDefaultEnv: {
+          goose: {}
+        },
+        excludeAgents: ['droid', 'muse', 'goose']
       })
     ).toBe('yolo')
   })

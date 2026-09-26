@@ -17,6 +17,12 @@ import {
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
+/**
+ * Builds the default global settings object with system- and platform-specific defaults.
+ *
+ * @param args - System and platform configuration parameters including workspace directory and fonts.
+ * @returns Complete default global settings object initialized for fresh profiles.
+ */
 export function buildDefaultSettings(args: {
   workspaceDir: string
   appFontFamily: string
@@ -219,6 +225,7 @@ export function buildDefaultSettings(args: {
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,
+    agentYoloDefaultsBackfillRepaired: true,
     agentStatusHooksEnabled: true,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,
