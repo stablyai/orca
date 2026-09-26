@@ -1,8 +1,3 @@
-import {
-  closeTestStores,
-  createSqliteTestStore,
-  readPersistedStateJson
-} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
 import { ProfileStateSqliteAuthority } from './persistence/profile-state/profile-state-sqlite-authority'
@@ -12,6 +7,9 @@ import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
   testState,
   createStore,
   dataFile,

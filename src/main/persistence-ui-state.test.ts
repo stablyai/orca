@@ -1,8 +1,3 @@
-import {
-  closeTestStores,
-  createSqliteTestStore,
-  readPersistedStateJson
-} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -11,6 +6,9 @@ import type { PersistedState } from '../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cleanup-browse-state'
 import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
   testState,
   dataFile,
   writeDataFile,

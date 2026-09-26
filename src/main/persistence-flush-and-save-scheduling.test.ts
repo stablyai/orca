@@ -1,8 +1,3 @@
-import {
-  closeTestStores,
-  createSqliteTestStore,
-  readPersistedStateJson
-} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,6 +5,9 @@ import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import type { Repo } from '../shared/repo-types'
 import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
   testState,
   createStore,
   withPlatform,
