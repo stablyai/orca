@@ -126,7 +126,7 @@ function waitOutSeveralGraceWindows(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
 }
 
-/** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. */
+/** Fails the next eviction's drain, which the wind-down reports and goes past. */
 function failNextDrain(): void {
   vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained').mockResolvedValueOnce({
     ok: false,
@@ -343,34 +343,22 @@ describe('a chat that closes', () => {
     expect(closeSession).toHaveBeenCalledOnce()
   })
 
-  it('settles and releases on the retry when a step after the child stopped aborts', async () => {
+  it('releases the lease in the same close when a proven stop cannot drain its sink', async () => {
     await attach()
-    dispatch.mockResolvedValueOnce({ state: 'admitted' })
-    const body = hostTestMessage('pending across an aborted eviction')
-    const sent = await host.send(CALLER, {
-      envelope: envelope('agentSession.send', { body }),
-      body
-    })
-    expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
-    const session = host['sessions'].get(SESSION)
-    expect(session).toBeDefined()
-    vi.spyOn(host['runtimeState'].eventSinkFor(SESSION), 'drained').mockResolvedValueOnce({
-      ok: false,
-      error: new Error('drain barrier lost')
-    })
+    await sendPending('pending across a failed drain')
     const settled = captureSettledSubmissions()
-
-    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
-    // The child is proven gone, but the wind-down it owes is not done: nothing settled, no release.
-    expect(session!.child).toBeNull()
-    expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
+    failNextDrain()
 
     await expect(host.close(SESSION)).resolves.toBeUndefined()
+
+    expect(host.hasSession(SESSION)).toBe(false)
     expect(closeSession).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       ownerProcess: null
     })
+    expect(hostErrors).toContainEqual(expect.objectContaining({ step: 'drain-published' }))
+    // The settlement still ran; only the drain was lost.
     expect(hasUnansweredStructuredAgentSessionDispatch(settled.value)).toBe(false)
   })
 })
@@ -810,9 +798,9 @@ describe('a quit over an eviction that never got its retry', () => {
     await attach()
     await sendPending('pending across an abandoned eviction')
     const settled = captureSettledSubmissions()
-    failNextDrain()
+    vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('store write lost'))
 
-    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'drain-published' })
+    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'release-lease' })
     expect(host['sessions'].get(SESSION)?.child).toBeNull()
     expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
 

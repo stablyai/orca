@@ -106,10 +106,10 @@ function owedProviderChildWindDown(
 /**
  * The agent goes to rest; the conversation stays. Runs the eviction steps under a deadline. A step
  * that fails — or runs out of time — aborts the rest and leaves the wind-down owed, so the next
- * stop is a real retry. A stop that cannot prove the exit still ends the child, and hands the lease
- * to recovery. `ending` is how the child's end is told: a user's Stop, the host stopping it for a
- * cause (with its text), a start the child was seen to die in, or an eviction whose close forgets
- * the conversation next.
+ * stop is a real retry; a failed drain or settlement is only reported. A stop that cannot prove the
+ * exit still ends the child, and hands the lease to recovery. `ending` is how the child's end is
+ * told: a user's Stop, the host stopping it for a cause (with its text), a start the child was seen
+ * to die in, or an eviction whose close forgets the conversation next.
  */
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
@@ -154,12 +154,15 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
           duringStartup: stopping.phase === 'starting',
           ...verdict
         })
+        // Now, not at the release: a later step that aborts must not leave the row on a live child.
+        context.publishStatus?.(sessionId)
       }
       if (verdict.rootGone) {
         context.restartWitness?.stopped(sessionId)
       }
     },
     acknowledgeRelease: () => context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
+    onBestEffortStepFailure: (error) => context.deps.onEventSinkError?.({ sessionId, error }),
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
     settleWork: async () => {
       const settled = await settleEndedStructuredAgentSessionChildWork({
@@ -170,13 +173,13 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
           fence: structuredAgentSessionConversationFence(context.deps.store, sessionId)
         },
         now: context.now(),
-        onError: (id, error) => {
+        // Reported once, by the step's failure below.
+        onError: (_id, error) => {
           settlementError = error
-          context.deps.onEventSinkError?.({ sessionId: id, error })
         }
       })
       if (!settled) {
-        // Without the cause the quit log names the step and nothing else.
+        // Without the cause the report names the step and nothing else.
         throw new Error('dead generation work settlement failed', { cause: settlementError })
       }
     },
@@ -213,7 +216,12 @@ function endedChildRootGone(
   owed: StructuredAgentSessionProviderChildIdentity
 ): boolean {
   const ended = session.lastEndedChild
-  return ended?.generation !== owed.generation || ended.fence !== owed.fence || ended.rootGone
+  return (
+    ended !== undefined &&
+    ended.generation === owed.generation &&
+    ended.fence === owed.fence &&
+    ended.rootGone
+  )
 }
 
 /** Ends the conversation's resources, not the conversation: its child stops, and then its handle

@@ -153,6 +153,7 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.tasks.trackAttach(this.serialize(sessionId, task)),
       now: () => this.now(),
       ensureProviderChild: (id, options) => this.holds.ensureProviderChild(id, options),
+      lifetime: () => this.lifetimeContext(),
       onBarrierError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
     })
     this.restartResume = createStructuredAgentSessionRestartResume(

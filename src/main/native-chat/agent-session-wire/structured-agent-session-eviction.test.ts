@@ -115,22 +115,59 @@ describe('structured agent session eviction', () => {
     }
   })
 
-  it('aborts after a failed drain barrier without unbinding or acknowledging the release', async () => {
+  it('reports a failed drain barrier and still winds the child down', async () => {
     const ctx = context()
+    const reported = vi.fn()
+    ctx.onBestEffortStepFailure = reported
     ctx.eventSink.drained = vi.fn(async () => {
       ctx.order.push('drained')
       return { ok: false, error: new Error('append failed') }
     }) as unknown as StructuredAgentSessionEvictionContext['eventSink']['drained']
 
-    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
-      step: 'drain-published'
+    await evictStructuredAgentSession(ctx)
+
+    expect(reported).toHaveBeenCalledWith(
+      expect.objectContaining({ step: 'drain-published', sessionId: 'session-1' })
+    )
+    expect(ctx.order).toEqual([
+      'closeSession',
+      'drained',
+      'settleWork',
+      'unbind',
+      'close',
+      'discardSink',
+      'releaseLease',
+      'acknowledgeRelease'
+    ])
+  })
+
+  it('reports a failed settlement and still hands the lease back', async () => {
+    const ctx = context()
+    const reported = vi.fn()
+    ctx.onBestEffortStepFailure = reported
+    ctx.settleWork = vi.fn(async () => {
+      throw new Error('journal write failed')
     })
-    expect(ctx.eventSink.unbind).not.toHaveBeenCalled()
-    expect(ctx.eventSink.close).not.toHaveBeenCalled()
-    expect(ctx.discardSink).not.toHaveBeenCalled()
-    expect(ctx.releaseLease).not.toHaveBeenCalled()
+
+    await evictStructuredAgentSession(ctx)
+
+    expect(reported).toHaveBeenCalledWith(
+      expect.objectContaining({ step: 'settle-dead-generation' })
+    )
+    expect(ctx.releaseLease).toHaveBeenCalledOnce()
+    expect(ctx.acknowledgeRelease).toHaveBeenCalledOnce()
+  })
+
+  it('aborts at a release that cannot be written, before the adapter drops the route', async () => {
+    const ctx = context()
+    ctx.releaseLease = vi.fn(async () => {
+      throw new Error('store write failed')
+    })
+
+    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
+      step: 'release-lease'
+    })
     expect(ctx.acknowledgeRelease).not.toHaveBeenCalled()
-    expect(ctx.order).toEqual(['closeSession', 'drained'])
   })
 })
 

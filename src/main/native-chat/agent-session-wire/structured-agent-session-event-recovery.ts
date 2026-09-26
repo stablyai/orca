@@ -7,9 +7,11 @@ import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
-import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
-import { settleEndedStructuredAgentSessionChildWork } from './structured-agent-session-dead-generation-settlement'
 import { endProviderChild } from './structured-agent-session-provider-child'
+import {
+  stopStructuredAgentSessionAgentUnderSerialize,
+  type StructuredAgentSessionLifetimeContext
+} from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
 import { settleStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
@@ -35,6 +37,8 @@ export class StructuredAgentSessionEventRecovery {
       now: () => number
       /** The one restart every asker shares; the holds put an unheld child on the idle clock. */
       ensureProviderChild: StructuredAgentSessionHolds['ensureProviderChild']
+      /** What the stop's own wind-down runs against. */
+      lifetime: () => StructuredAgentSessionLifetimeContext
       onBarrierError: (sessionId: string, error: unknown) => void
     }
   ) {}
@@ -77,8 +81,8 @@ export class StructuredAgentSessionEventRecovery {
   }
 
   /** The force-close could not prove the exit, but the child is closing and takes no writes: it
-   *  ends here, settles like every ended child, and its lease goes to recovery. Not the stop's
-   *  wind-down, whose settle step would abort ahead of the lease on this same journal failure. */
+   *  ends here, and the stop's own wind-down settles it and hands its lease to recovery. Owed
+   *  first, so a release that fails is retried by the next Stop, close or quit. */
   private async endUnprovenChild(
     sessionId: string,
     child: StructuredAgentSessionProviderChild,
@@ -98,27 +102,12 @@ export class StructuredAgentSessionEventRecovery {
     ) {
       return
     }
-    try {
-      // Best effort: the lease moves whether or not the failing journal takes it.
-      await settleEndedStructuredAgentSessionChildWork({
-        journal: session.journal,
-        sessionId,
-        child,
-        now: this.context.now(),
-        onError: this.context.onBarrierError
-      })
-      await releaseStoredStructuredAgentSessionOwner({
-        store: this.context.store,
-        sessionId,
-        hasProviderChild: true,
-        expectedFence: child.fence,
-        now: this.context.now(),
-        rootGone: false
-      })
-      this.context.deps.adapter.acknowledgeSessionRelease?.(sessionId)
-    } finally {
-      this.context.publishStatus?.(sessionId)
-    }
+    session.owesProviderChildWindDown = { generation: child.generation, fence: child.fence }
+    this.context.publishStatus?.(sessionId)
+    await stopStructuredAgentSessionAgentUnderSerialize(this.context.lifetime(), sessionId, {
+      cause: 'host-stop',
+      reason
+    })
   }
 
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {

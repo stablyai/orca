@@ -332,6 +332,16 @@ describe('the teardown deadline', () => {
     )
   })
 
+  it('keeps which steps only report their failure', () => {
+    const bestEffort = withStructuredAgentSessionEvictionDeadline(
+      STRUCTURED_AGENT_SESSION_EVICTION_STEPS
+    )
+      .filter((step) => step.bestEffort)
+      .map((step) => step.name)
+
+    expect(bestEffort).toEqual(['drain-published', 'settle-dead-generation'])
+  })
+
   it('does not delay a step that finishes', async () => {
     const ran: string[] = []
     const steps = withStructuredAgentSessionEvictionDeadline(

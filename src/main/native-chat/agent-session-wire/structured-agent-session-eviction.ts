@@ -12,10 +12,14 @@
 // this teardown exists to fix. So: stop the child, drain what it emitted on its way out, then let
 // the sink go. The one step ahead of the stop only reads, for quit's resume offer.
 //
-// FAILURE. A step that fails ABORTS the rest, leaving the session in place so the next close is a
-// real retry instead of a no-op. A stop that could not prove the exit is not a failure: the child is
+// FAILURE. A failed stop ABORTS the rest, leaving the session in place so the next close is a real
+// retry instead of a no-op. A stop that could not prove the exit is not a failure: the child is
 // closing and cannot take writes, so the host ends it all the same, and only the lease hears the
-// verdict — handed to recovery, which stops the recorded owner by identity at the next start.
+// verdict — handed to recovery, which stops the recorded owner by identity at the next start. Past
+// the stop, draining and settling are bookkeeping, which never keeps the lease from moving: a
+// failure there is reported and the wind-down goes on, since the next child's attach re-derives
+// what they would have written. The rest still abort, and a failed release leaves the wind-down
+// owed for the next close to repeat.
 
 import {
   stopAgentSessionProviderRoot,
@@ -46,6 +50,8 @@ export type StructuredAgentSessionEvictionContext = {
   owesProviderChildWindDown?: boolean
   /** Settles work owned by the child after its final callbacks have drained. */
   settleWork?: () => Promise<void>
+  /** Hears a best-effort step's failure; the wind-down continues past it. */
+  onBestEffortStepFailure?: (error: StructuredAgentSessionEvictionError) => void
   /** Hands the lease back now that this host's child is stopped: released on proof, otherwise to
    *  recovery. No-ops when the record is not this host's to release. */
   releaseLease: () => Promise<void>
@@ -57,6 +63,8 @@ const SNAPSHOT_DRAIN_TIMEOUT_MS = 1_000
 export type StructuredAgentSessionEvictionStep = {
   name: string
   run: (context: StructuredAgentSessionEvictionContext) => Promise<void> | void
+  /** A failure is reported, not fatal: see FAILURE above. */
+  bestEffort?: true
 }
 
 export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSessionEvictionStep[] =
@@ -93,6 +101,7 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
     },
     {
       name: 'drain-published',
+      bestEffort: true,
       run: async (context) => {
         const barrier = await context.eventSink.drained()
         if (!barrier.ok) {
@@ -102,6 +111,7 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
     },
     {
       name: 'settle-dead-generation',
+      bestEffort: true,
       run: (context) =>
         context.owesProviderChildWindDown === false ? undefined : context.settleWork?.()
     },
@@ -132,9 +142,10 @@ export class StructuredAgentSessionEvictionError extends Error {
 }
 
 /**
- * Runs the eviction steps in order, stopping at the first failure. The step name travels with the
- * error because the caller's only useful response is to retry, and a retry is only safe when the
- * session is still indexed — which is exactly what aborting preserves.
+ * Runs the eviction steps in order, stopping at the first failure of a step that is not best
+ * effort. The step name travels with the error because the caller's only useful response is to
+ * retry, and a retry is only safe when the session is still indexed — which is exactly what
+ * aborting preserves.
  */
 export async function evictStructuredAgentSession(
   context: StructuredAgentSessionEvictionContext,
@@ -144,7 +155,11 @@ export async function evictStructuredAgentSession(
     try {
       await step.run(context)
     } catch (error) {
-      throw new StructuredAgentSessionEvictionError(step.name, context.sessionId, error)
+      const failure = new StructuredAgentSessionEvictionError(step.name, context.sessionId, error)
+      if (!step.bestEffort) {
+        throw failure
+      }
+      context.onBestEffortStepFailure?.(failure)
     }
   }
 }

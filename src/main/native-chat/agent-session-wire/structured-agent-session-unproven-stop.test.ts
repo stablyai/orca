@@ -47,6 +47,7 @@ let adapterExtras: Partial<StructuredAgentSessionAdapter>
 /** What the recorded owner's probe answers; recovery's stop flips it to gone. */
 let ownerProbe: AgentSessionOwnerProbe
 let stopOwnerProcess: Mock<(pid: number, signal: 'SIGTERM' | 'SIGKILL') => void>
+let hostErrors: unknown[]
 
 function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
@@ -91,7 +92,8 @@ function startHost(): void {
     probeOwner: async () => ownerProbe,
     stopOwnerProcess,
     releaseGraceMs: 60_000,
-    now: () => NOW
+    now: () => NOW,
+    onEventSinkError: ({ error }) => hostErrors.push(error)
   })
 }
 
@@ -104,6 +106,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-unproven-stop-'))
   resetHostTestOperationIds()
   adapterExtras = {}
+  hostErrors = []
   ownerProbe = GONE
   stopOwnerProcess = vi.fn(() => {
     ownerProbe = GONE
@@ -494,5 +497,74 @@ describe('a new child never inherits a wait on the one before it', () => {
 
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(submission(handed)?.dispatchState).toBe('pending')
+  })
+})
+
+describe('bookkeeping that fails after the child ended', () => {
+  it('never keeps an unproven stop from handing the lease to recovery', async () => {
+    const acknowledgeSessionRelease = vi.fn()
+    adapterExtras = { acknowledgeSessionRelease }
+    await restartHost()
+    const handed = await childLeftWorkOpen()
+    const journal = conversation()?.journal
+    if (!journal) {
+      throw new Error('conversation not open')
+    }
+    vi.spyOn(journal, 'markPendingSubmissionsUnknown').mockRejectedValueOnce(new Error('disk full'))
+    closeSession.mockResolvedValueOnce(false)
+
+    await host.close(SESSION)
+
+    expect(hostErrors).toContainEqual(expect.objectContaining({ step: 'settle-dead-generation' }))
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(acknowledgeSessionRelease).toHaveBeenCalledWith(SESSION)
+    expect(lease()).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: 'recovering',
+      ownerProcess: { pid: OWNER_PID }
+    })
+    await expectNextSendStartsAfterRecovery()
+    expect(submission(handed)).toMatchObject({ dispatchState: 'unknown', recovered: true })
+  })
+
+  it('publishes the ended child even when the release after it cannot be written', async () => {
+    await deliveredOnce()
+    const publishStatus = vi.spyOn(host['clientDelivery'], 'publishStatus')
+    closeSession.mockResolvedValueOnce(false)
+    vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('store write lost'))
+
+    await expect(host.close(SESSION)).rejects.toMatchObject({ step: 'release-lease' })
+
+    expect(conversation()?.child).toBeNull()
+    expect(publishStatus).toHaveBeenCalledWith(SESSION)
+    // The retry repeats only what is still owed: no second close, and the lease moves.
+    await host.close(SESSION)
+    expect(closeSession).toHaveBeenCalledTimes(2)
+    expect(lease()).toMatchObject({ claimStatus: 'live', handoffStage: 'recovering' })
+  })
+
+  it("retries a sink failure's release that could not be written at the next close", async () => {
+    const acknowledgeSessionRelease = vi.fn()
+    adapterExtras = { acknowledgeSessionRelease }
+    await restartHost()
+    await deliveredOnce()
+    host['deps'].adapter.forceCloseSession = vi.fn(async () => false)
+    vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('store write lost'))
+
+    host['eventRecovery'].recoverAfterSinkFailure(SESSION, new Error('disk full'))
+
+    await eventually(() =>
+      expect(hostErrors).toContainEqual(expect.objectContaining({ step: 'release-lease' }))
+    )
+    expect(conversation()?.child).toBeNull()
+    expect(lease()).toMatchObject({ claimStatus: 'live', handoffStage: null })
+    expect(acknowledgeSessionRelease).not.toHaveBeenCalled()
+
+    await host.close(SESSION)
+
+    expect(lease()).toMatchObject({ claimStatus: 'live', handoffStage: 'recovering' })
+    expect(acknowledgeSessionRelease).toHaveBeenCalledWith(SESSION)
+    // The child was already force-closed; the retry only finishes its wind-down.
+    expect(closeSession).toHaveBeenCalledTimes(1)
   })
 })
