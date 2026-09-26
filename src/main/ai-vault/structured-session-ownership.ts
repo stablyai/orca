@@ -6,6 +6,7 @@ import {
   listStructuredProviderSessionOwnership,
   type StructuredProviderSessionOwnership
 } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+import { StructuredSessionResumeRefusedError } from './structured-session-resume-refusal'
 
 export function projectStructuredAiVaultSessions(
   result: AiVaultListResult,
@@ -178,9 +179,15 @@ function parseResumeInvocation(command: string): ResumeInvocation | null {
 }
 
 function refuseLegacyWriter(ownership: StructuredProviderSessionOwnership): never {
-  throw new Error(
-    agentSessionLeaseAdmitsWriter(ownership.lease)
+  const lease = ownership.lease
+  throw new StructuredSessionResumeRefusedError({
+    code: agentSessionLeaseAdmitsWriter(lease)
       ? 'agent_session_conflict'
-      : 'agent_session_ownership_unknown'
-  )
+      : 'agent_session_ownership_unknown',
+    sessionId: ownership.sessionId,
+    ownerRuntimeKind: lease.runtimeKind,
+    handoffStage: lease.handoffStage,
+    ownerPid: lease.ownerProcess?.pid ?? null,
+    runtimeFence: lease.runtimeFence
+  })
 }
