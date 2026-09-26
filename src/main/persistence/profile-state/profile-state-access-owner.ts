@@ -115,7 +115,7 @@ function readOwner(path: string): AccessOwner | undefined {
         processStartIdentity:
           'processStartIdentity' in owner &&
           typeof owner.processStartIdentity === 'string' &&
-          /^(?:linux-start-ticks|darwin-utc-start-ms|wall-time-ms):\d+$/.test(
+          /^(?:(?:linux-start-ticks|darwin-utc-start-ms|wall-time-ms):\d+|win32-creation-ms:[1-9]\d*)$/.test(
             owner.processStartIdentity
           ) &&
           Number.isSafeInteger(Number(owner.processStartIdentity.split(':')[1]))
@@ -138,7 +138,9 @@ function ownerExited(owner: AccessOwner): boolean {
   const sameBoot = Boolean(owner.bootIdentity && owner.bootIdentity === currentBoot)
   const sameMachine = Boolean(owner.machineIdentity && owner.machineIdentity === currentMachine)
   const sameHost = owner.host === hostname()
+  // Windows has no boot UUID here; a hostname alone cannot identify a shared-directory owner.
   if (
+    (process.platform === 'win32' && (!sameHost || !sameMachine)) ||
     (!sameBoot && !sameHost) ||
     owner.platform !== process.platform ||
     (!sameBoot && owner.machineIdentity && currentMachine && !sameMachine)
@@ -167,8 +169,10 @@ function ownerExited(owner: AccessOwner): boolean {
     return hasCode(error, 'ESRCH')
   }
   const recordedStart = owner.processStartIdentity
+  // GetProcessTimes records an absolute creation time, so it also detects reuse after reboot.
+  const canCompareStart = sameBoot || (process.platform === 'win32' && sameMachine && sameHost)
   const actualStart =
-    !sameBoot || recordedStart == null ? null : profileStateAccessProcessIdentity(owner.pid)
+    !canCompareStart || recordedStart == null ? null : profileStateAccessProcessIdentity(owner.pid)
   return (
     actualStart !== null &&
     recordedStart != null &&

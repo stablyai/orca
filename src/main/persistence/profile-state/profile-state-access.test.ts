@@ -195,6 +195,7 @@ function staleGate(
       host,
       platform: process.platform,
       pidNamespace: process.platform === 'linux' ? fs.readlinkSync('/proc/self/ns/pid') : null,
+      machineIdentity: identity.profileStateAccessMachineIdentity(),
       ...extra
     })
   )
@@ -399,16 +400,19 @@ describe('profile state owner reclamation', () => {
     }
   })
 
-  it('recognizes an exited owner after a hostname change on the same kernel boot', () => {
-    const path = root()
-    vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
-    const owner = staleGate(path, 12345, 'previous-hostname', { bootIdentity: 'same-boot' })
-    vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw Object.assign(new Error('exited'), { code: 'ESRCH' })
-    })
-    acquireProfileStateMaintenance(path).release()
-    expect(fs.existsSync(owner)).toBe(false)
-  })
+  it.skipIf(process.platform === 'win32')(
+    'recognizes an exited owner after a hostname change on the same kernel boot',
+    () => {
+      const path = root()
+      vi.spyOn(identity, 'profileStateAccessBootIdentity').mockReturnValue('same-boot')
+      const owner = staleGate(path, 12345, 'previous-hostname', { bootIdentity: 'same-boot' })
+      vi.spyOn(process, 'kill').mockImplementation(() => {
+        throw Object.assign(new Error('exited'), { code: 'ESRCH' })
+      })
+      acquireProfileStateMaintenance(path).release()
+      expect(fs.existsSync(owner)).toBe(false)
+    }
+  )
 
   it('keeps a differently booted host unverifiable after a hostname change', () => {
     const path = root()
