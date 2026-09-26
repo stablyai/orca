@@ -36,6 +36,8 @@ export function useLineageVirtualizer(args: {
       measuredHeights.get(tree.nodes[index]!.row.rowKey) ?? ESTIMATED_LINEAGE_CARD_HEIGHT,
     getItemKey,
     scrollMargin,
+    // Mounting an offscreen group must not reset the shared scroller to zero.
+    initialOffset: () => scrollRef.current?.scrollTop ?? 0,
     overscan: LINEAGE_VIRTUAL_OVERSCAN,
     useFlushSync: false
   })

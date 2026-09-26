@@ -1,7 +1,29 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { seedVirtualLineage } from './sidebar-lineage-virtualization-state'
+import {
+  seedOrdinaryRowsAboveLineage,
+  seedVirtualLineage
+} from './sidebar-lineage-virtualization-state'
 import { worktreeRow } from './worktree-row-locators'
+import { seedWorkspaceAgentStatus } from './worktree-lineage-state'
+
+test('mounting an offscreen lineage preserves the shared scroll position', async ({ orcaPage }) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await seedVirtualLineage(orcaPage, false)
+  await expect(worktreeRow(orcaPage, 'e2e-virtual-child-0')).toBeInViewport()
+  await seedOrdinaryRowsAboveLineage(orcaPage)
+  await expect(worktreeRow(orcaPage, 'ordinary-0')).toBeInViewport()
+  await orcaPage.waitForTimeout(650)
+  const scroller = orcaPage.locator('[data-worktree-sidebar]')
+  await scroller.evaluate((element) => {
+    element.dispatchEvent(new WheelEvent('wheel', { deltaY: 200, bubbles: true }))
+    element.scrollTop = 25_000
+  })
+  await orcaPage.waitForTimeout(650)
+  expect(await scroller.evaluate((element) => Math.abs(element.scrollTop - 25_000))).toBeLessThan(2)
+  await expect(orcaPage.locator('[data-lineage-virtual-item]').first()).toBeAttached()
+})
 
 test('restores the descendant title after switching sidebar bodies', async ({ orcaPage }) => {
   await waitForSessionReady(orcaPage)
@@ -38,11 +60,12 @@ test('remeasures recycled descendants after card style and viewport changes', as
   await expect(worktreeRow(orcaPage, targetId)).toHaveCount(0)
   await orcaPage.setViewportSize({ width: 1_100, height: 800 })
   await orcaPage.evaluate(() => {
+    // Pending preference snapshots must not restore the previous card layout.
+    window.__store!.getState().setWorktreeCardProperties(['status'])
     window.__store!.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, experimentalNewWorktreeCardStyle: true }
-        : null,
-      worktreeCardProperties: ['status']
+        : null
     }))
   })
   await reveal(targetId)
@@ -74,4 +97,41 @@ test('releases coincident worktree and sidebar-row reveals after scrolling away'
     element.scrollTo({ top: 0, behavior: 'instant' })
   })
   await expect(target).toHaveCount(0)
+})
+
+test('smooth reveal lands while background agent status updates continue', async ({ orcaPage }) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  const { targetId, parentId } = await seedVirtualLineage(orcaPage, false)
+  await seedWorkspaceAgentStatus(orcaPage, parentId, 'REVEAL_CHURN')
+  await expect(worktreeRow(orcaPage, 'e2e-virtual-child-0')).toBeInViewport()
+  await orcaPage.emulateMedia({ reducedMotion: 'no-preference' })
+  const updates = await orcaPage.evaluate(
+    async ({ targetId, parentId }) => {
+      const state = window.__store!.getState()
+      const tab = state.tabsByWorktree[parentId]![0]!
+      state.revealWorktreeInSidebar(targetId, { behavior: 'smooth', highlight: true })
+      let updates = 0
+      const started = performance.now()
+      while (performance.now() - started < 1_800) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        state.setAgentStatus(
+          `${tab.id}:reveal-churn`,
+          {
+            state: updates % 2 === 0 ? 'working' : 'waiting',
+            prompt: `Background update ${updates++}`,
+            agentType: 'codex'
+          },
+          'codex',
+          { updatedAt: Date.now(), stateStartedAt: Date.now() }
+        )
+      }
+      return updates
+    },
+    { targetId, parentId }
+  )
+  expect(updates).toBeGreaterThan(10)
+  const target = worktreeRow(orcaPage, targetId)
+  await expect(target.getByText('Virtual child 400', { exact: true })).toBeInViewport()
+  await expect(target).toHaveAttribute('data-scroll-reveal-highlight', 'true')
 })

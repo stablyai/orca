@@ -20,6 +20,7 @@ function fixture() {
     wasScrollInterrupted: () => state.interrupted,
     markRevealScroll: vi.fn(),
     scheduleFrame: (frame: FrameRequestCallback) => frames.push(frame),
+    beginRename: vi.fn(),
     complete: vi.fn()
   }
   return { args, state, frames, scrollTo, frame: () => frames.shift()?.(0) }
@@ -36,8 +37,10 @@ describe('mounted reveal completion', () => {
     frame()
     expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 500, behavior: 'auto' })
     expect(args.complete).not.toHaveBeenCalled()
+    expect(args.beginRename).not.toHaveBeenCalled()
     frame()
     expect(args.complete).toHaveBeenCalledExactlyOnceWith(true)
+    expect(args.beginRename).toHaveBeenCalledOnce()
   })
 
   it('completes an immediate reveal without scheduling animation frames', () => {
@@ -46,15 +49,17 @@ describe('mounted reveal completion', () => {
     completeMountedSidebarReveal(args)
     expect(args.complete).toHaveBeenCalledExactlyOnceWith(true)
     expect(frames).toHaveLength(0)
+    expect(args.beginRename).toHaveBeenCalledOnce()
   })
 
-  it('yields to direct scroll input without flashing or starting rename', () => {
+  it('yields scrolling and highlight to direct input while preserving rename', () => {
     const { args, state, frame, scrollTo } = fixture()
     completeMountedSidebarReveal(args)
     state.interrupted = true
     frame()
     expect(scrollTo).not.toHaveBeenCalled()
     expect(args.complete).toHaveBeenCalledExactlyOnceWith(false)
+    expect(args.beginRename).toHaveBeenCalledOnce()
   })
 
   it.each([true, false])(
@@ -69,8 +74,30 @@ describe('mounted reveal completion', () => {
       state.cancelled = true
       frame()
       expect(args.complete).not.toHaveBeenCalled()
+      expect(args.beginRename).not.toHaveBeenCalled()
     }
   )
+
+  it('preserves rename if input interrupts the final correction frame', () => {
+    const { args, state, frame } = fixture()
+    completeMountedSidebarReveal(args)
+    state.settling = false
+    frame()
+    state.interrupted = true
+    frame()
+    expect(args.complete).toHaveBeenCalledExactlyOnceWith(false)
+    expect(args.beginRename).toHaveBeenCalledOnce()
+  })
+
+  it('does not rename a removed target when scrolling is interrupted', () => {
+    const { args, state, frame } = fixture()
+    completeMountedSidebarReveal(args)
+    args.element.remove()
+    state.interrupted = true
+    frame()
+    expect(args.complete).toHaveBeenCalledExactlyOnceWith(false)
+    expect(args.beginRename).not.toHaveBeenCalled()
+  })
 
   it('does not rename an element removed before the final scroll', () => {
     const { args, state, frame } = fixture()
@@ -80,5 +107,6 @@ describe('mounted reveal completion', () => {
     frame()
     frame()
     expect(args.complete).toHaveBeenCalledExactlyOnceWith(false)
+    expect(args.beginRename).not.toHaveBeenCalled()
   })
 })

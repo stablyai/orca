@@ -8,10 +8,18 @@ export function completeMountedSidebarReveal(args: {
   wasScrollInterrupted: () => boolean
   markRevealScroll: (targetTop: number) => void
   scheduleFrame: (callback: FrameRequestCallback) => void
+  beginRename?: () => void
   complete: (landed: boolean) => void
 }): void {
+  const complete = (landed: boolean): void => {
+    // Direct scroll input cancels the reveal, not the requested edit.
+    if (args.container.contains(args.element)) {
+      args.beginRename?.()
+    }
+    args.complete(landed)
+  }
   if (!args.isScrollSettling()) {
-    args.complete(true)
+    complete(true)
     return
   }
   const finish = (): void => {
@@ -19,7 +27,7 @@ export function completeMountedSidebarReveal(args: {
       return
     }
     if (args.wasScrollInterrupted()) {
-      args.complete(false)
+      complete(false)
       return
     }
     if (args.isScrollSettling()) {
@@ -35,7 +43,7 @@ export function completeMountedSidebarReveal(args: {
     )
     args.scheduleFrame(() => {
       if (!args.cancelled()) {
-        args.complete(landed && !args.wasScrollInterrupted())
+        complete(landed && !args.wasScrollInterrupted())
       }
     })
   }

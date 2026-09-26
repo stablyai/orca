@@ -115,6 +115,13 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
           wasScrollInterrupted: () => argsRef.current.wasRevealScrollInterrupted(),
           markRevealScroll,
           scheduleFrame: schedulePendingRevealFrame,
+          beginRename: pendingRevealWorktree.beginRename
+            ? () =>
+                setRenamingWorktreeId({
+                  worktreeId: pendingRevealWorktree.worktreeId,
+                  rowKey: revealedOption.dataset.worktreeRowKey
+                })
+            : undefined,
           complete: (landed) => {
             if (landed && pendingRevealWorktree.highlight) {
               const revealedRowKey =
@@ -122,12 +129,6 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
               if (revealedRowKey) {
                 flashRevealedRow(revealedRowKey)
               }
-            }
-            if (landed && pendingRevealWorktree.beginRename) {
-              setRenamingWorktreeId({
-                worktreeId: pendingRevealWorktree.worktreeId,
-                rowKey: revealedOption.dataset.worktreeRowKey
-              })
             }
             pendingRevealRetryRef.current = null
             clearPendingRevealWorktreeId()

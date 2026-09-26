@@ -68,6 +68,10 @@ export function useVirtualRowMeasurementSync(args: {
   const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
+  const anchoredLineage = virtualItems.find(
+    (item) =>
+      item.key === scrollAnchorRef.current?.key && renderRows[item.index]?.type === 'lineage-group'
+  )
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
     rows: renderRows,
     rangeStartIndex: virtualization.stickyRangeStartIndexRef.current,
@@ -117,10 +121,8 @@ export function useVirtualRowMeasurementSync(args: {
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
     rekeyedRowKeys: lineageRowRekeys,
-    // Only lineage anchors delegate within-group measurement corrections to descendants.
-    restoreSignal: scrollAnchorRef.current?.key.startsWith('lineage-group:')
-      ? rowOrderSignal
-      : undefined,
+    // Outer shifts still need restoration; descendants own changes within the anchored group.
+    restoreSignal: anchoredLineage ? `${anchoredLineage.start}:${rowOrderSignal}` : undefined,
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,

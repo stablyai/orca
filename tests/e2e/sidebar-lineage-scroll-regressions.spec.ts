@@ -1,9 +1,73 @@
 import { writeFile } from 'node:fs/promises'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { seedVirtualLineage } from './sidebar-lineage-virtualization-state'
+import {
+  seedOrdinaryRowsAboveLineage,
+  seedVirtualLineage
+} from './sidebar-lineage-virtualization-state'
 import { seedWorkspaceAgentStatus } from './worktree-lineage-state'
 import { worktreeRow } from './worktree-row-locators'
+
+test('lineage descendants keep their anchor when an ordinary card above grows during suppression', async ({
+  orcaPage
+}, testInfo) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await seedVirtualLineage(orcaPage, false)
+  await expect(worktreeRow(orcaPage, 'e2e-virtual-child-0')).toBeInViewport()
+  await seedOrdinaryRowsAboveLineage(orcaPage)
+  await orcaPage.waitForTimeout(650)
+  await orcaPage.evaluate(() => {
+    window
+      .__store!.getState()
+      .revealWorktreeInSidebar('e2e-virtual-child-200', { behavior: 'auto' })
+  })
+  const targetId = 'e2e-virtual-child-200'
+  const target = worktreeRow(orcaPage, targetId)
+  await expect(target).toBeAttached()
+  await target.evaluate((element) => {
+    const scroller = element.closest<HTMLElement>('[data-worktree-sidebar]')!
+    scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }))
+    scroller.scrollTop +=
+      element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 40
+  })
+  await orcaPage.waitForTimeout(650)
+  await expect(target).toBeInViewport()
+  const previousTop = (await target.boundingBox())!.y
+  const above = worktreeRow(orcaPage, 'ordinary-79')
+  const previousHeight = (await above.boundingBox())!.height
+  const scroller = orcaPage.locator('[data-worktree-sidebar]')
+  const before = await scroller.evaluate((element) => {
+    element.dispatchEvent(new Event('orca-record-virtualized-scroll-anchor'))
+    element.dispatchEvent(new Event('scroll'))
+    const group = element.querySelector<HTMLElement>(
+      '[data-worktree-virtual-row-key^="lineage-group:"]'
+    )!
+    return {
+      scrollTop: element.scrollTop,
+      groupTop: group.getBoundingClientRect().top - element.getBoundingClientRect().top,
+      groupBottom: group.getBoundingClientRect().bottom - element.getBoundingClientRect().top
+    }
+  })
+  expect(before.groupTop).toBeLessThan(0)
+  expect(before.groupBottom).toBeGreaterThan(0)
+  expect((await above.boundingBox())!.y + previousHeight).toBeLessThan(
+    (await scroller.boundingBox())!.y
+  )
+  await seedWorkspaceAgentStatus(orcaPage, 'ordinary-79', 'ABOVE_LINEAGE_HEIGHT')
+  await expect
+    .poll(async () => (await above.boundingBox())!.height)
+    .toBeGreaterThan(previousHeight + 10)
+  await orcaPage.waitForTimeout(650)
+  const after = await scroller.evaluate((element) => element.scrollTop)
+  const drift = (await target.boundingBox())!.y - previousTop
+  await writeFile(
+    testInfo.outputPath('above-lineage-growth.json'),
+    JSON.stringify({ targetId, before, after, drift })
+  )
+  expect(Math.abs(drift)).toBeLessThan(2)
+  await orcaPage.screenshot({ path: testInfo.outputPath('above-lineage-growth.png') })
+})
 
 test('ordinary rows keep their anchor during measurement suppression with a distant lineage', async ({
   orcaPage
@@ -11,27 +75,9 @@ test('ordinary rows keep their anchor during measurement suppression with a dist
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await seedVirtualLineage(orcaPage, false)
+  await seedOrdinaryRowsAboveLineage(orcaPage)
   await orcaPage.evaluate(() => {
-    const store = window.__store!
-    const [repoId, worktrees] = Object.entries(store.getState().worktreesByRepo)[0]!
-    const template = worktrees[0]!
-    const ordinary = Array.from({ length: 80 }, (_, index) => ({
-      ...template,
-      id: `ordinary-${index}`,
-      instanceId: `ordinary-instance-${index}`,
-      displayName: `Ordinary ${index}`,
-      isMainWorktree: false,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      sortOrder: 1_000 - index,
-      manualOrder: 1_000 - index
-    }))
-    store.setState((current) => ({
-      worktreesByRepo: { [repoId]: [...ordinary, ...worktrees] },
-      sortEpoch: current.sortEpoch + 1
-    }))
-    store.getState().revealWorktreeInSidebar('ordinary-30', { behavior: 'auto' })
+    window.__store!.getState().revealWorktreeInSidebar('ordinary-30', { behavior: 'auto' })
   })
   const target = worktreeRow(orcaPage, 'ordinary-30')
   await expect(target).toBeInViewport()
