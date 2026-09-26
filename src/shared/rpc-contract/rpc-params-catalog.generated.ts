@@ -138,6 +138,14 @@ import {
   TypeText
 } from './computer-schemas-params'
 import {
+  CrossMachineRecoveryDescribeParams,
+  CrossMachineRecoveryExportParams,
+  CrossMachineRecoveryImportParams,
+  CrossMachineRecoveryListParams,
+  CrossMachineRecoveryPresentationPublishParams,
+  CrossMachineRecoveryResumeParams
+} from './cross-machine-recovery-params'
+import {
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
   ButtonParams,
@@ -727,6 +735,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.scroll': ScrollOfComputerSchemasParams,
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
+  'crossMachineRecovery.describe': CrossMachineRecoveryDescribeParams,
+  'crossMachineRecovery.export': CrossMachineRecoveryExportParams,
+  'crossMachineRecovery.import': CrossMachineRecoveryImportParams,
+  'crossMachineRecovery.list': CrossMachineRecoveryListParams,
+  'crossMachineRecovery.presentation.publish': CrossMachineRecoveryPresentationPublishParams,
+  'crossMachineRecovery.resume': CrossMachineRecoveryResumeParams,
   'diagnostics.memory': null,
   'emulator.attach': AttachParamsOfEmulatorParams,
   'emulator.availability': EmulatorAvailabilityParams,

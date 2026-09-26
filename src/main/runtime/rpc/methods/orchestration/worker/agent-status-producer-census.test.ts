@@ -145,6 +145,11 @@ const CENSUS: readonly CensusRow[] = [
     role: 'exact-worker provider session selection, matched on pane key'
   },
   {
+    path: 'main/runtime/orca-runtime-cross-machine-recovery.ts',
+    kind: 'consumes',
+    role: 'cross-machine recovery export live bindings, matched on pane key'
+  },
+  {
     path: 'main/runtime/orca-runtime-serialize-agent-prompt-submission.ts',
     kind: 'consumes',
     role: 'prompt-submission serialization, matched on pane key'
