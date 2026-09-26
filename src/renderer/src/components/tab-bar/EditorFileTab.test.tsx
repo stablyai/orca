@@ -176,11 +176,10 @@ vi.mock('@/lib/rename-file', () => ({
   renameFileOnDisk: renameFileOnDiskMock
 }))
 
-vi.mock('@/lib/file-type-icons', () => ({
-  getFileTypeIcon: () =>
-    function FileIcon(props: Record<string, unknown>) {
-      return { type: 'FileIcon', props }
-    }
+vi.mock('@/components/FileTypeIcon', () => ({
+  FileTypeIcon: function FileIcon(props: Record<string, unknown>) {
+    return { type: 'FileIcon', props }
+  }
 }))
 
 vi.mock('@/store/selectors', () => ({
