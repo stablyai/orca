@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import {
   Dialog,
@@ -26,6 +27,9 @@ import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { shouldShowWorkspaceComposerPane } from '@/lib/workspace-composer-pane-surface'
+import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
+import { useComposerPaneHandoff } from '@/components/new-workspace/use-composer-pane-handoff'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 // Why: match App-level AddRepoDialog loading — the add flow is off the hot
@@ -34,8 +38,9 @@ const HostedAddRepoDialog = lazyWithRetry(() => import('@/components/sidebar/Add
   reloadKey: 'composer-add-repo'
 })
 
-type ComposerModalData = {
+export type ComposerModalData = {
   prefilledName?: string
+  initialPrompt?: string
   initialRepoId?: string
   initialEphemeralVmRecipeId?: string
   initialProjectGroupId?: string
@@ -58,8 +63,33 @@ export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
   const modalData = useAppStore((s) => s.modalData as ComposerModalData | undefined)
   const closeModal = useAppStore((s) => s.closeModal)
+  // Why: the prompt-first composer renders in the center pane (NewWorkspaceComposerPane) instead.
+  const paneActive = useAppStore((s) =>
+    shouldShowWorkspaceComposerPane({
+      activeView: s.activeView,
+      activeModal: s.activeModal,
+      promptFirstComposer: s.settings?.experimentalPromptFirstComposer === true,
+      creationSurfaceActive: shouldShowWorktreeCreationSurface({
+        activeView: s.activeView,
+        activePendingCreationId: s.activePendingCreationId,
+        hasActivePendingCreation:
+          s.activePendingCreationId !== null &&
+          s.pendingWorktreeCreations[s.activePendingCreationId] !== undefined
+      })
+    })
+  )
+  const workspaceViewActive = useAppStore((s) => s.activeView === 'terminal')
 
-  if (!visible) {
+  // Why: leaving the workspace view while the pane hosts the composer dismisses it instead of
+  // re-hosting it here as an empty dialog.
+  const handingOff = useComposerPaneHandoff({
+    composerOpen: visible,
+    paneActive,
+    workspaceViewActive,
+    closeComposer: closeModal
+  })
+
+  if (!visible || paneActive || handingOff) {
     return null
   }
 
@@ -73,6 +103,7 @@ function ComposerModalBody({
   modalData: ComposerModalData
   onClose: () => void
 }): React.JSX.Element {
+  const promptFirst = useAppStore((s) => s.settings?.experimentalPromptFirstComposer === true)
   const submitCancelledRef = useRef(false)
   const handleDismiss = useCallback(() => {
     submitCancelledRef.current = true
@@ -83,7 +114,10 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
-        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
+        className={cn(
+          'flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden',
+          promptFirst ? 'sm:max-w-2xl' : 'sm:max-w-lg'
+        )}
         onOpenAutoFocus={(event) => {
           // Why: Radix's FocusScope fires this once the dialog has mounted.
           // preventDefault stops it from focusing whatever first-tabbable it
@@ -94,29 +128,43 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody
+        <WorkspaceComposerBody
           modalData={modalData}
           onClose={onClose}
           isSubmissionCancelled={isSubmissionCancelled}
           active
+          heading={(title, description) => (
+            <DialogHeader className="gap-1">
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription className="sr-only">{description}</DialogDescription>
+            </DialogHeader>
+          )}
         />
       </DialogContent>
     </Dialog>
   )
 }
 
-function QuickTabBody({
+/** Composer state + card, hosted by either the dialog or the center pane; `heading` renders the host-specific title. */
+export function WorkspaceComposerBody({
   modalData,
   onClose,
   isSubmissionCancelled,
-  active
+  active,
+  heading,
+  cardContentClassName = '-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek'
 }: {
   modalData: ComposerModalData
   onClose: () => void
   isSubmissionCancelled: () => boolean
   active: boolean
+  heading: (title: string, description: string) => React.JSX.Element
+  /** Dialog scrolls the card body; the pane lets it size to content. */
+  cardContentClassName?: string
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  // Why: the classic form has no prompt field, so a prefilled prompt would be sent without ever being shown.
+  const promptFirst = settings?.experimentalPromptFirstComposer === true
   const {
     cardProps,
     composerRef,
@@ -127,9 +175,7 @@ function QuickTabBody({
     selectAddedProjectRepo
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
-    // Why: the modal is quick-create only now, so prompt-prefill state is
-    // intentionally ignored even if older callers still send it.
-    initialPrompt: '',
+    initialPrompt: promptFirst ? (modalData.initialPrompt ?? '') : '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialGitHubWorkItem: modalData.initialGitHubWorkItem ?? null,
     initialTaskSourceContext: modalData.taskSourceContext ?? null,
@@ -273,27 +319,23 @@ function QuickTabBody({
 
   return (
     <>
-      <DialogHeader className="gap-1">
-        <DialogTitle className="text-base font-semibold">
-          {isFolderWorkspaceTarget
-            ? translate(
-                'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
-                'Create Folder Workspace'
-              )
-            : primaryActionLabel}
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          {translate(
-            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
-            'Choose the project, workspace name, and agent before creating the workspace.'
-          )}
-        </DialogDescription>
-      </DialogHeader>
+      {heading(
+        isFolderWorkspaceTarget
+          ? translate(
+              'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
+              'Create Folder Workspace'
+            )
+          : primaryActionLabel,
+        translate(
+          'auto.components.NewWorkspaceComposerModal.fa90f739a5',
+          'Choose the project, workspace name, and agent before creating the workspace.'
+        )
+      )}
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
         // Keep focus rings and the Advanced hover highlight inside the scroll padding.
         containerClassName="px-2"
-        contentClassName="-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek"
+        contentClassName={cardContentClassName}
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}

@@ -53,6 +53,10 @@ export function ExperimentalPane({
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const showPromptFirstComposer = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().promptFirstComposer
+  ])
+  const promptFirstComposerEnabled = settings.experimentalPromptFirstComposer === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -259,6 +263,51 @@ export function ExperimentalPane({
               onChange={() =>
                 updateSettings({
                   experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
+                })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showPromptFirstComposer ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.promptFirstComposer.title',
+            'Prompt-first worktree creation'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.promptFirstComposer.description',
+            'Open Create worktree on a chat-style prompt box with project, host and agent as compact pills.'
+          )}
+          keywords={getExperimentalSearchEntry().promptFirstComposer.keywords}
+          className="space-y-3 py-2"
+          id="experimental-prompt-first-composer"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.promptFirstComposer.title',
+                  'Prompt-first worktree creation'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.promptFirstComposer.copy',
+                  'New worktree opens on a prompt box. Enter creates the worktree and sends the prompt to the selected agent as its first message.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={promptFirstComposerEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.promptFirstComposer.toggleLabel',
+                'Toggle prompt-first worktree creation'
+              )}
+              onChange={() =>
+                updateSettings({
+                  experimentalPromptFirstComposer: !promptFirstComposerEnabled
                 })
               }
             />

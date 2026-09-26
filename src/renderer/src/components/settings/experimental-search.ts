@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getPromptFirstComposerSearchEntry } from './prompt-first-composer-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -180,6 +181,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
+    getPromptFirstComposerSearchEntry(),
     getEphemeralVmsSearchEntry()
   ]
 )
@@ -220,6 +222,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
+      )
+    ),
+    promptFirstComposer: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.promptFirstComposer.title',
+        'Prompt-first worktree creation'
       )
     ),
     ephemeralVms: findEntry(

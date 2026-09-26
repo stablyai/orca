@@ -61,6 +61,8 @@ export type NewWorkspaceComposerCardProps = {
   showAddProjectButton?: boolean
   name: string
   onNameValueChange: (value: string) => void
+  agentPrompt?: string
+  onAgentPromptChange?: (value: string) => void
   branchNameOverride: string | undefined
   onBranchNameOverrideChange: (value: string | undefined) => void
   baseBranch?: string

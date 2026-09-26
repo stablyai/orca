@@ -26,7 +26,9 @@ export default function RunTargetField({
   listId,
   hasArmedRow,
   inputRef,
-  onKeyDown
+  onKeyDown,
+  className,
+  compact = false
 }: {
   query: string
   onQueryChange: (value: string) => void
@@ -42,6 +44,9 @@ export default function RunTargetField({
   hasArmedRow: boolean
   inputRef: React.RefObject<HTMLInputElement | null>
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  className?: string
+  /** Pill mode: show only the host label, no path detail. */
+  compact?: boolean
 }): React.JSX.Element {
   return (
     <PopoverAnchor asChild>
@@ -51,7 +56,7 @@ export default function RunTargetField({
           inputRef.current?.focus()
           onOpenRequest()
         }}
-        className={COMBOBOX_FIELD_SHELL}
+        className={cn(COMBOBOX_FIELD_SHELL, className)}
       >
         <span className="flex w-4 shrink-0 items-center justify-center">
           {committed ? (
@@ -100,13 +105,17 @@ export default function RunTargetField({
             >
               {/* Baseline-aligned: centring two type sizes leaves the smaller high. */}
               <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                <span className="min-w-0 max-w-[50%] shrink truncate">{label}</span>
-                <span
-                  className="min-w-0 flex-1 shrink-[999] truncate text-right text-xs text-muted-foreground"
-                  title={detail}
-                >
-                  {detail}
+                <span className={cn('min-w-0 shrink truncate', !compact && 'max-w-[50%]')}>
+                  {label}
                 </span>
+                {compact ? null : (
+                  <span
+                    className="min-w-0 flex-1 shrink-[999] truncate text-right text-xs text-muted-foreground"
+                    title={detail}
+                  >
+                    {detail}
+                  </span>
+                )}
               </div>
             </div>
           ) : null}

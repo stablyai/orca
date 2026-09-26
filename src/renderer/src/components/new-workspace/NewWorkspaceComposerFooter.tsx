@@ -18,6 +18,8 @@ type NewWorkspaceComposerFooterProps = Pick<
   | 'primaryActionLabel'
 > & {
   submitShortcutModifierLabel: string
+  /** The prompt-first layout puts the send button inside the prompt box instead. */
+  hidePrimaryAction?: boolean
 }
 
 export function NewWorkspaceComposerFooter({
@@ -29,7 +31,8 @@ export function NewWorkspaceComposerFooter({
   createDisabled,
   creating,
   primaryActionLabel,
-  submitShortcutModifierLabel
+  submitShortcutModifierLabel,
+  hidePrimaryAction = false
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   return (
     <>
@@ -53,7 +56,8 @@ export function NewWorkspaceComposerFooter({
       <div
         className={cn(
           'flex items-center gap-3',
-          showCreateMultiple ? 'justify-between' : 'justify-end'
+          showCreateMultiple ? 'justify-between' : 'justify-end',
+          hidePrimaryAction && !showCreateMultiple && 'hidden'
         )}
       >
         {showCreateMultiple ? (
@@ -70,19 +74,21 @@ export function NewWorkspaceComposerFooter({
             </span>
           </button>
         ) : null}
-        <Button
-          onClick={() => void onCreate()}
-          disabled={createDisabled}
-          size="sm"
-          className="text-xs"
-        >
-          {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-          {primaryActionLabel}
-          <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
-            <span>{submitShortcutModifierLabel}</span>
-            <CornerDownLeft className="size-3" />
-          </span>
-        </Button>
+        {hidePrimaryAction ? null : (
+          <Button
+            onClick={() => void onCreate()}
+            disabled={createDisabled}
+            size="sm"
+            className="text-xs"
+          >
+            {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+            {primaryActionLabel}
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
+              <span>{submitShortcutModifierLabel}</span>
+              <CornerDownLeft className="size-3" />
+            </span>
+          </Button>
+        )}
       </div>
     </>
   )

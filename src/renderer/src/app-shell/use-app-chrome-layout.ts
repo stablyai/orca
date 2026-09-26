@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
+import { shouldShowWorkspaceComposerPane } from '@/lib/workspace-composer-pane-surface'
 import { useAppStore } from '../store'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
 import { useSystemPrefersDark } from '../components/terminal-pane/use-system-prefers-dark'
@@ -28,6 +29,7 @@ export function useAppChromeLayout() {
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
+  const activeModal = useAppStore((s) => s.activeModal)
   // Why: the creation surface owns the tab strip from the first pending frame; gating on the delayed loader flag swapped the tab bar mid-create.
   const activePendingCreationExists = useAppStore(
     (s) =>
@@ -69,8 +71,18 @@ export function useAppChromeLayout() {
     activePendingCreationId,
     hasActivePendingCreation: activePendingCreationExists
   })
+  // Why: the prompt-first composer replaces the center pane, so the workbench and its chrome step aside like during creation.
+  const composerPaneActive = shouldShowWorkspaceComposerPane({
+    activeView,
+    activeModal,
+    promptFirstComposer: settings?.experimentalPromptFirstComposer === true,
+    creationSurfaceActive: creationLayoutActive
+  })
   const workspaceChromeActive =
-    activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+    activeView === 'terminal' &&
+    activeWorktreeId !== null &&
+    !creationLayoutActive &&
+    !composerPaneActive
   const hasTabBar = tabCount >= 2
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
@@ -124,6 +136,7 @@ export function useAppChromeLayout() {
     activeTabCanExpand,
     effectiveActiveTabId,
     collapsedSidebarHeaderWidth,
+    composerPaneActive,
     creationLayoutActive,
     isFullScreen,
     leftSidebarStyle,
