@@ -17021,7 +17021,10 @@
             "onboardingCompleted": "Onboarding completed!",
             "body": "If you’re enjoying Orca so far, a GitHub star helps other developers discover it.",
             "dismiss": "Dismiss",
-            "later": "Later"
+            "later": "Later",
+            "saving": "Saving…",
+            "dontAskAgain": "Don't ask again",
+            "saveFailed": "Could not save your preference. Please try again."
           }
         }
       },
