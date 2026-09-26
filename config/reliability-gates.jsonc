@@ -11,6 +11,96 @@
   },
   "gates": [
     {
+      "id": "settings.terminal-section-lifetime",
+      "title": "Terminal settings search preserves matching section state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "Terminal settings search",
+        "session diagnostic inventory",
+        "scrollback settings draft"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Actual TerminalPane, ManageSessionsSection, health listener and scrollback form with mocked store/provider and display/action boundaries. Unix/Windows and Mac-client/Windows-host flags simulated; no physical provider, process-stop or native input coverage.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/TerminalPane.tsx"
+      ],
+      "invariant": "A matching settings section retains its state when preceding sections are filtered away; a section removed from search releases its owner and refreshes when shown again. Diagnostic inventory never becomes authority for process death.",
+      "oracle": "Initial mount plus15matched search edits performs one inventory read and one health read instead of six each. A draft and pending target survive matched search; actual hide/reopen reloads, explicit Refresh still reads, and hidden/unmounted health listeners do not fire.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx",
+        "src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx",
+          "assertions": [
+            "refreshes explicitly, reloads genuinely hidden sections, and removes focus listeners",
+            "preserves an uncommitted scrollback draft while its section remains visible",
+            "retains a pending action target only while its section remains visible"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx",
+          "result": "passed",
+          "durationSeconds": 0.701,
+          "summary": "Independent rerun11tests/2suites pass; author68tests/5suites pass. New6pass versus original5fail/1control. Separate actual-child-search independent5pass versus original4fail/1control."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused renderer-unit suites, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local evidence only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original new suite fails all three simulated platform read-count cases, draft and pending target; one cleanup/refresh control passes. Candidate6pass. Independent scratch5pass/original4fail1control."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Actual child inventory and health reads6to1 across15matched search edits. Fixed small section filter/map unchanged; no new polling, cache, listener or subprocess. Retains existing inventory/draft/pending state longer; removes incidental search refresh, with no bounded automatic inventory freshness deadline. No packaged CPU/frame/heap claim."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "No physical local/daemon/SSH/WSL/remote-runtime provider, native Linux/Windows or process-stop behavior exercised; routing, PTY ownership, commands and wire formats unchanged.",
+        "Matched searches keep the loaded snapshot until existing Refresh, completed mutation or genuine hide/reopen; health also refreshes on focus/revision.",
+        "Pending action target and drafts remain while their parent section matches, including individual controls hidden inside a retained section.",
+        "No packaged app latency, heap, real focus or pending destructive-mutation completion evidence. Hidden Electron component visual proof is separate from the gate."
+      ],
+      "promotionCriteria": [
+        "Retain count, real draft, pending target and cleanup oracles; obtain stable CI history and relevant full-app/provider evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate stale state or cleanup failures without weakening read-count, draft or fresh-owner assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
