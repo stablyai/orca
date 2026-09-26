@@ -1009,6 +1009,9 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
+      },
+      "projectHostSetupOptions": {
+        "wslStorageLabel": "{{value0}} · WSL ({{distro}})"
       }
     },
     "hooks": {
