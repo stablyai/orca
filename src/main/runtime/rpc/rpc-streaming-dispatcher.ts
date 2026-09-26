@@ -1,4 +1,10 @@
-import { isStreamingMethod, type RpcEnvelopeMeta, type RpcRegistry, type RpcRequest } from './core'
+import {
+  isRegistrationFencedUnsubscribe,
+  isStreamingMethod,
+  type RpcEnvelopeMeta,
+  type RpcRegistry,
+  type RpcRequest
+} from './core'
 
 import { errorResponse, successResponse } from './errors'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -85,10 +91,9 @@ export class RpcStreamingDispatcher {
     if (!isStreamingMethod(method)) {
       try {
         // Capture before middleware yields to a replacement subscribe on the same connection.
-        const subscriptionRegistrationVersion =
-          request.method === 'terminal.unsubscribe'
-            ? runtime.getSubscriptionRegistrationVersion()
-            : undefined
+        const subscriptionRegistrationVersion = isRegistrationFencedUnsubscribe(request.method)
+          ? runtime.getSubscriptionRegistrationVersion()
+          : undefined
         const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
           runtime,
           request.method,

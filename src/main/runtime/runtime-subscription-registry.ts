@@ -131,8 +131,13 @@ export class RuntimeSubscriptionRegistry {
     return promise
   }
 
-  cleanupByPrefix(prefix: string): void {
-    const ids = Array.from(this.cleanups.keys()).filter((id) => id.startsWith(prefix))
+  cleanupByPrefix(prefix: string, throughVersion?: number): void {
+    const ids = Array.from(this.cleanups.entries())
+      .filter(
+        ([id, entry]) =>
+          id.startsWith(prefix) && (throughVersion === undefined || entry.version <= throughVersion)
+      )
+      .map(([id]) => id)
     for (const id of ids) {
       this.cleanup(id)
     }
