@@ -279,6 +279,23 @@ describe('onboarding feature setup runner', () => {
     expect(deps.clipboardWrites).toEqual([ALL_SKILL_INSTALL_COMMAND])
   })
 
+  it('installs WSL skills without CLI registration when the host confirms managed access', async () => {
+    const deps = createDeps()
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
+      deps,
+      {
+        ...WSL_RUNTIME_CONTEXT,
+        agentRuntime: { ...WSL_RUNTIME_CONTEXT.agentRuntime, managedCliAvailable: true }
+      }
+    )
+    expect(result.cliTouched).toBe(false)
+    expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
+    expect(deps.getCliStatus).not.toHaveBeenCalled()
+    expect(deps.installCli).not.toHaveBeenCalled()
+    expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
+  })
+
   it('keeps invasive Browser Use and Computer Use setup untouched when only Orchestration is selected', async () => {
     const deps = createDeps()
     const selection: OnboardingFeatureSetupSelection = {

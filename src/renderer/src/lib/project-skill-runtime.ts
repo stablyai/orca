@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 
 export type ProjectAgentSkillRuntime = {
   runtime: 'host' | 'wsl'
+  managedCliAvailable?: boolean
   wslDistro?: string | null
   label: string
 }

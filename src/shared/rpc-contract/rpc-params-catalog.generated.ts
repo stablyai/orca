@@ -534,6 +534,7 @@ import {
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
+import { WslManagedCliAvailabilityParams } from './wsl-cli-params'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
 import { SkillDeleteRequestSchema } from '../skill-delete-contract'
 import {
@@ -895,6 +896,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'host.pwsh.isAvailable': null,
   'host.wsl.isAvailable': null,
   'host.wsl.listDistros': null,
+  'host.wsl.managedCliAvailable': WslManagedCliAvailabilityParams,
   'hostedReview.create': HostedReviewCreate,
   'hostedReview.createStacked': HostedReviewCreate,
   'hostedReview.forBranch': HostedReviewForBranch,

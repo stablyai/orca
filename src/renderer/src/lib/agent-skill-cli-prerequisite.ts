@@ -14,11 +14,11 @@ export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its C
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
   'Approve the system prompt so skill setup can use the Orca CLI command.'
 
-// WSL setup cannot yet confirm managed CLI support on the owning host or surviving daemon.
+// An absent capability preserves setup for older hosts and daemons.
 export function isOrcaCliRegistrationRequired(
-  agentRuntime: { runtime: 'host' | 'wsl' } | null | undefined
+  agentRuntime: { runtime: 'host' | 'wsl'; managedCliAvailable?: boolean } | null | undefined
 ): boolean {
-  return agentRuntime?.runtime === 'wsl'
+  return agentRuntime?.runtime === 'wsl' && agentRuntime.managedCliAvailable !== true
 }
 
 export function isOrcaCliAvailableOnPath(status: CliInstallStatus | null | undefined): boolean {

@@ -25,6 +25,7 @@ import { translate } from '@/i18n/i18n'
 
 export type LocalAgentRuntime = {
   runtime: 'host' | 'wsl'
+  managedCliAvailable?: boolean
   wslDistro?: string | null
   label: string
 }

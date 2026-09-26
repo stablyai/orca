@@ -104,17 +104,14 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   if (!value || typeof value !== 'object') {
     return null
   }
-  const identity = value as {
-    pid?: unknown
-    startedAtMs?: unknown
-    launchNonce?: unknown
-    entryPath?: unknown
-    appVersion?: unknown
-    spawnerExecPath?: unknown
+  if (!('pid' in value) || !('startedAtMs' in value) || !('launchNonce' in value)) {
+    return null
   }
+  const identity = value
   if (
+    typeof identity.pid !== 'number' ||
     !Number.isSafeInteger(identity.pid) ||
-    (identity.pid as number) <= 0 ||
+    identity.pid <= 0 ||
     typeof identity.startedAtMs !== 'number' ||
     !Number.isFinite(identity.startedAtMs) ||
     identity.startedAtMs <= 0 ||
@@ -124,16 +121,25 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
     return null
   }
   return {
-    pid: identity.pid as number,
+    ...('managedWslCli' in identity && identity.managedWslCli === true
+      ? { managedWslCli: true }
+      : {}),
+    pid: identity.pid,
     startedAtMs: identity.startedAtMs,
     launchNonce: identity.launchNonce,
-    ...(typeof identity.entryPath === 'string' && identity.entryPath.length > 0
+    ...('entryPath' in identity &&
+    typeof identity.entryPath === 'string' &&
+    identity.entryPath.length > 0
       ? { entryPath: identity.entryPath }
       : {}),
-    ...(typeof identity.appVersion === 'string' && identity.appVersion.length > 0
+    ...('appVersion' in identity &&
+    typeof identity.appVersion === 'string' &&
+    identity.appVersion.length > 0
       ? { appVersion: identity.appVersion }
       : {}),
-    ...(typeof identity.spawnerExecPath === 'string' && identity.spawnerExecPath.length > 0
+    ...('spawnerExecPath' in identity &&
+    typeof identity.spawnerExecPath === 'string' &&
+    identity.spawnerExecPath.length > 0
       ? { spawnerExecPath: identity.spawnerExecPath }
       : {})
   }

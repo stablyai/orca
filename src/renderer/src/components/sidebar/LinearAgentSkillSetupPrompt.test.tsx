@@ -2,6 +2,7 @@
 
 import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import type { LocalAgentRuntime } from '../settings/CliSkillRuntimeSetup'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,6 +47,7 @@ const mocks = vi.hoisted(() => ({
     skills: [],
     refresh: vi.fn(async () => {})
   },
+  managedCliAvailable: vi.fn(() => false),
   useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
   getWslCliStatus: vi.fn<(request?: { distro: string }) => Promise<CliInstallStatus>>(),
@@ -54,14 +56,18 @@ const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[]
 }))
 
+vi.mock('@/hooks/useManagedWslCliAvailability', () => ({
+  useManagedWslCliAvailability: mocks.managedCliAvailable
+}))
+
 vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
   ...(await importOriginal()),
   useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
-  isOrcaCliRegistrationRequired: (runtime?: { runtime: string } | null) =>
-    runtime?.runtime === 'wsl',
+  isOrcaCliRegistrationRequired: (runtime?: LocalAgentRuntime | null) =>
+    runtime?.runtime === 'wsl' && runtime.managedCliAvailable !== true,
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE: 'CLI registration notice',
   ensureOrcaCliAvailableForAgentSkillTerminal: mocks.ensureCli,
   isOrcaCliAvailableOnPath: (status: CliInstallStatus | null | undefined) =>
@@ -69,8 +75,8 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  getAgentSkillCliPrerequisite: (runtime?: { runtime: string; wslDistro?: string | null }) =>
-    runtime?.runtime === 'wsl'
+  getAgentSkillCliPrerequisite: (runtime?: LocalAgentRuntime) =>
+    runtime?.runtime === 'wsl' && runtime.managedCliAvailable !== true
       ? {
           preInstallNotice: 'CLI registration notice',
           getPrerequisiteStatus: () =>
@@ -87,8 +93,8 @@ vi.mock('../settings/CliSkillRuntimeSetup', () => ({
     _runtime: { runtime: string; wslDistro?: string | null }
   ) => command,
   ensureWslCliAvailableForAgentSkillTerminal: mocks.ensureWslCli,
-  getWslCliDistroRequest: (runtime?: { runtime: string; wslDistro?: string | null }) =>
-    runtime?.runtime === 'wsl' && runtime.wslDistro?.trim()
+  getWslCliDistroRequest: (runtime?: LocalAgentRuntime) =>
+    runtime?.runtime === 'wsl' && runtime.managedCliAvailable !== true && runtime.wslDistro?.trim()
       ? { distro: runtime.wslDistro.trim() }
       : undefined
 }))
@@ -241,6 +247,7 @@ async function showSuccessfulModalRecheck(): Promise<void> {
 
 describe('LinearAgentSkillSetupPrompt', () => {
   beforeEach(() => {
+    mocks.managedCliAvailable.mockReturnValue(false)
     Object.assign(mocks.skillState, { installed: false, loading: false, error: null, skills: [] })
     mocks.skillState.refresh.mockReset().mockImplementation(async () => {})
     mocks.useInstalledAgentSkillNames.mockReset()
@@ -304,20 +311,25 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(ready.textContent).not.toContain('Set up Linear agent skill')
   })
 
-  it('treats host setup as ready when the skill is installed and no CLI is registered', async () => {
-    mocks.skillState.installed = true
+  it.each([false, true])(
+    'treats installed skills as ready without registration (managed WSL: %s)',
+    async (managedWsl) => {
+      mocks.managedCliAvailable.mockReturnValue(managedWsl)
+      const props = managedWsl ? wslPromptProps('Fedora') : { linked: true, remote: false }
+      mocks.skillState.installed = true
 
-    const inline = await renderPrompt({ linked: true, remote: false, currentPlatform: 'darwin' })
-    expect(inline.textContent).not.toContain('Set up Linear agent skill')
+      const inline = await renderPrompt(props)
+      expect(inline.textContent).not.toContain('Set up Linear agent skill')
 
-    await unmountPrompt()
+      await unmountPrompt()
 
-    await renderPrompt({ linked: true, remote: false, surface: 'modal', currentPlatform: 'win32' })
-    expect(document.body.textContent).not.toContain(
-      'Enable agents to read and edit the attached Linear ticket.'
-    )
-    expectNoCliStatusQuery()
-  })
+      await renderPrompt({ ...props, surface: 'modal' })
+      expect(document.body.textContent).not.toContain(
+        'Enable agents to read and edit the attached Linear ticket.'
+      )
+      expectNoCliStatusQuery()
+    }
+  )
 
   it('persists host dismissal forever for the host setup target', async () => {
     const rendered = await renderPrompt({ linked: true, remote: false })

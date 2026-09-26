@@ -10,26 +10,27 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', async (importOriginal) => ({
 afterEach(() => vi.unstubAllGlobals())
 
 describe('agent skill CLI prerequisites', () => {
-  it.each([undefined, { runtime: 'host', label: 'This device' } as const])(
-    'does not inspect or register the host CLI for %j',
-    async (runtime) => {
-      const getInstallStatus = vi.fn()
-      const install = vi.fn()
-      const getWslInstallStatus = vi.fn()
-      const installWsl = vi.fn()
-      vi.stubGlobal('window', {
-        api: { cli: { getInstallStatus, install, getWslInstallStatus, installWsl } }
-      })
+  it.each([
+    undefined,
+    { runtime: 'host', label: 'This device' } as const,
+    { runtime: 'wsl', label: 'WSL', managedCliAvailable: true } as const
+  ])('does not inspect or register the host CLI for %j', async (runtime) => {
+    const getInstallStatus = vi.fn()
+    const install = vi.fn()
+    const getWslInstallStatus = vi.fn()
+    const installWsl = vi.fn()
+    vi.stubGlobal('window', {
+      api: { cli: { getInstallStatus, install, getWslInstallStatus, installWsl } }
+    })
 
-      const prerequisite = getAgentSkillCliPrerequisite(runtime)
-      expect(prerequisite.preInstallNotice).toBeUndefined()
-      expect(prerequisite.getPrerequisiteStatus).toBeUndefined()
-      await prerequisite.ensureCli()
-      for (const call of [getInstallStatus, install, getWslInstallStatus, installWsl]) {
-        expect(call).not.toHaveBeenCalled()
-      }
+    const prerequisite = getAgentSkillCliPrerequisite(runtime)
+    expect(prerequisite.preInstallNotice).toBeUndefined()
+    expect(prerequisite.getPrerequisiteStatus).toBeUndefined()
+    await prerequisite.ensureCli()
+    for (const call of [getInstallStatus, install, getWslInstallStatus, installWsl]) {
+      expect(call).not.toHaveBeenCalled()
     }
-  )
+  })
 
   it.each([' Ubuntu ', undefined])(
     'registers the CLI in the selected WSL distro: %s',

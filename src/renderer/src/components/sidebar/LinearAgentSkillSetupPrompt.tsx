@@ -1,3 +1,5 @@
+import { useManagedWslCliAvailability } from '@/hooks/useManagedWslCliAvailability'
+import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, TicketCheck, X } from 'lucide-react'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -85,9 +87,22 @@ export function LinearAgentSkillSetupPrompt({
   const [setupDialogOpen, setSetupDialogOpen] = useState(false)
   const [setupCheckResult, setSetupCheckResult] = useState<SetupCheckResult>('idle')
   const [activeSetupCheckIdentity, setActiveSetupCheckIdentity] = useState<string | null>(null)
-  const agentRuntime = useMemo(
+  const selectedAgentRuntime = useMemo(
     () => getLinearPromptAgentRuntime(settings, currentPlatform, remote, projectRuntime),
     [currentPlatform, projectRuntime, remote, settings]
+  )
+  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const managedCliAvailable = useManagedWslCliAvailability(
+    runtimeTarget,
+    linked &&
+      selectedAgentRuntime.runtime === 'wsl' &&
+      projectRuntime?.status !== 'repair-required',
+    selectedAgentRuntime.wslDistro
+  )
+  const agentRuntime = useMemo(
+    () =>
+      managedCliAvailable ? { ...selectedAgentRuntime, managedCliAvailable } : selectedAgentRuntime,
+    [selectedAgentRuntime, managedCliAvailable]
   )
   const cliRequired = isOrcaCliRegistrationRequired(agentRuntime)
   const cliPrerequisite = useMemo(() => getAgentSkillCliPrerequisite(agentRuntime), [agentRuntime])

@@ -4,6 +4,7 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 const {
+  isManagedWslCliAvailable,
   isPwshAvailable,
   isPwshAvailableAsync,
   isWslAvailable,
@@ -12,6 +13,7 @@ const {
   listWslDistrosAsync,
   isGitBashAvailable
 } = vi.hoisted(() => ({
+  isManagedWslCliAvailable: vi.fn(),
   isPwshAvailable: vi.fn(),
   isPwshAvailableAsync: vi.fn(),
   isWslAvailable: vi.fn(),
@@ -20,6 +22,8 @@ const {
   listWslDistrosAsync: vi.fn(),
   isGitBashAvailable: vi.fn()
 }))
+
+vi.mock('../../../cli/wsl-managed-cli-availability', () => ({ isManagedWslCliAvailable }))
 
 vi.mock('../../../pwsh', () => ({ isPwshAvailable, isPwshAvailableAsync }))
 vi.mock('../../../wsl', () => ({
@@ -45,6 +49,17 @@ describe('host capability RPC methods', () => {
     listWslDistros.mockReset()
     listWslDistrosAsync.mockReset()
     isGitBashAvailable.mockReset()
+  })
+
+  it('routes managed CLI checks to the execution host with the selected distro', async () => {
+    isManagedWslCliAvailable.mockResolvedValue(true)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler never accesses the runtime beyond the dispatcher identity.
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOST_CAPABILITY_METHODS })
+    await expect(
+      dispatcher.dispatch(makeRequest('host.wsl.managedCliAvailable', { distro: ' Ubuntu ' }))
+    ).resolves.toMatchObject({ ok: true, result: true })
+    expect(isManagedWslCliAvailable).toHaveBeenCalledWith('Ubuntu')
   })
 
   it('reports Windows shell capability probes through explicit methods', async () => {
