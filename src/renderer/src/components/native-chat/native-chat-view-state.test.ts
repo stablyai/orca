@@ -42,8 +42,17 @@ describe('selectNativeChatViewState', () => {
   })
 
   it('keeps a loaded transcript on screen when a later read fails (P2-21)', () => {
-    const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }))
+    const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }), {
+      readRetries: true
+    })
     expect(state).toEqual({ kind: 'ready', isWorking: false })
+  })
+
+  // The terminal-backed read does not retry; its only messages on error are local echoes (a launch
+  // prompt, a pending send), which must not hide the error and its way back to the terminal.
+  it('shows a terminal-backed read error over local echoes', () => {
+    const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }))
+    expect(state).toEqual({ kind: 'error', message: 'boom' })
   })
 
   it('maps empty when there are no messages', () => {
