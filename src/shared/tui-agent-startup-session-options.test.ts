@@ -150,6 +150,100 @@ describe('tui agent startup session options', () => {
     )
   })
 
+  it('places transient arguments before the terminator without persisting them', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox -- literal',
+      transientAgentArgs: ['-c', 'check_for_update_on_startup=false']
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' '-c' 'check_for_update_on_startup=false' '--' 'literal'"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' '--' 'literal'"
+    )
+  })
+
+  it('places transient arguments before a terminator carried by the command override', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: { codex: 'codex --profile work -- literal' },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      transientAgentArgs: ['-c', 'check_for_update_on_startup=false']
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "codex --profile work '-c' 'check_for_update_on_startup=false' -- literal"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe('codex --profile work -- literal')
+  })
+
+  it('leaves an override that wraps the agent intact when splicing transient arguments', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: { codex: 'CODEX_HOME=/tmp/x uv run codex -- literal' },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      transientAgentArgs: ['-c', 'check_for_update_on_startup=false']
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "CODEX_HOME=/tmp/x uv run codex '-c' 'check_for_update_on_startup=false' -- literal"
+    )
+  })
+
+  it('appends transient arguments after the agent when the terminator belongs to a wrapper', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: { codex: 'mise exec -- codex' },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      transientAgentArgs: ['-c', 'check_for_update_on_startup=false']
+    })
+
+    expect(plan?.launchCommand).toBe("mise exec -- codex '-c' 'check_for_update_on_startup=false'")
+  })
+
+  it('splices before the agent terminator, not the wrapper terminator ahead of it', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: { codex: 'mise exec -- codex --profile work -- literal' },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      transientAgentArgs: ['-c', 'check_for_update_on_startup=false']
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "mise exec -- codex --profile work '-c' 'check_for_update_on_startup=false' -- literal"
+    )
+    expect(plan?.launchConfig.agentCommand).toBe('mise exec -- codex --profile work -- literal')
+  })
+
+  it('does not mistake an argument ending in the agent name for the executable', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: { codex: 'ssh -i ~/.ssh/codex devbox -- codex' },
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      transientAgentArgs: ['-c', 'check_for_update_on_startup=false']
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "ssh -i ~/.ssh/codex devbox -- codex '-c' 'check_for_update_on_startup=false'"
+    )
+  })
+
   it('quotes option values for a remote POSIX launch', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
