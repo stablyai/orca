@@ -229,6 +229,7 @@ export async function performAttach(
   }
 
   const fence = record.lease.runtimeFence
+  const tabId = store.getSessionTabId(sessionId)
   return {
     ok: true,
     replayed,
@@ -239,7 +240,7 @@ export async function performAttach(
       fence,
       page: readAgentSessionHydrationPage(attached.journal, fence),
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
-      ...(record.surfaceTabId ? { tabId: record.surfaceTabId } : {})
+      ...(tabId ? { tabId } : {})
     }
   }
 }

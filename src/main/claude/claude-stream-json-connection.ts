@@ -321,6 +321,11 @@ export async function openClaudeStreamJsonConnection(
       })
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {
+        if (exited && tree.treeVerdict === 'live') {
+          console.warn('[claude-stream-json] root exited but a descendant survived the close:', {
+            pid: spawner.pid
+          })
+        }
         closePromise = null
         return false
       }

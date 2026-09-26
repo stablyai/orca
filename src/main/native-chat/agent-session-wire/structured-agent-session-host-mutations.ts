@@ -25,6 +25,7 @@ import {
   DISPATCH_REJECTION_CANCELLED,
   type AgentJournalDispatchRejection
 } from '../../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import {
@@ -176,13 +177,7 @@ export function cancelStructuredAgentSessionTurn(
 export function respondToStructuredAgentSessionPrompt(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: {
-    envelope: AgentSessionMutationEnvelope
-    kind: 'approval' | 'question'
-    itemId: string
-    expectedRevision: number
-    optionId: string
-  }
+  params: AgentSessionPromptRequest & { envelope: AgentSessionMutationEnvelope }
 ): Promise<AgentSessionMutationResult<AgentSessionPromptResult>> {
   return mutate(context, caller, params.envelope, promptPlan(params))
 }

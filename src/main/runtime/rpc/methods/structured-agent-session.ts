@@ -57,6 +57,7 @@ import {
   HandoffStatusParams,
   OptionsParams,
   RespondParams,
+  RespondToQuestionParams,
   RewindParams,
   SendParams,
   SetOptionParams,
@@ -226,7 +227,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   }),
   defineMethod({
     name: 'agentSession.respondToQuestion',
-    params: RespondParams,
+    params: RespondToQuestionParams,
     handler: async (params, ctx) =>
       requireHost(ctx).respondToPrompt(callerFor(ctx), { ...params, kind: 'question' })
   }),

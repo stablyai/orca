@@ -1,9 +1,10 @@
 import type { Tab } from '../../../../shared/tab-types'
 
-export type UnifiedTerminalTabChatFields = {
+export type UnifiedTerminalTabFields = {
   unifiedTabId: string | undefined
   isChatViewMode: boolean
   unifiedTabLabel: string | undefined
+  isTabPinned: boolean
 }
 
 const terminalTabLookupByUnifiedTabs = new WeakMap<readonly Tab[], Map<string, Tab>>()
@@ -46,16 +47,16 @@ export function getCachedTerminalGroupIdForWorktree(
 }
 
 /**
- * The unified-tab fields TerminalPane's chat state reads.
+ * The unified-tab fields TerminalPane reads.
  *
  * Why bundled: they used to be five `useAppStore` calls, so one publication paid
  * the lookup five times and held five listener slots for every mounted tab.
  */
-export function selectUnifiedTerminalTabChatFields(
+export function selectUnifiedTerminalTabFields(
   unifiedTabsByWorktree: Record<string, Tab[]>,
   worktreeId: string,
   terminalTabId: string
-): UnifiedTerminalTabChatFields {
+): UnifiedTerminalTabFields {
   const tab = getCachedUnifiedTerminalTabForWorktree(
     unifiedTabsByWorktree,
     worktreeId,
@@ -64,6 +65,7 @@ export function selectUnifiedTerminalTabChatFields(
   return {
     unifiedTabId: tab?.id,
     isChatViewMode: tab?.viewMode === 'chat',
-    unifiedTabLabel: tab?.label
+    unifiedTabLabel: tab?.label,
+    isTabPinned: tab?.isPinned === true
   }
 }

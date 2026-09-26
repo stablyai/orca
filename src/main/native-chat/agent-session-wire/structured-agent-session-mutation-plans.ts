@@ -23,6 +23,7 @@ import {
   type AgentSessionTurnContext,
   type TurnOutcome
 } from './structured-agent-session-turns'
+import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
 
 export type MutationPlan<TValue> = {
   method: string
@@ -126,18 +127,17 @@ export function cancelPlan(params: {
   }
 }
 
-export function promptPlan(params: {
-  kind: 'approval' | 'question'
-  itemId: string
-  expectedRevision: number
-  optionId: string
-}): MutationPlan<AgentSessionPromptResult> {
+export function promptPlan(
+  params: AgentSessionPromptRequest
+): MutationPlan<AgentSessionPromptResult> {
   return {
     method: `agentSession.respondTo:${params.kind}`,
+    // The client hashes exactly what it sent; the absent one of these two drops out of the digest.
     fields: {
       itemId: params.itemId,
       expectedRevision: params.expectedRevision,
-      optionId: params.optionId
+      optionId: params.optionId,
+      answers: params.answers
     },
     run: (ctx) => performPrompt(ctx, params),
     replay: (ctx) => {
