@@ -299,6 +299,43 @@ describe('chain lookup and validation', () => {
       ])
     ).toBe(false)
   })
+
+  it('validates a chain in work linear in its length', () => {
+    /** Property reads on every link of a valid chain of `length` resumes, counted per link. */
+    const readsToValidate = (length: number): number[] => {
+      const reads = Array.from({ length }, () => 0)
+      const chain = Array.from(
+        { length },
+        (_value, index) =>
+          new Proxy(
+            link(
+              index === 0
+                ? {}
+                : {
+                    linkId: `link-${index + 1}`,
+                    origin: 'resumed',
+                    handle: { ...CLAUDE, leafUuid: `leaf-${index + 1}` }
+                  }
+            ),
+            {
+              get: (target, property, receiver) => {
+                reads[index] += 1
+                return Reflect.get(target, property, receiver)
+              }
+            }
+          )
+      )
+      expect(isAgentSessionProviderHandleChain(chain)).toBe(true)
+      return reads
+    }
+    const half = readsToValidate(MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS / 2)
+    const full = readsToValidate(MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS)
+    const total = (reads: number[]) => reads.reduce((sum, count) => sum + count, 0)
+
+    // Each link is read a fixed number of times however long the chain is.
+    expect(Math.max(...full)).toBe(Math.max(...half))
+    expect(total(full)).toBeLessThanOrEqual(2 * total(half) + Math.max(...full))
+  })
 })
 
 describe('adopted chain heads', () => {
