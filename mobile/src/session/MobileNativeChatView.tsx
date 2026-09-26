@@ -316,6 +316,9 @@ export function MobileNativeChatView({
               onMomentumScrollBegin={beginMomentum}
               onMomentumScrollEnd={endMomentum}
               scrollEventThrottle={32}
+              // Rows are stacks of native text views; the default 21-screen window
+              // keeps enough of them mounted to make long chats lag while scrolling.
+              windowSize={7}
               onContentSizeChange={pinToTailAfterContentResize}
               onLayout={pinToTail}
               ListHeaderComponent={
