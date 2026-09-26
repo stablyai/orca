@@ -33,61 +33,65 @@ new Promise((resolve) => {
 export async function htmlToPdf(html: string): Promise<Buffer> {
   const tempDir = app.getPath('temp')
   const tempPath = path.join(tempDir, `orca-export-${randomUUID()}.html`)
-  await writeFile(tempPath, html, 'utf-8')
-
-  const win = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      // Why: image-wait needs to run a short script inside the export page, and
-      // the exported renderer DOM may already embed scripts/SVGs (e.g. Mermaid)
-      // that need JS to paint correctly. The window stays sandboxed and
-      // isolated so this is safe.
-      javascript: true
-    }
-  })
-
-  let timer: NodeJS.Timeout | undefined
-
+  // A failed write may leave partial HTML; window construction can fail after the write.
   try {
-    const loadPromise = new Promise<void>((resolve, reject) => {
-      win.webContents.once('did-finish-load', () => resolve())
-      win.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
-        reject(new Error(`Failed to load export document: ${errorDescription} (${errorCode})`))
-      })
+    await writeFile(tempPath, html, 'utf-8')
+
+    const win = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        // Why: image-wait needs to run a short script inside the export page, and
+        // the exported renderer DOM may already embed scripts/SVGs (e.g. Mermaid)
+        // that need JS to paint correctly. The window stays sandboxed and
+        // isolated so this is safe.
+        javascript: true
+      }
     })
 
-    await win.loadFile(tempPath)
-    await loadPromise
+    let timer: NodeJS.Timeout | undefined
 
-    const renderAndPrint = (async (): Promise<Buffer> => {
-      await win.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
-      return win.webContents.printToPDF({
-        printBackground: true,
-        pageSize: 'A4',
-        margins: {
-          top: 0.75,
-          bottom: 0.75,
-          left: 0.75,
-          right: 0.75
-        }
+    try {
+      const loadPromise = new Promise<void>((resolve, reject) => {
+        win.webContents.once('did-finish-load', () => resolve())
+        win.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
+          reject(new Error(`Failed to load export document: ${errorDescription} (${errorCode})`))
+        })
       })
-    })()
 
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new ExportTimeoutError()), EXPORT_TIMEOUT_MS)
-    })
+      await win.loadFile(tempPath)
+      await loadPromise
 
-    return await Promise.race([renderAndPrint, timeoutPromise])
+      const renderAndPrint = (async (): Promise<Buffer> => {
+        await win.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
+        return win.webContents.printToPDF({
+          printBackground: true,
+          pageSize: 'A4',
+          margins: {
+            top: 0.75,
+            bottom: 0.75,
+            left: 0.75,
+            right: 0.75
+          }
+        })
+      })()
+
+      const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new ExportTimeoutError()), EXPORT_TIMEOUT_MS)
+      })
+
+      return await Promise.race([renderAndPrint, timeoutPromise])
+    } finally {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      if (!win.isDestroyed()) {
+        win.destroy()
+      }
+    }
   } finally {
-    if (timer) {
-      clearTimeout(timer)
-    }
-    if (!win.isDestroyed()) {
-      win.destroy()
-    }
     try {
       await unlink(tempPath)
     } catch {
