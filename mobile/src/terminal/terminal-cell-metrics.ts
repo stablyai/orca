@@ -23,13 +23,18 @@ export function readTerminalCellMetrics(msg: Record<string, unknown>): TerminalC
     return []
   }
   const entries: TerminalCellMetrics[] = []
-  for (const entry of msg.cellMetrics) {
-    if (typeof entry !== 'object' || entry === null) {
+  const reported: unknown[] = msg.cellMetrics
+  for (const entry of reported) {
+    if (
+      typeof entry !== 'object' ||
+      entry === null ||
+      !('fontScale' in entry && 'cellWidth' in entry && 'cellHeight' in entry)
+    ) {
       continue
     }
-    const fontScale = positive(Reflect.get(entry, 'fontScale'))
-    const cellWidth = positive(Reflect.get(entry, 'cellWidth'))
-    const cellHeight = positive(Reflect.get(entry, 'cellHeight'))
+    const fontScale = positive(entry.fontScale)
+    const cellWidth = positive(entry.cellWidth)
+    const cellHeight = positive(entry.cellHeight)
     if (fontScale !== null && cellWidth !== null && cellHeight !== null) {
       entries.push({ fontScale, cellWidth, cellHeight })
     }
