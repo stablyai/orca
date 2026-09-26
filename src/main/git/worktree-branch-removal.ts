@@ -1,11 +1,13 @@
 import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
-  getBranchCleanupTargetRefs
+  getBranchCleanupTargetRefs,
+  type GitBranchCleanupExecOptions
 } from '../../shared/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
+import { createLocalGitObjectQuarantine } from './local-git-object-quarantine'
 import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import { isBranchCheckedOutInWorktreeError } from '../../shared/git-branch-delete-refusal'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from './worktree-operation-options'
@@ -107,11 +109,16 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
   branchHead: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<boolean> {
-  const runGit = (args: string[], execOptions?: { stdin?: string }) =>
-    gitExecFileAsync(args, {
-      ...gitExecOptions(repoPath, options),
-      ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
-    })
+  const quarantine = createLocalGitObjectQuarantine(repoPath, options)
+  const runGit = (args: string[], execOptions?: GitBranchCleanupExecOptions) => {
+    const run = (env: NodeJS.ProcessEnv | undefined) =>
+      gitExecFileAsync(args, {
+        ...gitExecOptions(repoPath, options),
+        ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {}),
+        ...(env ? { env } : {})
+      })
+    return execOptions?.discardWrittenObjects ? quarantine.run(run) : run(undefined)
+  }
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
   const hasNoUnmergedChanges = await withLocalGitCapabilityCacheForExecution(

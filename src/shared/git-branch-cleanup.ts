@@ -1,9 +1,15 @@
 import type { GitCapabilityCache } from './git-capability-cache'
 import { isUnsupportedMergeTreeWriteTreeError } from './git-merge-tree-capability'
 
+export type GitBranchCleanupExecOptions = {
+  stdin?: string
+  /** The command's object writes are throwaway; run it against a scratch object store. */
+  discardWrittenObjects?: boolean
+}
+
 export type GitBranchCleanupExec = (
   argv: string[],
-  options?: { stdin?: string }
+  options?: GitBranchCleanupExecOptions
 ) => Promise<{ stdout: string }>
 
 const SQUASH_PATCH_SCAN_LIMIT = 200
@@ -117,7 +123,7 @@ async function branchMergesWithoutTreeChanges(
     try {
       return await capabilities.runWithFallback(
         'merge-tree-write-tree',
-        async () => (await runGit(args)).stdout.trim() || null,
+        async () => (await runGit(args, { discardWrittenObjects: true })).stdout.trim() || null,
         async () => null,
         isUnsupportedMergeTreeWriteTreeError
       )

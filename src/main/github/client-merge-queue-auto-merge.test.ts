@@ -9,6 +9,9 @@ const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+vi.mock('../git/local-git-object-quarantine', () =>
+  moduleMocks.localGitObjectQuarantineModuleMock()
+)
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)

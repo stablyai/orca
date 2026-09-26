@@ -107,6 +107,13 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
     expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'branch-diff' })
     expect(runGit).toHaveBeenCalledWith(['patch-id', '--stable'], { stdin: 'squash-diff' })
     expect(runGit).not.toHaveBeenCalledWith(['cherry', '-v', 'target', 'refs/heads/feature/test'])
+    // Only merge-tree's throwaway tree writes go to a scratch object store.
+    const discarding = vi
+      .mocked(runGit)
+      .mock.calls.filter(([, options]) => options?.discardWrittenObjects)
+      .map(([args]) => args[0])
+    expect(discarding.length).toBeGreaterThan(0)
+    expect(new Set(discarding)).toEqual(new Set(['merge-tree']))
   })
 
   it('preserves a branch with merge commits when no target squash commit matches', async () => {

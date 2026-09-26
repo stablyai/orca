@@ -164,6 +164,9 @@ export class GitHandler {
       if (opts?.disableOptionalLocks) {
         env.GIT_OPTIONAL_LOCKS = '0'
       }
+      if (opts?.env) {
+        Object.assign(env, opts.env)
+      }
       const execOptions = {
         cwd: expandedCwd,
         env,

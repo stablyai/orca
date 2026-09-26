@@ -6,6 +6,10 @@ import {
 import { gitExecFileAsync } from '../git/runner'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from '../git/git-runtime-options'
 import {
+  createLocalGitObjectQuarantine,
+  type LocalGitObjectQuarantine
+} from '../git/local-git-object-quarantine'
+import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
 } from '../git/git-capability-state'
@@ -234,6 +238,8 @@ async function loadConflictingFiles(
     headOid,
     baseOid
   ]
+  // Why: only the file list is read; the merged tree it writes would pile up as loose objects.
+  const quarantine = createLocalGitObjectQuarantine(repoPath, localGitOptions)
 
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: localGitOptions.wslDistro },
@@ -245,9 +251,12 @@ async function loadConflictingFiles(
             'merge-tree-merge-base',
             async () => {
               try {
-                const result = await gitExecFileAsync(modernArgs, {
-                  ...gitOptionsForWorktree(repoPath, localGitOptions)
-                })
+                const result = await quarantine.run((env) =>
+                  gitExecFileAsync(modernArgs, {
+                    ...gitOptionsForWorktree(repoPath, localGitOptions),
+                    ...(env ? { env } : {})
+                  })
+                )
                 return parseMergeTreeNameOnlyOutput(result.stdout)
               } catch (error) {
                 if (isUnsupportedMergeTreeWriteTreeError(error)) {
@@ -262,7 +271,13 @@ async function loadConflictingFiles(
                 throw error
               }
             },
-            () => loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions),
+            () =>
+              loadConflictingFilesWithLegacyMergeTree(
+                repoPath,
+                legacyArgs,
+                localGitOptions,
+                quarantine
+              ),
             isUnsupportedMergeTreeMergeBaseError
           ),
         async () => {
@@ -278,12 +293,16 @@ async function loadConflictingFiles(
 async function loadConflictingFilesWithLegacyMergeTree(
   repoPath: string,
   legacyArgs: string[],
-  localGitOptions: LocalGitExecOptions
+  localGitOptions: LocalGitExecOptions,
+  quarantine: LocalGitObjectQuarantine
 ): Promise<string[]> {
   try {
-    const result = await gitExecFileAsync(legacyArgs, {
-      ...gitOptionsForWorktree(repoPath, localGitOptions)
-    })
+    const result = await quarantine.run((env) =>
+      gitExecFileAsync(legacyArgs, {
+        ...gitOptionsForWorktree(repoPath, localGitOptions),
+        ...(env ? { env } : {})
+      })
+    )
     return parseMergeTreeNameOnlyOutput(result.stdout)
   } catch (fallbackError) {
     const fallbackStdout = getGitErrorOutput(fallbackError, 'stdout')

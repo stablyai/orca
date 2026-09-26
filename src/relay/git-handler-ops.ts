@@ -22,6 +22,8 @@ export type GitExec = (
     signal?: AbortSignal
     stdin?: string
     timeout?: number
+    /** Merged over the relay's Git env for this one command. */
+    env?: Record<string, string>
   }
 ) => Promise<{ stdout: string; stderr: string }>
 

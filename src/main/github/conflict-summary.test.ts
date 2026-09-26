@@ -17,17 +17,26 @@ import { __resetPRConflictSummaryCachesForTests, getPRConflictSummary } from './
 type GitResult = { stdout: string }
 type GitHandler = (argv: string[]) => Promise<GitResult>
 
+// Why its own key: the merge-tree object quarantine reads the common dir once per derivation.
+const COMMON_DIR_COMMAND = 'rev-parse --git-common-dir'
+
 const defaultHandlers: Record<string, GitHandler> = {
   fetch: async () => ({ stdout: '' }),
   'rev-parse': async () => ({ stdout: 'base-tip-1\n' }),
   'merge-base': async () => ({ stdout: 'merge-base-1\n' }),
   'rev-list': async () => ({ stdout: '3\n' }),
-  'merge-tree': async () => ({ stdout: 'tree-oid\u0000src/conflict.ts\u0000' })
+  'merge-tree': async () => ({ stdout: 'tree-oid\u0000src/conflict.ts\u0000' }),
+  [COMMON_DIR_COMMAND]: async () => ({ stdout: '.git\n' })
+}
+
+function commandKey(argv: string[]): string {
+  return argv[0] === 'rev-parse' && argv.includes('--git-common-dir') ? COMMON_DIR_COMMAND : argv[0]
 }
 
 function mockGitDispatch(overrides: Record<string, GitHandler> = {}): void {
   gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
-    const handler = overrides[argv[0]] ?? defaultHandlers[argv[0]]
+    const key = commandKey(argv)
+    const handler = overrides[key] ?? defaultHandlers[key]
     if (!handler) {
       return Promise.reject(new Error(`unexpected git command: ${argv.join(' ')}`))
     }
@@ -40,7 +49,7 @@ function spawnCount(command?: string): number {
   if (!command) {
     return calls.length
   }
-  return calls.filter(([argv]) => Array.isArray(argv) && argv[0] === command).length
+  return calls.filter(([argv]) => Array.isArray(argv) && commandKey(argv) === command).length
 }
 
 const expectedSummary = {
@@ -78,13 +87,14 @@ describe('getPRConflictSummary caching', () => {
     const first = await deriveSummary()
     expect(first).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
-    expect(spawnCount()).toBe(5)
+    expect(spawnCount(COMMON_DIR_COMMAND)).toBe(1)
+    expect(spawnCount()).toBe(6)
 
     const second = await deriveSummary()
     const third = await deriveSummary()
     expect(second).toEqual(expectedSummary)
     expect(third).toEqual(expectedSummary)
-    expect(spawnCount()).toBe(5)
+    expect(spawnCount()).toBe(6)
   })
 
   it('re-derives when headRefOid changes without re-fetching inside the throttle window', async () => {
@@ -151,7 +161,7 @@ describe('getPRConflictSummary caching', () => {
 
     expect(first).toEqual(expectedSummary)
     expect(second).toEqual(expectedSummary)
-    expect(spawnCount()).toBe(5)
+    expect(spawnCount()).toBe(6)
   })
 
   it('dedupes overlapping derivations after resolving the same live base tip', async () => {
@@ -264,7 +274,7 @@ describe('getPRConflictSummary caching', () => {
     const repeat = await deriveSummary()
     expect(repeat).toEqual(expectedSummary)
     expect(spawnCount('fetch')).toBe(1)
-    expect(spawnCount()).toBe(5)
+    expect(spawnCount()).toBe(6)
   })
 
   it("falls back to GitHub's baseRefOid when fetch and remote-tracking refs are unavailable", async () => {
@@ -306,7 +316,7 @@ describe('getPRConflictSummary caching', () => {
       admissionTier: 'background'
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(5)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(6)
     for (const [, options] of gitExecFileAsyncMock.mock.calls) {
       expect(options).toEqual(
         expect.objectContaining({
