@@ -34,7 +34,6 @@ import { playPageHaptic } from './page-haptics'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
-import { softwareKeyboardWindowInset } from '../platform/software-keyboard-window-inset'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
@@ -42,7 +41,7 @@ import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
-import { pageKeyboardInset } from './page-keyboard-inset'
+import { shellKeyboardGeometry } from './page-keyboard-inset'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -210,20 +209,11 @@ export function MobileWebShellScreen({
   // The page cannot see the IME for itself: edge-to-edge makes `adjustResize` inert and the view's
   // IME insets are zeroed, so `visualViewport` never shrinks. A page that reads the height from
   // `init` is covered by the keyboard like a native screen; an older one gets a view ended above it.
-  const keyboardHeight = useKeyboardOcclusion()
-  // Legacy: only a page without the `keyboard-inset` accept is shortened; delete this branch (and
-  // `softwareKeyboardWindowInset`) once every served page declares it.
-  const viewShortenedBy = pageReadsKeyboardInset
-    ? 0
-    : softwareKeyboardWindowInset({
-        keyboardHeight,
-        bottomInset: insets.bottom,
-        platform: Platform.OS
-      })
-  const keyboardInset = pageKeyboardInset({
-    keyboardHeight,
+  const { keyboardInset, viewShortenedBy } = shellKeyboardGeometry({
+    keyboardHeight: useKeyboardOcclusion(),
     bottomInset: insets.bottom,
-    platform: Platform.OS
+    platform: Platform.OS,
+    pageReadsKeyboardInset
   })
   const pageInsets = pageSafeAreaInsets({
     insets,
