@@ -65,6 +65,7 @@ vi.mock('./ai-vault-session-launch-actions', () => ({
 vi.mock('./ai-vault-original-pane-actions', () => ({
   useAiVaultOriginalPaneActions: () => ({
     getOriginalPaneTarget: vi.fn(),
+    getSessionDisplayTitle: vi.fn((session) => session.title),
     getSessionLiveState: vi.fn(),
     jumpToOriginalPane: vi.fn(),
     jumpToWorktree: vi.fn()

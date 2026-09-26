@@ -38,6 +38,7 @@ export function AiVaultSessionVirtualList({
   vaultScope,
   buildResumeStartup,
   getOriginalPaneTarget,
+  getSessionDisplayTitle,
   isStructuredSessionOpen,
   getSessionLiveState,
   getWorktreeInfo,
@@ -69,6 +70,10 @@ export function AiVaultSessionVirtualList({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
+  getSessionDisplayTitle: (
+    session: AiVaultSession,
+    target?: AiVaultOriginalPaneTarget | null
+  ) => string
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
@@ -214,6 +219,7 @@ export function AiVaultSessionVirtualList({
                 searchHits={searchHits}
                 buildResumeStartup={buildResumeStartup}
                 getOriginalPaneTarget={getOriginalPaneTarget}
+                getSessionDisplayTitle={getSessionDisplayTitle}
                 isStructuredSessionOpen={isStructuredSessionOpen}
                 getSessionLiveState={getSessionLiveState}
                 getWorktreeInfo={getWorktreeInfo}

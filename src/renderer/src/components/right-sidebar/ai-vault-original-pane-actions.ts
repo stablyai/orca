@@ -9,7 +9,11 @@ import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-ta
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
+import {
+  findOriginalAiVaultSessionPane,
+  resolveAiVaultSessionDisplayTitle,
+  type AiVaultOriginalPaneTarget
+} from './ai-vault-original-pane'
 import {
   createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
@@ -20,6 +24,10 @@ export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
+  getSessionDisplayTitle: (
+    session: AiVaultSession,
+    target?: AiVaultOriginalPaneTarget | null
+  ) => string
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
   jumpToOriginalPane: (session: AiVaultSession) => void
@@ -67,6 +75,20 @@ export function useAiVaultOriginalPaneActions(): {
     (session: AiVaultSession) =>
       findAiVaultSessionLiveStateInIndex(getOriginalPaneIndex(), session),
     [getOriginalPaneIndex]
+  )
+
+  // Why: callers that already resolved the pane target (every vault row does)
+  // pass it back in so the shared index is not searched twice per row.
+  const getSessionDisplayTitle = useCallback(
+    (session: AiVaultSession, target?: AiVaultOriginalPaneTarget | null) =>
+      resolveAiVaultSessionDisplayTitle(
+        originalPaneLookupState,
+        session,
+        target === undefined
+          ? findOriginalAiVaultSessionPaneInIndex(getOriginalPaneIndex(), session)
+          : target
+      ),
+    [getOriginalPaneIndex, originalPaneLookupState]
   )
 
   const jumpToOriginalPane = useCallback(
@@ -118,6 +140,7 @@ export function useAiVaultOriginalPaneActions(): {
 
   return {
     getOriginalPaneTarget,
+    getSessionDisplayTitle,
     getSessionLiveState,
     isStructuredSessionOpen,
     jumpToOriginalPane,

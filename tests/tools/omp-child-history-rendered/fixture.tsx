@@ -121,6 +121,7 @@ function App() {
             vaultScope="all"
             buildResumeStartup={(session) => ({ command: session.resumeCommand })}
             getOriginalPaneTarget={() => null}
+            getSessionDisplayTitle={(session) => session.title}
             getSessionLiveState={() => null}
             getWorktreeInfo={() => null}
             getSessionResumeState={() => ({

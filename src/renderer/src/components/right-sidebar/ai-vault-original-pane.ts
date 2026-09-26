@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
+import { findStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -289,4 +290,38 @@ export function findOriginalAiVaultSessionPane(
   }
 
   return promptMatchedTargets.length === 1 ? promptMatchedTargets[0] : null
+}
+
+/**
+ * The name to show for a session across every list surface (sidebar, tab,
+ * AI Vault, resume pickers). A user-set Orca rename always wins over the
+ * harness-derived title baked into `session.title` (custom-title/thread_name/
+ * sqlite title, already prioritized over generated titles by the scanner).
+ *
+ * Renames land in two places: a terminal tab keeps `customTitle`, while a
+ * native-chat session is a unified tab and keeps `customLabel`. A structured
+ * session has no terminal pane, so its tab is matched by session identity
+ * rather than by `target`.
+ */
+export function resolveAiVaultSessionDisplayTitle(
+  state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,
+  session: AiVaultSession,
+  target: AiVaultOriginalPaneTarget | null
+): string {
+  const structured = session.structuredSession
+  if (structured) {
+    const structuredLabel = findStructuredAgentSessionTab(state.unifiedTabsByWorktree, {
+      workspaceId: structured.workspaceId,
+      sessionId: structured.sessionId
+    })?.customLabel?.trim()
+    if (structuredLabel) {
+      return structuredLabel
+    }
+  }
+  const tab = target
+    ? (state.tabsByWorktree[target.worktreeId] ?? []).find(
+        (candidate) => candidate.id === target.tabId
+      )
+    : undefined
+  return tab?.customTitle?.trim() || session.title
 }

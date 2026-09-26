@@ -29,6 +29,7 @@ import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
 
 export function VaultSessionRow({
   session,
+  displayTitle,
   liveState,
   resumeStartup,
   realHomeResumeStartup,
@@ -59,6 +60,9 @@ export function VaultSessionRow({
   searchHit
 }: {
   session: AiVaultSession
+  // Why: the session's harness-derived title, overridden with the user's own
+  // Orca tab rename when one exists on the live/originating tab.
+  displayTitle: string
   liveState: AgentStatusState | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
@@ -115,7 +119,7 @@ export function VaultSessionRow({
         agent: session.agent,
         sessionId: session.sessionId,
         ...(session.structuredSession ? { structuredSession: session.structuredSession } : {}),
-        title: session.title,
+        title: displayTitle,
         command: resumeStartup.command,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
@@ -130,7 +134,7 @@ export function VaultSessionRow({
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [realHomeResumeStartup, resumeDisabled, session, resumeStartup]
+    [displayTitle, realHomeResumeStartup, resumeDisabled, session, resumeStartup]
   )
 
   return (
@@ -175,7 +179,7 @@ export function VaultSessionRow({
                 window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
               }}
             >
-              {session.title}
+              {displayTitle}
             </div>
             <SessionRowTrailingActions
               session={session}

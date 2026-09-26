@@ -15,13 +15,16 @@ export function prepareAiVaultSessionContinuation(args: {
   session: AiVaultSession
   targetWorktreeId: string
   targetWorkspacePath: string
+  // Why: lets callers pass the resolved cross-surface display title (user's
+  // Orca tab rename, when one exists) instead of the raw harness title.
+  displayTitle?: string
 }): AgentSessionContinuationRequest {
-  const { session, targetWorktreeId, targetWorkspacePath } = args
+  const { session, targetWorktreeId, targetWorkspacePath, displayTitle } = args
   return {
     source: {
       capturedText: previewTranscript(session),
       sourceAgent: session.agent,
-      sourceTitle: session.title,
+      sourceTitle: displayTitle ?? session.title,
       sourceWorkingDirectory: session.cwd,
       transcriptPath: session.filePath.trim() || null,
       // Why: preview user entries can be tool results or injected skill text; only provider-authenticated prompts are safe hints.

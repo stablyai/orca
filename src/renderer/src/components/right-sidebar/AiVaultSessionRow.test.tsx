@@ -77,6 +77,7 @@ function renderRow(
     <TooltipProvider>
       <VaultSessionRow
         session={overrides.session ?? session}
+        displayTitle={(overrides.session ?? session).title}
         searchHit={overrides.searchHit}
         subagentResume={overrides.subagentResume}
         liveState={null}
@@ -177,6 +178,39 @@ describe('VaultSessionRow native session actions', () => {
 
     expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull()
   })
+})
+
+it('renders the resolved display title instead of the raw session title', () => {
+  render(
+    <TooltipProvider>
+      <VaultSessionRow
+        session={session}
+        displayTitle="Renamed by me"
+        liveState={null}
+        resumeStartup={{ command: 'gemini --resume sess-1' }}
+        realHomeResumeStartup={{ command: 'gemini --resume sess-1' }}
+        worktreeInfo={null}
+        vaultScope="all"
+        detailsExpanded={false}
+        resumeDisabled={false}
+        onToggleDetails={vi.fn()}
+        showJumpToWorktree={false}
+        onResume={vi.fn()}
+        resumeLabel="Resume in New Tab"
+        resumeActions={{
+          worktree: { worktreeId: null, disabled: true },
+          newTab: { worktreeId: null, disabled: true }
+        }}
+        onResumeInWorktree={vi.fn()}
+        onResumeInNewTab={vi.fn()}
+        onCopyId={vi.fn()}
+        onCopyPath={vi.fn()}
+      />
+    </TooltipProvider>
+  )
+
+  expect(screen.getByText('Renamed by me')).toBeTruthy()
+  expect(screen.queryByText(session.title)).toBeNull()
 })
 
 describe('VaultSessionRow agent metadata line', () => {
