@@ -1,14 +1,17 @@
 // Why: this is the original Unix socket / named pipe transport extracted from
 // runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
-// 30s idle timeout, 1MB max message, 32 max connections, chmod 0o600 on Unix.
+// 30s idle timeout, 1MB max message (crossMachineRecovery.import excepted), 32 max connections, chmod 0o600 on Unix.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
 // away. See design doc §3.1.
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
+import {
+  isWithinRuntimeRpcFrameBudget,
+  runtimeRpcFrameByteBudget
+} from './runtime-rpc-frame-budget'
 
-const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
 const MAX_RUNTIME_RPC_CONNECTIONS = 32
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
@@ -130,6 +133,13 @@ export class UnixSocketTransport implements RpcTransport {
       inflight.clear()
       this.activeSockets.delete(socket)
     })
+    const rejectOversized = (): void => {
+      oversized = true
+      this.messageHandler?.('', (response) => {
+        socket.write(`${response}\n`)
+        socket.end()
+      })
+    }
     socket.on('data', (chunk: string) => {
       if (oversized) {
         return
@@ -140,12 +150,8 @@ export class UnixSocketTransport implements RpcTransport {
       // Why: the Orca runtime lives in Electron main, so it must reject
       // oversized local RPC frames instead of letting a local client grow an
       // unbounded buffer and stall the app.
-      if (retainedBytes > MAX_RUNTIME_RPC_MESSAGE_BYTES) {
-        oversized = true
-        this.messageHandler?.('', (response) => {
-          socket.write(`${response}\n`)
-          socket.end()
-        })
+      if (retainedBytes > runtimeRpcFrameByteBudget(buffer)) {
+        rejectOversized()
         return
       }
       if (!chunk.includes('\n')) {
@@ -155,6 +161,10 @@ export class UnixSocketTransport implements RpcTransport {
       while (newlineIndex !== -1) {
         const rawMessage = buffer.slice(0, newlineIndex).trim()
         buffer = buffer.slice(newlineIndex + 1)
+        if (!isWithinRuntimeRpcFrameBudget(rawMessage, Buffer.byteLength(rawMessage, 'utf8'))) {
+          rejectOversized()
+          return
+        }
         if (rawMessage) {
           this.dispatchMessage(socket, rawMessage, inflight)
         }
