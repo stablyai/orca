@@ -27,7 +27,9 @@ export function initializeMainProcessObservers(): void {
     throw new Error('Store must be initialized before observers')
   }
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
-  state.agentAwakeService = new AgentAwakeService()
+  state.agentAwakeService = new AgentAwakeService({
+    keepDisplayAwake: store.getSettings().keepDisplayAwake === true
+  })
   state.agentAwakeService.setMode(
     normalizeComputerAwakeMode(
       store.getSettings().computerAwakeMode,

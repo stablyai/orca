@@ -27,6 +27,7 @@ import type { SettingsNavigationBuildOptions } from './settings-navigation-build
 
 export function buildCapabilitySettingsSections({
   isLocalWindowsHost,
+  isMac,
   isWebClient,
   isLinearConnected
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
@@ -42,7 +43,8 @@ export function buildCapabilitySettingsSections({
       icon: Bot,
       searchEntries: getAgentsPaneSearchEntries({
         includeAgentAwake: !isWebClient,
-        includeAgentRuntime: isLocalWindowsHost
+        includeAgentRuntime: isLocalWindowsHost,
+        includeKeepDisplayAwake: isMac
       }),
       group: 'capabilities'
     },
