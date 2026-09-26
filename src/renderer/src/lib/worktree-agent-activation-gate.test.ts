@@ -7,7 +7,10 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import type { TerminalSlice } from '@/store/slices/terminals'
 import { runWorktreeAgentActivationGate } from './worktree-agent-activation-gate'
-import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
+import {
+  indexLiveTerminalSurfaceOwners,
+  type LiveTerminalSurfaceOwnerIndex
+} from './worktree-live-terminal-surface-owners'
 
 const WORKTREE_ID = 'repo::/worktree'
 const STALE_STRUCTURED_SESSION_ID = 'structured-session-stale'
@@ -212,7 +215,10 @@ function seedExistingSurface(
 describe('worktree agent activation gate', () => {
   it('uses immediately ready development restore inventory', async () => {
     const ptyId = `${WORKTREE_ID}@@live-pty`
-    const { deps, createTab, resume } = testDeps({ sessions: [listed(ptyId)] })
+    const { deps, createTab, resume } = testDeps({
+      sessions: [listed(ptyId)],
+      surfaceOwners: new Map([[ptyId, 'unowned']])
+    })
     const awaitReady = vi.fn(async () => true)
 
     await expect(
@@ -226,7 +232,10 @@ describe('worktree agent activation gate', () => {
 
   it('waits for packaged restore hydration before reading daemon inventory', async () => {
     const ptyId = `${WORKTREE_ID}@@live-pty`
-    const { deps, createTab, resume } = testDeps({ sessions: [listed(ptyId)] })
+    const { deps, createTab, resume } = testDeps({
+      sessions: [listed(ptyId)],
+      surfaceOwners: new Map([[ptyId, 'unowned']])
+    })
     let releaseReady!: (ready: boolean) => void
     const awaitReady = vi.fn(() => new Promise<boolean>((resolve) => (releaseReady = resolve)))
 
@@ -270,7 +279,10 @@ describe('worktree agent activation gate', () => {
 
   it('adopts a live daemon PTY before activation can resume another agent', async () => {
     const ptyId = `${WORKTREE_ID}@@live-pty`
-    const { deps, createTab, resume } = testDeps({ sessions: [listed(ptyId)] })
+    const { deps, createTab, resume } = testDeps({
+      sessions: [listed(ptyId)],
+      surfaceOwners: new Map([[ptyId, 'unowned']])
+    })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
@@ -285,7 +297,10 @@ describe('worktree agent activation gate', () => {
   it('adopts a daemon PTY minted for a folder workspace', async () => {
     const folderWorkspaceId = 'folder:plain-workspace'
     const ptyId = `${folderWorkspaceId}@@live-pty`
-    const { deps, createTab, resume } = testDeps({ sessions: [listed(ptyId)] })
+    const { deps, createTab, resume } = testDeps({
+      sessions: [listed(ptyId)],
+      surfaceOwners: new Map([[ptyId, 'unowned']])
+    })
 
     await expect(runWorktreeAgentActivationGate(folderWorkspaceId, deps)).resolves.toBe('adopted')
 
@@ -593,7 +608,10 @@ describe('worktree agent activation gate', () => {
     const unverifiablePtyId = `${WORKTREE_ID}@@ambiguous-agent`
     const { deps } = testDeps({
       sessions: [listed(adoptedPtyId), listed(unverifiablePtyId)],
-      surfaceOwners: new Map([[unverifiablePtyId, null]]),
+      surfaceOwners: new Map([
+        [adoptedPtyId, 'unowned'],
+        [unverifiablePtyId, null]
+      ]),
       resumeCount: 0
     })
 
@@ -653,19 +671,51 @@ describe('worktree agent activation gate', () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
-      surfaceOwners: new Map()
+      surfaceOwners: new Map([[livePtyId, 'unowned']])
     })
     const store = deps.getState()
     seedExistingSurface(store, { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
     // The pane mounts while the census is in flight, binding the PTY behind the sweep.
     deps.listSurfaceOwners.mockImplementation(async () => {
       store.ptyIdsByTabId['tab-live'] = [livePtyId]
-      return new Map()
+      return new Map([[livePtyId, 'unowned']])
     })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
     expect(createTab).not.toHaveBeenCalled()
+  })
+
+  it('does not adopt a predecessor after the relay restarts between activation inventories', async () => {
+    const predecessor = 'ssh:target@@pty2:old-relay:1'
+    const replacement = 'ssh:target@@pty2:new-relay:1'
+    const { deps, createTab } = testDeps({ resumeCount: 0 })
+    const store = deps.getState()
+    seedExistingSurface(store, {
+      tabId: 'tab-live',
+      leafId: LIVE_LEAF_ID,
+      boundPtyId: predecessor
+    })
+    let replyWithOldInventory!: (sessions: PtyListedSession[]) => void
+    deps.listSessions.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          replyWithOldInventory = resolve
+        })
+    )
+    const activation = runWorktreeAgentActivationGate(WORKTREE_ID, deps)
+    await vi.waitFor(() => expect(deps.listSessions).toHaveBeenCalledOnce())
+
+    // Recovery rebinds the same pane before the old relay's inventory response arrives.
+    store.terminalLayoutsByTabId['tab-live']!.ptyIdsByLeafId[LIVE_LEAF_ID] = replacement
+    store.ptyIdsByTabId['tab-live'] = [replacement]
+    deps.listSurfaceOwners.mockResolvedValueOnce(indexLiveTerminalSurfaceOwners([], WORKTREE_ID))
+    replyWithOldInventory([{ ...listed(predecessor), worktreeId: WORKTREE_ID }])
+    await activation
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(store.tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual(['tab-live'])
+    expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId[LIVE_LEAF_ID]).toBe(replacement)
   })
 
   it('gives every host pane of an unmounted tab its own leaf', async () => {
@@ -706,7 +756,7 @@ describe('worktree agent activation gate', () => {
     const livePtyId = `${WORKTREE_ID}@@orphan-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
-      surfaceOwners: new Map()
+      surfaceOwners: new Map([[livePtyId, 'unowned']])
     })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')

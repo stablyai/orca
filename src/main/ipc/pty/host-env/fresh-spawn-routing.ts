@@ -49,8 +49,14 @@ export function beginPtySpawnForWorktree(
     }
   } catch (error) {
     // Why: worktree ID and cwd can be different roots; release earlier admissions before rejecting.
-    finishes.toReversed().forEach((finish) => finish())
+    for (let index = finishes.length - 1; index >= 0; index -= 1) {
+      finishes[index]!()
+    }
     throw error
   }
-  return () => finishes.toReversed().forEach((finish) => finish())
+  return () => {
+    for (let index = finishes.length - 1; index >= 0; index -= 1) {
+      finishes[index]!()
+    }
+  }
 }

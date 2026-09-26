@@ -82,7 +82,7 @@ export class MobileEndpointSupervisor {
     })
     // Why: the race owns recovery exactly like a network-change replacement — its
     // failure must book the shared cooldown. recoverRelay's own guards already
-    // cover stopped/background/no-relay, so the timer needs no scope check.
+    // cover stopped/background, so the timer needs no scope check.
     this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
       void this.recoverRelay(true, true)
     })

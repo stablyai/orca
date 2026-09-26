@@ -51,7 +51,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
   acquisitionGeneration: string | null
   now: number
   exitObservedAt?: number
-  settlementRetry?: { settlementId: string; detail: string }
+  exitReason?: string
 }): Promise<AgentSessionRecord> {
   if (input.acquisitionGeneration !== input.expectedAcquisitionGeneration) {
     throw new Error('agent_session_checkpoint_stale')
@@ -69,6 +69,6 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
     expectedFence: input.expectedFence,
     now: input.now,
     exitObservedAt: input.exitObservedAt,
-    ...(input.settlementRetry ? { settlementRetry: input.settlementRetry } : {})
+    ...(input.exitReason ? { exitReason: input.exitReason } : {})
   })
 }

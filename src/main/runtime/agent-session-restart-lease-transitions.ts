@@ -8,13 +8,9 @@
 
 import {
   adjudicateAgentSessionRestart,
-  agentSessionRestartEvictionSettlementId,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
-import type {
-  AgentSessionHandoffStage,
-  AgentSessionRecord
-} from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { withLease } from './agent-session-lease-transitions'
 
 /** Apply one restart adjudication. Never consults deadlines — only proof moves a lease. */
@@ -29,9 +25,6 @@ export function applyAgentSessionRestartAdjudication(args: {
     probe: args.probe,
     observedAt: args.now
   })
-  if (adjudication.disposition === 'settlement-pending') {
-    return withLease(record, { ...record.lease, unreconciled: false, lastRenewedAt: args.now })
-  }
   if (adjudication.disposition === 'free') {
     // Why: an already-free lease that reloads into `recovering` is unopenable forever; clearing
     // the stage restores it without moving the fence or touching the recorded death evidence.
@@ -39,41 +32,29 @@ export function applyAgentSessionRestartAdjudication(args: {
       ...record.lease,
       handoffStage: null,
       handoffOperationId: null,
-      processlessAt: null,
       unreconciled: false,
       lastRenewedAt: args.now
     })
   }
   if (adjudication.disposition === 'evicted') {
-    // A reservation that never proved its handle ran no turn, so no journal settlement is owed.
-    const settlementOwed = record.lease.handoffStage !== 'new-owner-proving'
+    // What the dead generation left running is settled from `deathEvidence` when the journal is
+    // next opened, so nothing about it is owed here.
     return withLease(record, {
       ...record.lease,
       runtimeFence: adjudication.nextFence,
       handoffStage: null,
       ownerProcess: null,
       reservedSpawnToken: null,
-      processlessAt: null,
       claimStatus: 'released',
       unreconciled: false,
       lastRenewedAt: args.now,
       handoffOperationId: null,
-      deathEvidence: adjudication.evidence,
-      ...(settlementOwed
-        ? {
-            settlementRetryRequired: true,
-            settlementRetryId: agentSessionRestartEvictionSettlementId(record.lease, adjudication)
-          }
-        : {})
+      deathEvidence: adjudication.evidence
     })
   }
-  const stage: AgentSessionHandoffStage =
-    adjudication.disposition === 'conflicted' ? 'manual-recovery' : adjudication.stage
   return withLease(record, {
     ...record.lease,
-    handoffStage: stage,
-    claimStatus:
-      adjudication.disposition === 'conflicted' ? 'conflicted' : record.lease.claimStatus,
+    handoffStage: adjudication.stage,
     unreconciled: false,
     lastRenewedAt: args.now
   })

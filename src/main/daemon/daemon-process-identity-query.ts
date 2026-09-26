@@ -16,22 +16,26 @@ export type PsProcessIdentity = {
   startedAtMs: number | null
 }
 
-function parsePsProcessIdentity(output: string): PsProcessIdentity {
+function parsePsProcessIdentity(output: string, utc = false): PsProcessIdentity {
   // BSD ps formats lstart as a fixed-width 24-character timestamp.
-  const startedAtMs = Date.parse(output.slice(0, 24))
+  const startedAtMs = Date.parse(output.slice(0, 24) + (utc ? ' UTC' : ''))
   return {
     commandLine: output.slice(24).trim(),
     startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null
   }
 }
 
-export function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
+export function getPsProcessIdentity(
+  pid: number,
+  options?: { utc?: boolean }
+): PsProcessIdentity | null {
   try {
     const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], {
       encoding: 'utf8',
-      timeout: 2_000
+      timeout: 2_000,
+      ...(options?.utc ? { env: { ...process.env, TZ: 'UTC', LC_ALL: 'C' } } : {})
     })
-    return parsePsProcessIdentity(output)
+    return parsePsProcessIdentity(output, options?.utc)
   } catch {
     return null
   }

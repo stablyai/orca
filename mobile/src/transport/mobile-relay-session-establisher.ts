@@ -54,7 +54,6 @@ export class MobileRelaySessionEstablisher {
     this.relay = args.relay
   }
 
-  // Routing only; the row and token belong to pairing and Edit Host.
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
     // Why: a stopped supervisor's host may be removed or re-paired; its successor owns routing.
     if (this.args.isStopped()) {

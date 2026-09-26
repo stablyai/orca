@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   track-community-pr:
-    runs-on: ubuntu-latest
+    # API-only bookkeeping fits the free single-CPU container runner.
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Generate bufo-bot token
