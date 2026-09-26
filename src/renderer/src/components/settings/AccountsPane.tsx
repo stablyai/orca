@@ -385,13 +385,13 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null
-  ].filter(Boolean)
+  ].filter((section) => section !== null)
 
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
       {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
+        <div key={section.key} className="space-y-8">
           {index > 0 ? <Separator /> : null}
           {section}
         </div>

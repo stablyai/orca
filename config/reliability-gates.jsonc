@@ -11,6 +11,94 @@
   },
   "gates": [
     {
+      "id": "settings.accounts-section-lifetime",
+      "title": "Accounts search preserves matching account section owners",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-settings",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "Accounts settings search",
+        "Grok and Cursor account status",
+        "Codex pending sign-in link"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "remote-runtime",
+        "ssh",
+        "wsl"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Actual AccountsPane, Grok, Cursor and Codex login components; synthetic APIs/store with Windows account support enabled/disabled. No real account, keychain or provider action.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/AccountsPane.tsx"
+      ],
+      "invariant": "Matching sections retain their owners as earlier search results disappear; genuine removal releases the Codex subscription and reopens fresh status reads.",
+      "oracle": "Including initial mount: nine matching Grok queries reduce status reads from four or six to one; ten matching Cursor queries reduce reads from four to one; eleven matching Codex queries reduce reads and subscriptions from four to one. Explicit and usage-driven refresh plus genuine removal remain.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",
+          "assertions": [
+            "preserves explicit Grok refresh and real hide/reopen status reads",
+            "keeps the login subscription until Codex genuinely hides",
+            "keeps Cursor refresh driven by usage updates and genuine reopen"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/AccountsPane.section-lifetime.test.tsx",
+          "result": "passed",
+          "durationSeconds": 1.18,
+          "summary": "Ten candidate cases passed on current main; original main failed seven regressions and passed three controls. Three independent Cursor cases extend seven author cases."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused renderer-unit suites, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local evidence only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Candidate ten pass; current-main original seven fail and three controls pass."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Actual renderer status-read/subscription admissions counted; no cache, poll, listener or process added. No CPU, latency or heap claim. Matching sections retain local state and lose incidental search-driven refresh."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "No native Linux/Windows or live SSH/WSL/paired provider behavior; platform flags are simulated.",
+        "Hidden Electron Grok proof uses the original audit baseline and synthetic status; current-main Cursor addition has unit evidence only.",
+        "Matching search no longer incidentally refreshes Grok/Cursor status or pending Codex URLs. Explicit refresh, usage updates, pushed URL events and true hide/reopen remain, with no bounded automatic freshness deadline.",
+        "Child drafts, errors, copied feedback and timers remain until their own transition or real removal."
+      ],
+      "promotionCriteria": [
+        "Retain read/subscription counts and genuine-removal controls; collect CI soak and relevant full-app provider evidence."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate owner and refresh regressions without weakening assertions or adding retries."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
