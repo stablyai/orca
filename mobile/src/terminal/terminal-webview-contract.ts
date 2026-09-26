@@ -18,6 +18,23 @@ export type TerminalKeyboardAvoidanceMetrics = {
   contentBottomRow: number
   rows: number
   altScreen: boolean
+  // CSS px between drawn rows, fit scale included; absent from older documents and before the
+  // renderer has measured.
+  rowPitch?: number
+}
+
+/** Every field: a fit-scale change moves only the row pitch, and the lift must hear it. */
+export function sameTerminalKeyboardAvoidanceMetrics(
+  a: TerminalKeyboardAvoidanceMetrics,
+  b: TerminalKeyboardAvoidanceMetrics
+): boolean {
+  return (
+    a.cursorY === b.cursorY &&
+    a.contentBottomRow === b.contentBottomRow &&
+    a.rows === b.rows &&
+    a.altScreen === b.altScreen &&
+    a.rowPitch === b.rowPitch
+  )
 }
 
 export function parseTerminalKeyboardAvoidanceMetrics(
@@ -30,12 +47,11 @@ export function parseTerminalKeyboardAvoidanceMetrics(
     msg.contentBottomRow === undefined
       ? cursorY
       : Math.min(toNonNegativeInteger(msg.contentBottomRow), maxRow)
-  return {
-    cursorY,
-    contentBottomRow,
-    rows,
-    altScreen: msg.altScreen === true
-  }
+  const metrics = { cursorY, contentBottomRow, rows, altScreen: msg.altScreen === true }
+  const rowPitch = msg.rowPitch
+  return typeof rowPitch === 'number' && Number.isFinite(rowPitch) && rowPitch > 0
+    ? { ...metrics, rowPitch }
+    : metrics
 }
 
 function toNonNegativeInteger(value: unknown): number {
