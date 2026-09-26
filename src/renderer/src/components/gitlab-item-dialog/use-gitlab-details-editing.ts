@@ -11,6 +11,7 @@ import {
 } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 
 export function useGitLabDetailsEditing(
   item: GitLabWorkItem | null,
@@ -40,7 +41,7 @@ export function useGitLabDetailsEditing(
     }
     setLabelOptionsLoading(true)
     try {
-      const labels = await window.api.gl.listLabels(repoSelector)
+      const labels = await routedGitLab.listLabels(repoSelector)
       if (mountedRef.current) {
         setLabelOptions(normalizeGitLabLabels(labels))
       }
@@ -127,7 +128,7 @@ export function useGitLabDetailsEditing(
 
     setDetailsSaving(true)
     try {
-      const res = await window.api.gl.updateMR({ ...repoSelector, iid: item.number, updates })
+      const res = await routedGitLab.updateMR({ ...repoSelector, iid: item.number, updates })
       if (res.ok) {
         if (mountedRef.current) {
           setDetails((current) =>

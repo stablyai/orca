@@ -7,6 +7,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 
 export function useGitLabPrimaryActions(
   item: GitLabWorkItem | null,
@@ -28,7 +29,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('close')
     try {
-      const res = await window.api.gl.closeMR({ ...repoSelector, iid: item.number })
+      const res = await routedGitLab.closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -61,7 +62,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('reopen')
     try {
-      const res = await window.api.gl.reopenMR({ ...repoSelector, iid: item.number })
+      const res = await routedGitLab.reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -94,7 +95,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('merge')
     try {
-      const res = await window.api.gl.mergeMR({ ...repoSelector, iid: item.number })
+      const res = await routedGitLab.mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -141,12 +142,12 @@ export function useGitLabPrimaryActions(
       // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
-          ? await window.api.gl.addMRComment({
+          ? await routedGitLab.addMRComment({
               ...repoSelector,
               iid: item.number,
               body: bodyState.body
             })
-          : await window.api.gl.addIssueComment({
+          : await routedGitLab.addIssueComment({
               ...repoSelector,
               number: item.number,
               body: bodyState.body
