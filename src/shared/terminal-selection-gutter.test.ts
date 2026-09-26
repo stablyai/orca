@@ -94,3 +94,73 @@ describe('stripTerminalSelectionGutter', () => {
     expect(stripTerminalSelectionGutter(tabbed)).toBe(tabbed)
   })
 })
+
+// The clipboard text a user got by drag-selecting a URL inside a TUI overlay:
+// the box edge, and the transcript that showed through beside it, ride along.
+const OVERLAY_SELECTION = [
+  ' https://dash.cloudflare.com/oauth2/auth?response_type=code&client_id=54d11  │',
+  '      │  594-84e4-41aa-b438-e81b8fa78ee7&redirect_uri=http%3A%2F%2Flocalhos  │',
+  ' todo │  t%3A8976%2Foauth%2Fcallback&scope=account%3Aread%20user%3Aread%20w  │',
+  ' \u25d0 in │  orkers%3Awrite%20workers_kv%3Awrite%20offline_access&state=_kgdQb  │',
+  ' Final│  GhTJWB9Ss1kqBuYOq1QX1G0OTF&code_challenge_method=S256'
+].join('\n')
+
+describe('stripTerminalSelectionGutter: TUI overlay frames', () => {
+  it('drops the box edge and the screen showing through beside it', () => {
+    expect(stripTerminalSelectionGutter(OVERLAY_SELECTION)).toBe(
+      [
+        'https://dash.cloudflare.com/oauth2/auth?response_type=code&client_id=54d11',
+        '594-84e4-41aa-b438-e81b8fa78ee7&redirect_uri=http%3A%2F%2Flocalhos',
+        't%3A8976%2Foauth%2Fcallback&scope=account%3Aread%20user%3Aread%20w',
+        'orkers%3Awrite%20workers_kv%3Awrite%20offline_access&state=_kgdQb',
+        'GhTJWB9Ss1kqBuYOq1QX1G0OTF&code_challenge_method=S256'
+      ].join('\n')
+    )
+  })
+
+  it('leaves a table the user selected from its own left edge intact', () => {
+    const table = ['| name | url  |', '|------|------|', '| foo  | bar  |'].join('\n')
+
+    expect(stripTerminalSelectionGutter(table)).toBe(table)
+  })
+
+  it('leaves an indented table intact apart from its shared indent', () => {
+    const table = ['  | name | url |', '  |------|-----|', '  | foo  | bar |'].join('\n')
+
+    expect(stripTerminalSelectionGutter(table)).toBe(
+      ['| name | url |', '|------|-----|', '| foo  | bar |'].join('\n')
+    )
+  })
+
+  it('needs more than one framed row before treating an edge as chrome', () => {
+    const pair = ['value', 'name  | other'].join('\n')
+
+    expect(stripTerminalSelectionGutter(pair)).toBe(pair)
+  })
+
+  it('leaves rows whose edge column drifts alone', () => {
+    const drifting = ['value', 'todo  │  one', 'x      │  two', 'y     │  three'].join('\n')
+
+    expect(stripTerminalSelectionGutter(drifting)).toBe(drifting)
+  })
+})
+
+describe('stripTerminalSelectionGutter: frame evidence is not guessed', () => {
+  it('keeps an aligned two-column listing whose separator is an ASCII pipe', () => {
+    const listing = ['title', 'foo | value', 'bar | other'].join('\n')
+
+    expect(stripTerminalSelectionGutter(listing)).toBe(listing)
+  })
+
+  it('keeps an aligned listing separated by a box-drawing character', () => {
+    const listing = ['title', 'foo │ value', 'bar │ other'].join('\n')
+
+    expect(stripTerminalSelectionGutter(listing)).toBe(listing)
+  })
+
+  it('keeps an ASCII-bordered block, whose edges are not evidence enough', () => {
+    const block = ['value', 'foo | inside |', 'bar | inside |'].join('\n')
+
+    expect(stripTerminalSelectionGutter(block)).toBe(block)
+  })
+})
