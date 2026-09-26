@@ -136,4 +136,30 @@ describe('runtime client-event stream disposal', () => {
     ])
     client.close()
   })
+
+  it('releases the replayed registration on the new socket when disposed before its ready', async () => {
+    const { client, socket: first } = connectReadyClient()
+    const unsubscribe = client.subscribe('runtime.clientEvents.subscribe', null, () => {})
+    const request = sentRequests(first, 'runtime.clientEvents.subscribe')[0]!
+    emitReady(first, request.id, 'runtime-events:first-socket')
+
+    first.close()
+    await vi.advanceTimersByTimeAsync(500)
+    const second = sockets.at(-1)!
+    expect(second).not.toBe(first)
+    second.open()
+    second.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    second.receive('encrypted:{"type":"e2ee_authenticated"}')
+    expect(sentRequests(second, 'runtime.clientEvents.subscribe')).toEqual([
+      expect.objectContaining({ id: request.id })
+    ])
+
+    unsubscribe()
+    emitReady(second, request.id, 'runtime-events:second-socket')
+
+    expect(sentRequests(second, 'runtime.clientEvents.unsubscribe')).toEqual([
+      expect.objectContaining({ params: { subscriptionId: 'runtime-events:second-socket' } })
+    ])
+    client.close()
+  })
 })

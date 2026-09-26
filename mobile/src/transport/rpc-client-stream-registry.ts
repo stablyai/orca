@@ -108,6 +108,8 @@ export class RpcClientStreamRegistry {
     this.pendingBrowserRequestId = null
     for (const [id, stream] of this.streams) {
       stream.sent = false
+      // The id named a registration on the closed socket; the replay's ready brings the new one.
+      stream.subscriptionId = undefined
       this.resetTerminalRouting(id)
     }
   }
