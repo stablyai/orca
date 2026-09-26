@@ -67,7 +67,7 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
     return () => {
       cancelled = true
     }
-  }, [code, language, lines, isDark])
+  }, [code, language, lines, isDark, monacoDarkTheme])
 
   return htmlLines
 }
