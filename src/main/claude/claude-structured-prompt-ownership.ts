@@ -1,4 +1,5 @@
 import {
+  AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
   type StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -10,7 +11,10 @@ import {
   supportsClaudeQueuedInterruptCancellation
 } from './claude-structured-control-actions'
 import type { ClaudeLateDispatchSettlement } from './claude-structured-dispatch'
+import { buildClaudePromptReply } from './claude-structured-prompt-replies'
 import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudePendingPrompt } from './claude-prompt-registry'
+import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 
 /** Conservative user-facing window: below the 30s control deadline, trading
  * residual slow-pump risk for ensuring delivery bookkeeping cannot block Stop indefinitely. */
@@ -192,6 +196,19 @@ export async function cancelClaudeStructuredTurn(input: {
   }
 }
 
+function prepareClaudePromptReply(
+  prompt: ClaudePendingPrompt,
+  response: AnswerInput['response']
+): PermissionResult {
+  try {
+    return buildClaudePromptReply(prompt, response)
+  } catch (error) {
+    throw new AgentSessionPromptAnswerRejectedError(
+      error instanceof Error ? error.message : String(error)
+    )
+  }
+}
+
 export async function answerClaudeStructuredPrompt(input: {
   request: AnswerInput
   sessions: Map<string, ClaudeSession>
@@ -207,6 +224,7 @@ export async function answerClaudeStructuredPrompt(input: {
     throw new AgentSessionPromptUnavailableError(request.itemId)
   }
   try {
+    const reply = prepareClaudePromptReply(claim.found.prompt, request.response)
     await request.commit()
     if (
       sessions.get(request.sessionId) !== session ||
@@ -216,7 +234,7 @@ export async function answerClaudeStructuredPrompt(input: {
     ) {
       throw new AgentSessionPromptUnavailableError(request.itemId)
     }
-    await answerClaudePrompt(session, claim, request.optionId)
+    await answerClaudePrompt(session, claim, reply)
   } catch (error) {
     session.prompts.releaseClaim(claim)
     throw error

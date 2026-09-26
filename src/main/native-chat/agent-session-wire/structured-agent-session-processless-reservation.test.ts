@@ -198,7 +198,6 @@ describe('processless structured session reservation', () => {
       claimStatus: 'released',
       handoffStage: null,
       reservedSpawnToken: null,
-      processlessAt: null,
       runtimeFence: 2,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
@@ -222,7 +221,6 @@ describe('processless structured session reservation', () => {
         throw new AgentSessionPreSpawnError(new Error('workspace no longer exists'))
       })
     } as unknown as StructuredAgentSessionAdapter
-    const processlessProof = vi.spyOn(store, 'setReservationProcesslessProof')
     const settlement = vi.spyOn(store, 'settleFailedAcquisition')
 
     await expect(
@@ -246,16 +244,11 @@ describe('processless structured session reservation', () => {
     expect(settlement).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ exitProof: 'processless', spawnToken: 'spawn-a' })
     )
-    // No separate durable proof write: the only proof call is acquisition's single-use clear.
-    expect(processlessProof).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ processlessAt: null })
-    )
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
       handoffOperationId: null,
       runtimeFence: 2,
-      processlessAt: null,
       reservedSpawnToken: null,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })

@@ -108,7 +108,7 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
   expect(record).not.toBeNull()
   const lease = record!.lease
   const durableState = lease.handoffStage ?? lease.claimStatus
-  expect(['live', 'released', 'recovering', 'manual-recovery']).toContain(durableState)
+  expect(['live', 'released', 'recovering']).toContain(durableState)
   expect(lease.handoffStage).not.toBe('new-owner-proving')
 }
 
@@ -563,14 +563,12 @@ describe('structured session acquisition options', () => {
         })
         await expect(perform(reopened, RESUME_OPERATION, 2)).resolves.toMatchObject({ ok: true })
         expectSettledAttachLease(reopened.getRecord(SESSION))
-      } else {
+      } else if (failurePoint === 'proof' || failurePoint === 'journal') {
+        // A recorded owner goes to recovery, which concludes about it before the next start.
         expect(failedRecord?.lease).toMatchObject({
           runtimeFence: 1,
           claimStatus: failurePoint === 'journal' ? 'live' : 'reserved',
-          handoffStage:
-            failurePoint === 'proof' || failurePoint === 'journal'
-              ? 'recovering'
-              : 'manual-recovery',
+          handoffStage: 'recovering',
           // The settled operation must not stay named by the lease as an in-flight transfer.
           handoffOperationId: null,
           reservedSpawnToken: 'spawn-a'
@@ -579,12 +577,25 @@ describe('structured session acquisition options', () => {
           ok: false,
           refusal: { code: 'agent_session_ownership_unknown' }
         })
+      } else {
+        // No owner was recorded, and the adapter closed the stdio of anything it spawned: released,
+        // with no death evidence, since nothing proved one.
+        expect(failedRecord?.lease).toMatchObject({
+          runtimeFence: 2,
+          claimStatus: 'released',
+          handoffStage: null,
+          handoffOperationId: null,
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          deathEvidence: null
+        })
+        await expect(perform(reopened, RESUME_OPERATION, 2)).resolves.toMatchObject({ ok: true })
       }
     })
   })
 })
 
-describe('the tab id a create records', () => {
+describe('the tab a create reserves', () => {
   async function openStore() {
     root = await mkdtemp(join(tmpdir(), 'orca-surface-tab-id-'))
     return AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
@@ -614,30 +625,18 @@ describe('the tab id a create records', () => {
     })
   }
 
-  it('pins the id the caller reserved on the record and answers with it', async () => {
+  it('takes no tab at attach, then answers a retry naming another tab with the one it was given', async () => {
     const store = await openStore()
-    const result = await attachWith(store, 'chat-tab-1')
+    const created = await attachWith(store, 'chat-tab-1')
+    // Publishing the tab takes the id, so a create that never gets there leaves nothing behind.
+    expect(created.ok && created.value.tabId).toBeUndefined()
+    expect(store.getSessionTabId(SESSION)).toBeNull()
 
-    expect(result).toMatchObject({ ok: true, value: { tabId: 'chat-tab-1' } })
-    expect(store.getRecord(SESSION)?.surfaceTabId).toBe('chat-tab-1')
-  })
-
-  it('records the id clients derive when the caller reserved none', async () => {
-    const store = await openStore()
-    const result = await attachWith(store)
-
-    // Every reader still keys by the derived id, so an unreserved chat must not record another.
-    const derived = `structured-agent-session-${SESSION}`
-    expect(result).toMatchObject({ ok: true, value: { tabId: derived } })
-    expect(store.getRecord(SESSION)?.surfaceTabId).toBe(derived)
-  })
-
-  it('answers a retry that names another tab with the one the record holds', async () => {
-    const store = await openStore()
-    await attachWith(store, 'chat-tab-1')
-    const retried = await attachWith(store, 'chat-tab-2')
-
-    expect(retried).toMatchObject({ ok: true, value: { tabId: 'chat-tab-1' } })
-    expect(store.getRecord(SESSION)?.surfaceTabId).toBe('chat-tab-1')
+    await store.setSessionTabVisibility(SESSION, true, 'chat-tab-1')
+    expect(await attachWith(store, 'chat-tab-2')).toMatchObject({
+      ok: true,
+      value: { tabId: 'chat-tab-1' }
+    })
+    expect(store.getSessionTabId(SESSION)).toBe('chat-tab-1')
   })
 })

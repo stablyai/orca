@@ -31,6 +31,7 @@ import type {
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
@@ -52,11 +53,19 @@ export class AgentSessionPromptUnavailableError extends Error {
   }
 }
 
+/** The provider cannot take this answer. Thrown before the journal commit, so nothing is recorded. */
+export class AgentSessionPromptAnswerRejectedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AgentSessionPromptAnswerRejectedError'
+  }
+}
+
 /**
  * The provider's own root process was observed to exit, but its descendant tree
- * could not be verified. The lease keys on the root's pid and start time, so its
- * observed death releases the reservation; nothing is claimed about descendants.
- * Never thrown when a descendant was observed still alive — that stays unproven.
+ * was not proven gone. The lease keys on the root's pid and start time, so its
+ * observed death releases the reservation; nothing is claimed about descendants,
+ * including one seen still alive.
  */
 export class AgentSessionAcquisitionRootExitObservedError extends Error {
   constructor(cause: unknown) {
@@ -81,6 +90,10 @@ export class AgentSessionAcquisitionExitUnprovenError extends Error {
     this.name = 'AgentSessionAcquisitionExitUnprovenError'
   }
 }
+
+/** A start that did not land: why, in the provider's own words, or null when it gave none. The
+ *  host words it for the chat and records it raw. */
+export type StructuredAgentSessionStartupFailure = { reason: string | null }
 
 /** What a reservation turns into once something is actually running under it:
  *  the process the host can probe, and the provider handle it was minted with. */
@@ -127,10 +140,8 @@ export type StructuredAgentSessionEndedEvent = {
   cause: 'unexpected-exit' | 'requested-close'
   fence: number
   acquisitionGeneration: string
-  /** Host receipt of the child exit, retained across settlement retries. */
+  /** Host receipt of the child exit: the end time of a turn it interrupted. */
   observedAt?: number
-  /** Translator could not admit terminal rows; host recovery must append its bounded fallback. */
-  settlementRetryRequired?: boolean
   /** The provider ended before it finished starting, so resuming it would repeat the failure. */
   startupUnproven?: true
 }
@@ -165,6 +176,9 @@ export type StructuredAgentSessionAcquireInput = {
   /** Provider events may begin before acquisition returns. */
   events?: StructuredAgentSessionEventSink
   recordPhase?: AgentSessionCreatePhaseRecorder
+  /** Durably records the child's identity the moment it exists, before any handshake, so a crash
+   *  mid-start leaves an owner recovery can stop. The acquisition's `process` must match it. */
+  onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
 }
 
 export type StructuredAgentSessionSetOptionInput = {
@@ -186,7 +200,7 @@ export type StructuredAgentSessionAdapter = {
   /** Reaps an acquired provider when the host cannot commit or prove its lease.
    *  Returns true only after provider child exit is proven. Throws
    *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
-   *  exit was observed first-hand but its descendants could not be verified. */
+   *  exit was observed first-hand but its descendants were not proven gone. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   dispatch(input: {
     sessionId: string
@@ -263,13 +277,14 @@ export type StructuredAgentSessionAdapter = {
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
-  /** Claims the live callback, commits the journal CAS while that claim is held, then answers it.
-   *  A prompt cancel claims the same callback, so only one operation can commit. */
+  /** Claims the live callback, builds the provider reply, commits the journal CAS while that claim is
+   *  held, then answers it. A reply that cannot be built throws `AgentSessionPromptAnswerRejectedError`
+   *  before the commit. A prompt cancel claims the same callback, so only one operation can commit. */
   answerPrompt(input: {
     sessionId: string
     itemId: string
     kind: 'approval' | 'question'
-    optionId: string
+    response: AgentSessionPromptResponse
     fence: number
     commit: () => Promise<void>
   }): Promise<void>
@@ -279,9 +294,9 @@ export type StructuredAgentSessionAdapter = {
   /** Resolves once a live session can take an option write, or after a bound; never rejects. */
   awaitOptionWritable?(sessionId: string): Promise<void>
   /** Resolves once a session published before it proved its start has proven it, failed, or been
-   *  closed; at once for any other. A start that did not land resolves with the chat's words for
-   *  why. Never rejects. */
-  awaitStarted?(sessionId: string): Promise<void | string>
+   *  closed; at once for any other. A start that did not land resolves with its failure. Never
+   *  rejects. */
+  awaitStarted?(sessionId: string): Promise<void | StructuredAgentSessionStartupFailure>
   readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
   /** Option keys skipped after a provider rejected their persisted restore value. */
   readOptionRestoreFailures?(sessionId: string): readonly string[]
@@ -305,7 +320,8 @@ export type StructuredAgentSessionAdapter = {
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Stops a provider child for teardown without requiring a future-resume cursor. */
   disposeSession?(sessionId: string): Promise<boolean>
-  /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
+  /** Host acknowledgement that it no longer drives this child: its lease is released, or handed to
+   *  recovery when the stop could not prove the exit. */
   acknowledgeSessionRelease?(sessionId: string): void
 }
 
@@ -347,8 +363,8 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
 }
 
 /** Whether a stop left the provider root gone. The lease follows the root, so a first-hand root
- *  exit or a processless child ends the session even with descendants unverified; any other
- *  failure, including known-live descendants, still throws. */
+ *  exit or a processless child ends the session whatever its descendants did, and an exit the
+ *  stop could not prove reads `false` however the adapter reported it; any other failure throws. */
 export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>): Promise<boolean> {
   try {
     return (await stop()) === true
@@ -358,6 +374,9 @@ export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>)
       isAgentSessionPreSpawnError(error)
     ) {
       return true
+    }
+    if (error instanceof AgentSessionAcquisitionExitUnprovenError) {
+      return false
     }
     throw error
   }

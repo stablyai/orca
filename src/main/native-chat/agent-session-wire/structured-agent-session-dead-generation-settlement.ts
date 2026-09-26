@@ -12,8 +12,11 @@ import {
 } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
+import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {
   runningTurnLifecycleRevisions,
+  turnVerdictFromDeathEvidence,
   type StructuredAgentSessionTurnVerdict
 } from './structured-agent-session-stale-turn-verdict'
 
@@ -141,6 +144,29 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   return outcomeItems.some((item) => !isCleanlySettled(currentItems.get(item.itemId)))
 }
 
+/** What every child the host ends gets, whatever ended it: its running turn interrupted, its
+ *  prompts cancelled, and what it was handed left in doubt. An exit the provider reported is the
+ *  one other settlement, since it carries the exit's own words. */
+export function settleEndedStructuredAgentSessionChildWork(input: {
+  journal: DeadGenerationJournal
+  sessionId: string
+  child: StructuredAgentSessionProviderChildIdentity
+  now: number
+  onError: (sessionId: string, error: unknown) => void
+}): Promise<boolean> {
+  const { child, sessionId } = input
+  return settleStructuredAgentSessionDeadGeneration({
+    journal: input.journal,
+    sessionId,
+    fence: child.fence,
+    settlementId: `expected-close:${sessionId}:${child.fence}:${child.generation ?? 'unknown'}`,
+    pendingSubmissionReason: 'provider_closed_before_acknowledgement',
+    verdict: { state: 'interrupted', completedAt: input.now },
+    showUnexpectedExitOutcome: false,
+    onError: input.onError
+  })
+}
+
 export async function settleStructuredAgentSessionDeadGeneration(input: {
   journal: DeadGenerationJournal
   sessionId: string
@@ -214,6 +240,55 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     input.onError?.(input.sessionId, error)
     return false
   }
+}
+
+/**
+ * Settles whatever a generation with no child in this process left running: found when a new child
+ * is acquired, or when a chat is reopened for reading. Derived from the journal and the lease's
+ * death evidence each time, so nothing is owed in between. Only an observed exit earns an end time
+ * and the exit copy. Must run before a new child's buffered events land, or a live turn would be
+ * judged.
+ */
+export async function settleStaleStructuredAgentSessionState(input: {
+  journal: AgentSessionJournal
+  sessionId: string
+  fence: number
+  acquisitionGeneration: string | null
+  deathEvidence: AgentSessionDeathEvidence | null
+}): Promise<number> {
+  const { journal } = input
+  const items = journal.snapshot().items
+  const verdict = turnVerdictFromDeathEvidence(input.deathEvidence)
+  const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
+  const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
+  const mutations: JournalLifecycleMutationInput[] = []
+  for (const item of items) {
+    const identity = parseAgentJournalItemKey(item.itemId)
+    const body = terminalDeadGenerationBody(item)
+    if (identity && body) {
+      mutations.push({ kind: 'item', identity, body })
+    }
+  }
+  mutations.push(...runningTurnLifecycleRevisions(items, verdict))
+  if (verdict.state === 'interrupted' && items.some(isInProgressItem)) {
+    mutations.unshift({
+      kind: 'item',
+      identity: { provider: 'orca', clientMessageId: settlementId },
+      body: {
+        kind: 'status',
+        text: boundJournalStatusText(unexpectedProviderExitOutcome(input.deathEvidence?.detail))
+      }
+    })
+  }
+  for (const chunk of partitionJournalLifecycleMutations(settlementId, mutations)) {
+    await journal.appendLifecycleBatch({
+      settlementId: chunk.settlementId,
+      fence: input.fence,
+      recovered: true,
+      mutations: chunk.mutations
+    })
+  }
+  return mutations.length
 }
 
 function terminalDeadGenerationBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {

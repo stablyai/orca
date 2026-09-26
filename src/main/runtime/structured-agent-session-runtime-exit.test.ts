@@ -315,9 +315,9 @@ describe('structured session runtime provider-exit wiring', () => {
     await stopping
     expect(stopped).toBe(true)
   })
-  it('drains a final exit callback delivered by the adapter backstop and keeps the retry real', async () => {
-    // The first stop refuses, so host eviction cannot prove the child gone and aborts with the
-    // session still indexed. What finally stops it is `closeAll`, which delivers the exit
+  it('hands an unproven quit stop to recovery and drains the exit callback the adapter backstop delivers', async () => {
+    // The first stop refuses, so host eviction cannot prove the child gone: it ends the child and
+    // hands the lease to recovery. What finally stops it is `closeAll`, which delivers the exit
     // callback AFTER host teardown has already run.
     root = await mkdtemp(join(tmpdir(), 'orca-runtime-backstop-exit-'))
     operations = 0
@@ -390,22 +390,18 @@ describe('structured session runtime provider-exit wiring', () => {
     })
     await host.hold(SESSION, 'desktop-chat:backstop')
 
-    await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow()
+    await stopStructuredAgentSessionRuntime()
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     // The backstop, not host eviction, is what stopped the child.
     expect(closeAttempts).toBeGreaterThanOrEqual(2)
-    // The callback it delivered neither reacquired nor wrote a technical row.
+    // The callback it delivered did not reacquire.
     expect(connections).toHaveLength(1)
-    const history = host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
-
-    // The aborted eviction left the session reachable, so the next teardown is a real retry.
-    await stopStructuredAgentSessionRuntime()
+    // Nothing proved the exit to the host, so the next start's recovery concludes about the owner.
     expect(host.deps.store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'released',
-      ownerProcess: null,
-      handoffStage: null
+      claimStatus: 'live',
+      ownerProcess: { pid: 4321 },
+      handoffStage: 'recovering'
     })
   })
 })

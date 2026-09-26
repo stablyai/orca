@@ -5,6 +5,7 @@
 // bookkeeping that decides when to run it than buried among the twenty other things a session can
 // do.
 
+import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { DISPATCH_REJECTED_PROVIDER_CLOSED } from '../../../shared/structured-agent-session-dispatch-rejection'
@@ -29,7 +30,7 @@ import {
 import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
 import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
+import { settleEndedStructuredAgentSessionChildWork } from './structured-agent-session-dead-generation-settlement'
 
 export type StructuredAgentSessionLifetimeContext = {
   deps: StructuredAgentSessionHostDeps
@@ -105,14 +106,19 @@ function owedProviderChildWindDown(
 /**
  * The agent goes to rest; the conversation stays. Runs the eviction steps under a deadline. A step
  * that fails — or runs out of time — aborts the rest and leaves the wind-down owed, so the next
- * stop is a real retry. `ending` is how the child's end is told: a user's Stop, the host stopping it
- * for a cause (with its text), or an eviction whose close forgets the conversation next.
+ * stop is a real retry. A stop that cannot prove the exit still ends the child, and hands the lease
+ * to recovery. `ending` is how the child's end is told: a user's Stop, the host stopping it for a
+ * cause (with its text), a start the child was seen to die in, or an eviction whose close forgets
+ * the conversation next.
  */
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   ending: {
-    cause: Extract<StructuredAgentSessionChildEndCause, 'user-stop' | 'host-stop' | 'evict'>
+    cause: Extract<
+      StructuredAgentSessionChildEndCause,
+      'user-stop' | 'host-stop' | 'exit' | 'evict'
+    >
     reason?: string
   } = { cause: 'user-stop' }
 ): Promise<void> {
@@ -149,21 +155,21 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
           ...verdict
         })
       }
-      context.restartWitness?.stopped(sessionId)
+      if (verdict.rootGone) {
+        context.restartWitness?.stopped(sessionId)
+      }
     },
     acknowledgeRelease: () => context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
     settleWork: async () => {
-      const fence =
-        owed?.fence ?? structuredAgentSessionConversationFence(context.deps.store, sessionId)
-      const settled = await settleStructuredAgentSessionDeadGeneration({
+      const settled = await settleEndedStructuredAgentSessionChildWork({
         journal: session.journal,
         sessionId,
-        fence,
-        settlementId: `expected-close:${sessionId}:${fence}:${owed?.generation ?? 'unknown'}`,
-        pendingSubmissionReason: 'provider_closed_before_acknowledgement',
-        verdict: { state: 'interrupted', completedAt: context.now() },
-        showUnexpectedExitOutcome: false,
+        child: owed ?? {
+          generation: null,
+          fence: structuredAgentSessionConversationFence(context.deps.store, sessionId)
+        },
+        now: context.now(),
         onError: (id, error) => {
           settlementError = error
           context.deps.onEventSinkError?.({ sessionId: id, error })
@@ -181,7 +187,10 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
           sessionId,
           hasProviderChild: true,
           expectedFence: owed.fence,
-          now: context.now()
+          now: context.now(),
+          // Read from the ended child, so a retry after a later step failed keeps the verdict.
+          rootGone: endedChildRootGone(session, owed),
+          ...(ending.reason ? { reason: ending.reason } : {})
         })
       }
       session.owesProviderChildWindDown = undefined
@@ -197,6 +206,14 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     eviction,
     withStructuredAgentSessionEvictionDeadline(STRUCTURED_AGENT_SESSION_EVICTION_STEPS)
   )
+}
+
+function endedChildRootGone(
+  session: StructuredAgentSessionHostSession,
+  owed: StructuredAgentSessionProviderChildIdentity
+): boolean {
+  const ended = session.lastEndedChild
+  return ended?.generation !== owed.generation || ended.fence !== owed.fence || ended.rootGone
 }
 
 /** Ends the conversation's resources, not the conversation: its child stops, and then its handle
@@ -276,14 +293,19 @@ export function createStructuredAgentSessionHolds(
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
     // A message accepted and not yet handed over is owed to this child, and so is one pending while
     // the child still starts. Any other pending send may wait on an echo that never comes, so
-    // eviction retires it.
+    // eviction retires it. Subagents, commands and monitors outlive the lead's turn inside the
+    // child, so the live roster the sidebar shows as working is owed too; stopping the child would
+    // end them silently.
     hasOwedWork: (sessionId) => {
       const session = context.sessions.get(sessionId)
       return session
         ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null ||
             deliveryActive(sessionId) ||
             session.journal.submissions().some(isQueuedAgentJournalSubmission) ||
-            (session.child?.phase === 'starting' && session.journal.pendingSubmissions().length > 0)
+            (session.child?.phase === 'starting' &&
+              session.journal.pendingSubmissions().length > 0) ||
+            agentChildWorkLiveness(context.deps.adapter.backgroundTaskState?.(sessionId)?.tasks) !==
+              null
         : false
     },
     onError: (error) => context.deps.onEventSinkError?.(error),

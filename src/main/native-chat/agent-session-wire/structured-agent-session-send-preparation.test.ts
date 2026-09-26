@@ -652,7 +652,7 @@ describe('a send with no live owner', () => {
     // What an acquisition whose exit could not be proven leaves behind: nobody's, but latched.
     await store.transitionHandoff(SESSION, (current) => ({
       ...current,
-      lease: { ...current.lease, handoffStage: 'manual-recovery' }
+      lease: { ...current.lease, handoffStage: 'recovering' }
     }))
     host.deps.probeOwner = async () => ({ outcome: 'pid-absent' })
 

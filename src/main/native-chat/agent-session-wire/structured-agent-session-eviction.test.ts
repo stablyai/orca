@@ -6,6 +6,7 @@ import {
   type StructuredAgentSessionEvictionContext
 } from './structured-agent-session-eviction'
 import {
+  AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
@@ -163,8 +164,8 @@ describe('rows the provider emits while closing', () => {
   })
 })
 
-// `closeSession` returning false means the adapter could not prove the child exited and has kept
-// the session indexed on purpose so a retry can reach it.
+// `closeSession` returning false means the adapter could not prove the child exited. The child is
+// closing either way, so the host stops claiming it and only the lease hears the verdict.
 describe('a child that will not stop', () => {
   it.each([
     new AgentSessionAcquisitionRootExitObservedError(new Error('root exited')),
@@ -192,16 +193,32 @@ describe('a child that will not stop', () => {
     ])
   })
 
-  it('aborts without acknowledging the release, so the next stop is a real retry', async () => {
+  it.each([
+    ['answers false', async () => false],
+    [
+      'throws an unproven exit',
+      async () => {
+        throw new AgentSessionAcquisitionExitUnprovenError(new Error('tree still running'))
+      }
+    ]
+  ])('winds the child down with an unproven verdict when its close %s', async (_how, close) => {
     const ctx = context()
-    ctx.adapter.closeSession = vi.fn(async () => false)
+    ctx.adapter.closeSession = vi.fn(close)
+    const stopped = vi.fn()
+    ctx.onProviderChildStopped = stopped
 
-    await expect(evictStructuredAgentSession(ctx)).rejects.toMatchObject({
-      step: 'stop-provider-child'
-    })
-    expect(ctx.acknowledgeRelease).not.toHaveBeenCalled()
-    expect(ctx.discardSink).not.toHaveBeenCalled()
-    expect(ctx.order).toEqual([])
+    await evictStructuredAgentSession(ctx)
+
+    expect(stopped).toHaveBeenCalledWith({ rootGone: false })
+    expect(ctx.order).toEqual([
+      'drained',
+      'settleWork',
+      'unbind',
+      'close',
+      'discardSink',
+      'releaseLease',
+      'acknowledgeRelease'
+    ])
   })
 
   it('reports the failing step and leaves the sink usable for the retry', async () => {

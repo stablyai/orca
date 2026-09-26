@@ -296,30 +296,6 @@ describe('Stop on a child still proving its start', () => {
   })
 })
 
-describe('a settlement retry for an earlier child inside the attach for the next one', () => {
-  it('settles the earlier child and leaves the queued message to the new child (R1)', async () => {
-    // The earlier child's settlement is still owed; the lease is otherwise released.
-    await store.transitionHandoff(SESSION, (record) => ({
-      ...record,
-      lease: {
-        ...record.lease,
-        settlementRetryRequired: true,
-        settlementRetryId: `provider-exit:${SESSION}:1:generation-1`
-      }
-    }))
-    const retryFence = store.getRecord(SESSION)!.lease.runtimeFence
-    const id = await accept('for the next child')
-
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
-    expect(store.getRecord(SESSION)?.lease.settlementRetryRequired).toBeUndefined()
-    // Handed over at the new child's fence, which the attach reserved after the retry.
-    const newFence = store.getRecord(SESSION)!.lease.runtimeFence
-    expect(newFence).toBeGreaterThan(retryFence)
-    expect(submission(id)?.fence).toBe(newFence)
-    expect(conversation()?.child).toMatchObject({ generation: generation(), fence: newFence })
-  })
-})
-
 describe('a published child that dies while it proves its start', () => {
   const EXIT = 'claude stream-json exited (code 1)'
   const TEXT = providerStartupFailureOutcome(EXIT)
@@ -327,7 +303,7 @@ describe('a published child that dies while it proves its start', () => {
   it.each([['the loop sees the start fail first'], ['the exit is processed first']])(
     'leaves one error row keyed by the start, and every queued message rejected with it: %s (R2)',
     async (order) => {
-      const settled = deferred<string>()
+      const settled = deferred<{ reason: string }>()
       adapterExtras = { awaitStarted: vi.fn(() => settled.promise) }
       await restartHost()
       acquire.mockImplementation(spawnStartingChild)
@@ -339,9 +315,9 @@ describe('a published child that dies while it proves its start', () => {
 
       if (order === 'the exit is processed first') {
         await exit(child, EXIT, true)
-        settled.resolve(TEXT)
+        settled.resolve({ reason: EXIT })
       } else {
-        settled.resolve(TEXT)
+        settled.resolve({ reason: EXIT })
         await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
         await exit(child, EXIT, true)
       }
@@ -368,7 +344,7 @@ describe("a view's start that dies while a sent message waits on it", () => {
   const TEXT = providerStartupFailureOutcome(EXIT)
 
   it("is the message's own failed start: one error row, the message rejected, no second start (R2)", async () => {
-    adapterExtras = { awaitStarted: vi.fn(async () => TEXT) }
+    adapterExtras = { awaitStarted: vi.fn(async () => ({ reason: EXIT })) }
     await restartHost()
     acquire.mockImplementation(spawnStartingChild)
     // Opening the tab: the view's hold starts a child that has not proven its start.

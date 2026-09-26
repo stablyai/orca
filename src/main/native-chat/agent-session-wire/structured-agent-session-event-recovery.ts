@@ -4,8 +4,12 @@ import {
 } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
+import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
+import { settleEndedStructuredAgentSessionChildWork } from './structured-agent-session-dead-generation-settlement'
+import { endProviderChild } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
 import { settleStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
@@ -49,14 +53,19 @@ export class StructuredAgentSessionEventRecovery {
           return null
         }
         const { fence, generation: acquisitionGeneration } = child
+        const reason = `journal sink failure: ${error instanceof Error ? error.message : String(error)}`
         const stopped = await stopAgentSessionProviderRoot(() => stop(sessionId))
-        if (!stopped || !acquisitionGeneration) {
+        if (!stopped) {
+          await this.endUnprovenChild(sessionId, child, reason)
+          return null
+        }
+        if (!acquisitionGeneration) {
           return null
         }
         return {
           type: 'ended',
           sessionId,
-          reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
+          reason,
           cause: 'unexpected-exit',
           fence,
           acquisitionGeneration
@@ -65,6 +74,51 @@ export class StructuredAgentSessionEventRecovery {
       .then((event) => (event ? this.handle(event) : undefined))
       .catch((recoveryError) => this.context.onBarrierError(sessionId, recoveryError))
       .finally(() => this.sinkFailures.delete(sessionId))
+  }
+
+  /** The force-close could not prove the exit, but the child is closing and takes no writes: it
+   *  ends here, settles like every ended child, and its lease goes to recovery. Not the stop's
+   *  wind-down, whose settle step would abort ahead of the lease on this same journal failure. */
+  private async endUnprovenChild(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChild,
+    reason: string
+  ): Promise<void> {
+    const session = this.context.sessions.get(sessionId)
+    if (
+      !session ||
+      !endProviderChild(session, {
+        generation: child.generation,
+        fence: child.fence,
+        cause: 'host-stop',
+        reason,
+        duringStartup: child.phase === 'starting',
+        rootGone: false
+      })
+    ) {
+      return
+    }
+    try {
+      // Best effort: the lease moves whether or not the failing journal takes it.
+      await settleEndedStructuredAgentSessionChildWork({
+        journal: session.journal,
+        sessionId,
+        child,
+        now: this.context.now(),
+        onError: this.context.onBarrierError
+      })
+      await releaseStoredStructuredAgentSessionOwner({
+        store: this.context.store,
+        sessionId,
+        hasProviderChild: true,
+        expectedFence: child.fence,
+        now: this.context.now(),
+        rootGone: false
+      })
+      this.context.deps.adapter.acknowledgeSessionRelease?.(sessionId)
+    } finally {
+      this.context.publishStatus?.(sessionId)
+    }
   }
 
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {

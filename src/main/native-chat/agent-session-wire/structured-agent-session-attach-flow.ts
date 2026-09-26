@@ -71,7 +71,7 @@ export type AttachFlowInput = {
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
   /** A failure after acquisition released the session's acquisition; `cause` is that failure and
    *  `rootGone` whether the release saw the provider root go. */
-  onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => void
+  onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => Promise<void> | void
 }
 
 export async function performAttach(
@@ -227,6 +227,7 @@ export async function performAttach(
   }
 
   const fence = record.lease.runtimeFence
+  const tabId = store.getSessionTabId(sessionId)
   return {
     ok: true,
     replayed,
@@ -237,7 +238,7 @@ export async function performAttach(
       fence,
       page: readAgentSessionHydrationPage(attached.journal, fence),
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
-      ...(record.surfaceTabId ? { tabId: record.surfaceTabId } : {})
+      ...(tabId ? { tabId } : {})
     }
   }
 }

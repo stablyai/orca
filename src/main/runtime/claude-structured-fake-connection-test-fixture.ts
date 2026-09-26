@@ -23,6 +23,8 @@ export function fakeClaude(providerSession: string) {
   let selfExit: { message: string; exitVerdict: ClaudeStreamJsonConnection['exitVerdict'] } | null =
     null
   let contextUsage: () => Promise<unknown> = async () => ({})
+  /** Holds every close until it settles: the close ladder a real child's exit runs through. */
+  let closeGate: Promise<void> | null = null
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake answers every control request the session issues; the real opener's signature is what the runtime under test calls.
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeClaudeConnection = {
@@ -89,6 +91,7 @@ export function fakeClaude(providerSession: string) {
       exitVerdict: selfExit?.exitVerdict ?? { root: 'live', tree: 'unverifiable' },
       close: async () => {
         connection.closed = true
+        await closeGate
         return selfExit === null || selfExit.exitVerdict.tree === 'exited'
       }
     }
@@ -114,6 +117,9 @@ export function fakeClaude(providerSession: string) {
     },
     setContextUsage: (answer: () => Promise<unknown>) => {
       contextUsage = answer
+    },
+    holdClose: (gate: Promise<void> | null) => {
+      closeGate = gate
     }
   }
 }

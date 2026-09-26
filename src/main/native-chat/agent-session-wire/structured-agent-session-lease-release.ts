@@ -1,4 +1,5 @@
-// Handing the durable lease back after eviction stopped this host's child.
+// Handing the durable lease back after this host stopped its child: released when the stop proved
+// the root gone, handed to recovery when it could not.
 //
 // Guarded on `hasProviderChild` for a reason that is not bookkeeping: a session restored only for
 // reading, or one a TUI owns, names an owner process this host never started and may still be
@@ -7,9 +8,11 @@
 
 import {
   isSurfaceReleasableAgentSessionRecord,
+  recoverAgentSessionOwnerAfterUnprovenStop,
   releaseStoredAgentSessionOwnerAfterSurfaceClose
 } from '../../runtime/agent-session-surface-release-transition'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 
 export type StructuredAgentSessionLeaseStore = Pick<
@@ -23,6 +26,10 @@ export async function releaseStoredStructuredAgentSessionOwner(input: {
   hasProviderChild: boolean
   expectedFence: number
   now: number
+  /** The stop's verdict, from `stopAgentSessionProviderRoot`: the only thing this decides. */
+  rootGone: boolean
+  /** Why the child stopped, when the host knows more than that it did. */
+  reason?: string
 }): Promise<void> {
   if (!input.hasProviderChild) {
     return
@@ -35,10 +42,22 @@ export async function releaseStoredStructuredAgentSessionOwner(input: {
   ) {
     return
   }
+  if (!input.rootGone) {
+    await input.store.transitionHandoff(input.sessionId, (latest) =>
+      recoverAgentSessionOwnerAfterUnprovenStop({
+        record: latest,
+        expectedFence: input.expectedFence,
+        now: input.now
+      })
+    )
+    return
+  }
   await releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
-    now: input.now
+    now: input.now,
+    // The store refuses a longer detail on its next read, undoing this release.
+    ...(input.reason ? { exitReason: input.reason.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS) } : {})
   })
 }
 
@@ -51,7 +70,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
   acquisitionGeneration: string | null
   now: number
   exitObservedAt?: number
-  settlementRetry?: { settlementId: string; detail: string }
+  exitReason?: string
 }): Promise<AgentSessionRecord> {
   if (input.acquisitionGeneration !== input.expectedAcquisitionGeneration) {
     throw new Error('agent_session_checkpoint_stale')
@@ -69,6 +88,6 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
     expectedFence: input.expectedFence,
     now: input.now,
     exitObservedAt: input.exitObservedAt,
-    ...(input.settlementRetry ? { settlementRetry: input.settlementRetry } : {})
+    ...(input.exitReason ? { exitReason: input.exitReason } : {})
   })
 }

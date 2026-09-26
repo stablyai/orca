@@ -27,6 +27,16 @@ type TerminalLiveInputChangeEvent = {
   }
 }
 
+/** Android keyboards compose every Latin word; report no range, as native Android does. */
+function reportedLiveInputComposing(
+  nativeEvent: TerminalLiveInputChangeEvent['nativeEvent']
+): boolean | undefined {
+  if (globalThis.navigator?.userAgent?.includes('Android')) {
+    return undefined
+  }
+  return nativeEvent.isComposing
+}
+
 type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
@@ -148,7 +158,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       void applyLiveInputMirror(
         activeHandle,
         normalizeTerminalTextInput(nativeEvent.text),
-        nativeEvent.isComposing
+        reportedLiveInputComposing(nativeEvent)
       )
     },
     [

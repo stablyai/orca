@@ -12,10 +12,10 @@
 // this teardown exists to fix. So: stop the child, drain what it emitted on its way out, then let
 // the sink go. The one step ahead of the stop only reads, for quit's resume offer.
 //
-// FAILURE. A step that fails ABORTS the rest. `closeSession` returning false means the child's
-// exit was not proven and the adapter has deliberately kept the session indexed so a retry can
-// reach it; forgetting it anyway stranded the process forever and reported success. Leaving the
-// session in place is what makes the next close a real retry instead of a no-op.
+// FAILURE. A step that fails ABORTS the rest, leaving the session in place so the next close is a
+// real retry instead of a no-op. A stop that could not prove the exit is not a failure: the child is
+// closing and cannot take writes, so the host ends it all the same, and only the lease hears the
+// verdict — handed to recovery, which stops the recorded owner by identity at the next start.
 
 import {
   stopAgentSessionProviderRoot,
@@ -38,16 +38,16 @@ export type StructuredAgentSessionEvictionContext = {
   /** Fires right before the stop, while the child's turn and background roster are still live. A
    *  throw is logged, never allowed to abort the stop. */
   beforeProviderChildStop?: () => void
-  /** Fires with the stop's verdict once `stopAgentSessionProviderRoot` read the root gone, so host
-   *  bookkeeping stops claiming a child. */
+  /** Fires with the stop's verdict from `stopAgentSessionProviderRoot`, gone or not, so host
+   *  bookkeeping stops claiming a child that can no longer take writes. */
   onProviderChildStopped?: (verdict: StructuredAgentSessionStopVerdict) => void
   /** Whether this host still owes the child's wind-down. Distinct from `hasProviderChild`, which a
    *  proven exit retires mid-run: the two disagree for exactly the steps a retry has to repeat. */
   owesProviderChildWindDown?: boolean
   /** Settles work owned by the child after its final callbacks have drained. */
   settleWork?: () => Promise<void>
-  /** Hands the lease back now that this host's child is proven gone. No-ops when the record is
-   *  not this host's to release. */
+  /** Hands the lease back now that this host's child is stopped: released on proof, otherwise to
+   *  recovery. No-ops when the record is not this host's to release. */
   releaseLease: () => Promise<void>
 }
 
@@ -88,9 +88,6 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         const rootGone = stop
           ? await stopAgentSessionProviderRoot(() => stop.call(context.adapter, context.sessionId))
           : true
-        if (!rootGone) {
-          throw new Error('provider child exit was not proven')
-        }
         context.onProviderChildStopped?.({ rootGone })
       }
     },

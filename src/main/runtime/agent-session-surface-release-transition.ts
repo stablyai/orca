@@ -31,7 +31,8 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   now: number
   /** Exit receipt can precede a delayed journal settlement and lease release. */
   exitObservedAt?: number
-  settlementRetry?: { settlementId: string; detail: string }
+  /** Why the provider exited, when the host saw it die on its own. */
+  exitReason?: string
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
@@ -43,17 +44,35 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     runtimeFence: nextAgentSessionFence(record.lease),
     ownerProcess: null,
     reservedSpawnToken: null,
-    processlessAt: null,
     claimStatus: 'released',
-    handoffStage: args.settlementRetry ? 'recovering' : null,
-    settlementRetryRequired: args.settlementRetry ? true : undefined,
-    settlementRetryId: args.settlementRetry?.settlementId,
+    handoffStage: null,
     lastRenewedAt: args.now,
     deathEvidence: {
       kind: 'exit-observed',
-      detail: args.settlementRetry?.detail ?? 'the last surface holding this session released it',
+      detail: args.exitReason ?? 'the last surface holding this session released it',
       observedAt: args.exitObservedAt ?? args.now
     }
+  })
+}
+
+/** The host stopped its own owner and could not prove the root gone. It no longer drives that
+ *  process, so the lease goes to recovery, which concludes about the recorded owner at the next
+ *  start; the owner stays recorded so recovery can stop it by identity. */
+export function recoverAgentSessionOwnerAfterUnprovenStop(args: {
+  record: AgentSessionRecord
+  expectedFence: number
+  now: number
+}): AgentSessionRecord {
+  const { record } = args
+  assertFence(record.lease, args.expectedFence)
+  if (!isSurfaceReleasableAgentSessionRecord(record)) {
+    throw new Error('agent_session_ownership_unknown')
+  }
+  return withLease(record, {
+    ...record.lease,
+    handoffStage: 'recovering',
+    handoffOperationId: null,
+    lastRenewedAt: args.now
   })
 }
 
@@ -65,7 +84,7 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     expectedFence: number
     now: number
     exitObservedAt?: number
-    settlementRetry?: { settlementId: string; detail: string }
+    exitReason?: string
   }
 ): Promise<AgentSessionRecord> {
   return store.transitionHandoff(args.sessionId, (record) =>

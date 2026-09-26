@@ -1,6 +1,5 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
-import { isAgentSessionSurfaceTabId } from './agent-session-surface-tab-id'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -61,13 +60,12 @@ export type AgentSessionLaunchArgs = string[]
  *  away at decode (agent-session-legacy-handoff-lease). */
 export type AgentSessionOwnerRuntimeKind = 'native'
 
-/** The acquisition stage. The removed terminal handoff's stages are mapped away at decode. */
-export type AgentSessionHandoffStage = 'new-owner-proving' | 'recovering' | 'manual-recovery'
+/** The acquisition stage. Stages only older builds wrote are mapped away at decode. */
+export type AgentSessionHandoffStage = 'new-owner-proving' | 'recovering'
 
 /**
  * PID-reuse-safe process identity. `spawnToken` is the only element available on every platform:
- * process start time costs a CIM query on Windows and is absent in some containers. An exact
- * identity stays in `recovering`; an ownerless, unattributable reservation uses `manual-recovery`.
+ * process start time costs a CIM query on Windows and is absent in some containers.
  */
 export type AgentSessionProcessIdentity = {
   hostId: string
@@ -79,9 +77,9 @@ export type AgentSessionProcessIdentity = {
 export type AgentSessionJournalCheckpoint = { epoch: number; sequence: number }
 
 /**
- * Mirrors the in-memory claim registry's reserved / live / conflicted states so a conflict
- * survives a restart. `released` has no registry equivalent: the registry expresses "no owner" by
- * deleting the entry, and a durable record that outlives its owner needs a name for that.
+ * `released` means no owner: a durable record that outlives its owner needs a name for that.
+ * `conflicted` is how a terminal owner an older build recorded loads: recovery waits it out and
+ * never stops it, because it is the user's own agent.
  */
 export type AgentSessionClaimStatus = 'reserved' | 'live' | 'conflicted' | 'released'
 
@@ -103,8 +101,6 @@ export type AgentSessionLease = {
   ownerProcess: AgentSessionProcessIdentity | null
   /** Reserved before any process exists, then matched against the child's environment. */
   reservedSpawnToken: string | null
-  /** Set only when acquisition failed before any spawn attempt. */
-  processlessAt?: number | null
   leaseDeadlineAt: number
   lastRenewedAt: number
   handoffOperationId: string | null
@@ -121,11 +117,8 @@ export type AgentSessionLease = {
    * so rewriting it would invalidate the record it is trying to save.
    */
   minimumNextFence?: number
+  /** Null on a released lease when nothing proved its owner gone. */
   deathEvidence: AgentSessionDeathEvidence | null
-  /** A positively observed provider exit whose terminal journal settlement still needs retry. */
-  settlementRetryRequired?: boolean
-  /** Stable lifecycle batch id used when retrying the terminal settlement. */
-  settlementRetryId?: string
 }
 
 export type AgentSessionRecord = {
@@ -142,9 +135,6 @@ export type AgentSessionRecord = {
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
   launchArgs?: AgentSessionLaunchArgs
-  /** The id of the tab that shows this conversation on every client: host-owned and pinned once;
-   *  readers copy it, never derive it. Older records are backfilled at load with the derived id. */
-  surfaceTabId?: string
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -311,9 +301,6 @@ function isPersistedAgentSessionLease(value: unknown): value is PersistedAgentSe
     (lease.ownerProcess === null || isAgentSessionProcessIdentity(lease.ownerProcess)) &&
     (lease.reservedSpawnToken === null ||
       isBoundedString(lease.reservedSpawnToken, MAX_ID_LENGTH)) &&
-    (lease.processlessAt === undefined ||
-      lease.processlessAt === null ||
-      (Number.isSafeInteger(lease.processlessAt) && (lease.processlessAt as number) >= 0)) &&
     Number.isSafeInteger(lease.leaseDeadlineAt) &&
     Number.isSafeInteger(lease.lastRenewedAt) &&
     (lease.handoffOperationId === null ||
@@ -326,10 +313,6 @@ function isPersistedAgentSessionLease(value: unknown): value is PersistedAgentSe
       lease.claimStatus === 'conflicted' ||
       lease.claimStatus === 'released') &&
     typeof lease.unreconciled === 'boolean' &&
-    (lease.settlementRetryRequired === undefined ||
-      typeof lease.settlementRetryRequired === 'boolean') &&
-    (lease.settlementRetryId === undefined ||
-      isBoundedString(lease.settlementRetryId, MAX_ID_LENGTH)) &&
     (lease.deathEvidence === null || isAgentSessionDeathEvidence(lease.deathEvidence))
   )
 }
@@ -357,7 +340,6 @@ export function isPersistedAgentSessionRecord(
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
-    (record.surfaceTabId === undefined || isAgentSessionSurfaceTabId(record.surfaceTabId)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isPersistedAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&

@@ -42,8 +42,6 @@ import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
-import type { StructuredAgentSessionTurnCompletionSubscriber } from './structured-agent-session-turn-completion-feed'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
@@ -112,6 +110,8 @@ export class StructuredAgentSessionHost {
       // Quit drains a delivery start before it evicts, so the child it produces is stopped.
       trackStart: (start) => this.tasks.trackAttach(start),
       ensureProviderChild: (sessionId) => this.holds.ensureProviderChild(sessionId),
+      stopAgent: (sessionId, ending) =>
+        stopStructuredAgentSessionAgentUnderSerialize(this.lifetimeContext(), sessionId, ending),
       reset: (sessionId, journal, reset) =>
         this.subscribers.reset(
           sessionId,
@@ -126,7 +126,7 @@ export class StructuredAgentSessionHost {
       (sessionId) => this.close(sessionId),
       (sessionId) => this.conversationDelivery.loop.isRunning(sessionId)
     )
-    this.restore = createStructuredAgentSessionHostRestore(deps, this.sessions, () => this.now(), {
+    this.restore = createStructuredAgentSessionHostRestore(deps, {
       reconcile: this.reconcileLeases,
       resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
@@ -223,9 +223,10 @@ export class StructuredAgentSessionHost {
 
   listSessionTabs = () => sessionTabs.listStructuredAgentSessionTabs(this.sessions)
   getPersistedVisibleSessionTabIndex = () => this.deps.store.getVisibleSessionTabIndex()
+  getSessionTabId = (sessionId: string): string | null => this.deps.store.getSessionTabId(sessionId)
 
-  setSessionTabVisibility = (sessionId: string, visible: boolean): Promise<void> =>
-    sessionTabs.setStructuredAgentSessionTabVisibility(this, sessionId, visible)
+  setSessionTabVisibility = (sessionId: string, visible: boolean, tabId?: string): Promise<void> =>
+    sessionTabs.setStructuredAgentSessionTabVisibility(this, sessionId, visible, tabId)
 
   reconcileRestartLeases = async (): Promise<void> => {
     const refusal = await this.reconcileLeases('startup')
@@ -339,16 +340,14 @@ export class StructuredAgentSessionHost {
 
   publishBackgroundTaskState: StructuredAgentSessionBackgroundTaskChannel['publish'] = (...args) =>
     this.backgroundTasks.publish(...args)
+  publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
 
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
-  subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
-    this.clientDelivery.subscribeStatus(subscriber)
+  subscribeStatus = this.clientDelivery.subscribeStatus
 
   /** Turns that settle from now on. Live-only: nothing missed is replayed. */
-  subscribeTurnCompletions = (
-    subscriber: StructuredAgentSessionTurnCompletionSubscriber
-  ): (() => void) => this.clientDelivery.subscribeTurnCompletions(subscriber)
+  subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
 
   private requireSession(sessionId: string): StructuredAgentSessionHostSession {
     const session = this.sessions.get(sessionId)
