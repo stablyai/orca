@@ -32,11 +32,12 @@ export function createProjectGroupCatalogActions(
             return current
           }
           const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, current.projectGroups)
+          if (arrayElementsUnchanged(projectGroups, current.projectGroups)) {
+            return current
+          }
           return {
             projectGroups,
-            ...(arrayElementsUnchanged(projectGroups, current.projectGroups)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
       } catch (err) {
@@ -55,11 +56,12 @@ export function createProjectGroupCatalogActions(
             return s
           }
           const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, s.projectGroups)
+          if (arrayElementsUnchanged(projectGroups, s.projectGroups)) {
+            return s
+          }
           return {
             projectGroups,
-            ...(arrayElementsUnchanged(projectGroups, s.projectGroups)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
       }

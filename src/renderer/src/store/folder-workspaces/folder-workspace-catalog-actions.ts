@@ -47,11 +47,12 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
+            return current
+          }
           return {
             folderWorkspaces,
-            ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
       } catch (err) {
@@ -85,11 +86,12 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
+            return current
+          }
           return {
             folderWorkspaces,
-            ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
-              ? {}
-              : { folderWorkspacePathStatuses: {} })
+            folderWorkspacePathStatuses: {}
           }
         })
       }
