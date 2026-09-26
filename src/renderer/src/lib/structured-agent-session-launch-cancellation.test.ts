@@ -11,8 +11,15 @@ import {
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
 } from './structured-agent-session-launch-registry'
-import { beginStructuredAgentSessionAuthoritativeInventory } from './structured-agent-session-launch-cancellation'
-import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
+import {
+  markStructuredAgentLaunchCancellation,
+  claimStructuredAgentLaunchCancellationCleanups,
+  beginStructuredAgentSessionAuthoritativeInventory
+} from './structured-agent-session-launch-cancellation'
+import {
+  resetStructuredAgentLaunchPersistenceForTests,
+  structuredAgentLaunchCancellationBelongsTo
+} from './structured-agent-session-launch-persistence'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
 
 const WORKTREE_ID = 'repo-1::worktree-1'
@@ -66,6 +73,7 @@ describe('structured launch cancellation retirement', () => {
         worktreeId: WORKTREE_ID,
         sessionId: SESSION_ID,
         agent: 'codex',
+        target: { kind: 'local' },
         params: {
           envelope: {
             sessionId: SESSION_ID,
@@ -117,6 +125,72 @@ describe('structured launch cancellation retirement', () => {
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(
       false
     )
+  })
+
+  it('keeps remote cancellations out of local and other-host inventories', () => {
+    const target = {
+      kind: 'environment',
+      environmentId: 'nexbox',
+      expectedEnvironmentPairingRevision: 10
+    } as const
+    markStructuredAgentLaunchCancellation(SESSION_ID, false, undefined, target)
+    const inventory = beginStructuredAgentSessionAuthoritativeInventory()
+    expect(
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), inventory)
+    ).toBe(false)
+    expect(
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), inventory, {
+        kind: 'environment',
+        environmentId: 'other'
+      })
+    ).toBe(false)
+    expect(
+      suppressCancelledStructuredSessionTabs(latePublication(), { kind: 'local' }).tabs
+    ).toHaveLength(1)
+    expect(
+      suppressCancelledStructuredSessionTabs(latePublication(), {
+        ...target,
+        expectedEnvironmentPairingRevision: 11
+      }).tabs
+    ).toHaveLength(1)
+    expect(
+      retireAbsentStructuredAgentSessionLaunchCancellationTombstones(new Set(), inventory, target)
+    ).toBe(true)
+  })
+
+  it('restores cancellation cleanup only for the original remote pairing', () => {
+    const target = {
+      kind: 'environment',
+      environmentId: 'nexbox',
+      expectedEnvironmentPairingRevision: 10
+    } as const
+    markStructuredAgentLaunchCancellation(SESSION_ID, false, undefined, target)
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentLaunchPersistenceForTests()
+    expect(claimStructuredAgentLaunchCancellationCleanups()).toEqual([])
+    expect(
+      claimStructuredAgentLaunchCancellationCleanups({
+        ...target,
+        expectedEnvironmentPairingRevision: 11
+      })
+    ).toEqual([])
+    expect(claimStructuredAgentLaunchCancellationCleanups(target)).toEqual([SESSION_ID])
+  })
+
+  it('retains the remote owner when the launch state has already been published', () => {
+    const target = {
+      kind: 'environment',
+      environmentId: 'nexbox',
+      expectedEnvironmentPairingRevision: 10
+    } as const
+    expect(markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, target)).toBe(true)
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentLaunchPersistenceForTests()
+
+    expect(structuredAgentLaunchCancellationBelongsTo(SESSION_ID, { kind: 'local' })).toBe(false)
+    expect(structuredAgentLaunchCancellationBelongsTo(SESSION_ID, target)).toBe(true)
+    expect(claimStructuredAgentLaunchCancellationCleanups()).toEqual([])
+    expect(claimStructuredAgentLaunchCancellationCleanups(target)).toEqual([SESSION_ID])
   })
 
   it('drains a restored cancellation before a newer inventory retires it', async () => {

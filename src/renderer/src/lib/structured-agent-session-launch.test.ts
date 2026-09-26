@@ -104,6 +104,7 @@ function launchIntent(
     worktreeId,
     sessionId,
     agent: 'codex',
+    target: { kind: 'local' },
     params: {
       envelope: {
         sessionId,

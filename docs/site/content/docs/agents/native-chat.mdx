@@ -21,6 +21,23 @@ Toggle Chat UI ↔ terminal from the agent pane once enabled.
 - Type `/` for slash commands and discovered **skills** (filtered per agent when possible). The slash catalog is agent-aware (Claude vs Codex command sets) and shared with mobile Chat UI.
 - Use the **model** and options pills (thought level, mode, agent-specific session options) when the agent exposes them. **Claude** model choices come from the **installed Claude CLI on that host** (not a hardcoded list), so new models show up after you update the CLI. **Codex** supports direct model selection from the pill (sends `/model <id>`), with bare `/model` still opening the agent picker. **Grok** exposes **model** (`-m` at launch, `/model` mid-session) and **reasoning effort** (`--reasoning-effort` at launch, `/effort` mid-session); the model list is probed from the signed-in Grok CLI (`grok models`) so retired ids drop out of the picker. Effort choices follow the selected model: Grok 4.6 includes **Extra high**, while Grok 4.5 stops at **High**. **Before the agent process starts**, the composer can show draft launch options that apply on first start; after the session is live, pills that only affect a running turn stay disabled or labeled until the session is ready. Live values go to the CLI in that tab.
 
+## Structured chat on a paired server
+
+With **Structured Native Chat** and **Chat UI as the default for new agent tabs** enabled,
+new Claude and Codex chats can run on a paired Remote Orca Server while the desktop displays
+the native chat surface. Select the workspace owned by that server, then open a new agent chat.
+The server must also have **Structured Native Chat** enabled in its own profile, advertise
+structured-session support, and accept the workspace's create-support probe. Enabling the
+client setting alone does not enable server admission. This applies to Orca Web clients too. Model and session options come from the agent running on that server.
+
+A plain SSH terminal connection does not provide structured-session RPCs. Pair the remote Orca
+runtime through [Remote Orca Servers](/docs/remote-servers) to use this flow. Existing terminal
+sessions keep their current transport; open a new chat to use structured mode.
+
+Creating, retrying, restoring and closing a launch remain tied to its original runtime. Losing
+contact leaves the launch outcome unknown until that host answers again; it does not create a
+replacement session locally. Pairing the saved server entry again cannot retarget an old launch.
+
 ## Questions from the agent
 
 When Claude shows an **AskUserQuestion** (or similar structured permission/question card), Chat UI should render the question card in the transcript so you can answer from the composer path instead of treating it as a collapsed tool call. Confirm with **Submit** on the card. That includes agents running on a paired [Remote Orca Server](/docs/remote-servers) / headless host — not only local panes.

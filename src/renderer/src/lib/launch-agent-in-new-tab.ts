@@ -165,38 +165,6 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     return null
   }
 
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
-  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
-      return null
-    }
-    const webHostDelivery = launchAgentInWebHostTab({
-      agent,
-      worktreeId,
-      environmentId: runtimeEnvironmentId,
-      groupId,
-      cwd: initialCwd,
-      startupPlan,
-      prompt: trimmedPrompt,
-      promptDelivery,
-      pastePromptAfterReady: pasteDraftAfterLaunch,
-      submitPastedPrompt,
-      agentArgs,
-      // Why: omission means terminal locally, but would let a paired host apply
-      // its own default; send the client's resolved terminal choice explicitly.
-      viewMode: initialViewModeProps.viewMode ?? 'terminal',
-      onPromptDelivered
-    })
-    return {
-      surface: { kind: 'host-published' },
-      startupPlan,
-      pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
-      ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
-        ? { promptDeliveryResult: webHostDelivery }
-        : {})
-    }
-  }
-
   const plan =
     agentSessionLaunchPlan ??
     planAgentSessionLaunch(store, {
@@ -233,6 +201,38 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       structuredSettlement: structured.structuredSettlement,
       ...(structured.promptDeliveryResult
         ? { promptDeliveryResult: structured.promptDeliveryResult }
+        : {})
+    }
+  }
+
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
+      return null
+    }
+    const webHostDelivery = launchAgentInWebHostTab({
+      agent,
+      worktreeId,
+      environmentId: runtimeEnvironmentId,
+      groupId,
+      cwd: initialCwd,
+      startupPlan,
+      prompt: trimmedPrompt,
+      promptDelivery,
+      pastePromptAfterReady: pasteDraftAfterLaunch,
+      submitPastedPrompt,
+      agentArgs,
+      // Why: omission means terminal locally, but would let a paired host apply
+      // its own default; send the client's resolved terminal choice explicitly.
+      viewMode: initialViewModeProps.viewMode ?? 'terminal',
+      onPromptDelivered
+    })
+    return {
+      surface: { kind: 'host-published' },
+      startupPlan,
+      pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
+      ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
+        ? { promptDeliveryResult: webHostDelivery }
         : {})
     }
   }

@@ -6,6 +6,8 @@ import {
 } from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 
 export type StructuredAgentLaunchReceipt = { sessionId: string; fence: number }
 
@@ -31,7 +33,17 @@ function throwIfLaunchCancelled(state: StructuredLaunchRecoveryState): void {
 }
 
 async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Promise<void> {
-  const snapshots = await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
+  const target = state.intent.target
+  const snapshots =
+    target.kind === 'local'
+      ? await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
+      : (
+          await callRuntimeRpc<{ snapshots: RuntimeMobileSessionTabsResult[] }>(
+            target,
+            'session.tabs.listAll',
+            {}
+          )
+        ).snapshots
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
     (snapshot) =>
@@ -50,7 +62,7 @@ async function recoverPublishedSessionReceipt(
 ): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
   const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
-    { kind: 'local' },
+    state.intent.target,
     'agentSession.history',
     { sessionId: state.intent.sessionId, direction: 'tail', limit: 1 }
   )

@@ -86,6 +86,7 @@ function launchIntent(seedOptions?: Record<string, string>): StructuredAgentSess
     worktreeId: WORKTREE_ID,
     sessionId: SESSION_ID,
     agent: 'codex',
+    target: { kind: 'local' },
     params: {
       envelope: {
         sessionId: SESSION_ID,

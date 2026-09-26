@@ -1,5 +1,6 @@
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 export type StructuredAgentLaunchPersistedLifecycle = 'pending' | 'visibility-unknown' | 'failed'
 
@@ -11,12 +12,14 @@ export type StructuredAgentLaunchPersistedRecord = {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  target?: RuntimeClientTarget
 }
 
 const LAUNCH_STORAGE_KEY = 'orca:structuredAgentLaunches:v1'
 const TOMBSTONE_STORAGE_KEY = 'orca:structuredAgentLaunchCancelledSessions:v1'
 const records = new Map<string, StructuredAgentLaunchPersistedRecord>()
 const tombstones = new Set<string>()
+const cancellationTargets = new Map<string, RuntimeClientTarget>()
 let loaded = false
 
 function validRecord(value: unknown): value is StructuredAgentLaunchPersistedRecord {
@@ -42,6 +45,7 @@ function validRecord(value: unknown): value is StructuredAgentLaunchPersistedRec
     expectedRuntimeFence
   } = value
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
+  const target = 'target' in value ? value.target : undefined
   return (
     typeof sessionId === 'string' &&
     sessionId.length > 0 &&
@@ -50,11 +54,29 @@ function validRecord(value: unknown): value is StructuredAgentLaunchPersistedRec
     typeof clientOperationId === 'string' &&
     typeof payloadFingerprint === 'string' &&
     (expectedRuntimeFence === null || typeof expectedRuntimeFence === 'number') &&
+    (target === undefined || validTarget(target)) &&
     (resumeFrom === undefined ||
       (typeof resumeFrom === 'object' &&
         resumeFrom !== null &&
         'providerSessionId' in resumeFrom &&
         typeof resumeFrom.providerSessionId === 'string'))
+  )
+}
+
+function validTarget(value: unknown): value is RuntimeClientTarget {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    (value.kind === 'local' ||
+      (value.kind === 'environment' &&
+        'environmentId' in value &&
+        typeof value.environmentId === 'string' &&
+        value.environmentId.trim().length > 0 &&
+        (!('expectedEnvironmentPairingRevision' in value) ||
+          value.expectedEnvironmentPairingRevision === undefined ||
+          (typeof value.expectedEnvironmentPairingRevision === 'number' &&
+            Number.isFinite(value.expectedEnvironmentPairingRevision)))))
   )
 }
 
@@ -84,6 +106,16 @@ function load(): void {
       for (const value of storedTombstones) {
         if (typeof value === 'string' && value.length > 0 && value.length <= 256) {
           tombstones.add(value)
+        } else if (
+          value &&
+          typeof value === 'object' &&
+          typeof value.sessionId === 'string' &&
+          value.sessionId.length > 0 &&
+          value.sessionId.length <= 256 &&
+          validTarget(value.target)
+        ) {
+          tombstones.add(value.sessionId)
+          cancellationTargets.set(value.sessionId, value.target)
         }
       }
     }
@@ -116,7 +148,15 @@ function writeTombstones(): void {
     if (tombstones.size === 0) {
       localStorage.removeItem(TOMBSTONE_STORAGE_KEY)
     } else {
-      localStorage.setItem(TOMBSTONE_STORAGE_KEY, JSON.stringify([...tombstones]))
+      localStorage.setItem(
+        TOMBSTONE_STORAGE_KEY,
+        JSON.stringify(
+          [...tombstones].map((sessionId) => {
+            const target = cancellationTargets.get(sessionId)
+            return target?.kind === 'environment' ? { sessionId, target } : sessionId
+          })
+        )
+      )
     }
   } catch {
     // Why: persistence is recovery bookkeeping and must never block close.
@@ -146,12 +186,35 @@ export function deleteStructuredAgentLaunchRecord(sessionId: string): void {
   }
 }
 
-export function markStructuredAgentLaunchCancelledPersisted(sessionId: string): void {
+export function markStructuredAgentLaunchCancelledPersisted(
+  sessionId: string,
+  target?: RuntimeClientTarget
+): void {
   load()
+  const owner = target ?? records.get(sessionId)?.target
+  if (owner) {
+    cancellationTargets.set(sessionId, owner)
+  }
   records.delete(sessionId)
   tombstones.add(sessionId)
   writeRecords()
   writeTombstones()
+}
+
+export function structuredAgentLaunchCancellationBelongsTo(
+  sessionId: string,
+  target: RuntimeClientTarget
+): boolean {
+  load()
+  const owner = cancellationTargets.get(sessionId) ?? { kind: 'local' }
+  return (
+    owner.kind === target.kind &&
+    (owner.kind === 'local' ||
+      (target.kind === 'environment' &&
+        owner.environmentId === target.environmentId &&
+        (owner.expectedEnvironmentPairingRevision === undefined ||
+          owner.expectedEnvironmentPairingRevision === target.expectedEnvironmentPairingRevision)))
+  )
 }
 
 export function hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId: string): boolean {
@@ -169,6 +232,7 @@ export function retireStructuredAgentLaunchCancellationTombstonePersisted(
 ): boolean {
   load()
   const removed = tombstones.delete(sessionId)
+  cancellationTargets.delete(sessionId)
   if (removed) {
     writeTombstones()
   }
@@ -183,6 +247,7 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
   for (const sessionId of tombstones) {
     if (!publishedSessionIds.has(sessionId)) {
       tombstones.delete(sessionId)
+      cancellationTargets.delete(sessionId)
       changed = true
     }
   }
@@ -195,5 +260,6 @@ export function retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted
 export function resetStructuredAgentLaunchPersistenceForTests(): void {
   records.clear()
   tombstones.clear()
+  cancellationTargets.clear()
   loaded = false
 }

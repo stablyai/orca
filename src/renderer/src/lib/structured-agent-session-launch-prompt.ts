@@ -14,6 +14,7 @@ import {
 } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 export type StructuredPromptDeliveryResult = {
   delivered: boolean
@@ -89,7 +90,8 @@ function mutateEntry(
 
 async function dispatchStructuredLaunchPrompt(
   entry: StructuredAgentSessionOutboxEntry,
-  receipt: LaunchReceipt
+  receipt: LaunchReceipt,
+  target: RuntimeClientTarget
 ): Promise<boolean> {
   if (
     !mutateEntry(entry, (current) => ({
@@ -103,11 +105,7 @@ async function dispatchStructuredLaunchPrompt(
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionSendResult>
-    >(
-      { kind: 'local' },
-      'agentSession.send',
-      structuredAgentSessionSendRequest(entry, receipt.fence)
-    )
+    >(target, 'agentSession.send', structuredAgentSessionSendRequest(entry, receipt.fence))
     if (!result.ok) {
       mutateEntry(entry, (current) =>
         requeueStructuredAgentSessionSendRefusal(
@@ -141,6 +139,7 @@ async function dispatchStructuredLaunchPrompt(
 }
 
 export function settleStructuredAgentLaunchPrompt(args: {
+  target: RuntimeClientTarget
   launchResult: Promise<LaunchReceipt>
   options: StructuredLaunchPromptOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
@@ -159,7 +158,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
       entry.sessionId,
       entry.clientMessageId,
       receipt.fence,
-      () => dispatchStructuredLaunchPrompt(entry, receipt)
+      () => dispatchStructuredLaunchPrompt(entry, receipt, args.target)
     )
     const delivered = await dispatch.promise
     if (delivered) {

@@ -16,7 +16,11 @@ import {
 } from '@/lib/structured-agent-session-launch-registry'
 import { discardStructuredAgentSessionLaunchOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import {
+  structuredAgentLaunchFocusOwner,
+  structuredAgentLaunchTarget,
+  structuredAgentLaunchTargetForExecutionHostId
+} from '@/lib/structured-agent-launch-target'
 
 export function buildWorktreePurgeState(
   s: AppState,
@@ -34,10 +38,14 @@ export function buildWorktreePurgeState(
       worktreeIdSet.has(worktreeId) &&
       shouldRetainStructuredAgentSessionLaunchTab(worktreeId, launch.intent.sessionId)
     ) {
-      markStructuredAgentSessionLaunchCancelledSilently(worktreeId, launch.intent.sessionId)
+      markStructuredAgentSessionLaunchCancelledSilently(
+        worktreeId,
+        launch.intent.sessionId,
+        launch.intent.target
+      )
       discardStructuredAgentSessionLaunchOutbox(launch.intent.sessionId)
       clearWebSessionFocusIntentIfMatches(
-        { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+        structuredAgentLaunchFocusOwner(launch.intent.target),
         worktreeId,
         `agent-session:${launch.intent.sessionId}`
       )
@@ -51,10 +59,13 @@ export function buildWorktreePurgeState(
         !cancelledSessionIds.has(tab.entityId) &&
         shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId)
       ) {
-        markStructuredAgentSessionLaunchCancelledSilently(worktreeId, tab.entityId)
+        const target = tab.executionHostId
+          ? structuredAgentLaunchTargetForExecutionHostId(tab.executionHostId)
+          : structuredAgentLaunchTarget(s, worktreeId)
+        markStructuredAgentSessionLaunchCancelledSilently(worktreeId, tab.entityId, target)
         discardStructuredAgentSessionLaunchOutbox(tab.entityId)
         clearWebSessionFocusIntentIfMatches(
-          { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+          structuredAgentLaunchFocusOwner(target),
           worktreeId,
           `agent-session:${tab.entityId}`
         )

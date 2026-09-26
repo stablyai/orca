@@ -56,6 +56,7 @@ function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1
   return {
     sessionId,
     worktreeId,
+    target: { kind: 'local' as const },
     params: {
       envelope: {
         sessionId,

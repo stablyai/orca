@@ -20,41 +20,46 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     )
   })
 
-  it('reports an admitted launch prompt delivered while retaining it for the provider echo', async () => {
-    const stagedEntry = enqueueStructuredAgentSessionLaunchPrompt('session-1', 'review this')
-    const onPromptDelivered = vi.fn()
-    mocks.call.mockResolvedValue({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-1', sequence: 1 },
-      value: {
-        clientMessageId: stagedEntry!.clientMessageId,
-        submission: {
+  it.each([{ kind: 'local' }, { kind: 'environment', environmentId: 'nexbox' }] as const)(
+    'delivers an admitted launch prompt to $kind and retains it for the provider echo',
+    async (target) => {
+      const stagedEntry = enqueueStructuredAgentSessionLaunchPrompt('session-1', 'review this')
+      const onPromptDelivered = vi.fn()
+      mocks.call.mockResolvedValue({
+        ok: true,
+        replayed: false,
+        fence: 1,
+        cursor: { epoch: 'epoch-1', sequence: 1 },
+        value: {
           clientMessageId: stagedEntry!.clientMessageId,
-          fence: 1,
-          payloadFingerprint: 'fingerprint',
-          dispatchState: 'pending',
-          providerItemId: null,
-          reason: null,
-          submittedAt: 1,
-          resolvedAt: null
+          submission: {
+            clientMessageId: stagedEntry!.clientMessageId,
+            fence: 1,
+            payloadFingerprint: 'fingerprint',
+            dispatchState: 'pending',
+            providerItemId: null,
+            reason: null,
+            submittedAt: 1,
+            resolvedAt: null
+          }
         }
-      }
-    })
-
-    await expect(
-      settleStructuredAgentLaunchPrompt({
-        launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
-        options: { prompt: 'review this', onPromptDelivered },
-        stagedEntry
       })
-    ).resolves.toEqual({ delivered: true, failureNotified: false })
 
-    expect(onPromptDelivered).toHaveBeenCalledOnce()
-    const persisted = JSON.parse(localStorage.getItem(localStorage.key(0)!) ?? '[]') as {
-      state: string
-    }[]
-    expect(persisted).toMatchObject([{ state: 'dispatching' }])
-  })
+      await expect(
+        settleStructuredAgentLaunchPrompt({
+          target,
+          launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+          options: { prompt: 'review this', onPromptDelivered },
+          stagedEntry
+        })
+      ).resolves.toEqual({ delivered: true, failureNotified: false })
+
+      expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.send', expect.any(Object))
+      expect(onPromptDelivered).toHaveBeenCalledOnce()
+      const persisted = JSON.parse(localStorage.getItem(localStorage.key(0)!) ?? '[]') as {
+        state: string
+      }[]
+      expect(persisted).toMatchObject([{ state: 'dispatching' }])
+    }
+  )
 })

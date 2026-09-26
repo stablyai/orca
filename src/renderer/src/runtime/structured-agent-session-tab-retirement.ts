@@ -8,6 +8,7 @@ import { closeStructuredAgentSession } from './structured-agent-session-close'
 import { withLocalSessionTabCloseOwner } from './local-session-tab-close-owner'
 import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { structuredAgentLaunchCancellationBelongsTo } from '@/lib/structured-agent-session-launch-persistence'
 
 const inFlightRetirements = new Map<string, Promise<void>>()
 
@@ -64,7 +65,7 @@ export function beginStructuredAgentSessionTabClose(args: {
   onError?: (error: unknown) => void
 }): void {
   if (args.provisional) {
-    markStructuredAgentSessionLaunchCancelled(args.worktreeId, args.sessionId)
+    markStructuredAgentSessionLaunchCancelled(args.worktreeId, args.sessionId, args.target)
   }
   discardStructuredAgentSessionLaunchOutbox(args.sessionId)
   retireStructuredAgentSessionTab(args)
@@ -80,6 +81,7 @@ export function suppressCancelledStructuredSessionTabs(
   for (const tab of snapshot.tabs) {
     if (
       tab.type === 'agent-session' &&
+      structuredAgentLaunchCancellationBelongsTo(tab.sessionId, target) &&
       hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
     ) {
       cancelledSessionIds.add(tab.sessionId)

@@ -43,7 +43,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   // terminal mirror gate (a TUI cannot clear more than forty lines of prefilled draft), which has
   // no meaning for a session that seeds the composer store directly. Its other gates are already
   // implied here: the structured resolver admits only claude/codex, both native-chat agents, and
-  // refuses every non-local host, and a structured session reads its journal over RPC rather than
+  // admits paired runtimes through RPC, and a structured session reads its journal rather than
   // the transcript file, so local transcript readability does not apply either.
   if (
     prefersStructuredNativeChatByDefault(input.settings) &&
@@ -71,6 +71,7 @@ export function structuredAgentLaunchSupported(
     resolveStructuredNativeChatSupport({
       agent: input.agent,
       executionHostId: input.executionHostId,
+      pairedRuntimeTransportAvailable: true,
       hostCapabilities: input.hostCapabilities,
       workspaceKind: input.workspaceKind,
       projectRuntime: input.projectRuntime,

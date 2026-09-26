@@ -1,3 +1,4 @@
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
@@ -141,6 +142,30 @@ describe('buildAgentLaunchRouteInput', () => {
         workspace: { kind: 'git-worktree', worktreeId: 'wt-remote' }
       })
     ).toBe(false)
+  })
+
+  it('uses only the paired host capabilities, including older and unanswered hosts', () => {
+    mocks.getExecutionHostIdForWorktree.mockReturnValue('runtime:nexbox')
+    const appStore = store()
+    const response = createCompatibleRuntimeStatusResponse('nexbox')
+    if (!response.ok) {
+      throw new Error('Invalid status fixture')
+    }
+    const args = {
+      agent: 'codex',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-remote' }
+    } as const
+    appStore.runtimeStatusByEnvironmentId = new Map([
+      ['nexbox', { status: response.result, checkedAt: 1 }]
+    ])
+    expect(routeFor(appStore, args)).toBe('structured-native-chat')
+    appStore.runtimeStatusByEnvironmentId = new Map([
+      ['nexbox', { status: { ...response.result, capabilities: [] }, checkedAt: 2 }]
+    ])
+    expect(structuredFeasibleFor(appStore, args)).toBe(false)
+    appStore.runtimeStatusByEnvironmentId = new Map()
+    expect(buildAgentLaunchRouteInput(appStore, args).hostCapabilities).toBeNull()
+    expect(mocks.readLocalRuntimeCapabilitiesOrUnknown).not.toHaveBeenCalled()
   })
 
   it('resolves a prospective git worktree from its repo', () => {

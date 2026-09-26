@@ -61,7 +61,7 @@ export async function callRuntimeRpc<TResult>(
     target.kind === 'environment'
       ? captureRuntimeEnvironmentRequestRevision(
           target.environmentId,
-          options.expectedEnvironmentPairingRevision
+          target.expectedEnvironmentPairingRevision ?? options.expectedEnvironmentPairingRevision
         )
       : undefined
   if (

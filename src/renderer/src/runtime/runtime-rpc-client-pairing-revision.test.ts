@@ -62,3 +62,22 @@ it('captures the pairing revision before awaiting the compatibility probe', asyn
     expectedEnvironmentPairingRevision: 10
   })
 })
+
+it('keeps a persisted launch target pinned after the same environment is paired again', async () => {
+  replaceRuntimeEnvironmentRevisions([{ id: 'nexbox', createdAt: 1, pairingRevision: 11 }])
+  runtimeEnvironmentCall.mockResolvedValue({
+    ok: false,
+    id: 'status',
+    error: { code: 'environment_pairing_changed', message: 'Pairing changed' }
+  })
+  await expect(
+    callRuntimeRpc(
+      { kind: 'environment', environmentId: 'nexbox', expectedEnvironmentPairingRevision: 10 },
+      'agentSession.create',
+      {}
+    )
+  ).rejects.toThrow('Pairing changed')
+  expect(runtimeEnvironmentCall).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ selector: 'nexbox', expectedEnvironmentPairingRevision: 10 })
+  )
+})

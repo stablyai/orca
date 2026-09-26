@@ -3,8 +3,10 @@ import {
   markStructuredAgentLaunchCancelledPersisted,
   readStructuredAgentLaunchCancellationTombstoneSessionIds,
   retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted,
-  retireStructuredAgentLaunchCancellationTombstonePersisted
+  retireStructuredAgentLaunchCancellationTombstonePersisted,
+  structuredAgentLaunchCancellationBelongsTo
 } from './structured-agent-session-launch-persistence'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 type CancellationRetirement = {
   retireAfterInventory: number | null
@@ -41,11 +43,17 @@ export function beginStructuredAgentSessionAuthoritativeInventory(): number {
 }
 
 /** Claims restored tombstones for best-effort host cleanup before an authoritative census. */
-export function claimStructuredAgentLaunchCancellationCleanups(): readonly string[] {
+export function claimStructuredAgentLaunchCancellationCleanups(
+  target: RuntimeClientTarget = { kind: 'local' }
+): readonly string[] {
   restoreCancellationRetirementFences()
   const claimed: string[] = []
   for (const [sessionId, retirement] of cancellationRetirementBySessionId) {
-    if (retirement.restored && !retirement.cleanupStarted) {
+    if (
+      retirement.restored &&
+      !retirement.cleanupStarted &&
+      structuredAgentLaunchCancellationBelongsTo(sessionId, target)
+    ) {
       retirement.cleanupStarted = true
       claimed.push(sessionId)
     }
@@ -71,9 +79,10 @@ export function settleStructuredAgentLaunchCancellationCleanup(
 }
 
 export function startStructuredAgentLaunchCancellationCleanup(
-  cleanup: (sessionId: string) => Promise<unknown>
+  cleanup: (sessionId: string) => Promise<unknown>,
+  target: RuntimeClientTarget = { kind: 'local' }
 ): void {
-  for (const sessionId of claimStructuredAgentLaunchCancellationCleanups()) {
+  for (const sessionId of claimStructuredAgentLaunchCancellationCleanups(target)) {
     void cleanup(sessionId).then(
       () => settleStructuredAgentLaunchCancellationCleanup(sessionId, true),
       (error: unknown) => {
@@ -87,9 +96,10 @@ export function startStructuredAgentLaunchCancellationCleanup(
 export function markStructuredAgentLaunchCancellation(
   sessionId: string,
   alreadyCancelled: boolean,
-  launchPromise?: Promise<unknown>
+  launchPromise?: Promise<unknown>,
+  target?: RuntimeClientTarget
 ): void {
-  markStructuredAgentLaunchCancelledPersisted(sessionId)
+  markStructuredAgentLaunchCancelledPersisted(sessionId, target)
   if (launchPromise) {
     const retirement: CancellationRetirement = {
       retireAfterInventory: null,
@@ -121,12 +131,14 @@ export function retireStructuredAgentLaunchCancellation(sessionId: string): void
 
 export function retireAbsentStructuredAgentLaunchCancellations(
   publishedSessionIds: ReadonlySet<string>,
-  authoritativeInventory: number
+  authoritativeInventory: number,
+  target: RuntimeClientTarget = { kind: 'local' }
 ): boolean {
   restoreCancellationRetirementFences()
   const retainedSessionIds = new Set(publishedSessionIds)
   for (const [sessionId, retirement] of cancellationRetirementBySessionId) {
     if (
+      !structuredAgentLaunchCancellationBelongsTo(sessionId, target) ||
       retirement.retireAfterInventory === null ||
       authoritativeInventory < retirement.retireAfterInventory
     ) {

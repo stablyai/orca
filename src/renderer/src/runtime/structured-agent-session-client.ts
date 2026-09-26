@@ -121,7 +121,9 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
       method,
       params,
       timeoutMs: 15_000,
-      expectedEnvironmentPairingRevision: getRuntimeEnvironmentRevision(target.environmentId)
+      expectedEnvironmentPairingRevision:
+        target.expectedEnvironmentPairingRevision ??
+        getRuntimeEnvironmentRevision(target.environmentId)
     },
     { onResponse, onError, onClose }
   )
