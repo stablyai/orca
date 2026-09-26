@@ -3,7 +3,8 @@ import type { Store } from '../persistence'
 import {
   REMOTE_WORKSPACE_STALE_NOTIFICATION,
   type RemoteWorkspaceChangedEvent,
-  type RemoteWorkspaceSession
+  type RemoteWorkspaceSession,
+  type RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 
 const { getActiveMultiplexerMock, getSshConnectionStoreMock } = vi.hoisted(() => ({
@@ -29,6 +30,12 @@ import {
   handleRemoteWorkspaceNotification,
   registerRemoteWorkspaceHandlers
 } from './remote-workspace'
+import {
+  getCachedRemoteWorkspaceSnapshot,
+  rememberLocallyPatchedRemoteWorkspaceSnapshot,
+  rememberRemoteWorkspaceSnapshot
+} from './remote-workspace-snapshot-cache'
+import { isRemoteWorkspaceResyncInFlight } from './remote-workspace-stale-resync'
 
 function session(activeTabId: string): RemoteWorkspaceSession {
   return {
@@ -38,6 +45,16 @@ function session(activeTabId: string): RemoteWorkspaceSession {
       '/remote/worktree': [{ id: activeTabId, worktreePath: '/remote/worktree' } as never]
     },
     terminalLayoutsByTabId: {}
+  }
+}
+
+function snapshot(revision: number, tabId: string): RemoteWorkspaceSnapshot {
+  return {
+    namespace: 'target-1',
+    revision,
+    updatedAt: revision,
+    schemaVersion: 1,
+    session: session(tabId)
   }
 }
 
@@ -149,5 +166,119 @@ describe('workspace.stale resync', () => {
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2))
     await Promise.resolve()
     expect(sent).toHaveLength(1)
+  })
+
+  it.each(['own', 'peer'] as const)(
+    'checks a %s snapshot against the own patch reply received during its pending read',
+    async (source) => {
+      rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'tab-before-patch'))
+      const ownSnapshot = snapshot(2, 'tab-from-own-patch')
+      const readSnapshot = source === 'own' ? ownSnapshot : snapshot(3, 'tab-from-peer')
+      let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
+      request.mockImplementationOnce(
+        () =>
+          new Promise<RemoteWorkspaceSnapshot>((resolve) => {
+            releaseRead = resolve
+          })
+      )
+
+      handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+        namespace: 'target-1'
+      })
+      expect(request).toHaveBeenCalledTimes(1)
+      expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(true)
+
+      // The relay publishes the stale marker before returning this client's patch reply.
+      rememberLocallyPatchedRemoteWorkspaceSnapshot('target-1', ownSnapshot)
+      releaseRead?.(readSnapshot)
+      await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+
+      expect(sent.map((event) => event.snapshot.session.activeTabId)).toEqual(
+        source === 'own' ? [] : ['tab-from-peer']
+      )
+    }
+  )
+
+  it('suppresses an own reply already acknowledged before the marker', async () => {
+    const ownSnapshot = snapshot(2, 'tab-from-own-patch')
+    rememberLocallyPatchedRemoteWorkspaceSnapshot('target-1', ownSnapshot)
+    request.mockResolvedValue(ownSnapshot)
+
+    handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+      namespace: 'target-1'
+    })
+    await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+
+    expect(sent).toEqual([])
+  })
+
+  it('still reads a queued peer change after suppressing the own echo', async () => {
+    const ownSnapshot = snapshot(2, 'tab-from-own-patch')
+    let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
+    request.mockImplementationOnce(
+      () =>
+        new Promise<RemoteWorkspaceSnapshot>((resolve) => {
+          releaseRead = resolve
+        })
+    )
+    request.mockResolvedValue(snapshot(3, 'tab-from-peer'))
+
+    for (let index = 0; index < 2; index += 1) {
+      handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+        namespace: 'target-1'
+      })
+    }
+
+    rememberLocallyPatchedRemoteWorkspaceSnapshot('target-1', ownSnapshot)
+    releaseRead?.(ownSnapshot)
+    await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(sent.map((event) => event.snapshot.session.activeTabId)).toEqual(['tab-from-peer'])
+  })
+
+  it('keeps an own acknowledgement from suppressing another target', async () => {
+    const releases: ((value: RemoteWorkspaceSnapshot) => void)[] = []
+    request.mockImplementation(
+      () => new Promise<RemoteWorkspaceSnapshot>((resolve) => releases.push(resolve))
+    )
+    for (const targetId of ['target-1', 'target-2']) {
+      handleRemoteWorkspaceNotification(targetId, REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+        namespace: 'target-1'
+      })
+    }
+    const ownSnapshot = snapshot(2, 'same-tab')
+    rememberLocallyPatchedRemoteWorkspaceSnapshot('target-1', ownSnapshot)
+    releases[0]?.(ownSnapshot)
+    releases[1]?.(ownSnapshot)
+    await vi.waitFor(() => {
+      expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false)
+      expect(isRemoteWorkspaceResyncInFlight('target-2')).toBe(false)
+    })
+
+    expect(sent.map((event) => event.targetId)).toEqual(['target-2'])
+  })
+
+  it('observes the read before a later own reply advances the cache', async () => {
+    rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'initial-tab'))
+    let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
+    request.mockImplementationOnce(
+      () =>
+        new Promise<RemoteWorkspaceSnapshot>((resolve) => {
+          releaseRead = resolve
+        })
+    )
+    handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+      namespace: 'target-1'
+    })
+
+    releaseRead?.(snapshot(2, 'peer-tab'))
+    queueMicrotask(() => {
+      rememberLocallyPatchedRemoteWorkspaceSnapshot('target-1', snapshot(3, 'newer-own-tab'))
+    })
+    await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+
+    expect(getCachedRemoteWorkspaceSnapshot('target-1')?.revision).toBe(3)
+    expect(sent.map((event) => event.snapshot.revision)).toEqual([2])
   })
 })

@@ -2,7 +2,8 @@ import type {
   RemoteWorkspaceObservedPatchResult,
   RemoteWorkspaceObservedSnapshot,
   RemoteWorkspacePatchResult,
-  RemoteWorkspaceSession
+  RemoteWorkspaceSession,
+  RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getActiveMultiplexer } from './ssh'
@@ -18,9 +19,11 @@ import {
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace-snapshot-normalization'
 
-export async function getRemoteSnapshot(
-  target: SshTarget
-): Promise<RemoteWorkspaceObservedSnapshot | null> {
+// Observe at receipt so another reply cannot advance the cache between fetch and observation.
+export async function readRemoteSnapshot<Result>(
+  target: SshTarget,
+  receive: (snapshot: RemoteWorkspaceSnapshot) => Result
+): Promise<Result | null> {
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
     return null
@@ -28,14 +31,21 @@ export async function getRemoteSnapshot(
   const namespace = getRemoteWorkspaceNamespace(target)
   try {
     const raw = await mux.request('workspace.get', { namespace })
-    const snapshot = normalizeSnapshot(raw, namespace)
-    return rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+    return receive(normalizeSnapshot(raw, namespace))
   } catch (err) {
     if ((err as { code?: unknown })?.code === -32601) {
       return null
     }
     throw err
   }
+}
+
+export function getRemoteSnapshot(
+  target: SshTarget
+): Promise<RemoteWorkspaceObservedSnapshot | null> {
+  return readRemoteSnapshot(target, (snapshot) =>
+    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+  )
 }
 
 function observePatchResult(
