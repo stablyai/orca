@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
+import { Copy, ExternalLink, Eye, FileText, FolderOpen } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -28,6 +28,7 @@ type SourceControlEntryContextMenuProps = {
   relativePath?: string
   connectionId?: string | null
   onView?: () => void
+  onOpenFile?: () => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   onOpenChange?: (open: boolean) => void
   children: React.ReactNode
@@ -39,6 +40,7 @@ export function SourceControlEntryContextMenu({
   relativePath,
   connectionId,
   onView,
+  onOpenFile,
   onRevealInExplorer,
   onOpenChange,
   children
@@ -100,6 +102,15 @@ export function SourceControlEntryContextMenu({
             'View'
           )}
         </ContextMenuItem>
+        {onOpenFile ? (
+          <ContextMenuItem onSelect={onOpenFile}>
+            <FileText className="size-3.5" />
+            {translate(
+              'auto.components.right.sidebar.SourceControlEntryContextMenu.openFile',
+              'Open file'
+            )}
+          </ContextMenuItem>
+        ) : null}
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
           <Copy className="size-3.5" />

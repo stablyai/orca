@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { ChevronDown, FileText, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -12,7 +12,12 @@ import { ConflictBadge } from './conflict-badge'
 import { getLocalizedConflictKindLabel } from './conflict-label'
 import { DiffLineCounts } from './diff-line-counts'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
-import { canDiscardStatusEntry, canStageStatusEntry, canUnstageStatusEntry } from './entry-actions'
+import {
+  canDiscardStatusEntry,
+  canOpenWorkingTreeStatusEntry,
+  canStageStatusEntry,
+  canUnstageStatusEntry
+} from './entry-actions'
 import { isSubmoduleWorktreeOnlyChange } from '../commit/discard-all-sequence'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
 import {
@@ -44,6 +49,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onRevealInExplorer,
   connectionId,
   onOpen,
+  onOpenFile,
   onStage,
   onUnstage,
   onDiscard,
@@ -63,6 +69,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  onOpenFile: (entry: GitStatusEntry) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
@@ -86,6 +93,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const canStage = canStageStatusEntry(entry)
   // Why: a submodule-internal staged row is read-only from the parent worktree, so don't offer Unstage (mirrors bulk unstage).
   const canUnstage = canUnstageStatusEntry(entry)
+  const canOpenFile = canOpenWorkingTreeStatusEntry(entry)
 
   return (
     <SourceControlEntryContextMenu
@@ -94,6 +102,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
       relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
+      onOpenFile={canOpenFile ? () => onOpenFile(entry) : undefined}
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {
@@ -208,6 +217,16 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           </>
         )}
         <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
+          {canOpenFile && (
+            <ActionButton
+              icon={FileText}
+              title={translate('auto.components.right.sidebar.SourceControl.openFile', 'Open file')}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenFile(entry)
+              }}
+            />
+          )}
           {canDiscard && (
             <ActionButton
               icon={entry.area === 'untracked' ? Trash : Undo2}

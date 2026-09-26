@@ -81,6 +81,7 @@ export function SourceControlUncommittedSections(props: {
   revealInExplorer: (worktreeId: string, absolutePath: string) => void
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  handleOpenWorkingTreeFile: (entry: GitStatusEntry) => void
   handleStage: (path: string) => Promise<void>
   handleUnstage: (path: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
@@ -206,6 +207,7 @@ export function SourceControlUncommittedSections(props: {
                 revealInExplorer={props.revealInExplorer}
                 activeConnectionId={props.activeConnectionId}
                 handleOpenDiff={props.handleOpenDiff}
+                handleOpenWorkingTreeFile={props.handleOpenWorkingTreeFile}
                 handleStage={props.handleStage}
                 handleUnstage={props.handleUnstage}
                 requestDiscardEntry={props.requestDiscardEntry}

@@ -91,4 +91,39 @@ describe('SourceControlEntryContextMenu', () => {
     copyRelativePathItem?.onSelect?.()
     expect(writeClipboardText).toHaveBeenCalledWith('src/example.ts')
   })
+
+  it('opens the working-tree file from the Open file menu item', () => {
+    const onOpenFile = vi.fn()
+    renderToStaticMarkup(
+      <SourceControlEntryContextMenu
+        currentWorktreeId="worktree-1"
+        absolutePath="/repo/src/example.ts"
+        relativePath="src/example.ts"
+        onOpenFile={onOpenFile}
+        onRevealInExplorer={vi.fn()}
+      >
+        <div />
+      </SourceControlEntryContextMenu>
+    )
+
+    const openFileItem = items.list.find((item) => childrenText(item.children) === 'Open file')
+    expect(openFileItem).toBeDefined()
+    openFileItem?.onSelect?.()
+    expect(onOpenFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the Open file menu item when the row cannot open a working-tree file', () => {
+    renderToStaticMarkup(
+      <SourceControlEntryContextMenu
+        currentWorktreeId="worktree-1"
+        absolutePath="/repo/src/gone.ts"
+        relativePath="src/gone.ts"
+        onRevealInExplorer={vi.fn()}
+      >
+        <div />
+      </SourceControlEntryContextMenu>
+    )
+
+    expect(items.list.find((item) => childrenText(item.children) === 'Open file')).toBeUndefined()
+  })
 })
