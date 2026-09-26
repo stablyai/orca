@@ -87,6 +87,8 @@ export type CombinedDiffSkippedConflict = {
 // `skippedConflicts` lives on the tab so the combined-diff exclusion notice stays stable; live status changing between polls would make it flicker.
 // `branchEntriesSnapshot` keeps a combined-branch tab's file list known after switching away from an inactive worktree whose compare data is stale.
 export type OpenFile = {
+  /** Transient CLI wait identities survive path rekeys; never persist or restore them. */
+  externalEditorWaitIds?: readonly string[]
   id: string // use filePath as unique key
   filePath: string // absolute path
   relativePath: string // relative to worktree root
@@ -155,10 +157,10 @@ export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 export type EditorViewMode = 'edit' | 'changes'
 
 /** Enough state to restore a tab via `openFile` after `closeFile`. */
-// Why: omit mirroredFromRuntimeSession so a user-reopened tab isn't treated as host-owned and culled by the next web session sync.
+// A reopened tab must not recover host-mirror ownership or callers waiting on its previous session.
 export type ClosedEditorTabSnapshot = Omit<
   OpenFile,
-  'id' | 'isDirty' | 'mirroredFromRuntimeSession'
+  'id' | 'isDirty' | 'mirroredFromRuntimeSession' | 'externalEditorWaitIds'
 > & {
   reopenId?: string
   position?: RecentlyClosedTabPosition

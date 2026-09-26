@@ -21,8 +21,21 @@ import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-pub
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import type { ExternalEditorResult } from '../../shared/external-editor'
 
 export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
+  /** Only desktop owners can prove that a user closed an editor tab. */
+  async editLocalFile(
+    filePath: string,
+    wait: boolean,
+    signal?: AbortSignal
+  ): Promise<ExternalEditorResult> {
+    if (!this.notifier?.editLocalFile) {
+      throw new Error('renderer_unavailable')
+    }
+    return this.notifier.editLocalFile(filePath, wait, signal)
+  }
+
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),

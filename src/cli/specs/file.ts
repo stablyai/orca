@@ -3,6 +3,21 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const FILE_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['file', 'edit'],
+    summary: 'Edit a local text file, optionally waiting until its tab closes',
+    usage: 'orca file edit <path> [--wait] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'wait'],
+    positionalArgs: ['path'],
+    notes: [
+      'Opens an existing UTF-8 text file (up to 1 MiB) in the floating workspace, including files outside projects.',
+      '--wait returns after the editor tab closes. Saving alone does not finish the command. Renderer loss or connection loss fails the command.',
+      'Start Orca first. This command does not launch the app automatically.',
+      'Local desktop only; SSH, WSL shims, paired runtimes and headless servers are not supported.',
+      'Set EDITOR and VISUAL to "orca file edit --wait" to use Orca as an external editor.'
+    ],
+    examples: ['orca file edit --wait /tmp/prompt.txt']
+  },
+  {
     path: ['file', 'open'],
     summary: 'Open a workspace file in the Orca editor',
     usage: 'orca file open <path> [--worktree <selector>] [--json]',

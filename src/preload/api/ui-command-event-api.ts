@@ -1,3 +1,4 @@
+import type { ExternalEditorRequest, ExternalEditorResponse } from '../../shared/external-editor'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -41,6 +42,9 @@ import type {
 export type CloseActiveTabPayload = { sourceId: string }
 
 export type UiCommandEventApi = {
+  onExternalEditorRequest?: (callback: (request: ExternalEditorRequest) => void) => () => void
+  onExternalEditorCancel?: (callback: (requestId: string) => void) => () => void
+  respondExternalEditor?: (response: ExternalEditorResponse) => void
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
   /** Like set, but REJECTS when the update did not reach the host (the web preload's set

@@ -143,6 +143,7 @@ export function createCloseFileAction(
             id: _id,
             isDirty: _dirty,
             mirroredFromRuntimeSession: _mirrored,
+            externalEditorWaitIds: _externalEditorWaitIds,
             ...snap
           } = closedFile
           const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []

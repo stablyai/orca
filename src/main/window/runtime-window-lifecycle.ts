@@ -1,3 +1,4 @@
+import { requestExternalEditor } from './external-editor-request'
 import { randomUUID } from 'node:crypto'
 
 import { ipcMain } from 'electron'
@@ -36,6 +37,8 @@ export function registerRuntimeWindowLifecycle(
   })
   const send = rendererNotifications.send
   runtime.setNotifier({
+    editLocalFile: (filePath, wait, signal) =>
+      requestExternalEditor(mainWindow, filePath, wait, signal),
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
       runWorktreeChangeInvalidators(repoId)

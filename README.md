@@ -148,7 +148,7 @@ VS Code's editor with autosave everywhere — drag files or images straight into
 
 Agents drive Orca too — script every workflow with `orca worktree create`, `snapshot`, `click`, and `fill`.
 
-[Docs →](https://www.onorca.dev/docs/cli/overview)
+[Docs →](https://www.onorca.dev/docs/cli/overview) · [Use Orca as an external editor](docs/reference/external-editor.md)
 
 </td>
 <td width="50%">

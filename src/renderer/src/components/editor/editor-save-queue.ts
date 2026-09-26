@@ -1,3 +1,4 @@
+import { createExternalEditorSaveWaits } from './editor-external-save-waits'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -29,17 +30,20 @@ export type EditorSaveQueue = {
     trigger?: 'autosave' | 'user'
   ) => Promise<void>
   quiesceFileSave: (fileId: string) => Promise<void>
+  waitForExternalEditorSaves: (requestId: string) => Promise<void>
+  releaseExternalEditorSaveWait: (requestId: string) => void
   clearAutoSaveTimer: (fileId: string) => void
   bumpSaveGeneration: (fileId: string) => void
   syncAutoSave: () => void
   dispose: () => void
 }
 
-// Why: keeping the save queue, quiesce coordination, and the debounce timers that feed it together avoids split-brain saves.
+/** Keep saves, cancellation, and external completion observations under the same queue owner. */
 export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const autoSaveTimers = new Map<string, number>()
   const autoSaveScheduledContent = new Map<string, string>()
   const saveQueue = new Map<string, Promise<void>>()
+  const externalSaveWaits = createExternalEditorSaveWaits()
   const saveGeneration = new Map<string, number>()
 
   const clearAutoSaveTimer = (fileId: string): void => {
@@ -152,6 +156,10 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       }
     })
     saveQueue.set(file.id, trackedSave)
+    externalSaveWaits.track(
+      store.getState().openFiles.find((current) => current.id === file.id)?.externalEditorWaitIds,
+      trackedSave
+    )
     return trackedSave
   }
 
@@ -166,7 +174,16 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
   const syncAutoSave = (): void => {
     const state = store.getState()
-    const openFilesById = new Map(state.openFiles.map((file) => [file.id, file]))
+    const openFilesById = new Map(
+      state.openFiles.map((file) => {
+        // A caller may attach while a write is already in flight, including with autosave off.
+        const pendingSave = saveQueue.get(file.id)
+        if (pendingSave) {
+          externalSaveWaits.track(file.externalEditorWaitIds, pendingSave)
+        }
+        return [file.id, file] as const
+      })
+    )
 
     for (const fileId of Array.from(autoSaveTimers.keys())) {
       const file = openFilesById.get(fileId)
@@ -222,6 +239,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
     autoSaveTimers.clear()
     autoSaveScheduledContent.clear()
+    externalSaveWaits.clear()
     saveQueue.clear()
     saveGeneration.clear()
   }
@@ -229,6 +247,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   return {
     queueSave,
     quiesceFileSave,
+    waitForExternalEditorSaves: externalSaveWaits.wait,
+    releaseExternalEditorSaveWait: externalSaveWaits.release,
     clearAutoSaveTimer,
     bumpSaveGeneration,
     syncAutoSave,

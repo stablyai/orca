@@ -4,15 +4,15 @@ import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-
 import { detectLanguage } from './language-detect'
 
 /**
- * Opens a markdown file that belongs to no workspace as a floating-workspace editor tab.
+ * Opens a local file that belongs to no workspace as a floating-workspace editor tab.
  *
  * Why local-only: every caller resolves an absolute path on this machine (a native picker or
  * the OS shell), so routing it through the active runtime would read it on the wrong host.
  */
-export function openMarkdownDocumentInFloatingWorkspace(
+export function openLocalFileInFloatingWorkspace(
   openFile: EditorFilesSlice['openFile'],
-  document: MarkdownDocument,
-  options: { targetGroupId?: string } = {}
+  document: Pick<MarkdownDocument, 'filePath' | 'relativePath'>,
+  options: { targetGroupId?: string; focusEditor?: boolean } = {}
 ): string {
   return openFile(
     {
@@ -25,8 +25,11 @@ export function openMarkdownDocumentInFloatingWorkspace(
     },
     {
       preview: false,
+      ...(options.focusEditor === undefined ? {} : { focusEditor: options.focusEditor }),
       targetGroupId: options.targetGroupId,
       suppressActiveRuntimeFallback: true
     }
   )
 }
+
+export const openMarkdownDocumentInFloatingWorkspace = openLocalFileInFloatingWorkspace

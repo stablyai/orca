@@ -1,4 +1,3 @@
-import EditorAutosaveController from './editor/EditorAutosaveController'
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
 import { TerminalTitlebarTabs } from './TerminalTitlebarTabs'
 import { TerminalSplitWorkspaceSurfaces } from './TerminalSplitWorkspaceSurfaces'
@@ -6,6 +5,7 @@ import { TerminalLegacyWorkspaceSurface } from './TerminalLegacyWorkspaceSurface
 import { TerminalWorkspaceDialogs } from './TerminalWorkspaceDialogs'
 import type { TerminalController } from './use-terminal-controller'
 
+/** App-wide persistence must remain independent of workbench visibility. */
 export function TerminalSurface({
   controller
 }: {
@@ -26,7 +26,6 @@ export function TerminalSurface({
       }`}
       data-rendered-active-worktree-id={renderedActiveWorktreeId ?? undefined}
     >
-      <EditorAutosaveController />
       <TerminalTitlebarTabs controller={controller} />
       <TerminalSplitWorkspaceSurfaces controller={controller} />
       <TerminalLegacyWorkspaceSurface controller={controller} />

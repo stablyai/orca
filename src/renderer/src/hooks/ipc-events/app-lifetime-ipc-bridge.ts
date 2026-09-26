@@ -1,3 +1,4 @@
+import { registerExternalEditorBridge } from './external-editor-bridge'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
@@ -93,6 +94,7 @@ export function installAppLifetimeIpcEvents(
   registerOrcaProfileAuthIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
+  registerExternalEditorBridge(unsubs)
   unsubs.push(
     window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
       void worktreeRuntime

@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import EditorAutosaveController from '../components/editor/EditorAutosaveController'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
@@ -23,6 +24,8 @@ export function AppBackgroundServices(): React.JSX.Element {
 
   return (
     <>
+      {/* Floating files need saving even before a workspace workbench mounts. */}
+      <EditorAutosaveController />
       <WorkspacePortScanner enabled={workspaceSessionReady} />
       {/* Why: plugin language-pack discovery must not re-render the App shell. */}
       <MacosTccPromptNoticeHost />

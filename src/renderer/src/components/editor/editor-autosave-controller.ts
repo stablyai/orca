@@ -2,6 +2,7 @@ import {
   getOpenFilesForExternalFileChange,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
+  ORCA_EDITOR_RELEASE_EXTERNAL_SAVE_WAIT_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   ORCA_EDITOR_SAVE_FILE_EVENT,
   type EditorSaveFileDetail,
@@ -20,6 +21,7 @@ import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
 
+/** Keep one save queue alive across panel changes and late tab-close writes. */
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const saveQueue = createEditorSaveQueue(store)
   const { queueSave, quiesceFileSave, clearAutoSaveTimer, bumpSaveGeneration, syncAutoSave } =
@@ -89,6 +91,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     }
   }
 
+  /** Caller drains include writes whose original editor ID has already changed. */
   const handleQuiesce = async (event: Event): Promise<void> => {
     const detail = (event as CustomEvent<EditorSaveQuiesceDetail>).detail
     if (!detail) {
@@ -96,13 +99,33 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     }
     detail.claim()
 
-    const matchingFiles =
-      'fileId' in detail
-        ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
-        : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
+    if ('externalEditorWaitId' in detail) {
+      try {
+        await saveQueue.waitForExternalEditorSaves(detail.externalEditorWaitId)
+        detail.resolve()
+      } catch (error) {
+        detail.reject(error)
+      }
+      return
+    }
 
-    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
+    // A closed tab may still own a queued disk write.
+    const matchingIds =
+      'fileId' in detail
+        ? [detail.fileId]
+        : getOpenFilesForExternalFileChange(store.getState().openFiles, detail).map(
+            (file) => file.id
+          )
+
+    await Promise.all(matchingIds.map((fileId) => quiesceFileSave(fileId)))
     detail.resolve()
+  }
+
+  /** Cancellation ends observation without interrupting editing or disk writes. */
+  const handleExternalWaitRelease = (event: Event): void => {
+    if (event instanceof CustomEvent && typeof event.detail === 'string') {
+      saveQueue.releaseExternalEditorSaveWait(event.detail)
+    }
   }
 
   // Why: the root subscriber fires on every store tick; skip the scan unless the four autosave inputs changed.
@@ -117,6 +140,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   })
   syncAutoSave()
 
+  window.addEventListener(ORCA_EDITOR_RELEASE_EXTERNAL_SAVE_WAIT_EVENT, handleExternalWaitRelease)
   window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handleSaveDirtyFiles as EventListener)
   window.addEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, handlePrepareHotExit as EventListener)
   window.addEventListener(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, handleSaveAndClose as EventListener)
@@ -129,6 +153,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
   return () => {
     unsubscribe()
+    window.removeEventListener(
+      ORCA_EDITOR_RELEASE_EXTERNAL_SAVE_WAIT_EVENT,
+      handleExternalWaitRelease
+    )
     window.removeEventListener(
       ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
       handleSaveDirtyFiles as EventListener
