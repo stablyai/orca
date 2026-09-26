@@ -45,7 +45,9 @@ import {
   RpcClientProvider,
   useDisconnectHostClient,
   useForceReconnect,
-  useHostClient
+  useHostClient,
+  usePrimeHosts,
+  useRefreshHostClient
 } from './client-context'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
@@ -410,6 +412,49 @@ describe('useHostClient', () => {
       expect(relayClient.closeMock).not.toHaveBeenCalled()
       expect(relayClient.notifyForeground).toHaveBeenCalledWith('app-resume')
       expect(connectMock).toHaveBeenCalledOnce()
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('refreshes a Relay-active owned client onto the saved row after an endpoint edit', async () => {
+    const relayClient = makeFakeClient('connected', 'relay')
+    const replacement = makeFakeClient('connecting', 'tailscale')
+    connectMock.mockReturnValueOnce(relayClient).mockReturnValueOnce(replacement)
+    loadHostsMock.mockResolvedValue([HOST])
+    const edited = { ...HOST, endpoint: 'ws://100.101.102.103:6768' }
+
+    const states: ConnectionState[] = []
+    let refreshHostClient: ((hostId: string) => void) | null = null
+    let primeHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      refreshHostClient = useRefreshHostClient()
+      primeHosts = usePrimeHosts()
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      // A failed post-save re-prime leaves the pre-edit profile cached.
+      act(() => primeHosts?.([HOST]))
+      loadHostsMock.mockResolvedValue([edited])
+      states.length = 0
+
+      await act(async () => {
+        refreshHostClient?.(HOST.id)
+        await Promise.resolve()
+      })
+
+      expect(relayClient.closeMock).toHaveBeenCalled()
+      expect(relayClient.notifyForeground).not.toHaveBeenCalled()
+      expect(connectMock.mock.calls[1]?.[0]).toEqual(edited)
+      // The owner reads amber through the rebuild, never a grey flash.
+      expect(states).not.toContain('disconnected')
     } finally {
       act(() => renderer?.unmount())
     }

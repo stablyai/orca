@@ -22,6 +22,8 @@ export type FakeDiffCommentEditor = {
   decorations: () => readonly FakeDecoration[]
   decorationWrites: () => number
   scrollTop: () => number
+  /** How many times the editor was asked to take focus back. */
+  focusCount: () => number
   emitMouseMove: (lineNumber: number) => void
   emitDispose: () => void
   /** Viewport-relative Y for a line, as the fake hit-test reads it. */
@@ -69,6 +71,7 @@ export function createFakeDiffCommentEditor(
   let scrollTop = 0
   let decorations: FakeDecoration[] = []
   let decorationWrites = 0
+  let focusCount = 0
   const mouseMoveListeners: ((e: { target: { position: { lineNumber: number } } }) => void)[] = []
   const disposeListeners: (() => void)[] = []
   const noopDisposable: IDisposable = { dispose: () => {} }
@@ -100,6 +103,9 @@ export function createFakeDiffCommentEditor(
     getScrollHeight: () => lineCount * FAKE_LINE_HEIGHT_PX,
     getLayoutInfo: () => ({ height: FAKE_EDITOR_HEIGHT_PX, contentLeft: 60 }),
     getSelection: () => null,
+    focus: () => {
+      focusCount += 1
+    },
     deltaDecorations: () => [],
     createDecorationsCollection: () => ({
       set: (next: MonacoEditor.IModelDeltaDecoration[]) => {
@@ -161,6 +167,7 @@ export function createFakeDiffCommentEditor(
     decorations: () => decorations,
     decorationWrites: () => decorationWrites,
     scrollTop: () => scrollTop,
+    focusCount: () => focusCount,
     clientYForLine,
     setLineCount: (next) => {
       lineCount = next

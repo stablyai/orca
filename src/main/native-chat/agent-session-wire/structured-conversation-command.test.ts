@@ -245,14 +245,11 @@ describe('host conversation commands', () => {
     })
   })
 
-  it('rejects stale fences before provider execution', async () => {
+  it('runs a command whose fence the client has not caught up to', async () => {
     const params = commandParams('compact')
     params.envelope.expectedRuntimeFence++
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale' }
-    })
-    expect(compact).not.toHaveBeenCalled()
+    expect(await host.conversationCommand(caller, params)).toMatchObject({ ok: true })
+    expect(compact).toHaveBeenCalledTimes(1)
   })
   it('allows cancellation while compaction is awaiting completion and refuses a second client', async () => {
     let finish!: (value: {}) => void

@@ -203,7 +203,9 @@ unquoted parameter string on whitespace.
 
 One site still spells `-ExecutionPolicy Bypass` with **no** encoding, the weaker
 signal: `src/main/cli/wsl-cli-scripts.ts` (`-File`, and it is a real script
-file, so the switch is not a no-op there). `src/main/system-fonts.ts` dropped it
+file, so the switch is not a no-op there). Every Orca-managed WSL terminal now
+reaches it by default on each CLI call (`docs/reference/wsl-managed-cli.md`), not
+only after the user registers the WSL CLI. `src/main/system-fonts.ts` dropped it
 for plain `-Command`; `src/shared/secure-path-windows-acl.ts` no longer runs
 PowerShell at all, having moved to `icacls.exe`; and computer use now asks for
 `-ExecutionPolicy RemoteSigned` in

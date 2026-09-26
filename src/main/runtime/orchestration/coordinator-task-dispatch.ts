@@ -32,7 +32,7 @@ export async function listAvailableWorkerTerminals(
   runtime: CoordinatorRuntime,
   coordinatorHandle: string,
   worktree: string | undefined
-): Promise<string[]> {
+): Promise<string[] | null> {
   try {
     const result = await runtime.listTerminals(worktree, undefined, {
       includeVisualLayouts: false
@@ -55,7 +55,8 @@ export async function listAvailableWorkerTerminals(
       )
       .map((t) => t.handle)
   } catch {
-    return []
+    // A failed census cannot authorize creating another worker.
+    return null
   }
 }
 

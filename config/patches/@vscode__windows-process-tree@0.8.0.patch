@@ -28,13 +28,14 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..0bb2af7923b6e6f1f0da40cae8067304
                  "/guard:cf",
                  "/sdl",
 diff --git a/lib/index.js b/lib/index.js
-index 9747a7402600cd252859144d32580ed45c8c93f7..001e81fa8bc89091971d06aaf9d051ba20906615 100644
+index e586cd6ead522a4ff060f5338201f45e3467d639..0ee62c35558ff40e2298c464fdf6e9485f9d181d 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -7,11 +7,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
+@@ -7,11 +7,14 @@
  exports.getAllProcesses = exports.getProcessTree = exports.getProcessCpuUsage = exports.getProcessList = exports.filterProcessList = exports.buildProcessTree = exports.ProcessDataFlag = void 0;
  const util_1 = require("util");
  const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++exports.getProcessCreationTime = native === undefined ? undefined : native.getProcessCreationTime;
 +exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;
  var ProcessDataFlag;
  (function (ProcessDataFlag) {
@@ -45,7 +46,7 @@ index 9747a7402600cd252859144d32580ed45c8c93f7..001e81fa8bc89091971d06aaf9d051ba
  })(ProcessDataFlag = exports.ProcessDataFlag || (exports.ProcessDataFlag = {}));
  // requestInProgress is used for any function that uses CreateToolhelp32Snapshot, as multiple calls
  // to this cannot be done at the same time.
-@@ -66,11 +68,12 @@ function buildProcessTree(rootPid, processList, maxDepth = MAX_FILTER_DEPTH) {
+@@ -66,11 +69,12 @@
      // • the properties are inlined/splatted
      // • the 'ppid' field is omitted
      // • the depth of the tree is limited by `maxDepth`
@@ -60,13 +61,14 @@ index 9747a7402600cd252859144d32580ed45c8c93f7..001e81fa8bc89091971d06aaf9d051ba
      });
      return buildNode(root, maxDepth);
 diff --git a/lib/index.ts b/lib/index.ts
-index f9aa005d9ced9e42885b8a976de5eb5bd61899ee..1b509af0b9065918bcb5cb75f2d7f23821d4a56a 100644
+index 7b53aad05c3682a5c7d814d81a39c3f391ae97e3..284dae185b56241244b4d6bcab9e08f7530b8cf3 100644
 --- a/lib/index.ts
 +++ b/lib/index.ts
-@@ -6,12 +6,15 @@
+@@ -6,12 +6,16 @@
  import { promisify } from 'util';
  
  const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined = native?.getProcessCreationTime;
 +/** The flag bits this compiled addon reports; undefined off win32. */
 +export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;
  import { IProcessInfo, IProcessTreeNode, IProcessCpuInfo } from '@vscode/windows-process-tree';
@@ -80,7 +82,7 @@ index f9aa005d9ced9e42885b8a976de5eb5bd61899ee..1b509af0b9065918bcb5cb75f2d7f238
  }
  
  type RequestCallback = (processList: IProcessInfo[]) => void;
-@@ -81,11 +84,12 @@ export function buildProcessTree(rootPid: number, processList: Iterable<IProcess
+@@ -81,11 +85,12 @@
    // • the properties are inlined/splatted
    // • the 'ppid' field is omitted
    // • the depth of the tree is limited by `maxDepth`
@@ -95,11 +97,33 @@ index f9aa005d9ced9e42885b8a976de5eb5bd61899ee..1b509af0b9065918bcb5cb75f2d7f238
    });
  
 diff --git a/src/addon.cc b/src/addon.cc
-index 9214aff281251e797a70ecb9f6e0b52932a0503f..722edd42ddb4740296bfc47582a181bd6d00c464 100644
+index 5253960ad97496b53c4a02572b64b270302af22f..a801526e20af72b6442c769a8ba1640386c23f46 100644
 --- a/src/addon.cc
 +++ b/src/addon.cc
-@@ -53,6 +53,10 @@ void GetProcessCpuUsage(const Napi::CallbackInfo& args) {
+@@ -50,9 +50,32 @@
+   worker->Queue();
+ }
+
++Napi::Value ReadProcessCreationTime(const Napi::CallbackInfo& args) {
++  Napi::Env env(args.Env());
++  if (args.Length() != 1 || !args[0].IsNumber()) {
++    return env.Undefined();
++  }
++  const double pid = args[0].As<Napi::Number>().DoubleValue();
++  if (!(pid >= 1 && pid <= MAXDWORD) || pid != static_cast<DWORD>(pid)) {
++    return env.Undefined();
++  }
++  ProcessInfo pinfo{};
++  pinfo.pid = static_cast<DWORD>(pid);
++  GetProcessCreationTime(pinfo);
++  if (pinfo.creationTimeMs == 0) {
++    return env.Undefined();
++  }
++  return Napi::Number::New(env, static_cast<double>(pinfo.creationTimeMs));
++}
++
  Napi::Object Init(Napi::Env env, Napi::Object exports) {
++  exports.Set("getProcessCreationTime", Napi::Function::New(env, ReadProcessCreationTime));
    exports.Set("getProcessList", Napi::Function::New(env, GetProcessList));
    exports.Set("getProcessCpuUsage", Napi::Function::New(env, GetProcessCpuUsage));
 +  // Lets a caller prove THIS BINARY understands CREATIONTIME. The JS enum is
@@ -398,10 +422,10 @@ index c9e3457a759c1acaa2644231a4917d45aed951f8..3f26a354477f062b34bd31fbd17be529
    }
  
 diff --git a/typings/windows-process-tree.d.ts b/typings/windows-process-tree.d.ts
-index 08bdac2fdc5ead6f0fcfb5ee5a021e2298c7d523..458981566fc45c0084badff566b1e3791ec1b629 100644
+index 70e242b123e76d43c452007be1ce92a6d224c8bb..b1d0a53c0c18cc16531b394c19bb256bdbaf782f 100644
 --- a/typings/windows-process-tree.d.ts
 +++ b/typings/windows-process-tree.d.ts
-@@ -7,9 +7,17 @@ declare module '@vscode/windows-process-tree' {
+@@ -7,8 +7,17 @@
    export enum ProcessDataFlag {
      None = 0,
      Memory = 1,
@@ -409,18 +433,18 @@ index 08bdac2fdc5ead6f0fcfb5ee5a021e2298c7d523..458981566fc45c0084badff566b1e379
 +    CommandLine = 2,
 +    CreationTime = 4
    }
- 
++
 +  /**
 +   * The flag bits the compiled addon actually understands, or undefined off
 +   * win32. `ProcessDataFlag` above is source; this is what the binary reports,
 +   * so it is the only way to tell a patched build from a stale prebuilt.
 +   */
 +  export const supportedProcessDataFlags: number | undefined;
-+
++  export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined;
+
    export interface IProcessInfo {
      pid: number;
-     ppid: number;
-@@ -24,6 +32,9 @@ declare module '@vscode/windows-process-tree' {
+@@ -24,6 +33,9 @@
       * The string returned is at most 512 chars, strings exceeding this length are truncated.
       */
      commandLine?: string;
@@ -430,7 +454,7 @@ index 08bdac2fdc5ead6f0fcfb5ee5a021e2298c7d523..458981566fc45c0084badff566b1e379
    }
  
    export interface IProcessCpuInfo extends IProcessInfo {
-@@ -35,6 +46,7 @@ declare module '@vscode/windows-process-tree' {
+@@ -35,6 +47,7 @@
      name: string;
      memory?: number;
      commandLine?: string;

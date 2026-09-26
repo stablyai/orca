@@ -5,8 +5,8 @@
 // lease-owning provider root through the adapter. Its observed exit is sufficient because the
 // lease follows that root, even when descendants remain `unverifiable`.
 //
-// The fence still moves. A released lease at the old fence would let a mutation a client queued
-// against the dead generation land on the next one.
+// The fence still moves, so the next owner is a new generation: an attach or settlement still
+// holding the stopped owner's fence is refused as stale rather than acting on its successor.
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
@@ -31,7 +31,8 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   now: number
   /** Exit receipt can precede a delayed journal settlement and lease release. */
   exitObservedAt?: number
-  settlementRetry?: { settlementId: string; detail: string }
+  /** Why the provider exited, when the host saw it die on its own. */
+  exitReason?: string
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
@@ -43,15 +44,12 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     runtimeFence: nextAgentSessionFence(record.lease),
     ownerProcess: null,
     reservedSpawnToken: null,
-    processlessAt: null,
     claimStatus: 'released',
-    handoffStage: args.settlementRetry ? 'recovering' : null,
-    settlementRetryRequired: args.settlementRetry ? true : undefined,
-    settlementRetryId: args.settlementRetry?.settlementId,
+    handoffStage: null,
     lastRenewedAt: args.now,
     deathEvidence: {
       kind: 'exit-observed',
-      detail: args.settlementRetry?.detail ?? 'the last surface holding this session released it',
+      detail: args.exitReason ?? 'the last surface holding this session released it',
       observedAt: args.exitObservedAt ?? args.now
     }
   })
@@ -65,7 +63,7 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     expectedFence: number
     now: number
     exitObservedAt?: number
-    settlementRetry?: { settlementId: string; detail: string }
+    exitReason?: string
   }
 ): Promise<AgentSessionRecord> {
   return store.transitionHandoff(args.sessionId, (record) =>

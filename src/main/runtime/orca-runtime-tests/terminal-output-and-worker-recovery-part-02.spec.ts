@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -76,7 +77,9 @@ describe('OrcaRuntimeService', () => {
       ['pty-setup', 'inc-setup', 'term_setup', 'Setup'],
       ['pty-shell', 'inc-shell', 'term_shell', 'Shell']
     ] as const
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     const listProcesses = vi.fn(async () =>
       processes.map(([id, incarnationId, terminalHandle, title]) => ({
         id,
@@ -247,13 +250,15 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const durableWrite = deferred<void>()
     const durableWriteStarted = deferred<void>()
-    const runtime = new OrcaRuntimeService({
-      ...runtimeStore,
-      flushPendingOrThrowAsync: vi.fn(() => {
-        durableWriteStarted.resolve()
-        return durableWrite.promise
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({
+        ...runtimeStore,
+        flushPendingOrThrowAsync: vi.fn(() => {
+          durableWriteStarted.resolve()
+          return durableWrite.promise
+        })
       })
-    } as never)
+    )
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -332,10 +337,12 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
-    const runtime = new OrcaRuntimeService({
-      ...runtimeStore,
-      flushPendingOrThrowAsync
-    } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({
+        ...runtimeStore,
+        flushPendingOrThrowAsync
+      })
+    )
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -447,13 +454,17 @@ describe('OrcaRuntimeService', () => {
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const flushOrThrow = vi.fn()
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never, undefined, {
-      canRecoverPersistentLocalPtys: () => true,
-      attestAgentHookCompatibilityAuthority: ({ paneKey, launchTokenHash }) =>
-        paneKey === workerPaneKey && launchTokenHash === RESTORED_AUTHORITY_TOKEN_HASH
-          ? { paneKey, source: 'hydrated_commitment' }
-          : null
-    })
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow }),
+      undefined,
+      {
+        canRecoverPersistentLocalPtys: () => true,
+        attestAgentHookCompatibilityAuthority: ({ paneKey, launchTokenHash }) =>
+          paneKey === workerPaneKey && launchTokenHash === RESTORED_AUTHORITY_TOKEN_HASH
+            ? { paneKey, source: 'hydrated_commitment' }
+            : null
+      }
+    )
     runtime.setOrchestrationDb({
       getActiveDispatchForTerminal: () => undefined,
       listLegacyWorkerTerminalRecoveryRows: () => [
