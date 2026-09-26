@@ -77,7 +77,8 @@ export function hasActiveWorkspaceActivity(
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
   worktreeIdsWithLiveAgent: ReadonlySet<string>,
-  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS
+  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS,
+  pendingReconnectWorktreeIds: ReadonlySet<string> = EMPTY_WORKTREE_IDS
 ): boolean {
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
@@ -89,7 +90,10 @@ export function hasActiveWorkspaceActivity(
   // Why not folded into hasLiveTerminal: a structured chat has no PTY and no entry in
   // tabsByWorktree, so every terminal-shaped signal above reads it as absent.
   const hasStructuredChat = worktreeIdsWithStructuredChat.has(worktreeId)
-  return hasLiveTerminal || hasBrowser || hasLiveAgent || hasStructuredChat
+  // Startup hydrates tabs before reconnect restores their ptyIds; without this a
+  // workspace awake at shutdown reads as asleep until then. #16247
+  const isReattaching = pendingReconnectWorktreeIds.has(worktreeId)
+  return hasLiveTerminal || hasBrowser || hasLiveAgent || hasStructuredChat || isReattaching
 }
 
 export function isInactiveWorkspace(
@@ -98,7 +102,8 @@ export function isInactiveWorkspace(
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
   worktreeIdsWithLiveAgent: ReadonlySet<string>,
-  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS
+  worktreeIdsWithStructuredChat: ReadonlySet<string> = EMPTY_WORKTREE_IDS,
+  pendingReconnectWorktreeIds: ReadonlySet<string> = EMPTY_WORKTREE_IDS
 ): boolean {
   return !hasActiveWorkspaceActivity(
     worktreeId,
@@ -106,6 +111,7 @@ export function isInactiveWorkspace(
     ptyIdsByTabId,
     browserTabsByWorktree,
     worktreeIdsWithLiveAgent,
-    worktreeIdsWithStructuredChat
+    worktreeIdsWithStructuredChat,
+    pendingReconnectWorktreeIds
   )
 }

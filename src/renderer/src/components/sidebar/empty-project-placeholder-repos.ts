@@ -8,6 +8,8 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
   worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
   visibleWorktrees: readonly Worktree[]
   filterRepoIds: readonly string[]
+  /** Startup's all-host worktree scan has settled (or bailed out). */
+  startupWorktreeRefreshCompleted: boolean
 }): Set<string> {
   if (args.groupBy !== 'repo') {
     return new Set()
@@ -20,7 +22,13 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
     if (filterSet && !filterSet.has(repo.id)) {
       continue
     }
-    const hasNoWorktrees = (args.worktreesByRepo[repo.id]?.length ?? 0) === 0
+    const worktrees = args.worktreesByRepo[repo.id]
+    // `undefined` is "not scanned yet", `[]` is "scanned, empty" (#16247). After
+    // startup, fall back so a repo whose scan failed still keeps a header.
+    if (worktrees === undefined && !args.startupWorktreeRefreshCompleted) {
+      continue
+    }
+    const hasNoWorktrees = (worktrees?.length ?? 0) === 0
     // Why: workspace filters hide cards, but must not rewrite the visible
     // membership of a persisted Project Group. #8865
     const isFilteredProjectGroupMember = repo.projectGroupId != null && !visibleRepoIds.has(repo.id)

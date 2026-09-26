@@ -23,6 +23,7 @@ type MockState = {
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
   migrationUnsupportedByPtyId: Record<string, never>
   retainedAgentsByPaneKey: Record<string, unknown>
+  pendingReconnectWorktreeIds?: string[]
 }
 
 let mockState: MockState
@@ -211,6 +212,20 @@ describe('useIsSleepingWorktree', () => {
       ptyIdsByTabId: {}
     }
 
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>true</span>')
+  })
+
+  it('keeps a dead tab awake while startup reconnect still owes it a PTY (#16247)', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const state = {
+      ...mockState,
+      tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId)] },
+      ptyIdsByTabId: {}
+    }
+    mockState = { ...state, pendingReconnectWorktreeIds: [worktreeId] }
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>false</span>')
+
+    mockState = { ...state, pendingReconnectWorktreeIds: [] }
     expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>true</span>')
   })
 

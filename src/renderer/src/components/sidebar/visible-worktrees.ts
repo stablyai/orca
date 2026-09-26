@@ -72,6 +72,8 @@ export type VisibleWorktreeOptions = {
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
   worktreeIdsWithLiveAgent: ReadonlySet<string>
   worktreeIdsWithStructuredChat?: ReadonlySet<string>
+  /** Awake at shutdown, pty not reattached yet; the sleeping sweep must keep them. #16247 */
+  pendingReconnectWorktreeIds: ReadonlySet<string>
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
@@ -157,7 +159,8 @@ export function computeVisibleWorktrees(
           opts.ptyIdsByTabId,
           opts.browserTabsByWorktree,
           opts.worktreeIdsWithLiveAgent,
-          opts.worktreeIdsWithStructuredChat
+          opts.worktreeIdsWithStructuredChat,
+          opts.pendingReconnectWorktreeIds
         )
     )
   }
