@@ -15599,7 +15599,10 @@
             "2b3ce6d394": "Annuler",
             "e05063cfc1": "Ligne {{value0}}",
             "c845170b3b": "Lignes {{value0}}-{{value1}}",
-            "commentTooLarge": "Le commentaire est trop volumineux pour être envoyé sans risque."
+            "commentTooLarge": "Le commentaire est trop volumineux pour être envoyé sans risque.",
+            "f6c449191e": "Ajouter une note pour l'IA",
+            "5fa4bfebaa": "Ajouter une note",
+            "5e9b3d0c2e": "Ajout..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "Cette note"
