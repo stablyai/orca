@@ -19,6 +19,10 @@ import { dispatchTerminalShortcutAction } from './terminal-keyboard-action-dispa
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { createTerminalKeyboardReleaseHandlers } from './terminal-keyboard-release-handlers'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
+import {
+  createShortcutInputSender,
+  type TerminalCapturedInputBinding
+} from './terminal-captured-input-dispatch'
 
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
 
@@ -54,6 +58,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     keyboardScopeRef,
     managerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd,
     expandedPaneIdRef,
@@ -236,13 +241,20 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
         return
       }
       const sendResolvedInput = createCapturedInputSender(pane, action.data)
+      const sendShortcutInput = createShortcutInputSender({
+        getBinding: () =>
+          panePtyBindingsRef.current.get(pane.id) as TerminalCapturedInputBinding | undefined,
+        kittyKeyboardInput: action.kittyKeyboardInput,
+        sendResolvedInput,
+        sendData: (data) => createCapturedInputSender(pane, data)()
+      })
       if (action.consumeOptionKeyUp) {
         optionKittyReleases.armNativeDeadKey(e)
       } else if (action.optionKittyRelease) {
         optionKittyReleases.arm(
           e,
           action.optionKittyRelease,
-          sendResolvedInput,
+          sendShortcutInput,
           () => paneKittyKeyboardModesRef?.current.get(pane.id)?.flags ?? 0,
           getLayoutCharacterForCode
         )
@@ -260,7 +272,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
             return
           }
         }
-        deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+        deferredNewlineSender.defer(e, pane.terminal.element, sendShortcutInput)
         return
       }
       // Why: the composed glyph reaches the pty from the composition session-end handler, which
@@ -270,10 +282,10 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       // mid-preedit is the corruption itself, so this one waits on the composition rather than a
       // deadline. The sender owns the wait so blur and teardown can drop it.
       if (e.isComposing || hasPendingImeComposition) {
-        deferredChordSender.defer(pane.terminal.element, sendResolvedInput)
+        deferredChordSender.defer(pane.terminal.element, sendShortcutInput)
         return
       }
-      sendResolvedInput()
+      sendShortcutInput()
       return
     }
 

@@ -170,6 +170,13 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     markShortcutTerminalInputSent() {
       session.markInteractiveRedrawInput()
     },
+    dispatchKittyShortcutInput(input, send) {
+      return session.kittyShortcutInputSettlement.dispatch(
+        input,
+        session.kittyKeyboardModes.flags,
+        send
+      )
+    },
     reconcileIfSessionDead: session.reconcileIfSessionDead,
     reconcileIfSessionMissing: session.reconcileIfSessionMissing,
     isUntouchedFreshSpawnPty: (ptyId) =>
@@ -177,6 +184,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     dispose() {
       session.disposed = true
       session.startupTiming?.finish('disposed')
+      session.kittyShortcutInputSettlement.dispose()
       const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
       if (unsentReplacedPtyId) {
         // Why: no spawn will carry this stop now, and the pane no longer references the PTY.

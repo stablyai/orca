@@ -8,7 +8,7 @@ import { useAppStore } from '@/store'
 import { isPassiveCompletedHibernationEvidence } from '@/lib/sleeping-agent-pane-ownership'
 import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
-import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
+import { resolveReattachReplacementPtyId } from './reattach-replacement-pty-id'
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
@@ -28,6 +28,7 @@ import {
   type ParkRevealNoHostImageReason,
   type ParkRevealRetryLedger
 } from './park-reveal-snapshot-verdict'
+import { restoreRetainedTerminalKittyState } from '../terminal-kitty-state-retention'
 
 type ReattachResultSession = ReattachPayloadSession &
   Pick<
@@ -44,6 +45,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'disposed'
     | 'getSshMainModelSnapshotProbe'
     | 'handleReattachResult'
+    | 'kittyShortcutInputSettlement'
     | 'followsDirectSshReconnect'
     | 'mountFollowsTerminalPark'
     | 'registerEffectiveLaunchConfig'
@@ -101,8 +103,11 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       // unverifiable evidence until a fresh attach returns one.
       session.remotePtyIncarnationId = null
     }
+    const settleShortcutInput = (): void =>
+      session.kittyShortcutInputSettlement?.settle(session.kittyKeyboardModes?.flags ?? 0)
 
     if (connectResult?.exitedBeforeAttach) {
+      settleShortcutInput()
       // Why: the transport already delivered the dead session's final frame + exit; treat as terminal state, not a failed reattach.
       return true
     }
@@ -112,6 +117,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       (typeof result === 'string' ? result : (staleSessionId ?? session.transport.getPtyId()))
     if (session.rejectObsoleteDirectSshReattach(retryPtyId)) {
       // Why: an obsolete reattach must stop consuming frames without killing the durable PTY a newer lease may adopt.
+      settleShortcutInput()
       return false
     }
     const ptyId =
@@ -126,6 +132,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         ptyId: staleSessionId ?? null
       })
       if (session.connectionId) {
+        settleShortcutInput()
         recoverUnverifiableDirectSshReattach(sessionBag, staleSessionId)
         return false
       }
@@ -183,6 +190,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     // sessionExpired arm fall through to startFreshColdRestoreAgentResume and
     // leave the attempt pending, which the 31s bound then ages out.
     session.settlePaneAttachAttempt?.(undefined, 'success')
+    restoreRetainedTerminalKittyState(ptyId, session.kittyKeyboardModes)
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
@@ -215,28 +223,12 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     session.reportPanePtyVisibility(ptyId, session.deps.isVisibleRef.current)
     session.registerSideEffectFactConsumerForPty(ptyId)
     session.syncHiddenRendererPtyDelivery()
-    const currentTabPtyId = Object.values(useAppStore.getState().tabsByWorktree)
-      .flat()
-      .find((tab) => tab.id === session.deps.tabId)?.ptyId
-    const existingLeafPtyId =
-      useAppStore.getState().terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[
-        session.pane.leafId
-      ]
-    // A split pane has its own PTY while the legacy tab-level field still
-    // names the source pane. Only infer a tab-wide replacement when that
-    // field is actually bound to this leaf; an unrelated sibling must not be
-    // rewritten to the new pane's PTY.
-    const inferredReplacementPtyId =
-      currentTabPtyId &&
-      shouldIgnoreStalePanePtyLayoutBinding({
-        existingPtyId: existingLeafPtyId,
-        nextPtyId: ptyId,
-        tabPtyId: currentTabPtyId
-      })
-        ? existingLeafPtyId
-        : undefined
-    const replacementPtyId =
-      staleSessionId && staleSessionId !== ptyId ? staleSessionId : inferredReplacementPtyId
+    const replacementPtyId = resolveReattachReplacementPtyId({
+      tabId: session.deps.tabId,
+      leafId: session.pane.leafId,
+      ptyId,
+      staleSessionId
+    })
     if (session.capturedDirectSshRetryPtyAccepted && session.directSshRetryAttempt) {
       session.deps.updateTabPtyId(
         session.deps.tabId,
@@ -355,6 +347,9 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       await fitAfterReattachRestore()
     }
     if (!isCurrentReattachPayload() || !reattachPayload.reattachPayloadApplied) {
+      if (isCurrentReattachPayload()) {
+        settleShortcutInput()
+      }
       return false
     }
     if (unverifiableParkRevealLedger !== undefined) {
@@ -363,6 +358,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     } else if (noHostImageReason !== undefined) {
       session.warnParkRevealNoHostImage(ptyId, noHostImageReason)
     }
+    settleShortcutInput()
     session.scheduleReattachIdleAgentCursorReset()
 
     scheduleRuntimeGraphSync()

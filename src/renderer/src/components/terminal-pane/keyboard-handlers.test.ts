@@ -126,7 +126,11 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
         () => 'alt-enter',
         () => true
       )
-    ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+    ).toEqual({
+      type: 'sendInput',
+      data: '\x1b\r',
+      kittyKeyboardInput: { kitty: '\x1b[13;2u', legacy: '\x1b\r' }
+    })
   })
 
   it('forwards trusted Ctrl+Enter authority to the shared policy', () => {

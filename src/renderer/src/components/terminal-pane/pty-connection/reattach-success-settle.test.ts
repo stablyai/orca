@@ -57,6 +57,8 @@ function buildSession(overrides: Record<string, unknown> = {}): {
     capturedDirectSshRetryPtyAccepted: false,
     rejectObsoleteDirectSshReattach: () => false,
     registerEffectiveLaunchConfig: vi.fn(),
+    kittyKeyboardModes: { flags: 0 },
+    kittyShortcutInputSettlement: { settle: vi.fn() },
     clearExitedPanePtyLayoutBinding: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
     startFreshColdRestoreAgentResume: vi.fn(),
@@ -127,12 +129,31 @@ describe('handleReattachResult recovery settle', () => {
     expect(settlePaneAttachAttempt).toHaveBeenCalledWith(undefined, 'failed')
   })
 
-  it('does not report success for an expired session', async () => {
+  it('keeps shortcut input pending while an expired session starts its replacement', async () => {
     const { session, settlePaneAttachAttempt } = buildSession()
 
     await driveReattach(session, { id: 'pty-1', sessionExpired: true }, 'pty-old')
 
     expect(settlePaneAttachAttempt).not.toHaveBeenCalledWith(undefined, 'success')
+    expect(session.kittyShortcutInputSettlement.settle).not.toHaveBeenCalled()
+    expect(session.startFreshColdRestoreAgentResume).toHaveBeenCalled()
+  })
+
+  it('keeps shortcut input pending when a local reattach without a PTY starts fresh', async () => {
+    const { session } = buildSession({
+      transport: {
+        getPtyId: () => null,
+        disconnect: vi.fn(),
+        serializeBuffer: vi.fn()
+      },
+      kittyShortcutInputSettlement: { settle: vi.fn() }
+    })
+    setPaneTransports(session, new Map([['pane-1', session.transport]]))
+
+    await driveReattach(session, undefined, null)
+
+    expect(session.kittyShortcutInputSettlement.settle).not.toHaveBeenCalled()
+    expect(session.startFreshColdRestoreAgentResume).toHaveBeenCalled()
   })
 
   it('does not report success for a superseded transport', async () => {

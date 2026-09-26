@@ -4,6 +4,7 @@ import { bindSerializeHiddenOutputSnapshot } from './hidden-output-snapshot-seri
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { HiddenOutputSnapshotResult } from './hidden-output-snapshot-serialize'
 import type { ReattachPayloadContext } from './reattach-payload-context'
+import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal-kitty-keyboard-mode-tracker'
 
 /**
  * A park-reveal of a remote-runtime pty arrives with `replay: ''`, so the host
@@ -128,6 +129,8 @@ function buildParkRevealSession(overrides: Record<string, unknown> = {}): Bag {
     sampleVisiblePaneForegroundAgent: vi.fn(),
     scheduleReattachIdleAgentCursorReset: vi.fn(),
     settlePaneAttachAttempt: vi.fn(),
+    kittyKeyboardModes: new TerminalKittyKeyboardModeTracker(),
+    kittyShortcutInputSettlement: { settle: vi.fn() },
     ...overrides
   } as unknown as ConnectPanePtySession
   bindHandleReattachResult(session)

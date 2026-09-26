@@ -12,6 +12,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     onError: (message: string) => void,
     startup: PtyPaneStartup
   ) => {
+    session.kittyShortcutInputSettlement.begin()
     // Why: a new stream generation cannot inherit an old replay's pending
     // destination-grid fit or keep its live-data waiter open.
     session.pendingHiddenSnapshotFit?.cancel()

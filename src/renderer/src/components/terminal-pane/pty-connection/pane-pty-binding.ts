@@ -20,6 +20,11 @@ export type PanePtyBinding = IDisposable & {
   requestWindowsShiftEnterReconfirmation: () => void
   /** Refresh interactive redraw scheduling after captured shortcut input. */
   markShortcutTerminalInputSent: () => void
+  /** Hold protocol-dependent shortcuts until a connect/reattach restores Kitty state. */
+  dispatchKittyShortcutInput: (
+    input: { kitty: string; legacy: string },
+    send: (data: string) => void
+  ) => boolean
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
   /** This session fresh-spawned the PTY (onPtySpawn fired for it) and never

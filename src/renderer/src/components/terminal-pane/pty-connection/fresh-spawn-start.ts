@@ -16,6 +16,7 @@ import type {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { findTerminalTabForPane } from './terminal-tab-id'
+import { forgetRetainedTerminalKittyState } from '../terminal-kitty-state-retention'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -56,6 +57,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // zero. The exit-handler reset alone is not enough: a late exit from a
     // replaced PTY takes the stale-transport early return and skips it, so
     // a restart-in-place would leak the old TUI's flags into a fresh shell.
+    forgetRetainedTerminalKittyState(session.transport.getPtyId())
     session.kittyKeyboardModes.reset()
     session.prepareFreshShellViewportForSpawn(options)
     const coldRestoreOverride =
@@ -176,6 +178,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           }
           return accepted ? resolvedPtyId : null
         }
+        session.kittyShortcutInputSettlement.settle(session.kittyKeyboardModes.flags)
         if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
           session.registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
             ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
