@@ -1,6 +1,7 @@
 import { isAgentSessionId, type AgentSessionRecord } from '../../shared/agent-session-record'
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { isReadableAgentSessionStoreTab } from './agent-session-store-row-rules'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
 
 /**
@@ -241,15 +242,12 @@ function parsePersistedTabs(
   }
   const table = new AgentSessionTabTable()
   for (const entry of raw) {
-    const tabId: unknown = entry?.tabId
-    const sessionId: unknown = entry?.sessionId
     const wellFormed =
-      isAgentSessionSurfaceTabId(tabId) &&
-      isAgentSessionId(sessionId) &&
-      table.sessionIdFor(tabId) === undefined &&
-      table.tabIdFor(sessionId) === undefined
+      isReadableAgentSessionStoreTab(entry) &&
+      table.sessionIdFor(entry.tabId) === undefined &&
+      table.tabIdFor(entry.sessionId) === undefined
     if (wellFormed) {
-      table.show(sessionId, tabId)
+      table.show(entry.sessionId, entry.tabId)
     } else if (strict) {
       return { valid: false, table: null }
     }

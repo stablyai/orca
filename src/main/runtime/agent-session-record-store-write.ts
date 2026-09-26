@@ -24,23 +24,26 @@ import { serializeAgentSessionStoreState } from './agent-session-store-serializa
 
 export const agentSessionStoreBackupPath = (filePath: string): string => `${filePath}.bak`
 
+/** Returns the exact text it published, so the caller derives revision and byte hash from it. */
 export async function saveAgentSessionStore(
   filePath: string,
   state: AgentSessionStoreState,
   options: { primaryStatus: 'validated' | 'unusable-or-absent' }
-): Promise<void> {
+): Promise<string> {
   const directory = dirname(filePath)
   await mkdir(directory, { recursive: true, mode: 0o700 })
   await chmod(directory, 0o700)
   const tmpPath = durableWriteTempPath(filePath)
+  const serialized = serializeAgentSessionStoreState(state)
   try {
-    await writeTempFileDurable(tmpPath, serializeAgentSessionStoreState(state), 0o600)
+    await writeTempFileDurable(tmpPath, serialized, 0o600)
     // Only a primary parsed under the transaction lock may replace the backup. During recovery the
     // primary is corrupt or absent, so the known-good backup must survive until publication.
     if (options.primaryStatus === 'validated') {
       await copyFileDurable(filePath, agentSessionStoreBackupPath(filePath))
     }
     await renameDurable(tmpPath, filePath)
+    return serialized
   } catch (error) {
     await rm(tmpPath, { force: true }).catch(() => {})
     throw error
