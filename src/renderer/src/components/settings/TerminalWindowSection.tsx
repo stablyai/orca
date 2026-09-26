@@ -9,6 +9,10 @@ import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import {
+  DEFAULT_SINGLE_PANE_MAX_WIDTH,
+  MIN_SINGLE_PANE_WIDTH
+} from '../terminal-pane/TerminalSinglePaneWidthHandles'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
@@ -219,6 +223,39 @@ export function TerminalWindowSection({
             step={1}
             suffix="px"
             onChange={(value) => updateSettings({ terminalPaddingY: Math.max(0, value) })}
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalWindowSection.7e06e46f18',
+            'Single Terminal Width'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalWindowSection.07bdfea18e',
+            'Maximum width for a tab with no splits, centered between the sidebars. Set 0 for full width.'
+          )}
+          keywords={['width', 'center', 'centered', 'max', 'single', 'unsplit', 'wide']}
+        >
+          <NumberField
+            label={translate(
+              'auto.components.settings.TerminalWindowSection.7e06e46f18',
+              'Single Terminal Width'
+            )}
+            description=""
+            value={settings.terminalSinglePaneMaxWidth ?? DEFAULT_SINGLE_PANE_MAX_WIDTH}
+            defaultValue={DEFAULT_SINGLE_PANE_MAX_WIDTH}
+            min={0}
+            max={4000}
+            step={10}
+            suffix="px"
+            onChange={(value) =>
+              updateSettings({
+                // Below the drag floor the first drag would silently snap the
+                // value back up, so refuse the width the drag cannot hold.
+                terminalSinglePaneMaxWidth: value <= 0 ? 0 : Math.max(MIN_SINGLE_PANE_WIDTH, value)
+              })
+            }
           />
         </SearchableSetting>
 
