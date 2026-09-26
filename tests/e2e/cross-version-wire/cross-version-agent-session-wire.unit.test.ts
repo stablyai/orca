@@ -23,6 +23,7 @@ import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-s
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
@@ -287,6 +288,40 @@ describe('cross-version structured agent sessions', () => {
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)
+    })
+
+    // The client sends a Stop naming no turn only to a host advertising this, because older cancel
+    // params are strict and require the turn. The invariant survives a release cut: each build
+    // advertises the capability exactly when its dispatcher accepts that cancel.
+    it('advertises conversation stop exactly where a cancel naming no turn is accepted', async () => {
+      const named = paramsFor('agentSession.cancel')
+      if (typeof named !== 'object' || named === null) {
+        throw new Error('the manifest has no cancel params')
+      }
+      const unnamed = Object.fromEntries(Object.entries(named).filter(([key]) => key !== 'turnId'))
+      for (const build of [current, baseline]) {
+        if (!build.methodNames.includes('agentSession.cancel')) {
+          continue
+        }
+        // Without a host every call answers `structured_agent_session_unsupported`, which would
+        // read as the params refusal this looks for.
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await build.installStructuredHost(installableHost(hostCalls))
+        try {
+          const replies = await callBuild(build, 'agentSession.cancel', unnamed, {
+            clientKind: 'runtime',
+            clientCapabilities: current.capabilities
+          })
+          expect(replies, `${build.label}: a cancel naming no turn`).toHaveLength(1)
+          expect(replies[0]?.ok, `${build.label}: a cancel naming no turn`).toBe(
+            build.capabilities.includes(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
+          )
+          expect(hostCalls.cancel).toHaveBeenCalledTimes(replies[0]?.ok ? 1 : 0)
+        } finally {
+          await build.installStructuredHost(null)
+        }
+      }
+      expect(current.capabilities).toContain(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
     })
 
     it('gets a clean answer from the old dispatcher rather than silence', async () => {
