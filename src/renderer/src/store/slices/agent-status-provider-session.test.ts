@@ -489,7 +489,7 @@ describe('recordAgentProviderSession', () => {
     )
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       state: 'done',
-      outcome: 'failure'
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 30 }
     })
 
     store
@@ -505,7 +505,7 @@ describe('recordAgentProviderSession', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       providerSession,
       state: 'done',
-      outcome: 'failure',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 30 },
       origin: 'live'
     })
   })

@@ -262,6 +262,20 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'failure' })
   })
 
+  it('asks for input when the host settled a request while a prompt waits on the user', () => {
+    // The host's status mirror reads `attention`, e.g. a subagent's approval is unanswered.
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion(), 'attention')
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked', agentTurnOutcome: 'success' })
+
+    for (const hostStatus of ['idle', 'working', null, undefined] as const) {
+      dispatched.length = 0
+      seed()
+      dispatchStructuredTurnCompletionAttention(structuredTab(), completion(), hostStatus)
+      expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
+    }
+  })
+
   it('says done even while the status row still reads working, because the host settled the turn', () => {
     // The completion can outrun the status re-projection. Sending the row's own state would make
     // main word a finished turn as "working" (notification-options.ts), which is the whole reason

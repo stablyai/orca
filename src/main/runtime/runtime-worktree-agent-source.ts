@@ -1,6 +1,6 @@
 import type { StructuredHostStatus } from '../../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
-import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
+import type { AgentMainAgentStatus } from '../../shared/main-agent-status'
 
 export type RuntimeWorktreeAgentSource = {
   paneKey: string
@@ -16,7 +16,7 @@ export type RuntimeWorktreeAgentSource = {
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
-  outcome?: AgentJournalTurnOutcome
+  mainAgent?: AgentMainAgentStatus
   stateStartedAt: number
   updatedAt: number
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */

@@ -121,10 +121,12 @@ export class StructuredAgentSessionTurnCompletionFeed {
       baseline.settled = null
       return
     }
-    // Only an idle session has a verdict, as on its row: sends refused one commit at a time
-    // announce once, when the last is answered. A withdrawn send leaves the older request latest.
+    // Owed work waits, so sends refused one commit at a time announce once, when the last is
+    // answered. A pending prompt does not wait (structured chat has no other attention producer):
+    // the client words it from the `attention` status, and answering it keeps the same identity.
+    // A withdrawn send leaves the older request latest.
     if (
-      state.summary.status !== 'idle' ||
+      state.owesWork ||
       !request ||
       (baseline.settled?.kind === request.kind && baseline.settled.id === request.id)
     ) {

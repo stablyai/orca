@@ -4,7 +4,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
+import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
 import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
@@ -32,7 +32,6 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       continue
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)
-    const outcome = agentMainAgentVerdict(entry)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
       ptyId: entry.terminalHandle
@@ -49,9 +48,8 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,
       toolInput: entry.toolInput ?? null,
-      interrupted: entry.interrupted ?? false,
-      // The main agent's own verdict, also while its subagents hold the row working.
-      ...(outcome ? { outcome } : {}),
+      interrupted: false,
+      ...agentVerdictFields(entry),
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,

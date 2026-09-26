@@ -106,13 +106,19 @@ describe('mostRecentAttentionInHistory', () => {
     expect(
       mostRecentAttentionInHistory([
         makeHistory('done', NOW - 4_000),
-        { ...makeHistory('done', NOW - 1_000), outcome: 'failure' }
+        {
+          ...makeHistory('done', NOW - 1_000),
+          mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1_000 }
+        }
       ])
     ).toBe(NOW - 1_000)
     expect(
       mostRecentAttentionInHistory([
         makeHistory('done', NOW - 4_000),
-        { ...makeHistory('done', NOW - 1_000), outcome: 'cancellation' }
+        {
+          ...makeHistory('done', NOW - 1_000),
+          mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: NOW - 1_000 }
+        }
       ])
     ).toBe(NOW - 4_000)
   })

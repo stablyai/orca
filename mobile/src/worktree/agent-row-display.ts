@@ -20,19 +20,20 @@ export type AgentDotState =
   | 'interrupted'
   | 'failed'
 
+type AgentRowVerdictSource = Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'mainAgent'>
+
 // Mirrors desktop agentMainAgentVerdict and agentVerdictDisplayMark
-// (src/shared/agent-main-agent-verdict.ts); a parity test runs both over one table. `outcome` is the
-// main agent's own verdict, sent also while subagents hold the row working; an old host sends none.
-export function agentRowVerdict(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'outcome'>
-): AgentJournalTurnOutcome | null {
-  return row.outcome ?? (row.state === 'done' && row.interrupted ? 'cancellation' : null)
+// (src/shared/agent-main-agent-verdict.ts); a parity test runs both over one table. `mainAgent` is
+// the main agent's own status, sent also while subagents hold the row working; an old host sends none.
+export function agentRowVerdict(row: AgentRowVerdictSource): AgentJournalTurnOutcome | null {
+  if (row.mainAgent && row.mainAgent.state !== 'done') {
+    return null
+  }
+  return row.mainAgent?.outcome ?? (row.state === 'done' && row.interrupted ? 'cancellation' : null)
 }
 
 // A failure outranks every state; a stop marks only a row that is itself done.
-export function agentRowVerdictMark(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'outcome'>
-): 'failed' | 'interrupted' | null {
+export function agentRowVerdictMark(row: AgentRowVerdictSource): 'failed' | 'interrupted' | null {
   const verdict = agentRowVerdict(row)
   if (verdict === 'failure') {
     return 'failed'
@@ -43,7 +44,7 @@ export function agentRowVerdictMark(
 export function agentDotState(
   row: Pick<
     RuntimeWorktreeAgentRow,
-    'state' | 'workingMode' | 'interrupted' | 'outcome' | 'updatedAt'
+    'state' | 'workingMode' | 'interrupted' | 'mainAgent' | 'updatedAt'
   >,
   now: number
 ): AgentDotState {
@@ -125,6 +126,17 @@ export function agentIdentityLabel(agentType: string | null): string {
     'mimo-code': 'MC'
   }
   return known[normalized] ?? normalized.slice(0, 2).toUpperCase()
+}
+
+// When the row's state began, except that a main agent that failed while its subagents run is
+// dated by its own failure. Mirrors desktop lastEnteredDoneAt (agent-finished-timestamp.ts).
+export function agentRowTimeAt(
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'mainAgent' | 'stateStartedAt'>
+): number {
+  if (row.state !== 'done' && row.mainAgent && agentRowVerdictMark(row) === 'failed') {
+    return row.mainAgent.stateStartedAt
+  }
+  return row.stateStartedAt
 }
 
 // Relative time, matching desktop formatTimeAgo thresholds (just now / Xm / Xh / Xd).

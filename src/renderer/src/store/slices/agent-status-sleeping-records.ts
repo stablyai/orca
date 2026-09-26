@@ -1,6 +1,9 @@
 import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
+import {
+  agentTurnEndedUncleanly,
+  agentVerdictFields
+} from '../../../../shared/agent-main-agent-verdict'
 import {
   getAgentResumeArgv,
   isResumableTuiAgent,
@@ -58,10 +61,7 @@ export function sleepingRecordFromEntry(args: {
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
-    ...(args.entry.interrupted ? { interrupted: true } : {}),
-    ...(args.entry.state === 'done' && args.entry.mainAgent?.outcome
-      ? { outcome: args.entry.mainAgent.outcome }
-      : {}),
+    ...agentVerdictFields(args.entry),
     ...(args.origin ? { origin: args.origin } : {})
   }
 }

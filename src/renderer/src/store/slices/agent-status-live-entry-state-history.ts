@@ -3,6 +3,7 @@ import {
   type AgentStateHistoryEntry,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { agentVerdictFields } from '../../../../shared/agent-main-agent-verdict'
 import type { AgentStatusPayload } from './agent-status-contract'
 
 /** The history a live entry carries after this write, and when its state was first observed. A
@@ -36,10 +37,7 @@ export function resolveAgentStatusLiveEntryStateHistory(
         prompt: existing.prompt,
         startedAt: existing.stateStartedAt,
         observedAt: existing.stateObservedAt,
-        interrupted: existing.interrupted,
-        ...(existing.state === 'done' && existing.mainAgent?.outcome
-          ? { outcome: existing.mainAgent.outcome }
-          : {})
+        ...agentVerdictFields(existing)
       }
     ]
     if (history.length > AGENT_STATE_HISTORY_MAX) {

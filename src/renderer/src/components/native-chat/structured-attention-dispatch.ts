@@ -15,14 +15,19 @@
  *
  * EVERY SETTLED TURN NOTIFIES, matching the CLI lane: the outcome picks the wording — "finished",
  * "failed" or "stopped" — exactly as the hook lane's verdict does. A turn with no outcome is UNKNOWN — the host sends no event for one, and nothing
- * here may turn that absence into success.
+ * here may turn that absence into success. A request that settles while a prompt (a subagent's
+ * approval, say) waits on the user is worded "needs input" instead, as the hook lane words a
+ * blocked row.
  *
  * Unread and delivery come out of ONE `resolveAgentAttention` decision. "Do not alert me about
  * something I am watching" is already answered by focus, in the surface adapter's viewed gates and
  * in main's `suppressWhenFocused`; there is no second suppression path here.
  */
 import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusSummary,
+  AgentSessionTurnCompletion
+} from '../../../../shared/agent-session-wire'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
@@ -37,7 +42,8 @@ import type { StructuredTab } from './structured-agent-session-tabs'
 
 export function dispatchStructuredTurnCompletionAttention(
   tab: StructuredTab,
-  completion: AgentSessionTurnCompletion
+  completion: AgentSessionTurnCompletion,
+  hostStatus?: AgentSessionStatusSummary['status']
 ): void {
   // ABSENT OUTCOME IS UNKNOWN AND LIGHTS NOTHING. The wire type makes it required and this host
   // never omits it, but a host that predates the field reaches here as `undefined`, and reading
@@ -107,7 +113,8 @@ export function dispatchStructuredTurnCompletionAttention(
           // 'done' is what the host told us, not an inference from the row — the row's own state
           // can still read 'working' when the completion outruns the status re-projection, and
           // main words a 'working' notification as "working". The outcome picks the wording from there.
-          agentState: 'done',
+          // A host status of `attention` is the row's 'blocked': the user has a prompt to answer.
+          agentState: hostStatus === 'attention' ? 'blocked' : 'done',
           agentTurnOutcome: completion.outcome,
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage

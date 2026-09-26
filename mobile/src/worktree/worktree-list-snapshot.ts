@@ -1,6 +1,5 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { Worktree } from './workspace-list-sections'
-import { agentRowVerdict } from './agent-row-display'
 
 export function areWorktreeListsEqual(
   left: readonly Worktree[],
@@ -110,7 +109,8 @@ function areAgentRowsEqual(
       a.lastAssistantMessage !== b.lastAssistantMessage ||
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||
-      agentRowVerdict(a) !== agentRowVerdict(b) ||
+      a.interrupted !== b.interrupted ||
+      !areMainAgentsEqual(a.mainAgent, b.mainAgent) ||
       a.stateStartedAt !== b.stateStartedAt ||
       a.updatedAt !== b.updatedAt
     ) {
@@ -118,4 +118,21 @@ function areAgentRowsEqual(
     }
   }
   return true
+}
+
+function areMainAgentsEqual(
+  left: RuntimeWorktreeAgentRow['mainAgent'],
+  right: RuntimeWorktreeAgentRow['mainAgent']
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  return (
+    left.state === right.state &&
+    left.outcome === right.outcome &&
+    left.stateStartedAt === right.stateStartedAt
+  )
 }

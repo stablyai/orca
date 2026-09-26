@@ -4,6 +4,7 @@ import {
   agentTurnEndedUncleanly,
   agentTurnStoppedByUser,
   agentVerdictDisplayMark,
+  agentVerdictFields,
   type AgentMainAgentVerdictSource
 } from './agent-main-agent-verdict'
 import type { AgentStatusState } from './agent-status-types'
@@ -16,16 +17,13 @@ const OUTCOMES: (AgentJournalTurnOutcome | undefined)[] = [
 ]
 
 // The rule as the plan states it: the main agent's own state decides when a row carries it; a row
-// without it (legacy, history, `worktree ps`) reads its top-level copy, and only the legacy flag
-// needs the combined `done`.
+// without it (a legacy or old-host row) reads the legacy flag, which alone needs the combined `done`.
 function expected(row: AgentMainAgentVerdictSource): AgentJournalTurnOutcome | null {
   const legacyFlag = row.state === 'done' && row.interrupted === true ? 'cancellation' : null
   if (row.mainAgent) {
-    return row.mainAgent.state === 'done'
-      ? (row.mainAgent.outcome ?? row.outcome ?? legacyFlag)
-      : null
+    return row.mainAgent.state === 'done' ? (row.mainAgent.outcome ?? legacyFlag) : null
   }
-  return row.outcome ?? legacyFlag
+  return legacyFlag
 }
 
 const MAIN_AGENTS: (AgentMainAgentVerdictSource['mainAgent'] | undefined)[] = [
@@ -37,14 +35,11 @@ const MAIN_AGENTS: (AgentMainAgentVerdictSource['mainAgent'] | undefined)[] = [
 
 const PRODUCT: AgentMainAgentVerdictSource[] = STATES.flatMap((state) =>
   MAIN_AGENTS.flatMap((mainAgent) =>
-    OUTCOMES.flatMap((topOutcome) =>
-      [undefined, false, true].map((interrupted) => ({
-        state,
-        ...(interrupted !== undefined ? { interrupted } : {}),
-        ...(mainAgent ? { mainAgent } : {}),
-        ...(topOutcome ? { outcome: topOutcome } : {})
-      }))
-    )
+    [undefined, false, true].map((interrupted) => ({
+      state,
+      ...(interrupted !== undefined ? { interrupted } : {}),
+      ...(mainAgent ? { mainAgent } : {})
+    }))
   )
 )
 
@@ -93,9 +88,11 @@ describe('agentMainAgentVerdict', () => {
     expect(agentMainAgentVerdict(row)).toBeNull()
   })
 
-  it('reads a top-level copy even on a working row, and the legacy flag only on a done one', () => {
-    expect(agentMainAgentVerdict({ state: 'working', outcome: 'failure' })).toBe('failure')
+  it('reads the legacy flag only on a done row, and under a done main agent with no outcome', () => {
     expect(agentMainAgentVerdict({ state: 'working', interrupted: true })).toBeNull()
+    expect(
+      agentMainAgentVerdict({ state: 'done', interrupted: true, mainAgent: { state: 'done' } })
+    ).toBe('cancellation')
     expect(agentMainAgentVerdict({ state: 'done', interrupted: true })).toBe('cancellation')
   })
 
@@ -107,5 +104,21 @@ describe('agentMainAgentVerdict', () => {
         mainAgent: { state: 'done', outcome: 'failure' }
       })
     ).toBe('failure')
+  })
+})
+
+describe('agentVerdictFields', () => {
+  const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 7 }
+
+  it('copies the whole main agent status and a true legacy flag together', () => {
+    expect(agentVerdictFields({ interrupted: true, mainAgent })).toEqual({
+      interrupted: true,
+      mainAgent
+    })
+  })
+
+  it('copies nothing a row does not carry, and never a false flag', () => {
+    expect(agentVerdictFields({ interrupted: false })).toEqual({})
+    expect(agentVerdictFields({})).toEqual({})
   })
 })

@@ -535,3 +535,125 @@ describe('a request the agent or its start refused', () => {
     expect(h.outcomes()).toEqual([[M2, 'failure']])
   })
 })
+
+describe('a request that settles while the user is asked something', () => {
+  const M1 = agentJournalSubmissionKey('m1')
+
+  /** An approval the user has not answered; `agentId` makes it a subagent's. */
+  function approval(
+    itemId: string,
+    sequence: number,
+    state: 'pending' | 'resolved',
+    agentId?: string
+  ): AgentJournalRenderItem {
+    return {
+      itemId,
+      revision: state === 'pending' ? 1 : 2,
+      sequence,
+      observedAt: sequence,
+      ...(agentId ? { agentId } : {}),
+      body: {
+        kind: 'approval',
+        title: 'Run command?',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state, selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    }
+  }
+
+  it('notifies once when the main turn settles while a subagent waits on an approval', () => {
+    const h = harness()
+    h.listen()
+    const user = userEntry('m1', 1)
+    const accepted = [sent('m1', { dispatchState: 'accepted' })]
+    h.setJournal([user, turnItem(turn('t1', 'running'), 2)], accepted)
+    h.observe()
+    h.setJournal(
+      [user, turnItem(turn('t1', 'running'), 2), approval('a1', 3, 'pending', 'child-1')],
+      accepted
+    )
+    h.observe()
+    h.setJournal(
+      [
+        user,
+        turnItem(turn('t1', 'completed', 'success'), 2),
+        approval('a1', 3, 'pending', 'child-1')
+      ],
+      accepted
+    )
+    h.observe()
+    expect(h.outcomes()).toEqual([['t1', 'success']])
+
+    // Answering the prompt settles the session idle on the request already announced.
+    h.setJournal(
+      [
+        user,
+        turnItem(turn('t1', 'completed', 'success'), 2),
+        approval('a1', 3, 'resolved', 'child-1')
+      ],
+      accepted
+    )
+    h.observe()
+    expect(h.outcomes()).toEqual([['t1', 'success']])
+  })
+
+  it('notifies a refused send once while a prompt is pending', () => {
+    const h = harness()
+    h.listen()
+    const prompt = approval('a1', 1, 'pending', 'child-1')
+    h.setJournal([prompt, userEntry('m1', 2)], [pending('m1')])
+    h.observe()
+    h.setJournal([prompt, userEntry('m1', 2)], [refused('m1')])
+    h.observe()
+    expect(h.outcomes()).toEqual([[M1, 'failure']])
+    h.setJournal([approval('a1', 1, 'resolved', 'child-1'), userEntry('m1', 2)], [refused('m1')])
+    h.observe()
+    expect(h.outcomes()).toEqual([[M1, 'failure']])
+  })
+
+  it('sends nothing while the main turn asks for permission, and one event when it settles', () => {
+    const h = harness()
+    h.listen()
+    const user = userEntry('m1', 1)
+    const accepted = [sent('m1', { dispatchState: 'accepted' })]
+    h.setJournal([user, turnItem(turn('t1', 'running'), 2)], accepted)
+    h.observe()
+    h.setJournal([user, turnItem(turn('t1', 'running'), 2), approval('a1', 3, 'pending')], accepted)
+    h.observe()
+    expect(h.events).toEqual([])
+    h.setJournal(
+      [user, turnItem(turn('t1', 'running'), 2), approval('a1', 3, 'resolved')],
+      accepted
+    )
+    h.observe()
+    h.setJournal(
+      [user, turnItem(turn('t1', 'completed', 'success'), 2), approval('a1', 3, 'resolved')],
+      accepted
+    )
+    h.observe()
+    expect(h.outcomes()).toEqual([['t1', 'success']])
+  })
+
+  it('still waits on a queued send the prompt hides, so the queue notifies once', () => {
+    const h = harness()
+    h.listen()
+    const prompt = approval('a1', 3, 'pending', 'child-1')
+    const items = [userEntry('m1', 1), turnItem(turn('t1', 'running'), 2), prompt]
+    const queued = sent('m2', { dispatchState: 'pending', resolvedAt: null })
+    const accepted = sent('m1', { dispatchState: 'accepted' })
+    h.setJournal([...items, userEntry('m2', 4)], [accepted, queued])
+    h.observe()
+    h.setJournal(
+      [
+        userEntry('m1', 1),
+        turnItem(turn('t1', 'completed', 'success'), 2),
+        prompt,
+        userEntry('m2', 4)
+      ],
+      [accepted, queued]
+    )
+    h.observe()
+    expect(h.events).toEqual([])
+  })
+})

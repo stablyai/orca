@@ -227,13 +227,13 @@ turn boundary remains a secondary source for builds that send it, and
 
 Readers decode the verdict through one accessor, `agentMainAgentVerdict`, which
 reads the main agent's own state, not the combined row's: `mainAgent.outcome`
-while `mainAgent.state` is `done`, then a top-level `outcome` (history entries,
-sleep records and `worktree ps` rows, whose writers record it only for a main
-agent that is itself done), then the legacy `interrupted` flag as a
+while `mainAgent.state` is `done`, then the legacy `interrupted` flag as a
 cancellation, which alone needs the combined `done`. So a main agent that
-failed while its subagents still run has a verdict on a `working` row, and
-`worktree ps` publishes it there. A state-history entry copies the verdict as
-`outcome` beside `interrupted`, so a row's history agrees with the row.
+failed while its subagents still run has a verdict on a `working` row. Every
+copy of a row (state-history entries, sleep records, `worktree ps` rows) takes
+the verdict through `agentVerdictFields`, which carries `interrupted` and the
+whole `mainAgent` (state, outcome and its own clock) together, so a copy agrees
+with the row and can date a failure by `mainAgent.stateStartedAt`.
 
 Display reads the verdict through `agentVerdictDisplayMark`: a failure marks the
 agent failed whatever the combined state, because it is news the user must see

@@ -81,7 +81,12 @@ describe('lastEnteredDoneAt shares the Smart Sort completion clock', () => {
     const boundary = (outcome?: 'failure' | 'cancellation') =>
       doneEntry({
         sessionBoundary: true,
-        stateHistory: [{ ...history, ...(outcome ? { outcome } : {}) }]
+        stateHistory: [
+          {
+            ...history,
+            ...(outcome ? { mainAgent: { state: 'done', outcome, stateStartedAt: 1_500 } } : {})
+          }
+        ]
       })
     expect(agentEntryCompletionAt(boundary())).toBe(1_500)
     expect(agentEntryCompletionAt(boundary('failure'))).toBe(1_500)

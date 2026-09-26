@@ -30,7 +30,8 @@ export function sameAgentStateHistory(
       entry.state === b[index]?.state &&
       entry.prompt === b[index]?.prompt &&
       entry.startedAt === b[index]?.startedAt &&
-      entry.interrupted === b[index]?.interrupted
+      entry.interrupted === b[index]?.interrupted &&
+      mainAgentStatusEqual(entry.mainAgent, b[index]?.mainAgent)
   )
 }
 

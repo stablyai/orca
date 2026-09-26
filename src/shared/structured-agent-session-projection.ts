@@ -15,10 +15,7 @@ import {
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
 import { describeToolInput } from './native-chat-tool-summary'
-import {
-  activeStructuredAgentSessionTurnId,
-  statusStructuredAgentSessionToolCall
-} from './structured-agent-session-live-turn'
+import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 import {
   hasStructuredAgentSessionRequest,
   latestStructuredAgentSessionAssistantMessage,
@@ -34,7 +31,7 @@ import {
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
-import { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
+import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
 
 // Re-exported so the live-turn readers' and the unanswered-send rule's existing consumers keep one
 // import site.
@@ -207,10 +204,7 @@ export function projectStructuredAgentSessionStatus(
   ) {
     return 'attention'
   }
-  return activeStructuredAgentSessionTurnId(items) ||
-    hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
-    ? 'working'
-    : 'idle'
+  return owesStructuredAgentSessionWork(items, submissions, currentFence) ? 'working' : 'idle'
 }
 
 /** The activity fields a sidebar row shows beside the prompt, named as the agent-status
@@ -252,9 +246,11 @@ export function projectStructuredAgentSessionStatusState(
 ): {
   summary: StructuredAgentSessionStatusProjection
   latestRequest: StructuredAgentSessionLatestRequest | null
+  /** Whether a running turn or an unanswered send is still owed, even beneath a pending prompt. */
+  owesWork: boolean
 } {
   if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
-    return { summary: { status: null, latestPrompt: '' }, latestRequest: null }
+    return { summary: { status: null, latestPrompt: '' }, latestRequest: null, owesWork: false }
   }
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
@@ -284,6 +280,7 @@ export function projectStructuredAgentSessionStatusState(
   )
   return {
     latestRequest,
+    owesWork: status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence),
     summary: {
       status,
       latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),

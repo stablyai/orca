@@ -1,6 +1,11 @@
 import type { AppState } from '@/store/types'
+import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
 import { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS, graphState } from './graph-state'
 import type { AgentStatusProjectionCacheEntry } from './types'
+
+function mainAgentKey(mainAgent: AgentMainAgentStatus | undefined) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
 
 function serializeAgentStatusEntry(
   paneKey: string,
@@ -21,7 +26,7 @@ function serializeAgentStatusEntry(
       prompt: history.prompt,
       startedAt: history.startedAt,
       interrupted: history.interrupted ?? null,
-      outcome: history.outcome ?? null
+      mainAgent: mainAgentKey(history.mainAgent)
     })),
     toolName: entry.toolName ?? null,
     toolInput: entry.toolInput ?? null,
@@ -31,7 +36,7 @@ function serializeAgentStatusEntry(
     lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
     interrupted: entry.interrupted ?? null,
     // A failure changes the verdict and leaves `interrupted` as it was.
-    outcome: entry.mainAgent?.outcome ?? null
+    mainAgent: mainAgentKey(entry.mainAgent)
   })
 }
 
