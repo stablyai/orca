@@ -8,6 +8,7 @@ import {
   buildPosixHookSpoolLines,
   POSIX_HOOK_JSON_STDIN
 } from '../agent-hooks/hook-stdin-contract'
+import { buildPosixNestedClaudeHostGuardLines } from '../agent-hooks/nested-claude-host-guard'
 import {
   buildWindowsGrokHookScript,
   GROK_HOME_ENVELOPE_MAX_LENGTH
@@ -38,6 +39,9 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_JSON_STDIN),
     ...buildPosixHookSpoolLines('grok'),
+    // Placed after the payload capture so a nested run still drains stdin, and
+    // it exits without spooling: the event must not reach the lead's pane later.
+    ...buildPosixNestedClaudeHostGuardLines(),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',

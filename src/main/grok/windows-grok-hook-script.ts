@@ -3,6 +3,7 @@ import {
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
+import { buildWindowsNestedClaudeHostGuardLines } from '../agent-hooks/nested-claude-host-guard'
 
 /** Matches the envelope length cap used by the POSIX grok-hook branch. */
 export const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
@@ -33,6 +34,7 @@ export function buildWindowsGrokHookScript(): string {
     'setlocal DisableDelayedExpansion',
     'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
     ...buildWindowsHookEnvironmentGuardLines(),
+    ...buildWindowsNestedClaudeHostGuardLines(),
     'set "ORCA_GROK_HOME="',
     'if not defined GROK_HOME goto :orca_grok_home_ready',
     `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" goto :orca_grok_home_ready`,

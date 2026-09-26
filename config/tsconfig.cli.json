@@ -18,6 +18,7 @@
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
     "../src/main/agent-hooks/managed-hook-script-refresh.ts",
+    "../src/main/agent-hooks/nested-claude-host-guard.ts",
     "../src/main/agent-hooks/posix-hook-command.ts",
     "../src/main/agent-hooks/runtime-home-hook-command.ts",
     "../src/main/agent-hooks/windows-direct-cmd-hook-command.ts",
