@@ -5,7 +5,8 @@ const CODES = [
   'account-missing',
   'became-active',
   'credentials',
-  'provenance'
+  'provenance',
+  'unsupported-host'
 ] as const
 
 export type ClaudePinnedLaunchErrorCode = (typeof CODES)[number]

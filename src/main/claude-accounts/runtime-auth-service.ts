@@ -14,6 +14,7 @@ import {
   readPinnedClaudeSeedMarker
 } from './claude-pinned-credentials'
 import { ClaudeRuntimeAuthSync } from './runtime-auth/runtime-auth-sync'
+import { claudePinnedLaunchError } from '../../shared/claude/claude-pinned-launch-error'
 import type {
   ClaudeLaunchAuthOptions,
   ClaudeRuntimeAuthPreparation
@@ -125,7 +126,10 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
       })
     }
     if (normalizeClaudeAccountSelectionTarget(target).runtime !== 'host') {
-      throw new Error('Claude --account launches are not supported for WSL terminals yet.')
+      throw claudePinnedLaunchError(
+        'unsupported-host',
+        'Claude --account launches are not supported for WSL terminals yet.'
+      )
     }
     const sharedWithLiveSession = await this.reservePinnedClaudeAccount(accountId)
     // Why no host-mutation re-check in the queue: while the reservation is held, no switch or

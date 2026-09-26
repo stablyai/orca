@@ -2465,6 +2465,7 @@
             "hostSessionsDetail_one": "{{email}} is still used by {{count}} Claude terminal started while it was the active account. Close it, or start on the active account this time.",
             "hostSessionsDetail_other": "{{email}} is still used by {{count}} Claude terminals started while it was the active account. Close them, or start on the active account this time.",
             "provenance": "Couldn't confirm the Claude account for this session, so it wasn't started.",
+            "unsupportedHost": "A saved Claude account can't be used in WSL yet. Start on the active account, or set this project's account to Default in Settings → Repository.",
             "usageFetch": "Checking account usage took too long. Try again."
           },
           "CloseTerminalDialog": {

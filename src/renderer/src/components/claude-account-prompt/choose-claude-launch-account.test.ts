@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
-import { shouldPromptForClaudeAccount } from './choose-claude-launch-account'
+import { useAppStore } from '@/store'
+import {
+  launchWithClaudeAccountChoice,
+  shouldPromptForClaudeAccount
+} from './choose-claude-launch-account'
+import { claudeAccountPinningUnsupportedReasonInState } from '../settings/repository-claude-account'
+
+vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
 
 function account(id: string): ClaudeManagedAccountSummary {
   return {
@@ -71,5 +79,37 @@ describe('shouldPromptForClaudeAccount', () => {
         accounts: twoAccounts
       })
     ).toBe(false)
+  })
+})
+
+describe('WSL projects', () => {
+  const initialState = useAppStore.getInitialState()
+  afterEach(() => useAppStore.setState(initialState, true))
+
+  function wslState(): ReturnType<typeof useAppStore.getState> {
+    const askRepo = repo({ path: 'C:\\repo', agentAccounts: { claude: { mode: 'ask' } } })
+    useAppStore.setState({
+      repos: [askRepo],
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the prompt toggle and the Windows runtime default are read on this path.
+      settings: {
+        askClaudeAccountPerProject: true,
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      } as GlobalSettings
+    })
+    return useAppStore.getState()
+  }
+
+  it('reports WSL as unsupported for pinning, matching the launch runtime', () => {
+    const state = wslState()
+    expect(claudeAccountPinningUnsupportedReasonInState(state, state.repos[0]!)).toBe('wsl')
+  })
+
+  it('launches without prompting', () => {
+    wslState()
+    const launch = vi.fn()
+
+    launchWithClaudeAccountChoice('claude', { repoId: 'repo-1' }, launch)
+
+    expect(launch).toHaveBeenCalledWith(undefined, false)
   })
 })

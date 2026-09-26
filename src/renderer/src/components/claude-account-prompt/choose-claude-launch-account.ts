@@ -13,6 +13,7 @@ import {
 } from '@/runtime/runtime-provider-accounts-client'
 import { providerAccountMatchesView } from '../settings/provider-account-visibility'
 import { requestClaudeAccountPrompt } from './claude-account-prompt-state'
+import { claudeAccountPinningUnsupportedReasonInState } from '../settings/repository-claude-account'
 
 export type ClaudeLaunchAccountChoice =
   | { kind: 'default' }
@@ -36,6 +37,19 @@ function claudeAccountPromptMayApply(
     return preference.mode === 'ask'
   }
   return settings?.askClaudeAccountPerProject === true
+}
+
+type PromptEligibilityState = Parameters<typeof claudeAccountPinningUnsupportedReasonInState>[0]
+
+// Why: a project that cannot pin (SSH, WSL) must not offer a choice its launch would refuse.
+function claudeAccountPromptMayApplyInState(
+  state: PromptEligibilityState,
+  repo: Repo | undefined
+): repo is Repo {
+  return (
+    claudeAccountPromptMayApply(repo, state.settings) &&
+    claudeAccountPinningUnsupportedReasonInState(state, repo) === null
+  )
 }
 
 export function shouldPromptForClaudeAccount(
@@ -86,7 +100,7 @@ export async function chooseClaudeLaunchAccountForWorkspace(workspace: {
   const state = useAppStore.getState()
   const repo = findLaunchRepo(state, workspace)
   const { settings } = state
-  if (!settings || !claudeAccountPromptMayApply(repo, settings)) {
+  if (!settings || !claudeAccountPromptMayApplyInState(state, repo)) {
     return { kind: 'default' }
   }
   const routedSettings = getRepoOwnerRoutedSettings(settings, repo)
@@ -142,7 +156,7 @@ export function launchWithClaudeAccountChoice(
   const state = useAppStore.getState()
   if (
     agent !== 'claude' ||
-    !claudeAccountPromptMayApply(findLaunchRepo(state, target), state.settings)
+    !claudeAccountPromptMayApplyInState(state, findLaunchRepo(state, target))
   ) {
     launch(undefined, false)
     return

@@ -16,7 +16,7 @@ import {
   ASK_VALUE,
   DEFAULT_VALUE,
   buildClaudeAccountOptions,
-  claudeAccountPinningUnsupportedReason
+  claudeAccountPinningUnsupportedReasonInState
 } from './repository-claude-account'
 
 type RepositoryClaudeAccountSectionProps = {
@@ -39,7 +39,9 @@ export function RepositoryClaudeAccountSection({
   const loadGenerationRef = useRef(0)
   const selectLabelId = useId()
 
-  const unsupportedReason = claudeAccountPinningUnsupportedReason(repo)
+  const unsupportedReason = useAppStore((state) =>
+    claudeAccountPinningUnsupportedReasonInState(state, repo)
+  )
 
   // Why: getRepoOwnerRoutedSettings returns a fresh object each render, and the target
   // depends on nothing else — key the memo on the id so it stays stable.
@@ -182,7 +184,8 @@ export function RepositoryClaudeAccountSection({
         </span>
         <Select
           value={selectedValue}
-          disabled={loading || saving || Boolean(unsupportedReason)}
+          // Why: an unsupported project still gets to clear a preference saved before it became one.
+          disabled={loading || saving || (Boolean(unsupportedReason) && !saved)}
           onValueChange={(value) => {
             if (value === selectedValue) {
               return
@@ -207,7 +210,13 @@ export function RepositoryClaudeAccountSection({
           </SelectTrigger>
           <SelectContent>
             {options.map((option) => (
-              <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+              <SelectItem
+                key={option.value}
+                value={option.value}
+                disabled={
+                  option.disabled || (Boolean(unsupportedReason) && option.value !== DEFAULT_VALUE)
+                }
+              >
                 {option.label}
               </SelectItem>
             ))}

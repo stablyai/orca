@@ -26,6 +26,11 @@ describe('describeClaudePinnedLaunchError', () => {
       'provenance',
       "Couldn't confirm the Claude account for this session, so it wasn't started.",
       false
+    ],
+    [
+      'unsupported-host',
+      "A saved Claude account can't be used in WSL yet. Start on the active account, or set this project's account to Default in Settings → Repository.",
+      true
     ]
   ] as const)('maps %s to its message and offer flag', (code, message, offerActiveAccount) => {
     const error = claudePinnedLaunchError(code, 'refused').message

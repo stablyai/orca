@@ -49,6 +49,12 @@ const COPY: Record<
     key: 'auto.components.terminal.pane.ClaudePinnedLaunch.provenance',
     fallback: "Couldn't confirm the Claude account for this session, so it wasn't started.",
     offerActiveAccount: false
+  },
+  'unsupported-host': {
+    key: 'auto.components.terminal.pane.ClaudePinnedLaunch.unsupportedHost',
+    fallback:
+      "A saved Claude account can't be used in WSL yet. Start on the active account, or set this project's account to Default in Settings → Repository.",
+    offerActiveAccount: true
   }
 }
 

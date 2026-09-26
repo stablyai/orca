@@ -1,7 +1,9 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
 import type { ProjectClaudeAccountPreference } from '../../../../shared/claude/project-claude-account-preference'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { translate } from '@/i18n/i18n'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 
 export const DEFAULT_VALUE = '__default__'
 export const ASK_VALUE = '__ask__'
@@ -56,7 +58,31 @@ export function buildClaudeAccountOptions(input: {
   return options
 }
 
-// Why: SSH repos spawn Claude on a remote host that never sees the local managed-account store.
-export function claudeAccountPinningUnsupportedReason(repo: Repo): 'ssh' | null {
-  return repo.connectionId ? 'ssh' : null
+function targetsWsl(projectRuntime: ProjectExecutionRuntimeResolution | undefined): boolean {
+  return projectRuntime?.status === 'repair-required'
+    ? projectRuntime.repair.preferredRuntime.kind === 'wsl'
+    : projectRuntime?.runtime.kind === 'wsl'
+}
+
+// Why: SSH repos spawn Claude on a remote host that never sees the local managed-account store,
+// and pinned launches support host accounts only, so a WSL-runtime project cannot pin either.
+export function claudeAccountPinningUnsupportedReason(
+  repo: Repo,
+  projectRuntime?: ProjectExecutionRuntimeResolution
+): 'ssh' | 'wsl' | null {
+  if (repo.connectionId) {
+    return 'ssh'
+  }
+  return targetsWsl(projectRuntime) ? 'wsl' : null
+}
+
+/** Reads the project runtime the launch path resolves, so WSL projects match their spawns. */
+export function claudeAccountPinningUnsupportedReasonInState(
+  state: Parameters<typeof getLocalRepoProjectExecutionRuntimeContext>[0],
+  repo: Repo
+): 'ssh' | 'wsl' | null {
+  return claudeAccountPinningUnsupportedReason(
+    repo,
+    getLocalRepoProjectExecutionRuntimeContext(state, repo.id)
+  )
 }
