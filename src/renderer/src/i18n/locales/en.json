@@ -6854,6 +6854,13 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          },
+          "activeWorkspaceContrast": {
+            "title": "Active Workspace Contrast",
+            "description": "Controls how strongly the current workspace card stands out in the sidebar.",
+            "default": "Default",
+            "more": "More",
+            "high": "High"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -9320,7 +9327,11 @@
               "project": "project",
               "terminal": "terminal",
               "background": "background",
-              "tint": "tint"
+              "tint": "tint",
+              "contrast": "contrast",
+              "activeWorkspace": "active workspace",
+              "selectedWorkspace": "selected workspace",
+              "activeWorkspaceContrast": "active workspace contrast"
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",
