@@ -54,6 +54,9 @@ export type WorktreeVirtualRowContext = {
   onOpenWorktreeVisibility: (
     repo: Parameters<SectionHeaderRowContext['projectActions']['onOpenWorktreeVisibility']>[0]
   ) => void
+  onOpenProjectCleanup: (
+    repo: Parameters<SectionHeaderRowContext['projectActions']['onOpenProjectCleanup']>[0]
+  ) => void
   onOpenSuppressExternalWorktreeInbox: (projectId: string) => void
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void

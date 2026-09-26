@@ -22,6 +22,7 @@ describe('workspace cleanup candidate row data', () => {
         clean: null,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: null
       }
     })
@@ -31,6 +32,7 @@ describe('workspace cleanup candidate row data', () => {
         clean: true,
         upstreamAhead: null,
         upstreamBehind: null,
+        merged: null,
         checkedAt: 1
       }
     })
@@ -49,6 +51,7 @@ describe('workspace cleanup candidate row data', () => {
             clean: true,
             upstreamAhead: 0,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: 1
           }
         })
@@ -66,6 +69,7 @@ describe('workspace cleanup candidate row data', () => {
             clean: true,
             upstreamAhead: 2,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: 1
           }
         })
@@ -94,6 +98,7 @@ describe('workspace cleanup candidate row data', () => {
             clean: true,
             upstreamAhead: 2,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: 1
           }
         })
@@ -108,6 +113,7 @@ describe('workspace cleanup candidate row data', () => {
             clean: true,
             upstreamAhead: 2,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: 1
           }
         })
@@ -121,6 +127,7 @@ describe('workspace cleanup candidate row data', () => {
             clean: false,
             upstreamAhead: 0,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: 1
           }
         })

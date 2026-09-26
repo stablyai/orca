@@ -17,11 +17,14 @@ import {
   type WorkspaceCleanupGitRoute,
   type WorkspaceCleanupWorktreeGitRoute
 } from './workspace-cleanup-git-route'
+import { readWorkspaceCleanupMergeVerdict } from './workspace-cleanup-merge-probe'
+import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
 export type WorkspaceCleanupGitEvidence = {
   clean: boolean | null
   upstreamAhead: number | null
   upstreamBehind: number | null
+  merged: boolean | null
   checkedAt: number | null
   blockers: WorkspaceCleanupBlocker[]
 }
@@ -31,6 +34,7 @@ export function createEmptyWorkspaceCleanupGitEvidence(): WorkspaceCleanupGitEvi
     clean: null,
     upstreamAhead: null,
     upstreamBehind: null,
+    merged: null,
     checkedAt: null,
     blockers: []
   }
@@ -40,7 +44,8 @@ export async function readWorkspaceCleanupGitEvidence(
   worktree: Worktree,
   repo: Repo,
   repoRoute: WorkspaceCleanupGitRoute,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  localGitOptions: LocalProjectWorktreeGitOptions = {}
 ): Promise<WorkspaceCleanupGitEvidence> {
   const blockers: WorkspaceCleanupBlocker[] = []
   let status: GitStatusResult
@@ -97,15 +102,26 @@ export async function readWorkspaceCleanupGitEvidence(
 
   const upstreamAhead = status.upstreamStatus.hasUpstream ? status.upstreamStatus.ahead : null
   const upstreamBehind = status.upstreamStatus.hasUpstream ? status.upstreamStatus.behind : null
-  if (upstreamAhead !== null && upstreamAhead > 0) {
-    blockers.push('unpushed-commits')
-  }
-  if (clean && upstreamAhead === null) {
-    const unpushedCommitCount = await readUnpushedCommitCount(worktree, route, signal)
-    if (unpushedCommitCount === null) {
-      blockers.push('unknown-base')
-    } else if (unpushedCommitCount > 0) {
+  // Why: a dirty workspace is blocked by dirty-files whatever the merge says, so
+  // the probe would only spend Git processes to change nothing.
+  const merged = clean ? await readMergeVerdict(worktree, repo, route, localGitOptions) : null
+
+  // Why: a squash or rebase merge rewrites the branch's commits, so they exist
+  // nowhere on a remote in their original form and the deleted PR branch leaves
+  // no upstream — the shape that made these two blockers fire on exactly the
+  // workspaces this cleanup exists to retire. The merge proof already
+  // established the base carries every change, so there is nothing to lose.
+  if (merged !== true) {
+    if (upstreamAhead !== null && upstreamAhead > 0) {
       blockers.push('unpushed-commits')
+    }
+    if (clean && upstreamAhead === null) {
+      const unpushedCommitCount = await readUnpushedCommitCount(worktree, route, signal)
+      if (unpushedCommitCount === null) {
+        blockers.push('unknown-base')
+      } else if (unpushedCommitCount > 0) {
+        blockers.push('unpushed-commits')
+      }
     }
   }
 
@@ -113,8 +129,34 @@ export async function readWorkspaceCleanupGitEvidence(
     clean,
     upstreamAhead,
     upstreamBehind,
+    merged,
     checkedAt,
     blockers: uniqueWorkspaceCleanupGitBlockers(blockers)
+  }
+}
+
+async function readMergeVerdict(
+  worktree: Worktree,
+  repo: Repo,
+  route: WorkspaceCleanupWorktreeGitRoute,
+  localGitOptions: LocalProjectWorktreeGitOptions
+): Promise<boolean | null> {
+  // Why: the proof runs Git on this machine, so it may only judge a workspace
+  // this machine owns. The resolved route already separated local from ssh and
+  // refused `runtime:`, so reading it here beats re-deriving ownership.
+  if (route.kind !== 'local') {
+    return null
+  }
+  try {
+    return await withWorkspaceCleanupTimeout(
+      (signal) => readWorkspaceCleanupMergeVerdict(worktree, repo, { ...localGitOptions, signal }),
+      WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
+      'Timed out checking whether the branch is merged.'
+    )
+  } catch {
+    // Why: an unknown verdict keeps the pre-existing blocker behavior, so a slow
+    // probe degrades to today's classification instead of widening deletion.
+    return null
   }
 }
 
