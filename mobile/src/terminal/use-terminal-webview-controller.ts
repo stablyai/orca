@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
+import { createTerminalCellMetricsStore } from './terminal-cell-metrics'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { useTerminalWebViewEngineErrorState } from './terminal-webview-engine-error-state'
 import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
@@ -73,6 +74,7 @@ export function useTerminalWebViewController(
   // document's init() rAF chain ends with a 'ready' notify that resolves it. measureFitDimensions
   // awaits this so it doesn't race ahead of term.open() / renderService population.
   const promises = useTerminalWebViewReadyPromises()
+  const cellMetrics = useMemo(() => createTerminalCellMetricsStore(), [])
   const { clearEngineError, engineError, reportEngineError, reportNativeEngineError } =
     useTerminalWebViewEngineErrorState(onEngineError)
   const { armWebReadyWatchdog, clearWebReadyWatchdog } = useTerminalWebReadyWatchdog(
@@ -148,6 +150,7 @@ export function useTerminalWebViewController(
       routeTerminalQueryReply(msg, onTerminalQueryReply)
 
       if (msg.type === 'web-ready') {
+        cellMetrics.acceptWebReady(msg)
         confirmWebReady(true)
       } else if (
         msg.type === 'pong' &&
@@ -159,6 +162,14 @@ export function useTerminalWebViewController(
         // Why: the document's init() rAF chain has run — term is open, renderService is
         // populated, first paint has happened. Resolve any pending awaitReady() so a queued
         // measure can now safely read cell dims.
+        const corrected = cellMetrics.acceptReady(msg)
+        if (
+          corrected?.reported &&
+          (corrected.reported.cellWidth !== corrected.actual.cellWidth ||
+            corrected.reported.cellHeight !== corrected.actual.cellHeight)
+        ) {
+          console.log('[fit][cell-metrics] probe differs from xterm', corrected)
+        }
         promises.resolveReady()
       } else if (msg.type === 'measure-result') {
         promises.resolveMeasure(msg)
@@ -180,6 +191,7 @@ export function useTerminalWebViewController(
       }
     },
     [
+      cellMetrics,
       confirmWebReady,
       promises,
       reportEngineError,
@@ -207,10 +219,11 @@ export function useTerminalWebViewController(
   const resetReadiness = useCallback(() => {
     isWebReadyRef.current = false
     pendingPingIdRef.current = null
+    cellMetrics.clear()
     pendingMessages.clear()
     writeCoalescer.clear()
     armWebReadyWatchdog()
-  }, [armWebReadyWatchdog, pendingMessages, writeCoalescer])
+  }, [armWebReadyWatchdog, cellMetrics, pendingMessages, writeCoalescer])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -274,9 +287,16 @@ export function useTerminalWebViewController(
         writeCoalescer.clear()
         postMessage({ type: 'clear' })
       },
+      fitDimensions(containerHeight?: number) {
+        return cellMetrics.fit(textScale, containerHeight) ?? null
+      },
       measureFitDimensions(containerHeight?: number) {
         if (!isWebReadyRef.current) {
           return Promise.resolve(null)
+        }
+        const fitted = cellMetrics.fit(textScale, containerHeight)
+        if (fitted !== undefined) {
+          return Promise.resolve(fitted)
         }
         return promises.measure(sendToDocument, containerHeight)
       },
@@ -295,6 +315,7 @@ export function useTerminalWebViewController(
     }),
     [
       armWebReadyWatchdog,
+      cellMetrics,
       pingsOnForegroundRecovery,
       postMessage,
       promises,
@@ -307,6 +328,8 @@ export function useTerminalWebViewController(
 
   return {
     armWebReadyWatchdog,
+    /** The terminal view's RN layout; the document's own box stands in until it arrives. */
+    layout: cellMetrics.layout,
     clearEngineError,
     confirmWebReady,
     engineError,

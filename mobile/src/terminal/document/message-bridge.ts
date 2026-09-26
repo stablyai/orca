@@ -1,5 +1,6 @@
 import { handleMsg, type TerminalHostMessage } from './host-message-router'
 import { notify, reportEngineError, type TerminalEngineError } from './host-notify'
+import { measureCellMetrics } from './cell-metrics-probe'
 import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHostFrame } from './document-host-seams'
 
@@ -45,7 +46,14 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
     handleIncomingMessage(scope, frame)
   )
   if (scope.hasEngine()) {
-    notify(scope, { type: 'web-ready' })
+    // Why: with the cell box and viewport in hand the host sizes the first subscribe without a terminal.
+    const viewport = scope.viewportRect()
+    notify(scope, {
+      type: 'web-ready',
+      cellMetrics: measureCellMetrics(scope),
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height
+    })
   } else {
     reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
   }

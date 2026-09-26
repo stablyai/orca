@@ -2,6 +2,7 @@ import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { MOBILE_TERMINAL_CARET_OPTIONS } from '../terminal-webview-html/theme'
 import { ESC } from './escape-introducers'
 import { notify } from './host-notify'
+import { laidOutCellMetrics } from './cell-metrics-probe'
 import { fontPxForScale } from './text-scaling'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
@@ -150,7 +151,12 @@ export function init(
       scope.initialOscLinkRowOffset = 0
       scope.initialOscLinkEvictionReady = true
       applyFitScale(scope, 'init-replay')
-      notify(scope, { type: 'ready', cols: cols, rows: rows })
+      notify(scope, {
+        type: 'ready',
+        cols: cols,
+        rows: rows,
+        cellMetrics: laidOutCellMetrics(scope)
+      })
     })
   })
 }

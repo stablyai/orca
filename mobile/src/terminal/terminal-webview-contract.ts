@@ -91,6 +91,8 @@ export type TerminalWebViewHandle = {
   // latest output. No-op on the alternate screen.
   reflow: (cols: number, rows: number) => void
   clear: () => void
+  /** The fit from the document's reported cell box, with no message; null until it has one. */
+  fitDimensions: (containerHeight?: number) => { cols: number; rows: number } | null
   measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
   resetZoom: () => void
   cancelSelect: () => void

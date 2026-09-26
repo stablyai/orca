@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
-import { deferFirstSubscribeUntilViewportMeasured } from './mobile-terminal-first-subscribe-viewport'
+import { seedTerminalViewportFromCellMetrics } from './mobile-terminal-first-subscribe-viewport'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
@@ -32,7 +32,6 @@ export function useMobileSessionTerminalSubscription(
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
     webReadyHandlesRef,
-    subscribedDocumentsRef,
     activeHandleRef,
     subscribeSeqRef,
     layoutSeqRef,
@@ -44,7 +43,6 @@ export function useMobileSessionTerminalSubscription(
     getTerminalRef,
     unsubscribeTerminal,
     unsubscribeTerminalRef,
-    measureViewportOnce,
     signalTerminalInventoryRecovery
   } = scope
   const subscribeToTerminal = useCallback(
@@ -75,7 +73,8 @@ export function useMobileSessionTerminalSubscription(
       )
       // Why: a native-chat-covered terminal has no mounted webview, so only gate on the webview when not covered.
       if (!covered) {
-        if (!getTerminalRef(handle)) {
+        const ref = getTerminalRef(handle)
+        if (!ref) {
           logSkippedGate('no-webview-ref')
           return
         }
@@ -83,22 +82,15 @@ export function useMobileSessionTerminalSubscription(
           logSkippedGate('webview-not-ready')
           return
         }
-      }
-
-      if (
-        deferFirstSubscribeUntilViewportMeasured({
+        seedTerminalViewportFromCellMetrics({
           handle,
-          covered,
-          viewportMeasured: viewportMeasuredRef.current,
-          subscribedDocuments: subscribedDocumentsRef.current,
-          subscribingHandles: subscribingHandlesRef.current,
-          subscribeSeq: subscribeSeqRef.current,
-          measure: measureViewportOnce,
-          subscribe: subscribeToTerminal
+          ref,
+          viewportRef,
+          viewportMeasuredRef,
+          terminalFrameHeightRef,
+          onMeasured: (measuredHandle, dims, frameHeight) =>
+            diagnostics.viewportMeasured(measuredHandle, dims, frameHeight)
         })
-      ) {
-        logSkippedGate('measuring-viewport')
-        return
       }
 
       subscribingHandlesRef.current.add(handle)
@@ -209,8 +201,8 @@ export function useMobileSessionTerminalSubscription(
             }
             // Why: cold-start refit — init()'s fit can run against a transient scrollWidth, so re-fire against a settled DOM.
             scheduleDelayedAction(() => getTerminalRef(handle)?.resetZoom(), 200)
-            // Why: first subscribe has no viewport (xterm not loaded yet), so measure after init
-            // and resubscribe so the server can phone-fit — bounded per handle so a
+            // Why: a subscribe without a viewport (no reported cell box) measures after init and
+            // resubscribes so the server can phone-fit — bounded per handle so a
             // non-converging host degrades visibly instead of hot-looping (STA-3337).
             runTerminalViewportFitPass({
               handle,
@@ -298,7 +290,6 @@ export function useMobileSessionTerminalSubscription(
       clientId,
       getTerminalRef,
       markNativeChatInputLeaseReady,
-      measureViewportOnce,
       scheduleDelayedAction,
       showToast,
       signalTerminalInventoryRecovery

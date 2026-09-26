@@ -50,7 +50,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       // were gone so was the component holding this handle.
       pingsOnForegroundRecovery: () => false
     })
-    const { clearEngineError, engineError, handle, receive, resetReadiness } = controller
+    const { clearEngineError, engineError, handle, layout, receive, resetReadiness } = controller
     // The page's answer to the WebView's reload: drop the document and build another one. The host
     // element is keyed on it so React replaces the div rather than handing back one xterm left in.
     const [generation, setGeneration] = useState(0)
@@ -111,7 +111,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     }, [clearEngineError, resetReadiness])
 
     return (
-      <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
+      <View
+        style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}
+        onLayout={(e) => layout(e.nativeEvent.layout.width, e.nativeEvent.layout.height)}
+      >
         <View key={generation} ref={hostRef} style={TERMINAL_WEBVIEW_FRAME_STYLES.webview} />
         {engineError ? (
           <TerminalWebViewEngineErrorOverlay message={engineError} onReload={handleReload} />

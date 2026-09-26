@@ -14,7 +14,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     initializedHandlesRef,
     terminalDiagnosticsRef,
     webReadyHandlesRef,
-    subscribedDocumentsRef,
     activeHandleRef,
     pendingActiveTerminalHandleRef,
     activeSessionTab,
@@ -44,8 +43,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   const handleTerminalWebReady = useCallback(
     (handle: string) => {
       const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
-      // Why: web-ready announces a new document; the handle also re-attaches on theme or text-size changes, which keep the document.
-      subscribedDocumentsRef.current.delete(handle)
       webReadyHandlesRef.current.add(handle)
       nativeChatStream.notifyWebReady(handle, wasAlreadyReady)
       terminalDiagnosticsRef.current.webViewReady(
@@ -65,7 +62,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
       const isIntendedActive =
         handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
-      // Why: subscribeToTerminal measures the viewport first for a fresh document, so the dims ride this subscribe.
+      // Why: web-ready carried the document's cell box, so subscribeToTerminal sizes this subscribe with no terminal open.
       if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
         subscribeToTerminal(handle)
       }
