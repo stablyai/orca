@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,
+  AGENT_SESSION_RESUME_MAX_CONTINUATIONS,
   parseAgentSessionResumeMarker,
   type AgentSessionResumeFailureOutcome,
   type AgentSessionResumeMarker
@@ -179,6 +180,19 @@ export function normalizeState(
     failed.push(failure)
   }
   return { entries: [...bySession.values()], failed }
+}
+
+/** The offer with one more continuation sent for it, keeping the newest the marker is bounded to. */
+export function markerWithContinuation(
+  marker: AgentSessionResumeMarker,
+  continuationId: string
+): AgentSessionResumeMarker {
+  return {
+    ...marker,
+    continuations: [...(marker.continuations ?? []), continuationId].slice(
+      -AGENT_SESSION_RESUME_MAX_CONTINUATIONS
+    )
+  }
 }
 
 export function shouldReplaceMarker(

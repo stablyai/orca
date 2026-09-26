@@ -46,8 +46,6 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-session-status-feed'
-import type { StructuredAgentSessionTurnCompletionSubscriber } from './structured-agent-session-turn-completion-feed'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
@@ -211,9 +209,14 @@ export class StructuredAgentSessionHost {
   listPersistedSessionTabs = (sessionIds: readonly string[]) =>
     sessionTabs.listPersistedStructuredAgentSessionTabs(this.deps, sessionIds)
   getPersistedVisibleSessionTabIndex = () => this.deps.store.getVisibleSessionTabIndex()
+  getSessionTabId = (sessionId: string): string | null => this.deps.store.getSessionTabId(sessionId)
 
-  setSessionTabVisibility = async (sessionId: string, visible: boolean): Promise<void> => {
-    await sessionTabs.setStructuredAgentSessionTabVisibility(this, sessionId, visible)
+  setSessionTabVisibility = async (
+    sessionId: string,
+    visible: boolean,
+    tabId?: string
+  ): Promise<void> => {
+    await sessionTabs.setStructuredAgentSessionTabVisibility(this, sessionId, visible, tabId)
     // The tab edge of the row's lifetime; the handle close is the other.
     if (!visible && !this.sessions.get(sessionId)?.child) {
       this.clientDelivery.forgetStatus(sessionId)
@@ -300,19 +303,9 @@ export class StructuredAgentSessionHost {
     commands: this.deps.adapter.readCommands?.(sessionId)
   })
 
-  /** Answered from the record alone, so worktree activation asking for every chat tab opens no
-   *  journal. Queued behind an in-flight attach, so a starting chat answers with its settled owner. */
-  handoffStatus = (sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> =>
-    this.serialize(sessionId, async () => {
-      const record = this.deps.store.getRecord(sessionId)
-      if (!record) {
-        throw new Error('agent_session_identity_required')
-      }
-      if (!providerSupport.adapterSupportsRecord(this.deps.adapter, record)) {
-        throw new Error('structured_agent_session_unsupported')
-      }
-      return structuredAgentSessionOwnerStatus(record)
-    })
+  /** From the record store, never the session map: an idle-released chat has no map entry. */
+  handoffStatus = (sessionId: string): SessionWire.AgentSessionHandoffStatus =>
+    structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request) =>
     this.backgroundTasks.history(request)
@@ -334,14 +327,12 @@ export class StructuredAgentSessionHost {
 
   publishBackgroundTaskState: StructuredAgentSessionBackgroundTaskChannel['publish'] = (...args) =>
     this.backgroundTasks.publish(...args)
+  publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
 
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
-  subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
-    this.clientDelivery.subscribeStatus(subscriber)
+  subscribeStatus = this.clientDelivery.subscribeStatus
 
   /** Turns that settle from now on. Live-only: nothing missed is replayed. */
-  subscribeTurnCompletions = (
-    subscriber: StructuredAgentSessionTurnCompletionSubscriber
-  ): (() => void) => this.clientDelivery.subscribeTurnCompletions(subscriber)
+  subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
 }

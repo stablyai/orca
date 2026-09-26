@@ -1,3 +1,4 @@
+import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { CODEX_PROMPT_MAX_ANSWER_BYTES } from './codex-prompt-registry-bounds'
 import {
@@ -55,35 +56,61 @@ export function decodeCodexQuestionOptionId(
   }
 }
 
+/** One answer, checked against the prompt but not yet recorded on it. */
+export type CodexPreparedAnswer =
+  | { kind: 'decision'; decision: CodexApprovalDecision }
+  | { kind: 'answer'; questionId: string; answer: string }
+
+/** Validates a client's choice against the prompt without recording it, so an answer Codex
+ *  cannot take is refused before the journal commits it. */
+export function prepareCodexPromptAnswer(
+  prompt: CodexPendingPrompt,
+  response: AgentSessionPromptResponse
+): CodexPreparedAnswer {
+  if (prompt.method !== CODEX_USER_INPUT_METHOD) {
+    if (response.kind !== 'option' || !isCodexApprovalDecision(response.optionId)) {
+      throw new Error(`Codex item ${prompt.codexItemId} takes an approval decision`)
+    }
+    return { kind: 'decision', decision: response.optionId }
+  }
+  // Each Codex question is its own journal item, so an answer names exactly one question.
+  const entry =
+    response.kind === 'answers' && response.answers.length === 1 ? response.answers[0] : null
+  if (!entry) {
+    throw new Error(`Codex item ${prompt.codexItemId} takes one question answer`)
+  }
+  const optionId = entry.optionIds[0]
+  const decoded =
+    optionId === undefined
+      ? { questionId: entry.questionId, answer: entry.other?.trim() ?? '' }
+      : (prompt.optionAnswers.get(optionId) ?? decodeCodexQuestionOptionId(optionId))
+  const questionId =
+    (decoded?.questionId
+      ? (prompt.questionIdAliases.get(decoded.questionId) ?? decoded.questionId)
+      : null) ?? (prompt.questionIds.length === 1 ? prompt.questionIds[0] : null)
+  const answer = decoded?.answer ?? optionId ?? ''
+  if (!questionId || !prompt.questionIds.includes(questionId)) {
+    throw new Error(`The answer does not name a question on Codex item ${prompt.codexItemId}`)
+  }
+  if (Buffer.byteLength(answer, 'utf8') > CODEX_PROMPT_MAX_ANSWER_BYTES) {
+    throw new Error('codex prompt answer exceeds bounded registry state')
+  }
+  return { kind: 'answer', questionId, answer }
+}
+
 /**
- * Records one answer and returns the reply payload once the request is fully
+ * Records one prepared answer and returns the reply payload once the request is fully
  * answered. A multi-question user-input request stays pending until every
  * question has an answer, because Codex takes one reply for all of them.
  */
 export function applyCodexPromptAnswer(
   prompt: CodexPendingPrompt,
-  optionId: string
+  prepared: CodexPreparedAnswer
 ): Record<string, unknown> | null {
-  if (prompt.method !== CODEX_USER_INPUT_METHOD) {
-    if (!isCodexApprovalDecision(optionId)) {
-      throw new Error(`${optionId} is not a Codex approval decision`)
-    }
-    return { decision: optionId }
+  if (prepared.kind === 'decision') {
+    return { decision: prepared.decision }
   }
-  const mapped = prompt.optionAnswers.get(optionId)
-  const decoded = mapped ?? decodeCodexQuestionOptionId(optionId)
-  const questionId =
-    (decoded?.questionId
-      ? (prompt.questionIdAliases.get(decoded.questionId) ?? decoded.questionId)
-      : null) ?? (prompt.questionIds.length === 1 ? prompt.questionIds[0] : null)
-  const answer = decoded?.answer ?? optionId
-  if (!questionId || !prompt.questionIds.includes(questionId)) {
-    throw new Error(`${optionId} does not name a question on Codex item ${prompt.codexItemId}`)
-  }
-  if (Buffer.byteLength(answer, 'utf8') > CODEX_PROMPT_MAX_ANSWER_BYTES) {
-    throw new Error('codex prompt answer exceeds bounded registry state')
-  }
-  prompt.answers.set(questionId, answer)
+  prompt.answers.set(prepared.questionId, prepared.answer)
   if (prompt.questionIds.some((id) => !prompt.answers.has(id))) {
     return null
   }
@@ -104,13 +131,13 @@ export function answerCodexPrompt(
   registry: CodexPromptRegistry,
   connection: Pick<CodexAppServerConnection, 'respond'>,
   claim: CodexPromptClaim,
-  optionId: string
+  prepared: CodexPreparedAnswer
 ): void {
   if (!registry.ownsClaim(claim)) {
     throw new Error(`codex app-server is no longer waiting on ${claim.itemId}`)
   }
   const prompt = claim.prompt
-  const reply = applyCodexPromptAnswer(prompt, optionId)
+  const reply = applyCodexPromptAnswer(prompt, prepared)
   if (reply === null) {
     registry.releaseClaim(claim)
     return

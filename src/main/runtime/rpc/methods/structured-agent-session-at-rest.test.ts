@@ -136,9 +136,13 @@ describe('opening a chat at rest (P2-01)', () => {
     await restingChat()
     const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
     const sent = await rig.host.send(CALLER, restTestSend('wake up', fence))
-    expect(sent.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledOnce())
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+    if (!sent.ok) {
+      throw new Error(`send refused: ${sent.refusal.code}`)
+    }
+    // Awaits the provider's answer itself rather than polling for it, however slow the start.
+    await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+    expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+    expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
   })
 })
 
@@ -347,10 +351,11 @@ describe('an agent exit', () => {
       restTestSend('again', rig.store.getRecord(SESSION)!.lease.runtimeFence)
     )
 
-    expect(sent.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2), {
-      timeout: 5_000
-    })
+    if (!sent.ok) {
+      throw new Error(`send refused: ${sent.refusal.code}`)
+    }
+    await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+    expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2)
     expect(rig.store.getRecord(SESSION)?.lease.settlementRetryRequired).toBeUndefined()
   })
 })

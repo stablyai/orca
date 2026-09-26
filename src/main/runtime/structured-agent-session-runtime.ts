@@ -287,6 +287,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     onLifecycleEvent: (event) => lifecycle.deliver(event),
     onBackgroundTasksChanged: (sessionId, state) =>
       host?.publishBackgroundTaskState(sessionId, state),
+    onChildWorkEvidence: (sessionId, evidence) =>
+      host?.publishChildWorkEvidence(sessionId, evidence),
     onDispatchSettledLate,
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

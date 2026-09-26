@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -26,10 +26,6 @@ import { NativeChatDeliveryRetry } from './NativeChatDeliveryRetry'
 import { useStructuredAgentSessionHostExecutionPhase } from './StructuredAgentSessionStatusBridge'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
-
-function encodeQuestionAnswer(questionId: string, answer: string): string {
-  return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
-}
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -146,21 +142,7 @@ export function NativeChatStructuredSession(
     composerReady: prompt === null
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
-  const questions =
-    questionBody?.questions ??
-    (questionBody
-      ? [
-          {
-            id: questionBody.freeTextQuestionId ?? 'q1',
-            question: questionBody.question,
-            options: questionBody.options,
-            multiSelect: false,
-            ...(questionBody.freeTextQuestionId
-              ? { freeTextQuestionId: questionBody.freeTextQuestionId }
-              : {})
-          }
-        ]
-      : [])
+  const questions = questionBody ? agentSessionPromptQuestions(questionBody) : []
   const structuredTransport = useMemo(() => {
     const threadGoal = controller.threadGoal
     const setThreadGoalObjective = threadGoal
@@ -295,7 +277,7 @@ export function NativeChatStructuredSession(
         <NativeChatApprovalCard
           key={`${prompt.itemId}:${prompt.revision}`}
           approval={approval}
-          onChoose={(optionId) => void controller.respond(prompt, optionId)}
+          onChoose={(optionId) => void controller.respond(prompt, { kind: 'option', optionId })}
           onCancel={cancelPrompt}
           shouldFocus={props.isVisible && props.isFocusedGroup}
           onLinkClick={onLinkClick}
@@ -318,35 +300,17 @@ export function NativeChatStructuredSession(
           }}
           allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
           onAnswer={(answers) => {
-            if (questionBody.questions) {
-              const grouped = questions.map((question, questionIndex) => {
-                const answer = answers[questionIndex]
-                const other = answer?.other?.trim()
-                const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
-                  const optionId = question.options[optionIndex]?.id
-                  return optionId ? [optionId] : []
-                })
-                return {
-                  questionId: question.id,
-                  optionIds: question.multiSelect || !other ? optionIds : [],
-                  ...(other ? { other } : {})
-                }
+            const chosen = questions.map((question, questionIndex) => {
+              const answer = answers[questionIndex]
+              const other = answer?.other?.trim()
+              const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
+                const optionId = question.options[optionIndex]?.id
+                return optionId ? [optionId] : []
               })
-              if (grouped.every((answer) => answer.optionIds.length > 0 || answer.other)) {
-                void controller.respond(prompt, encodeAgentSessionQuestionAnswers(grouped))
-              }
-              return
-            }
-            const index = answers[0]?.indices[0]
-            const other = answers[0]?.other?.trim()
-            const optionId =
-              typeof index === 'number'
-                ? questionBody.options[index]?.id
-                : questionBody.freeTextQuestionId && other
-                  ? encodeQuestionAnswer(questionBody.freeTextQuestionId, other)
-                  : undefined
-            if (optionId) {
-              void controller.respond(prompt, optionId)
+              return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
+            })
+            if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other)) {
+              void controller.respond(prompt, { kind: 'answers', answers: chosen })
             }
           }}
           onCancel={cancelPrompt}

@@ -8,7 +8,9 @@ type StreamRecord = {
   subscriptionId: string
 }
 
-const { handlers, listeners, streams, unaryConnections } = vi.hoisted(() => ({
+const { dispatchMode, handlers, listeners, streams, unaryConnections } = vi.hoisted(() => ({
+  // Most real streaming handlers return once set up and keep streaming until their signal aborts.
+  dispatchMode: { settleOnSetup: false },
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   listeners: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   streams: [] as StreamRecord[],
@@ -49,11 +51,16 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
         subscriptionId: request.id
       }
       streams.push(record)
-      // The production shape: a streaming handler binds its abort listener and returns at once.
-      options.signal.addEventListener('abort', () => {
+      if (dispatchMode.settleOnSetup) {
         record.settled = true
+        return Promise.resolve()
+      }
+      return new Promise<void>((resolve) => {
+        options.signal.addEventListener('abort', () => {
+          record.settled = true
+          resolve()
+        })
       })
-      return Promise.resolve()
     }
   }
 }))
@@ -149,6 +156,7 @@ const FRAME = JSON.stringify({ ok: true, result: { seq: 1 } })
 
 describe('runtime:subscribe renderer lifecycle cleanup', () => {
   beforeEach(() => {
+    dispatchMode.settleOnSetup = false
     handlers.clear()
     listeners.clear()
     streams.length = 0
@@ -266,13 +274,16 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     expect(stream.signal.aborted).toBe(true)
   })
 
-  it('aborts a stream whose handler already returned when the renderer unsubscribes (U-01)', async () => {
+  it('aborts a stream whose handler returned right after setup, on explicit unsubscribe', async () => {
+    dispatchMode.settleOnSetup = true
     const harness = createSender(12)
     subscribe(harness.sender, 'sub-returned')
     const stream = streamFor('sub-returned')
-    // The dispatch settled: the handler bound its stream and returned.
+    // Let the settled dispatch run whatever it chains before the renderer leaves.
     await Promise.resolve()
     await Promise.resolve()
+    expect(stream.settled).toBe(true)
+    expect(stream.signal.aborted).toBe(false)
 
     const unsubscribe = listeners.get('runtime:unsubscribe')
     if (!unsubscribe) {
@@ -283,6 +294,19 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     expect(stream.signal.aborted).toBe(true)
     stream.emit(FRAME)
     expect(harness.sender.send).not.toHaveBeenCalled()
+  })
+
+  it('aborts a stream whose handler returned right after setup, when its sender navigates', async () => {
+    dispatchMode.settleOnSetup = true
+    const harness = createSender(13)
+    subscribe(harness.sender, 'sub-returned-nav')
+    const stream = streamFor('sub-returned-nav')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    harness.emitDidNavigate()
+
+    expect(stream.signal.aborted).toBe(true)
   })
 
   it('scopes colliding subscription ids and unsubscribe to their sender', () => {

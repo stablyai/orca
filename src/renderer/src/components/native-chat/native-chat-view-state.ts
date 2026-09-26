@@ -10,7 +10,7 @@ import type { NativeChatSession } from '../../../../shared/native-chat-types'
  *  live in-flight indicator. The rest are full-pane states. */
 export type NativeChatViewState =
   | { kind: 'loading' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message?: string }
   | { kind: 'empty' }
   | { kind: 'ready'; isWorking: false }
   | { kind: 'ready'; isWorking: true }
@@ -26,9 +26,10 @@ export function selectNativeChatViewState(
   session: NativeChatSession,
   { readRetries = false }: { readRetries?: boolean } = {}
 ): NativeChatViewState {
+  // No text of its own: the empty state supplies the pane's translated line.
   const error: NativeChatViewState | null =
     session.status === 'error'
-      ? { kind: 'error', message: session.error ?? 'Conversation could not be loaded.' }
+      ? { kind: 'error', ...(session.error ? { message: session.error } : {}) }
       : null
   if (error && !readRetries) {
     return error
