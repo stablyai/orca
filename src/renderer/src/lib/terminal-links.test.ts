@@ -124,6 +124,26 @@ describe('terminal path helpers', () => {
       ).toEqual(['docs/café/report.pdf'])
     })
 
+    it('keeps CJK name punctuation in the detected range', () => {
+      expect(
+        extractTerminalFileLinks('//nas/base/会社・事業/確定申告/R7確定申告送信票.pdf').map(
+          (link) => link.displayText
+        )
+      ).toEqual(['//nas/base/会社・事業/確定申告/R7確定申告送信票.pdf'])
+      expect(
+        extractTerminalFileLinks('C:/tmp/中黒・テスト/a.txt').map((link) => link.displayText)
+      ).toEqual(['C:/tmp/中黒・テスト/a.txt'])
+    })
+
+    it('still stops a CJK path at ASCII delimiters', () => {
+      expect(
+        extractTerminalFileLinks('/tmp/中黒・テスト/a.txt, done').map((link) => link.pathText)
+      ).toEqual(['/tmp/中黒・テスト/a.txt'])
+      expect(
+        extractTerminalFileLinks('open /tmp/中黒・テスト/a.txt; retry').map((link) => link.pathText)
+      ).toEqual(['/tmp/中黒・テスト/a.txt'])
+    })
+
     it('detects tilde-prefixed POSIX paths', () => {
       const links = extractTerminalFileLinks('~/Documents/Path/file_name')
       expect(links).toHaveLength(1)
