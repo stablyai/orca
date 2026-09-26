@@ -180,14 +180,20 @@ export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
 }
 
 export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
-  if (pane.webglDisabledAfterContextLoss) {
+  if (pane.webglDisabledAfterContextLoss || !pane.webglAddon) {
+    return
+  }
+  // Defensive: detect and handle context loss to prevent SIGSEGV from corrupted atlas state
+  if (isPaneWebglContextLost(pane)) {
+    pane.webglDisabledAfterContextLoss = true
+    disposeWebgl(pane, { refreshDimensions: true })
     return
   }
   try {
     // Why: rapid TUI redraws can corrupt xterm's WebGL glyph atlas without a
     // context-loss event. Clearing the atlas preserves GPU rendering and forces
     // a fresh paint when the pane becomes visible/focused again.
-    pane.webglAddon?.clearTextureAtlas()
+    pane.webglAddon.clearTextureAtlas()
   } catch {
     /* ignore — pane may have been disposed in the meantime */
   }
