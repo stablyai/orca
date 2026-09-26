@@ -11,6 +11,104 @@
   },
   "gates": [
     {
+      "id": "agent-session.trust-preflight-completion",
+      "title": "Agent launch preflight waits for its trust owner to settle",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "cross-layer-unit",
+      "surfaces": [
+        "agent trust IPC",
+        "renderer agent preflight",
+        "Codex continuation launch admission"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "ssh"
+      ],
+      "coverageNotes": "Actual main IPC handler, renderer preflight, session-continuation caller and config mutation queue with fake Electron bridge, config writer, launch and remote owner. Counts prove admission ordering only; no native PTY/CLI, actual config mutation or live provider evidence. Recognized native Codex launch preparation already awaits trust deeper in the stack.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/ipc/agent-trust.ts"
+      ],
+      "invariant": "Trust preflight settles after the selected owner mutation settles; rejected writes remain best-effort after settlement and SSH failures never fall back to local trust.",
+      "oracle": "Held local write or actual queue predecessor yields zero continuation launch calls until release, then exactly one; delayed local rejection settles successfully afterward. SSH awaits its remote writer and never invokes local trust. Sixty seconds of fake pending time adds zero timers and one trust call.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts"
+      ],
+      "testFiles": [
+        "tests/e2e/agent-trust-completion.unit.test.ts",
+        "src/renderer/src/lib/agent-trust-preflight.test.ts",
+        "src/renderer/src/lib/launch-agent-session-continuation.test.ts",
+        "src/main/remote-agent-trust-presets.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/agent-trust-completion.unit.test.ts",
+          "assertions": [
+            "holds the actual session-continuation launch call until the local write settles",
+            "keeps renderer preflight pending behind the actual config mutation queue",
+            "settles best-effort only after a queued local trust failure",
+            "adds no deadline or polling while a local write remains pending",
+            "keeps remote failures best-effort without a local fallback"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.173,
+          "summary": "32 author tests /4 suites pass; independently rerun32pass. New11pass versus original4fail/7pass. Four independent queue/registration/remote controls pass; original2fail/2pass. No native launch or config writes."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused mocked preflight/continuation/remote trust suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local mocked evidence; CI soak and native platform evidence pending."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original new suite fails four pending-write/queue/continuation assertions and passes seven; await candidate passes11. Separate actual IPC count probe originally resolves before write; candidate remains pending."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No new subprocess, polling, timer, retry or trust operation. Existing queue/write await is newly visible to IPC/caller: no timeout/cancellation and no finite delay bound; stuck predecessor can wait indefinitely. Reliability fix, no performance gain claim; separate trade-off PR."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "No live Codex CLI, PTY, trust prompt, native Electron app or actual trust-config mutation was exercised.",
+        "Windows/Linux/WSL/daemon/remote-runtime behavior was not executed; remote owner is mocked. No routing/wire/PTY ownership change.",
+        "Recognized native Codex launch preparation already awaits trust deeper; do not infer all actual launches currently race.",
+        "Another discarded trust Promise in worktree startup remains outside this candidate.",
+        "Existing queue has no timeout/cancellation; pending predecessor may keep caller waiting indefinitely."
+      ],
+      "promotionCriteria": [
+        "Retain pending-write/queue/launch-boundary red-green evidence and remote owner assertions; obtain actual platform/session evidence and CI soak before promotion."
+      ],
+      "demotionRule": "Remain experimental until repeated independent/CI evidence; investigate ordering or indefinite-wait regressions without weakening completion assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",

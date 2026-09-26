@@ -43,7 +43,7 @@ export function registerAgentTrustHandlers(): void {
         } else if (args.preset === 'copilot') {
           markCopilotFolderTrusted(args.workspacePath)
         } else if (args.preset === 'codex') {
-          markCodexProjectTrusted(args.workspacePath)
+          await markCodexProjectTrusted(args.workspacePath)
         } else if (args.preset === 'antigravity') {
           markAntigravityWorkspaceTrusted(args.workspacePath)
         }
