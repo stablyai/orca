@@ -125,7 +125,14 @@ function coldRestoredRuntime(): OrcaRuntimeService {
   })
   const runtime = new OrcaRuntimeService(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list and fence paths read only repos and the workspace session; the rest of Store is unreached.
-    { getRepos: () => [LIVE_REPO], getWorkspaceSession: () => session } as never
+    {
+      getRepos: () => [LIVE_REPO],
+      getWorkspaceSession: () => session,
+      // The production store commits asynchronously; a synchronous flush on this path is a bug.
+      flushOrThrow: () => {
+        throw new Error('synchronous flush')
+      }
+    } as never
   )
   runtime.attachWindow(1)
   return runtime
