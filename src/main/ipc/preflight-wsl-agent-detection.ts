@@ -12,7 +12,8 @@ export type WslPreflightTarget = {
 
 export async function detectWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
-  commands: readonly string[]
+  commands: readonly string[],
+  options: { failOnProbeError?: boolean } = {}
 ): Promise<Set<string>> {
   const uniqueCommands = [...new Set(commands.filter(Boolean))]
   if (uniqueCommands.length === 0) {
@@ -35,10 +36,12 @@ export async function detectWslCommandsOnPath(
     // second bespoke `[ -x ]` walk here duplicated the lookup script's own
     // `! -d` guard, which is how a directory once read as an installed CLI.
     buildPosixFallbackPathPrelude(),
-    `for cmd in ${commandList}; do`,
+    `for raw_cmd in ${commandList}; do`,
+    'cmd="$raw_cmd"',
+    'case "$cmd" in "~/"*) cmd="$HOME/${cmd#~/}" ;; esac',
     lookupScript,
     'if [ -n "$resolved" ]; then',
-    `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
+    `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$raw_cmd" "$resolved";`,
     'fi',
     'done'
   ].join('\n')
@@ -56,11 +59,22 @@ export async function detectWslCommandsOnPath(
     })
     // runProcess resolves on a timeout and on a non-zero exit, so partial
     // stdout would otherwise read as a complete answer.
-    if (result.timedOut || result.code !== 0) {
+    if (result.environmentResolved === false || result.timedOut || result.code !== 0) {
+      if (options.failOnProbeError) {
+        throw Object.assign(new Error('The WSL execution host is unavailable.'), {
+          code: 'remote_runtime_unavailable'
+        })
+      }
       return new Set()
     }
     return parseWslDetectedCommands(result.stdout)
-  } catch {
+  } catch (error) {
+    if (options.failOnProbeError) {
+      throw Object.assign(new Error('The WSL execution host is unavailable.'), {
+        code: 'remote_runtime_unavailable',
+        cause: error
+      })
+    }
     return new Set()
   }
 }

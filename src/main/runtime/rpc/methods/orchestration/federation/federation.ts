@@ -6,7 +6,6 @@ import {
 } from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
-import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
 import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,
@@ -20,6 +19,10 @@ import {
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
 import { FederationAttachStartParams } from './federation-start-schema'
+import {
+  resolveFederatedExistingWorktreePreflight,
+  validateFederatedCreationPreflight
+} from './federation-agent-preflight'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationAttachmentWorkerStart } from '../worker/worker-start-validation'
 import {
@@ -59,13 +62,10 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         createsWorktree,
         runtime
       })
-      if (createsWorktree) {
-        await assertOrchestrationWorktreeCreationSupported({
-          runtime,
-          repoSelector: params.repo as string,
-          existingPlacement: 'an exact existing folder workspace'
-        })
-      }
+      const existingWorktree = createsWorktree
+        ? undefined
+        : await resolveFederatedExistingWorktreePreflight(runtime, agent, params.worktree)
+      await validateFederatedCreationPreflight(runtime, agent, params.repo, createsWorktree)
 
       const db = runtime.getOrchestrationDb()
       db.createRemoteDispatchAttachment({
@@ -80,7 +80,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       })
       const effects: FederationEffect[] = []
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
-      let worktree
+      let worktree = existingWorktree
       let terminalHandle = params.terminal
       const setupSource = createsWorktree
         ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
@@ -149,12 +149,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           )
           appendFederationSetupEffect(effects, setup)
         } else {
-          worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
-            throw new OrchestrationError(
-              'worktree_not_found_on_server',
-              `Worktree ${params.worktree} was not found on the selected worker server.`
-            )
-          })
           effects.push(
             { kind: 'worktree', action: 'reused', id: worktree.id },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
