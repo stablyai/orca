@@ -40,6 +40,11 @@ function decodeEncodedWslBashCommand(command: string): string {
   return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : command
 }
 
+/** The tagged line the guest prints for an Orca-owned home (STA-5616 protocol). */
+function ownedProbeVerdict(linuxPath: string): string {
+  return `ORCA_CODEX_HOME_VERDICT:owned:${Buffer.from(linuxPath, 'utf-8').toString('base64')}\n`
+}
+
 function wslOk(stdout = ''): WslResult {
   return { environmentResolved: true, code: 0, stdout, stderr: '', timedOut: false }
 }
@@ -139,7 +144,7 @@ describe('CodexAccountService config sync', () => {
     writeFileSync(wslCanonicalConfigPath, 'model_instructions_file = "instructions.md"\n', 'utf-8')
 
     vi.doMock('node:child_process', () => ({
-      execFileSync: vi.fn(() => `${wslLinuxHomePath}\n`),
+      execFileSync: vi.fn(() => ownedProbeVerdict(wslLinuxHomePath)),
       spawn: vi.fn()
     }))
     vi.doMock('../../shared/wsl-paths', () => ({
@@ -216,7 +221,7 @@ describe('CodexAccountService config sync', () => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       expect(args.slice(0, 2)).toEqual(['-d', 'Debian'])
       expect(script).toContain('readlink -f')
-      return `${wslLinuxHomePath}\n`
+      return ownedProbeVerdict(wslLinuxHomePath)
     })
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
@@ -349,7 +354,7 @@ describe('CodexAccountService config sync', () => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       expect(args.slice(0, 2)).toEqual(['-d', 'Debian'])
       expect(script).toContain('readlink -f')
-      return `${wslLinuxHomePath}\n`
+      return ownedProbeVerdict(wslLinuxHomePath)
     })
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
@@ -427,7 +432,7 @@ describe('CodexAccountService config sync', () => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       expect(args.slice(0, 2)).toEqual(['-d', 'Debian'])
       expect(script).toContain('readlink -f')
-      return `${wslLinuxHomePath}\n`
+      return ownedProbeVerdict(wslLinuxHomePath)
     })
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
@@ -514,7 +519,7 @@ describe('CodexAccountService config sync', () => {
     const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       if (script.includes('readlink -f')) {
-        return `${wslLinuxHomePath}\n`
+        return ownedProbeVerdict(wslLinuxHomePath)
       }
       return ''
     })
@@ -647,7 +652,7 @@ describe('CodexAccountService config sync', () => {
     const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       if (script.includes('readlink -f')) {
-        return `${wslLinuxHomePath}\n`
+        return ownedProbeVerdict(wslLinuxHomePath)
       }
       return ''
     })
@@ -766,12 +771,12 @@ describe('CodexAccountService config sync', () => {
         if (script.includes('readlink -f')) {
           expect(script).toContain("expected_marker='account-1'")
           expect(script).toContain(
-            'test "$candidate_real" = "$managed_root_real/$expected_marker/home"'
+            'if [ "$candidate_real" != "$managed_root_real/$expected_marker/home" ]; then tag account-mismatch; fi'
           )
           expect(script).toContain(
-            'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"'
+            'if [ "$contents" != "$expected_marker" ]; then tag marker-mismatch; fi'
           )
-          return `${wslLinuxHomePath}\n`
+          return ownedProbeVerdict(wslLinuxHomePath)
         }
         return ''
       }),

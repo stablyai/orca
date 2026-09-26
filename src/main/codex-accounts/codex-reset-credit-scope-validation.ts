@@ -108,8 +108,14 @@ export function validateCodexResetCreditScope(
       )
     }
   }
-  if (validation.kind === 'providerMutation' && expectedScope.target.runtime === 'host') {
-    dependencies.managedHomePaths.assertHostOwnership(account.managedHomePath, account.id)
+  if (validation.kind === 'providerMutation') {
+    // Why both runtimes: spending a reset credit is an irreversible provider
+    // mutation, so the home must be PROVEN to be this account's whichever
+    // runtime holds it — the WSL lane was skipping the check entirely. `assert`
+    // routes a host path to the host gate and a WSL path to the guest probe,
+    // and throws the temporary-unavailable error when it cannot tell, which the
+    // coordinator already refuses on rather than spending the credit.
+    dependencies.managedHomePaths.assert(account.managedHomePath, account.id)
   }
   return { managedHomePath: account.managedHomePath, rateLimits: rateLimitState }
 }
