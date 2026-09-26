@@ -110,7 +110,8 @@ export const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,
   from: OptionalString,
-  devMode: OptionalBoolean
+  devMode: OptionalBoolean,
+  callerTerminalHandle: OptionalString
 })
 
 export const AskParams = z

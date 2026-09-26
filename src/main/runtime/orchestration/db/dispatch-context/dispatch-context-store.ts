@@ -3,7 +3,10 @@ import { OrchestrationError } from '../../orchestration-error'
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
-import { paneKeyMatchSuffix } from '../pane-key-match'
+import {
+  isEquivalentPaneKey,
+  paneKeyMatchSuffix
+} from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -118,6 +121,47 @@ export function getDispatchContext(
     .get(taskId) as DispatchContextRow | undefined
 }
 
+export function getDispatchContextForRun(
+  this: OrchestrationDb,
+  taskId: string,
+  runId: string
+): DispatchContextRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SQLite query returns row matching DispatchContextRow schema or undefined
+  return this.db
+    .prepare(
+      'SELECT * FROM dispatch_contexts WHERE run_id = ? AND task_id = ? ORDER BY rowid DESC LIMIT 1'
+    )
+    .get(runId, taskId) as DispatchContextRow | undefined
+}
+
+export function getDispatchContextForCallerIdentity(
+  this: OrchestrationDb,
+  taskId: string,
+  caller: {
+    terminalHandle: string
+    paneKey: string
+    processIncarnation: string
+    launchTokenHash: string
+  }
+): DispatchContextRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SQLite query returns rows matching DispatchContextRow schema
+  const candidates = this.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
+       WHERE task_id = ? AND process_incarnation = ? AND launch_token_hash = ?
+       ORDER BY rowid DESC`
+    )
+    .all(taskId, caller.processIncarnation, caller.launchTokenHash) as DispatchContextRow[]
+  return candidates.find(
+    (dispatch) =>
+      dispatch.assignee_handle === caller.terminalHandle ||
+      Boolean(
+        dispatch.assignee_pane_key &&
+        isEquivalentPaneKey(dispatch.assignee_pane_key, caller.paneKey)
+      )
+  )
+}
+
 export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
@@ -161,6 +205,8 @@ export function commitDispatchLaunchTokenHash(
 export type DispatchContextStoreMethods = {
   createDispatchContext: typeof createDispatchContext
   getDispatchContext: typeof getDispatchContext
+  getDispatchContextForRun: typeof getDispatchContextForRun
+  getDispatchContextForCallerIdentity: typeof getDispatchContextForCallerIdentity
   getDispatchContextById: typeof getDispatchContextById
   commitDispatchLaunchTokenHash: typeof commitDispatchLaunchTokenHash
 }
@@ -169,6 +215,8 @@ export function attachDispatchContextStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     createDispatchContext,
     getDispatchContext,
+    getDispatchContextForRun,
+    getDispatchContextForCallerIdentity,
     getDispatchContextById,
     commitDispatchLaunchTokenHash
   })

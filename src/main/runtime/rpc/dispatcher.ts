@@ -108,6 +108,7 @@ export class RpcDispatcher {
         context: {
           runtime: this.runtime,
           signal: options?.signal,
+          trustedDesktopIpc: options?.trustedDesktopIpc,
           connectionId: options?.connectionId,
           subscriptionRegistrationVersion:
             request.method === 'terminal.unsubscribe'
