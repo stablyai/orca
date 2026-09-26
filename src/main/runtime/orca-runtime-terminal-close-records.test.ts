@@ -79,7 +79,11 @@ describe('close records', () => {
     async (reason) => {
       const { store, runtime, reload } = createPersistedRuntime()
 
-      runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID }, reason)
+      await runtime.closeTerminalSurfaceFromRenderer(
+        WORKTREE_ID,
+        { kind: 'tab', tabId: TAB_ID },
+        reason
+      )
       store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
       const reloaded = (await reload()).getWorkspaceSession()
@@ -93,11 +97,11 @@ describe('close records', () => {
   )
 
   // The store keeps main's map only when a write omits it; main's own writes carry it and win.
-  it("keeps main's own record writes across later store writes", () => {
+  it("keeps main's own record writes across later store writes", async () => {
     const { store, runtime } = createPersistedRuntime()
 
-    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID })
-    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
+    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID })
+    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
     store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
     expect(
@@ -105,10 +109,10 @@ describe('close records', () => {
     ).toEqual([LATE_TAB_ID, TAB_ID].sort())
   })
 
-  it('records nothing for a split pane close, which leaves its tab open', () => {
+  it('records nothing for a split pane close, which leaves its tab open', async () => {
     const { store, runtime } = createPersistedRuntime()
 
-    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
       kind: 'pane',
       tabId: 'unknown-tab',
       leafId: LEAF_ID
@@ -118,10 +122,10 @@ describe('close records', () => {
   })
 
   // Why: only a resolved tab close records; a pane target never widens here, even on the last pane.
-  it("records nothing for a pane close aimed at its tab's only pane", () => {
+  it("records nothing for a pane close aimed at its tab's only pane", async () => {
     const { store, runtime } = createPersistedRuntime()
 
-    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
       kind: 'pane',
       tabId: TAB_ID,
       leafId: LEAF_ID
@@ -138,11 +142,11 @@ describe('close records', () => {
   it('refuses a closed tab whose spawn commits after a crash and reload', async () => {
     const { runtime, reload } = createPersistedRuntime()
 
-    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
+    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
     const relaunched = await reload()
 
     expect(
-      relaunched.persistPtyBinding({
+      await relaunched.persistPtyBinding({
         worktreeId: WORKTREE_ID,
         tabId: LATE_TAB_ID,
         leafId: LEAF_ID,
@@ -155,21 +159,24 @@ describe('close records', () => {
     ).not.toContain(LATE_TAB_ID)
   })
 
-  it('refuses the graft when the close was recorded in another host partition', () => {
+  it('refuses the graft when the close was recorded in another host partition', async () => {
     const { store, runtime } = createPersistedRuntime()
     store.setWorkspaceSession(
       { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } },
       SSH_HOST_ID
     )
 
-    runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
+    await runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, {
+      kind: 'tab',
+      tabId: LATE_TAB_ID
+    })
 
     expect(
       store.getWorkspaceSession(SSH_HOST_ID).closedTerminalTabTombstonesByTabId?.[LATE_TAB_ID]
     ).toBeDefined()
     // A relay reattach binds into `local`, not the partition the close was recorded in.
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: SSH_WORKTREE_ID,
         tabId: LATE_TAB_ID,
         leafId: LEAF_ID,
@@ -179,16 +186,19 @@ describe('close records', () => {
     ).toBe(false)
   })
 
-  it('prunes each host partition alone, so local churn evicts no SSH record', () => {
+  it('prunes each host partition alone, so local churn evicts no SSH record', async () => {
     const { store, runtime } = createPersistedRuntime()
     store.setWorkspaceSession(
       { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } },
       SSH_HOST_ID
     )
-    runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, { kind: 'tab', tabId: 'ssh-tab' })
+    await runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, {
+      kind: 'tab',
+      tabId: 'ssh-tab'
+    })
 
     for (let index = 0; index <= MAX_CLOSED_TERMINAL_TAB_TOMBSTONES; index += 1) {
-      runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+      await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
         kind: 'tab',
         tabId: `local-${index}`
       })

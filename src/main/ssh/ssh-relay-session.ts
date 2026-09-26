@@ -1800,10 +1800,6 @@ export class SshRelaySession {
       }
       const pending = this.pendingPtyReattaches.get(payload.id)
       if (pending && this.activePtyConsumerOwner()?.outputFlowControl) {
-        if (pending.livePassthrough) {
-          void this.acceptPtyData(payload).catch(() => {})
-          return
-        }
         this.quarantineReattachData(pending, payload)
         return
       }
@@ -2075,6 +2071,12 @@ export class SshRelaySession {
   }
 
   private quarantineReattachData(pending: PendingPtyReattach, payload: SshPtyDataPayload): void {
+    if (pending.livePassthrough) {
+      if (this.ownsPtyRecoveryAttempt(payload.id, pending)) {
+        void this.acceptPtyData(payload).catch(() => {})
+      }
+      return
+    }
     this.observePrivateRecoveryFrame(pending, payload)
     if (pending.restoreRequired) {
       return
@@ -2576,11 +2578,15 @@ export class SshRelaySession {
         return
       }
       if (attachResult.incarnationId) {
-        const restoreResult = this.restoreReattachedPtyRuntime(
+        const restoreResult = await this.restoreReattachedPtyRuntime(
           appPtyId,
           attachResult.incarnationId,
-          activeLease
+          activeLease,
+          () => shouldContinue() && this.ownsPtyRecoveryAttempt(appPtyId, pendingReattach)
         )
+        if (!shouldContinue() || !this.ownsPtyRecoveryAttempt(appPtyId, pendingReattach)) {
+          return
+        }
         if (restoreResult !== 'restored') {
           clearProviderPtyState(appPtyId)
           deletePtyOwnership(appPtyId)
@@ -2753,45 +2759,56 @@ export class SshRelaySession {
     deletePtyOwnership(appPtyId)
   }
 
-  private restoreReattachedPtyRuntime(
+  private async restoreReattachedPtyRuntime(
     appPtyId: string,
     incarnationId: string,
-    lease: SshPtyLease | undefined
-  ): ReattachedPtyRuntimeRestore {
+    lease: SshPtyLease | undefined,
+    shouldContinue: () => boolean
+  ): Promise<ReattachedPtyRuntimeRestore> {
     if (lease?.worktreeId && lease.tabId && lease.leafId) {
-      const session = this.store.getWorkspaceSession?.()
-      // The lease froze its tabId at write time; `detachTerminalPaneToTab` moves a live pane, so
-      // trusting it would fence this reattach to the tab the pane LEFT and refuse a pane that
-      // merely moved. Leaf is the identity, the tab is only where it currently sits.
-      // SSH spawns bind panes into `ssh:<target>` while this reattach binds into `local`, so a
-      // fence that consulted only one partition would read "no pane" for a pane the other holds.
-      const hostSession = this.store.getWorkspaceSession?.(toSshExecutionHostId(this.targetId))
-      const tabId =
-        findTerminalTabIdForLeaf(session, lease.leafId) ??
-        findTerminalTabIdForLeaf(hostSession, lease.leafId) ??
-        lease.tabId
-      // Absence of the pane only means "the user closed it" once the persisted membership
-      // speaks for this worktree. Before that it means the renderer has not published its
-      // layout yet, and refusing there drops a tab the user still has — the regression that
-      // reverted this fix twice. Losing a tab is worse than keeping a duplicate, so an
-      // unauthoritative session still gets the creating write.
-      // Authority is read from `local` because that is the partition this write lands in — it
-      // is local's absence we would be interpreting. But a pane the other partition still holds
-      // is not gone, so it keeps its creating write: refusing there would strand a live pane
-      // behind a binding reattach can no longer reach.
-      const mayCreate =
-        !hasHostAuthoritativeTerminalMembership(session, lease.worktreeId) ||
-        findTerminalTabIdForLeaf(hostSession, lease.leafId) !== undefined
-      const bound = this.store.persistPtyBinding({
-        worktreeId: lease.worktreeId,
-        tabId,
-        leafId: lease.leafId,
-        ptyId: appPtyId,
-        incarnationId,
-        ...(mayCreate ? {} : { mayCreate: false }),
-        mayReviveRetiredSurface: false,
-        origin: 'relay_reattach'
+      const { worktreeId, leafId, tabId: leaseTabId } = lease
+      let tabId = lease.tabId
+      const bound = await this.store.persistPtyBinding(() => {
+        if (!shouldContinue()) {
+          return null
+        }
+        const session = this.store.getWorkspaceSession?.()
+        // The lease froze its tabId at write time; `detachTerminalPaneToTab` moves a live pane, so
+        // trusting it would fence this reattach to the tab the pane LEFT and refuse a pane that
+        // merely moved. Leaf is the identity, the tab is only where it currently sits.
+        // SSH spawns bind panes into `ssh:<target>` while this reattach binds into `local`, so a
+        // fence that consulted only one partition would read "no pane" for a pane the other holds.
+        const hostSession = this.store.getWorkspaceSession?.(toSshExecutionHostId(this.targetId))
+        tabId =
+          findTerminalTabIdForLeaf(session, leafId) ??
+          findTerminalTabIdForLeaf(hostSession, leafId) ??
+          leaseTabId
+        // Absence of the pane only means "the user closed it" once the persisted membership
+        // speaks for this worktree. Before that it means the renderer has not published its
+        // layout yet, and refusing there drops a tab the user still has — the regression that
+        // reverted this fix twice. Losing a tab is worse than keeping a duplicate, so an
+        // unauthoritative session still gets the creating write.
+        // Authority is read from `local` because that is the partition this write lands in — it
+        // is local's absence we would be interpreting. But a pane the other partition still holds
+        // is not gone, so it keeps its creating write: refusing there would strand a live pane
+        // behind a binding reattach can no longer reach.
+        const mayCreate =
+          !hasHostAuthoritativeTerminalMembership(session, worktreeId) ||
+          findTerminalTabIdForLeaf(hostSession, leafId) !== undefined
+        return {
+          worktreeId: worktreeId,
+          tabId,
+          leafId: leafId,
+          ptyId: appPtyId,
+          incarnationId,
+          ...(mayCreate ? {} : { mayCreate: false }),
+          mayReviveRetiredSurface: false,
+          origin: 'relay_reattach' as const
+        }
       })
+      if (!shouldContinue()) {
+        return 'missing-surface'
+      }
       if (bound === false) {
         // Topology absence alone is not authority to kill a process, but neither refusal may
         // publish or replay into a missing pane.

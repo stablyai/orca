@@ -126,27 +126,28 @@ function median(values: readonly number[]): number {
 // oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
 test('keeps real Electron launch stable with 20 approved inert plugins', async ({}, testInfo) => {
   test.setTimeout(240_000)
-  const session = createRestartSession(testInfo, { ORCA_STARTUP_DIAGNOSTICS: '1' })
   const baseline: StartupSample[] = []
   const populated: StartupSample[] = []
-  let markerPaths: string[] = []
-  try {
-    for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
-      seedPlugins(session.userDataDir, 0)
-      baseline.push(await launchSample(session, 0, testInfo))
-      markerPaths = seedPlugins(session.userDataDir, PLUGIN_COUNT)
-      populated.push(await launchSample(session, PLUGIN_COUNT, testInfo))
+  for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
+    for (const count of [0, PLUGIN_COUNT]) {
+      // Seed each profile before its first migration into authoritative SQLite state.
+      const session = createRestartSession(testInfo, { ORCA_STARTUP_DIAGNOSTICS: '1' })
+      try {
+        const markerPaths = seedPlugins(session.userDataDir, count)
+        const samples = count === 0 ? baseline : populated
+        samples.push(await launchSample(session, count, testInfo))
+        expect(markerPaths.every((markerPath) => !existsSync(markerPath))).toBe(true)
+      } finally {
+        await session.dispose()
+      }
     }
-
-    // The isolated 20-sample unit gate owns the ≤50 ms P95. This app-level
-    // complement measures the user-visible launch delta because background
-    // discovery completion overlaps unrelated main-process startup work.
-    expect(populated.every((sample) => Number.isFinite(sample.pluginDurationMs))).toBe(true)
-    expect(median(populated.map((sample) => sample.readyToShowMs))).toBeLessThanOrEqual(
-      median(baseline.map((sample) => sample.readyToShowMs)) + 50
-    )
-    expect(markerPaths.every((markerPath) => !existsSync(markerPath))).toBe(true)
-  } finally {
-    await session.dispose()
   }
+
+  // The isolated 20-sample unit gate owns the ≤50 ms P95. This app-level
+  // complement measures the user-visible launch delta because background
+  // discovery completion overlaps unrelated main-process startup work.
+  expect(populated.every((sample) => Number.isFinite(sample.pluginDurationMs))).toBe(true)
+  expect(median(populated.map((sample) => sample.readyToShowMs))).toBeLessThanOrEqual(
+    median(baseline.map((sample) => sample.readyToShowMs)) + 50
+  )
 })

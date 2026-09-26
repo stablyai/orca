@@ -36,7 +36,8 @@ export function mergeDirectSshRemoteWorkspaceSession(
   liveTabsByWorktree: AppState['tabsByWorktree'],
   preserveLocalTerminalTabIds: ReadonlySet<string>,
   replaceExecutionHostId?: ExecutionHostId,
-  closedTabRecords?: ClosedTerminalTabTombstonesByTabId
+  closedTabRecords?: ClosedTerminalTabTombstonesByTabId,
+  preserveLocalLayoutTabIds: ReadonlySet<string> = new Set()
 ): WorkspaceSessionState {
   // Live tabs across the worktrees this snapshot replaces. Close-suppression consults it so a tab
   // that is still live locally always beats its own tombstone.
@@ -223,15 +224,16 @@ export function mergeDirectSshRemoteWorkspaceSession(
         )
       })
     )
+  const preservedLayoutTabIds = new Set([...locallyPreservedTabIds, ...preserveLocalLayoutTabIds])
   const terminalLayoutsByTabId = {
     ...Object.fromEntries(
       Object.entries(current.terminalLayoutsByTabId).filter(
-        ([tabId]) => !replacedTabIds.has(tabId) || locallyPreservedTabIds.has(tabId)
+        ([tabId]) => !replacedTabIds.has(tabId) || preservedLayoutTabIds.has(tabId)
       )
     ),
     ...Object.fromEntries(
       Object.entries(remote.terminalLayoutsByTabId)
-        .filter(([tabId]) => !locallyPreservedTabIds.has(tabId) && !suppressedTabIds.has(tabId))
+        .filter(([tabId]) => !preservedLayoutTabIds.has(tabId) && !suppressedTabIds.has(tabId))
         // Why: this replace is wholesale, and a park capture does not bump tab.generation, so a
         // just-parked tab is not locally preserved and the only client-side copy of its remote
         // scrollback would go with its layout. Structure stays the host's.

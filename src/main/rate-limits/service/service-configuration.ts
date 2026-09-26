@@ -127,6 +127,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),
       opencodeGoApiKeyConfigured: this.openCodeGoApiKeyConfigured,
       grokAuthConfigured: this.grokAuthConfigured,
+      cursorAuthConfigured: this.cursorAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(

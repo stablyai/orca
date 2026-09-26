@@ -53,13 +53,35 @@ E2E also retains both discovery reports and `selected.txt`. Artifacts live for
 14 days. A rerun of the same source uses the same checked-in baseline rather than
 mutable timing caches; a GitHub job rerun therefore keeps its assignment.
 
+Unit artifacts also contain `unit-timings.json`, measured through Vitest's reporter
+API. Each file's weight includes environment startup, test harness preparation,
+setup files, imports and test execution. Imports are often more expensive than the
+assertions: run **36212793136**, shard 4, spent **535 worker-seconds importing**
+and **357 running tests**. This evidence replaces the old uniform import allowance
+when the next complete successful run is imported.
+
 For E2E reproduction, check out the recorded source and pass the saved list to the
 existing command: `pnpm run test:e2e --test-list=/path/to/selected.txt` with the same
 CI environment/build inputs. For unit reproduction, use the unchanged workflow
 command and exclusions with `ORCA_BALANCE_UNIT_SHARDS=1` and the recorded
 `--shard=INDEX/8`. Direct test-file reruns remain supported.
 
-To refresh the baseline, download `log-JOB_ID.txt` files into one directory from
+To refresh unit weights, download all `unit-shard-node-*` artifacts from one
+successful run attempt and Node version into a directory, preserving their shard
+subdirectories, then run:
+
+```sh
+node config/scripts/ci-unit-timing-import.mjs ARTIFACT_DIRECTORY config/scripts/ci-shard-timings.json
+```
+
+The importer rejects missing or duplicate shards, duplicate files, failed runs,
+unhandled errors and mixed source revisions, run attempts or Node versions. It
+preserves E2E weights and sets unit overhead to zero because the per-file measurements
+already include it. Timing artifacts remain diagnostic; failed or interrupted runs
+are retained for investigation but cannot replace the scheduling baseline.
+
+For older unit runs without reporter artifacts, and E2E refreshes, download
+`log-JOB_ID.txt` files into one directory from
 exactly one eight-shard unit run and one fourteen-shard general E2E run. Use the
 job IDs from the Actions jobs API and fetch each with
 `gh api repos/stablyai/orca/actions/jobs/JOB_ID/logs`. Do not include dedicated

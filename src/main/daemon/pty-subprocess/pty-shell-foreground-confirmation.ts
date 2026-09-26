@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { confirmShellForegroundProcess } from '../../providers/agent-foreground-process'
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
 
@@ -14,7 +15,7 @@ export async function confirmPtyShellForeground(args: {
     return false
   }
   const confirmed = await confirmShellForegroundProcess(
-    args.process.pid,
+    ptyShellProcessId(args.process),
     args.shellPath,
     process.platform === 'win32'
       ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(args.process) }

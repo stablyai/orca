@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
+
+vi.mock('node:fs', { spy: true })
+import { rmSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
@@ -77,7 +79,7 @@ describe('Store', () => {
     })
 
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: 'wt1',
         tabId: 'tab1',
         leafId: TEST_LEAF_2,
@@ -127,7 +129,7 @@ describe('Store', () => {
       store.setWorkspaceSession(sourceSession, hostId)
 
       expect(
-        store.persistPtyBinding(
+        await store.persistPtyBinding(
           {
             worktreeId: 'wt1',
             tabId: 'tab1',
@@ -174,7 +176,7 @@ describe('Store', () => {
     )
 
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: 'wt1',
         tabId: 'tab1',
         leafId: TEST_LEAF_2,
@@ -213,7 +215,7 @@ describe('Store', () => {
       { ptyId: 'pty-current', expectedIncarnationId: 'inc-replaced' }
     ]) {
       expect(
-        store.persistPtyBinding({
+        await store.persistPtyBinding({
           worktreeId: 'wt1',
           tabId: 'tab1',
           leafId: TEST_LEAF_1,
@@ -253,7 +255,7 @@ describe('Store', () => {
     store.setWorkspaceSession(structuredClone(session), 'ssh:ssh-1')
 
     expect(
-      store.persistPtyBinding(
+      await store.persistPtyBinding(
         {
           worktreeId: 'wt1',
           tabId: 'tab1',
@@ -302,7 +304,7 @@ describe('Store', () => {
       )
 
       expect(
-        store.persistPtyBinding(
+        await store.persistPtyBinding(
           {
             worktreeId: 'wt1',
             tabId: 'tab1',
@@ -348,11 +350,11 @@ describe('Store', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
     })
-    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+    vi.mocked(writeFileSync).mockImplementationOnce(() => {
       throw new Error('disk full')
     })
 
-    expect(() =>
+    await expect(
       store.persistPtyBinding({
         worktreeId: 'wt1',
         tabId: 'tab1',
@@ -361,7 +363,7 @@ describe('Store', () => {
         incarnationId: 'inc-live',
         expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
       })
-    ).toThrow('disk full')
+    ).rejects.toThrow('disk full')
     expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
       'inc-stale'
     )

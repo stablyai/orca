@@ -3,7 +3,8 @@ import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './orca-runtime-cl
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
-  RuntimeMobileSessionTabsSnapshot
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from './mobile-session-layout-projection'
@@ -13,10 +14,10 @@ import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
 
 export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithCloseStructuredAgentSessionTab {
-  protected closeHeadlessMobileTerminalTab(
+  protected async closeHeadlessMobileTerminalTab(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    closedParentTabId: string,
+    tab: RuntimeMobileSessionTerminalTab,
     options: {
       allowMissingPersistedTab?: boolean
       killPtys?: boolean
@@ -24,7 +25,8 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       force?: boolean
       reason?: RuntimeSessionTabCloseReason
     } = {}
-  ): void {
+  ): Promise<void> {
+    const closedParentTabId = tab.parentTabId
     const retirementProofs = snapshot.tabs.flatMap((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         return []
@@ -36,7 +38,8 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       )
       return proof ? [proof] : []
     })
-    const projectedPtyIds = this.closeTerminalSurface(
+    const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
+    const projectedPtyIds = await this.closeTerminalSurface(
       worktreeId,
       { kind: 'tab', tabId: closedParentTabId },
       {
@@ -45,6 +48,11 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         reason: options.reason
       }
     )
+    if (!acknowledgeRetirement().matches) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    // Renderer frames may add other tabs while the durable close is in flight.
+    snapshot = this.mobileSessionTabsByWorktree.get(worktreeId) ?? snapshot
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
     if (options.authorizedPty) {
       options.authorizedPty.runtimeSessionOwned = false
@@ -176,6 +184,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       tabId: string
       root: TerminalPaneLayoutNode | null
       expandedLeafId: string | null
+      chatLeafId?: string | null
       titlesByLeafId?: Record<string, string>
     }
   ): Promise<{ updated: true }> {
@@ -201,6 +210,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         tabId: hostTabId,
         root: acceptedLayout.root,
         expandedLeafId: acceptedLayout.expandedLeafId,
+        chatLeafId: acceptedLayout.chatLeafId ?? null,
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }

@@ -2,7 +2,10 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalQuestionItem
 } from '../../../../shared/agent-session-journal-types'
-import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import {
+  agentSessionPromptQuestions,
+  legacyAgentSessionQuestionAnswers
+} from '../../../../shared/agent-session-question-answer'
 
 export type NativeChatResolvedPrompt = AgentJournalApprovalItem | AgentJournalQuestionItem
 export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
@@ -14,16 +17,19 @@ export function nativeChatReceiptAnswers(
     return []
   }
   const selected = body.resolution.selectedOptionId
-  if (body.kind === 'question' && body.questions) {
-    const answers = selected ? decodeAgentSessionQuestionAnswers(selected) : null
-    return body.questions.map((question) => {
+  if (body.kind === 'question') {
+    // Rows written before hosts recorded structured answers carry only the packed form.
+    const answers =
+      body.resolution.answers ??
+      (selected ? legacyAgentSessionQuestionAnswers(body, selected) : null)
+    return agentSessionPromptQuestions(body).map((question) => {
       const answer = answers?.find((entry) => entry.questionId === question.id)
       const labels = answer?.optionIds.map(
         (id) => question.options.find((option) => option.id === id)?.label
       )
       const valid = labels?.every((label) => label !== undefined)
       return {
-        question: question.question,
+        question: body.questions ? question.question : null,
         answer: valid
           ? [...(labels ?? []), ...(answer?.other ? [answer.other] : [])].join(' · ') || null
           : null
@@ -31,20 +37,5 @@ export function nativeChatReceiptAnswers(
     })
   }
   const option = body.options.find((option) => option.id === selected)
-  if (option) {
-    return [{ question: null, answer: option.label }]
-  }
-  if (body.kind === 'question' && body.freeTextQuestionId && selected) {
-    const prefix = `${encodeURIComponent(body.freeTextQuestionId)}:`
-    if (selected.startsWith(prefix)) {
-      try {
-        return [
-          { question: null, answer: decodeURIComponent(selected.slice(prefix.length)) || null }
-        ]
-      } catch {
-        // Malformed persisted answers remain readable as an unavailable selection.
-      }
-    }
-  }
-  return [{ question: null, answer: null }]
+  return [{ question: null, answer: option?.label ?? null }]
 }

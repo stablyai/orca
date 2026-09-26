@@ -164,7 +164,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         // Why: the pane's removal is this close's own commit, not a side effect of its exit. An
         // unconfirmed stop is unverifiable, never a reason to close the live siblings with it.
         if (paneTarget) {
-          this.closeTerminalPane(pty.pty.worktreeId, paneTarget)
+          await this.closeTerminalPane(pty.pty.worktreeId, paneTarget)
         }
       } else if (surface) {
         // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
@@ -199,7 +199,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
       ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
       : NO_STOP
     if (!closesTab) {
-      this.closeTerminalPane(leaf.worktreeId, paneTarget)
+      await this.closeTerminalPane(leaf.worktreeId, paneTarget)
     } else if (!this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId)
     }

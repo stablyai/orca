@@ -175,7 +175,7 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
 
 async function closePane(entry: Entry, harness: CloseContinuityHarness): Promise<void> {
   if (entry === 'renderer') {
-    harness.runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+    await harness.runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
       kind: 'pane',
       tabId: TAB_ID,
       leafId: LEAF_ID

@@ -132,7 +132,7 @@ function mutationOperation(
   }
 }
 
-/** Admit the ledger row and its lease/fence preconditions in one durable transaction. */
+/** Admit the ledger row and its writer-lease precondition in one durable transaction. */
 export function admitAgentSessionMutationOperation(
   state: AgentSessionStoreState,
   args: AgentSessionMutationOperationAdmission

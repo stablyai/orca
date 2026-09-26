@@ -182,7 +182,17 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     state.tabsByWorktree,
     currentRecoveryTabIds(state, authority, worktreeIds),
     toSshExecutionHostId(authority.targetId),
-    state.closedTerminalTabTombstonesByTabId
+    state.closedTerminalTabTombstonesByTabId,
+    new Set(
+      [...worktreeIds].flatMap((id) =>
+        (state.tabsByWorktree[id] ?? [])
+          .filter(
+            (tab) =>
+              state.pendingDirectSshLayoutEditsByTabId[tab.id]?.targetId === authority.targetId
+          )
+          .map((tab) => tab.id)
+      )
+    )
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return 'stale'

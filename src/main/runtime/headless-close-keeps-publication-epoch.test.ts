@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
@@ -25,7 +26,7 @@ function makeStore() {
   return {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
-    flushOrThrow: vi.fn(),
+    runDurableMutation: async <T>(mutate: () => DurableProfileStateMutation<T>) => mutate().value,
     getRepos: vi.fn(() => [
       {
         id: 'repo-1',
@@ -68,7 +69,7 @@ function storedSnapshot(tabs: RuntimeMobileSessionTerminalTab[]): RuntimeMobileS
   }
 }
 
-function closeOneTab(): RuntimeMobileSessionTabsSnapshot {
+async function closeOneTab(): Promise<RuntimeMobileSessionTabsSnapshot> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore covers the reads this suite drives.
   const runtime = new OrcaRuntimeService(makeStore() as never)
   const closedTab = terminalTab('tab-a', LEAF_ID)
@@ -78,13 +79,13 @@ function closeOneTab(): RuntimeMobileSessionTabsSnapshot {
     closeHeadlessMobileTerminalTab: (
       worktreeId: string,
       snapshot: RuntimeMobileSessionTabsSnapshot,
-      parentTabId: string,
+      tab: RuntimeMobileSessionTerminalTab,
       options?: Record<string, unknown>
-    ) => void
+    ) => Promise<void>
     mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
   }
   internals.mobileSessionTabsByWorktree.set(WORKTREE_ID, snapshot)
-  internals.closeHeadlessMobileTerminalTab(WORKTREE_ID, snapshot, closedTab.parentTabId, {
+  await internals.closeHeadlessMobileTerminalTab(WORKTREE_ID, snapshot, closedTab, {
     allowMissingPersistedTab: true,
     killPtys: false
   })
@@ -96,12 +97,12 @@ function closeOneTab(): RuntimeMobileSessionTabsSnapshot {
 }
 
 describe('closing a headless mobile terminal tab', () => {
-  it('keeps the worktree under the epoch that was already publishing it', () => {
-    expect(closeOneTab().publicationEpoch).toBe(LIVE_EPOCH)
+  it('keeps the worktree under the epoch that was already publishing it', async () => {
+    expect((await closeOneTab()).publicationEpoch).toBe(LIVE_EPOCH)
   })
 
-  it('still advances the version so clients accept the frame', () => {
-    const published = closeOneTab()
+  it('still advances the version so clients accept the frame', async () => {
+    const published = await closeOneTab()
     expect(published.snapshotVersion).toBe(5)
     expect(published.tabs.map((tab) => tab.id)).toEqual([`tab-b::${LEAF_ID}`])
   })

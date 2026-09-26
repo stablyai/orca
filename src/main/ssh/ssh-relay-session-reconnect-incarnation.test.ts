@@ -3,7 +3,11 @@ import { randomUUID } from 'node:crypto'
 import type * as NodeCrypto from 'node:crypto'
 import { SshRelaySession } from './ssh-relay-session'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
-import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
+import {
+  createMockDeps,
+  mockDeploySuccess,
+  recordedPtyBindings
+} from './ssh-relay-session-test-fixtures'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { SshRemotePtyLease } from '../../shared/ssh-types'
 
@@ -439,7 +443,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(runtime.onPtySpawned).not.toHaveBeenCalled()
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith({
+    expect(recordedPtyBindings(mockStore)).toContainEqual({
       worktreeId: 'worktree-1',
       tabId: 'tab-1',
       leafId: INCARNATION_LEAF_ID,
@@ -657,7 +661,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       leafId: INCARNATION_LEAF_ID,
       incarnationId
     })
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
+    expect(recordedPtyBindings(mockStore)).toContainEqual(
       expect.objectContaining({ tabId: movedTabId, ptyId: APP_PTY_ID, incarnationId })
     )
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
@@ -777,7 +781,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId: currentIncarnationId
     })
     expect(setPtyOwnership).toHaveBeenCalledWith(APP_PTY_ID, 'target-1')
-    expect(mockStore.persistPtyBinding).toHaveBeenCalledWith(
+    expect(recordedPtyBindings(mockStore)).toContainEqual(
       expect.objectContaining({ ptyId: APP_PTY_ID, incarnationId: currentIncarnationId })
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {

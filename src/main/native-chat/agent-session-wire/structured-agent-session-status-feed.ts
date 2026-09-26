@@ -21,6 +21,7 @@ import {
   type AgentSessionStatusEvent,
   type AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -293,6 +294,19 @@ export class StructuredAgentSessionStatusFeed {
       ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
+    }
+  }
+
+  /** Child-work evidence for a session this feed publishes; a failing sink costs nothing else. */
+  publishChildWork(sessionId: string, evidence: AgentChildWorkEvidence[]): void {
+    const session = this.deps.sessions.get(sessionId)
+    if (!session) {
+      return
+    }
+    try {
+      this.ownership.publishChildWork(sessionId, evidence, session.params.provider)
+    } catch (error) {
+      console.warn('[structured-session-status] child work publish failed', error)
     }
   }
 
