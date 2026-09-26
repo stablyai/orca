@@ -29,7 +29,10 @@ export function recordFailedStartDispatchIdentity(
     .run(
       resource.terminal_handle,
       resource.pane_key,
-      dispatchAssigneeOrcaSessionId(resource.process_incarnation),
+      dispatchAssigneeOrcaSessionId({
+        handle: resource.terminal_handle,
+        processIncarnation: resource.process_incarnation
+      }),
       resource.process_incarnation,
       resource.host_scope,
       worker.dispatch_id

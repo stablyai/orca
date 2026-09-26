@@ -29,7 +29,11 @@ import {
   resolveStructuredWorkerAuthority,
   structuredWorkerSessionId
 } from './structured-worker-authority'
-import { structuredWorkerAgentStatus } from './orchestration/structured-worker-group-addressing'
+import {
+  chatAssigneeAgentStatus,
+  structuredWorkerAgentStatus
+} from './orchestration/structured-worker-group-addressing'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address'
 
 export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {
   protected pruneMobileSessionTabGroupLayout(
@@ -225,6 +229,9 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
     if (structured) {
       return structuredWorkerAgentStatus(structuredWorkerSessionId(structured.identity))
+    }
+    if (handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+      return chatAssigneeAgentStatus(handle)
     }
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)

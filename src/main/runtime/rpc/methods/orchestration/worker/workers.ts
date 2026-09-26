@@ -13,6 +13,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
+import { capSessionCallerWaitMs } from '../../../../orchestration/session-caller-wait-cap'
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
@@ -22,6 +23,9 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
       params,
       { runtime, orchestrationMutation, orchestrationCompatibilityEvidence, orchestrationCaller }
     ) => {
+      const callerCapDeadline = orchestrationCaller
+        ? Date.now() + capSessionCallerWaitMs(Number.POSITIVE_INFINITY, orchestrationCaller)
+        : undefined
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -77,7 +81,8 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         callerSession: orchestrationCaller,
         existingTask,
         orchestrationMutation,
-        mode
+        mode,
+        callerCapDeadline
       })
     }
   })

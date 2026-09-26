@@ -2,9 +2,12 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import { assertChatAssigneeReachable } from '../messaging/session-recipient'
 
 /**
- * Admits a caller-supplied `--terminal` as this dispatch's worker pane.
+ * Admits a caller-supplied `--terminal` as this dispatch's worker pane, or a chat by its address.
  *
  * Three refusals, all of which must happen before anything is created: a coordinator adopted as its
  * own worker answers its own dispatch preamble forever, a pane in another worktree is not this
@@ -12,12 +15,17 @@ import type { OrchestrationCallerIdentity } from '../../../../orchestration/orch
  */
 export async function assertExplicitWorkerTerminalUsable(args: {
   runtime: OrcaRuntimeService
-  terminal: string
+  terminal: OrchestrationParty
   from: string
   coordinator: OrchestrationCallerIdentity | null
   resolvedWorktreeId: string | undefined
 }): Promise<void> {
-  const { runtime, terminal, from, coordinator, resolvedWorktreeId } = args
+  const { runtime, from, coordinator, resolvedWorktreeId } = args
+  if (args.terminal.terminalHandle === null) {
+    await assertExplicitWorkerChatUsable({ ...args, chat: args.terminal })
+    return
+  }
+  const terminal = args.terminal.address
   const explicitTerminal = await runtime.showTerminal(terminal)
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinator?.paneKey ?? runtime.getTerminalPaneKey(from)
@@ -49,6 +57,33 @@ export async function assertExplicitWorkerTerminalUsable(args: {
     throw new OrchestrationError(
       'agent_unconfigured',
       `Terminal ${terminal} is not running a recognized agent.`
+    )
+  }
+}
+
+/** The same three refusals for a chat named by its address: itself, another worktree, unreachable. */
+async function assertExplicitWorkerChatUsable(args: {
+  runtime: OrcaRuntimeService
+  chat: OrchestrationParty
+  coordinator: OrchestrationCallerIdentity | null
+  resolvedWorktreeId: string | undefined
+}): Promise<void> {
+  const { runtime, chat } = args
+  if (chat.address === args.coordinator?.address) {
+    throw new OrchestrationError(
+      'terminal_is_coordinator',
+      `${chat.address} is this coordinator itself. Pass --terminal for a different agent, or omit it so worker-start creates one.`
+    )
+  }
+  const db = runtime.getOrchestrationDb()
+  await assertChatAssigneeReachable(runtime, chat, db)
+  const record = chat.orcaSessionId
+    ? readAgentSessionRecordStore()?.getRecord(chat.orcaSessionId)
+    : null
+  if (record?.location.workspaceId !== args.resolvedWorktreeId) {
+    throw new OrchestrationError(
+      'terminal_worktree_mismatch',
+      `${chat.address} does not belong to worktree ${args.resolvedWorktreeId}.`
     )
   }
 }

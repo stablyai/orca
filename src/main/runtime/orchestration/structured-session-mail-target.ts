@@ -1,7 +1,7 @@
 /**
  * Where a mailbox owned by a structured session is delivered: a chat that coordinates a Run
- * (`run:<id>` with no coordinator handle), a session addressed directly at `session:<id>`, and the
- * live session behind a structured worker's handle. The session is resolved here, never a pane, and
+ * (`run:<id>` with no coordinator handle), a session addressed directly at `session:<id>`, a chat
+ * holding a Dispatch, and the live session behind a structured worker's handle. The session is resolved here, never a pane, and
  * takes the pointer as a session turn.
  */
 
@@ -91,9 +91,10 @@ export function structuredSessionAddressTarget(
 }
 
 /**
- * Every mailbox a session reads for itself: the Runs it coordinates and its own direct mail.
+ * Every mailbox a session reads for itself: the Runs it coordinates, the Dispatches it holds as a
+ * chat assignee (the first of which carries its owed preamble), and its own direct mail.
  * Re-derived from the database on each idle edge rather than remembered, so mail that arrived
- * while the session could not take it (closed, evicted) is found again.
+ * while the session could not take it (closed, evicted, restarted) is found again.
  */
 export function structuredSessionOwnedMailboxes(sessionId: string, db: OrchestrationDb): string[] {
   const party = isOrcaSessionId(sessionId) ? addressableSessionParty(sessionId, db) : null
@@ -101,6 +102,11 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
     return []
   }
   const mailboxes = db.runsBoundToCoordinator(party).map((run) => `run:${run.id}`)
+  if (party.terminalHandle === null) {
+    for (const dispatch of db.getActiveDispatchMailboxOwners(party.address)) {
+      mailboxes.push(`dispatch:${dispatch.id}`)
+    }
+  }
   if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
     mailboxes.push(party.address)
   }

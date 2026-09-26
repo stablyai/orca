@@ -9,6 +9,9 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerForDispatch
 } from '../../orchestration-structured-worker-lifecycle'
+import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { observeStructuredSession } from '../../../../structured-worker-authority'
+import { executingSessionId } from '../../../../orchestration/structured-session-lineage'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -54,6 +57,19 @@ export async function inspectWorkerTerminal(
       exact,
       status: exact ? observation.status : 'identity_changed',
       ...(exact && observation.reason ? { reason: observation.reason } : {})
+    }
+  }
+  const chat = parseOrcaSessionAddress(terminalHandle)
+  if (chat) {
+    // A chat assignee is its address, which nothing re-points, so it is always the exact worker;
+    // its liveness is the session running it now. `agentWait` is absent as for any session.
+    await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+    const observation = observeStructuredSession(executingSessionId(chat))
+    return {
+      terminal: null,
+      exact: true,
+      status: observation.status,
+      ...(observation.reason ? { reason: observation.reason } : {})
     }
   }
   const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)

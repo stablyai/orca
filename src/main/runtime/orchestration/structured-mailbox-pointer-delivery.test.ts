@@ -83,6 +83,8 @@ function harness(options: {
   outstandingOwnDelivery?: boolean
   /** Undelivered unread rows on the mailbox, oldest first. */
   unreadIds?: string[]
+  /** Full rows instead, when their type and body matter. */
+  unread?: { id: string; type: string; body: string }[]
   /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
   mailbox?: string
   dispatchId?: string | null
@@ -105,6 +107,8 @@ function harness(options: {
   })
   const sendMock = vi.mocked(send)
   const markAsUndelivered = vi.fn()
+  const markAsRead = vi.fn()
+  const markAsReadAndDelivered = vi.fn()
   const released = vi.fn()
   const wake = vi.fn(async () => {
     if (!options.wakeTo) {
@@ -123,13 +127,14 @@ function harness(options: {
         ? { id: 'delivery_held', messageIds: new Set(['m1']) }
         : undefined,
     getUndeliveredUnreadMessages: () =>
-      (options.unreadIds ?? ['m1']).map((id, index) => ({
-        id,
-        type: 'status',
-        sequence: index + 3
-      })),
+      (
+        options.unread ??
+        (options.unreadIds ?? ['m1']).map((id) => ({ id, type: 'status', body: '' }))
+      ).map((message, index) => ({ ...message, sequence: index + 3 })),
     markAsDelivered,
     markAsUndelivered,
+    markAsRead,
+    markAsReadAndDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
     putStructuredPointerOperation: (row: { mailbox_handle: string }) =>
       stored.set(row.mailbox_handle, row),
@@ -152,6 +157,8 @@ function harness(options: {
     delivery,
     markAsDelivered,
     markAsUndelivered,
+    markAsRead,
+    markAsReadAndDelivered,
     released,
     wake,
     send: sendMock,
@@ -543,5 +550,57 @@ describe('forgetting one settled worker', () => {
     delivery.onJournalActivity('session-1')
     await flush()
     expect(send).not.toHaveBeenCalled()
+  })
+})
+
+describe("a chat assignee's dispatch preamble", () => {
+  const PREAMBLE = { id: 'm_preamble', type: 'dispatch', body: 'You are a dispatched worker.' }
+  const FOLLOW_UP = { id: 'm_follow', type: 'status', body: 'also this' }
+
+  it('goes alone, as its own body, and the accepted turn is its reading', async () => {
+    const h = harness({ journal: idleJournal(), unread: [PREAMBLE, FOLLOW_UP] })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.send.mock.calls[0]![0].body.blocks).toEqual([{ type: 'text', text: PREAMBLE.body }])
+    expect(h.markAsReadAndDelivered).toHaveBeenCalledWith([PREAMBLE.id])
+    expect(h.markAsDelivered).not.toHaveBeenCalled()
+  })
+
+  it('is read once an admitted turn is echoed', async () => {
+    const h = harness({
+      journal: idleJournal(),
+      unread: [PREAMBLE],
+      dispatchState: 'pending',
+      settlement: Promise.resolve('accepted')
+    })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.markAsDelivered).toHaveBeenCalledWith([PREAMBLE.id])
+    expect(h.markAsRead).toHaveBeenCalledWith([PREAMBLE.id])
+  })
+
+  it('stays owed when an admitted turn never ran', async () => {
+    const h = harness({
+      journal: idleJournal(),
+      unread: [PREAMBLE],
+      dispatchState: 'pending',
+      settlement: Promise.resolve('unknown')
+    })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.markAsRead).not.toHaveBeenCalled()
+    expect(h.markAsUndelivered).toHaveBeenCalledWith([PREAMBLE.id])
+  })
+
+  it('waits out a running turn like any mail', async () => {
+    const h = harness({ journal: runningJournal(), unread: [PREAMBLE] })
+    h.delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(h.send).not.toHaveBeenCalled()
+    h.setJournal(idleJournal())
+    h.delivery.onJournalActivity(IDENTITY.sessionId)
+    await flush()
+    expect(h.send.mock.calls[0]![0].body.blocks).toEqual([{ type: 'text', text: PREAMBLE.body }])
   })
 })

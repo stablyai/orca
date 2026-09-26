@@ -45,7 +45,8 @@ const args = {
   coordinatorHandle: 'session:7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64',
   dispatchCapability: 'cap',
   devMode: false,
-  requestId: 'req_1'
+  requestId: 'req_1',
+  runId: 'run_1'
 }
 
 describe('deliverWorkerDispatchPreamble tells each worker its own address', () => {

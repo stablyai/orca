@@ -9,6 +9,7 @@ import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import type { SendRecipientWarning } from './recipient-routing'
 import type { z } from 'zod'
+import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 
 type SendParamsInput = z.infer<typeof SendParams>
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
@@ -24,6 +25,8 @@ export function sendPointToPointMessage(args: {
   senderPaneKey: string | undefined
   legacyCoordinatorRunId: string | undefined
   orchestrationCapability: string | undefined
+  /** The host-verified session a session caller is; it proves a chat assignee. */
+  callerOrcaSessionId: OrcaSessionId | null
   resolveProcessIncarnation: () => string | undefined
   revalidateLegacyCoordinator: (() => string) | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
@@ -41,6 +44,7 @@ export function sendPointToPointMessage(args: {
     senderPaneKey,
     legacyCoordinatorRunId,
     orchestrationCapability,
+    callerOrcaSessionId,
     resolveProcessIncarnation,
     revalidateLegacyCoordinator,
     recordMutationReceipt,
@@ -85,6 +89,7 @@ export function sendPointToPointMessage(args: {
         paneKey: senderPaneKey,
         processIncarnation,
         capability: orchestrationCapability,
+        orcaSessionId: callerOrcaSessionId,
         taskId,
         capabilityBacked,
         coordinatorMutation
@@ -165,6 +170,7 @@ function resolveLifecycleAuthority(args: {
   paneKey: string | undefined
   processIncarnation: string | undefined
   capability: string | undefined
+  orcaSessionId: OrcaSessionId | null
   taskId: string | undefined
   capabilityBacked: boolean
   coordinatorMutation: boolean
@@ -176,6 +182,7 @@ function resolveLifecycleAuthority(args: {
     paneKey,
     processIncarnation,
     capability,
+    orcaSessionId,
     taskId,
     capabilityBacked,
     coordinatorMutation
@@ -199,7 +206,8 @@ function resolveLifecycleAuthority(args: {
       dispatchId: dispatch.id,
       capability,
       paneKey,
-      processIncarnation
+      processIncarnation,
+      orcaSessionId
     })
     return {
       valid: authority.valid,

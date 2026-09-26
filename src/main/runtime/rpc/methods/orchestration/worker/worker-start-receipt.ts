@@ -32,30 +32,66 @@ export function failWorkerStartWithReceipt(args: {
   const releasable =
     residual?.ownership_state === 'owned' && !isStructuredWorkerHandle(residual.terminal_handle)
   return {
+    ...workerStartReceipt(args, worker, reason),
+    state: worker.state === 'start_unknown' ? 'outcome_unknown' : worker.state,
+    ...(releasable
+      ? {
+          recovery: `This start created a terminal that never ran the Task. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
+        }
+      : {}),
+    ...(unknown ? { nextCommands: unknownWorkerStartNextCommands(args.dispatchId) } : {})
+  }
+}
+
+type WorkerStartReceiptArgs = Omit<Parameters<typeof failWorkerStartWithReceipt>[0], 'error'>
+
+/**
+ * The `outcome_unknown` receipt for a start still in progress, written nothing: the start runs on
+ * and settles the worker as it would have. What a caller that cannot wait any longer is handed.
+ */
+export function inProgressWorkerStartReceipt(
+  args: WorkerStartReceiptArgs,
+  reason: string
+): unknown {
+  const worker = args.db.getWorkerDispatch(args.dispatchId)
+  if (!worker) {
+    throw new Error(`Worker Dispatch ${args.dispatchId} was not found.`)
+  }
+  return {
+    ...workerStartReceipt(args, worker, reason),
+    state: 'outcome_unknown',
+    nextCommands: unknownWorkerStartNextCommands(args.dispatchId)
+  }
+}
+
+function workerStartReceipt(
+  args: WorkerStartReceiptArgs,
+  worker: { stage: string; effects: string; residual_resources: string },
+  reason: string
+) {
+  return {
     runId: args.runId,
     taskId: args.taskId,
     dispatchId: args.dispatchId,
-    state: worker.state === 'start_unknown' ? 'outcome_unknown' : worker.state,
     stage: worker.stage,
     failedStage: args.failedStage,
     lastError: reason,
     setup: args.setup,
     launch: args.launch,
     mode: args.mode,
-    effects: JSON.parse(worker.effects) as unknown[],
-    residualResources: JSON.parse(worker.residual_resources) as unknown[],
-    ...(releasable
-      ? {
-          recovery: `This start created a terminal that never ran the Task. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
-        }
-      : {}),
-    ...(unknown
-      ? {
-          nextCommands: [
-            `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
-            `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
-          ]
-        }
-      : {})
+    effects: parseJsonArray(worker.effects),
+    residualResources: parseJsonArray(worker.residual_resources)
   }
+}
+
+function parseJsonArray(text: string): unknown[] {
+  const parsed: unknown = JSON.parse(text)
+  return Array.isArray(parsed) ? parsed : []
+}
+
+function unknownWorkerStartNextCommands(dispatchId: string): string[] {
+  return [
+    `orca orchestration worker-show --dispatch ${dispatchId} --json`,
+    `orca orchestration worker-abandon --dispatch ${dispatchId} --json`
+  ]
 }

@@ -32,7 +32,8 @@ export const ORCHESTRATION_TARGET_PARAM: Readonly<Record<string, 'to' | 'termina
     'orchestration.ask': 'to',
     'orchestration.dispatch': 'to',
     'orchestration.inbox': 'terminal',
-    'orchestration.sessionAddress': 'sessionId'
+    'orchestration.sessionAddress': 'sessionId',
+    'orchestration.workerStart': 'terminal'
   }
 
 /** The party an Orca session id names. Throws when it is a worker this host lost the identity of. */
@@ -93,18 +94,14 @@ export function resolveDeclaredCallerParty(
   return party
 }
 
-/** A Dispatch assignee: a terminal or a structured worker, never a chat yet. */
+/**
+ * A Dispatch assignee: a terminal, a structured worker, or a chat by its `session:<id>` address.
+ * A chat is never adopted as a worker; the Dispatch names it by that address, whose party the host
+ * verifies from the chat's own session id whenever it acts.
+ */
 export function resolveDispatchAssigneeParty(
   address: string,
   db: OrchestrationDb | null | undefined
 ): OrchestrationParty {
-  const party = resolveOrchestrationParty(address, db)
-  if (party.terminalHandle === null) {
-    throw new OrchestrationError(
-      CODES.chatNotDispatchable,
-      `Agent session ${party.orcaSessionId} is a chat, and a chat can't receive a dispatch yet. Start a worker with worker-start instead. No effects were applied.`,
-      NO_EFFECTS
-    )
-  }
-  return party
+  return resolveOrchestrationParty(address, db)
 }
