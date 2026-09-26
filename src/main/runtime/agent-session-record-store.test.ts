@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type {
   AgentSessionExecutionLocation,
+  AgentSessionLease,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
@@ -119,6 +120,26 @@ async function establishOwner(
     link: handleLink({ mintedAtFence: fence }),
     now: NOW
   })
+}
+
+/** The shape the removed conflict marker wrote, as it decodes. No shipped build called it; a record
+ *  may carry it. */
+async function markLegacyConflicted(
+  store: AgentSessionRecordStore,
+  lease: Partial<AgentSessionLease> = {}
+): Promise<void> {
+  if (!store.getRecord('session-alpha')) {
+    await store.reserveOwner(reserveRequest())
+  }
+  await store.transitionHandoff('session-alpha', (record) => ({
+    ...record,
+    lease: {
+      ...record.lease,
+      claimStatus: 'conflicted',
+      handoffStage: 'recovering',
+      ...lease
+    }
+  }))
 }
 
 beforeEach(async () => {
@@ -596,10 +617,26 @@ describe('restart reconciliation', () => {
     ).rejects.toThrow('agent_session_ownership_unknown')
   })
 
-  it('keeps a conflict conflicted across a restart that proves nothing', async () => {
+  it('re-adjudicates a claim an older record marked conflicted by the owner it names', async () => {
     const first = await open()
     await establishOwner(first)
-    await first.markClaimConflicted('session-alpha', NOW)
+    await markLegacyConflicted(first)
+
+    const reopened = await open()
+    await reopened.reconcileOnRestart({
+      probe: async () => ({ outcome: 'indeterminate', reason: 'no answer' }),
+      now: NOW
+    })
+    // An unverifiable owner goes to recovery like any other; resolution concludes about it.
+    expect(reopened.getRecord('session-alpha')?.lease).toMatchObject({
+      handoffStage: 'recovering',
+      ownerProcess: { pid: expect.any(Number) }
+    })
+  })
+
+  it('releases a claim an older record marked conflicted that names no process', async () => {
+    const first = await open()
+    await markLegacyConflicted(first, { ownerProcess: null })
 
     const reopened = await open()
     await reopened.reconcileOnRestart({
@@ -607,18 +644,10 @@ describe('restart reconciliation', () => {
       now: NOW
     })
     expect(reopened.getRecord('session-alpha')?.lease).toMatchObject({
-      claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: null
     })
-    await expect(
-      reopened.reserveOwner(
-        reserveRequest({
-          expectedFence: 1,
-          probe: { outcome: 'pid-absent' },
-          operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-        })
-      )
-    ).rejects.toThrow('agent_session_conflict')
   })
 
   it('releases a conflict whose named owner is proven gone at restart', async () => {
@@ -626,7 +655,7 @@ describe('restart reconciliation', () => {
     // the process the conflict names has exited leaves no claimant left to protect.
     const first = await open()
     await establishOwner(first)
-    await first.markClaimConflicted('session-alpha', NOW)
+    await markLegacyConflicted(first)
 
     const reopened = await open()
     await reopened.reconcileOnRestart({ probe: async () => ({ outcome: 'pid-absent' }), now: NOW })

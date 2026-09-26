@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
+
+vi.mock('node:fs', { spy: true })
+import { rmSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
@@ -80,7 +82,7 @@ describe('Store SSH remote PTY bindings across host partitions', () => {
     store.setWorkspaceSession(makeBoundHostSession(null), 'local')
     store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
 
-    store.persistPtyBinding(
+    await store.persistPtyBinding(
       {
         worktreeId: 'repo-1::/worktree',
         tabId: 'tab-1',
@@ -102,11 +104,11 @@ describe('Store SSH remote PTY bindings across host partitions', () => {
     const store = await createStore()
     store.setWorkspaceSession(makeBoundHostSession(null), 'local')
     store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
-    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+    const flush = vi.mocked(writeFileSync).mockImplementationOnce(() => {
       throw new Error('disk unavailable')
     })
 
-    expect(() =>
+    await expect(
       store.persistPtyBinding(
         {
           worktreeId: 'repo-1::/worktree',
@@ -116,7 +118,7 @@ describe('Store SSH remote PTY bindings across host partitions', () => {
         },
         'ssh:ssh-1'
       )
-    ).toThrow('disk unavailable')
+    ).rejects.toThrow('disk unavailable')
     flush.mockRestore()
 
     expect(

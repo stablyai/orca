@@ -127,14 +127,14 @@ describe('terminal live accessory local edit text', () => {
     const fieldText = `${'a'.repeat(100_000)}🙂`
     const originalIterator = String.prototype[Symbol.iterator]
     let visits = 0
-    const iterator = vi
-      .spyOn(String.prototype, Symbol.iterator)
-      .mockImplementation(function* (this: string) {
-        for (const codePoint of originalIterator.call(this)) {
-          visits += 1
-          yield codePoint
-        }
-      })
+    const iterator = vi.spyOn(String.prototype, Symbol.iterator).mockImplementation(function* (
+      this: string
+    ) {
+      for (const codePoint of originalIterator.call(this)) {
+        visits += 1
+        yield codePoint
+      }
+    })
     let result: string
     try {
       result = getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText })

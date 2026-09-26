@@ -311,7 +311,10 @@ describe('terminal exit records', () => {
     const { runtime, notifier } = makeRendererRuntime(snapshot, runtimeStore)
     runtime.terminalExitRecords.record(exitRecord())
 
-    runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, { kind: 'tab', tabId: 'host-tab' })
+    await runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, {
+      kind: 'tab',
+      tabId: 'host-tab'
+    })
     runtime.syncWindowGraph(0, {
       tabs: [],
       leaves: [],
@@ -345,7 +348,10 @@ describe('terminal exit records', () => {
     runtime.terminalExitRecords.record(exitRecord())
 
     // The close intent lands before the renderer's graph sync removes the leaf.
-    runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, { kind: 'tab', tabId: 'host-tab' })
+    await runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, {
+      kind: 'tab',
+      tabId: 'host-tab'
+    })
     const between = await listForClient(runtime, [
       SESSION_TABS_TERMINAL_EXIT_STATE_RUNTIME_CAPABILITY
     ])

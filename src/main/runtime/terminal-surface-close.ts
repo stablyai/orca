@@ -10,6 +10,8 @@ import {
 } from '../../shared/workspace-session-terminal-tab-close'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import type { DurableProfileStateMutation } from '../persistence/loading-store/store-runtime-state'
+import type { ExecutionHostId } from '../../shared/execution-host'
 
 /** Where a pane close lands: its own removal, its tab's last pane, or a pane the copy lacks. */
 export type PaneCloseResolution = 'pane' | 'last-pane' | 'absent'
@@ -94,7 +96,7 @@ export function closeTerminalSurfaceInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
   target: TerminalSurfaceCloseTarget,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; paneIncarnationId?: string } = {}
 ): TerminalSurfaceCloseResult {
   if (target.kind === 'pane') {
     const layout = session.terminalLayoutsByTabId[target.tabId]
@@ -106,14 +108,22 @@ export function closeTerminalSurfaceInWorkspaceSession(
     if (!layout || resolution !== 'pane') {
       return { session, ptyIdsToKill: [], closed: false, pinned: false, resolution }
     }
-    // The pane's own binding is passed so the retirement's stale-binding fence always admits it.
+    // The pane's own binding is passed so the retirement's stale-binding fence always admits it;
+    // the incarnation seen when the close was asked refuses a pane restarted since.
     const retired = retireTerminalSurfaceFromPersistence(session, {
       worktreeId,
       parentTabId: target.tabId,
       leafId: target.leafId,
-      ptyId: layout.ptyIdsByLeafId?.[target.leafId] ?? ''
+      ptyId: layout.ptyIdsByLeafId?.[target.leafId] ?? '',
+      ...(options.paneIncarnationId ? { incarnationId: options.paneIncarnationId } : {})
     })
-    return { session: retired, ptyIdsToKill: [], closed: true, pinned: false, resolution }
+    return {
+      session: retired,
+      ptyIdsToKill: [],
+      closed: retired !== session,
+      pinned: false,
+      resolution
+    }
   }
   const result = closeTerminalTabInWorkspaceSession(session, worktreeId, target.tabId, {
     force: options.force
@@ -124,5 +134,62 @@ export function closeTerminalSurfaceInWorkspaceSession(
       ? { session: advanceTerminalTopologyRevision(result.session, worktreeId) }
       : {}),
     resolution: 'tab'
+  }
+}
+
+/** What one close's durable mutation reads and writes, resolved when the writer admits it. */
+export type TerminalSurfaceCloseCommit = {
+  worktreeId: string
+  target: TerminalSurfaceCloseTarget
+  options: { allowMissing?: boolean; force?: boolean }
+  /** The session as it was when the close was asked, before the writer admitted it. */
+  requestedSession: WorkspaceSessionState | null | undefined
+  /** The tab's owner identity still matches the one the close was asked against. */
+  ownerMatches: () => boolean
+  hostId: () => ExecutionHostId
+  getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
+  setSession: (session: WorkspaceSessionState, hostId: ExecutionHostId) => void
+  onClosed: (ptyIdsToKill: string[]) => void
+}
+
+/** Builds the close's durable mutation: a refusal persists nothing and is its value. */
+export function terminalSurfaceCloseMutation(
+  commit: TerminalSurfaceCloseCommit
+): () => DurableProfileStateMutation<Error | undefined> {
+  const { target } = commit
+  // Why: a pane is fenced by its own binding, so a sibling split during the write cannot refuse it.
+  const paneIncarnationId =
+    target.kind === 'pane'
+      ? commit.requestedSession?.terminalPtyIncarnationsByPaneKey?.[
+          `${target.tabId}:${target.leafId}`
+        ]
+      : undefined
+  return () => {
+    if (!commit.ownerMatches()) {
+      return { value: new Error('terminal_pane_owner_changed'), persist: false }
+    }
+    const hostId = commit.hostId()
+    const session = commit.getSession(hostId)
+    if (!session) {
+      return { value: new Error('workspace_session_unavailable'), persist: false }
+    }
+    const result = closeTerminalSurfaceInWorkspaceSession(session, commit.worktreeId, target, {
+      force: commit.options.force,
+      paneIncarnationId
+    })
+    if (result.pinned) {
+      return { value: new Error('terminal_tab_pinned'), persist: false }
+    }
+    if (!result.closed) {
+      return {
+        value: commit.options.allowMissing ? undefined : new Error('tab_not_found'),
+        persist: false
+      }
+    }
+    commit.setSession(result.session, hostId)
+    commit.onClosed(result.ptyIdsToKill)
+    // Why no rollback: bookkeeping must not undo a user's close or skip its kill; a failed write
+    // keeps the removal dirty in memory, so the next write persists it.
+    return { value: undefined }
   }
 }

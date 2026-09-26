@@ -11,12 +11,13 @@ import {
 import { access, copyFile, rename, rm, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-const BACKUP_COUNT = 5
-const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+import {
+  PROFILE_STATE_LEGACY_BACKUP_COUNT as BACKUP_COUNT,
+  profileStateLegacyBackupPath as backupPath
+} from '../profile-state/profile-state-legacy-backup-path'
+export { hasStateBackup } from '../profile-state/profile-state-legacy-backup-path'
 
-function backupPath(dataFile: string, index: number): string {
-  return `${dataFile}.bak.${index}`
-}
+const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
 
 /** existsSync's non-blocking twin: existsSync is an access(F_OK) probe, so access() is the exact analogue. */
 async function exists(path: string): Promise<boolean> {
@@ -26,18 +27,7 @@ async function exists(path: string): Promise<boolean> {
   )
 }
 
-export function hasStateBackup(dataFile: string): boolean {
-  for (let index = 0; index < BACKUP_COUNT; index += 1) {
-    if (existsSync(backupPath(dataFile, index))) {
-      return true
-    }
-  }
-  return false
-}
-
-import type { StoreRuntimeState } from './store-runtime-state'
-
-type BackupRecoveryRotationOperationsRuntime = Pick<StoreRuntimeState, 'backupRotationInFlight'>
+type BackupRecoveryRotationOperationsRuntime = { backupRotationInFlight: boolean }
 
 export class BackupRecoveryRotationOperations {
   constructor(private readonly runtime: BackupRecoveryRotationOperationsRuntime) {}

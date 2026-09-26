@@ -24,7 +24,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
        * as -1, so the numeric code alone cannot tell a dead process from a failed stop. */
       providerExitObserved?: boolean
     } = {}
-  ): void {
+  ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
@@ -75,7 +75,10 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     >()
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       for (const tab of snapshot.tabs) {
-        if (tab.type === 'terminal' && tab.ptyId === ptyId) {
+        if (
+          tab.type === 'terminal' &&
+          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+        ) {
           exactSurfaceByKey.set(`${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`, {
             worktreeId,
             parentTabId: tab.parentTabId,
@@ -139,11 +142,8 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
-    // Safe against respawn: `getPtyLifecycleGeneration` lazily mints from the
-    // monotonic `nextPtyLifecycleGeneration`, so a re-read after this delete
-    // returns a strictly newer number — never a reused one. Every comparison a
-    // stale frame makes therefore still fails, exactly as the advance above intends.
     this.ptyLifecycleGenerationById.delete(ptyId)
+    this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -224,6 +224,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
         .flatMap((record) => (record.ptyId === ptyId ? [record.leafId] : []))
     )
     const retirableSurfaces = exactSurfaces.filter((surface) => !keptLeafIds.has(surface.leafId))
+    let retirement: Promise<void> | undefined
     if (
       preservesIntentionalHandlelessSurface ||
       preservesAbnormalSshSurface ||
@@ -234,7 +235,17 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     } else {
       // Why: permanent process exit is absence, not a starting/sleeping tab.
       // Retire before publishing so paired clients never persist a ghost.
-      this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, retirableSurfaces)
+      const pendingRetirement = {}
+      this.pendingPtySurfaceRetirementsByPtyId.set(ptyId, pendingRetirement)
+      retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, retirableSurfaces)
+        .catch((error) => {
+          console.error('[runtime] failed to publish terminal retirement:', error)
+        })
+        .finally(() => {
+          if (this.pendingPtySurfaceRetirementsByPtyId.get(ptyId) === pendingRetirement) {
+            this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
+          }
+        })
     }
 
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
@@ -265,6 +276,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       }
     }
     this.pruneDisconnectedPtyRecords()
+    return retirement
   }
 
   private notifyPtyExitListeners(ptyId: string): void {

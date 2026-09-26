@@ -89,7 +89,7 @@ describe('terminal close and handle incarnation continuity', () => {
     const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     expect(snapshot.tabs).toEqual([])
     expect(errorSpy).toHaveBeenCalledWith(
-      '[runtime] failed to flush terminal close:',
+      '[runtime] failed to persist terminal close:',
       expect.any(Error)
     )
     errorSpy.mockRestore()

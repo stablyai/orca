@@ -31,6 +31,7 @@ import {
 } from './claude-structured-session-exit-lifecycle'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
+import { drainClaudeChildWork } from './claude-child-work-evidence'
 import {
   admitClaudePromptCancellation,
   answerClaudeStructuredPrompt,
@@ -108,8 +109,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   /** Resolves once every first-hand exit observed so far has published its
-   *  lifecycle event — or has failed its tree proof and stayed indexed for a
-   *  retry. Publication trails observation by the close ladder and the
+   *  lifecycle event — or, with neither its tree proven gone nor its root's exit
+   *  observed, stayed indexed for a retry. Publication trails observation by the close ladder and the
    *  transcript cursor write, so nothing outside can otherwise tell the two
    *  apart without guessing at wall-clock. */
   drainObservedExits = (): Promise<void> => drainClaudeObservedExits(this.exits)
@@ -130,6 +131,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
 
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
+    if (event.type === 'ended') {
+      session?.childWork.clear()
+    } else if (event.type === 'message') {
+      session?.childWork.observe(event.message)
+    }
     const backgroundTasksChanged =
       event.type === 'ended'
         ? (session?.backgroundTasks.clear() ?? false)
@@ -147,19 +153,27 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         session ? backgroundTaskState(session) : null
       )
     }
+    this.publishChildWork(event.sessionId, session, event.type === 'message' ? event.message : null)
   }
 
-  bindPromptItemId(
+  /** After the journal handled the frame and the parent's own row was republished: the host
+   *  never holds a child record ahead of the rows that frame wrote, and never before its parent. */
+  private publishChildWork(
     sessionId: string,
-    journalItemId: string,
-    promptKey: string,
-    questionId?: string
+    session: ClaudeSession | null | undefined,
+    message: Record<string, unknown> | null = null
   ): void {
+    const evidence = drainClaudeChildWork(session, message, this.deps.now?.() ?? Date.now())
+    if (evidence.length > 0) {
+      this.deps.onChildWorkEvidence?.(sessionId, evidence)
+    }
+  }
+
+  bindPromptItemId(sessionId: string, journalItemId: string, promptKey: string): void {
     const session = this.sessions.get(sessionId)
     session?.prompts.bindJournalItemId(
       journalItemId,
       promptKey,
-      questionId,
       session.translator?.currentTurnId ?? null
     )
   }
@@ -229,8 +243,21 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   ]
 
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
+    this.afterClose(input.sessionId, () => this.releaseProviderSession(input.sessionId))
+
+  /** A close clears the session's tasks outside `emit`; its ending still reaches the host. */
+  private async afterClose(sessionId: string, close: () => Promise<boolean>): Promise<boolean> {
+    const session = this.sessions.get(sessionId)
+    try {
+      return await close()
+    } finally {
+      this.publishChildWork(sessionId, session)
+    }
+  }
+
+  private releaseProviderSession = (sessionId: string): Promise<boolean> =>
     releaseClaudeAcquisition({
-      sessionId: input.sessionId,
+      sessionId,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       exits: this.exits,
@@ -251,7 +278,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     if (this.exits.has(sessionId)) {
       return this.releaseAcquisition({ sessionId })
     }
-    return closeClaudeSession({
+    return this.afterClose(sessionId, () => this.closeProviderSession(sessionId))
+  }
+
+  private closeProviderSession = (sessionId: string): Promise<boolean> =>
+    closeClaudeSession({
       sessionId,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
@@ -261,7 +292,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         : {}),
       ...(this.deps.onEvent ? { onEvent: this.deps.onEvent } : {})
     })
-  }
 
   closeAll = (): Promise<void> =>
     closeAllClaudeSessions({

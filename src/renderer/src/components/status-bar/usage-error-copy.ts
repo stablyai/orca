@@ -26,6 +26,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'cursor') {
+    return 'Cursor'
+  }
   return provider
 }
 
@@ -117,6 +120,11 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return translate('auto.components.status.bar.tooltip.minimax.expired.label', 'Sign-in expired')
   }
+  // Why: cursor-agent owns its own token rotation, so a lapsed Cursor session is
+  // fixed by signing in to the CLI, not by Orca retrying the fetch.
+  if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {
+    return translate('auto.components.status.bar.tooltip.cursor.expired.label', 'Sign-in expired')
+  }
   // Why: an unsubscribed account is a settled answer about the account, not a
   // failed refresh; "Refresh failed" sends the user hunting a bug that is not there.
   if (p.usageMetadata?.failureKind === 'no-subscription') {
@@ -150,6 +158,12 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     return translate(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  }
+  if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {
+    return translate(
+      'auto.components.status.bar.tooltip.cursor.expired.message',
+      'Run cursor-agent login in a terminal on the computer running Orca, then retry usage.'
     )
   }
   if (p.provider === 'claude') {

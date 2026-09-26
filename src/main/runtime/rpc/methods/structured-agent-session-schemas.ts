@@ -17,6 +17,7 @@ export {
   MutationEnvelope,
   OptionsParams,
   RespondParams,
+  RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
   RewindParams,
