@@ -16,6 +16,7 @@ import {
 } from '../../../../shared/agent-session-resume'
 import {
   resolveAgentStatusIdentity,
+  shouldRetainInheritedProviderSession,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
@@ -122,6 +123,14 @@ export function buildAgentStatusLiveEntry(
   ) {
     return { entry: null, reason: 'suppressed-inherited-terminal' }
   }
+  const retainProviderSession = Boolean(
+    existing &&
+    shouldRetainInheritedProviderSession({
+      inheritedFromActivePane: identity.inheritedFromActivePane,
+      incomingState: payload.state,
+      sameTerminalOwner: (existing.connectionId ?? null) === (routing?.connectionId ?? null)
+    })
+  )
   const runtimeOrchestration = state.runtimeAgentOrchestrationByPaneKey[paneKey]
   const runtimeMergedOrchestration = runtimeOrchestration
     ? mergeCurrentOrchestrationContext(existing?.orchestration, runtimeOrchestration)
@@ -139,13 +148,15 @@ export function buildAgentStatusLiveEntry(
   const canReuseExistingProviderSession =
     existing?.agentType === identity.agentType &&
     (existing.state !== 'done' || payload.state === 'done')
-  const providerSession =
-    metadata?.providerSession ??
-    (canReuseExistingProviderSession ? existing.providerSession : undefined)
+  const providerSession = retainProviderSession
+    ? existing?.providerSession
+    : (metadata?.providerSession ??
+      (canReuseExistingProviderSession ? existing.providerSession : undefined))
   const existingProviderSession = canReuseExistingProviderSession
     ? existing.providerSession
     : undefined
   const providerSessionChanged =
+    !retainProviderSession &&
     Boolean(metadata?.providerSession && existingProviderSession) &&
     !agentProviderSessionsEqual(
       identity.agentType,

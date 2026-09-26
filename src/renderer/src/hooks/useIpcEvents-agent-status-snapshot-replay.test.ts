@@ -376,6 +376,96 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
+  it('keeps the foreground transcript when a nested WSL relay hook reports another agent', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const foreground = { key: 'session_id' as const, id: 'claude-session' }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'WSL Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      agentStatusByPaneKey: {
+        [FUTURE_PANE_KEY]: {
+          state: 'working',
+          prompt: 'foreground claude',
+          agentType: 'claude',
+          updatedAt: 1_700_000_000_000,
+          connectionId: null,
+          providerSession: foreground,
+          paneKey: FUTURE_PANE_KEY
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'nested codex',
+      agentType: 'codex',
+      toolName: 'Read',
+      toolInput: '00-review-context.md',
+      worktreeId: 'wt-1',
+      connectionId: 'wsl:Ubuntu',
+      providerSession: { key: 'session_id', id: 'codex-session' },
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_700_000_000_100
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({
+        state: 'working',
+        prompt: 'nested codex',
+        toolName: 'Read',
+        toolInput: '00-review-context.md'
+      }),
+      'WSL Tab',
+      { updatedAt: 1_700_000_000_100, stateStartedAt: 1_700_000_000_100 },
+      expect.objectContaining({ worktreeId: 'wt-1', connectionId: null }),
+      { providerSession: foreground }
+    )
+  })
+
   it('still rejects WSL-relayed status events against an SSH-owned repo', async () => {
     const setAgentStatus = vi.fn()
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {

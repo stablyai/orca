@@ -216,6 +216,92 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
+  // Why: mobile reads this snapshot. A background Codex CLI inherits the pane key, and a
+  // working hook used to install its transcript while the foreground turn was still active.
+  it('keeps the foreground provider session when a nested agent is working', () => {
+    const server = new AgentHookServer()
+    const foreground = {
+      key: 'session_id' as const,
+      id: 'claude-session',
+      transcriptPath: '/tmp/claude.jsonl'
+    }
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession: foreground,
+        payload: { state: 'working', prompt: 'foreground claude', agentType: 'claude' }
+      },
+      null
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession: {
+          key: 'session_id',
+          id: 'codex-session',
+          transcriptPath: '/tmp/codex.jsonl'
+        },
+        payload: {
+          state: 'working',
+          prompt: 'background codex',
+          agentType: 'codex',
+          lastAssistantMessage: 'codex output'
+        }
+      },
+      null
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'working',
+        prompt: 'background codex',
+        agentType: 'claude',
+        providerSession: foreground,
+        lastAssistantMessage: 'codex output'
+      })
+    ])
+  })
+
+  it('lets a different connection replace the foreground provider session', () => {
+    const server = new AgentHookServer()
+    const nested = {
+      key: 'session_id' as const,
+      id: 'codex-session',
+      transcriptPath: '/tmp/codex.jsonl'
+    }
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession: {
+          key: 'session_id',
+          id: 'claude-session',
+          transcriptPath: '/tmp/claude.jsonl'
+        },
+        payload: { state: 'working', prompt: 'foreground claude', agentType: 'claude' }
+      },
+      'conn-a'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        providerSession: nested,
+        payload: { state: 'working', prompt: 'other connection', agentType: 'codex' }
+      },
+      'conn-b'
+    )
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'working',
+        prompt: 'other connection',
+        providerSession: nested,
+        connectionId: 'conn-b'
+      })
+    ])
+  })
+
   it('does not apply Claude background evidence from a rejected local status', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

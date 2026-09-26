@@ -2,6 +2,7 @@ import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-co
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import {
   resolveAgentStatusIdentity,
+  shouldRetainInheritedProviderSession,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
@@ -216,6 +217,17 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
+    // Why: the row stores the ownership id. A WSL relay's raw `wsl:` id is null
+    // there, so comparing the raw id never treats that pane as this terminal.
+    const metadataSource =
+      existingStatus &&
+      shouldRetainInheritedProviderSession({
+        inheritedFromActivePane: identity.inheritedFromActivePane,
+        incomingState: statusPayload.state,
+        sameTerminalOwner: (existingStatus.connectionId ?? null) === (ownershipConnectionId ?? null)
+      })
+        ? { ...data, providerSession: existingStatus.providerSession }
+        : data
     const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
@@ -235,7 +247,7 @@ export function createAgentStatusEventApplicator(args: {
         terminalHandle: data.terminalHandle,
         ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
       },
-      metadata: normalizeAgentStatusMetadata(data, authorityRestartId)
+      metadata: normalizeAgentStatusMetadata(metadataSource, authorityRestartId)
     }
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
