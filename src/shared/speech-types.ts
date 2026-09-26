@@ -4,6 +4,7 @@ export type SpeechModelType =
   | 'whisper'
   | 'senseVoice'
   | 'nemo-ctc'
+  | 'qwen3-asr'
   | 'openai'
 export type SpeechModelProvider = 'local' | 'openai'
 

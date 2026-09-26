@@ -39,6 +39,42 @@ describe('SPEECH_MODEL_CATALOG', () => {
     expect(model?.files).toEqual(['model.int8.onnx', 'tokens.txt'])
   })
 
+  it('registers Qwen3-ASR as a non-streaming local model', () => {
+    const model = getCatalogModel('qwen3-asr-0.6b-int8')
+
+    expect(model).toBeDefined()
+    expect(model?.type).toBe('qwen3-asr')
+    expect(model?.provider).toBe('local')
+    expect(model?.language).toBe('multilingual')
+    expect(model?.streaming).toBe(false)
+    expect(model?.sampleRate).toBe(16000)
+  })
+
+  it('flattens the nested Qwen3-ASR tokenizer files into the model directory', () => {
+    const model = getCatalogModel('qwen3-asr-0.6b-int8')
+
+    expect(model?.files).toEqual([
+      'conv_frontend.onnx',
+      'encoder.int8.onnx',
+      'decoder.int8.onnx',
+      'vocab.json',
+      'merges.txt',
+      'tokenizer_config.json'
+    ])
+    expect(model?.downloadFiles?.find(({ name }) => name === 'vocab.json')?.url).toContain(
+      '/tokenizer/vocab.json'
+    )
+    expect(model?.sizeBytes).toBe(987_015_347)
+  })
+
+  it('leaves flat download URLs unchanged now that nested paths are supported', () => {
+    const model = getCatalogModel('sense-voice-zh-en-ja-ko-yue')
+
+    expect(model?.downloadFiles?.[0]?.url).toBe(
+      'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/model.int8.onnx?download=true'
+    )
+  })
+
   it('downloads only the pinned SenseVoice runtime files', () => {
     const model = getCatalogModel('sense-voice-zh-en-ja-ko-yue')
     expect(model?.sizeBytes).toBe(239_549_735)
