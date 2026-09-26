@@ -18,6 +18,7 @@ import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gestu
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { installTerminalSelectionCopyHandler } from './terminal-selection-copy-event'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from './terminal-native-copy-gutter'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
@@ -40,6 +41,7 @@ type PaneLinkContext = {
     | 'linkPointerGesturesRef'
     | 'fileLinkClickFallbackDisposablesRef'
     | 'httpLinkClickFallbackDisposablesRef'
+    | 'selectionCopyDisposablesRef'
     | 'selectionDisposablesRef'
     | 'nativeCopyDisposablesRef'
     | 'selectionCaptureTimersRef'
@@ -116,6 +118,10 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
   )
   seedStartupSessionRestoredBanner(ptyStartup, pane.id, onShowSessionRestoredBanner)
 
+  refs.selectionCopyDisposablesRef.current.set(
+    pane.id,
+    installTerminalSelectionCopyHandler(pane.terminal, window.api.ui.writeTerminalClipboardText)
+  )
   refs.nativeCopyDisposablesRef.current.set(
     pane.id,
     installTerminalNativeCopyGutterTrim(pane.terminal)

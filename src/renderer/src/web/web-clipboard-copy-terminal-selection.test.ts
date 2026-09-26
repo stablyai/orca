@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
 import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
+import { installTerminalSelectionCopyHandler } from '../components/terminal-pane/terminal-selection-copy-event'
 
 // Why a real DOM: only genuine capture/bubble propagation reproduces the ordering bug.
 
@@ -60,9 +61,13 @@ describe('web copy fallback vs. the terminal selection', () => {
   })
 
   it('copies the requested text even when the selection anchor is inside a terminal', () => {
-    // Copy Path / Copy Pane ID leave the selection in the terminal, so the copy event
-    // dispatches from there and a capture-phase write loses to xterm's bubble handler.
+    // Copy Path / Copy Pane ID leave the selection in the terminal, so the fallback's
+    // document capture listener must win before terminal capture and xterm bubble handlers.
     const terminalElement = mountTerminalWithSelection('rm -rf ./secret-dir')
+    installTerminalSelectionCopyHandler(
+      { element: terminalElement, getSelection: () => 'rm -rf ./secret-dir' },
+      async () => {}
+    )
     const clipboardData = createClipboardDataStub()
     stubExecCommand(terminalElement, clipboardData)
 
