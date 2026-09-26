@@ -75,6 +75,40 @@ export function createRepoRemovalActions(
             )
           }
         }
+        // Why: read the repo's worktrees before removal; its repos:changed refetch can drop their rows mid-await.
+        const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+        // A raw id can be published by two hosts. Keep the purge host-scoped for
+        // those twins so the sibling's qualified visit recency survives.
+        const knownRepoWorktrees = [
+          ...(get().worktreesByRepo[projectId] ?? []),
+          ...(get().detectedWorktreesByRepo[projectId]?.worktrees ?? [])
+        ]
+        const exactSiblingIds = new Set(
+          knownRepoWorktrees
+            .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
+            .map((worktree) => worktree.id)
+        )
+        const purgeTargets = worktreeIds.map((id) =>
+          exactSiblingIds.has(id) ? { id, hostId: ownerHostId } : id
+        )
+        const localAgentContextProjectIds =
+          ownerHostId === LOCAL_EXECUTION_HOST_ID
+            ? [
+                projectId,
+                ...(get().worktreesByRepo[projectId] ?? [])
+                  .filter((worktree) => worktreeBelongsToHost(worktree, ownerHostId))
+                  .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
+              ]
+            : []
+        // Why: read tabs/PTYs before and after the await: that refetch purges them, and a PTY can attach meanwhile.
+        const readTabPtyIds = (): { tabId: string; ptyIds: string[] }[] =>
+          worktreeIds.flatMap((wId) =>
+            (get().tabsByWorktree[wId] ?? []).map((tab) => ({
+              tabId: tab.id,
+              ptyIds: get().ptyIdsByTabId[tab.id] ?? []
+            }))
+          )
+        const tabPtyIdsBeforeRemoval = readTabPtyIds()
         // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
         const target = getActiveRuntimeTarget(
           settingsForRepoOwner(get(), projectId, options?.hostId)
@@ -104,31 +138,6 @@ export function createRepoRemovalActions(
         const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
         clearRepoSlugCacheEntry(projectId)
 
-        // Kill PTYs for all worktrees belonging to this repo
-        const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
-        // A raw id can be published by two hosts. Keep the purge host-scoped for
-        // those twins so the sibling's qualified visit recency survives.
-        const knownRepoWorktrees = [
-          ...(get().worktreesByRepo[projectId] ?? []),
-          ...(get().detectedWorktreesByRepo[projectId]?.worktrees ?? [])
-        ]
-        const exactSiblingIds = new Set(
-          knownRepoWorktrees
-            .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
-            .map((worktree) => worktree.id)
-        )
-        const purgeTargets = worktreeIds.map((id) =>
-          exactSiblingIds.has(id) ? { id, hostId: ownerHostId } : id
-        )
-        const localAgentContextProjectIds =
-          ownerHostId === LOCAL_EXECUTION_HOST_ID
-            ? [
-                projectId,
-                ...(get().worktreesByRepo[projectId] ?? [])
-                  .filter((worktree) => worktreeBelongsToHost(worktree, ownerHostId))
-                  .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
-              ]
-            : []
         const killedTabIds = new Set<string>()
         if (target.kind === 'environment') {
           await Promise.allSettled(
@@ -142,14 +151,13 @@ export function createRepoRemovalActions(
             )
           )
         }
-        for (const wId of worktreeIds) {
-          const tabs = get().tabsByWorktree[wId] ?? []
-          for (const tab of tabs) {
-            killedTabIds.add(tab.id)
-            for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-              if (!ptyId.startsWith('remote:')) {
-                window.api.pty.kill(ptyId)
-              }
+        const killedPtyIds = new Set<string>()
+        for (const { tabId, ptyIds } of [...tabPtyIdsBeforeRemoval, ...readTabPtyIds()]) {
+          killedTabIds.add(tabId)
+          for (const ptyId of ptyIds) {
+            if (!ptyId.startsWith('remote:') && !killedPtyIds.has(ptyId)) {
+              killedPtyIds.add(ptyId)
+              window.api.pty.kill(ptyId)
             }
           }
         }

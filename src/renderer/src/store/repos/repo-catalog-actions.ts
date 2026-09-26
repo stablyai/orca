@@ -23,6 +23,7 @@ import {
   startLocalRepoCatalogFetch
 } from './repo-catalog-fencing'
 import {
+  dropWorktreeRowsForRemovedRepos,
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
   mergeFetchedRepoCatalog,
@@ -111,6 +112,7 @@ export function createRepoCatalogActions(
           return
         }
         let finalizedHostRepos: Repo[] = []
+        let droppedWorktreeIds: string[] = []
         set((s) => {
           // Why: an in-flight fetch for a just-removed env would re-add purged repos and stick; skip only when the env was tombstoned, not merely unhydrated (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
@@ -142,10 +144,17 @@ export function createRepoCatalogActions(
           finalizedHostRepos = prunedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
+          const worktreeRowDrop = dropWorktreeRowsForRemovedRepos(
+            reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+            s.repos,
+            validRepoIds,
+            result.hostId
+          )
+          droppedWorktreeIds = worktreeRowDrop.droppedWorktreeIds
           return {
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+            ...worktreeRowDrop.state,
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(prunedRepos, s.repos)
               ? {}
@@ -159,6 +168,11 @@ export function createRepoCatalogActions(
             )
           }
         })
+        if (droppedWorktreeIds.length > 0) {
+          // Why: same cleanup as a worktree removed outside the window (worktree-event-runtime); nothing else purges these.
+          get().purgeWorktreeTerminalState(droppedWorktreeIds)
+          get().removeWorkspaceSpaceWorktrees(droppedWorktreeIds)
+        }
         scheduleSafeAutoForkSync(get, finalizedHostRepos)
       } catch (err) {
         localCatalogOutcome = { status: 'rejected', reason: err }
