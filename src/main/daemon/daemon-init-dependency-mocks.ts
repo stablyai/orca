@@ -115,6 +115,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly fanoutSyntheticExits: Mock
     readonly listProcesses: Mock
     readonly listSessions: Mock
+    readonly hasChildProcesses: Mock
     readonly establishLifecycleLease: Mock
     readonly shutdown: Mock
     readonly dispose: Mock
@@ -134,6 +135,9 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
         listProcessesControl.current ? listProcessesControl.current() : []
       )
       this.listSessions = vi.fn(async () => [...defaultListSessionsSessions])
+      // Why: idle by default (a bare shell), matching every other harness default;
+      // a test proving a busy legacy session overrides this per adapter instance.
+      this.hasChildProcesses = vi.fn(async () => false)
       const lifecycleLeaseError = lifecycleLeaseErrors.shift()
       this.establishLifecycleLease = vi.fn(async () => {
         if (lifecycleLeaseError) {

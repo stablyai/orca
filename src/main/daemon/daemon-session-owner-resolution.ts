@@ -192,6 +192,20 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     this.routeIncarnations.set(sessionId, incarnationId)
   }
 
+  // Why: a caller verifying a provider's remaining ownership (e.g. before retiring
+  // a legacy daemon) needs the ROUTED session IDs, not the last-inventoried
+  // candidates the private `routes` map already tracks; this reads that map
+  // without re-deriving ownership from `inventory()`'s private state.
+  sessionsOwnedBy(provider: T): string[] {
+    const owned: string[] = []
+    for (const [sessionId, routedProvider] of this.routes) {
+      if (routedProvider === provider) {
+        owned.push(sessionId)
+      }
+    }
+    return owned
+  }
+
   forgetRoute(sessionId: string, provider?: T): void {
     if (provider && this.routes.get(sessionId) !== provider) {
       return

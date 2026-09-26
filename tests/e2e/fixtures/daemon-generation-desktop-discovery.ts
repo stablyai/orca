@@ -28,7 +28,10 @@ export async function createDesktopDiscoveredDaemonRouter(options: {
   })
   // Why: exercise the desktop startup scanner itself, including versioned
   // named-pipe probing and legacy-adapter construction, not a fixture copy.
-  const legacy = await createLegacyDaemonAdapters(options.daemonDir, options.historyDir)
+  const { adapters: legacy, registry } = await createLegacyDaemonAdapters(
+    options.daemonDir,
+    options.historyDir
+  )
   const discoveredProtocols = legacy.map((adapter) => adapter.protocolVersion)
   const expectedProtocols = options.generations
     .filter((generation) => generation.protocolVersion !== options.currentProtocolVersion)
@@ -39,7 +42,9 @@ export async function createDesktopDiscoveredDaemonRouter(options: {
     )
   }
   return {
-    router: new DaemonPtyRouter({ current, legacy }),
+    // Why: mirrors daemon-provider-init.ts's production wiring, so the scanner this
+    // fixture exercises builds its router the same way the real startup path does.
+    router: new DaemonPtyRouter({ current, legacy, registry }),
     adapters: [current, ...legacy]
   }
 }

@@ -573,4 +573,38 @@ describe('DaemonSessionOwnerResolver', () => {
 
     expect(routes.get('session')).toBe(owner)
   })
+
+  describe('sessionsOwnedBy', () => {
+    it('returns only the session IDs routed to the given provider', () => {
+      const routes = new Map<string, IPtyProvider>()
+      const owner = provider(async () => [])
+      const otherOwner = provider(async () => [])
+      const resolver = new DaemonSessionOwnerResolver([owner, otherOwner], routes)
+      resolver.recordRoute('session-a', owner)
+      resolver.recordRoute('session-b', owner)
+      resolver.recordRoute('session-c', otherOwner)
+
+      expect(resolver.sessionsOwnedBy(owner).sort()).toEqual(['session-a', 'session-b'])
+      expect(resolver.sessionsOwnedBy(otherOwner)).toEqual(['session-c'])
+    })
+
+    it('returns an empty array when the provider owns no routed session', () => {
+      const routes = new Map<string, IPtyProvider>()
+      const owner = provider(async () => [])
+      const resolver = new DaemonSessionOwnerResolver([owner], routes)
+
+      expect(resolver.sessionsOwnedBy(owner)).toEqual([])
+    })
+
+    it('stops counting a session once its route is forgotten', () => {
+      const routes = new Map<string, IPtyProvider>()
+      const owner = provider(async () => [])
+      const resolver = new DaemonSessionOwnerResolver([owner], routes)
+      resolver.recordRoute('session-a', owner)
+
+      resolver.forgetRoute('session-a', owner)
+
+      expect(resolver.sessionsOwnedBy(owner)).toEqual([])
+    })
+  })
 })
