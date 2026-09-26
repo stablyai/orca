@@ -121,6 +121,30 @@ function makeRendererRuntime(
   return { runtime, spawn, notifier }
 }
 
+/** The desktop renderer's graph holding every terminal leaf of `snapshot`. */
+function publishDesktopGraph(runtime: Runtime, snapshot: RuntimeMobileSessionTabsSnapshot): void {
+  const leaves = snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab] : []))
+  runtime.attachWindow(1)
+  runtime.syncWindowGraph(1, {
+    tabs: [...new Set(leaves.map((leaf) => leaf.parentTabId))].map((tabId) => ({
+      tabId,
+      worktreeId: TEST_WORKTREE_ID,
+      title: 'Terminal',
+      activeLeafId: leaves.find((leaf) => leaf.parentTabId === tabId)!.leafId,
+      layout: null
+    })),
+    leaves: leaves.map((leaf, index) => ({
+      tabId: leaf.parentTabId,
+      worktreeId: TEST_WORKTREE_ID,
+      leafId: leaf.leafId,
+      paneRuntimeId: index + 1,
+      ptyId: leaf.ptyId ?? null,
+      paneTitle: null
+    })),
+    mobileSessionTabs: [snapshot]
+  })
+}
+
 async function listForClient(
   runtime: Runtime,
   capabilities: string[]
@@ -352,9 +376,9 @@ describe('terminal exit records', () => {
   })
 
   it('routes a user activation of a desktop-held exited leaf to the desktop pane', async () => {
-    const { runtime, spawn, notifier } = makeRendererRuntime(
-      rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
-    )
+    const snapshot = rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
+    const { runtime, spawn, notifier } = makeRendererRuntime(snapshot)
+    publishDesktopGraph(runtime, snapshot)
     runtime.terminalExitRecords.record(exitRecord())
 
     await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
@@ -369,6 +393,23 @@ describe('terminal exit records', () => {
     )
     expect(notifier.focusTerminal).not.toHaveBeenCalled()
     expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('restarts a runtime-owned leaf in a desktop-published snapshot through the runtime', async () => {
+    // The desktop publishes the worktree, but its renderer graph does not hold this tab.
+    const { runtime, spawn, notifier } = makeRendererRuntime(
+      rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
+    )
+    runtime.terminalExitRecords.record(exitRecord())
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
+      notifyClients: false,
+      intent: 'user'
+    })
+
+    expect(notifier.restartExitedTerminal).not.toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(spawn.mock.calls[0]![0]).toMatchObject({ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID })
   })
 
   it('never restarts or focuses an exited leaf for an automatic probe', async () => {

@@ -99,13 +99,20 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     opts: { activate?: boolean } = {}
   ): Promise<void> {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot || !this.terminalExitRecords.get(leafId)) {
+    const tab = snapshot?.tabs.find(
+      (candidate) =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === tabId &&
+        candidate.leafId === leafId
+    )
+    if (!snapshot || !this.terminalExitRecords.get(leafId) || tab?.type !== 'terminal') {
       return
     }
-    if (
-      !this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) &&
-      this.notifier?.restartExitedTerminal
-    ) {
+    // Why the renderer-graph test, not the publication: a runtime-owned tab can sit inside a
+    // desktop-published snapshot, and no desktop pane would run its restart.
+    const heldByDesktopPane =
+      this.notifier?.restartExitedTerminal && !this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)
+    if (heldByDesktopPane) {
       // Why: the desktop pane still holds the dead leaf; a runtime spawn would bind a second process
       // the mounted pane never attaches to.
       this.notifier.restartExitedTerminal(tabId, worktreeId, leafId)
@@ -114,19 +121,13 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       }
       return
     }
-    const tab = snapshot.tabs.find(
-      (candidate) =>
-        candidate.type === 'terminal' &&
-        candidate.parentTabId === tabId &&
-        candidate.leafId === leafId
-    )
     await this.createRuntimeOwnedMobileSessionTerminal(
       worktreeId,
       opts.activate === true,
       undefined,
       {
         identity: { tabId, leafId },
-        cwd: tab?.type === 'terminal' ? tab.startupCwd : undefined,
+        cwd: tab.startupCwd,
         targetGroupId: snapshot.tabGroups?.find((group) => group.tabOrder.includes(tabId))?.id
       }
     )
