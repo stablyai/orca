@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -25,6 +26,7 @@ import type {
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { Store } from '../persistence'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
@@ -558,9 +560,9 @@ function makeRuntimeStoreWithWorkspaceSession(
 ): {
   runtimeStore: typeof store & {
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
-    setWorkspaceSession: ReturnType<typeof vi.fn>
-    flushOrThrow: ReturnType<typeof vi.fn>
-    persistPtyBinding: ReturnType<typeof vi.fn>
+    setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
+    flushOrThrow: ReturnType<typeof vi.fn<() => void>>
+    persistPtyBinding: ReturnType<typeof vi.fn<Store['persistPtyBinding']>>
   }
   getSession: () => WorkspaceSessionState
   setSession: (next: WorkspaceSessionState) => void
@@ -569,7 +571,7 @@ function makeRuntimeStoreWithWorkspaceSession(
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
-  const runtimeStore = {
+  const runtimeStore = withDurableRuntimeStore({
     ...store,
     getWorkspaceSession: (hostId?: string) =>
       hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
@@ -577,36 +579,38 @@ function makeRuntimeStoreWithWorkspaceSession(
     // Headless close is a durable transaction; keep the in-memory fixture's
     // persistence contract equivalent to the production store.
     flushOrThrow: vi.fn(),
-    persistPtyBinding: vi.fn(
-      (args: { worktreeId: string; tabId: string; leafId: string; ptyId: string }) => {
-        const tabs = session.tabsByWorktree[args.worktreeId] ?? []
-        session = {
-          ...session,
-          tabsByWorktree: {
-            ...session.tabsByWorktree,
-            [args.worktreeId]: tabs.map((tab) =>
-              tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
-            )
-          },
-          terminalLayoutsByTabId: {
-            ...session.terminalLayoutsByTabId,
-            [args.tabId]: {
-              ...(session.terminalLayoutsByTabId[args.tabId] ?? {
-                root: { type: 'leaf', leafId: args.leafId },
-                activeLeafId: args.leafId,
-                expandedLeafId: null
-              }),
-              ptyIdsByLeafId: {
-                ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
-                [args.leafId]: args.ptyId
-              }
+    persistPtyBinding: vi.fn<Store['persistPtyBinding']>(async (input) => {
+      const args = typeof input === 'function' ? input() : input
+      if (!args) {
+        return false
+      }
+      const tabs = session.tabsByWorktree[args.worktreeId] ?? []
+      session = {
+        ...session,
+        tabsByWorktree: {
+          ...session.tabsByWorktree,
+          [args.worktreeId]: tabs.map((tab) =>
+            tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab
+          )
+        },
+        terminalLayoutsByTabId: {
+          ...session.terminalLayoutsByTabId,
+          [args.tabId]: {
+            ...(session.terminalLayoutsByTabId[args.tabId] ?? {
+              root: { type: 'leaf', leafId: args.leafId },
+              activeLeafId: args.leafId,
+              expandedLeafId: null
+            }),
+            ptyIdsByLeafId: {
+              ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
+              [args.leafId]: args.ptyId
             }
           }
         }
-        return true
       }
-    )
-  }
+      return true
+    })
+  })
   return { runtimeStore, getSession: () => session, setSession }
 }
 

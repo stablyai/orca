@@ -44,6 +44,8 @@ describe('pre-gone crash sampling startup wiring', () => {
     expect(readySource).toContain(
       "import { initializeReadyRuntimeServices } from './main-process-ready-runtime'"
     )
-    expect(readySource).toContain('\n  await initializeReadyRuntimeServices()')
+    expect(readySource).toContain(
+      'try {\n    await initializeReadyFoundation()\n    await initializeReadyRuntimeServices()'
+    )
   })
 })

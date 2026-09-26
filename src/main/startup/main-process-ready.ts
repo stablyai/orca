@@ -11,12 +11,33 @@ import {
 export async function initializeMainProcessReady(
   options: MainProcessRuntimeLaunchOptions
 ): Promise<void> {
-  await initializeReadyFoundation()
-  await initializeReadyRuntimeServices()
-  // Why concurrent: window creation reads no translated string and no menu item, and both the
-  // native menu and the tray only become reachable once the window shows — so serializing them
-  // ahead of openMainWindow only delayed the renderer (8 ms in English, more for a lazy locale).
-  const i18nAndMenuReady = initializeMainProcessI18nAndMenu()
-  state.mainProcessI18nReady = i18nAndMenuReady.catch(() => {})
-  await Promise.all([i18nAndMenuReady, initializeMainProcessRuntimeLaunch(options)])
+  try {
+    await initializeReadyFoundation()
+    await initializeReadyRuntimeServices()
+    // Window creation can proceed while translations and the native menu initialize.
+    const i18nAndMenuReady = initializeMainProcessI18nAndMenu()
+    state.mainProcessI18nReady = i18nAndMenuReady.catch(() => {})
+    // Join both branches before cleanup can close the profile writer.
+    const results = await Promise.allSettled([
+      i18nAndMenuReady,
+      initializeMainProcessRuntimeLaunch(options)
+    ])
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        throw result.reason
+      }
+    }
+  } catch (error) {
+    try {
+      await state.store?.freezeWritesAsync()
+      state.profileStateAdmission?.release()
+      state.profileStateAdmission = undefined
+    } catch (closeError) {
+      console.error(
+        '[persistence] Failed to close profile persistence after startup failure:',
+        closeError
+      )
+    }
+    throw error
+  }
 }

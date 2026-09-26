@@ -154,6 +154,7 @@ describe('WSL CLI PowerShell boundary', () => {
             ],
             {
               encoding: 'utf8',
+              windowsHide: true,
               env: {
                 ...process.env,
                 ORCA_CLI_CWD: 'stale',
@@ -182,10 +183,67 @@ describe('WSL CLI PowerShell boundary', () => {
             '-e',
             'process.exit(23)'
           ],
-          { encoding: 'utf8' }
+          { encoding: 'utf8', windowsHide: true }
         )
         expect(exitResult.error).toBeUndefined()
         expect(exitResult.status).toBe(23)
+      } finally {
+        await removeTree(root)
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'pins a non-ASCII app identity and the dev launcher env through Windows PowerShell 5.1',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-wsl-managed-bridge-'))
+      const userDataPath = join(root, "张三's O\u2019Brien Orca")
+      const cliEntryPath = join(root, 'cli \u2018entry\u2019.cjs')
+      const bridgePath = join(root, 'orca-wsl-bridge.ps1')
+      try {
+        await writeFile(bridgePath, buildWslBridgeScript({ userDataPath, cliEntryPath }), 'utf8')
+        await writeFile(
+          cliEntryPath,
+          'console.error("to stderr"); const e = process.env; console.log(JSON.stringify({ argv: process.argv.slice(2), owner: e.ORCA_USER_DATA_PATH, app: e.ORCA_APP_EXECUTABLE, nodeOptions: e.NODE_OPTIONS ?? null, stashed: e.ORCA_NODE_OPTIONS, cliDir: e.ORCA_WSL_CLI_DIR ?? null }))\n',
+          'utf8'
+        )
+        const result = spawnSync(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            bridgePath,
+            process.execPath,
+            '-WslCwd',
+            root,
+            ...FORWARDED_ARGS
+          ],
+          {
+            encoding: 'utf8',
+            windowsHide: true,
+            env: {
+              ...process.env,
+              ORCA_APP_EXECUTABLE: '',
+              NODE_OPTIONS: '--max-old-space-size=4096',
+              ORCA_WSL_CLI_DIR: 'C:\\guest-only'
+            }
+          }
+        )
+
+        expect(result.error).toBeUndefined()
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stderr).toContain('to stderr')
+        expect(JSON.parse(result.stdout.trim())).toEqual({
+          argv: FORWARDED_ARGS,
+          owner: userDataPath,
+          app: process.execPath,
+          nodeOptions: null,
+          stashed: '--max-old-space-size=4096',
+          cliDir: null
+        })
       } finally {
         await removeTree(root)
       }
