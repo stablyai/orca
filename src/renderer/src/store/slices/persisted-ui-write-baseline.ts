@@ -10,6 +10,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
  */
 export type PersistedUIWriteBaseline = {
   sidebarWidth: number
+  sidebarOpen: boolean
   rightSidebarOpen: boolean
   rightSidebarTab: PersistedUIState['rightSidebarTab']
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
@@ -39,6 +40,7 @@ export type PersistedUIWriteBaseline = {
 // this module exists to close (see ui-state-schema-parity.ts for the same lesson).
 const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   sidebarWidth: true,
+  sidebarOpen: true,
   rightSidebarOpen: true,
   rightSidebarTab: true,
   rightSidebarExplorerView: true,

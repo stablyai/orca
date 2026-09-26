@@ -10,6 +10,7 @@ describe('pairing-local UI fields', () => {
       'hideWorkspacesFromOtherDevices',
       'manualRepoOrder',
       'workspaceHostOrder',
+      'sidebarOpen',
       'agentsVisibleHostIds',
       'agentsFilterRepoIds',
       'agentsShowChildAgents',
