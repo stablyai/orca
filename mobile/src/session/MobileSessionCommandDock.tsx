@@ -298,8 +298,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               placeholder=""
               showSoftInputOnFocus
               autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
+              // Why: the field text is mirrored to the PTY verbatim, so keyboard corrections apply as edits; Android keeps them off.
+              autoCorrect={Platform.OS === 'ios' && autocompleteEnabled}
+              spellCheck={Platform.OS === 'ios' && autocompleteEnabled}
               smartInsertDelete={false}
               // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
               autoComplete="off"
