@@ -17,7 +17,7 @@ type ActivationPolicyApp = {
 }
 
 /** Reads ORCA_BACKGROUND_LAUNCH, ORCA_E2E_FOREGROUND, ORCA_E2E_HEADLESS, ORCA_E2E_HEADFUL. */
-type PolicyEnv = Readonly<Record<string, string | undefined>>
+export type PolicyEnv = Readonly<Record<string, string | undefined>>
 
 /** True when this process must not steal focus, raise windows, or activate the app. */
 export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
