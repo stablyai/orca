@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -6,6 +6,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
+import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 
 const WORKTREE_ID = 'repo::/worktree'
 const REPO_ID = 'repo'
@@ -114,13 +115,19 @@ function publishRendererFrame(runtime: OrcaRuntimeService): void {
 
 function coldRestoredRuntime(): OrcaRuntimeService {
   const session = makeColdRestoredSession()
-  const runtime = new OrcaRuntimeService({
-    getRepos: () => [LIVE_REPO],
-    getWorkspaceSession: () => session
-  } as never)
-  runtime.attachWindow(1)
   // The desktop window is live, so main must not rebuild the list from the persisted session.
-  vi.spyOn(runtime as never, 'getAvailableAuthoritativeWindow').mockReturnValue({} as never)
+  setRuntimeDesktopSurface({
+    showNotification: () => false,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only isDestroyed off its authoritative window on this path.
+    findWindowById: () => ({ isDestroyed: () => false }) as never,
+    onIpc: () => {},
+    removeIpcListener: () => {}
+  })
+  const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list and fence paths read only repos and the workspace session; the rest of Store is unreached.
+    { getRepos: () => [LIVE_REPO], getWorkspaceSession: () => session } as never
+  )
+  runtime.attachWindow(1)
   return runtime
 }
 
@@ -130,6 +137,8 @@ async function listedSurfaces(runtime: OrcaRuntimeService): Promise<string[]> {
 }
 
 describe('a renderer frame fenced before its PTY registered', () => {
+  afterEach(() => setRuntimeDesktopSurface(null))
+
   it.each([
     ['local', null],
     ['SSH', 'ssh-1']
