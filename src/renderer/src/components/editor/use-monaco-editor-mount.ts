@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
@@ -61,6 +61,9 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
     },
     gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
   } = params
+  // Why: same-path ownership migrations can keep the editor and its listeners mounted.
+  const fileIdRef = useRef(fileId)
+  fileIdRef.current = fileId
 
   return useCallback<OnMount>(
     (editorInstance, monaco) => {
@@ -145,7 +148,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
 
       const { cursorPositionSub, scrollStateSub } = installMonacoViewStateTracking({
         editorInstance,
-        filePath,
+        fileIdRef,
         viewStateKey,
         scrollThrottleTimerRef,
         setEditorCursorLine
