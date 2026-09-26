@@ -732,7 +732,8 @@ describe('Jira issue search', () => {
   it('builds text and exact-key JQL without accepting oversized input', () => {
     expect(buildJiraIssueSearchJql('test')).toBe('text ~ "test*"')
     expect(buildJiraIssueSearchJql('orca-123')).toBe('key = "ORCA-123"')
-    expect(buildJiraIssueSearchJql('say "hello"')).toBe('text ~ "say \\"hello\\"*"')
+    expect(buildJiraIssueSearchJql('say "hello"')).toBe('text ~ "say hello*"')
+    expect(buildJiraIssueSearchJql('()')).toBeNull()
     expect(
       buildJiraIssueSearchJql('x'.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES + 1))
     ).toBeNull()

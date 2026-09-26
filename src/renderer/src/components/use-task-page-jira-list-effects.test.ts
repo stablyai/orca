@@ -28,6 +28,7 @@ function createModel(): TaskPageLinearCollectionEffectsModel {
     setJiraLoading: vi.fn(),
     setJiraError: vi.fn(),
     setJiraErrorDetailsOpen: vi.fn(),
+    setJiraJqlRejection: vi.fn(),
     jiraSearchInput: '',
     appliedJiraSearch: '',
     setAppliedJiraSearch: vi.fn(),
@@ -78,6 +79,24 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
     expect(listJiraIssues).toHaveBeenNthCalledWith(3, 'reported', 50, {
       sourceContext: null,
       force: false
+    })
+  })
+
+  it('passes force through the text-search wrapper on refresh', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = 'fix login'
+    const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
+    await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      model.jiraRefreshNonce = 1
+      rerender()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(searchJiraIssues).toHaveBeenCalledTimes(2))
+    expect(searchJiraIssues).toHaveBeenNthCalledWith(2, 'text ~ "fix login*"', 50, {
+      sourceContext: null,
+      force: true
     })
   })
 })

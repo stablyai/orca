@@ -62,6 +62,15 @@ function getIssueSearchErrorSummary(message: string, code: number | null): strin
   return "Couldn't load Jira issues. Try again in a moment."
 }
 
+// Not anchored: local IPC prefixes "Error invoking remote method '…': Error: ".
+const BAD_REQUEST_PATTERN = /\bError 400:\s*([\s\S]*)$/
+
+/** Jira's reason when it rejected the request as malformed (HTTP 400); null for other failures. */
+export function getJiraBadRequestReason(error: unknown): string | null {
+  const match = BAD_REQUEST_PATTERN.exec(getErrorMessage(error))
+  return match ? match[1].trim() : null
+}
+
 export function createTaskPageJiraLoadFailureState(error: unknown): TaskPageJiraLoadFailureState {
   const message = getErrorMessage(error)
   const code = getErrorCode(message)

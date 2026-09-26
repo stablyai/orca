@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createTaskPageJiraLoadFailureState } from './task-page-jira-load-state'
+import {
+  createTaskPageJiraLoadFailureState,
+  getJiraBadRequestReason
+} from './task-page-jira-load-state'
 
 describe('TaskPage Jira load state', () => {
   it('explains Jira forbidden errors while clearing stale issues', () => {
@@ -63,4 +66,24 @@ describe('TaskPage Jira load state', () => {
       }
     })
   })
+})
+
+describe('getJiraBadRequestReason', () => {
+  it.each([
+    ['Error 400: Error in the JQL Query: bad', 'Error in the JQL Query: bad'],
+    [
+      "Error invoking remote method 'jira:searchIssues': Error: Error 400: Error in the JQL Query: bad",
+      'Error in the JQL Query: bad'
+    ],
+    ['Error 400:', '']
+  ])('reads Jira reason from %s', (message, reason) => {
+    expect(getJiraBadRequestReason(new Error(message))).toBe(reason)
+  })
+
+  it.each(['Error 401: Unauthorized', 'Error 4000: nope', 'Bad request', 'fetch failed'])(
+    'ignores other failures: %s',
+    (message) => {
+      expect(getJiraBadRequestReason(new Error(message))).toBeNull()
+    }
+  )
 })

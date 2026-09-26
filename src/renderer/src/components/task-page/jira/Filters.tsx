@@ -155,7 +155,7 @@ export function TaskPageJiraFilters({
             }}
             placeholder={translate(
               'auto.components.TaskPage.99c2755218',
-              'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+              'Search issues or enter JQL, e.g. project = ABC'
             )}
             className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
           />

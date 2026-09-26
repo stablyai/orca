@@ -4,7 +4,8 @@ import type { JiraIssue } from '../jira-types'
 import type { LinearIssue } from '../linear/issue-types'
 import type { LinearCollectionResult } from '../linear/workspace-types'
 import type { BaseRefSearchResult } from '../repo-types'
-import { JIRA_ISSUE_KEY_PATTERN, parseJiraIssueUrl } from '../jira-issue-url'
+import { parseJiraIssueUrl } from '../jira-issue-url'
+import { buildJiraTextSearchJql } from '../jira-search-input-jql'
 import type { GitHubIssueOrPRLink } from '../github/links'
 import {
   buildSmartWorkspaceUrlSourceRows,
@@ -49,11 +50,7 @@ export function buildJiraIssueSearchJql(query: string): string | null {
   if (!trimmed || !isSmartWorkspaceSourceQueryWithinLimit(trimmed)) {
     return null
   }
-  if (JIRA_ISSUE_KEY_PATTERN.test(trimmed)) {
-    return `key = "${trimmed.toUpperCase()}"`
-  }
-  const escaped = trimmed.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
-  return `text ~ "${escaped}*"`
+  return buildJiraTextSearchJql(trimmed) || null
 }
 
 export function isBlockingJiraUrlIntent(mode: SmartNameMode, value: string): boolean {
