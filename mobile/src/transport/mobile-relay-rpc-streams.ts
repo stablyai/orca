@@ -8,7 +8,7 @@ import {
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
-import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
+import { buildReadyStreamUnsubscribe, isReadyIdStream } from './rpc-client-server-subscription'
 import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse, RpcSuccess } from './types'
@@ -205,17 +205,9 @@ export class MobileRelayRpcStreams {
           this.cancelledSubscriptions.set(id, { method: stream.method, unsubscribe: byParams })
         } else if (unsubscribe || byParams) {
           this.sendUnsubscribe((unsubscribe ?? byParams)!)
-        } else if (
-          stream.method === 'browser.screencast' ||
-          stream.method === 'runtime.clientEvents.subscribe'
-        ) {
+        } else if (isReadyIdStream(stream.method)) {
           // Keep only the cleanup route while the server assigns its subscription ID.
           this.cancelledSubscriptions.set(id, { method: stream.method })
-        } else if (stream.subscriptionId) {
-          this.sendUnsubscribe({
-            method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
-            params: { subscriptionId: stream.subscriptionId }
-          })
         }
       }
     }

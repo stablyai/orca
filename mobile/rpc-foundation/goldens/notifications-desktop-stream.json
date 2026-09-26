@@ -3,11 +3,11 @@
   "family": "notifications.desktop-stream",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "baseline": "a547d8903b91908502892cc3ca68cb0986397901",
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "eacf859143588ae6bee2804975d642b6c1088d57ae77ffe298620250d9a9f0e4",
-  "scenarioSha256": "359add5203e68fcb85586f06babb694ee9d548e1dc58481e6d03871ab9f922cb",
+  "recorderSha256": "ca865964d90db4c42bf4807049ffb54d7d2f552a4666798a2d2e5cbf14723edd",
+  "adapterSha256": "f0b64994ed7d98c0479488e37df23cc997468e1be9b1466a9da91ac1a6260b43",
+  "scenarioSha256": "bc355d0cddf9e9771f20d28b10aae59a03ffb88dcff7d5a6a124fb307b260647",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -65,6 +65,11 @@
         }
       }
     },
+    "2637263140a2": {
+      "name": "notifications.unsubscribe#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
+    },
     "45aca32cac62": {
       "name": "notification-tray.dismiss",
       "ordinal": 7,
@@ -79,11 +84,6 @@
         "key": "orca:pushDismissalWatermarks:v1",
         "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-2\\\"]\",\"seq\":8,\"expiresAt\":1767312000000}]"
       }
-    },
-    "4c376c5d53ac": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
     },
     "5359579cc62d": {
       "running": true
@@ -124,66 +124,6 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
-      }
-    },
-    "96f940529e7e": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 8,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "97d75ba51dcd": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 8,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "unsubscribed": true
-          }
-        }
       }
     },
     "a0b2bcfcde77": {
@@ -277,8 +217,8 @@
       {
         "id": "unsubscribing",
         "observation": {
-          "sender": ["18a100fb6bae", "96f940529e7e"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "4c376c5d53ac"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -290,8 +230,8 @@
       {
         "id": "stopped",
         "observation": {
-          "sender": ["18a100fb6bae", "97d75ba51dcd"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "4c376c5d53ac"],
+          "sender": ["18a100fb6bae"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "2637263140a2"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"

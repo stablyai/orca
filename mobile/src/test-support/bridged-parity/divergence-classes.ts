@@ -2,7 +2,7 @@
  * What a bridged-replay divergence is called, decided by a rule rather than by reading a message.
  *
  * Beside the recorder rather than inside it. Reading a failure cannot change what a recording
- * records, so `recorderSha256` must not cover this: a tightened rule would otherwise re-record 787
+ * records, so `recorderSha256` must not cover this: a tightened rule would otherwise re-record 786
  * headers to say nothing. The recorder's own directory is digested whole, which is why this lives
  * one level up in `test-support`.
  */
@@ -165,7 +165,7 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 }
 
 /**
- * What this tree measures, per class, over all 787 goldens.
+ * What this tree measures, per class, over all 786 goldens.
  *
  * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
  * in both directions, and this module's test pins their sum to the size of the corpus. A class that
@@ -186,7 +186,7 @@ export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'iden
   // now arrives differs before the ordinal that also moved does. Nothing stopped replaying
   // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
   // hide one.
-  'result-absent-settlement': 341,
+  'result-absent-settlement': 340,
   // Four left here and two left `write-ordinal` for the class below, which is the `cancel` a
   // refused stream frame now posts: the run stops at a renamed occurrence before it reaches the
   // checkpoint or the ordinal that used to be what differed first.

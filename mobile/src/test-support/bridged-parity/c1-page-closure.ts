@@ -4,7 +4,7 @@
  *
  * C1 moves a screen to the web: `app/h/_layout.tsx` and `app/h/[hostId]/index.tsx` and everything
  * they import. The suite next door already proves the corpus replays byte-identically or in a named
- * class, but it proves it as counts over 787 goldens, and a count is the wrong instrument for the
+ * class, but it proves it as counts over 786 goldens, and a count is the wrong instrument for the
  * claim C1 needs. These 94 are the ones whose divergence would be this domain's divergence, so
  * each is pinned by id to the verdict it gives, not counted into a total another golden can pay for.
  *

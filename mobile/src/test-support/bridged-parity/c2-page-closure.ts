@@ -10,7 +10,7 @@ import type { PageClosurePins } from './page-closure'
  * C2 moves the tasks screen to the web: `app/h/_layout.tsx` and `app/h/[hostId]/tasks.web.tsx` and
  * everything they import, 3767 modules of which 428 are this repository's own. 68 families and 257
  * goldens are recorded at a site inside it, and each is pinned by id to the verdict it gives — the
- * same instrument C1 and C5 use, for the same reason: `BRIDGED_PARITY_BASELINE` is counts over 787
+ * same instrument C1 and C5 use, for the same reason: `BRIDGED_PARITY_BASELINE` is counts over 786
  * goldens, and a count lets one of the other 530 pay for a closure golden that stopped replaying.
  *
  * The entry is the `.web.tsx` file, not the route switch beside it. Measured from

@@ -3,11 +3,11 @@
   "family": "notifications.desktop-stream",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "baseline": "a547d8903b91908502892cc3ca68cb0986397901",
   "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
-  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "eacf859143588ae6bee2804975d642b6c1088d57ae77ffe298620250d9a9f0e4",
-  "scenarioSha256": "24f8c05639f82bc5e32abe3864c3d01a0589e295369028929fed2f0c684f1d0c",
+  "recorderSha256": "ca865964d90db4c42bf4807049ffb54d7d2f552a4666798a2d2e5cbf14723edd",
+  "adapterSha256": "f0b64994ed7d98c0479488e37df23cc997468e1be9b1466a9da91ac1a6260b43",
+  "scenarioSha256": "c19acf00cef5d466c9116b953e9c87f1fdcb10a2b71c29c811ebc4649dac6916",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -59,47 +59,13 @@
         }
       }
     },
-    "5359579cc62d": {
-      "running": true
-    },
-    "6a8123e61fb7": {
+    "1a6e545a32e3": {
       "name": "notifications.unsubscribe#1",
       "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "notifications.unsubscribe"
-        },
-        {
-          "name": "params",
-          "value": {
-            "subscriptionId": "sub-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "unsubscribed": true
-          }
-        }
-      }
-    },
-    "851428b22bd4": {
-      "name": "notifications.unsubscribe#1",
-      "ordinal": 5,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.unsubscribe\",\"params\":{\"subscriptionId\":\"sub-1\"}}"
+    },
+    "5359579cc62d": {
+      "running": true
     },
     "a0b2bcfcde77": {
       "running": false
@@ -141,8 +107,8 @@
       {
         "id": "stopped",
         "observation": {
-          "sender": ["0493957d4faf", "6a8123e61fb7"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "851428b22bd4"],
+          "sender": ["0493957d4faf"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "1a6e545a32e3"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a"
@@ -154,8 +120,8 @@
       {
         "id": "not-replayed",
         "observation": {
-          "sender": ["0493957d4faf", "6a8123e61fb7"],
-          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "851428b22bd4"],
+          "sender": ["0493957d4faf"],
+          "payloads": ["f552b5040ec7", "e074c0b6fa0a", "1a6e545a32e3"],
           "settlements": {
             "start": "eb79a9b3682a",
             "stop": "eb79a9b3682a",
