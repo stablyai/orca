@@ -11,7 +11,7 @@ import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
 } from './worktree'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
-import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
+import { withRepoMaintenancePaused } from './local-repo-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
@@ -59,7 +59,7 @@ export async function prepareWorktreeCreateCheckout(
   options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   try {
-    await withRepoRefMaintenancePaused('worktree-prepare', () =>
+    await withRepoMaintenancePaused('worktree-prepare', () =>
       runWithGitReadCacheInvalidation(async () => {
         const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
           hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)

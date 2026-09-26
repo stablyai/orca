@@ -1,10 +1,7 @@
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { getCanonicalRepoKey } from '../git/canonical-repo-key'
-import {
-  armLocalRepoRefMaintenance,
-  setRepoRefMaintenanceBusyProbe
-} from '../git/local-repo-ref-maintenance'
+import { armLocalRepoMaintenance, setRepoMaintenanceBusyProbe } from '../git/local-repo-maintenance'
 import { gitExecFileAsync } from '../git/runner'
 import { setBoundedMapEntry } from './runtime-async-boundaries'
 
@@ -66,11 +63,11 @@ export class RuntimeRemoteFetchController {
    * adds to a loose-ref backlog nothing else will ever pack. Arm the idle sweep
    * that pays it back; each fetch pushes the attempt a further quiet period out.
    */
-  private armRefMaintenance(repoPath: string, gitOptions: GitOptions): void {
+  private armRepoMaintenance(repoPath: string, gitOptions: GitOptions): void {
     void this.getCanonicalRepoKey(repoPath, gitOptions)
       .then((key) => {
-        setRepoRefMaintenanceBusyProbe(key, () => this.hasInflightFetchForRepo(key))
-        armLocalRepoRefMaintenance({
+        setRepoMaintenanceBusyProbe(key, () => this.hasInflightFetchForRepo(key))
+        armLocalRepoMaintenance({
           key,
           repoPath,
           ...(gitOptions.wslDistro ? { wslDistro: gitOptions.wslDistro } : {})
@@ -152,7 +149,7 @@ export class RuntimeRemoteFetchController {
         })
     ).finally(() => {
       this.fetchInflight.delete(key)
-      this.armRefMaintenance(repoPath, gitOptions)
+      this.armRepoMaintenance(repoPath, gitOptions)
     })
     this.fetchInflight.set(key, promise)
     return promise
@@ -208,7 +205,7 @@ export class RuntimeRemoteFetchController {
         })
     }).finally(() => {
       this.fetchInflight.delete(key)
-      this.armRefMaintenance(repoPath, gitOptions)
+      this.armRepoMaintenance(repoPath, gitOptions)
     })
     this.fetchInflight.set(key, promise)
     return promise

@@ -15,7 +15,7 @@ import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
-import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
+import { awaitPackedRefsLockRelease } from '../git/local-repo-maintenance'
 import { settleTeardownWithinDeadline, settleWithinMs } from '../quit-teardown-deadline'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
@@ -37,7 +37,7 @@ let watcherShutdownPromise: Promise<void> | null = null
 // Why 2s: a config delete is best-effort, not durable state.
 const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
 // Why 2s: long enough for a `pack-refs` child to take SIGTERM and unlink its lock.
-const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
+const REPO_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
 
 function shutdownWatchersOnce(): Promise<void> {
   if (state.watcherShutdownDone) {
@@ -147,7 +147,7 @@ function installWillQuitHandler(): void {
       Promise.all([state.repoMaintenanceShutdown, state.uninstallRepoMaintenanceIdleGate?.()]).then(
         () => {}
       ),
-      REF_MAINTENANCE_QUIT_DEADLINE_MS
+      REPO_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
     agentHookServer.stop()

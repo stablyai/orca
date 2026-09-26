@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitRunner from '../git/runner'
+import type * as LocalRepoMaintenance from '../git/local-repo-maintenance'
 
 // Why: Orca's fetches are what create the loose-ref backlog (they suppress
 // git's auto-maintenance), so the fetch controller is where the idle sweep has
@@ -6,32 +8,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // hands the sweep.
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
-const armMock = vi.hoisted(() => vi.fn())
-const busyProbeMock = vi.hoisted(() => vi.fn())
+const armMock = vi.hoisted(() => vi.fn<(args: { key: string; repoPath: string }) => void>())
+const busyProbeMock = vi.hoisted(() => vi.fn<(key: string, probe: () => boolean) => void>())
 
 vi.mock('../git/runner', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
+  ...(await importOriginal<typeof GitRunner>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../git/local-repo-ref-maintenance', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  armLocalRepoRefMaintenance: armMock,
-  setRepoRefMaintenanceBusyProbe: busyProbeMock
+vi.mock('../git/local-repo-maintenance', async (importOriginal) => ({
+  ...(await importOriginal<typeof LocalRepoMaintenance>()),
+  armLocalRepoMaintenance: armMock,
+  setRepoMaintenanceBusyProbe: busyProbeMock
 }))
 
 import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
 import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 
 function armedTargets(): { key: string }[] {
-  return armMock.mock.calls.map(([args]) => args as { key: string })
+  return armMock.mock.calls.map(([args]) => args)
 }
 
 /** The per-repo "a fetch is in flight" answer the controller registers for a key. */
 function busyProbeFor(key: string): (() => boolean) | undefined {
-  return busyProbeMock.mock.calls.findLast(([registered]) => registered === key)?.[1] as
-    | (() => boolean)
-    | undefined
+  return busyProbeMock.mock.calls.findLast(([registered]) => registered === key)?.[1]
 }
 
 beforeEach(() => {
