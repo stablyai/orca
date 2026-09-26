@@ -123,26 +123,32 @@ describe('a page the keyboard covers', () => {
     dependencies.client = createFakeRpcClient()
     dependencies.pageOwnsSafeArea = true
     const tree = await renderScreen(readyState('session-older-keyboard'))
-    await act(async () => {
-      byName(tree, 'ShellViewProbe')[0]?.props.onBridgeMessage({
-        nativeEvent: {
-          json: clientFrame({
-            type: 'ready',
-            accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_SAFE_AREA_ACCEPT]
-          })
-        }
+    const ready = async () => {
+      await act(async () => {
+        byName(tree, 'ShellViewProbe')[0]?.props.onBridgeMessage({
+          nativeEvent: {
+            json: clientFrame({
+              type: 'ready',
+              accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_SAFE_AREA_ACCEPT]
+            })
+          }
+        })
       })
-    })
+    }
+    await ready()
     await act(async () => {
       dependencies.keyboardListeners.get('keyboardDidShow')?.({ endCoordinates: { height: 336 } })
     })
     const root = tree.root.find((node) => node.props.testID === 'mobile-web-shell-ready')
     expect(root.props.style[1]).toEqual({ paddingTop: 0, paddingBottom: 344 })
-    // The first `init` and the insets move; the keyboard itself sends nothing to this page.
-    const inits = dependencies.posted.filter((json) => {
+    // The page re-asks, as one does after a refused frame: the answer still carries no keyboard.
+    await ready()
+    const inits = dependencies.posted.flatMap((json) => {
       const read = readBridgeHostMessage(json)
-      return read.ok && read.message.type === 'init'
+      return read.ok && read.message.type === 'init' ? [read.message] : []
     })
-    expect(inits).toHaveLength(2)
+    // The first `init`, the insets move and the re-ask; the keyboard itself sends nothing here.
+    expect(inits).toHaveLength(3)
+    expect(inits.filter((init) => 'keyboardInset' in init)).toEqual([])
   })
 })

@@ -210,6 +210,8 @@ export function MobileWebShellScreen({
   // IME insets are zeroed, so `visualViewport` never shrinks. A page that reads the height from
   // `init` is covered by the keyboard like a native screen; an older one gets a view ended above it.
   const keyboardHeight = useKeyboardOcclusion()
+  // Legacy: only a page without the `keyboard-inset` accept is shortened; delete this branch (and
+  // `softwareKeyboardWindowInset`) once every served page declares it.
   const viewShortenedBy = pageReadsKeyboardInset
     ? 0
     : softwareKeyboardWindowInset({
