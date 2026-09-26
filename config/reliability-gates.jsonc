@@ -11,6 +11,95 @@
   },
   "gates": [
     {
+      "id": "settings.general-section-lifetime",
+      "title": "General settings search preserves matching section state",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-settings",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "General settings search",
+        "app version and remote update display",
+        "autosave settings draft"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "remote-runtime",
+        "ssh",
+        "wsl"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Actual GeneralPane, update/version and remote-status components with mocked store/API; actual autosave form. Windows runtime on/off simulated. No physical updater, paired host, settings write or native input.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/GeneralPane.tsx"
+      ],
+      "invariant": "A matching General settings section retains its owner and state as preceding search results disappear; an actually removed section releases its owner and reloads when shown again.",
+      "oracle": "Initial mount plus14 matching searches makes one version read and one remote-refresh admission instead of six each. Explicit refresh and genuine hide/reopen still read; drafts yield to externally changed saved settings; a removed owner cannot publish its late version.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
+          "assertions": [
+            "keeps explicit remote refresh and true hide/reopen reads",
+            "preserves an autosave draft until external settings change or the section hides",
+            "does not publish a version result from a genuinely unmounted section"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
+          "result": "passed",
+          "durationSeconds": 0.965,
+          "summary": "Independent permanent6pass; author62tests/12suites. Original permanent4fail2controls. Independent additional3pass/original2fail1control."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused renderer-unit suites, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local evidence only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Candidate permanent6pass versus original4fail2controls. Additional independent pending-version/error-context/store-refresh3pass versus original2fail1control."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Actual version and remote-refresh admissions6to1 across14matching queries. Fixed-size section map unchanged; no added poll, cache, listener or subprocess. Retains snapshots and local draft/error state; no bounded automatic freshness deadline. No packaged CPU/frame/heap claim."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "Physical updater/install, local/daemon PTYs and mobile are unaffected; no execution-host routing, process authority or wire change.",
+        "Native Linux/Windows, SSH/WSL and paired remote-runtime behavior not exercised; synthetic runtime flags cover renderer branches only.",
+        "Matching search no longer incidentally refreshes version/remote-status/CLI discovery; explicit checks and real hide/reopen remain. No automatic freshness deadline.",
+        "Retained drafts, release reveal and pending/error context last until a real hide or their own transition; programmatic-query draft test does not reproduce ordinary mouse-search blur/commit.",
+        "Hidden Electron actual-form proof is separate; no packaged latency, heap or native focus evidence."
+      ],
+      "promotionCriteria": [
+        "Retain count, draft, owner cleanup and refresh controls; collect CI soak and relevant full-app/provider evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate state or cleanup regressions without weakening owner, read-count or draft assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
