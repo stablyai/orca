@@ -15496,7 +15496,10 @@
             "2b3ce6d394": "取消",
             "e05063cfc1": "行 {{value0}}",
             "c845170b3b": "行 {{value0}}-{{value1}}",
-            "commentTooLarge": "评论过长，无法安全提交。"
+            "commentTooLarge": "评论过长，无法安全提交。",
+            "f6c449191e": "为AI添加注释",
+            "5fa4bfebaa": "添加备注",
+            "5e9b3d0c2e": "添加..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "此注"
