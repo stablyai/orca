@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
 import { admitProcessTreeKill } from './child-process/process-tree-kill-gate'
+import { RecipeOutputCapture } from './ephemeral-vm-recipe-output-capture'
 
 const DEFAULT_MAX_CAPTURE_BYTES = 1024 * 1024
 const CANCEL_FORCE_KILL_DELAY_MS = 5_000
@@ -55,12 +56,12 @@ export async function runRecipeCommand(args: {
       return
     }
 
-    let stdout = ''
-    let stderr = ''
+    const stdout = new RecipeOutputCapture(maxBytes)
+    const stderr = new RecipeOutputCapture(maxBytes)
     let settled = false
     let aborted = false
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined
-    const finish = (result: ProcessRunResult): void => {
+    const finish = (result: Omit<ProcessRunResult, 'stdout' | 'stderr'>): void => {
       if (settled) {
         return
       }
@@ -69,7 +70,7 @@ export async function runRecipeCommand(args: {
         clearTimeout(forceKillTimer)
       }
       args.signal?.removeEventListener('abort', abort)
-      resolve(result)
+      resolve({ stdout: stdout.takeText(), stderr: stderr.takeText(), ...result })
     }
     const fail = (error: Error): void => {
       if (settled) {
@@ -80,6 +81,8 @@ export async function runRecipeCommand(args: {
         clearTimeout(forceKillTimer)
       }
       args.signal?.removeEventListener('abort', abort)
+      stdout.clear()
+      stderr.clear()
       reject(error)
     }
     const abort = (): void => {
@@ -92,7 +95,7 @@ export async function runRecipeCommand(args: {
           return
         }
         killRecipeProcess(child, true)
-        finish({ stdout, stderr, exitCode: null, signal: null, aborted: true })
+        finish({ exitCode: null, signal: null, aborted: true })
         child.stdin.destroy()
         child.stdout.destroy()
         child.stderr.destroy()
@@ -105,18 +108,22 @@ export async function runRecipeCommand(args: {
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
-      stdout = appendBounded(stdout, chunk, maxBytes)
+      if (!settled) {
+        stdout.append(chunk)
+      }
       args.onStdout?.(chunk)
     })
     child.stderr.on('data', (chunk: string) => {
-      stderr = appendBounded(stderr, chunk, maxBytes)
+      if (!settled) {
+        stderr.append(chunk)
+      }
       args.onStderr?.(chunk)
     })
     child.on('error', (error) => {
       fail(error)
     })
     child.on('close', (exitCode, signal) => {
-      finish({ stdout, stderr, exitCode, signal, ...(aborted ? { aborted: true } : {}) })
+      finish({ exitCode, signal, ...(aborted ? { aborted: true } : {}) })
     })
 
     if (args.signal?.aborted) {
@@ -198,27 +205,4 @@ function buildRecipeEnv(
     ORCA_RECIPE_RESULT_SCHEMA_VERSION: String(resultSchemaVersion),
     ORCA_VERSION: context.orcaVersion ?? ''
   }
-}
-
-function appendBounded(current: string, chunk: string, maxBytes: number): string {
-  if (maxBytes <= 0) {
-    return ''
-  }
-  const chunkBytes = Buffer.byteLength(chunk, 'utf8')
-  if (chunkBytes >= maxBytes) {
-    return utf8Tail(chunk, maxBytes)
-  }
-  return utf8Tail(current, maxBytes - chunkBytes) + chunk
-}
-
-function utf8Tail(value: string, maxBytes: number): string {
-  const bytes = Buffer.from(value, 'utf8')
-  if (bytes.byteLength <= maxBytes) {
-    return value
-  }
-  let start = bytes.byteLength - maxBytes
-  while (start < bytes.byteLength && (bytes[start]! & 0xc0) === 0x80) {
-    start += 1
-  }
-  return bytes.subarray(start).toString('utf8')
 }

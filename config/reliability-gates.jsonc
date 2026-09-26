@@ -11,6 +11,84 @@
   },
   "gates": [
     {
+      "id": "ephemeral-vm-recipe.output-tail-parity",
+      "title": "Recipe output capture preserves UTF-8 tails and releases settled storage",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "ephemeral-vm-runtime-store",
+      "layer": "shared-node-process-contract",
+      "surfaces": ["VM recipe stdout and stderr", "recipe cancellation and process errors"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Actual recipe capture with synthetic child streams and real forced GC, plus real macOS shell output and descendant cancellation. Linux and Windows native execution, live VM providers and remote lifecycle journeys remain untested. Local/daemon PTY, SSH ownership, WSL launch, mobile and relay wire behavior are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/01ce5edf1aeec8a4b5cf06f531434be7d7c0cbcd/src/shared/ephemeral-vm-recipe-process.ts"
+      ],
+      "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails preserve the previous per-chunk UTF-8 byte limit policy, and success or failure releases capture storage without recapturing late output.",
+      "oracle": "Compare byte-bounded tails against old and independent code-point models across wraps, growth, oversized chunks and unusual limits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB string encoding for 4 MiB output, collectible backing buffers after close and error, zero late capture work with preserved callbacks, and unchanged tails on forced cancellation or synchronous kill-close.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/ephemeral-vm-recipe-process.test.ts",
+        "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
+        "src/main/ephemeral-vm-recipe-runner.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
+          "assertions": [
+            "matches the old UTF-8 tail for limit %s across varied chunk boundaries",
+            "matches a code-point oracle through oversized chunks, growth and many ring wraps",
+            "preserves stream decoding, callback boundaries and independent tails",
+            "keeps capture encoding proportional to incoming output",
+            "releases capture storage after %s while preserving late callbacks",
+            "decodes once when force-kill closes synchronously"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.24,
+          "summary": "44 tests across three suites passed, including forced-GC lifetime and synchronous SIGKILL-close cases."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused Node process and capture contracts with forced GC"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Author and independent local runs pass; no CI or soak history collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline encodes 938,999,808 bytes for 4 MiB output and fails the permanent 5 MiB budget. The initial ring prototype retained two backing buffers after error and encoded late output after close; both permanent lifetime cases fail there and pass after cleanup correction."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Final actual runner: 4 MiB in 4 KiB chunks encodes 938,999,808 to 4,194,304 bytes; seven paired samples median 241.66 to 0.750 ms. A 64-byte one-shot is 1.375 to 2.417 microseconds; ring spare capacity increases active storage. No new polling, timers, subprocesses, wire fields or deadline changes."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Exercise native Windows and Linux recipe output and cancellation."
+      ],
+      "knownGaps": [
+        "Synthetic output timings do not establish typical recipe prevalence, end-to-end provisioning gains or UI latency.",
+        "A live ring reserves spare capacity and can use more memory than a string; CJK bytes can exceed UTF-16 storage. Tiny output is slower, and oversized input still requires an input-sized encoding.",
+        "Fractional, NaN, infinite and unsafe-integer caps preserve prior coercion behavior without a new boundedness guarantee. No production override was found.",
+        "Live VM providers, SSH lifecycle journeys, and native Windows or Linux termination were not run."
+      ],
+      "demotionRule": "Keep experimental or demote if output differs, discarded bytes return, settled capture remains reachable, cancellation loses its tail, or the deterministic encoding budget regresses. Never weaken the oracle or increase retries to obtain a pass."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
