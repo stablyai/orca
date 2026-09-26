@@ -197,6 +197,9 @@ describe('keep-awake copy under non-English UI languages', () => {
       name: '防止电脑休眠，智能体 · 生效中'
     })
     expect(trigger.textContent).toContain('智能体')
+    expect(screen.getByRole('tooltip').textContent).toContain(
+      'Caffeinate prevents idle sleep while active. Closing a MacBook lid may still put it to sleep.'
+    )
 
     const menu = screen.getByRole('menu')
     await waitFor(() => expect(menu.textContent).toContain('防止电脑休眠'))
