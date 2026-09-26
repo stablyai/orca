@@ -41,10 +41,12 @@ function callbacksFor() {
 describe('Claude permission callbacks', () => {
   it('registers a decodable can_use_tool as a durable prompt and settles it from the registry', async () => {
     const control = callbacksFor()
+    const controller = new AbortController()
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener')
     const answered = control.canUseTool(
       'Bash',
       { command: 'git status' },
-      permissionOptions('perm-1', 'tool-1', new AbortController().signal, [
+      permissionOptions('perm-1', 'tool-1', controller.signal, [
         { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
       ])
     )
@@ -63,6 +65,7 @@ describe('Claude permission callbacks', () => {
     // The prompt's settle is the SDK callback's own resolve — answering resolves this promise.
     found?.prompt.settle({ behavior: 'allow', toolUseID: 'tool-1' })
     await expect(answered).resolves.toEqual({ behavior: 'allow', toolUseID: 'tool-1' })
+    expect(removeListener).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the SDK permission presentation and strips terminal escapes', async () => {

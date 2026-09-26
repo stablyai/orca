@@ -11,45 +11,52 @@
   },
   "gates": [
     {
-      "id": "runtime-events.renderer-subscription-ownership",
-      "title": "Runtime events stay owned by their renderer subscription",
+      "id": "terminal-preview.connection-settings-ownership",
+      "title": "Terminal preview connections survive unrelated settings updates",
       "maturity": "experimental",
       "protection": "partial",
-      "owner": "runtime-platform",
-      "layer": "ipc-contract",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
       "surfaces": [
-        "renderer runtime events",
-        "remote runtime reconnect replay",
-        "renderer Linear refresh"
+        "dashboard terminal preview connection",
+        "preview settings updates",
+        "preview box fit and grid claim"
       ],
       "platforms": ["macos", "linux", "windows"],
-      "providers": ["remote-runtime"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Actual renderer manager, bridge, store actions, adapter and preload dispatcher with synthetic IPC boundaries on macOS. No rendered/native lifecycle, live peer or real provider network claim.",
+      "coveredProviders": ["local", "remote-runtime"],
+      "coverageNotes": "Mounted production component and real settings action with cloned IPC replies, inert xterm/input adapters, and simulated metrics. Local/remote-qualified renderer identities covered; no physical provider, native geometry, focus, IME or rendered app claim. Subsequent hidden/offscreen Electron component proof uses real xterm and synthetic snapshots, preserving the rendered terminal across unrelated updates and measuring equivalent fallback scale/fit requests after a font-size change.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/renderer/src/hooks/runtime-client-events-sync.ts"
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/dashboard-popout/AgentTerminalPreview.tsx",
+        "https://github.com/stablyai/orca/pull/23099"
       ],
-      "invariant": "Only the current subscription attempt can cause renderer event work or reconnect recovery. Current early frames and other hosts survive; canceled late setup handles dispose.",
-      "oracle": "Hold setup, clean up the bridge, deliver100 events and a replay, and require zero provider read dispatches/cache publications/recovery/re-subscriptions. Require initial/live delivery, same-ID replacement, rekey, stop during synchronous setup, sibling host survival and late disposal.",
+      "invariant": "Equal composed theme with unchanged PTY, mode, contrast and font/shaping settings keeps the current preview owner. Relevant changes replace it once, preserve explicit fit/grid negotiation, and reject retired pending completions.",
+      "oracle": "Ten unrelated settings replies produce one connect and xterm construction, no pre-unmount teardown, then one final cleanup. Changed colors/mode/contrast/font/shaping replace owners; pending retired connections never construct and obsolete grid claims are canceled.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx"
       ],
       "testFiles": [
-        "src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts",
-        "src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts",
-        "src/renderer/src/hooks/runtime-client-events-sync.test.ts",
-        "src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts",
-        "src/renderer/src/runtime/runtime-client-events.test.ts",
-        "src/preload/runtime-environment-subscriptions.test.ts"
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts",
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx",
           "assertions": [
-            "does no Linear read dispatch or cache publication after cleanup while setup is pending",
-            "does no replay recovery or resubscription after cleanup",
-            "accepts a fresh bridge early frame while rejecting the previous bridge frame"
+            "keeps one preview connection across ten unrelated settings snapshots",
+            "ignores an old pending connection after a relevant theme change",
+            "does not install a terminal after unmounting a pending connection"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx",
+          "assertions": [
+            "ignores a pending connection retired by a metric change",
+            "cancels an obsolete metric owner grid claim before the next change"
           ]
         }
       ],
@@ -58,37 +65,38 @@
           "date": "2026-09-25",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-lifetime.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.settings-geometry.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.clipboard-routes.test.tsx",
           "result": "passed",
-          "durationSeconds": 2.12,
-          "summary": "41 tests /6 suites pass;13 new regressions have12 failures /1 pass against original production source."
+          "durationSeconds": 2.23,
+          "summary": "63 tests /5 suites pass. Lifetime regressions: original 7 fail/7 pass, candidate14 pass; all8 metric/shaping cases pass both original and corrected candidate."
         }
       ],
       "runtimeBudget": {
         "p95Seconds": 15,
-        "scope": "Focused deterministic renderer/preload suites; p95 not established."
+        "scope": "Focused deterministic suites; local elapsed recorded, p95 not established."
       },
       "flakeHistory": {
         "status": "not-started",
-        "evidence": "Local validation only; no CI soak."
+        "evidence": "Local checks and independent adverse review only; no CI soak."
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "12/13 new tests fail original source; candidate41 tests pass.100 stale dispatches/publications become0 each."
+        "evidence": "Original reconnects/reconstructs11 times for10 unrelated updates; candidate1. Seven of14 lifetime cases fail original. Original and corrected candidate both pass all8 geometry preservation cases."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "No new timers, scans or IPC. Per-event O(1) owner guard adds paired median0.026ms/10k pending events and0.062ms/10k settled events. Each benchmark delivers2.2million events with no per-event desired/key reads. Synthetic timing, no rendered latency claim."
+        "evidence": "Ten unrelated settings replies: connect/constructor11 to1, pre-unmount unsubscribe/dispose10 to0. One previous-theme ref and shallow comparison added; CPU/heap overhead unmeasured. No timer/polling/subprocess/subscriber added; broad settings render/composition work remains."
       },
       "knownGaps": [
-        "No native Windows/Linux/WSL, live SSH/remote or rendered app lifecycle test.",
-        "Already-admitted asynchronous handlers are not canceled; physical listener cleanup still waits for setup settlement.",
-        "No CI soak or mounted render/network/heap measurement."
+        "No full-dashboard interaction, native focus/input/IME, ligature shaping or physical PTY validation. Hidden Electron component rendering and one font-size transition were checked; fit endpoint was inert.",
+        "No live SSH/WSL/relay or Linux/Windows run. Provider/wire ownership and folder/git workspace paths unchanged.",
+        "Selection/buffer/input state now persists across unrelated and live cursor/scroll updates instead of incidental resets. Small comparison/ref overhead unmeasured.",
+        "No CI soak, heap, main snapshot serialization or frame latency claim."
       ],
       "promotionCriteria": [
-        "Retain actual composed dispatch/publication and late-disposal oracles; add CI soak and cross-platform lifecycle evidence before promotion."
+        "Retain count, stale-owner and explicit metric fit/grid oracles; add rendered native and provider/platform evidence plus CI soak."
       ],
-      "demotionRule": "Keep experimental until soak; investigate failures without suppressing ownership assertions or unexplained retries."
+      "demotionRule": "Keep experimental until soak; investigate failures without weakening owner counts, changed-theme behavior, fit/grid claims or late-disposal assertions."
     },
     {
       "id": "workspace-hooks.execution-host-ownership",
@@ -103,20 +111,9 @@
         "issue-command read and write",
         "hosted-review own-store host resolution"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Actual hydration and authoritative desktop owner selection with mocked filesystem, Git, inspection and provider boundaries; synthetic local/SSH/runtime rows. No physical provider or native platform certification.",
       "motivatingLinks": [
@@ -127,9 +124,7 @@
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
       ],
-      "testFiles": [
-        "src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
-      ],
+      "testFiles": ["src/main/ipc/hooks/worktree-hook-execution-host.test.ts"],
       "assertionRefs": [
         {
           "file": "src/main/ipc/hooks/worktree-hook-execution-host.test.ts",
@@ -17644,6 +17639,86 @@
         "No live Electron reload-survival assertion yet — the gate proves the main-side accounting reset, not the full renderer reattach paint."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
+    },
+    {
+      "id": "runtime-events.renderer-subscription-ownership",
+      "title": "Runtime events stay owned by their renderer subscription",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "ipc-contract",
+      "surfaces": [
+        "renderer runtime events",
+        "remote runtime reconnect replay",
+        "renderer Linear refresh"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Actual renderer manager, bridge, store actions, adapter and preload dispatcher with synthetic IPC boundaries on macOS. No rendered/native lifecycle, live peer or real provider network claim.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/hooks/runtime-client-events-sync.ts"
+      ],
+      "invariant": "Only the current subscription attempt can cause renderer event work or reconnect recovery. Current early frames and other hosts survive; canceled late setup handles dispose.",
+      "oracle": "Hold setup, clean up the bridge, deliver100 events and a replay, and require zero provider read dispatches/cache publications/recovery/re-subscriptions. Require initial/live delivery, same-ID replacement, rekey, stop during synchronous setup, sibling host survival and late disposal.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts",
+        "src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts",
+        "src/renderer/src/hooks/runtime-client-events-sync.test.ts",
+        "src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts",
+        "src/renderer/src/runtime/runtime-client-events.test.ts",
+        "src/preload/runtime-environment-subscriptions.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts",
+          "assertions": [
+            "does no Linear read dispatch or cache publication after cleanup while setup is pending",
+            "does no replay recovery or resubscription after cleanup",
+            "accepts a fresh bridge early frame while rejecting the previous bridge frame"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.12,
+          "summary": "41 tests /6 suites pass;13 new regressions have12 failures /1 pass against original production source."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Focused deterministic renderer/preload suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "12/13 new tests fail original source; candidate41 tests pass.100 stale dispatches/publications become0 each."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No new timers, scans or IPC. Per-event O(1) owner guard adds paired median0.026ms/10k pending events and0.062ms/10k settled events. Each benchmark delivers2.2million events with no per-event desired/key reads. Synthetic timing, no rendered latency claim."
+      },
+      "knownGaps": [
+        "No native Windows/Linux/WSL, live SSH/remote or rendered app lifecycle test.",
+        "Already-admitted asynchronous handlers are not canceled; physical listener cleanup still waits for setup settlement.",
+        "No CI soak or mounted render/network/heap measurement."
+      ],
+      "promotionCriteria": [
+        "Retain actual composed dispatch/publication and late-disposal oracles; add CI soak and cross-platform lifecycle evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate failures without suppressing ownership assertions or unexplained retries."
     },
     {
       "id": "runtime-files.watcher-process-isolation",
