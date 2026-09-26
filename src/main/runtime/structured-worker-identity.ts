@@ -30,7 +30,6 @@ import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
 } from './orchestration/worker-terminal-process-liveness'
-import type { OrchestrationDb } from './orchestration/db'
 
 // Deliberately not `term_`: `issueHandle` revalidates the renderer graph epoch against the
 // renderer-driven leaves map, so a main-minted `term_` leaf evaporates on the next window reload.
@@ -157,23 +156,6 @@ export function structuredWorkerRecordIsCurrent(
     record.lease.claimStatus !== 'conflicted' &&
     (record.lease.claimStatus !== 'released' || tabListed) &&
     structuredWorkerHostScope(record.location)
-  )
-}
-
-/** Whether a dispatch that has not settled still addresses this session's worker, keyed the way
- *  the worker's terminal resource row is: its process incarnation and host scope. */
-export function structuredWorkerHasOpenDispatch(
-  db: OrchestrationDb | null,
-  record: AgentSessionRecord
-): boolean {
-  const hostScope = structuredWorkerHostScope(record.location)
-  return Boolean(
-    db &&
-    hostScope &&
-    db.hasOpenWorkerDispatchForProcess({
-      processIncarnation: structuredWorkerProcessIncarnation(record.sessionId),
-      hostScope: JSON.stringify(hostScope)
-    })
   )
 }
 

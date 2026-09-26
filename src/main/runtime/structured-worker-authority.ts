@@ -3,7 +3,8 @@
  *
  * The registry holds the handle→session mapping for this process; the durable worker-terminal
  * resource row is what survives a restart, so a miss falls back to rehydrating from it. The
- * durable agent-session record and the chat's tab are the ownership half: see `structuredWorkerOwned`.
+ * durable agent-session record, the chat's tab and the orchestration's own resource row decide
+ * custody: see `structured-worker-custody`.
  * Whether its provider process runs is a separate fact, `observeStructuredWorker`, and routing
  * never reads it — an agent at rest still receives mail, which starts it.
  */
@@ -13,12 +14,11 @@ import type { OrcaSessionId } from '../../shared/orca-session-address'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrchestrationDb } from './orchestration/db'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import { structuredWorkerAddressable } from './structured-worker-custody'
 import {
   isStructuredWorkerHandle,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation,
-  structuredWorkerRecordIsCurrent,
   type StructuredWorkerIdentity
 } from './structured-worker-identity'
 
@@ -49,35 +49,6 @@ export function resolveStructuredWorkerIdentity(
   }
   const row = db?.getWorkerTerminalResourceByHandle?.(handle)
   return row ? structuredWorkerIdentities.rehydrate(row) : null
-}
-
-/**
- * Whether this runtime still owns the worker's session: routing, addressing and authority ask
- * this, never whether its process runs. Null when the host is not installed, because reading the
- * record store would install it — not being able to look is not an answer.
- */
-export function structuredWorkerOwned(sessionId: string): boolean | null {
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    return null
-  }
-  const record = readStructuredAgentSessionRecord(sessionId)
-  return structuredWorkerRecordIsCurrent(
-    record,
-    record?.lease.claimStatus === 'released' && structuredWorkerTabListed(host, sessionId)
-  )
-}
-
-/** Retirement is the tab index: every path that ends a chat for good hides its tab. */
-function structuredWorkerTabListed(
-  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
-  sessionId: string
-): boolean {
-  try {
-    return host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ?? false
-  } catch {
-    return false
-  }
 }
 
 /** The worker identity minted for a session, if that session is a structured worker. */
@@ -125,18 +96,13 @@ export function resolveStructuredWorkerAuthority(
   }
   const record = readStructuredAgentSessionRecord(identity.sessionId)
   return record &&
-    structuredWorkerOwned(identity.sessionId) &&
-    !structuredWorkerResourceReleased(db?.getWorkerTerminalResourceByHandle?.(identity.handle))
+    structuredWorkerAddressable(
+      db,
+      identity.sessionId,
+      db?.getWorkerTerminalResourceByHandle?.(identity.handle)
+    )
     ? { identity, record }
     : null
-}
-
-/** The orchestration released this worker: its coordinator is done with it, as with a terminal
- *  worker whose terminal closed, so nothing routes to it. Its chat stays the user's. */
-export function structuredWorkerResourceReleased(
-  row: Pick<WorkerTerminalResourceRow, 'release_state' | 'ownership_state'> | undefined
-): boolean {
-  return row?.release_state === 'released' || row?.ownership_state === 'released'
 }
 
 /**

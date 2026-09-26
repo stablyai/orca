@@ -12,16 +12,13 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-const {
-  observeStructuredWorker,
-  resolveStructuredWorkerAuthority,
-  structuredSessionCloseSettled,
-  structuredWorkerOwned
-} = await import('./structured-worker-authority')
+const { observeStructuredWorker, resolveStructuredWorkerAuthority, structuredSessionCloseSettled } =
+  await import('./structured-worker-authority')
+const { structuredWorkerOwesWork, structuredWorkerOwned } =
+  await import('./structured-worker-custody')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
-  structuredWorkerHasOpenDispatch,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } = await import('./structured-worker-identity')
@@ -117,13 +114,32 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
 
   it('answers open while the dispatch starts, runs or stops, and closed once it settles', () => {
     const dispatch = dispatchWorker()
-    expect(structuredWorkerHasOpenDispatch(db, record({}))).toBe(true)
+    expect(structuredWorkerOwesWork(db, record({}))).toBe(true)
     db.markWorkerDispatchReady(dispatch.id)
-    expect(structuredWorkerHasOpenDispatch(db, record({}))).toBe(true)
+    expect(structuredWorkerOwesWork(db, record({}))).toBe(true)
     db.beginWorkerStop(dispatch.id, 'epoch_home')
-    expect(structuredWorkerHasOpenDispatch(db, record({}))).toBe(true)
+    expect(structuredWorkerOwesWork(db, record({}))).toBe(true)
     db.settleWorkerStop(dispatch.id)
-    expect(structuredWorkerHasOpenDispatch(db, record({}))).toBe(false)
+    expect(structuredWorkerOwesWork(db, record({}))).toBe(false)
+  })
+
+  // Custody is the list state coordinators see: `active` owes work, `reclaimable` does not.
+  it('lets a worker awaiting its coordinator rest, and keeps one whose stop is in doubt', () => {
+    const done = dispatchWorker()
+    db.markWorkerDispatchReady(done.id)
+    db.settleWorkerReport({
+      taskId: done.task_id,
+      dispatchId: done.id,
+      outcome: 'succeeded',
+      result: 'done'
+    })
+    expect(structuredWorkerOwesWork(db, record({}))).toBe(false)
+
+    const doubted = dispatchWorker()
+    db.markWorkerDispatchReady(doubted.id)
+    db.beginWorkerStop(doubted.id, 'epoch_home')
+    db.markWorkerStopUnknown(doubted.id, 'the close was not proven')
+    expect(structuredWorkerOwesWork(db, record({}))).toBe(true)
   })
 
   it('keeps a worker at rest after its dispatch settles a group recipient, until its tab goes (P2-19 ii)', () => {
@@ -197,8 +213,8 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
 
   it('reads only this host scope, and no database answers no', () => {
     dispatchWorker(JSON.stringify({ kind: 'ssh', targetId: 'elsewhere' }))
-    expect(structuredWorkerHasOpenDispatch(db, record({}))).toBe(false)
-    expect(structuredWorkerHasOpenDispatch(null, record({}))).toBe(false)
+    expect(structuredWorkerOwesWork(db, record({}))).toBe(false)
+    expect(structuredWorkerOwesWork(null, record({}))).toBe(false)
   })
 })
 
@@ -265,7 +281,7 @@ describe('a task dispatched into a worker whose own dispatch settled', () => {
   it('keeps the worker running while that task is open, and lets it rest once the task settles', async () => {
     const db = new OrchestrationDb(':memory:')
     const rig = await createRestTestRig({
-      hasOpenDispatch: (current) => structuredWorkerHasOpenDispatch(db, current)
+      hasOpenDispatch: (current) => structuredWorkerOwesWork(db, current)
     })
     try {
       hostRef.current = rig.host

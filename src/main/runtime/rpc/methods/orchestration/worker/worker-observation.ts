@@ -7,10 +7,9 @@ import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestr
 import { projectWorkerFleet } from './worker-list-projection'
 import {
   observeStructuredWorker,
-  resolveStructuredWorkerForDispatch,
-  structuredWorkerOwned
+  resolveStructuredWorkerForDispatch
 } from '../../orchestration-structured-worker-lifecycle'
-import { structuredWorkerResourceReleased } from '../../../../structured-worker-authority'
+import { structuredWorkerAddressable } from '../../../../structured-worker-custody'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -54,14 +53,11 @@ export async function inspectWorkerTerminal(
       processIncarnation: structured.processIncarnation
     })
     const observation = observeStructuredWorker(structured)
-    const owned = structuredWorkerOwned(structured.sessionId)
-    const addressable =
-      owned === null
-        ? null
-        : owned &&
-          !structuredWorkerResourceReleased(
-            db.getWorkerTerminalResourceByHandle?.(structured.handle)
-          )
+    const addressable = structuredWorkerAddressable(
+      db,
+      structured.sessionId,
+      db.getWorkerTerminalResourceByHandle?.(structured.handle)
+    )
     return {
       terminal: null,
       exact,
