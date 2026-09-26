@@ -1,0 +1,61 @@
+name: Warm shared CI caches
+
+on:
+  schedule:
+    - cron: '41 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ci-cache-warmup.yml'
+      - '.github/actions/install-node-dependencies/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'config/tsconfig*.json'
+      - 'config/scripts/ensure-native-runtime.mjs'
+      - 'config/scripts/rebuild-native-deps.mjs'
+      - 'config/patches/node-pty@1.1.0.patch'
+      - 'config/patches/@vscode__windows-process-tree@0.8.0.patch'
+      - 'native/windows-registry/**'
+  pull_request:
+    paths:
+      - '.github/workflows/ci-cache-warmup.yml'
+      - 'config/scripts/ci-cache-warmup-workflow.test.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cache-warmup-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Default-branch caches can be restored by every PR; PR caches cannot.
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '24'
+
+      - name: Cache TypeScript incremental state
+        id: typecheck-cache
+        uses: actions/cache@v5
+        with:
+          path: config/*.tsbuildinfo
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
+
+      - name: Refresh TypeScript state for this commit
+        if: steps.typecheck-cache.outputs.cache-hit != 'true'
+        run: pnpm run typecheck
