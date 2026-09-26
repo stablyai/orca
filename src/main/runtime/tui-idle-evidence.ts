@@ -1,10 +1,17 @@
 import type { AgentStatus } from '../../shared/agent-detection'
 import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-freshness'
 import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
 import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import {
+  detectExplicitIdleStatusFromTitle,
+  detectTerminalWaitBlockedReason,
+  isKnownReadyPromptPreview,
+  isMuseReadyPromptPreview
+} from './terminal-wait-detection'
 
 /**
  * Ranking the evidence that a `tui-idle` wait may settle on.
@@ -15,14 +22,20 @@ import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
  * stale spinner (#1437) — so a busy Codex/Devin pane is routinely titled idle, and
  * accepting it satisfied a wait in ~0s mid-turn (#6011).
  *
- *   1. POSITIVE — the agent states it is ready: an explicit idle marker in its own
+ *   0. BLOCKED — the tail shows a prompt waiting on the user.
+ *   1. STRONG READY — the agent states it is ready: an explicit idle marker in its own
  *      title, or a known ready-prompt body.
  *   1b. MUSE — Muse emits no title signal at all, so its ready-screen body stands in
- *      for the positive evidence, believed only once the stream has gone quiet.
- *   2. VETO — a fresh first-party agent status (OSC 9999) saying working/blocked/
- *      waiting. The agent's own account of itself outranks anything inferred.
- *   3. ABSENCE — a name-only title, or a quiet non-shell foreground process. A last
+ *      for the strong evidence, believed only once the stream has gone quiet.
+ *   2. WORKING — a fresh first-party agent status (OSC 9999) saying working/blocked/
+ *      waiting, or a working title. The agent's own account of itself outranks anything
+ *      inferred.
+ *   3. WEAK READY — a name-only title, or a quiet non-shell foreground process. A last
  *      resort, and only once sustained.
+ *
+ * Why weak ready is a verdict class rather than a per-evidence flag: none of it can see a
+ * start-up dialog the line tail lost (Claude's workspace trust), so ONLY the poll may settle
+ * on it, after the rendered screen shows no blocker. Synchronous sites settle on tiers 0-1b.
  *
  * Why derived here rather than stamped onto the record at write time: `syncWindowGraph`
  * rebuilds every leaf from an explicit field list, so a bespoke provenance field is
@@ -60,14 +73,20 @@ export function hasFreshWorkingFirstPartyStatus(status: FirstPartyAgentStatus): 
   return isFreshNonDoneAgentStatus(status ?? undefined)
 }
 
+/** Agents that paint their own explicit rest title (Claude's `✳`). Gemini's `◇` would qualify
+ *  but is not yet held to it. */
+const NATIVE_EXPLICIT_IDLE_TITLE_AGENTS: ReadonlySet<TuiAgent> = new Set(['claude'])
+
 /**
- * Whether a name-only title from `agent` may be held to the tier-3 quiescence demand.
+ * Whether a name-only title from `agent` must be corroborated by a quiet stream.
  *
- * Only for agents that go on to announce rest with an explicit title of their own (the
- * hook-driven `Codex ready` / `Devin ready`). Grok, Copilot, Aider, Mimo, agy and
- * OpenCode emit their NAME and nothing more at rest, so holding them to it leaves no
- * settle signal at all: a real idle Grok pane repaints its banner about four times a
- * second forever, so the stream never quiesces and the wait runs to timeout.
+ * Only for agents that announce rest with an explicit title of their own: the hook-driven
+ * `Codex ready` / `Devin ready`, or Claude's `✳`. For them the bare name is not a rest signal —
+ * a shell auto-title (`claude`, `claude ~/repo`) names the agent from the moment it starts, over
+ * a start-up dialog or a busy turn alike. Grok, Copilot, Aider, Mimo, agy and OpenCode emit
+ * their NAME and nothing more at rest, so holding them to it leaves no settle signal at all:
+ * a real idle Grok pane repaints its banner about four times a second forever, so the stream
+ * never quiesces and the wait runs to timeout.
  */
 export function nameOnlyIdleNeedsCorroboration(
   agent: TuiAgent | null | undefined,
@@ -76,7 +95,11 @@ export function nameOnlyIdleNeedsCorroboration(
   // Why the title fallback: an adopted pane carries no launch metadata, but its
   // name-only title is exactly the thing that names the agent.
   const resolved = agent ?? (title ? resolveExplicitTerminalTitleAgentType(title) : null)
-  return getSyntheticAgentTerminalTitle(resolved, 'done') !== null
+  return (
+    resolved !== null &&
+    (NATIVE_EXPLICIT_IDLE_TITLE_AGENTS.has(resolved) ||
+      getSyntheticAgentTerminalTitle(resolved, 'done') !== null)
+  )
 }
 
 /** Tier 3: a title-derived idle, usable only once the stream has also gone quiet. */
@@ -112,8 +135,10 @@ export function quietForegroundProcessProvesTuiIdle(agent: TuiAgent | null | und
   return !agent
 }
 
-export type TuiIdleSatisfactionInput = {
+export type TuiIdleEvaluationInput = {
   record: TuiIdleEvidenceRecord
+  /** Tier 0: a blocking prompt in the line tail. */
+  readTailBlockedReason: () => RuntimeTerminalWaitBlockedReason | null
   /** Renderer-synced pane/tab title, when one exists. */
   rendererTitle?: string | null
   /** Tier 1 body evidence: a known ready prompt, or an adopted pane's explicit title.
@@ -127,6 +152,20 @@ export type TuiIdleSatisfactionInput = {
   firstPartyStatus: FirstPartyAgentStatus
   quiescenceMs: number
 }
+
+export type TuiIdleVerdict =
+  | { kind: 'blocked'; reason: RuntimeTerminalWaitBlockedReason }
+  | { kind: 'ready-strong' }
+  /** Settles only on the poll, after a rendered-screen read finds no blocker. */
+  | { kind: 'ready-weak' }
+  /** The agent says it is mid-turn: nothing may settle, and its screen is not read. */
+  | { kind: 'working' }
+  /** `quietForeground`: whether a quiet non-shell foreground process may still settle it. */
+  | { kind: 'pending'; quietForeground: boolean }
+
+const READY_STRONG: TuiIdleVerdict = { kind: 'ready-strong' }
+const READY_WEAK: TuiIdleVerdict = { kind: 'ready-weak' }
+const WORKING: TuiIdleVerdict = { kind: 'working' }
 
 /**
  * Tier 1b: a Muse ready screen in the body, believed only once the stream has gone quiet.
@@ -158,15 +197,23 @@ export function hasQuietMuseReadyPrompt(
   return Date.now() - record.lastOutputAt >= quiescenceMs
 }
 
-/** The one place the tiers are combined; every satisfaction site routes here. */
-export function isTuiIdleSatisfied(input: TuiIdleSatisfactionInput): boolean {
+/** The one place the tiers are combined; every settle site branches only on the verdict. */
+export function evaluateTuiIdle(input: TuiIdleEvaluationInput): TuiIdleVerdict {
+  const blockedReason = input.readTailBlockedReason()
+  if (blockedReason) {
+    return { kind: 'blocked', reason: blockedReason }
+  }
   // Why the title before the body: both are tier 1, so either settles, but the title is a
   // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
   if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
-    return true
+    return READY_STRONG
   }
   if (hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
-    return false
+    // Why blocked/waiting stays pending: the agent says it is waiting on the user, which is
+    // when a dialog is on screen, so the screen read must still run.
+    return input.firstPartyStatus?.state === 'working'
+      ? WORKING
+      : { kind: 'pending', quietForeground: false }
   }
   // Why after the veto: a first-party working account outranks inferred body evidence.
   if (
@@ -177,7 +224,71 @@ export function isTuiIdleSatisfied(input: TuiIdleSatisfactionInput): boolean {
       input.quiescenceMs
     )
   ) {
-    return true
+    return READY_STRONG
   }
-  return hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs)
+  if (input.record.lastAgentStatus === 'working') {
+    return WORKING
+  }
+  if (hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs)) {
+    return READY_WEAK
+  }
+  return {
+    kind: 'pending',
+    quietForeground:
+      input.record.lastAgentStatus === null && quietForegroundProcessProvesTuiIdle(input.agent)
+  }
+}
+
+export function isTuiIdleReadyVerdict(verdict: TuiIdleVerdict): boolean {
+  return verdict.kind === 'ready-strong' || verdict.kind === 'ready-weak'
+}
+
+/** The runtime state every tui-idle site reads its evidence from. */
+export type TuiIdleEvidenceSource = {
+  quiescenceMs: number
+  getTabTitle(tabId: string): string | null
+  getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
+  getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
+  getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
+}
+
+function lazyWaitText(readWaitText: () => string): () => string {
+  let waitText: string | null = null
+  return () => (waitText ??= readWaitText())
+}
+
+export function leafTuiIdleEvidence(
+  source: TuiIdleEvidenceSource,
+  leaf: RuntimeLeafRecord,
+  readWaitText: () => string
+): TuiIdleEvaluationInput {
+  const waitText = lazyWaitText(readWaitText)
+  return {
+    record: leaf,
+    readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    rendererTitle: leaf.paneTitle ?? source.getTabTitle(leaf.tabId),
+    readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText()),
+    readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText()),
+    agent: source.getPaneAgent(leaf.ptyId),
+    firstPartyStatus: source.getFirstPartyAgentStatus(leaf.ptyId),
+    quiescenceMs: source.quiescenceMs
+  }
+}
+
+export function ptyTuiIdleEvidence(
+  source: TuiIdleEvidenceSource,
+  pty: RuntimePtyWorktreeRecord,
+  readWaitText: () => string
+): TuiIdleEvaluationInput {
+  const waitText = lazyWaitText(readWaitText)
+  return {
+    record: pty,
+    readTailBlockedReason: () => detectTerminalWaitBlockedReason(waitText()),
+    readPositiveBodyEvidence: () =>
+      source.getAdoptedPtyIdleStatus(pty) === 'idle' || isKnownReadyPromptPreview(waitText()),
+    readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText()),
+    agent: source.getPaneAgent(pty.ptyId),
+    firstPartyStatus: source.getFirstPartyAgentStatus(pty.ptyId),
+    quiescenceMs: source.quiescenceMs
+  }
 }

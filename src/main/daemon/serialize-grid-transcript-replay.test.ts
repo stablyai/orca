@@ -27,9 +27,15 @@ const OLD_ADDON_PATH = process.env.ORCA_OLD_SERIALIZE_ADDON
 const SEEDS = Math.max(1, Number(process.env.SERIALIZE_TRANSCRIPT_SEEDS) || 2)
 
 // Checkpoints (default seeds) whose new replay diverges exactly as the previous
-// build's did — pre-existing upstream limitations, not regressions (verified
-// with ORCA_OLD_SERIALIZE_ADDON). Shrink when one is fixed.
-const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = { less: 6, nano: 2, opencode: 5 }
+// build's did — pre-existing serializer limitations, not regressions (verified
+// with ORCA_OLD_SERIALIZE_ADDON): the live SGR pen leaks into the alt buffer, and
+// an alt buffer first entered after a shrink keeps hidden scrollback. Shrink when one is fixed.
+const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
+  less: 6,
+  nano: 2,
+  opencode: 5,
+  'claude-dialog-trust-workspace-answered': 13
+}
 
 type Transcript = { name: string; data: string; cols: number; rows: number }
 type Schedule = 'none' | 'shrink' | 'shrink-grow' | 'jitter'
