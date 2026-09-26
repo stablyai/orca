@@ -72,6 +72,45 @@ If the phone has a stale host entry, remove it from the app and pair again.
 3. For native modules: `pnpm exec expo run:android`
 4. Run with `pnpm start --dev-client`
 
+### Android Emulator
+
+Use this for anything that needs a real Android IME, keyboard, or soft-input behaviour — those bugs cannot be reproduced on the iOS simulator or by reading the source.
+
+```bash
+pnpm start:emulator:android      # boots or reuses an AVD, then reverses 8081 and 6768
+pnpm exec expo run:android       # builds and installs the dev client
+pnpm start --dev-client          # Metro
+```
+
+`start:emulator:android` accepts `--avd <name>`, `--port <n>` (repeatable) and `--no-reverse`.
+
+Prerequisites, once:
+
+Pick the image ABI that matches the host CPU — `arm64-v8a` on Apple silicon and
+other ARM hosts, `x86_64` on Intel and AMD. A mismatched image runs under
+translation without hardware acceleration and is far too slow to type into.
+
+```bash
+ABI=arm64-v8a   # x86_64 on Intel or AMD hosts
+IMAGE="system-images;android-36;google_apis_playstore;$ABI"
+sdkmanager "platform-tools" "emulator" "$IMAGE"
+avdmanager create avd -n orca-android -k "$IMAGE" -d pixel_7
+```
+
+Notes that cost time if you hit them cold:
+
+- **Use a JDK 17 for the build.** Gradle fails `configureCMakeDebug` with a restricted-method error on JDK 24+, which reads like an unrelated native build failure. `start:emulator:android` warns when `JAVA_HOME` points at an unsupported JDK.
+- **A Play Store system image is required for Gboard**, which is what you need for CJK input. `google_apis` images ship a Latin-only keyboard.
+- **AVDs may not be where the emulator looks.** Recent `avdmanager` writes them under `$XDG_CONFIG_HOME/.android/avd`; the script resolves the same path and passes it to every tool it runs.
+- **Port 6768 collides with a running Orca desktop**, which also listens there. Either quit the desktop app, or move the stub and reverse the port it actually uses:
+
+  ```bash
+  PORT=6769 pnpm mock-server
+  pnpm start:emulator:android --port 8081 --port 6769
+  ```
+
+Adding a CJK keyboard to the emulator: Settings → System → Languages → Add a language. Gboard picks up the matching keyboard automatically; switch layouts with the globe key.
+
 ### iOS Simulator
 
 1. Install Xcode from the App Store
