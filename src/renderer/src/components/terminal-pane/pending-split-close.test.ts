@@ -199,7 +199,6 @@ it('commits the explicit split close in main by its leaf', async () => {
   p.actions.executeClosePane(1)
   expect(closeTerminalSurface).toHaveBeenCalledExactlyOnceWith({
     worktreeId: 'workspace',
-    tabId: p.tabId,
-    leafId: p.leafId
+    target: { kind: 'pane', tabId: p.tabId, leafId: p.leafId }
   })
 })

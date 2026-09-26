@@ -297,7 +297,7 @@ describe('terminal exit records', () => {
     const { runtime } = makeRendererRuntime(snapshot, runtimeStore)
     runtime.terminalExitRecords.record(exitRecord())
 
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab' })
+    runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, { kind: 'tab', tabId: 'host-tab' })
     // Reopening a recently closed tab restores it with its original ids.
     setSession(beforeClose)
     runtime.syncWindowGraph(0, {
@@ -323,7 +323,7 @@ describe('terminal exit records', () => {
     const frames: unknown[] = []
     runtime.onMobileSessionTabsChanged((frame) => frames.push(frame))
 
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab' })
+    runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, { kind: 'tab', tabId: 'host-tab' })
 
     // Why: a frame here would show the closed leaf, still listed, without its exit.
     expect(frames).toEqual([])

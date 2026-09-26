@@ -103,8 +103,8 @@ const BINDING = {
 }
 
 class ObservedExitRuntime extends OrcaRuntimeService {
-  closeControl(): Promise<boolean> {
-    return this.stopExplicitlyClosedTabPtys([CONTROL_PTY_ID], CONTROL_PTY_ID)
+  async closeControl(): Promise<boolean> {
+    return (await this.stopExplicitlyClosedTabPtys([CONTROL_PTY_ID], CONTROL_PTY_ID)).stopped
   }
 }
 

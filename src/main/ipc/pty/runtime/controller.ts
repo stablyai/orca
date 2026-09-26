@@ -27,6 +27,7 @@ import {
   waitForRendererSerializerFromRuntimeController,
   writePtyFromRuntimeController
 } from './operations'
+import { recordUnconfirmedExplicitSshStop } from './undelivered-ssh-kill'
 import { supportsForegroundProcessEvidenceFromRuntimeController } from './foreground-process-evidence-capability'
 import {
   listProcessesFromRuntimeController,
@@ -58,6 +59,12 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed),
     markReversibleStops: (ptyIds) => markReversibleStopsFromRuntimeController(deps, ptyIds),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
+    recordUnconfirmedStop: (ptyId) =>
+      recordUnconfirmedExplicitSshStop({
+        store: deps.store,
+        ptyId,
+        reversible: deps.reversibleStopOwnersByPtyId.has(ptyId)
+      }),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),

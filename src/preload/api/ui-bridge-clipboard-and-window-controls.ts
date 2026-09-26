@@ -10,6 +10,7 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import { subscribeNativeFileDrop } from '../preload-runtime-support'
@@ -49,11 +50,9 @@ export const uiClipboardAndWindowControlsApi = {
   respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse): void => {
     ipcRenderer.send('ui:mobileMarkdownResponse', response)
   },
-  onCloseTerminal: (callback: (data: { tabId: string; leafId?: string }) => void): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { tabId: string; leafId?: string }
-    ) => callback(data)
+  onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: TerminalSurfaceCloseTarget) =>
+      callback(target)
     ipcRenderer.on('ui:closeTerminal', listener)
     return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
   },

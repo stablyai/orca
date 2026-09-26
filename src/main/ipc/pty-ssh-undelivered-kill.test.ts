@@ -92,6 +92,7 @@ describe('undelivered SSH stops', () => {
     kill: (ptyId: string) => boolean
     stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
     markReversibleStops: (ptyIds: readonly string[]) => () => void
+    recordUnconfirmedStop: (ptyId: string) => boolean
     runtime: ReturnType<typeof installController>['runtime']
   } {
     const { runtime } = installController(handlers as never)
@@ -103,15 +104,18 @@ describe('undelivered SSH stops', () => {
       undefined,
       store as never
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registerPtyHandlers installs the runtime PTY controller, which implements these members.
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       kill: (ptyId: string) => boolean
       stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
       markReversibleStops: (ptyIds: readonly string[]) => () => void
+      recordUnconfirmedStop: (ptyId: string) => boolean
     }
     return {
       kill: controller.kill,
       stopAndWait: controller.stopAndWait,
       markReversibleStops: controller.markReversibleStops,
+      recordUnconfirmedStop: controller.recordUnconfirmedStop,
       runtime
     }
   }
@@ -346,6 +350,46 @@ describe('undelivered SSH stops', () => {
     } finally {
       unregisterSshPtyProvider('ssh-1')
       deletePtyOwnership('ssh:ssh-1@@pty-8')
+    }
+  })
+
+  // An explicit close records its order when the stop goes unconfirmed, before the follow-up kill,
+  // so its receipt can promise the reconnect retry from the record itself.
+  it("records an explicit close's unconfirmed stop and says so", () => {
+    const store = createKillStore()
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    restorePtyIncarnation(SCOPED_PTY_ID, 'inc-g')
+    const { recordUnconfirmedStop } = install(store)
+
+    try {
+      expect(recordUnconfirmedStop(SCOPED_PTY_ID)).toBe(true)
+      expect(store.recordSshRemotePtyKillIntent).toHaveBeenCalledWith(
+        'ssh-1',
+        'pty-7',
+        expect.objectContaining({ incarnationId: 'inc-g', attempts: 0 })
+      )
+    } finally {
+      deletePtyOwnership(SCOPED_PTY_ID)
+    }
+  })
+
+  it('reports no recorded order for a local or reversibly stopped PTY', () => {
+    const store = createKillStore()
+    setPtyOwnership('local-pty', null)
+    restorePtyIncarnation('local-pty', 'inc-h')
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    restorePtyIncarnation(SCOPED_PTY_ID, 'inc-i')
+    const { recordUnconfirmedStop, markReversibleStops } = install(store)
+    const release = markReversibleStops([SCOPED_PTY_ID])
+
+    try {
+      expect(recordUnconfirmedStop('local-pty')).toBe(false)
+      expect(recordUnconfirmedStop(SCOPED_PTY_ID)).toBe(false)
+      expect(store.recordSshRemotePtyKillIntent).not.toHaveBeenCalled()
+    } finally {
+      release()
+      deletePtyOwnership('local-pty')
+      deletePtyOwnership(SCOPED_PTY_ID)
     }
   })
 })

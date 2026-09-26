@@ -3,12 +3,22 @@ import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from './orca-runtime
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { Tab } from '../../shared/tab-types'
-import { closeTerminalSurfaceInWorkspaceSession } from './terminal-surface-close'
+import {
+  closeTerminalSurfaceInWorkspaceSession,
+  resolveTerminalCloseTarget,
+  type PaneCloseResolution
+} from './terminal-surface-close'
 import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
+import type {
+  TerminalPaneCloseTarget,
+  TerminalSurfaceCloseTarget
+} from '../../shared/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
@@ -84,14 +94,14 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
    */
   protected closeTerminalSurface(
     worktreeId: string,
-    tabId: string,
-    options: { leafId?: string; allowMissing?: boolean; force?: boolean } = {}
+    target: TerminalSurfaceCloseTarget,
+    options: { allowMissing?: boolean; force?: boolean } = {}
   ): string[] {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
       throw new Error('workspace_session_unavailable')
     }
-    const result = closeTerminalSurfaceInWorkspaceSession(session, worktreeId, tabId, options)
+    const result = closeTerminalSurfaceInWorkspaceSession(session, worktreeId, target, options)
     if (result.pinned) {
       throw new Error('terminal_tab_pinned')
     }
@@ -102,10 +112,11 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       return []
     }
     this.setWorkspaceSessionForWorktree(worktreeId, result.session)
+    // Why: a committed pane close removed only its pane; a last-pane close arrives as a tab close.
     this.terminalExitRecords.clearClosedLeaves(
-      options.leafId
-        ? [options.leafId]
-        : collectPersistedTerminalLeafIds(session.terminalLayoutsByTabId[tabId])
+      target.kind === 'pane'
+        ? [target.leafId]
+        : collectPersistedTerminalLeafIds(session.terminalLayoutsByTabId[target.tabId])
     )
     try {
       this.store.flushOrThrow()
@@ -118,26 +129,39 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   }
 
   /** The desktop renderer's close intent: the renderer already ran its pin guard and owns the kill. */
-  closeTerminalSurfaceFromRenderer(args: {
-    worktreeId: string
-    tabId: string
-    leafId?: string
-  }): void {
-    this.closeTerminalSurface(args.worktreeId, args.tabId, {
-      leafId: args.leafId,
-      allowMissing: true,
-      force: true
+  closeTerminalSurfaceFromRenderer(worktreeId: string, target: TerminalSurfaceCloseTarget): void {
+    this.closeTerminalSurface(worktreeId, target, { allowMissing: true, force: true })
+  }
+
+  /** Resolves a close main started against the copy of the tab's panes its layout owner holds. */
+  protected resolveTerminalCloseTarget(
+    worktreeId: string,
+    target: TerminalSurfaceCloseTarget
+  ): PaneCloseResolution | 'tab' {
+    const graphLeafIds: string[] = []
+    for (const leaf of this.leaves.values()) {
+      if (leaf.tabId === target.tabId) {
+        graphLeafIds.push(leaf.leafId)
+      }
+    }
+    return resolveTerminalCloseTarget(target, {
+      rendererListsTab: this.tabs.has(target.tabId),
+      snapshotRows: (this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs ?? []).filter(
+        (row) => row.type === 'terminal' && row.parentTabId === target.tabId
+      ),
+      graphLeafIds,
+      sessionLayout:
+        this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
     })
   }
 
   /**
-   * Commits a split pane's close that main started once its process was stopped, then tells the
-   * desktop renderer to drop that leaf. No session means nothing persisted to remove.
+   * Commits a split pane's close that main started, then tells the desktop renderer to drop that
+   * pane. Never touches the tab: a pane the session no longer lists commits nothing.
    */
-  protected closeTerminalLeaf(worktreeId: string, tabId: string, leafId: string): void {
+  protected closeTerminalPane(worktreeId: string, target: TerminalPaneCloseTarget): void {
     try {
-      // Why force: the process is already stopped, so a pin must not fail the close after the fact.
-      this.closeTerminalSurface(worktreeId, tabId, { leafId, allowMissing: true, force: true })
+      this.closeTerminalSurface(worktreeId, target, { allowMissing: true })
     } catch (error) {
       if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
         throw error
@@ -145,8 +169,24 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     }
     // Why: no exit may ever arrive to remove the pane. The notice is leaf-addressed, so it and the
     // renderer's exit handling are each a no-op after the other.
-    this.retireClosedTerminalLeafFromMobileSnapshot(worktreeId, tabId, leafId)
-    this.notifier?.closeTerminal(tabId, leafId)
+    this.retireClosedTerminalLeafFromMobileSnapshot(worktreeId, target.tabId, target.leafId)
+    this.notifier?.closeTerminalPane?.(target.tabId, target.leafId)
+  }
+
+  /** A paired client's close of one pane: stops only that pane's process, commits only that pane. */
+  protected closeMobileSessionTerminalPane(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): void {
+    // Why best-effort, as for a tab: a failed kill must not keep a pane the user closed.
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    if (pty) {
+      this.ptyController?.kill(pty.ptyId)
+    } else if (!this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
+      // Why: with no renderer to own the kill, a dormant SSH pane's durable id is its stop order.
+      this.ptyController?.kill(tab.ptyId)
+    }
+    this.closeTerminalPane(worktreeId, { kind: 'pane', tabId: tab.parentTabId, leafId: tab.leafId })
   }
 
   private retireClosedTerminalLeafFromMobileSnapshot(

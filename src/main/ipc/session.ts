@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { parseTerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
@@ -32,15 +33,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   // Why: a renderer save cannot shrink membership main owns, so each close commits it explicitly.
   ipcMain.handle(
     'session:close-terminal-surface',
-    (_event, args: { worktreeId: string; tabId: string; leafId?: string }) => {
-      if (typeof args?.worktreeId !== 'string' || typeof args.tabId !== 'string') {
+    (_event, args: { worktreeId?: unknown; target?: unknown } | undefined) => {
+      const target = parseTerminalSurfaceCloseTarget(args?.target)
+      if (typeof args?.worktreeId !== 'string' || !target) {
         throw new Error('invalid_terminal_surface')
       }
-      runtime.closeTerminalSurfaceFromRenderer({
-        worktreeId: args.worktreeId,
-        tabId: args.tabId,
-        ...(typeof args.leafId === 'string' ? { leafId: args.leafId } : {})
-      })
+      runtime.closeTerminalSurfaceFromRenderer(args.worktreeId, target)
     }
   )
 

@@ -92,7 +92,7 @@ describe('useIpcEvents browser tab close routing', () => {
       getState: () => ({})
     })
 
-    closeTerminalListenerRef.current?.({ tabId: 'terminal-1' })
+    closeTerminalListenerRef.current?.({ kind: 'tab', tabId: 'terminal-1' })
 
     // The CLI/RPC caller is answered immediately, so this close must never raise a modal.
     expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1', {

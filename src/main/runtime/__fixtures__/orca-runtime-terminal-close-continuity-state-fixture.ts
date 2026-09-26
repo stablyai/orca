@@ -106,3 +106,11 @@ export function makeSession(ptyId = PTY_ID, includeCanary = false): WorkspaceSes
     }
   }
 }
+
+export function makeDeferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
+}
