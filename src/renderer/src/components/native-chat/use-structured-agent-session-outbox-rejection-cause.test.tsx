@@ -11,6 +11,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
 }))
 
+import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
 
 // What the host answers when the child it restarted for this send died before starting.
@@ -73,14 +74,19 @@ describe('a send the host rejected because the agent never started', () => {
 // Stable across renders, as a mounted pane's target is.
 const LOCAL_TARGET = { kind: 'local' } as const
 
-function acceptedResultFor(clientMessageId: string) {
-  const rejected = rejectedResultFor(clientMessageId)
+function submission(
+  clientMessageId: string,
+  dispatchState: 'pending' | 'accepted'
+): AgentJournalSubmission {
   return {
-    ...rejected,
-    value: {
-      clientMessageId,
-      submission: { ...rejected.value.submission, dispatchState: 'accepted', reason: null }
-    }
+    clientMessageId,
+    fence: 3,
+    payloadFingerprint: 'fingerprint',
+    dispatchState,
+    providerItemId: null,
+    reason: null,
+    submittedAt: 10,
+    resolvedAt: dispatchState === 'accepted' ? 11 : null
   }
 }
 
@@ -90,12 +96,8 @@ describe('a send refused while its agent restarted', () => {
     localStorage.clear()
   })
 
+  // The live order: the restart takes seconds, so the journal settles the resend before its reply.
   it('leaves no error behind once a send refused before an agent restart is delivered', async () => {
-    let deliver!: (value: unknown) => void
-    const resend = {
-      promise: new Promise((resolve) => (deliver = resolve)),
-      resolve: (value: unknown) => deliver(value)
-    }
     mocks.call
       .mockResolvedValueOnce({
         ok: false,
@@ -104,16 +106,16 @@ describe('a send refused while its agent restarted', () => {
           message: 'Expected runtime fence 1; the session is at 3.'
         }
       })
-      .mockReturnValueOnce(resend.promise)
+      .mockReturnValueOnce(new Promise(() => {}))
     const { result, rerender } = renderHook(
-      ({ fence }: { fence: number }) =>
+      ({ fence, submissions }: { fence: number; submissions: AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
           sessionId: 'session-1',
           target: LOCAL_TARGET,
           fence,
-          submissions: []
+          submissions
         }),
-      { initialProps: { fence: 1 } }
+      { initialProps: { fence: 1, submissions: [] as AgentJournalSubmission[] } }
     )
 
     act(() => expect(result.current.send('hello')).toBe(true))
@@ -124,12 +126,14 @@ describe('a send refused while its agent restarted', () => {
     )
 
     // The pane learns the new owner and sends the same message again.
-    rerender({ fence: 3 })
+    rerender({ fence: 3, submissions: [] })
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     expect(result.current.outbox[0]).toMatchObject({ state: 'dispatching' })
     expect(result.current.outbox[0]?.notice).toBeUndefined()
 
-    resend.resolve(acceptedResultFor(result.current.outbox[0]!.clientMessageId))
+    const id = result.current.outbox[0]!.clientMessageId
+    rerender({ fence: 3, submissions: [submission(id, 'pending')] })
+    rerender({ fence: 3, submissions: [submission(id, 'accepted')] })
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
     expect(result.current.error).toBeNull()
     expect(result.current.blockedClientMessageId).toBeNull()
