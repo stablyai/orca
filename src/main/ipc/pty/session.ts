@@ -10,6 +10,7 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../../shared/pty-renderer-delivery-health'
 import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
+import type { ReplacedPtyStop } from './delivery/exit'
 import { PtyProducerFlowController } from '../pty-producer-flow-control'
 import { PtyPendingDataDrainQueue, type PendingPtyData } from '../pty-pending-data-drain-queue'
 import type { SshPtyOutputIntake } from '../ssh-pty-output-intake'
@@ -101,6 +102,7 @@ export type PtyIpcSession = {
     { cleanupTimer: NodeJS.Timeout; incarnationId: string | undefined }
   >
   reversibleStopOwnersByPtyId: Map<string, number>
+  replacedPtyStopsById: Map<string, ReplacedPtyStop>
   retiredRejectedPtyIds: Map<string, NodeJS.Timeout>
   pendingSerializeRequests: Map<
     string,
@@ -170,8 +172,6 @@ export type PtyIpcSession = {
   ) => { droppable: boolean; droppedWhileHidden: boolean; policyChanged: boolean }
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   rendererPtyIsKnownHidden: (id: string) => boolean
-  clearHiddenRendererResizeOutput: (id: string) => void
-  clearDeliveredHiddenRendererResizeOutput: (id: string) => void
   schedulePendingDataAfterCreditReport: (creditedAny: boolean) => void
   writeOffLostRendererDelivery: (report: PtyRendererDeliveryStateReport) => PtyDeliveryWriteOff[]
   getRendererInFlightCharsForPty: (id: string) => number
@@ -232,6 +232,7 @@ export function createPtyIpcSession(args: {
     backgroundedDeliverySyncByPty: new Map(),
     syntheticKillExitPtyIds: new Map(),
     reversibleStopOwnersByPtyId: new Map(),
+    replacedPtyStopsById: new Map(),
     retiredRejectedPtyIds: new Map(),
     pendingSerializeRequests: new Map(),
     canSendPtyDataToRenderer: unsetSessionFn,
@@ -263,8 +264,6 @@ export function createPtyIpcSession(args: {
     transitionHiddenRendererPtyDeliveryState: unsetSessionFn,
     transitionSpawnHiddenRendererPtyDeliveryState: unsetSessionFn,
     rendererPtyIsKnownHidden: unsetSessionFn,
-    clearHiddenRendererResizeOutput: unsetSessionFn,
-    clearDeliveredHiddenRendererResizeOutput: unsetSessionFn,
     schedulePendingDataAfterCreditReport: unsetSessionFn,
     writeOffLostRendererDelivery: unsetSessionFn,
     getRendererInFlightCharsForPty: unsetSessionFn

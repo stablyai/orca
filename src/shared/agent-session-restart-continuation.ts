@@ -1,6 +1,6 @@
-// The one message Orca sends when a user asks an interrupted agent to carry on.
+// The message Orca sends when a user asks an interrupted agent to carry on.
 //
-// ONE constant, identical for both providers, and deliberately not promptless. Codex's `turn/start`
+// Identical for both providers, and deliberately not promptless. Codex's `turn/start`
 // would accept an empty `input`, but Claude's SDK has no promptless form, so a bare continuation
 // would make the two lanes behave differently — and the wording is the part that tells an agent to
 // VERIFY its last action before repeating it. Both reasons point the same way.
@@ -11,8 +11,29 @@
 // action before repeating it, and the launch reports what it did. Reattaching without a send
 // remains a separate operation that never comes here.
 
+import type { AgentSessionResumeMarker } from './agent-session-resume-marker'
+
 export const AGENT_SESSION_RESTART_CONTINUATION_MESSAGE =
   "Orca restarted, so your previous reply was cut off partway through. Before continuing, check whether your most recent action completed — don't repeat it if it did. Then carry on."
+
+/** For a marker that may stand for more than a reply: subagents, background commands, monitors or
+ *  a prompt the restart stopped. Names none of them — the provider restates what it lost on
+ *  resume, and a body that varied with the journal would change between retries of one offer. */
+export const AGENT_SESSION_RESTART_WORK_CONTINUATION_MESSAGE =
+  "Orca restarted, which stopped what you were doing: a reply in progress, any subagents or background commands you had running, and any request waiting on the user. Before continuing, check what finished before the restart and don't repeat it. Restart anything still needed, ask again for anything still waiting on the user, then carry on."
+
+/**
+ * The continuation a marker gets. A function of the marker alone, because the payload fingerprint
+ * covers the body and a retried offer must reach the ledger with the same one. A marker from a
+ * build that recorded only a working lead keeps the original wording.
+ */
+export function restartContinuationMessage(
+  marker: Pick<AgentSessionResumeMarker, 'activity'>
+): string {
+  return marker.activity
+    ? AGENT_SESSION_RESTART_WORK_CONTINUATION_MESSAGE
+    : AGENT_SESSION_RESTART_CONTINUATION_MESSAGE
+}
 
 /**
  * Host-authored journal note marking the send as Orca's rather than the user's.

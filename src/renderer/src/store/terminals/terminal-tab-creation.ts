@@ -1,3 +1,4 @@
+import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -132,6 +133,11 @@ export function createTerminalTabCreationActions(
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
+        }
+        if (options?.launchAgent === 'zcode') {
+          // Why here: this is where a ZCode launch is first known, and it runs before the
+          // pane connects, so the explanation can beat the stack trace to the screen.
+          void warnIfZCodeCannotOpenSession()
         }
         const validTargetGroupId =
           targetGroupId &&

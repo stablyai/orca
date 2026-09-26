@@ -9,62 +9,55 @@ import {
 
 describe('foldAgentLeadStatus', () => {
   it('keeps a lead that is not settled, whatever its children do', () => {
-    expect(
-      foldAgentLeadStatus({
-        leadState: 'blocked',
-        interrupted: false,
-        childWorkLiveness: 'working'
-      })
-    ).toEqual({ stateName: 'blocked' })
+    expect(foldAgentLeadStatus({ leadState: 'blocked', childWorkLiveness: 'working' })).toEqual({
+      stateName: 'blocked'
+    })
   })
 
   it('reads a settled lead with live agent work as working', () => {
-    expect(
-      foldAgentLeadStatus({ leadState: 'done', interrupted: false, childWorkLiveness: 'working' })
-    ).toEqual({ stateName: 'working' })
+    expect(foldAgentLeadStatus({ leadState: 'done', childWorkLiveness: 'working' })).toEqual({
+      stateName: 'working'
+    })
   })
 
   it('reads a settled lead with only watch loops as monitoring', () => {
-    expect(
-      foldAgentLeadStatus({
-        leadState: 'done',
-        interrupted: false,
-        childWorkLiveness: 'monitoring'
-      })
-    ).toEqual({ stateName: 'working', workingMode: 'monitoring' })
+    expect(foldAgentLeadStatus({ leadState: 'done', childWorkLiveness: 'monitoring' })).toEqual({
+      stateName: 'working',
+      workingMode: 'monitoring'
+    })
   })
 
-  it('does not read a watch loop as monitoring after an interrupt, but keeps agent work', () => {
-    expect(
-      foldAgentLeadStatus({ leadState: 'done', interrupted: true, childWorkLiveness: 'monitoring' })
-    ).toEqual({ stateName: 'done' })
-    expect(
-      foldAgentLeadStatus({ leadState: 'done', interrupted: true, childWorkLiveness: 'working' })
-    ).toEqual({ stateName: 'working' })
+  it("takes no verdict: how the mainAgent's turn ended is not a fold input", () => {
+    // A cancel is a fact about the main agent, carried on `mainAgent.outcome`; the work it left running
+    // reads exactly as it would after a plain end of turn.
+    const input: Parameters<typeof foldAgentLeadStatus>[0] = {
+      leadState: 'done',
+      childWorkLiveness: 'monitoring'
+    }
+    expect(Object.keys(input)).toEqual(['leadState', 'childWorkLiveness'])
+    expect(foldAgentLeadStatus(input)).toEqual({ stateName: 'working', workingMode: 'monitoring' })
   })
 
   it('settles when nothing is running', () => {
-    expect(
-      foldAgentLeadStatus({ leadState: 'done', interrupted: false, childWorkLiveness: null })
-    ).toEqual({ stateName: 'done' })
+    expect(foldAgentLeadStatus({ leadState: 'done', childWorkLiveness: null })).toEqual({
+      stateName: 'done'
+    })
   })
 
   describe('a child waiting on a human', () => {
-    it('makes a working or settled main agent wait, even after an interrupt', () => {
+    it('makes a working or settled main agent wait', () => {
       for (const leadState of ['working', 'done'] as const) {
-        for (const interrupted of [false, true]) {
-          expect(
-            foldAgentLeadStatus({ leadState, interrupted, childWorkLiveness: 'waiting' })
-          ).toEqual({ stateName: 'waiting' })
-        }
+        expect(foldAgentLeadStatus({ leadState, childWorkLiveness: 'waiting' })).toEqual({
+          stateName: 'waiting'
+        })
       }
     })
 
     it("yields to the main agent's own request for a human, in the main agent's own vocabulary", () => {
       for (const leadState of ['waiting', 'blocked'] as const) {
-        expect(
-          foldAgentLeadStatus({ leadState, interrupted: false, childWorkLiveness: 'waiting' })
-        ).toEqual({ stateName: leadState })
+        expect(foldAgentLeadStatus({ leadState, childWorkLiveness: 'waiting' })).toEqual({
+          stateName: leadState
+        })
       }
     })
   })
@@ -116,19 +109,17 @@ describe('isAgentTimeAccruing', () => {
     const leadStates = ['working', 'waiting', 'blocked', 'done'] as const
     const liveness = ['waiting', 'working', 'monitoring', null] as const
     for (const leadState of leadStates) {
-      for (const interrupted of [false, true]) {
-        for (const childWorkLiveness of liveness) {
-          const folded = foldAgentLeadStatus({ leadState, interrupted, childWorkLiveness })
-          const accrues = isAgentTimeAccruing({
-            state: folded.stateName,
-            workingMode: folded.workingMode
-          })
-          // A child waiting on a human pauses the row, whatever the main agent is doing.
-          expect(accrues).toBe(
-            childWorkLiveness !== 'waiting' &&
-              (leadState === 'working' || (leadState === 'done' && childWorkLiveness === 'working'))
-          )
-        }
+      for (const childWorkLiveness of liveness) {
+        const folded = foldAgentLeadStatus({ leadState, childWorkLiveness })
+        const accrues = isAgentTimeAccruing({
+          state: folded.stateName,
+          workingMode: folded.workingMode
+        })
+        // A child waiting on a human pauses the row, whatever the main agent is doing.
+        expect(accrues).toBe(
+          childWorkLiveness !== 'waiting' &&
+            (leadState === 'working' || (leadState === 'done' && childWorkLiveness === 'working'))
+        )
       }
     }
   })

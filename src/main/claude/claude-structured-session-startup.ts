@@ -23,6 +23,7 @@ import {
 } from './claude-structured-session-acquisition-options'
 import {
   claudeStructuredSessionOptionsFrom,
+  observeClaudeSettingsApplied,
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
 import {
@@ -125,6 +126,7 @@ function applyClaudeStartupFacts(session: ClaudeSession, facts: ClaudeStartupFac
     session.reportedOptions.model = init.model
     session.reportedModelMutation = session.optionMutationSequence
   }
+  observeClaudeSettingsApplied(session, settings)
   if (effort) {
     session.reportedOptions.effort = effort
     session.confirmedOptions.add('effort')
@@ -145,6 +147,20 @@ function applyClaudeStartupFacts(session: ClaudeSession, facts: ClaudeStartupFac
     session.commands = new ClaudeSlashCommandCatalog(init.message, initialization)
   }
   session.events?.publish()
+}
+
+/** What the start persists as the session's options. The applied effort is display-only: saved,
+ *  it would pin an effort nobody chose on every reopen, past a later settings change. */
+function claudeStartedReportedOptions(
+  session: ClaudeSession,
+  catalog: unknown[]
+): StructuredAgentSessionStartedOptions['reportedOptions'] {
+  const { current } = claudeStructuredSessionOptionsFrom(session, catalog)
+  if (session.options.has('effort') || session.reportedOptions.effort !== undefined) {
+    return current
+  }
+  const { effort: _displayOnly, ...persisted } = current
+  return persisted
 }
 
 /** Applies startup facts to the published session, restores saved options, then releases
@@ -176,10 +192,10 @@ export async function settleClaudeSessionStartup(input: {
     if (!superseded()) {
       input.onStarted({
         // `list_models` is answered from this same initialize result, so nothing is re-read.
-        reportedOptions: claudeStructuredSessionOptionsFrom(
+        reportedOptions: claudeStartedReportedOptions(
           session,
           readClaudeModels(facts.initialization)
-        ).current,
+        ),
         restoreSkippedOptions: [...session.restoreSkippedOptions]
       })
       await openClaudeStartupGate(session)

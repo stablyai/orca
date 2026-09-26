@@ -16,8 +16,6 @@ export class StructuredAgentSessionHostRuntimeState {
 
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
-    onLeaseRenewed?: (record: AgentSessionRecord) => Promise<void>,
-    onDeadTuiOwner?: (record: AgentSessionRecord, probe: AgentSessionOwnerProbe) => Promise<void>,
     onEventSinkFailure?: (sessionId: string, error: unknown) => void
   ) {
     this.onEventSinkFailure = onEventSinkFailure
@@ -26,8 +24,6 @@ export class StructuredAgentSessionHostRuntimeState {
       probe: (record) => this.probeRecord(record),
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
       now: () => deps.now?.() ?? Date.now(),
-      ...(onLeaseRenewed ? { onRenewed: onLeaseRenewed } : {}),
-      ...(onDeadTuiOwner ? { onDeadTuiOwner } : {}),
       // Lease/ownership failures are transient and stay on the visible lease-error path.
       // Only deferred sink I/O failures are terminal and may force-close a provider.
       onError: ({ sessionId, error }) => deps.onEventSinkError?.({ sessionId, error })
@@ -92,11 +88,6 @@ export class StructuredAgentSessionHostRuntimeState {
 
   discardEventSink(sessionId: string): void {
     this.eventSinks.delete(sessionId)
-  }
-
-  hasPendingStreamedEvents(sessionId: string): boolean {
-    const state = this.eventSinks.get(sessionId)?.state()
-    return state !== undefined && (state.failed || state.queuedOperations > 0)
   }
 
   flushEventSink(sessionId: string): Promise<void> {

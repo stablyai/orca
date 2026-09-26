@@ -40,6 +40,7 @@
 # these carry real CR and CRLF bytes as the terminal emitted them, and line-ending
 # normalisation on a Windows checkout would rewrite the evidence the fixture exists to be.
 /src/main/runtime/__fixtures__/*.txt -text
+/src/main/daemon/__fixtures__/pty-transcripts/*.txt -text
 # Generated runtime English subset: compared byte-for-byte by
 # verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf

@@ -120,10 +120,10 @@ function grokRunningFiniteTasks(
   })
 }
 
-/** What a plain `stop` leaves running behind the main agent. A background subagent is agent work
+/** What a turn end leaves running behind the main agent. A background subagent is agent work
  *  and keeps the pane `working`; a shell, or a still-active stop hook holding the turn, is watch
  *  work and reads as monitoring. */
-function grokChildWorkLivenessAfterStop(
+function grokChildWorkLivenessAfterTurnEnd(
   hookPayload: Record<string, unknown>
 ): AgentChildWorkLiveness {
   const stopHookActive = aliasedField(hookPayload, 'stopHookActive', 'stop_hook_active')
@@ -222,15 +222,14 @@ export function normalizeGrokEvent(
     : isGrokEvent(eventName, 'stop_failure')
       ? ('failure' as const)
       : undefined
-  // Only a plain end-of-turn `stop` reports what it left running; a cancel, a failure and a
-  // session boundary settle the pane whatever the inventory says, as they always have.
+  // Why: every turn end reports what it left running, and a task leaves only when it reports its
+  // own end or the session ends — a cancelled or failed turn with a still-running task reads
+  // monitoring exactly like a plain `stop`. Only a session boundary settles the pane whatever
+  // the inventory says.
   const resolution = foldAgentLeadStatus({
     leadState,
-    interrupted: outcome === 'cancellation',
     childWorkLiveness:
-      isGrokEvent(eventName, 'stop') && !sessionBoundary
-        ? grokChildWorkLivenessAfterStop(hookPayload)
-        : null
+      isTurnEnd && !sessionBoundary ? grokChildWorkLivenessAfterTurnEnd(hookPayload) : null
   })
   const stateName = resolution.stateName
   const previousMainAgent = state.grokMainAgentStatusByPaneKey.get(paneKey)
@@ -271,7 +270,8 @@ export function normalizeGrokEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     ...(resolution.workingMode ? { workingMode: resolution.workingMode } : {}),
-    ...(outcome === 'cancellation' ? { interrupted: true } : {}),
+    // Why: derived from the main agent, so the idle backstop that settles a cancelled turn held open by a task still reads interrupted.
+    ...(mainAgent.outcome === 'cancellation' ? { interrupted: true } : {}),
     ...(sessionBoundary ? { sessionBoundary: true } : {}),
     mainAgent
   })

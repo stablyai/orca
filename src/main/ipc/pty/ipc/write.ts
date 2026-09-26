@@ -6,7 +6,6 @@ import { createPtyWriteInput } from './write-input'
 export function installPtyWriteIpcHandlers(deps: {
   mainWindow: BrowserWindow
   runtime?: OrcaRuntimeService
-  clearHiddenRendererResizeOutput: (id: string) => void
 }): void {
   const ipcMain = getPtyIpc()
   const { mainWindow, runtime } = deps

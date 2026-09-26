@@ -494,7 +494,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3088,6 +3089,14 @@
             "e2fcf07c0d": "Orca 无法保存此终端会话，因为本地存储已满或不可写。打开磁盘空间分析器以查找可以清理的工作区存储。",
             "678c780a2c": "磁盘空间不可用"
           },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
+          },
           "osc52": {
             "clipboard": {
               "blocked": {
@@ -3830,7 +3839,7 @@
             },
             "usage": {
               "noSubscription": {
-                "label": "没有订阅"
+                "label": "无订阅"
               }
             }
           },
@@ -3931,16 +3940,16 @@
             "ariaLabelOne": "1 个聊天可恢复",
             "ariaLabel": "{{value0}} 聊天可恢复",
             "tooltip": "打开可恢复的中断聊天",
-            "failedLabelOne": "1 条聊天无法恢复",
-            "failedLabel": "{{value0}} 聊天未能恢复",
-            "failedAriaOne": "1 条聊天无法恢复。点击查看详情。",
-            "failedAria": "{{value0}} 聊天无法恢复。点击查看详情。",
-            "failedTooltip": "重启后 Orca 聊天无法恢复。点击查看详情。",
-            "checkLabelOne": "1 条聊天记录",
-            "checkLabel": "{{value0}} 聊天记录查看",
-            "checkAriaOne": "1 聊天恢复后检查。点击查看详情。",
-            "checkAria": "{{value0}} 聊天恢复后检查。点击查看详情。",
-            "checkTooltip": "重启后，Orca 聊天无法恢复，或无法确认其恢复。点击查看详情。"
+            "failedLabelOne": "1 个聊天恢复失败",
+            "failedLabel": "{{value0}} 个聊天恢复失败",
+            "failedAriaOne": "1 个聊天恢复失败。点击查看详情。",
+            "failedAria": "{{value0}} 个聊天恢复失败。点击查看详情。",
+            "failedTooltip": "重启后 Orca 未能恢复的聊天。点击查看详情。",
+            "checkLabelOne": "1 个待检查的聊天",
+            "checkLabel": "{{value0}} 个待检查的聊天",
+            "checkAriaOne": "恢复后有 1 个待检查的聊天。点击查看详情。",
+            "checkAria": "恢复后有 {{value0}} 个待检查的聊天。点击查看详情。",
+            "checkTooltip": "重启后 Orca 未能恢复或未能确认已恢复的聊天。点击查看详情。"
           }
         }
       },
@@ -6154,7 +6163,6 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "最多附加 {count} 张截图",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },
@@ -6251,16 +6259,16 @@
           "copyDiagnostics": "复制诊断"
         },
         "LocalGitToolchainScanBanner": {
-          "xcodeLicenseTitle": "接受 Xcode 许可证以使用 Git",
-          "xcodeLicenseBody": "macOS 会阻止 Git，直到您接受为止。在终端中运行此命令，然后切换回 Orca。它会自动再次检查。",
-          "developerToolsTitle": "安装Apple的命令行工具",
-          "developerToolsBody": "Git 需要 Apple 的开发者工具。在终端中运行此命令，然后切换回 Orca。它会自动再次检查。",
-          "affectedOne": "工作树扫描已暂停 {{value0}}",
-          "affectedMany": "{{value0}} 项目的工作树扫描已暂停",
+          "xcodeLicenseTitle": "接受 Xcode 许可协议以使用 Git",
+          "xcodeLicenseBody": "在您接受之前，macOS 会阻止 Git 运行。请在终端中运行此命令，然后切回 Orca。它会自动重新检查。",
+          "developerToolsTitle": "安装 Apple 命令行工具",
+          "developerToolsBody": "Git 需要 Apple 开发者工具。请在终端中运行此命令，然后切回 Orca。它会自动重新检查。",
+          "affectedOne": "已暂停 {{value0}} 的工作树扫描",
+          "affectedMany": "已暂停 {{value0}} 个项目的工作树扫描",
           "copyCommand": "复制命令",
           "copied": "命令已复制",
           "retry": "立即重试",
-          "restored": "Git 又开始工作了。工作树已刷新。"
+          "restored": "Git 已恢复正常。工作树已刷新。"
         }
       },
       "shared": {
@@ -6496,10 +6504,10 @@
           "opencodeGo": {
             "apiKey": {
               "title": "OpenCode Go API 密钥",
-              "description": "可选覆盖。否则，Orca 将使用运行 /connect 时保存的 OpenCode 密钥，然后使用 OPENCODE_API_KEY。",
+              "description": "可选的覆盖设置。如果留空，Orca 将使用您运行 /connect 时 OpenCode 保存的密钥，其次使用 OPENCODE_API_KEY。",
               "label": "OpenCode Go API 密钥",
               "placeholder": "留空以使用 /connect 或 OPENCODE_API_KEY 保存的密钥",
-              "help": "用于状态栏中的 OpenCode Go 使用。下面的会话 cookie 仅适用于旧版控制台 (OpenCode Black) 帐户。"
+              "help": "用于在状态栏中显示 OpenCode Go 使用情况。下面的会话 Cookie 仅旧版控制台 (OpenCode Black) 账号需要。"
             }
           }
         },
@@ -7057,7 +7065,7 @@
             "structuredScope": "目前仅限本地会话。 WSL 和远程执行主机（包括 SSH）继续使用终端聊天，Windows 会回退到它，除非 Orca 可以读取进程启动时间。",
             "structuredToggleLabel": "切换更新的结构化本机聊天",
             "resumeTitle": "重启后自动恢复工作聊天",
-            "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 时，中途聊天会自动恢复。",
+            "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
             "resumeToggleLabel": "重启后切换自动恢复"
           },
           "agentDashboard": {
@@ -14900,31 +14908,32 @@
           "3e4cbf15ea": "生的",
           "1833dbbc43": "Markdown",
           "7005960d73": "代码",
-          "8dbe39a152": "更多细胞作用",
-          "fa8fd99cf1": "细胞类型",
-          "kernelStarting": "开始…",
-          "kernelInstalling": "正在安装 ipykernel...",
-          "kernelDead": "内核死亡",
+          "8dbe39a152": "更多单元格操作",
+          "fa8fd99cf1": "单元格类型",
+          "kernelStarting": "正在启动…",
+          "kernelInstalling": "正在安装 ipykernel…",
+          "kernelDead": "内核已停止",
           "selectKernel": "选择内核",
           "notPython": "该文件不是 Python 解释器。",
-          "interrupt": "打断",
+          "interrupt": "中断",
           "restart": "重启内核",
-          "runAll": "运行全部",
+          "trustFirst": "请先运行一个单元格以信任此笔记本",
+          "runAll": "全部运行",
           "clearAll": "清除所有输出",
-          "notResponding": "没有回应。重启内核",
-          "findingPython": "寻找Python环境...",
-          "recommended": "受到推崇的",
-          "pythonOnPath": "路径上的Python",
-          "browsePython": "浏览 Python...",
-          "missingIpykernelTitle": "安装ipykernel？",
-          "missingIpykernel": "使用“{{env}}”运行单元需要 ipykernel 包。",
+          "notResponding": "无响应。请重启内核",
+          "findingPython": "正在查找 Python 环境…",
+          "recommended": "推荐",
+          "pythonOnPath": "PATH 中的 Python",
+          "browsePython": "浏览 Python…",
+          "missingIpykernelTitle": "安装 ipykernel？",
+          "missingIpykernel": "使用“{{env}}”运行单元格需要 ipykernel 软件包。",
           "copyCommand": "复制命令",
           "install": "安装",
-          "kernelStartFailed": "内核无法启动。",
-          "noPython": "在此计算机上未找到 Python。从 [python.org](https://www.python.org/downloads/) 安装它，然后再次运行单元。",
-          "kernelDied": "内核死了。",
-          "localOnly": "笔记本单元只能针对该计算机上的文件运行。",
-          "pythonOnly": "只有 Python 笔记本可以在 Orca 中运行。"
+          "kernelStartFailed": "内核启动失败。",
+          "noPython": "在此电脑上未找到 Python。请从 [python.org](https://www.python.org/downloads/) 安装，然后重新运行单元格。",
+          "kernelDied": "内核已停止。",
+          "localOnly": "笔记本单元格只能针对此电脑上的文件运行。",
+          "pythonOnly": "Orca 中只能运行 Python 笔记本。"
         },
         "MarkdownPreview": {
           "e4683f70c4": "取消",
@@ -17018,8 +17027,8 @@
       },
       "NativeChatResumeOnRestartModal": {
         "title": "恢复中断的聊天？",
-        "body": "当 Orca 关闭时，这些聊天正在进行中。恢复会恢复每个停止的位置及其完整上下文，并要求代理在继续之前检查其最后一个操作。您自己的提示不会重新发送。",
-        "updateBody": "这些聊天是在 Orca 安装更新时进行的。恢复会恢复每个停止的位置及其完整上下文，并要求代理在继续之前检查其最后一个操作。您自己的提示不会重新发送。",
+        "body": "当 Orca 关闭时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求代理在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
+        "updateBody": "当 Orca 安装更新时，这些聊天正在工作。恢复会将每个聊天还原到停止的位置及其完整上下文，并要求代理在继续之前检查它正在做的事情。您自己的提示不会重新发送。",
         "resuming": "正在恢复…",
         "untitled": "无标题聊天",
         "listLabel": "将恢复的聊天",
@@ -17035,14 +17044,22 @@
         "continueUnconfirmed_other": "对于 {{value0}} 聊天，未确认继续传送。在发送另一条消息之前打开它们进行检查。",
         "dismissAll": "全部关闭",
         "dismissUnconfirmed": "拒绝简历邀请尚未得到确认——它可能仍在状态栏中。",
-        "notContinuedOne": "1 条聊天无法恢复",
-        "notContinuedMany": "{{value0}} 聊天无法恢复",
-        "notConfirmedOne": "无法确认 1 条聊天已恢复",
-        "notConfirmedMany": "无法确认 {{value0}} 聊天已恢复",
-        "notConfirmedOtherOne": "无法确认另外 1 条聊天已恢复",
-        "notConfirmedOtherMany": "无法确认 {{value0}} 其他聊天已恢复",
+        "notContinuedOne": "1 个聊天无法恢复",
+        "notContinuedMany": "{{value0}} 个聊天无法恢复",
+        "notConfirmedOne": "无法确认 1 个聊天已恢复",
+        "notConfirmedMany": "无法确认 {{value0}} 个聊天已恢复",
+        "notConfirmedOtherOne": "无法确认另外 1 个聊天已恢复",
+        "notConfirmedOtherMany": "无法确认另外 {{value0}} 个聊天已恢复",
         "show": "显示",
-        "dismiss": "关闭"
+        "dismiss": "关闭",
+        "activityUnnamed": "未命名",
+        "activityApproval": "等待您的批准：{{value0}}",
+        "activityQuestion": "等待您的回答：{{value0}}",
+        "activityMidReply": "回复进行中",
+        "activitySubagentOne": "子代理运行中：{{value0}}",
+        "activitySubagentMany": "{{value0}} 个子代理运行中",
+        "activityMonitorOne": "正在监控：{{value0}}",
+        "activityMonitorMany": "正在监控 {{value0}} 个后台任务"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "过滤 {{value1}} 团队状态中的 {{value0}} — 不包括其余团队的问题。",
@@ -17127,18 +17144,18 @@
         "unconfirmed": "无法确认聊天已恢复",
         "failed": "无法恢复",
         "statusFor": "{{value0}}：{{value1}}",
-        "dismissChat": "消除 {{value1}} 中的“{{value0}}”",
-        "toResume": "恢复："
+        "dismissChat": "关闭 {{value1}} 中的“{{value0}}”",
+        "toResume": "待恢复："
       },
       "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca 无法确认“继续”消息已发送。打开聊天并检查后再发送另一个。",
-        "superseded": "打开聊天并回复。重新启动后，新的工作立即到达，因此 Orca 没有发送“继续”消息。",
-        "conflict": "另一个 Orca 窗口或终端仍然拥有此会话。关闭它，然后重试。",
-        "ownershipUnknown": "Orca 仍在确定哪个进程拥有此会话。稍等片刻，然后重试。",
-        "notAttached": "聊天没有重新连接。重试，或打开它以开始新的转动。",
-        "dispatchRejected": "代理拒绝了“继续”消息。打开聊天并自己发送一个。",
-        "unsupported": "Orca 无法恢复此聊天。打开它看看它停在哪里。",
-        "fallback": "Orca 无法恢复此聊天。打开它以手动继续。"
+        "unconfirmed": "Orca 无法确认“continue”消息已送达。请打开聊天进行检查，确认后再发送其他消息。",
+        "superseded": "请打开聊天并回复。重启后紧接着有新的工作到达，因此 Orca 未发送其“continue”消息。",
+        "conflict": "另一个 Orca 窗口或终端仍持有此会话。请将其关闭，然后重试。",
+        "ownershipUnknown": "Orca 仍在确认哪个进程持有此会话。请稍候，然后重试。",
+        "notAttached": "聊天未能重新连接。请重试，或将其打开以开始新的轮次。",
+        "dispatchRejected": "代理拒绝了“continue”消息。请打开聊天并自行发送一条。",
+        "unsupported": "此聊天无法由 Orca 恢复。请将其打开以查看停止位置。",
+        "fallback": "Orca 无法恢复此聊天。请将其打开以手动继续。"
       }
     },
     "i18n": {
@@ -17493,38 +17510,6 @@
         "questionCount": "{{value0}} 问题"
       },
       "structuredSessionLaunchFailed": "无法打开 {{value0}} 聊天",
-      "handoff": {
-        "stage": {
-          "finishingChat": "正在完成聊天会话...",
-          "finishingTerminal": "整理代理终端...",
-          "openingTerminal": "打开代理终端...",
-          "resumingChat": "正在恢复聊天会话...",
-          "verifyingTerminal": "正在验证代理终端...",
-          "verifyingChat": "正在验证聊天会话...",
-          "recovering": "正在恢复代理会话...",
-          "manualRecovery": "代理会话需要恢复"
-        },
-        "switchingOwner": "切换会话所有者...",
-        "mode": {
-          "switching": "交换",
-          "terminal": "终端",
-          "chat": "聊天"
-        },
-        "switchingAfterTurn": "本回合后切换",
-        "returningAfterTurn": "本回合后返回",
-        "cancel": "取消",
-        "switchAfterTurn": "本回合后切换",
-        "stopTurnAndSwitch": "停止转弯并切换",
-        "openAgentTui": "打开代理 TUI",
-        "returnAfterTurn": "本回合后返回",
-        "returnToChat": "返回聊天",
-        "agentOpenOnHost": "代理已在 {{value0}} 的终端中打开。",
-        "agentOpen": "代理在终端中打开。",
-        "exitTerminal": "退出代理终端以继续聊天。",
-        "retryProof": "重试证明",
-        "retry": "重试",
-        "details": "细节"
-      },
       "structuredSessionLaunchFailedDescription": "Orca 无法打开结构化 {{value0}} 聊天。有关详细信息，请参阅日志。",
       "subagents": {
         "state": {
@@ -17574,7 +17559,12 @@
       "fileLinks": {
         "notFound": "未找到文件：{{value0}}",
         "unverifiable": "无法检查 {{value0}}：{{value1}}",
-        "unresolved": "无法解析此工作区中的 {{value0}}"
+        "unresolved": "无法在此工作区中解析 {{value0}}"
+      },
+      "contextUsage": {
+        "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
+        "title": "上下文",
+        "estimated": "根据上一次响应的估算值。"
       }
     },
     "tab": {
@@ -17856,7 +17846,7 @@
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。",
-      "deliveryUnconfirmed": "Orca 无法确认 {{agent}} 收到了会话上下文。检查新会话，如果其输入为空，请自行粘贴。",
+      "deliveryUnconfirmed": "Orca 无法确认 {{agent}} 已收到会话上下文。请检查新会话，如果其输入为空，请自行粘贴。",
       "copyPrompt": "复制提示"
     },
     "terminalPane": {

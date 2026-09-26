@@ -30,11 +30,6 @@ export function structuredAgentSessionAgentStatus(
   const leadState = structuredAgentSessionLeadState(summary.status)
   const resolution = foldAgentLeadStatus({
     leadState,
-    // Known divergence from the hook lane, kept on purpose until the cancel policy lands: that
-    // lane hides a still-running shell after an interrupted turn (`updateClaudeRunningNonAgentTask`
-    // calls it a live-shell judgement), so a cancelled turn with a watch loop reads `done` there
-    // and `monitoring` here. This lane never feeds the verdict into the fold — see `mainAgent.outcome`.
-    interrupted: false,
     childWorkLiveness: agentChildWorkLiveness(summary.backgroundTasks)
   })
   return {

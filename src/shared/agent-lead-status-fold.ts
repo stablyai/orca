@@ -5,9 +5,6 @@ export type AgentLeadStatusFoldInput = {
   /** The main agent's own turn state. Anything but `done` wins over child work, except that a
    *  child waiting on a human outranks a working main agent. */
   leadState: AgentStatusState
-  /** A lead turn that ended by interrupt keeps a watch loop from reading as monitoring;
-   *  live agent work still counts, because it outlives the interrupt. */
-  interrupted: boolean
   childWorkLiveness: AgentChildWorkLiveness
 }
 
@@ -16,7 +13,8 @@ export type AgentLeadStatusResolution = {
   workingMode?: AgentWorkingMode
 }
 
-/** A cancelled turn is the one verdict the display fold reads off the main agent record. */
+/** The row's `interrupted` flag for readers that predate `mainAgent`, derived from the main agent's
+ *  verdict. The display fold never reads it. */
 export function mainAgentTurnInterrupted(
   record: Pick<AgentMainAgentStatus, 'outcome'> | undefined
 ): boolean {
@@ -29,6 +27,10 @@ export function mainAgentTurnInterrupted(
  * agent with live agent work is still working, and one with only watch loops is
  * monitoring. Every lane derives the liveness from its own evidence, but the
  * policy must not differ.
+ *
+ * How the main agent's turn ended is not an input. A cancel is a verdict on the main agent
+ * (`mainAgent.outcome`), never on the shell or subagent it left running: that work
+ * leaves the fold only when it reports its own end or the session ends.
  */
 export function foldAgentLeadStatus(input: AgentLeadStatusFoldInput): AgentLeadStatusResolution {
   // The main agent's own request for a human keeps its own vocabulary (`blocked` in the
@@ -45,7 +47,7 @@ export function foldAgentLeadStatus(input: AgentLeadStatusFoldInput): AgentLeadS
   if (input.childWorkLiveness === 'working') {
     return { stateName: 'working' }
   }
-  if (input.childWorkLiveness === 'monitoring' && !input.interrupted) {
+  if (input.childWorkLiveness === 'monitoring') {
     return { stateName: 'working', workingMode: 'monitoring' }
   }
   return { stateName: 'done' }

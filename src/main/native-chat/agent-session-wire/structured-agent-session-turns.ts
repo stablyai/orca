@@ -1,6 +1,6 @@
 // The effects behind send / cancel / respond / setOption.
 //
-// Admission (lease, fence, idempotency) has already passed by the time anything
+// Admission (writer lease, idempotency) has already passed by the time anything
 // here runs; these functions own only the journal writes and the adapter call,
 // in that order. Journal first is deliberate: a crash between the two leaves a
 // row the next attach settles as `unknown`, whereas the reverse would lose a
@@ -42,10 +42,11 @@ export type AgentSessionTurnContext = {
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
   /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
+  /** Republishes state kept outside the journal, such as the record's options or rewind phase.
+   *  Journal appends reach readers on their own. */
   publish: () => void
   /** Drains provider lifecycle already accepted by the execution host. */
   flushStreamedEvents: () => Promise<void>
-  hasPendingStreamedEvents?: () => boolean
   /** Re-derives authorization after submission persistence, immediately before provider dispatch. */
   beforeDispatch?: () => void
   /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
@@ -77,24 +78,7 @@ async function dispatchSafely(
       clientMessageId,
       body,
       fence: ctx.fence,
-      ...(ctx.beforeDispatch
-        ? {
-            beforeDispatch: async () => {
-              const ready = await withTimeout(
-                ctx.flushStreamedEvents().then(() => true),
-                AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS,
-                false
-              )
-              // A drained barrier may be followed by newer accepted events.
-              if (!ready || ctx.hasPendingStreamedEvents?.()) {
-                throw new AgentSessionPreDispatchError(
-                  'agent_session_admission_evidence_unavailable'
-                )
-              }
-              ctx.beforeDispatch?.()
-            }
-          }
-        : {}),
+      ...(ctx.beforeDispatch ? { beforeDispatch: async () => ctx.beforeDispatch?.() } : {}),
       ...(requestedAt === undefined ? {} : { requestedAt })
     })
   } catch (error) {
@@ -118,7 +102,6 @@ async function appendStatus(
     { kind: 'status', text },
     { fence: ctx.fence }
   )
-  ctx.publish()
 }
 
 /**
@@ -154,7 +137,6 @@ export async function performSend(
   } catch {
     return invalid('The message could not be recorded and was not sent.')
   }
-  ctx.publish()
 
   // The row just written is the send's instant on the host clock; the turn this
   // dispatch opens records it so the live counter never re-anchors at turn-open.
@@ -179,14 +161,12 @@ export async function performSend(
         if (!recorded) {
           console.warn('[structured-agent-session] pre-dispatch refusal persistence failed')
         }
-        ctx.publish()
       }
       throw error
     }
   )
   // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
-    ctx.publish()
     return {
       ok: true,
       value: {
@@ -224,10 +204,8 @@ export async function performSend(
     } catch {
       // Nothing further to record; the pending row is settled on the next attach.
     }
-    ctx.publish()
     throw error
   }
-  ctx.publish()
   return {
     ok: true,
     value: {

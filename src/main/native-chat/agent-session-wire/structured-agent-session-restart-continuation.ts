@@ -14,11 +14,11 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
-  AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
+  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE,
+  restartContinuationMessage
 } from '../../../shared/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
 import { createHash } from 'node:crypto'
@@ -55,11 +55,14 @@ export type StructuredAgentSessionContinuationHost = {
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   onNoteFailed: (sessionId: string, error: unknown) => void
-  publish: (sessionId: string, journal: AgentSessionJournal) => void
   now: () => number
-  /** Whether the marker still describes resumable work, with the continuation's own submission
-   *  set aside. Re-asked right before dispatch, so newer user work refuses the send. */
-  stillResumable: (marker: AgentSessionResumeMarker, pendingContinuationId: string) => boolean
+  /** Whether the marker is still an offer, with the continuation's own submission set aside.
+   *  Re-asked right before dispatch, so a newer user message refuses the send; a provider turn
+   *  running then does not, since both providers queue a message sent mid-turn. */
+  stillResumable: (
+    marker: AgentSessionResumeMarker,
+    options: { pendingContinuationId: string }
+  ) => boolean
 }
 
 /** Binds one continuation to the host: the superseded check before dispatch, the settlement
@@ -74,7 +77,11 @@ export function restartContinuationDeps(
       host.send({
         ...input,
         beforeRun: () => {
-          if (!host.stillResumable(marker, input.envelope.clientOperationId)) {
+          if (
+            !host.stillResumable(marker, {
+              pendingContinuationId: input.envelope.clientOperationId
+            })
+          ) {
             throw new RestartContinuationSupersededError()
           }
         }
@@ -98,9 +105,9 @@ export function noteRestartReattachFailed(
   )
 }
 
-/** Writes a host-authored status note into the chat and publishes it to open panes. */
+/** Writes a host-authored status note into the chat. */
 function restartNoteWriter(
-  host: Pick<StructuredAgentSessionContinuationHost, 'sessions' | 'publish' | 'now'>
+  host: Pick<StructuredAgentSessionContinuationHost, 'sessions' | 'now'>
 ): StructuredAgentSessionContinuationDeps['note'] {
   return async (sessionId, text, tone) => {
     const session = host.sessions.get(sessionId)
@@ -112,7 +119,6 @@ function restartNoteWriter(
       { kind: 'status', text, ...(tone ? { tone } : {}) },
       { fence: session.fence }
     )
-    host.publish(sessionId, session.journal)
   }
 }
 
@@ -132,22 +138,21 @@ export class RestartContinuationSupersededError extends AgentSessionPreDispatchE
 }
 
 /** The message body, built once so both the send and any test read the same text. */
-export function restartContinuationBody(): AgentJournalMessageItem {
+export function restartContinuationBody(marker: AgentSessionResumeMarker): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: AGENT_SESSION_RESTART_CONTINUATION_MESSAGE }]
+    blocks: [{ type: 'text', text: restartContinuationMessage(marker) }]
   }
 }
 
-/** The fence is read AFTER the reconnect: reattaching mints a new one, and the pre-reconnect value
- *  would be refused by the mutation admission. */
+/** The fence only fills the envelope: admission names this send by its operation id, not a fence. */
 export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,
   marker: AgentSessionResumeMarker
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
-  const body = restartContinuationBody()
+  const body = restartContinuationBody(marker)
   return {
     body,
     envelope: {

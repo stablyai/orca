@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-24T22:11:40.957Z",
+  "platform": "darwin",
+  "command": ["zcode"],
+  "cols": 120,
+  "rows": 32,
+  "note": "ZCode desktop-bundled runtime 0.16.5 (no @zcode/tui); interactive launch fails immediately",
+  "exitCode": 1
+}

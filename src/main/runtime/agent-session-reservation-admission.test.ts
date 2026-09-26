@@ -50,7 +50,6 @@ function reserveRequest(
     location: LOCATION,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
@@ -70,8 +69,7 @@ function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionSt
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
-    visibleSessionIds: new Set(),
-    visibleSessionIdsIndexPresent: true
+    sessionTabs: null
   }
 }
 

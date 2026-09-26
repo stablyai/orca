@@ -91,11 +91,6 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
-    method: 'agentSession.requestHandoff',
-    hostMethod: 'requestHandoff',
-    result: { status: { owner: 'native' } }
-  },
-  {
     method: 'agentSession.handoffStatus',
     hostMethod: 'handoffStatus',
     result: { owner: 'native' }
@@ -104,6 +99,11 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.options',
     hostMethod: 'readOptions',
     result: { current: { model: 'gpt-live' } }
+  },
+  {
+    method: 'agentSession.modelCatalog',
+    hostMethod: 'modelCatalog',
+    result: { origin: 'unknown' }
   },
   {
     method: 'agentSession.commands',
@@ -257,14 +257,6 @@ export function paramsFor(method: string): unknown {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
-    case 'agentSession.requestHandoff': {
-      const fields = {
-        direction: 'to-tui' as const,
-        mode: 'now' as const,
-        action: 'start' as const
-      }
-      return { envelope: envelope({ method, fields, fence }), ...fields }
-    }
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
@@ -275,6 +267,8 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.modelCatalog':
+      return { agent: 'codex', sessionId: SESSION }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

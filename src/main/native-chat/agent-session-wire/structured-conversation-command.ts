@@ -176,7 +176,6 @@ export function runStructuredConversationCommand(
               },
               { fence: ctx.fence }
             )
-            ctx.publish()
             try {
               error = (
                 await ctx.adapter.compact({
@@ -212,7 +211,6 @@ export function runStructuredConversationCommand(
                           conversationCommand: matching()!
                         }
                       })
-                      ctx.publish()
                     })
                 })
               ).error
@@ -223,7 +221,6 @@ export function runStructuredConversationCommand(
                 { kind: 'status', text: 'Compaction completion is unconfirmed.' },
                 { fence: ctx.fence }
               )
-              ctx.publish()
               throw cause
             }
             await ctx.journal.appendItem(
@@ -231,7 +228,6 @@ export function runStructuredConversationCommand(
               { kind: 'status', text: error ?? 'Conversation compacted.' },
               { fence: ctx.fence }
             )
-            ctx.publish()
           }
           const completed = {
             ...prepared,

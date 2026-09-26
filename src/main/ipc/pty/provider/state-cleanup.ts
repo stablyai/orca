@@ -17,12 +17,10 @@ import { ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { clearBackgroundedDeliverySyncForPty } from './listener-lifecycle'
 import {
   activeRendererPtys,
-  deliveredHiddenRendererResizeOutputPtys,
   interactiveOutputCharsByPty,
   invalidatePendingPtyDrainPolicy,
   invalidatePendingPtyDrainPriority,
   lastInputAtByPty,
-  pendingHiddenRendererResizeOutputPtys,
   providerSnapshotRequiredPtys,
   ptySizes,
   rendererVisibilityKnownPtys,
@@ -60,8 +58,6 @@ export function clearProviderPtyState(
   const activeChanged = activeRendererPtys.delete(id)
   visibleRendererPtys.delete(id)
   rendererVisibilityKnownPtys.delete(id)
-  pendingHiddenRendererResizeOutputPtys.delete(id)
-  deliveredHiddenRendererResizeOutputPtys.delete(id)
   // Why: every teardown path funnels through here — hidden/interest gate bits must not outlive the PTY or a reused map entry could silently gate a new one.
   const deliveryPolicyChanged = isHiddenRendererPty(id)
   clearHiddenRendererPtyDeliveryState(id)

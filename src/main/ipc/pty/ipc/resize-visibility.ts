@@ -15,10 +15,8 @@ import {
 import { tryGetProviderForPty, closeStartupQueryAuthorityForPty } from '../provider/registry'
 import {
   activeRendererPtys,
-  deliveredHiddenRendererResizeOutputPtys,
   invalidatePendingPtyDrainPolicy,
   invalidatePendingPtyDrainPriority,
-  pendingHiddenRendererResizeOutputPtys,
   ptySizes,
   rendererVisibilityKnownPtys,
   visibleRendererPtys
@@ -57,21 +55,9 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     if (!provider) {
       return
     }
-    const markedHiddenResizeOutput = session.rendererPtyIsKnownHidden(args.id)
-    if (markedHiddenResizeOutput) {
-      // Why: alt-screen TUIs repaint on SIGWINCH; a hidden repaint read after switch-back must not masquerade as live output and overwrite the correctly-sized screen.
-      pendingHiddenRendererResizeOutputPtys.add(args.id)
-      deliveredHiddenRendererResizeOutputPtys.delete(args.id)
-    } else if (visibleRendererPtys.has(args.id)) {
-      // Why: after the stale hidden-resize repaint is observed, the renderer's visible resize pulse owns the next repaint.
-      session.clearDeliveredHiddenRendererResizeOutput(args.id)
-    }
     try {
       provider.resize(args.id, args.cols, args.rows)
     } catch {
-      if (markedHiddenResizeOutput) {
-        pendingHiddenRendererResizeOutputPtys.delete(args.id)
-      }
       return
     }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })

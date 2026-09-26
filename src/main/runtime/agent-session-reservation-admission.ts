@@ -56,13 +56,12 @@ export type AgentSessionReserveRequest = {
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
-  /** The tab id this conversation shows under. Pinned on first reservation; a later reservation of
-   *  an existing record keeps the record's own. Refused when another record already holds it. */
+  /** The tab id a create reserved for this conversation, taken when its tab is published. An id
+   *  another session's tab holds is refused here, before anything is spawned. */
   surfaceTabId?: string
   /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
    *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
-  runtimeKind: AgentSessionReservation['runtimeKind']
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */
@@ -154,7 +153,6 @@ export function applyAgentSessionReservation(
     throw new Error('agent_session_options_invalid')
   }
   const reservation: AgentSessionReservation = {
-    runtimeKind: request.runtimeKind,
     spawnToken:
       typeof request.spawnToken === 'function' ? request.spawnToken() : request.spawnToken,
     claimKeyId: request.claimKeyId,
@@ -175,7 +173,7 @@ export function applyAgentSessionReservation(
     if (request.expectedFence !== null) {
       throw new Error('agent_session_checkpoint_stale')
     }
-    assertSurfaceTabIdUnheld(state, request)
+    assertReservedTabUnheld(state, request)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
   if (
@@ -196,6 +194,7 @@ export function applyAgentSessionReservation(
   if (request.expectedFence === null && !recreatable) {
     throw new Error('agent_session_conflict')
   }
+  assertReservedTabUnheld(state, request)
   const pinned = {
     ...existing,
     ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
@@ -244,9 +243,12 @@ function assertAdoptedConversationUnowned(
   }
 }
 
-/** A tab id names one conversation. Two records under one id would give two chats one tab, one
- *  read-state key and one notification id, so the second reservation is refused as a conflict. */
-function assertSurfaceTabIdUnheld(
+/**
+ * A tab id names one conversation, so a reserved id another session's tab holds is a conflict.
+ * Checked, not claimed: the id is taken when the chat's tab is published, so a create that never
+ * gets that far leaves nothing in the table to restore or release.
+ */
+function assertReservedTabUnheld(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest
 ): void {
@@ -256,10 +258,9 @@ function assertSurfaceTabIdUnheld(
   if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
     throw new Error('agent_session_operation_invalid')
   }
-  for (const record of state.records.values()) {
-    if (record.sessionId !== request.sessionId && record.surfaceTabId === request.surfaceTabId) {
-      throw new Error('agent_session_conflict')
-    }
+  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
+  if (holder !== undefined && holder !== request.sessionId) {
+    throw new Error('agent_session_conflict')
   }
 }
 
@@ -278,12 +279,11 @@ function createAgentSessionRecord(
     accountHome: request.accountHome,
     ...(request.options ? { options: { ...request.options } } : {}),
     ...(request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
-    ...(request.surfaceTabId ? { surfaceTabId: request.surfaceTabId } : {}),
     createdAt: request.now,
     updatedAt: request.now,
     lease: {
       sessionId: request.sessionId,
-      runtimeKind: reservation.runtimeKind,
+      runtimeKind: 'native',
       // Why: fence 1 is the first reservation; 0 is reserved for "no owner has ever existed".
       runtimeFence: 1,
       handoffStage: 'new-owner-proving',

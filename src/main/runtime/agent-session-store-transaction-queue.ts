@@ -7,8 +7,7 @@ import {
   loadAgentSessionStore,
   saveAgentSessionStore,
   type AgentSessionStoreState,
-  type LoadedAgentSessionStore,
-  backfillAgentSessionSurfaceTabIds
+  type LoadedAgentSessionStore
 } from './agent-session-record-store-file'
 import { withFileTransactionLock } from '../file-transaction-lock'
 
@@ -39,16 +38,15 @@ function agentSessionStoreStateChanged(
   operations: ReadonlyMap<string, AgentSessionOperationRow>,
   retiredClaimKeys: AgentSessionStoreState['retiredClaimKeys'],
   unreadableRecords: AgentSessionStoreState['unreadableRecords'],
-  visibleSessionIds: AgentSessionStoreState['visibleSessionIds'],
-  visibleSessionIdsIndexPresent: AgentSessionStoreState['visibleSessionIdsIndexPresent']
+  sessionTabs: AgentSessionStoreState['sessionTabs']
 ): boolean {
   return (
     !mapEntriesMatch(state.records, records) ||
     !mapEntriesMatch(state.operations, operations) ||
     !mapEntriesMatch(state.unreadableRecords, unreadableRecords) ||
-    state.visibleSessionIdsIndexPresent !== visibleSessionIdsIndexPresent ||
-    state.visibleSessionIds.size !== visibleSessionIds.size ||
-    [...state.visibleSessionIds].some((id) => !visibleSessionIds.has(id)) ||
+    (state.sessionTabs && sessionTabs
+      ? !state.sessionTabs.equals(sessionTabs)
+      : state.sessionTabs !== sessionTabs) ||
     state.retiredClaimKeys.length !== retiredClaimKeys.length ||
     state.retiredClaimKeys.some((entry, index) => entry !== retiredClaimKeys[index])
   )
@@ -100,8 +98,7 @@ export class AgentSessionStoreTransactionQueue {
         const operations = new Map(this.state.operations)
         const retiredClaimKeys = [...this.state.retiredClaimKeys]
         const unreadableRecords = new Map(this.state.unreadableRecords)
-        const visibleSessionIds = new Set(this.state.visibleSessionIds)
-        const visibleSessionIdsIndexPresent = this.state.visibleSessionIdsIndexPresent
+        const sessionTabs = this.state.sessionTabs?.clone() ?? null
         try {
           // The lost commit may have granted a higher fence than the backup records show. Rather
           // than refuse forever, raise every recovered fence clear of anything that commit could
@@ -120,8 +117,7 @@ export class AgentSessionStoreTransactionQueue {
               operations,
               retiredClaimKeys,
               unreadableRecords,
-              visibleSessionIds,
-              visibleSessionIdsIndexPresent
+              sessionTabs
             )
           ) {
             return result
@@ -140,8 +136,7 @@ export class AgentSessionStoreTransactionQueue {
           this.state.operations = operations
           this.state.retiredClaimKeys = retiredClaimKeys
           this.state.unreadableRecords = unreadableRecords
-          this.state.visibleSessionIds = visibleSessionIds
-          this.state.visibleSessionIdsIndexPresent = visibleSessionIdsIndexPresent
+          this.state.sessionTabs = sessionTabs
           throw error
         }
       })
@@ -170,11 +165,6 @@ export class AgentSessionStoreTransactionQueue {
       throw new Error('agent_session_legacy_required')
     }
     markLoadedLeasesUnreconciled(loaded.state)
-    // Why: a reload replaces the state wholesale, so the ids filled at open would vanish from
-    // memory until the next open; refilling keeps every in-memory record carrying one. It does
-    // not force a save: a reload marks every lease unadjudicated, and this instance must not
-    // persist that verdict on the strength of a refill.
-    backfillAgentSessionSurfaceTabIds(loaded.state)
     this.state = loaded.state
     this.diskRevision = diskRevision
     this.needsRewrite = loaded.needsRewrite

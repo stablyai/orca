@@ -13,7 +13,7 @@ import {
 
 export type ClaudePromptJournalDeps = {
   sink: StructuredAgentSessionEventSink
-  bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
+  bindPromptItemId?: (journalItemId: string, promptKey: string) => void
   /** Prompt key → the rows it wrote, owned by the translator so a cancel can sweep them. */
   promptItems: Map<string, AgentJournalItemIdentity[]>
 }

@@ -494,7 +494,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3088,6 +3089,14 @@
             "e2fcf07c0d": "로컬 저장소가 가득 찼거나 쓸 수 없기 때문에 Orca가 이 terminal 세션을 저장할 수 없습니다. 디스크 공간 분석기를 열어 정리할 수 있는 워크스페이스 저장소를 찾으세요.",
             "678c780a2c": "디스크 공간을 사용할 수 없습니다."
           },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
+          },
           "osc52": {
             "clipboard": {
               "blocked": {
@@ -3830,7 +3839,7 @@
             },
             "usage": {
               "noSubscription": {
-                "label": "구독하지 않음"
+                "label": "구독 없음"
               }
             }
           },
@@ -3931,16 +3940,16 @@
             "ariaLabelOne": "재개할 수 있는 채팅 1개",
             "ariaLabel": "{{value0}} 재개 가능한 채팅",
             "tooltip": "중단된 채팅을 열어 재개할 수 있습니다.",
-            "failedLabelOne": "채팅 1개를 재개하지 못했습니다.",
-            "failedLabel": "{{value0}} 채팅을 재개하지 못했습니다.",
-            "failedAriaOne": "채팅 1개를 재개하지 못했습니다. 자세한 내용을 보려면 클릭하세요.",
-            "failedAria": "{{value0}} 채팅을 재개하지 못했습니다. 자세한 내용을 보려면 클릭하세요.",
-            "failedTooltip": "다시 시작한 후 Orca 채팅을 재개할 수 없습니다. 자세한 내용을 보려면 클릭하세요.",
+            "failedLabelOne": "채팅 1개를 재개하지 못했습니다",
+            "failedLabel": "{{value0}}개의 채팅을 재개하지 못했습니다",
+            "failedAriaOne": "채팅 1개를 재개하지 못했습니다. 자세히 보려면 클릭하세요.",
+            "failedAria": "{{value0}}개의 채팅을 재개하지 못했습니다. 자세히 보려면 클릭하세요.",
+            "failedTooltip": "다시 시작한 후 Orca가 재개하지 못한 채팅. 자세히 보려면 클릭하세요.",
             "checkLabelOne": "확인할 채팅 1개",
-            "checkLabel": "{{value0}} 확인할 채팅",
-            "checkAriaOne": "재개 후 확인해야 할 채팅 1개입니다. 자세한 내용을 보려면 클릭하세요.",
-            "checkAria": "{{value0}} 채팅을 재개한 후 확인하세요. 자세한 내용을 보려면 클릭하세요.",
-            "checkTooltip": "채팅 Orca를 다시 시작할 수 없거나 다시 시작한 후 재개되었는지 확인할 수 없습니다. 자세한 내용을 보려면 클릭하세요."
+            "checkLabel": "확인할 채팅 {{value0}}개",
+            "checkAriaOne": "재개한 후 확인할 채팅 1개. 자세히 보려면 클릭하세요.",
+            "checkAria": "재개한 후 확인할 채팅 {{value0}}개. 자세히 보려면 클릭하세요.",
+            "checkTooltip": "다시 시작한 후 Orca가 재개하지 못했거나 재개했는지 확인하지 못한 채팅. 자세히 보려면 클릭하세요."
           }
         }
       },
@@ -6154,7 +6163,6 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "Attach up to {count} screenshots",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },
@@ -6251,16 +6259,16 @@
           "copyDiagnostics": "진단 복사"
         },
         "LocalGitToolchainScanBanner": {
-          "xcodeLicenseTitle": "Git을 사용하려면 Xcode 라이선스에 동의하세요.",
-          "xcodeLicenseBody": "macOS는 사용자가 수락할 때까지 Git을 차단합니다. 터미널에서 이것을 실행한 다음 Orca로 다시 전환하십시오. 자동으로 다시 확인됩니다.",
-          "developerToolsTitle": "Apple의 명령줄 도구 설치",
-          "developerToolsBody": "Git에는 Apple의 개발자 도구가 필요합니다. 터미널에서 이것을 실행한 다음 Orca로 다시 전환하십시오. 자동으로 다시 확인됩니다.",
-          "affectedOne": "{{value0}}에 대한 작업 트리 스캔이 일시 중지되었습니다.",
-          "affectedMany": "{{value0}} 프로젝트에 대한 작업 트리 스캔이 일시 중지되었습니다.",
-          "copyCommand": "복사 명령",
-          "copied": "명령이 복사되었습니다.",
-          "retry": "지금 다시 시도하세요",
-          "restored": "Git이 다시 작동하고 있습니다. 작업 트리가 새로 고쳐졌습니다."
+          "xcodeLicenseTitle": "Git을 사용하려면 Xcode 라이선스에 동의하세요",
+          "xcodeLicenseBody": "동의할 때까지 macOS에서 Git이 차단됩니다. 터미널에서 이 명령을 실행한 뒤 Orca로 돌아오세요. 자동으로 다시 확인합니다.",
+          "developerToolsTitle": "Apple 명령줄 도구 설치",
+          "developerToolsBody": "Git에는 Apple 개발자 도구가 필요합니다. 터미널에서 이 명령을 실행한 뒤 Orca로 돌아오세요. 자동으로 다시 확인합니다.",
+          "affectedOne": "{{value0}}에 대한 워크트리 검사가 일시 중지됨",
+          "affectedMany": "{{value0}}개 프로젝트의 워크트리 검사가 일시 중지됨",
+          "copyCommand": "명령 복사",
+          "copied": "명령이 복사됨",
+          "retry": "지금 다시 시도",
+          "restored": "Git이 다시 작동합니다. 워크트리를 새로고침했습니다."
         }
       },
       "shared": {
@@ -6496,10 +6504,10 @@
           "opencodeGo": {
             "apiKey": {
               "title": "OpenCode Go API 키",
-              "description": "선택적 재정의. 그렇지 않으면 Orca는 /connect를 실행할 때 저장된 OpenCode 키를 사용한 다음 OPENCODE_API_KEY를 사용합니다.",
+              "description": "선택적 재정의. 지정하지 않으면 Orca는 /connect 실행 시 OpenCode가 저장한 키(다음으로 OPENCODE_API_KEY)를 사용합니다.",
               "label": "OpenCode Go API 키",
-              "placeholder": "/connect 또는 OPENCODE_API_KEY에 저장된 키를 사용하려면 비워 두세요.",
-              "help": "상태 표시줄에서 OpenCode Go 사용에 사용됩니다. 아래 세션 쿠키는 레거시 콘솔(OpenCode Black) 계정에만 필요합니다."
+              "placeholder": "/connect 또는 OPENCODE_API_KEY로 저장된 키를 사용하려면 비워 두세요",
+              "help": "상태 표시줄의 OpenCode Go 사용량 표시에 사용됩니다. 아래 세션 쿠키는 레거시 콘솔(OpenCode Black) 계정에만 필요합니다."
             }
           }
         },
@@ -7057,7 +7065,7 @@
             "structuredScope": "현재는 로컬 세션만 가능합니다. WSL 및 원격 실행 호스트(SSH 포함)는 계속해서 터미널 채팅을 사용하며 Orca가 프로세스 시작 시간을 읽을 수 없으면 Windows는 이 채팅을 사용합니다.",
             "structuredToggleLabel": "업데이트된 구조화된 기본 채팅 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
-            "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 중간에 진행된 채팅이 자동으로 재개됩니다.",
+            "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
             "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
           },
           "agentDashboard": {
@@ -14900,29 +14908,30 @@
           "3e4cbf15ea": "원시",
           "1833dbbc43": "Markdown",
           "7005960d73": "코드",
-          "8dbe39a152": "더 많은 셀 작업",
-          "fa8fd99cf1": "세포 유형",
+          "8dbe39a152": "셀 작업 더보기",
+          "fa8fd99cf1": "셀 종류",
           "kernelStarting": "시작 중…",
           "kernelInstalling": "ipykernel 설치 중…",
-          "kernelDead": "커널이 죽었습니다",
+          "kernelDead": "커널이 종료됨",
           "selectKernel": "커널 선택",
           "notPython": "해당 파일은 Python 인터프리터가 아닙니다.",
-          "interrupt": "방해하다",
+          "interrupt": "중단",
           "restart": "커널 다시 시작",
+          "trustFirst": "먼저 셀을 실행하여 이 노트북을 신뢰하세요",
           "runAll": "모두 실행",
           "clearAll": "모든 출력 지우기",
-          "notResponding": "응답하지 않습니다. 커널 다시 시작",
-          "findingPython": "Python 환경을 찾는 중…",
-          "recommended": "추천",
+          "notResponding": "응답 없음. 커널을 다시 시작하세요",
+          "findingPython": "Python 환경 검색 중…",
+          "recommended": "권장",
           "pythonOnPath": "PATH의 Python",
-          "browsePython": "Python을 찾아보세요…",
-          "missingIpykernelTitle": "ipykernel을 설치하시겠습니까?",
-          "missingIpykernel": "'{{env}}'으로 셀을 실행하려면 ipykernel 패키지가 필요합니다.",
-          "copyCommand": "복사 명령",
+          "browsePython": "Python 찾아보기…",
+          "missingIpykernelTitle": "ipykernel을 설치할까요?",
+          "missingIpykernel": "'{{env}}'에서 셀을 실행하려면 ipykernel 패키지가 필요합니다.",
+          "copyCommand": "명령 복사",
           "install": "설치",
           "kernelStartFailed": "커널을 시작하지 못했습니다.",
-          "noPython": "이 컴퓨터에서는 Python을 찾을 수 없습니다. [python.org](https://www.python.org/downloads/)에서 설치한 후 셀을 다시 실행하세요.",
-          "kernelDied": "커널이 죽었습니다.",
+          "noPython": "이 컴퓨터에서 Python을 찾을 수 없습니다. [python.org](https://www.python.org/downloads/)에서 설치한 뒤 셀을 다시 실행하세요.",
+          "kernelDied": "커널이 종료되었습니다.",
           "localOnly": "노트북 셀은 이 컴퓨터의 파일에 대해서만 실행할 수 있습니다.",
           "pythonOnly": "Orca에서는 Python 노트북만 실행할 수 있습니다."
         },
@@ -17018,8 +17027,8 @@
       },
       "NativeChatResumeOnRestartModal": {
         "title": "중단된 채팅을 재개하시겠습니까?",
-        "body": "이 채팅은 Orca가 문을 닫았을 때 중간에 이루어졌습니다. 재개하면 중지된 각 항목이 전체 컨텍스트와 함께 복원되고, 계속하기 전에 에이전트에게 마지막 작업을 확인하도록 요청합니다. 귀하의 메시지는 다시 전송되지 않습니다.",
-        "updateBody": "이러한 채팅은 Orca가 업데이트를 설치한 중간에 이루어졌습니다. 재개하면 중지된 각 항목이 전체 컨텍스트와 함께 복원되고, 계속하기 전에 에이전트에게 마지막 작업을 확인하도록 요청합니다. 귀하의 메시지는 다시 전송되지 않습니다.",
+        "body": "이 채팅은 Orca가 종료될 때 작업 중이었습니다. 재개하면 각 채팅이 전체 컨텍스트와 함께 중지된 지점에서 복원되고, 계속하기 전에 에이전트에게 하던 작업을 확인하도록 요청합니다. 귀하의 메시지는 다시 전송되지 않습니다.",
+        "updateBody": "이 채팅은 Orca가 업데이트를 설치할 때 작업 중이었습니다. 재개하면 각 채팅이 전체 컨텍스트와 함께 중지된 지점에서 복원되고, 계속하기 전에 에이전트에게 하던 작업을 확인하도록 요청합니다. 귀하의 메시지는 다시 전송되지 않습니다.",
         "resuming": "재개 중…",
         "untitled": "제목 없는 채팅",
         "listLabel": "재개될 채팅",
@@ -17035,14 +17044,22 @@
         "continueUnconfirmed_other": "{{value0}} 채팅에 대한 계속 전달이 확인되지 않았습니다. 다른 메시지를 보내기 전에 열어서 확인하세요.",
         "dismissAll": "모두 닫기",
         "dismissUnconfirmed": "이력서 제안 닫기가 확인되지 않았습니다. 여전히 상태 표시줄에 있을 수 있습니다.",
-        "notContinuedOne": "채팅 1개를 재개할 수 없습니다.",
-        "notContinuedMany": "{{value0}} 채팅을 재개할 수 없습니다.",
-        "notConfirmedOne": "채팅 1개가 재개되었는지 확인할 수 없습니다.",
-        "notConfirmedMany": "{{value0}} 채팅이 재개되었는지 확인할 수 없습니다.",
-        "notConfirmedOtherOne": "다른 채팅 1개가 재개되었는지 확인할 수 없습니다.",
-        "notConfirmedOtherMany": "{{value0}} 다른 채팅이 재개되었는지 확인할 수 없습니다.",
+        "notContinuedOne": "채팅 1개를 재개하지 못했습니다",
+        "notContinuedMany": "{{value0}}개의 채팅을 재개하지 못했습니다",
+        "notConfirmedOne": "채팅 1개가 재개되었는지 확인하지 못했습니다",
+        "notConfirmedMany": "{{value0}}개의 채팅이 재개되었는지 확인하지 못했습니다",
+        "notConfirmedOtherOne": "다른 채팅 1개가 재개되었는지 확인하지 못했습니다",
+        "notConfirmedOtherMany": "다른 채팅 {{value0}}개가 재개되었는지 확인하지 못했습니다",
         "show": "표시",
-        "dismiss": "닫기"
+        "dismiss": "닫기",
+        "activityUnnamed": "이름 없음",
+        "activityApproval": "승인 대기 중: {{value0}}",
+        "activityQuestion": "답변 대기 중: {{value0}}",
+        "activityMidReply": "응답 중이었음",
+        "activitySubagentOne": "하위 에이전트 실행 중: {{value0}}",
+        "activitySubagentMany": "하위 에이전트 {{value0}}개 실행 중",
+        "activityMonitorOne": "모니터링 중: {{value0}}",
+        "activityMonitorMany": "백그라운드 작업 {{value0}}개 모니터링 중"
       },
       "linear-issue-attribute-filter-coverage-notice": {
         "statusPartialTeamCoverage": "{{value1}} 팀 상태 중 {{value0}} 필터링 중 - 나머지 팀의 문제는 포함되지 않습니다.",
@@ -17121,24 +17138,24 @@
         "c5b3e8a17d": "Orca에 로그인"
       },
       "NativeChatResumeOutcomeRow": {
-        "openChat": "오픈채팅",
+        "openChat": "채팅 열기",
         "retry": "다시 시도",
         "dismiss": "닫기",
-        "unconfirmed": "채팅이 재개되었는지 확인할 수 없습니다.",
-        "failed": "재개할 수 없습니다.",
+        "unconfirmed": "채팅이 재개되었는지 확인하지 못했습니다",
+        "failed": "재개하지 못했습니다",
         "statusFor": "{{value0}}: {{value1}}",
-        "dismissChat": "{{value1}}에서 \"{{value0}}\" 닫기",
-        "toResume": "재개하려면:"
+        "dismissChat": "\"{{value0}}\"({{value1}}) 닫기",
+        "toResume": "재개할 항목:"
       },
       "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca는 \"계속\" 메시지가 전달되었는지 확인할 수 없습니다. 다른 채팅을 보내기 전에 채팅을 열고 확인하세요.",
-        "superseded": "채팅을 열고 답변하세요. 다시 시작한 직후에 새 작업이 도착했기 때문에 Orca는 \"계속\" 메시지를 보내지 않았습니다.",
-        "conflict": "다른 Orca 창이나 터미널이 여전히 이 세션을 소유하고 있습니다. 닫은 후 다시 시도하세요.",
-        "ownershipUnknown": "Orca는 어느 프로세스가 이 세션을 소유하는지 계속 조사 중입니다. 잠시 기다렸다가 다시 시도하세요.",
-        "notAttached": "채팅이 다시 연결되지 않았습니다. 다시 시도하거나 열어서 새로운 차례를 시작하세요.",
-        "dispatchRejected": "에이전트이 '계속' 메시지를 거부했습니다. 채팅을 열고 직접 보내보세요.",
-        "unsupported": "이 채팅은 Orca에서 재개할 수 없습니다. 열어서 어디에서 멈췄는지 확인하세요.",
-        "fallback": "Orca가 이 채팅을 재개할 수 없습니다. 수동으로 계속하려면 이를 엽니다."
+        "unconfirmed": "Orca가 “continue” 메시지가 전달되었는지 확인하지 못했습니다. 다른 메시지를 보내기 전에 채팅을 열어 확인하세요.",
+        "superseded": "채팅을 열고 답장하세요. 다시 시작한 직후 새 작업이 도착해서 Orca가 “continue” 메시지를 보내지 않았습니다.",
+        "conflict": "다른 Orca 창이나 터미널이 아직 이 세션을 가지고 있습니다. 닫은 뒤 다시 시도하세요.",
+        "ownershipUnknown": "Orca가 이 세션을 소유한 프로세스를 아직 파악 중입니다. 잠시 기다렸다가 다시 시도하세요.",
+        "notAttached": "채팅이 다시 연결되지 않았습니다. 다시 시도하거나 열어서 새 턴을 시작하세요.",
+        "dispatchRejected": "에이전트가 “continue” 메시지를 거부했습니다. 채팅을 열어 직접 보내세요.",
+        "unsupported": "이 채팅은 Orca에서 재개할 수 없습니다. 열어서 중단된 위치를 확인하세요.",
+        "fallback": "Orca가 이 채팅을 재개하지 못했습니다. 열어서 수동으로 계속하세요."
       }
     },
     "i18n": {
@@ -17528,38 +17545,6 @@
         "questionCount": "{{value0}} 질문"
       },
       "structuredSessionLaunchFailed": "{{value0}} 채팅을 열 수 없습니다.",
-      "handoff": {
-        "stage": {
-          "finishingChat": "채팅 세션을 종료하는 중…",
-          "finishingTerminal": "마감제 터미널…",
-          "openingTerminal": "에이전트 터미널을 여는 중…",
-          "resumingChat": "채팅 세션을 재개하는 중…",
-          "verifyingTerminal": "에이전트 터미널 확인 중…",
-          "verifyingChat": "채팅 세션 확인 중…",
-          "recovering": "에이전트 세션을 복구하는 중…",
-          "manualRecovery": "에이전트 세션을 복구해야 합니다."
-        },
-        "switchingOwner": "세션 소유자 전환 중…",
-        "mode": {
-          "switching": "스위칭",
-          "terminal": "터미널",
-          "chat": "채팅"
-        },
-        "switchingAfterTurn": "이번 턴 이후에 전환",
-        "returningAfterTurn": "이번 턴 이후에 돌아옴",
-        "cancel": "취소",
-        "switchAfterTurn": "이번 턴 이후에 전환",
-        "stopTurnAndSwitch": "회전을 멈추고 스위치를 켜세요",
-        "openAgentTui": "에이전트 TUI 공개",
-        "returnAfterTurn": "이번 턴 이후에 돌아오세요",
-        "returnToChat": "채팅으로 돌아가기",
-        "agentOpenOnHost": "에이전트가 {{value0}}의 터미널에 열려 있습니다.",
-        "agentOpen": "에이전트가 터미널에 열려 있습니다.",
-        "exitTerminal": "채팅을 계속하려면 에이전트 터미널을 종료하세요.",
-        "retryProof": "재시도 증명",
-        "retry": "다시 시도",
-        "details": "세부"
-      },
       "structuredSessionLaunchFailedDescription": "Orca는 구조화된 {{value0}} 채팅을 열 수 없습니다. 자세한 내용은 로그를 참조하세요.",
       "subagents": {
         "state": {
@@ -17608,8 +17593,13 @@
       },
       "fileLinks": {
         "notFound": "파일을 찾을 수 없습니다: {{value0}}",
-        "unverifiable": "{{value0}}을(를) 확인할 수 없습니다: {{value1}}",
-        "unresolved": "이 워크스페이스에서 {{value0}}을(를) 해결할 수 없습니다."
+        "unverifiable": "{{value0}}을(를) 확인하지 못했습니다: {{value1}}",
+        "unresolved": "이 워크스페이스에서 {{value0}}을(를) 찾을 수 없습니다"
+      },
+      "contextUsage": {
+        "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
+        "title": "컨텍스트",
+        "estimated": "마지막 응답 기준 추정치입니다."
       }
     },
     "tab": {
@@ -17891,7 +17881,7 @@
       "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
       "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
       "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다.",
-      "deliveryUnconfirmed": "Orca는 {{agent}}이(가) 세션 컨텍스트를 수신했는지 확인할 수 없습니다. 새 세션을 확인하고 입력이 비어 있으면 직접 붙여넣습니다.",
+      "deliveryUnconfirmed": "Orca가 {{agent}}가 세션 컨텍스트를 받았는지 확인하지 못했습니다. 새 세션을 확인하고 입력이 비어 있으면 직접 붙여넣으세요.",
       "copyPrompt": "프롬프트 복사"
     },
     "terminalPane": {
