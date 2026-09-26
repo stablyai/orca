@@ -81,6 +81,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastOscTitle: string | null
   lastOscTitleAt: number | null
   lastOscTitleEpochMs: number | null
+  /** Restored titles dropped when the inventory reported a new incarnation; a pane may echo them. */
+  replacedRestoredTitles?: string[]
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
