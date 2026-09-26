@@ -119,10 +119,11 @@ export type CodexUsageDailyAggregate = {
 export type CodexUsagePersistedFile = CodexUsageProcessedFile & {
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
-  /** Event keys this file counted. Resumed/forked rollouts copy earlier
+  /** Digests of the event keys this file counted, packed by
+   *  `packUsageEventKeyDigests`. Resumed/forked rollouts copy earlier
    *  token_count records into new files; ownership keeps each record counted
    *  by exactly one cached file across incremental scans. */
-  ownedEventKeys: string[]
+  ownedEventKeyDigests: string
   /** True when this file saw events already claimed by another file. When that
    *  owner disappears, only deferred files need reparse to reclaim — not the
    *  entire rollout corpus. */

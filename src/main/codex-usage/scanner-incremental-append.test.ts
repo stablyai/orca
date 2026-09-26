@@ -61,6 +61,10 @@ vi.mock('node:fs', async () => {
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync, appendFileSync } from 'node:fs'
 import { scanCodexUsageFiles } from './scanner'
 import type { CodexUsagePersistedFile } from './types'
+import {
+  countPackedUsageEventKeyDigests,
+  USAGE_EVENT_KEY_DIGEST_LENGTH
+} from '../usage/usage-event-key-digest'
 
 /** Mirrors BOUNDARY_WINDOW_BYTES in codex-rollout-resume-state.ts. */
 const BOUNDARY_WINDOW_BYTES = 4096
@@ -69,6 +73,10 @@ const BOUNDARY_WINDOW_BYTES = 4096
  *  A shorter rollout is always reparsed whole, so a test meaning to exercise the
  *  resume path has to clear the floor or it silently stops testing anything. */
 const RESUMABLE_RECORDS = 40
+
+function countOwnedEvents(file: CodexUsagePersistedFile | undefined): number {
+  return countPackedUsageEventKeyDigests(file?.ownedEventKeyDigests ?? '')
+}
 
 const originalCodexHome = process.env.CODEX_HOME
 let fakeHomeDir: string
@@ -733,9 +741,9 @@ describe('scanCodexUsageFiles incremental append', () => {
 
     const first = await scanCodexUsageFiles([], [])
     expect(totalTokens(first.dailyAggregates)).toBe(RESUMABLE_RECORDS + 2)
-    expect(first.processedFiles.find((file) => file.path === originalPath)?.ownedEventKeys).toEqual(
-      expect.arrayContaining([expect.any(String)])
-    )
+    expect(
+      countOwnedEvents(first.processedFiles.find((file) => file.path === originalPath))
+    ).toBeGreaterThan(0)
 
     const resumeOffset = recordedResumeOffset(first.processedFiles, originalPath)
     appendFileSync(
@@ -751,8 +759,8 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS + 4)
     const originalAfter = second.processedFiles.find((file) => file.path === originalPath)
     const forkAfter = second.processedFiles.find((file) => file.path === forkPath)
-    expect(originalAfter?.ownedEventKeys).toHaveLength(RESUMABLE_RECORDS + 2)
-    expect(forkAfter?.ownedEventKeys).toHaveLength(2)
+    expect(countOwnedEvents(originalAfter)).toBe(RESUMABLE_RECORDS + 2)
+    expect(countOwnedEvents(forkAfter)).toBe(2)
     expect(forkAfter?.hasDeferredClaims).toBe(true)
   })
 
@@ -783,7 +791,7 @@ describe('scanCodexUsageFiles incremental append', () => {
     expect(parseReadOffsets(originalPath)).toEqual([resumeOffset])
     expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS + 3)
     const forkAfter = second.processedFiles.find((file) => file.path === forkPath)
-    expect(forkAfter?.ownedEventKeys).toHaveLength(1)
+    expect(countOwnedEvents(forkAfter)).toBe(1)
     expect(forkAfter?.hasDeferredClaims).toBe(true)
   })
 
@@ -848,7 +856,36 @@ describe('scanCodexUsageFiles incremental append', () => {
     rmSync(originalPath)
     const third = await scanCodexUsageFiles([], second.processedFiles)
     expect(third.processedFiles).toHaveLength(1)
-    expect(third.processedFiles[0]?.ownedEventKeys).toHaveLength(RESUMABLE_RECORDS + 4)
+    expect(countOwnedEvents(third.processedFiles[0])).toBe(RESUMABLE_RECORDS + 4)
     expect(totalTokens(third.dailyAggregates)).toBe(RESUMABLE_RECORDS + 4)
+  })
+
+  // Why: raw ownership keys (~92 B each) grew the persisted cache past 200 MB
+  // on long histories; each owned event must cost one fixed-width digest.
+  it('grows the persisted cache by one fixed-width digest per event without changing dedup', async () => {
+    const originalPath = join(sessionsDir, 'aaaa-bounded.jsonl')
+    const forkPath = join(sessionsDir, 'zzzz-bounded-fork.jsonl')
+    writeFileSync(originalPath, `${sessionMeta('session-bounded')}${usageRecordRange(0, 100)}`)
+    const first = await scanCodexUsageFiles([], [])
+
+    appendFileSync(originalPath, usageRecordRange(100, 200), 'utf-8')
+    const second = await scanCodexUsageFiles([], first.processedFiles)
+    const grownBytes =
+      JSON.stringify(second.processedFiles).length - JSON.stringify(first.processedFiles).length
+    // Slack covers counters and offsets gaining a digit.
+    expect(grownBytes).toBeLessThanOrEqual(100 * USAGE_EVENT_KEY_DIGEST_LENGTH + 64)
+    expect(countOwnedEvents(second.processedFiles[0])).toBe(200)
+
+    // A fork copying the whole history still counts only its own record.
+    writeFileSync(
+      forkPath,
+      `${sessionMeta('session-bounded-fork')}${usageRecordRange(0, 200)}${usageRecordRange(200, 201)}`
+    )
+    const third = await scanCodexUsageFiles([], second.processedFiles)
+    const fromScratch = await scanCodexUsageFiles([], [])
+    expect(totalTokens(third.dailyAggregates)).toBe(201)
+    expect(totalTokens(fromScratch.dailyAggregates)).toBe(201)
+    expect(eventCountsBySession(third.sessions)).toEqual(eventCountsBySession(fromScratch.sessions))
+    expect(third.processedFiles.map(countOwnedEvents)).toEqual([200, 1])
   })
 })

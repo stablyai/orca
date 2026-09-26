@@ -1,5 +1,9 @@
 import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
 import {
+  isPackedUsageEventKeyDigests,
+  unpackUsageEventKeyDigests
+} from '../usage/usage-event-key-digest'
+import {
   getLegacySourceSkipBytesByPath,
   listCodexSessionFiles,
   yieldToEventLoop
@@ -48,8 +52,8 @@ export async function scanCodexUsageFiles(
   const lostOwnerPath = previousProcessedFiles.some(
     (file) =>
       !currentPaths.has(file.path) &&
-      Array.isArray(file.ownedEventKeys) &&
-      file.ownedEventKeys.length > 0
+      isPackedUsageEventKeyDigests(file.ownedEventKeyDigests) &&
+      file.ownedEventKeyDigests.length > 0
   )
 
   const reusedByPath = new Map<string, CodexUsagePersistedFile>()
@@ -67,7 +71,7 @@ export async function scanCodexUsageFiles(
       previous &&
       previous.mtimeMs === fileInfo.mtimeMs &&
       previous.size === fileInfo.size &&
-      Array.isArray(previous.ownedEventKeys) &&
+      isPackedUsageEventKeyDigests(previous.ownedEventKeyDigests) &&
       typeof previous.hasDeferredClaims === 'boolean'
     if (canReuse) {
       reusedByPath.set(filePath, previous)
@@ -98,10 +102,13 @@ export async function scanCodexUsageFiles(
   const eventOwnerByKey = new Map<string, string>()
   for (const filePath of files) {
     const retained = reusedByPath.get(filePath) ?? resumeByPath.get(filePath)?.previous
-    for (const eventKey of retained?.ownedEventKeys ?? []) {
+    if (!retained) {
+      continue
+    }
+    for (const eventKeyDigest of unpackUsageEventKeyDigests(retained.ownedEventKeyDigests)) {
       // First retained claim wins so conflicting projections stay deterministic.
-      if (!eventOwnerByKey.has(eventKey)) {
-        eventOwnerByKey.set(eventKey, filePath)
+      if (!eventOwnerByKey.has(eventKeyDigest)) {
+        eventOwnerByKey.set(eventKeyDigest, filePath)
       }
     }
   }
@@ -111,12 +118,12 @@ export async function scanCodexUsageFiles(
     const processed = await parseCodexUsageFile(filePath, resolveWorktree, {
       legacySourceSkipBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
       resume: resumeByPath.get(filePath),
-      claimEventKey: (eventKey) => {
-        const owner = eventOwnerByKey.get(eventKey)
+      claimEventKey: (eventKeyDigest) => {
+        const owner = eventOwnerByKey.get(eventKeyDigest)
         if (owner !== undefined && owner !== filePath) {
           return false
         }
-        eventOwnerByKey.set(eventKey, filePath)
+        eventOwnerByKey.set(eventKeyDigest, filePath)
         return true
       }
     })
