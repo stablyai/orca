@@ -421,6 +421,42 @@ describe('restored editor owner reparent', () => {
     expect(useAppStore.getState().editorDrafts[restored.id]).toBe('hot exit')
   })
 
+  it('persists OpenFile ids and reuses them on restore', () => {
+    const persistedId = 'persisted-open-file-id'
+    const fileId = useAppStore.getState().openFile(
+      {
+        filePath: FILE_PATH,
+        relativePath: FILE_PATH,
+        worktreeId: SOURCE,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true, reopenId: persistedId }
+    )
+    expect(fileId).toBe(persistedId)
+    const state = useAppStore.getState()
+    const session = buildEditorSessionData(
+      state.openFiles,
+      state.editorDrafts,
+      state.markdownFrontmatterVisible,
+      state.activeFileIdByWorktree,
+      state.activeTabTypeByWorktree
+    )
+    expect(session.openFilesByWorktree?.[SOURCE]?.[0]?.id).toBe(persistedId)
+
+    installWorkspaceState()
+    useAppStore.getState().hydrateEditorSession({
+      activeRepoId: 'repo-a',
+      activeWorktreeId: SOURCE,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ...session
+    })
+    expect(useAppStore.getState().openFiles.map((file) => file.id)).toEqual([persistedId])
+  })
+
   it.each([false, true])('fails closed on a %s destination collision', (dirtyDestination) => {
     const sourceId = openRestoredSource()
     const destinationId = useAppStore.getState().openFile(
