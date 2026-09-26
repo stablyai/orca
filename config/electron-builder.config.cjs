@@ -109,12 +109,17 @@ const emojiShortcodeDatasetResource = {
   from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
+const thirdPartyLicensesResource = {
+  from: 'resources/licenses',
+  to: 'licenses'
+}
 const commonExtraResources = [
   relayExtraResource,
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
   skillFreshnessResources,
-  emojiShortcodeDatasetResource
+  emojiShortcodeDatasetResource,
+  thirdPartyLicensesResource
 ]
 // Why: native speech addons must be real files outside app.asar; copy only the
 // package matching the artifact target instead of every optional variant.
@@ -233,6 +238,9 @@ module.exports = {
     // it from process.resourcesPath; exclude the source copy from app.asar.
     '!resources/onboarding/feature-wall/**',
     '!resources/skills/**',
+    // Why: legal notices ship as visible extraResources; exclude the source copy
+    // from app.asar so each packaged application contains one canonical copy.
+    '!resources/licenses/**',
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',

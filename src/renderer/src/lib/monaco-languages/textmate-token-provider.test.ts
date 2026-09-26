@@ -2,9 +2,13 @@ import { createRequire } from 'node:module'
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
+import { parseRawGrammar } from 'vscode-textmate'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
-import { createTextMateTokensProvider } from './textmate-token-provider'
+import {
+  createTextMateEncodedTokensProvider,
+  createTextMateTokensProvider
+} from './textmate-token-provider'
 
 const require = createRequire(import.meta.url)
 
@@ -54,5 +58,31 @@ describe('createTextMateTokensProvider', () => {
         loadOniguruma: loadNodeOniguruma
       })
     ).rejects.toThrow('No TextMate grammar registered for scope source.unknown')
+  })
+})
+
+describe('createTextMateEncodedTokensProvider', () => {
+  it('encodes embedded language IDs without registering a Monaco language provider', async () => {
+    const grammar = parseRawGrammar(
+      JSON.stringify({
+        scopeName: 'source.test',
+        patterns: [{ name: 'meta.embedded.test', match: '<[^>]+>' }]
+      }),
+      'test.tmLanguage.json'
+    )
+    const provider = await createTextMateEncodedTokensProvider({
+      scopeName: 'source.test',
+      initialLanguage: 1,
+      embeddedLanguages: { 'meta.embedded.test': 7 },
+      loadGrammar: async (scopeName) => (scopeName === 'source.test' ? grammar : null),
+      loadOniguruma: loadNodeOniguruma
+    })
+
+    const result = provider.tokenizeEncoded('value <tag>', provider.getInitialState())
+    const languageIds = Array.from(result.tokens)
+      .filter((_, index) => index % 2 === 1)
+      .map((metadata) => metadata & 0xff)
+
+    expect(languageIds).toEqual([1, 7])
   })
 })

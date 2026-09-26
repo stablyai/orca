@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { editor } from 'monaco-editor'
+import type * as Monaco from 'monaco-editor'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -15,11 +15,14 @@ import {
   type MonacoMarkdownSelectionAnnotationTarget
 } from './monaco-markdown-selection-annotation'
 import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
+import { installMonacoJsxCommentAction } from './monaco-jsx-comment-action'
 import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
 import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
 
 type MonacoEditorInputBindingsParams = {
-  editorInstance: editor.IStandaloneCodeEditor
+  editorInstance: Monaco.editor.IStandaloneCodeEditor
+  monaco: typeof Monaco
+  filePath: string
   worktreeId: string | undefined
   editorContainerRef: MutableRefObject<HTMLDivElement | null>
   propsRef: MonacoEditorPropsRef
@@ -40,6 +43,8 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
 } {
   const {
     editorInstance,
+    monaco,
+    filePath,
     worktreeId,
     editorContainerRef,
     propsRef,
@@ -58,6 +63,11 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+  const jsxCommentAction = installMonacoJsxCommentAction({
+    editorInstance,
+    monaco,
+    filePath
+  })
   // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
     // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
@@ -133,6 +143,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       cleanupSaveShortcut()
       cleanupFindShortcut()
       cleanupAddReviewNoteShortcut()
+      jsxCommentAction?.dispose()
       editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
     }

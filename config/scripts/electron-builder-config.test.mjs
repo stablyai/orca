@@ -34,6 +34,7 @@ describe('electron-builder config', () => {
         '!skill-guides{,/**/*}',
         '!skill-stubs{,/**/*}',
         '!resources/skills/**',
+        '!resources/licenses/**',
         '!tests{,/**/*}',
         '!examples{,/**/*}',
         '!pr-evidence{,/**/*}',
@@ -146,6 +147,23 @@ describe('electron-builder config', () => {
           to: 'bin/orca.exe'
         })
       ])
+    )
+  })
+
+  it('ships pinned third-party grammar notices on every platform', async () => {
+    const licenseResource = {
+      from: 'resources/licenses',
+      to: 'licenses'
+    }
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual(licenseResource)
+    }
+
+    const noticeDirectory = join(REPO_ROOT, 'resources', 'licenses', 'TypeScript-TmLanguage')
+    expect(existsSync(join(noticeDirectory, 'LICENSE.txt'))).toBe(true)
+    expect(existsSync(join(noticeDirectory, 'ThirdPartyNotices.txt'))).toBe(true)
+    await expect(readFile(join(noticeDirectory, 'UPSTREAM.txt'), 'utf8')).resolves.toContain(
+      '48f608692aa6d6ad7bd65b478187906c798234a8'
     )
   })
 

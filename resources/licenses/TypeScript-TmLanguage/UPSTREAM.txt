@@ -1,0 +1,6 @@
+Project: TypeScript-TmLanguage
+Source: https://github.com/microsoft/TypeScript-TmLanguage
+Commit: 48f608692aa6d6ad7bd65b478187906c798234a8
+
+Orca uses the JavaScript React and TypeScript React TextMate grammars derived
+from this revision for contextual comments in .jsx and .tsx editor models.
