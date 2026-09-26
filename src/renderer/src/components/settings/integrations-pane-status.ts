@@ -14,6 +14,7 @@ export type PreflightIntegrationStatuses = {
   glabStatus: GlabStatus
   bitbucketStatus: BitbucketStatus
   bitbucketAccount: string | null
+  bitbucketBaseUrl: string | null
   azureDevOpsStatus: AzureDevOpsStatus
   azureDevOpsAccount: string | null
   azureDevOpsBaseUrl: string | null
@@ -102,6 +103,7 @@ export function getPreflightIntegrationStatuses(
       glabStatus: 'checking',
       bitbucketStatus: 'checking',
       bitbucketAccount: null,
+      bitbucketBaseUrl: null,
       azureDevOpsStatus: 'checking',
       azureDevOpsAccount: null,
       azureDevOpsBaseUrl: null,
@@ -127,6 +129,7 @@ export function getPreflightIntegrationStatuses(
       bitbucketStatusFromPreflight(bitbucket)
     ),
     bitbucketAccount: bitbucket?.account ?? null,
+    bitbucketBaseUrl: bitbucket?.baseUrl ?? null,
     azureDevOpsStatus: maybeChecking(
       'azureDevOps',
       refreshingProviders,

@@ -60,7 +60,9 @@ function makePreflightStatus(overrides: Partial<PreflightStatus> = {}): Prefligh
     bitbucket: {
       configured: false,
       authenticated: false,
-      account: null
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
     },
     azureDevOps: {
       configured: false,
@@ -192,7 +194,13 @@ describe('ConnectIntegrationsList', () => {
     // offer the code hosts as connectable task sources alongside the trackers.
     installStore(
       makePreflightStatus({
-        bitbucket: { configured: true, authenticated: true, account: 'acme' }
+        bitbucket: {
+          configured: true,
+          authenticated: true,
+          account: 'acme',
+          baseUrl: null,
+          tokenConfigured: true
+        }
       })
     )
 

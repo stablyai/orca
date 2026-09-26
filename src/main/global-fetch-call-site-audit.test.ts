@@ -17,7 +17,8 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   // HTTP call sites — body consumed or cancelled on every path, including !ok
   ['main/artifacts/artifact-cloud-request.ts', 1],
   ['main/azure-devops/azure-devops-api-request.ts', 1],
-  ['main/bitbucket/client.ts', 1],
+  ['main/bitbucket/cloud-client.ts', 1],
+  ['main/bitbucket/server-client.ts', 2],
   ['main/bitbucket/user-request.ts', 1],
   ['main/gitea/client.ts', 1],
   ['main/orca-profiles/profile-cloud-client.ts', 1],
