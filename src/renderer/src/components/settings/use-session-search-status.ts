@@ -30,6 +30,14 @@ export function useSessionSearchStatus(args: {
   const [status, setStatus] = useState<AiVaultSearchStatus | null>(null)
   const [failed, setFailed] = useState(false)
   const [hostTooOld, setHostTooOld] = useState(false)
+  // Another host's answer is no evidence about this one.
+  const [statusHost, setStatusHost] = useState(executionHostId)
+  if (statusHost !== executionHostId) {
+    setStatusHost(executionHostId)
+    setStatus(null)
+    setFailed(false)
+    setHostTooOld(false)
+  }
   const intervalMs = sessionSearchPollIntervalMs(status)
   const adopt = useCallback((next: AiVaultSearchStatus) => {
     setStatus(next)

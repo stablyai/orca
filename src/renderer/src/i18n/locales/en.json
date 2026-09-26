@@ -18352,6 +18352,7 @@
       "sortResultsAriaLabel": "Sort results: {{value0}}",
       "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
+      "hostSearchOff": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
       "noService": "Search is unavailable on this computer. It may need an Orca update or a runtime with search support.",
       "failed": "Could not search this computer. Check its connection and try again.",

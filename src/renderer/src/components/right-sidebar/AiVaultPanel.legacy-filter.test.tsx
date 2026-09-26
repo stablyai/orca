@@ -2,7 +2,9 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type * as AiVaultHostScope from './ai-vault-host-scope'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 
 const mockState: {
@@ -73,6 +75,15 @@ vi.mock('./ai-vault-original-pane-actions', () => ({
 vi.mock('./ai-vault-session-delete-action', () => ({
   useAiVaultSessionDeleteAction: () => vi.fn()
 }))
+const hostScope: { current: string } = { current: 'local' }
+vi.mock('./ai-vault-host-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof AiVaultHostScope>()),
+  useAiVaultExecutionHostScope: () => ({
+    executionHostScope: hostScope.current,
+    activeExecutionHostScope: hostScope.current === 'local' ? null : hostScope.current,
+    onExecutionHostScopeChange: vi.fn()
+  })
+}))
 // The virtualizer measures a zero-height viewport under happy-dom; the rows it would
 // choose are exactly the grouped sessions, so render those instead.
 vi.mock('./AiVaultSessionVirtualList', () => ({
@@ -87,6 +98,7 @@ vi.mock('./AiVaultSessionVirtualList', () => ({
 }))
 
 const searchSessions = vi.fn()
+const searchStatus = vi.fn()
 
 function vaultSession(id: string, title: string): AiVaultSession {
   return {
@@ -115,6 +127,8 @@ function vaultSession(id: string, title: string): AiVaultSession {
 
 beforeEach(() => {
   mockState.settings = {}
+  hostScope.current = 'local'
+  searchStatus.mockReset().mockResolvedValue({ ...unavailableSessionSearchStatus(), enabled: true })
   searchSessions.mockReset().mockResolvedValue({
     kind: 'results',
     hits: [],
@@ -125,7 +139,7 @@ beforeEach(() => {
   })
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { aiVault: { searchSessions }, ui: { writeClipboardText: vi.fn() } }
+    value: { aiVault: { searchSessions, searchStatus }, ui: { writeClipboardText: vi.fn() } }
   })
 })
 afterEach(cleanup)
@@ -256,4 +270,35 @@ it('hands the list one untitled group while searching, and titled groups while b
   await waitFor(() =>
     expect(screen.getByRole('list').getAttribute('data-group-labels')).toBe('(untitled)')
   )
+})
+
+it('title-filters an SSH host whose index is off instead of walling off its sessions', async () => {
+  hostScope.current = 'ssh:build-box'
+  searchStatus.mockResolvedValue(unavailableSessionSearchStatus())
+
+  await typeQuery('foo')
+
+  await waitFor(() =>
+    expect(screen.getByRole('status').textContent).toContain('only session titles are matched')
+  )
+  expect(searchStatus).toHaveBeenCalledWith('ssh:build-box')
+  expect(screen.getByText('Fix the foo pipeline')).toBeTruthy()
+  expect(screen.queryByText('Rename the bar widget')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Enable' })).toBeNull()
+  expect(screen.queryByText(/Search is disabled on this computer/)).toBeNull()
+  expect(searchSessions).not.toHaveBeenCalled()
+})
+
+it('searches an SSH host index once that host reports indexing on', async () => {
+  hostScope.current = 'ssh:build-box'
+
+  await typeQuery('foo')
+
+  await waitFor(() =>
+    expect(searchSessions).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'foo' }),
+      'ssh:build-box'
+    )
+  )
+  expect(screen.queryByText(/only session titles are matched/)).toBeNull()
 })

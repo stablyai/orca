@@ -34,6 +34,7 @@ function panelSearch(overrides: Partial<PanelSearch> = {}): PanelSearch {
     searching: true,
     hasQuery: true,
     needsLocalConsent: false,
+    hostSearchOff: false,
     host: null,
     resetKey: 'all',
     ...overrides
@@ -49,6 +50,14 @@ function renderPanel(search: PanelSearch) {
 }
 
 describe('AiVaultPanelSearch', () => {
+  it('notes title-only matching above the list for a host whose index is off', () => {
+    renderPanel(panelSearch({ searching: false, hostSearchOff: true, host: 'ssh:build-box' }))
+
+    expect(screen.getByRole('status').textContent).toContain('only session titles are matched')
+    expect(screen.getByText('results')).toBeTruthy()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
   it('names every computer the merge could not search, with its reason', () => {
     const response = searchResults()
     renderPanel(
