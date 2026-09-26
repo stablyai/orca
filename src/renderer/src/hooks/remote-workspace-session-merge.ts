@@ -47,7 +47,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   //      (terminal-tab-close.ts), so a tombstoned id is not live anywhere;
   //   2. isSuppressedByClose matches the tombstone's own worktreeId, so it cannot reach another
   //      workspace's tab even if an id somehow recurred;
-  //   3. only a close main committed ever writes a record.
+  //   3. only a tab close writes a record; nothing infers one from a tab's absence.
   // A final sweep of suppression over the assembled tabsByWorktree — including worktrees
   // omitTargetWorktrees passes through verbatim — is still deliberately absent.
   const currentTabsById = new Map(
@@ -60,9 +60,8 @@ export function mergeDirectSshRemoteWorkspaceSession(
     liveTabsByWorktree[worktreeId] ?? current.tabsByWorktree[worktreeId] ?? []
   // Why presence and not length: an explicit empty row, with a close record for the worktree, is how
   // a workspace the user emptied reads (initial-terminal.ts), and localTabsFor cannot tell it from an
-  // absent one. Admitting
-  // only non-empty rows dropped the key, which reads downstream as "never initialized" and seeds a
-  // fresh terminal on every reconnect.
+  // absent one. Admitting only non-empty rows dropped the key, which reads downstream as "never
+  // initialized" and seeds a fresh terminal on every reconnect.
   const hasLocalTabsRow = (worktreeId: string): boolean =>
     Object.hasOwn(liveTabsByWorktree, worktreeId) ||
     Object.hasOwn(current.tabsByWorktree, worktreeId)
