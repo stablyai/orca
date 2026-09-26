@@ -80,10 +80,7 @@ export function useStructuredAgentSessionMutate(args: {
         return null
       }
       if (!result.ok) {
-        if (
-          agentSessionRefusalOperationState(fingerprintMethod, result.refusal.code) ===
-          'settled-rejected'
-        ) {
+        if (agentSessionRefusalOperationState(result.refusal.code) === 'settled-rejected') {
           operationIds.current.delete(key)
         }
         if (enabledRef.current && stateRef.current.fence === targetFence) {

@@ -8,6 +8,9 @@ function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
     return 'Installing...'
   }
+  if (action === 'enable-session-search') {
+    return 'Turning on...'
+  }
   return 'Working...'
 }
 
@@ -18,7 +21,8 @@ export function FeatureTipActions({
   onSkip,
   showSkip = true,
   fullWidth = false,
-  primaryButtonRef
+  primaryButtonRef,
+  label = currentTip.ctaLabel
 }: {
   currentTip: FeatureTip
   primaryBusy: boolean
@@ -27,6 +31,8 @@ export function FeatureTipActions({
   showSkip?: boolean
   fullWidth?: boolean
   primaryButtonRef?: Ref<HTMLButtonElement>
+  /** Overrides the tip's CTA for tips whose button changes with their state. */
+  label?: string
 }): JSX.Element {
   return (
     <>
@@ -47,7 +53,7 @@ export function FeatureTipActions({
             {getPrimaryBusyLabel(currentTip.action)}
           </>
         ) : (
-          currentTip.ctaLabel
+          label
         )}
       </Button>
     </>

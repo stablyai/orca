@@ -223,13 +223,13 @@ export function createStructuredSessionMocks() {
     nativeChatApprovalCard: () => ({
       NativeChatApprovalCard: (props: NativeChatApprovalCardProps) => {
         mocks.approvalCardProps = props
-        return null
+        return <div data-native-chat-approval-card-mock />
       }
     }),
     nativeChatQuestionCard: () => ({
       NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
         mocks.questionCardProps = props
-        return null
+        return <div data-native-chat-question-card-mock />
       }
     })
   }

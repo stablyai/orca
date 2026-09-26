@@ -6,7 +6,8 @@ import {
   dependencies,
   FakeRelaySession,
   FakeSession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
@@ -65,7 +66,7 @@ describe('continuous Relay pairing-rejection escalation', () => {
       randomBytes: () => new Uint8Array([0, 0]),
       onLog: () => {}
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     return { activeRelay, logical, openRelay, supervisor }
   }
 

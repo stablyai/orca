@@ -112,8 +112,11 @@ afterAll(async () => {
  * Settled is "the probe registered" or "the page reported a fault", because those are the two
  * outcomes and waiting only for the first turns the defect into a 60s timeout that names nothing.
  */
-async function openProbe() {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+async function openProbe({ userAgent } = {}) {
+  const page = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    ...(userAgent ? { userAgent } : {})
+  })
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
     sessionId: 'live-input-session',
@@ -321,6 +324,104 @@ describeRender(
       expect(errors).toEqual([])
       await page.close()
     }, 300_000)
+
+    describe('under an Android keyboard, which composes every word it types', () => {
+      // The OTA shell's WebView. Its keyboards hold a composing region over the Latin word being
+      // typed, so every input event mid-word says `isComposing: true`; native Android reports no
+      // range at all, and there each ASCII keystroke reaches the terminal as it is typed.
+      const ANDROID_WEBVIEW_USER_AGENT =
+        'Mozilla/5.0 (Linux; Android 16; Pixel 9 Pro Build/BP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/140.0.0.0 Mobile Safari/537.36'
+      const sent = (page) => page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())
+
+      /** One composition step through the browser's own IME path, which fires the DOM composition events. */
+      async function compose(input, text) {
+        await input.send('Input.imeSetComposition', {
+          text,
+          selectionStart: text.length,
+          selectionEnd: text.length
+        })
+      }
+
+      async function waitForField(page, value) {
+        await page.waitForFunction(
+          ([id, expected]) => document.getElementById(id)?.value === expected,
+          [LIVE_INPUT_FIELD_ID, value],
+          { timeout: 30_000, polling: 50 }
+        )
+      }
+
+      it('sends each letter of a composed word after a slash as it is typed', async () => {
+        // The reported shape: `/tui` in a Codex terminal, where the `/` arrived and `tui` did not
+        // until Enter. The keyboard commits `/` outright and opens a composition for the letters.
+        const { errors, page } = await openProbe({ userAgent: ANDROID_WEBVIEW_USER_AGENT })
+        await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+        const input = await page.context().newCDPSession(page)
+        await page.keyboard.type('/')
+        await waitForField(page, '/')
+
+        const afterEachStep = []
+        for (const text of ['t', 'tu', 'tui']) {
+          await compose(input, text)
+          await waitForField(page, `/${text}`)
+          afterEachStep.push(await sent(page))
+        }
+        await input.send('Input.insertText', { text: 'tui' })
+        await waitForField(page, '/tui')
+
+        expect(afterEachStep).toEqual([
+          ['/', 't'],
+          ['/', 't', 'u'],
+          ['/', 't', 'u', 'i']
+        ])
+        expect(await sent(page)).toEqual(['/', 't', 'u', 'i'])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it('erases and retypes a word the keyboard corrects when it commits', async () => {
+        const { errors, page } = await openProbe({ userAgent: ANDROID_WEBVIEW_USER_AGENT })
+        await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+        const input = await page.context().newCDPSession(page)
+        for (const text of ['t', 'te', 'teh']) {
+          await compose(input, text)
+          await waitForField(page, text)
+        }
+
+        await input.send('Input.insertText', { text: 'the' })
+        await waitForField(page, 'the')
+
+        await page.waitForFunction(
+          () => globalThis.__orcaLiveInputProbe.sent().length === 4,
+          undefined,
+          {
+            timeout: 30_000,
+            polling: 50
+          }
+        )
+        expect(await sent(page)).toEqual(['t', 'e', 'h', '\u007f\u007fhe'])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+
+      it("still holds a composition off Android, where it is the text system's marked text", async () => {
+        // The guard: an iOS WebView composes only what native iOS marks, pinyin before conversion
+        // among it, and that is not text yet on either side of the bridge.
+        const { errors, page } = await openProbe({
+          userAgent:
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
+        })
+        await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+        const input = await page.context().newCDPSession(page)
+        for (const text of ['n', 'ni']) {
+          await compose(input, text)
+          await waitForField(page, text)
+        }
+
+        expect(await sent(page)).toEqual([])
+        expect(errors).toEqual([])
+        await page.close()
+      }, 300_000)
+    })
 
     describe('in buffered mode, where the field holds the draft until Enter', () => {
       const bufferedValue = (page) =>

@@ -25,7 +25,6 @@ export class StructuredAgentSessionReadableRestorer {
         sessionId: string,
         params: RestoredStructuredAgentSessionRead['params']
       ) => Promise<boolean>
-      restoreHandoff: (sessionId: string) => Promise<void>
     }
   ) {}
 

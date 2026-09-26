@@ -30,8 +30,7 @@ export function structuredAgentSessionResumeParams(
   }
   return attachParamsForRecord(record, {
     clientOperationId,
-    expectedRuntimeFence: record.lease.runtimeFence,
-    runtimeKind: 'native'
+    expectedRuntimeFence: record.lease.runtimeFence
   })
 }
 

@@ -29,6 +29,7 @@ vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { claudeGroupedQuestionPromptItems } from './native-chat-structured-question-test-fixtures'
 
 const STRIP = '[data-native-chat-background-tasks]'
 const GOAL = '[data-native-chat-thread-goal]'
@@ -154,6 +155,55 @@ describe('NativeChatStructuredSession task strip on the goal tab', () => {
     expect(document.querySelector(STRIP)).toBeNull()
     expect(document.querySelector(GOAL)?.previousElementSibling?.matches(STRIP) ?? false).toBe(
       false
+    )
+  })
+})
+
+describe('NativeChatStructuredSession task strip above a pending prompt', () => {
+  afterEach(() => {
+    cleanup()
+    localStorage.clear()
+    resetStructuredSessionMocks()
+  })
+
+  it.each([
+    ['question', '[data-native-chat-question-card-mock]'],
+    ['approval', '[data-native-chat-approval-card-mock]']
+  ] as const)('renders the strip before the %s card, where the composer sat', (kind, card) => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.backgroundTasks = [{ id: 'task-agent', kind: 'agent' }]
+    mocks.promptItems =
+      kind === 'question'
+        ? claudeGroupedQuestionPromptItems
+        : [
+            {
+              itemId: 'approval-item',
+              revision: 1,
+              sequence: 1,
+              observedAt: 1,
+              body: {
+                kind: 'approval',
+                title: 'Allow command?',
+                detail: 'pnpm test',
+                options: [{ id: 'allow', label: 'Allow' }],
+                resolution: {
+                  state: 'pending',
+                  selectedOptionId: null,
+                  resolvedBy: null,
+                  resolvedAt: null
+                }
+              }
+            }
+          ]
+    render(sessionView())
+
+    const strip = document.querySelector(STRIP)
+    const promptCard = document.querySelector(card)
+    if (!strip || !promptCard) {
+      throw new Error(`expected both the task strip and the ${kind} card`)
+    }
+    expect(strip.compareDocumentPosition(promptCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
     )
   })
 })

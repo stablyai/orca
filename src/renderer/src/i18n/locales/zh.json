@@ -494,7 +494,8 @@
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
           "muse_label": "Muse",
-          "opencode2_label": "OpenCode 2"
+          "opencode2_label": "OpenCode 2",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -3087,6 +3088,14 @@
             "38c282a2c4": "分析器直接从这里打开。您也可以稍后从左下角的工具箱菜单中选择“空间分析器”将其打开。",
             "e2fcf07c0d": "Orca 无法保存此终端会话，因为本地存储已满或不可写。打开磁盘空间分析器以查找可以清理的工作区存储。",
             "678c780a2c": "磁盘空间不可用"
+          },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
           },
           "osc52": {
             "clipboard": {
@@ -6154,7 +6163,6 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "最多附加 {count} 张截图",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },
@@ -14909,6 +14917,7 @@
           "notPython": "该文件不是 Python 解释器。",
           "interrupt": "中断",
           "restart": "重启内核",
+          "trustFirst": "请先运行一个单元格以信任此笔记本",
           "runAll": "全部运行",
           "clearAll": "清除所有输出",
           "notResponding": "无响应。请重启内核",
@@ -17501,38 +17510,6 @@
         "questionCount": "{{value0}} 问题"
       },
       "structuredSessionLaunchFailed": "无法打开 {{value0}} 聊天",
-      "handoff": {
-        "stage": {
-          "finishingChat": "正在完成聊天会话...",
-          "finishingTerminal": "整理代理终端...",
-          "openingTerminal": "打开代理终端...",
-          "resumingChat": "正在恢复聊天会话...",
-          "verifyingTerminal": "正在验证代理终端...",
-          "verifyingChat": "正在验证聊天会话...",
-          "recovering": "正在恢复代理会话...",
-          "manualRecovery": "代理会话需要恢复"
-        },
-        "switchingOwner": "切换会话所有者...",
-        "mode": {
-          "switching": "交换",
-          "terminal": "终端",
-          "chat": "聊天"
-        },
-        "switchingAfterTurn": "本回合后切换",
-        "returningAfterTurn": "本回合后返回",
-        "cancel": "取消",
-        "switchAfterTurn": "本回合后切换",
-        "stopTurnAndSwitch": "停止转弯并切换",
-        "openAgentTui": "打开代理 TUI",
-        "returnAfterTurn": "本回合后返回",
-        "returnToChat": "返回聊天",
-        "agentOpenOnHost": "代理已在 {{value0}} 的终端中打开。",
-        "agentOpen": "代理在终端中打开。",
-        "exitTerminal": "退出代理终端以继续聊天。",
-        "retryProof": "重试证明",
-        "retry": "重试",
-        "details": "细节"
-      },
       "structuredSessionLaunchFailedDescription": "Orca 无法打开结构化 {{value0}} 聊天。有关详细信息，请参阅日志。",
       "subagents": {
         "state": {
