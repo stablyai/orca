@@ -195,9 +195,23 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             'auto.components.sidebar.worktree.card.compact.agents.a128d7006b',
             '{{value0}} {{value1}} child {{value2}}',
             {
-              value0: childAgentsExpanded ? 'Hide' : 'Show',
+              value0: childAgentsExpanded
+                ? translate('auto.components.sidebar.worktree.card.compact.agents.hideVerb', 'Hide')
+                : translate(
+                    'auto.components.sidebar.worktree.card.compact.agents.showVerb',
+                    'Show'
+                  ),
               value1: childAgentCount,
-              value2: childAgentCount === 1 ? 'agent' : 'agents'
+              value2:
+                childAgentCount === 1
+                  ? translate(
+                      'auto.components.sidebar.worktree.card.compact.agents.agentSingular',
+                      'agent'
+                    )
+                  : translate(
+                      'auto.components.sidebar.worktree.card.compact.agents.agentPlural',
+                      'agents'
+                    )
             }
           )}
           aria-expanded={childAgentsExpanded}

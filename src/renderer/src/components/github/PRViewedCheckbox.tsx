@@ -25,7 +25,12 @@ export function PRViewedCheckbox({
           aria-label={translate(
             'auto.components.GitHubItemDialog.2d89a38d9d',
             '{{value0}} {{value1}} as viewed',
-            { value0: checked ? 'Unmark' : 'Mark', value1: filePath }
+            {
+              value0: checked
+                ? translate('auto.components.GitHubItemDialog.unmarkVerb', 'Unmark')
+                : translate('auto.components.GitHubItemDialog.markVerb', 'Mark'),
+              value1: filePath
+            }
           )}
           disabled={pending}
           onClick={(event) => {

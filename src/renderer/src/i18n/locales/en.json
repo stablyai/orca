@@ -137,7 +137,8 @@
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "turkish": "Türkçe"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
@@ -237,7 +238,20 @@
     "help": "Help",
     "paste": "Paste",
     "copy": "Copy",
-    "selectAll": "Select All"
+    "selectAll": "Select All",
+    "about": "About {{appName}}",
+    "services": "Services",
+    "hide": "Hide {{appName}}",
+    "hideOthers": "Hide Others",
+    "unhide": "Show All",
+    "quit": "Quit {{appName}}",
+    "undo": "Undo",
+    "redo": "Redo",
+    "cut": "Cut",
+    "toggleDevTools": "Toggle Developer Tools",
+    "toggleFullScreen": "Toggle Full Screen",
+    "minimize": "Minimize",
+    "zoom": "Zoom"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -1009,6 +1023,339 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
+      },
+      "keybindings": {
+        "titles": {
+          "worktree": {
+            "quickOpen": {
+              "title": "Go to File"
+            },
+            "palette": {
+              "title": "Switch worktree"
+            },
+            "navigateUp": {
+              "title": "Previous worktree"
+            },
+            "navigateDown": {
+              "title": "Next worktree"
+            },
+            "history": {
+              "back": {
+                "title": "Worktree History Back"
+              },
+              "forward": {
+                "title": "Worktree History Forward"
+              }
+            }
+          },
+          "app": {
+            "settings": {
+              "title": "Open Settings"
+            },
+            "forceReload": {
+              "title": "Force Reload"
+            }
+          },
+          "workspace": {
+            "create": {
+              "title": "Create worktree"
+            },
+            "rename": {
+              "title": "Rename worktree"
+            },
+            "delete": {
+              "title": "Delete Workspace"
+            },
+            "openBoard": {
+              "title": "Toggle Workspace Board"
+            },
+            "selectByIndex": {
+              "title": "Select Workspace 1–9"
+            }
+          },
+          "dashboard": {
+            "toggle": {
+              "title": "Toggle Agent Dashboard"
+            }
+          },
+          "voice": {
+            "dictation": {
+              "title": "Dictation"
+            }
+          },
+          "view": {
+            "tasks": {
+              "title": "Open Tasks"
+            }
+          },
+          "sidebar": {
+            "left": {
+              "toggle": {
+                "title": "Toggle Sidebar"
+              }
+            },
+            "right": {
+              "toggle": {
+                "title": "Toggle Right Sidebar"
+              }
+            },
+            "explorer": {
+              "toggle": {
+                "title": "Show Explorer"
+              }
+            },
+            "search": {
+              "toggle": {
+                "title": "Show Search"
+              }
+            },
+            "sourceControl": {
+              "toggle": {
+                "title": "Show Source Control"
+              }
+            },
+            "checks": {
+              "toggle": {
+                "title": "Show Checks"
+              }
+            },
+            "ports": {
+              "toggle": {
+                "title": "Show Ports"
+              }
+            },
+            "sleepingWorkspaces": {
+              "toggle": {
+                "title": "Toggle Sleeping Workspaces"
+              }
+            },
+            "focusWorktreeList": {
+              "title": "Focus worktree list"
+            }
+          },
+          "floatingTerminal": {
+            "toggle": {
+              "title": "Toggle Floating Terminal"
+            }
+          },
+          "floatingWorkspace": {
+            "maximize": {
+              "title": "Maximize Floating Workspace Panel"
+            },
+            "minimize": {
+              "title": "Minimize Floating Workspace Panel"
+            }
+          },
+          "zoom": {
+            "in": {
+              "title": "Zoom In"
+            },
+            "out": {
+              "title": "Zoom Out"
+            },
+            "reset": {
+              "title": "Reset Size"
+            }
+          },
+          "tab": {
+            "newTerminal": {
+              "title": "New terminal tab"
+            },
+            "newAgent": {
+              "title": "New agent tab (default agent)"
+            },
+            "newBrowser": {
+              "title": "New browser tab"
+            },
+            "newSimulator": {
+              "title": "New mobile emulator tab"
+            },
+            "newMarkdown": {
+              "title": "New markdown tab"
+            },
+            "openMarkdown": {
+              "title": "Open markdown tab"
+            },
+            "close": {
+              "title": "Close active tab"
+            },
+            "closeAll": {
+              "title": "Close all editor tabs"
+            },
+            "rename": {
+              "title": "Rename active tab"
+            },
+            "reopenClosed": {
+              "title": "Reopen closed tab"
+            },
+            "nextSameType": {
+              "title": "Next tab (same type)"
+            },
+            "previousSameType": {
+              "title": "Previous tab (same type)"
+            },
+            "nextAllTypes": {
+              "title": "Next tab (all types)"
+            },
+            "previousAllTypes": {
+              "title": "Previous tab (all types)"
+            },
+            "previousRecent": {
+              "title": "Previous recent tab"
+            },
+            "nextTerminal": {
+              "title": "Next terminal tab"
+            },
+            "previousTerminal": {
+              "title": "Previous terminal tab"
+            },
+            "selectByIndex": {
+              "title": "Select Tab 1–9"
+            },
+            "openQuickCommandsMenu": {
+              "title": "Toggle Quick Commands menu"
+            }
+          },
+          "browser": {
+            "find": {
+              "title": "Find in Browser"
+            },
+            "back": {
+              "title": "Go Back in Browser"
+            },
+            "forward": {
+              "title": "Go Forward in Browser"
+            },
+            "reload": {
+              "title": "Reload Browser Page"
+            },
+            "hardReload": {
+              "title": "Hard Reload Browser Page"
+            },
+            "focusAddressBar": {
+              "title": "Focus Browser Address Bar"
+            },
+            "grabElement": {
+              "title": "Grab Page Element"
+            }
+          },
+          "editor": {
+            "find": {
+              "title": "Find in editor"
+            },
+            "replace": {
+              "title": "Replace in editor"
+            },
+            "save": {
+              "title": "Save File"
+            },
+            "markdownPreview": {
+              "title": "Show Markdown Preview"
+            },
+            "toggleWordWrap": {
+              "title": "Toggle Word Wrap"
+            },
+            "copyContext": {
+              "title": "Copy Context"
+            },
+            "previousChange": {
+              "title": "Go to Previous Change"
+            },
+            "nextChange": {
+              "title": "Go to Next Change"
+            },
+            "addReviewNote": {
+              "title": "Add Review Note"
+            }
+          },
+          "sourceControl": {
+            "sendReviewNotes": {
+              "title": "Send Review Notes to Agent"
+            }
+          },
+          "fileExplorer": {
+            "undo": {
+              "title": "Undo file operation"
+            },
+            "redo": {
+              "title": "Redo file operation"
+            },
+            "copyPath": {
+              "title": "Copy file path"
+            },
+            "copyRelativePath": {
+              "title": "Copy relative file path"
+            },
+            "delete": {
+              "title": "Delete file"
+            }
+          },
+          "settings": {
+            "search": {
+              "title": "Search Settings"
+            }
+          },
+          "terminal": {
+            "copySelection": {
+              "title": "Copy terminal selection"
+            },
+            "selectAll": {
+              "title": "Select all terminal text"
+            },
+            "paste": {
+              "title": "Paste into terminal"
+            },
+            "search": {
+              "title": "Search active pane"
+            },
+            "clear": {
+              "title": "Clear active pane"
+            },
+            "focusNextPane": {
+              "title": "Focus next pane"
+            },
+            "focusPreviousPane": {
+              "title": "Focus previous pane"
+            },
+            "equalizePaneSizes": {
+              "title": "Equalize pane sizes"
+            },
+            "expandPane": {
+              "title": "Expand / collapse pane"
+            },
+            "setTitle": {
+              "title": "Set Title…"
+            },
+            "clearPaneTitle": {
+              "title": "Clear Pane Title"
+            },
+            "closePane": {
+              "title": "Close active pane"
+            },
+            "splitRight": {
+              "title": "Split terminal right"
+            },
+            "splitDown": {
+              "title": "Split terminal down"
+            },
+            "switchInputSource": {
+              "title": "Switch input source / language (native)"
+            }
+          },
+          "newAgentTab": "New {{value0}} tab"
+        },
+        "groups": {
+          "global": "Global",
+          "tabs": "Tabs",
+          "tabNavigation": "Tab Navigation",
+          "browser": "Browser",
+          "editors": "Editors",
+          "fileExplorer": "File Explorer",
+          "settings": "Settings",
+          "terminalPanes": "Terminal Panes",
+          "quickCommands": "Quick Commands",
+          "agents": "Agents"
+        }
       }
     },
     "hooks": {
@@ -1426,7 +1773,9 @@
         "8812225174": "Reopen",
         "09d67a0f9b": "Failed to close pull request",
         "88809e79db": "Failed to reopen pull request",
-        "00f55cc17b": "Repository access is unavailable for this pull request."
+        "00f55cc17b": "Repository access is unavailable for this pull request.",
+        "unmarkVerb": "Unmark",
+        "markVerb": "Mark"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1549,7 +1898,11 @@
         "0d0ace8861": "Star on GitHub",
         "ec43b38ba7": "Starred on GitHub",
         "157bb5ecbb": "Open GitHub",
-        "preflightDismiss": "Dismiss"
+        "preflightDismiss": "Dismiss",
+        "createWorktreeButton": "Create worktree",
+        "createWorkspaceButton": "Create workspace",
+        "moveUpWorkspace": "Move up workspace",
+        "moveDownWorkspace": "Move down workspace"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -5280,7 +5633,9 @@
           "2251d41ebb": "Hidden worktree groups",
           "f54f2bec5d": "{{value0}} hidden worktrees for {{value1}}",
           "5a9688802a": "Show {{value0}} more",
-          "294de4aeb2": "Show fewer"
+          "294de4aeb2": "Show fewer",
+          "collapseVerb": "Collapse",
+          "expandVerb": "Expand"
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "Open as Folder",
@@ -6041,7 +6396,11 @@
               "agents": {
                 "a128d7006b": "{{value0}} {{value1}} child {{value2}}",
                 "289a1d2ca7": "Expand {{value0}}. {{value1}}",
-                "0c1debfe84": "Collapse {{value0}}"
+                "0c1debfe84": "Collapse {{value0}}",
+                "hideVerb": "Hide",
+                "showVerb": "Show",
+                "agentSingular": "agent",
+                "agentPlural": "agents"
               }
             }
           },
@@ -8474,7 +8833,11 @@
           "df8466f3fc": "Clear shortcut search",
           "f733c4b89f": "Search command or keys",
           "02dc7d4251": "Find shortcuts",
-          "1d5634ba31": "{{value0}} shortcut"
+          "1d5634ba31": "{{value0}} shortcut",
+          "filterAll": "All",
+          "filterModified": "Modified",
+          "filterUnassigned": "Unassigned",
+          "filterConflicts": "Conflicts"
         },
         "ShortcutRowsList": {
           "4ce3cd24d9": "No shortcuts match those filters."
@@ -8499,7 +8862,9 @@
           "781cb74d22": "Runs from terminal panes.",
           "cb02e00202": "Terminal",
           "d8c988dab4": "~/.orca/keybindings.json",
-          "shortcutUnavailable": "Shortcut is no longer available."
+          "shortcutUnavailable": "Shortcut is no longer available.",
+          "bindingConflict": "{{value0}} conflicts with {{value1}}.",
+          "unableToParseShortcut": "Unable to parse shortcut."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -14315,7 +14680,9 @@
             "3b04b065b5": "Show floating workspace",
             "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "Minimize floating workspace",
-            "bfe7809a70": "{{value0}} floating workspace ({{value1}})"
+            "bfe7809a70": "{{value0}} floating workspace ({{value1}})",
+            "minimizeVerb": "Minimize",
+            "showVerb": "Show"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "Minimize",
@@ -15684,7 +16051,11 @@
       },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
-          "1b57ce9fa4": "{{value0}} {{value1}} child {{value2}}"
+          "1b57ce9fa4": "{{value0}} {{value1}} child {{value2}}",
+          "hideVerb": "Hide",
+          "showVerb": "Show",
+          "agentSingular": "agent",
+          "agentPlural": "agents"
         },
         "DashboardAgentRow": {
           "912e136cd9": "Send",

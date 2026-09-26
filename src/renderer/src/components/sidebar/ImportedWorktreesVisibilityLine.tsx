@@ -145,7 +145,18 @@ export default function ImportedWorktreesVisibilityLine({
           aria-label={translate(
             'auto.components.sidebar.ImportedWorktreesVisibilityLine.f54f2bec5d',
             '{{value0}} hidden worktrees for {{value1}}',
-            { value0: isExpanded ? 'Collapse' : 'Expand', value1: repoScopeLabel }
+            {
+              value0: isExpanded
+                ? translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.collapseVerb',
+                    'Collapse'
+                  )
+                : translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.expandVerb',
+                    'Expand'
+                  ),
+              value1: repoScopeLabel
+            }
           )}
           onClick={() => setIsExpanded((value) => !value)}
           className="shrink-0 rounded-[4px] text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground"

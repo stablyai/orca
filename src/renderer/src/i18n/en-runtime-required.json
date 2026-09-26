@@ -60,6 +60,7 @@
       },
       "Landing": {
         "16e9e3df89": "starred",
+        "76a95f7f47": "Create",
         "ce44fad849": "Missing dependencies",
         "f05d237049": "Add a project first"
       },
@@ -2588,6 +2589,338 @@
           }
         }
       },
+      "keybindings": {
+        "groups": {
+          "agents": "Agents",
+          "browser": "Browser",
+          "editors": "Editors",
+          "fileExplorer": "File Explorer",
+          "global": "Global",
+          "quickCommands": "Quick Commands",
+          "settings": "Settings",
+          "tabNavigation": "Tab Navigation",
+          "tabs": "Tabs",
+          "terminalPanes": "Terminal Panes"
+        },
+        "titles": {
+          "app": {
+            "forceReload": {
+              "title": "Force Reload"
+            },
+            "settings": {
+              "title": "Open Settings"
+            }
+          },
+          "browser": {
+            "back": {
+              "title": "Go Back in Browser"
+            },
+            "find": {
+              "title": "Find in Browser"
+            },
+            "focusAddressBar": {
+              "title": "Focus Browser Address Bar"
+            },
+            "forward": {
+              "title": "Go Forward in Browser"
+            },
+            "grabElement": {
+              "title": "Grab Page Element"
+            },
+            "hardReload": {
+              "title": "Hard Reload Browser Page"
+            },
+            "reload": {
+              "title": "Reload Browser Page"
+            }
+          },
+          "dashboard": {
+            "toggle": {
+              "title": "Toggle Agent Dashboard"
+            }
+          },
+          "editor": {
+            "addReviewNote": {
+              "title": "Add Review Note"
+            },
+            "copyContext": {
+              "title": "Copy Context"
+            },
+            "find": {
+              "title": "Find in editor"
+            },
+            "markdownPreview": {
+              "title": "Show Markdown Preview"
+            },
+            "nextChange": {
+              "title": "Go to Next Change"
+            },
+            "previousChange": {
+              "title": "Go to Previous Change"
+            },
+            "replace": {
+              "title": "Replace in editor"
+            },
+            "save": {
+              "title": "Save File"
+            },
+            "toggleWordWrap": {
+              "title": "Toggle Word Wrap"
+            }
+          },
+          "fileExplorer": {
+            "copyPath": {
+              "title": "Copy file path"
+            },
+            "copyRelativePath": {
+              "title": "Copy relative file path"
+            },
+            "delete": {
+              "title": "Delete file"
+            },
+            "redo": {
+              "title": "Redo file operation"
+            },
+            "undo": {
+              "title": "Undo file operation"
+            }
+          },
+          "floatingTerminal": {
+            "toggle": {
+              "title": "Toggle Floating Terminal"
+            }
+          },
+          "floatingWorkspace": {
+            "maximize": {
+              "title": "Maximize Floating Workspace Panel"
+            },
+            "minimize": {
+              "title": "Minimize Floating Workspace Panel"
+            }
+          },
+          "settings": {
+            "search": {
+              "title": "Search Settings"
+            }
+          },
+          "sidebar": {
+            "checks": {
+              "toggle": {
+                "title": "Show Checks"
+              }
+            },
+            "explorer": {
+              "toggle": {
+                "title": "Show Explorer"
+              }
+            },
+            "focusWorktreeList": {
+              "title": "Focus worktree list"
+            },
+            "left": {
+              "toggle": {
+                "title": "Toggle Sidebar"
+              }
+            },
+            "ports": {
+              "toggle": {
+                "title": "Show Ports"
+              }
+            },
+            "right": {
+              "toggle": {
+                "title": "Toggle Right Sidebar"
+              }
+            },
+            "search": {
+              "toggle": {
+                "title": "Show Search"
+              }
+            },
+            "sleepingWorkspaces": {
+              "toggle": {
+                "title": "Toggle Sleeping Workspaces"
+              }
+            },
+            "sourceControl": {
+              "toggle": {
+                "title": "Show Source Control"
+              }
+            }
+          },
+          "sourceControl": {
+            "sendReviewNotes": {
+              "title": "Send Review Notes to Agent"
+            }
+          },
+          "tab": {
+            "close": {
+              "title": "Close active tab"
+            },
+            "closeAll": {
+              "title": "Close all editor tabs"
+            },
+            "newAgent": {
+              "title": "New agent tab (default agent)"
+            },
+            "newBrowser": {
+              "title": "New browser tab"
+            },
+            "newMarkdown": {
+              "title": "New markdown tab"
+            },
+            "newSimulator": {
+              "title": "New mobile emulator tab"
+            },
+            "newTerminal": {
+              "title": "New terminal tab"
+            },
+            "nextAllTypes": {
+              "title": "Next tab (all types)"
+            },
+            "nextSameType": {
+              "title": "Next tab (same type)"
+            },
+            "nextTerminal": {
+              "title": "Next terminal tab"
+            },
+            "openMarkdown": {
+              "title": "Open markdown tab"
+            },
+            "openQuickCommandsMenu": {
+              "title": "Toggle Quick Commands menu"
+            },
+            "previousAllTypes": {
+              "title": "Previous tab (all types)"
+            },
+            "previousRecent": {
+              "title": "Previous recent tab"
+            },
+            "previousSameType": {
+              "title": "Previous tab (same type)"
+            },
+            "previousTerminal": {
+              "title": "Previous terminal tab"
+            },
+            "rename": {
+              "title": "Rename active tab"
+            },
+            "reopenClosed": {
+              "title": "Reopen closed tab"
+            },
+            "selectByIndex": {
+              "title": "Select Tab 1–9"
+            }
+          },
+          "terminal": {
+            "clear": {
+              "title": "Clear active pane"
+            },
+            "clearPaneTitle": {
+              "title": "Clear Pane Title"
+            },
+            "closePane": {
+              "title": "Close active pane"
+            },
+            "copySelection": {
+              "title": "Copy terminal selection"
+            },
+            "equalizePaneSizes": {
+              "title": "Equalize pane sizes"
+            },
+            "expandPane": {
+              "title": "Expand / collapse pane"
+            },
+            "focusNextPane": {
+              "title": "Focus next pane"
+            },
+            "focusPreviousPane": {
+              "title": "Focus previous pane"
+            },
+            "paste": {
+              "title": "Paste into terminal"
+            },
+            "search": {
+              "title": "Search active pane"
+            },
+            "selectAll": {
+              "title": "Select all terminal text"
+            },
+            "setTitle": {
+              "title": "Set Title…"
+            },
+            "splitDown": {
+              "title": "Split terminal down"
+            },
+            "splitRight": {
+              "title": "Split terminal right"
+            },
+            "switchInputSource": {
+              "title": "Switch input source / language (native)"
+            }
+          },
+          "view": {
+            "tasks": {
+              "title": "Open Tasks"
+            }
+          },
+          "voice": {
+            "dictation": {
+              "title": "Dictation"
+            }
+          },
+          "workspace": {
+            "create": {
+              "title": "Create worktree"
+            },
+            "delete": {
+              "title": "Delete Workspace"
+            },
+            "openBoard": {
+              "title": "Toggle Workspace Board"
+            },
+            "rename": {
+              "title": "Rename worktree"
+            },
+            "selectByIndex": {
+              "title": "Select Workspace 1–9"
+            }
+          },
+          "worktree": {
+            "history": {
+              "back": {
+                "title": "Worktree History Back"
+              },
+              "forward": {
+                "title": "Worktree History Forward"
+              }
+            },
+            "navigateDown": {
+              "title": "Next worktree"
+            },
+            "navigateUp": {
+              "title": "Previous worktree"
+            },
+            "palette": {
+              "title": "Switch worktree"
+            },
+            "quickOpen": {
+              "title": "Go to File"
+            }
+          },
+          "zoom": {
+            "in": {
+              "title": "Zoom In"
+            },
+            "out": {
+              "title": "Zoom Out"
+            },
+            "reset": {
+              "title": "Reset Size"
+            }
+          }
+        }
+      },
       "terminal": {
         "shortcut": {
           "capture": {
@@ -2779,6 +3112,11 @@
     }
   },
   "settings": {
+    "appearance": {
+      "language": {
+        "turkish": "Türkçe"
+      }
+    },
     "browser": {
       "clientHostedRemote": {
         "description": "Render remote workspace pages on this desktop; network traffic still goes through the remote host. Applies to new pages only.",

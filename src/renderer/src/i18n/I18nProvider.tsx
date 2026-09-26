@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { I18nextProvider } from 'react-i18next'
 
 import { useAppStore } from '../store'
-import { i18n, setRendererPluginLanguagePacks } from './i18n'
+import { getIntlLocale, i18n, setRendererPluginLanguagePacks } from './i18n'
 import { resolveUiLocale } from './supported-languages'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { usePluginLanguagePacks } from '../store/plugin-language-packs'
@@ -26,6 +26,21 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
     setRendererPluginLanguagePacks(pluginLanguagePacks)
     requestedLocale.current = null
   }, [pluginLanguagePacks])
+
+  useEffect(() => {
+    // Why: CSS text-transform: uppercase/lowercase only applies Turkish-correct
+    // dotted/dotless I casing when an ancestor's lang attribute says tr/az —
+    // without this, "değişiklikler" uppercases to "DEĞIŞIKLIKLER" instead of
+    // "DEĞİŞİKLİKLER". Sync <html lang> to the active locale on every change.
+    const applyDocumentLang = (): void => {
+      document.documentElement.lang = getIntlLocale()
+    }
+    applyDocumentLang()
+    i18n.on('languageChanged', applyDocumentLang)
+    return () => {
+      i18n.off('languageChanged', applyDocumentLang)
+    }
+  }, [])
 
   useEffect(() => {
     // Why: track the last *requested* locale instead of checking i18n.language —
