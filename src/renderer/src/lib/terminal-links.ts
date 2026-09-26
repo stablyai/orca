@@ -79,8 +79,7 @@ function hasSeparatorAfterWhitespace(text: string): boolean {
 }
 
 function hasInternalWhitespaceBeforeTrimmedEnd(text: string): boolean {
-  const trimmed = text.trimEnd()
-  return /\s/.test(trimmed)
+  return /\s/.test(text.trimEnd())
 }
 
 function isAtTrimmedLineEnd(lineText: string, endIndex: number): boolean {
@@ -118,6 +117,9 @@ function isInsideUriScheme(lineText: string, range: DetectedTerminalFileLinkRang
 function trimSpacedPathTrailingProse(
   range: DetectedTerminalFileLinkRange
 ): DetectedTerminalFileLinkRange {
+  if (!range.text.includes('.')) {
+    return range
+  }
   // Why: keep one extension-terminated path, but drop trailing prose or a
   // second unrelated path that the broad spaced-path scan also captured. A
   // line-end extension token only extends the span when the added segment is
@@ -131,7 +133,6 @@ function trimSpacedPathTrailingProse(
   let match: RegExpExecArray | null
   while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
     const end = match.index + match[0].length
-    const text = range.text.slice(0, end)
     while (nextPathStart && nextPathStart.index + nextPathStart[0].length <= end) {
       pathStartCount += 1
       nextPathStart = pathStartPattern.exec(range.text)
@@ -144,7 +145,7 @@ function trimSpacedPathTrailingProse(
       selected === null ||
       /[\\/]/.test(range.text.slice(selected.length, end))
     ) {
-      selected = text
+      selected = range.text.slice(0, end)
     }
   }
   if (!selected) {

@@ -5,13 +5,17 @@ export type ParsedFileLinkLocation = {
 }
 
 export function parseFileLinkLocation(value: string): ParsedFileLinkLocation | null {
-  const match = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value)
-  const pathText = match?.[1]
+  if (!value || /[\r\n\u2028\u2029]/.test(value)) {
+    return null
+  }
+  // Only trailing digits can carry a location; don't retry suffixes at every path character.
+  const match = /\d$/.test(value) ? /:(\d+)(?::(\d+))?$/.exec(value) : null
+  const pathText = match ? value.slice(0, match.index) : value
   if (!pathText) {
     return null
   }
-  const line = match[2] ? Number.parseInt(match[2], 10) : null
-  const column = match[3] ? Number.parseInt(match[3], 10) : null
+  const line = match ? Number.parseInt(match[1], 10) : null
+  const column = match?.[2] ? Number.parseInt(match[2], 10) : null
   if ((line !== null && line < 1) || (column !== null && column < 1)) {
     return null
   }
