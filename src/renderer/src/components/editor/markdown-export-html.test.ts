@@ -35,4 +35,10 @@ describe('buildMarkdownExportHtml', () => {
     expect(html).toContain('[data-orca-export-hide')
     expect(html).toContain('display: none')
   })
+
+  it('caps Mermaid SVGs at the printable page height', () => {
+    const html = buildMarkdownExportHtml({ title: 'Diagram', renderedHtml: '<svg />' })
+
+    expect(html).toContain('.orca-export-root svg { max-height: 9.5in; }')
+  })
 })

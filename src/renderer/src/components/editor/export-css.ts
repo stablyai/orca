@@ -139,6 +139,8 @@ html, body {
 
 @media print {
   pre, code, table, img, svg { page-break-inside: avoid; }
+  /* Why: A4 minus the PDF margins is 10.19in, so reserve heading space to keep a tall diagram on its page. */
+  .orca-export-root svg { max-height: 9.5in; }
   h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
 }
 `
