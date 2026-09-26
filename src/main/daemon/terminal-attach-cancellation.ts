@@ -1,17 +1,16 @@
 import { TerminalAttachCanceledError } from './daemon-errors'
+import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 
-/** Never resolves; only rejects, so it can bound a wait without settling it. */
-export function rejectOnAbort(signal: AbortSignal | undefined, sessionId: string): Promise<never> {
+export function waitForTerminalAttachOperation<T>(
+  operation: Promise<T>,
+  signal: AbortSignal | undefined,
+  sessionId: string
+): Promise<T> {
   if (!signal) {
-    return new Promise<never>(() => {})
+    return operation
   }
-  return new Promise<never>((_resolve, reject) => {
-    if (signal.aborted) {
-      reject(new TerminalAttachCanceledError(sessionId))
-      return
-    }
-    signal.addEventListener('abort', () => reject(new TerminalAttachCanceledError(sessionId)), {
-      once: true
-    })
+  return new PromiseSettlementWaiters(operation).wait({
+    signal,
+    createAbortError: () => new TerminalAttachCanceledError(sessionId)
   })
 }
