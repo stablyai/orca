@@ -17,6 +17,7 @@ import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-
 import {
   CLAUDE_ROOT,
   claudeRecord,
+  EPOCH,
   HANDLE_ROOT,
   journal,
   TEARDOWN_CURRENT,
@@ -64,6 +65,7 @@ describe('deriving what was working at teardown', () => {
         recordedAt: NOW,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
+        journalCursor: { epoch: EPOCH, sequence: 1 },
         providerHandleRoot: HANDLE_ROOT,
         latestUserItemId: null,
         activity: { state: 'working', prompts: [], tasks: [] }
@@ -450,7 +452,8 @@ describe('the resumable set', () => {
       markers: [marker({ providerHandleRoot: CLAUDE_ROOT })],
       getRecord: () => claudeRecord('5aed93d6-advanced-leaf'),
       supportsRecord: () => true,
-      latestPrompt: () => ''
+      latestPrompt: () => '',
+      movedOn: () => false
     })
 
     expect(candidates).toHaveLength(1)
@@ -464,7 +467,8 @@ describe('the resumable set', () => {
       markers: [forked],
       getRecord: () => claudeRecord(null, 'prov-session-2'),
       supportsRecord: () => true,
-      latestPrompt: () => ''
+      latestPrompt: () => '',
+      movedOn: () => false
     })
 
     expect(set.candidates).toEqual([])

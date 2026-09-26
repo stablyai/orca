@@ -19,6 +19,7 @@ import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS
 } from './agent-session-restart-activity'
 import type { AgentSessionRestartActivity } from './agent-session-restart-activity'
+import type { AgentJournalCursor } from './agent-session-journal-types'
 
 /** Why the app went away. Recorded because an update install is a restart the user did not choose,
  *  and the surface that offers the resume says so. */
@@ -67,6 +68,12 @@ export type AgentSessionResumeMarker = {
   providerHandleRoot: string
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
+  /**
+   * Where the chat's journal stood when the offer was taken. A message accepted after it, or a
+   * journal on another epoch, means the chat moved on. Absent on markers from builds that did not
+   * record it.
+   */
+  journalCursor?: AgentJournalCursor
   /**
    * What the session was doing, captured at the same stop-time snapshot that decided the offer.
    * The dialog row, the status bar and the wire candidate read ONLY this; nothing re-reads the
@@ -121,6 +128,10 @@ const agentSessionResumeMarkerSchema = z.object({
   trigger: z.enum(AGENT_SESSION_RESUME_TRIGGERS),
   providerHandleRoot: markerField,
   teardownId: markerField,
+  journalCursor: z
+    .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
+    .optional()
+    .catch(undefined),
   activity: agentSessionRestartActivitySchema.optional().catch(undefined)
 })
 
@@ -131,6 +142,10 @@ export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResum
   if (!parsed.success) {
     return null
   }
-  const { activity, ...marker } = parsed.data
-  return activity === undefined ? marker : { ...marker, activity }
+  const { activity, journalCursor, ...marker } = parsed.data
+  return {
+    ...marker,
+    ...(journalCursor === undefined ? {} : { journalCursor }),
+    ...(activity === undefined ? {} : { activity })
+  }
 }

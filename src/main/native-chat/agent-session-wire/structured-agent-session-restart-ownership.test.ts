@@ -326,14 +326,11 @@ it('fails closed on corrupt recovery storage while an ordinary send still works'
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
   ).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-  // list; the action's read of offers and of failures; the post-action refresh of both; and the
-  // send's start, which cannot withdraw an offer it cannot read.
-  await vi.waitFor(() =>
-    expect(warning).toHaveBeenLastCalledWith(
-      '[structured-agent-session] withdrawing a restart offer failed'
-    )
-  )
-  expect(warning).toHaveBeenCalledTimes(6)
+  // list; the action's read of offers and of failures; the post-action refresh of both. The send
+  // cannot withdraw an offer it cannot read either, and says so.
+  const withdrawing = '[structured-agent-session] withdrawing a restart offer failed'
+  await vi.waitFor(() => expect(warning).toHaveBeenLastCalledWith(withdrawing))
+  expect(warning.mock.calls.filter(([message]) => message !== withdrawing)).toHaveLength(5)
   warning.mockRestore()
 })
 

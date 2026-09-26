@@ -208,6 +208,7 @@ export function resumableSet(input: {
     markers: input.markers,
     getRecord: () => record(input.chain === undefined ? {} : { chain: input.chain }),
     supportsRecord: () => true,
-    latestPrompt: () => 'fix the auth bug'
+    latestPrompt: () => 'fix the auth bug',
+    movedOn: () => false
   })
 }

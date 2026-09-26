@@ -59,8 +59,6 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   recordResumeMarkers: () => Promise<void>
 }): StructuredAgentSessionTeardownPhase[] {
   return [
-    // First: once quit begins, a start that lands must not withdraw an offer teardown captures.
-    { name: 'dispose-idle-sweep', run: () => collaborators.idleSweep.dispose() },
     {
       name: 'begin-resume-markers',
       run: () => {
@@ -71,6 +69,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
         }
       }
     },
+    { name: 'dispose-idle-sweep', run: () => collaborators.idleSweep.dispose() },
     { name: 'stop-lease-renewal', run: () => collaborators.runtimeState.stopLeaseRenewal() },
     { name: 'drain-attaches', run: () => collaborators.tasks.drainAttaches() },
     {

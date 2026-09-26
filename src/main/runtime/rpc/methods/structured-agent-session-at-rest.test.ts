@@ -123,13 +123,27 @@ describe('opening a chat at rest (P2-01)', () => {
     expect(held).toMatchObject({ ok: true, result: { held: true } })
   })
 
+  // Worktree activation asks this for every chat tab in the worktree.
+  it('answers the owner check from the record without opening the chat', async () => {
+    await restingChat()
+
+    const [status] = await call('agentSession.handoffStatus', { sessionId: SESSION })
+
+    expect(status).toMatchObject({ ok: true, result: { owner: expect.any(String) } })
+    expect(rig.host.hasSession(SESSION)).toBe(false)
+  })
+
   it('starts the agent on the first send (P2-01)', async () => {
     await restingChat()
     const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
     const sent = await rig.host.send(CALLER, restTestSend('wake up', fence))
-    expect(sent.ok).toBe(true)
-    await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledOnce())
-    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+    if (!sent.ok) {
+      throw new Error(`send refused: ${sent.refusal.code}`)
+    }
+    // Awaits the provider's answer itself rather than polling for it, however slow the start.
+    await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+    expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+    expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
   })
 })
 
@@ -165,6 +179,31 @@ describe('the accessor', () => {
     )
     expect(openedJournals.size).toBe(1)
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
+  })
+
+  it('opens nothing once quit began, for a read that was already waiting on the lock', async () => {
+    await restingChat()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private per-session queue, held so the read waits behind it.
+    const serialize = Reflect.get(rig.host, 'serialize') as (
+      sessionId: string,
+      task: () => Promise<void>
+    ) => Promise<void>
+    let release = (): void => undefined
+    const held = new Promise<void>((started) => {
+      void serialize(SESSION, () => {
+        started()
+        return new Promise<void>((resolve) => (release = resolve))
+      })
+    })
+    await held
+    const read = rig.host.history({ sessionId: SESSION, direction: 'tail' })
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private lifetime, disposed as quit's first teardown step does.
+    ;(Reflect.get(rig.host, 'lifetime') as { dispose: () => void }).dispose()
+    release()
+
+    await expect(read).rejects.toThrow()
+    expect(rig.host.hasSession(SESSION)).toBe(false)
   })
 
   it('opens a corrupt journal through the recovering open and still accepts a send (P2-03)', async () => {
@@ -274,6 +313,52 @@ describe('an agent exit', () => {
     expect(rig.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     await rig.host.send(CALLER, restTestSend('again', fence))
     await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(2))
+  })
+
+  it('whose settlement write failed is settled by the next send, which is delivered', async () => {
+    await foundRestTestChat(rig)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private map, read for the child and its journal.
+    const sessions = Reflect.get(rig.host, 'sessions') as Map<
+      string,
+      {
+        child: { fence: number; generation: string } | null
+        journal: { appendLifecycleBatch: (...args: never[]) => Promise<unknown> }
+      }
+    >
+    const open = sessions.get(SESSION)!
+    const running = open.child!
+    // A turn in flight, so the exit has something to settle.
+    rig.adapter.acquire.mock.calls
+      .at(-1)?.[0]
+      .events?.appendItem(
+        { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'working', ordinal: 50 },
+        { kind: 'turn', turnId: 'working', state: 'running' }
+      )
+    await rig.host.flushStreamedEvents(SESSION)
+    vi.spyOn(open.journal, 'appendLifecycleBatch').mockRejectedValueOnce(new Error('disk full'))
+    await rig.host.handleAdapterEvent({
+      type: 'ended',
+      sessionId: SESSION,
+      reason: 'killed',
+      cause: 'unexpected-exit',
+      fence: running.fence,
+      acquisitionGeneration: running.generation
+    })
+    await vi.waitFor(() =>
+      expect(rig.store.getRecord(SESSION)?.lease.settlementRetryRequired).toBe(true)
+    )
+
+    const sent = await rig.host.send(
+      CALLER,
+      restTestSend('again', rig.store.getRecord(SESSION)!.lease.runtimeFence)
+    )
+
+    if (!sent.ok) {
+      throw new Error(`send refused: ${sent.refusal.code}`)
+    }
+    await rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
+    expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2)
+    expect(rig.store.getRecord(SESSION)?.lease.settlementRetryRequired).toBeUndefined()
   })
 })
 

@@ -28,13 +28,13 @@ export class StructuredAgentSessionClientDelivery {
     now: () => number,
     deps: () => StructuredAgentSessionHostDeps,
     private readonly onJournalActivity?: (sessionId: string) => void,
-    onOwnedEdge?: (sessionId: string) => void
+    onAgentStarted?: (sessionId: string) => void
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
       now,
       deps,
-      ...(onOwnedEdge ? { onOwnedEdge } : {})
+      ...(onAgentStarted ? { onAgentStarted } : {})
     })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({ sessions, now })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>

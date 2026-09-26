@@ -7,10 +7,9 @@
 // restored thread), and every reading of those rewrites as "the work is done" dropped chats that
 // were owed a resume.
 //
-// An offer ends when the chat's agent is started again, other than by its own continuation; the
-// host retires it at that start. The one ending this predicate can see — the conversation forked —
-// is reported back as `superseded` so the caller DELETES the record rather than filtering it
-// forever. What remains are structural checks that are not about work at all: the record still
+// An offer ends when the chat moves on after the restart — another message accepted, or its agent
+// started — or when the conversation forked. Both are reported back as `superseded` so the caller
+// DELETES the record rather than filtering it forever. What remains are structural checks that are not about work at all: the record still
 // exists and this build supports it, and the lease is free.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -65,8 +64,8 @@ export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCa
 
 export type StructuredAgentSessionResumableSet = {
   candidates: StructuredAgentSessionResumeCandidate[]
-  /** Markers the chat has provably moved past: a forked conversation. Every ending deletes: the
-   *  caller retires these rather than re-filtering them forever. */
+  /** Markers the chat has provably moved past, or whose conversation forked. Every ending deletes:
+   *  the caller retires these rather than re-filtering them forever. */
   superseded: AgentSessionResumeMarker[]
 }
 
@@ -75,6 +74,8 @@ export type StructuredAgentSessionResumeSetInput = {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   supportsRecord: (record: AgentSessionRecord) => boolean
   latestPrompt: (sessionId: string) => string
+  /** Whether the chat moved on since the offer was taken; false when its journal is not open here. */
+  movedOn: (marker: AgentSessionResumeMarker) => boolean
   /**
    * Whether the lease must be free.
    *
@@ -108,6 +109,10 @@ export function structuredAgentSessionResumableSet(
       continue
     }
     if (agentSessionProviderHandleRoot(head.handle) !== marker.providerHandleRoot) {
+      superseded.push(marker)
+      continue
+    }
+    if (input.movedOn(marker)) {
       superseded.push(marker)
       continue
     }

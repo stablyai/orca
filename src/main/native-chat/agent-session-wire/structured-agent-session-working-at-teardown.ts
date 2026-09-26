@@ -217,6 +217,7 @@ export function structuredAgentSessionWorkingAtStop(input: {
     recordedAt: input.now,
     trigger: input.trigger,
     teardownId: input.teardownId,
+    journalCursor: snapshot.cursor,
     // Root, not key: the close path advances Claude's leaf moments after this runs, and a key
     // comparison would then refuse the session forever.
     providerHandleRoot: agentSessionProviderHandleRoot(head.handle),

@@ -757,6 +757,7 @@ jobs:
           tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
+          tests/e2e/cross-version-wire/agent-session-resume-marker-downgrade.unit.test.ts
 
   managed_hook_node18:
     name: managed hooks on Node 18

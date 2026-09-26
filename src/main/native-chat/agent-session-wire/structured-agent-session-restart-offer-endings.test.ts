@@ -24,9 +24,13 @@ it('deletes the offer once the user sends their own message in that chat', async
   const body = hostTestMessage('Never mind, do this instead')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
 
-  await vi.waitFor(async () => {
-    expect(await capsule.list(NOW)).toEqual([])
-  })
+  // Written when the agent's start is proven: a cold start.
+  await vi.waitFor(
+    async () => {
+      expect(await capsule.list(NOW)).toEqual([])
+    },
+    { timeout: 10_000 }
+  )
   expect(await host.restartResume.list()).toEqual([])
 })
 
