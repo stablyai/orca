@@ -17442,9 +17442,9 @@
         "responding": "智能体正在回复",
         "working": "处理中…",
         "thinking": "思维",
-        "workingFor": "为 {{value0}} 工作",
-        "workedFor": "为 {{value0}} 工作",
-        "toggleDetails": "切换转弯详情"
+        "workingFor": "已工作 {{value0}}",
+        "workedFor": "工作了 {{value0}}",
+        "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
       "toggle": {
@@ -17983,10 +17983,10 @@
     },
     "cmd-j": {
       "paletteSessionAge": {
-        "minutes": "{{value0}}米",
-        "hours": "{{value0}}h",
-        "days": "{{value0}}d",
-        "underOneMinute": "<1m"
+        "minutes": "{{value0}}分",
+        "hours": "{{value0}}小时",
+        "days": "{{value0}}天",
+        "underOneMinute": "<1分钟"
       }
     },
     "settings": {

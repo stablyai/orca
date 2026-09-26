@@ -17477,9 +17477,9 @@
         "responding": "Agent이 응답 중입니다.",
         "working": "일하고 있는…",
         "thinking": "생각",
-        "workingFor": "{{value0}}에서 근무",
-        "workedFor": "{{value0}}에서 근무함",
-        "toggleDetails": "회전 세부정보 전환"
+        "workingFor": "{{value0}} 작업 중",
+        "workedFor": "{{value0}} 작업 완료",
+        "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
       "toggle": {
@@ -17925,7 +17925,7 @@
           "justNow": "방금",
           "minutesAgo": "{{value0}}분 전",
           "hoursAgo": "{{value0}}시간 전",
-          "daysAgo": "{{value0}}d 전"
+          "daysAgo": "{{value0}}일 전"
         },
         "host": {
           "label": "호스트: {{value0}}",
@@ -17983,9 +17983,9 @@
     },
     "cmd-j": {
       "paletteSessionAge": {
-        "minutes": "{{value0}}m",
-        "hours": "{{value0}}h",
-        "days": "{{value0}}d",
+        "minutes": "{{value0}}분",
+        "hours": "{{value0}}시간",
+        "days": "{{value0}}일",
         "underOneMinute": "1분 미만"
       }
     },

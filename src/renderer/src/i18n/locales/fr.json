@@ -17541,9 +17541,9 @@
         "responding": "L'agent répond",
         "working": "Fonctionnement…",
         "thinking": "Réflexion",
-        "workingFor": "Travailler pour {{value0}}",
-        "workedFor": "A travaillé pour {{value0}}",
-        "toggleDetails": "Basculer les détails du virage"
+        "workingFor": "En cours depuis {{value0}}",
+        "workedFor": "A travaillé pendant {{value0}}",
+        "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
       "toggle": {
