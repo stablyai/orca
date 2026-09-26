@@ -312,23 +312,25 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
   const TEXT = providerStartupFailureOutcome(EXIT)
 
   /** The first child dies starting, before any exit is published for it. */
-  async function diedStarting(text = TEXT): Promise<string> {
-    const settled = deferred<string>()
+  async function diedStarting(reason = EXIT): Promise<string> {
+    const settled = deferred<{ reason: string }>()
     adapterExtras = { awaitStarted: vi.fn(() => settled.promise) }
     await restartHost()
     acquire.mockImplementationOnce(spawnStartingChild)
     const first = await accept('first')
     await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalled())
     ownerProbe = ALIVE
-    settled.resolve(text)
+    settled.resolve({ reason })
     return first
   }
 
   it('keeps a long start failure within what the record store accepts, so the release sticks', async () => {
     const stderr = Array.from({ length: 40 }, (_, line) => `stderr line ${line}`).join('\n')
-    await diedStarting(providerStartupFailureOutcome(`claude exited (code 1): ${stderr}`))
+    const exit = `claude exited (code 1): ${stderr}`
+    await diedStarting(exit)
 
     await eventually(() => expect(lease()).toMatchObject({ claimStatus: 'released' }))
+    expect(lease()?.deathEvidence?.detail).toBe(exit.slice(0, 512))
     // Read back from disk: a detail past the store's bound is quarantined and the release undone.
     const reopened = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
@@ -339,6 +341,10 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
       ownerProcess: null,
       deathEvidence: { kind: 'exit-observed' }
     })
+    // And the live store's next transaction keeps it: the Retry starts on the released lease.
+    ownerProbe = GONE
+    const retry = await accept('retry')
+    await eventually(() => expect(submission(retry)?.dispatchState).toBe('accepted'))
   })
 
   it('ends the child when the death is seen, so a Retry at once starts a new child (W42)', async () => {
@@ -346,14 +352,20 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
 
     await eventually(() => expect(submission(first)?.dispatchState).toBe('rejected'))
     await eventually(() => expect(conversation()?.child).toBeNull())
+    // The provider's own words, not the chat's copy of them.
     expect(conversation()?.lastEndedChild).toMatchObject({
       cause: 'exit',
+      reason: EXIT,
       duringStartup: true,
       rootGone: true
     })
     // The child ends at the stop step; the lease moves at the end of the same wind-down.
     await eventually(() =>
-      expect(lease()).toMatchObject({ claimStatus: 'released', handoffStage: null })
+      expect(lease()).toMatchObject({
+        claimStatus: 'released',
+        handoffStage: null,
+        deathEvidence: { detail: EXIT }
+      })
     )
 
     ownerProbe = GONE

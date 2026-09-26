@@ -4,6 +4,7 @@
 // so a first turn never runs under defaults the restore was about to replace.
 
 import { providerStartupFailureRejection } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
+import type { StructuredAgentSessionStartupFailure } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeSession } from './claude-structured-session-state'
 
 export type ClaudeSessionStartup = {
@@ -22,6 +23,14 @@ export function createClaudeSessionStartup(): ClaudeSessionStartup {
     end = resolve
   })
   return { state: 'pending', failure: null, settled: ended, end }
+}
+
+export function claudeStartupFailure(
+  session: ClaudeSession
+): StructuredAgentSessionStartupFailure | null {
+  return session.startup.state === 'failed'
+    ? { reason: session.startup.failure?.message ?? null }
+    : null
 }
 
 export function claudeStartupFailureReason(session: ClaudeSession): string | null {

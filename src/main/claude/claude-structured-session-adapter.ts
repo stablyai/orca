@@ -2,7 +2,8 @@ import { compactClaudeSession, observeClaudeCompaction } from './claude-structur
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionAdapter
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionStartupFailure
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { stopClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
@@ -13,7 +14,7 @@ import { supportsClaudeStructuredLocation } from './claude-structured-location-s
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import {
-  claudeStartupFailureReason,
+  claudeStartupFailure,
   claudeStartupSettledWithin
 } from './claude-structured-session-startup-state'
 import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
@@ -120,14 +121,16 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   /** Resolves once a published session's startup has landed, faulted, or been ended by a close;
    *  with the reason when it did not land. */
-  awaitStarted = async (sessionId: string): Promise<void | string> => {
+  awaitStarted = async (
+    sessionId: string
+  ): Promise<void | StructuredAgentSessionStartupFailure> => {
     // An exit still closing is the host's child until it publishes, so its failed start answers.
     const session = this.sessions.get(sessionId) ?? this.exits.get(sessionId)?.session
     if (!session) {
       return
     }
     await session.startup.settled
-    return claudeStartupFailureReason(session) ?? undefined
+    return claudeStartupFailure(session) ?? undefined
   }
 
   /** Restart reconciliation reads the transcript a resume replays; these maps track liveness. */
