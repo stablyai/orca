@@ -12,6 +12,7 @@ import {
   type PtyInputWriteQueue,
   type PtyInputWriteQueueDeps
 } from './pty-input-write-queue-contract'
+import type { PtyInputOptions } from './pty-transport-types'
 import {
   createHeadQueue,
   peekHeadQueue,
@@ -111,7 +112,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   // Why: one cancel per in-flight write rather than `.then()` on a queue-lifetime
   // promise — those reactions are retained until that promise settles, so a
   // long-lived pane accumulated one record per acknowledged write (Esc, Ctrl+C).
-  async function writeAcceptedChunk(id: string, data: string): Promise<boolean> {
+  async function writeAcceptedChunk(item: PendingPtyInputWrite, data: string): Promise<boolean> {
     let cancel = (): void => undefined
     const cancelled = new Promise<boolean>((resolve) => {
       cancel = () => resolve(false)
@@ -122,7 +123,9 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     try {
       return await Promise.race([
         cancelled,
-        Promise.resolve(deps.writeAccepted?.(id, data) ?? false).catch(() => false)
+        Promise.resolve(deps.writeAccepted?.(item.id, data, item.options) ?? false).catch(
+          () => false
+        )
       ])
     } finally {
       pendingAcceptedCancels.delete(cancel)
@@ -173,6 +176,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
               peek.tooLarge !== false ||
               peek.chunks !== undefined ||
               !isCoalesciblePtyInput(peek) ||
+              peek.options?.userInput !== next.options?.userInput ||
               payload.length + peek.text.length > TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS
             ) {
               break
@@ -180,7 +184,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
             payload += peek.text
             removePending(peek)
           }
-          deps.write(next.id, payload)
+          deps.write(next.id, payload, next.options)
           if (firstPending()) {
             await yieldBetweenWrites()
           }
@@ -196,8 +200,8 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         }
         const writeGeneration = generation
         const accepted = next.resolveAccepted
-          ? await writeAcceptedChunk(next.id, chunk.value)
-          : (deps.write(next.id, chunk.value), true)
+          ? await writeAcceptedChunk(next, chunk.value)
+          : (deps.write(next.id, chunk.value, next.options), true)
         if (generation !== writeGeneration || firstPending() !== next) {
           continue
         }
@@ -249,8 +253,9 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
 
   function enqueueInput(
     id: string,
-    data: string,
+    text: string,
     queryReply: boolean,
+    options: PtyInputOptions | undefined,
     resolveAccepted?: PendingPtyInputWrite['resolveAccepted']
   ): boolean {
     try {
@@ -260,20 +265,28 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
       }
       // Every query reply stays atomic so host-side ordering can classify it (#13892).
       const replyOnly = queryReply
-      if (replyOnly && !admitReply(data)) {
+      if (replyOnly && !admitReply(text)) {
         return false
       }
-      const tooLarge = replyOnly ? false : isTerminalInputTooLargeWithDeferredMeasurement(data)
+      const tooLarge = replyOnly ? false : isTerminalInputTooLargeWithDeferredMeasurement(text)
       if (tooLarge === true) {
         resolveAccepted?.(false)
         return false
       }
-      const item = { sequence: nextSequence, id, text: data, replyOnly, tooLarge, resolveAccepted }
+      const item = {
+        sequence: nextSequence,
+        id,
+        text,
+        replyOnly,
+        options,
+        tooLarge,
+        resolveAccepted
+      }
       nextSequence += 1
       if (replyOnly) {
         pendingReplies.items.push(item)
         pendingReplyCount += 1
-        pendingReplyCodeUnits += data.length
+        pendingReplyCodeUnits += text.length
       } else {
         pendingOrdinary.items.push(item)
       }
@@ -286,17 +299,17 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   }
 
   return {
-    enqueue(id: string, data: string): boolean {
-      return enqueueInput(id, data, false)
+    enqueue(id: string, data: string, options?: PtyInputOptions): boolean {
+      return enqueueInput(id, data, false, options)
     },
 
     enqueueQueryReply(id: string, data: string): boolean {
-      return enqueueInput(id, data, true)
+      return enqueueInput(id, data, true, undefined)
     },
 
-    enqueueAccepted: (id, data) =>
+    enqueueAccepted: (id, data, options) =>
       new Promise((resolve) => {
-        enqueueInput(id, data, false, resolve)
+        enqueueInput(id, data, false, options, resolve)
       }),
 
     async waitForDrain(): Promise<void> {

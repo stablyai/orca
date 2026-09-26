@@ -248,7 +248,8 @@ function sendRuntimePtyInputWithinLimit(
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    window.api.pty.write(ptyId, data)
+    // Why tagged: the environment branch reaches terminal.send, which the host records as input.
+    window.api.pty.write(ptyId, data, { userInput: true })
     recordRuntimeTerminalInputForPtyId(ptyId)
     return true
   }
@@ -286,9 +287,9 @@ export async function sendRuntimePtyInputVerified(
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    const accepted = await window.api.pty.writeAccepted(ptyId, data)
+    const accepted = await window.api.pty.writeAccepted(ptyId, data, { userInput: true })
     if (!accepted) {
-      window.api.pty.write(ptyId, data)
+      window.api.pty.write(ptyId, data, { userInput: true })
       // Why: SSH/local fallback writes are fire-and-forget. Callers use this
       // boolean to continue UX flow, while hook telemetry confirms real turns.
       recordRuntimeTerminalInputForPtyId(ptyId)

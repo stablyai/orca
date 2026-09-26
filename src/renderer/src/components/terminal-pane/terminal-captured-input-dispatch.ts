@@ -32,7 +32,7 @@ export function sendCapturedTerminalInput({
   ) {
     return false
   }
-  const sent = capturedTransport.sendInput(data)
+  const sent = capturedTransport.sendInput(data, { userInput: true })
   if (sent) {
     onAccepted?.()
   }

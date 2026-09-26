@@ -4,7 +4,6 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
 import {
   killPtyFromRuntimeController,
-  markReversibleStopsFromRuntimeController,
   retireRejectedPtyFromRuntimeController,
   stopAndWaitPtyFromRuntimeController
 } from './kill'
@@ -56,7 +55,6 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     kill: (ptyId) => killPtyFromRuntimeController(deps, ptyId),
     retireRejectedPty: (ptyId, stopConfirmed) =>
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed),
-    markReversibleStops: (ptyIds) => markReversibleStopsFromRuntimeController(deps, ptyIds),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),

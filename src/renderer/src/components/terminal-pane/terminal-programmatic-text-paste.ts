@@ -66,7 +66,7 @@ export function handleTerminalProgrammaticTextPaste({
     .then((plan) =>
       executeTerminalPastePlan(plan, {
         pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
-        writePty: (data) => writeTerminalPastePtyInput(transport, data),
+        writePty: (data) => writeTerminalPastePtyInput(transport, data, { userInput: true }),
         isTargetCurrent: () =>
           isTerminalPanePasteTargetCurrent({
             manager: getManager(),

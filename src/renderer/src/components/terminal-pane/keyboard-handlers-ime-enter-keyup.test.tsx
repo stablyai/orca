@@ -328,7 +328,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
     vi.runAllTimers()
 
     expect(harness.sendInput).toHaveBeenCalledTimes(1)
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', { userInput: true })
     hook.unmount()
     harness.dispose()
   })
@@ -351,7 +351,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
     vi.runAllTimers()
 
     expect(harness.sendInput).toHaveBeenCalledTimes(1)
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', { userInput: true })
     hook.unmount()
     harness.dispose()
   })
@@ -374,7 +374,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
 
     expect(harness.setActivePane).toHaveBeenCalledWith(2, { focus: false })
     expect(harness.sendInput).toHaveBeenCalledOnce()
-    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r')
+    expect(harness.sendInput).toHaveBeenCalledWith('\x1b\r', { userInput: true })
     hook.unmount()
     harness.dispose()
   })

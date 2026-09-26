@@ -58,6 +58,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
+  // Why here: every runtime spawn, the adopted return included, commits once through this point.
+  const expectedSource = ctx.hostSessionBinding?.expectedSourceBinding
+  ctx.deps.runtime?.noteTerminalSpawnCommit?.(ctx.result, expectedSource)
   if (ctx.result.agentSessionEnsure?.disposition === 'adopted') {
     // Why: an adoption is an attach to a live owner by definition, but the SSH relay's adopted
     // reply omits isReattach; derive it once so the size commit and the reservation agree.

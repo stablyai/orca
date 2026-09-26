@@ -22,7 +22,8 @@ export function isMainWindowPtyIpcEvent(
   )
 }
 
-export type PtyWritePayload = { id: string; data: string }
+/** `userInput` marks bytes a person produced, as opposed to replies and programmatic writes. */
+export type PtyWritePayload = { id: string; data: string; userInput?: true }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
 export function createPtyWriteInput(deps: {
@@ -149,6 +150,15 @@ export function createPtyWriteInput(deps: {
     mainWebContents: WebContents
   ): boolean => isMainWindowPtyIpcEvent(event, mainWindow, mainWebContents)
 
+  const noteRendererPtyInput = (args: PtyWritePayload): void => {
+    lastInputAtByPty.set(args.id, performance.now())
+    interactiveOutputCharsByPty.set(args.id, 0)
+    // Why before the write: input such as `exit` can end the process before the write returns.
+    if (args.userInput === true) {
+      runtime?.terminalRunFacts?.recordUserInput(args.id)
+    }
+  }
+
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
@@ -159,9 +169,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      noteRendererPtyInput(args)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false
@@ -181,9 +189,7 @@ export function createPtyWriteInput(deps: {
       return false
     }
     try {
-      const now = performance.now()
-      lastInputAtByPty.set(args.id, now)
-      interactiveOutputCharsByPty.set(args.id, 0)
+      noteRendererPtyInput(args)
       return writePtyProviderInput(provider, args.id, args.data)
     } catch {
       return false

@@ -45,6 +45,8 @@ import { MailPointerRepointScheduler } from './orchestration/mail-pointer-repoin
 import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registry'
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
+import { TerminalIntentionalStops } from './terminal-intentional-stops'
+import { TerminalRunFactsRegister, type TerminalSpawnCommit } from './terminal-run-facts'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
@@ -232,9 +234,16 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected pendingPtyRegistrationIncarnations = new Map<string, PtyIncarnationId | null>()
 
-  // Why: exact-stop is the current sleep transaction boundary; its exit must
-  // leave the renderer's intentional sleeping surface available for wake.
-  protected intentionalHandlelessPtyStops = new Map<string, string | null>()
+  // Why public: the PTY IPC layer's stop paths write it and its exit delivery reads it.
+  readonly intentionalPtyStops = new TerminalIntentionalStops()
+
+  readonly terminalRunFacts = new TerminalRunFactsRegister()
+
+  /** Both spawn-commit funnels report each committed process here, once. */
+  noteTerminalSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
+    this.terminalRunFacts.recordSpawnCommit(commit, expectedSourceBinding)
+    this.intentionalPtyStops.noteSpawnCommit(commit.id)
+  }
 
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
   // doesn't fan out (and per-client JSON.stringify) a snapshot several times a

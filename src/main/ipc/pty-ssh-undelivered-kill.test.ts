@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
 import { SSH_SESSION_EXPIRED_ERROR } from '../providers/ssh-pty-errors'
 import {
   registerPtyHandlers,
@@ -79,7 +80,8 @@ function installController(handlers: Map<string, never>) {
     setPtyController: vi.fn(),
     markPtyStopRequested: vi.fn(),
     markPtyLivenessUnverifiable: vi.fn(),
-    onPtyExit: vi.fn()
+    onPtyExit: vi.fn(),
+    intentionalPtyStops: new TerminalIntentionalStops()
   }
   handlers.clear()
   return { runtime }
@@ -91,7 +93,6 @@ describe('undelivered SSH stops', () => {
   function install(store: ReturnType<typeof createKillStore>): {
     kill: (ptyId: string) => boolean
     stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
-    markReversibleStops: (ptyIds: readonly string[]) => () => void
     runtime: ReturnType<typeof installController>['runtime']
   } {
     const { runtime } = installController(handlers as never)
@@ -106,12 +107,10 @@ describe('undelivered SSH stops', () => {
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       kill: (ptyId: string) => boolean
       stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
-      markReversibleStops: (ptyIds: readonly string[]) => () => void
     }
     return {
       kill: controller.kill,
       stopAndWait: controller.stopAndWait,
-      markReversibleStops: controller.markReversibleStops,
       runtime
     }
   }
@@ -298,15 +297,41 @@ describe('undelivered SSH stops', () => {
     )
     setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-f')
-    const { kill, markReversibleStops } = install(store)
-    const release = markReversibleStops([SCOPED_PTY_ID])
+    const { kill, runtime } = install(store)
+    const settleStop = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'reversible', null)
 
     try {
       kill(SCOPED_PTY_ID)
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(store.recordSshRemotePtyKillIntent).not.toHaveBeenCalled()
     } finally {
-      release()
+      settleStop(false)
+      unregisterSshPtyProvider('ssh-1')
+      deletePtyOwnership(SCOPED_PTY_ID)
+    }
+  })
+
+  it('records nothing while a reversible stop owns the PTY and a restart stop joins it', async () => {
+    const store = createKillStore()
+    registerSshPtyProvider(
+      'ssh-1',
+      sshProviderStub(async () => {
+        throw new Error('socket closed')
+      })
+    )
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    restorePtyIncarnation(SCOPED_PTY_ID, 'inc-f')
+    const { kill, runtime } = install(store)
+    const settleSleep = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'reversible', null)
+    const settleRestart = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'replaced', null)
+
+    try {
+      kill(SCOPED_PTY_ID)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(store.recordSshRemotePtyKillIntent).not.toHaveBeenCalled()
+    } finally {
+      settleRestart(false)
+      settleSleep(false)
       unregisterSshPtyProvider('ssh-1')
       deletePtyOwnership(SCOPED_PTY_ID)
     }

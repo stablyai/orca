@@ -156,7 +156,8 @@ describe('handleTerminalFileDrop', () => {
       { assertCurrent: expect.any(Function) }
     )
     expect(sendInput).toHaveBeenCalledWith(
-      wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png')
+      wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png'),
+      { userInput: true }
     )
     expect(focus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
@@ -252,7 +253,8 @@ describe('handleTerminalFileDrop', () => {
       { assertCurrent: expect.any(Function) }
     )
     expect(sendInput).toHaveBeenCalledWith(
-      wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.orca\\drops\\logo.png')
+      wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.orca\\drops\\logo.png'),
+      { userInput: true }
     )
   })
 
@@ -308,7 +310,9 @@ describe('handleTerminalFileDrop', () => {
       '/remote/repo/.orca/drops',
       { assertCurrent: expect.any(Function) }
     )
-    expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/spec.pdf ')
+    expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/spec.pdf ', {
+      userInput: true
+    })
   })
 
   it('keeps explicit local worktree drops local while a runtime is focused', async () => {
@@ -335,7 +339,7 @@ describe('handleTerminalFileDrop', () => {
     })
 
     expect(mocks.importExternalPathsToRuntime).not.toHaveBeenCalled()
-    expect(sendInput).toHaveBeenCalledWith('/Users/me/spec.pdf ')
+    expect(sendInput).toHaveBeenCalledWith('/Users/me/spec.pdf ', { userInput: true })
     expect(focus).toHaveBeenCalled()
   })
 
@@ -382,8 +386,10 @@ describe('handleTerminalFileDrop', () => {
     })
 
     expect(mocks.importExternalPathsToRuntime).not.toHaveBeenCalled()
-    expect(sendInput).toHaveBeenNthCalledWith(1, "'/mnt/c/Users/alice/Desktop/notes one.txt' ")
-    expect(sendInput).toHaveBeenNthCalledWith(2, '/home/alice/repo/README.md ')
+    expect(sendInput).toHaveBeenNthCalledWith(1, "'/mnt/c/Users/alice/Desktop/notes one.txt' ", {
+      userInput: true
+    })
+    expect(sendInput).toHaveBeenNthCalledWith(2, '/home/alice/repo/README.md ', { userInput: true })
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
   })
 
@@ -413,7 +419,7 @@ describe('handleTerminalFileDrop', () => {
       data: { paths: ['/Users/me/spec.pdf'], target: 'terminal' }
     })
 
-    expect(sendInputAccepted).toHaveBeenCalledWith('/Users/me/spec.pdf ')
+    expect(sendInputAccepted).toHaveBeenCalledWith('/Users/me/spec.pdf ', { userInput: true })
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
@@ -452,7 +458,7 @@ describe('handleTerminalFileDrop', () => {
 
     expect(activeSendInput).not.toHaveBeenCalled()
     expect(activeFocus).not.toHaveBeenCalled()
-    expect(targetSendInput).toHaveBeenCalledWith('/Users/me/spec.pdf ')
+    expect(targetSendInput).toHaveBeenCalledWith('/Users/me/spec.pdf ', { userInput: true })
     expect(targetFocus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-target')
   })
@@ -508,8 +514,8 @@ describe('handleTerminalFileDrop', () => {
       worktreePath: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
     })
     expect(sendInput.mock.calls).toEqual([
-      ["'/mnt/c/Users/Name/My Project/file.txt' "],
-      ['/home/user/repo/README.md ']
+      ["'/mnt/c/Users/Name/My Project/file.txt' ", { userInput: true }],
+      ['/home/user/repo/README.md ', { userInput: true }]
     ])
     expect(focus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
@@ -608,7 +614,7 @@ describe('handleTerminalFileDrop', () => {
       expectedSshTargetId: 'ssh-win',
       expectedSshConnectionGeneration: 4
     })
-    expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ')
+    expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ', { userInput: true })
     expect(focus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
   })
@@ -684,6 +690,6 @@ describe('handleTerminalFileDrop', () => {
       data: { paths: ["/Users/me/it's here.txt"], target: 'terminal' }
     })
 
-    expect(sendInput).toHaveBeenCalledWith("'/remote/repo/it'\\''s here.txt' ")
+    expect(sendInput).toHaveBeenCalledWith("'/remote/repo/it'\\''s here.txt' ", { userInput: true })
   })
 })

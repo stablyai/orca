@@ -1,4 +1,5 @@
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import type { PtyInputOptions } from './pty-transport-types'
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
 // Why: a retention budget, not the 16MB single-write ceiling. The deferral lasts
@@ -12,6 +13,7 @@ export type PtyPreconnectInputKind = 'ordinary' | 'immediate' | 'accepted'
 export type PtyPreconnectInputEntry = {
   data: string
   kind: PtyPreconnectInputKind
+  userInput?: true
 }
 
 type BufferedInput = PtyPreconnectInputEntry & {
@@ -20,9 +22,24 @@ type BufferedInput = PtyPreconnectInputEntry & {
 
 type PreconnectInputWriter = {
   isCurrent: () => boolean
-  sendInput: (data: string) => boolean
+  sendInput: (data: string, options?: PtyInputOptions) => boolean
   sendInputImmediate: (data: string) => boolean
-  sendInputAccepted?: (data: string) => Promise<boolean>
+  sendInputAccepted?: (data: string, options?: PtyInputOptions) => Promise<boolean>
+}
+
+const sendBufferedInput = (writer: PreconnectInputWriter, input: BufferedInput): boolean =>
+  input.userInput ? writer.sendInput(input.data, { userInput: true }) : writer.sendInput(input.data)
+
+const sendBufferedInputAccepted = (
+  writer: PreconnectInputWriter,
+  input: BufferedInput
+): boolean | Promise<boolean> => {
+  if (!writer.sendInputAccepted) {
+    return sendBufferedInput(writer, input)
+  }
+  return input.userInput
+    ? writer.sendInputAccepted(input.data, { userInput: true })
+    : writer.sendInputAccepted(input.data)
 }
 
 export type PtyPreconnectInputBuffer = {
@@ -30,11 +47,13 @@ export type PtyPreconnectInputBuffer = {
   enqueue: (
     data: string,
     kind: 'ordinary' | 'immediate',
-    onRetained?: (entry: PtyPreconnectInputEntry) => void
+    onRetained?: (entry: PtyPreconnectInputEntry) => void,
+    options?: PtyInputOptions
   ) => boolean
   enqueueAccepted: (
     data: string,
-    onRetained?: (entry: PtyPreconnectInputEntry) => void
+    onRetained?: (entry: PtyPreconnectInputEntry) => void,
+    options?: PtyInputOptions
   ) => Promise<boolean>
   flush: (writer: PreconnectInputWriter) => Promise<void>
   clear: () => void
@@ -70,14 +89,24 @@ export function createPtyPreconnectInputBuffer(
   const createInput = (
     data: string,
     kind: PtyPreconnectInputKind,
+    userInput: boolean,
     resolve?: BufferedInput['resolve']
-  ): BufferedInput => ({ data, kind, ...(resolve ? { resolve } : {}) })
+  ): BufferedInput => ({
+    data,
+    kind,
+    ...(userInput ? { userInput: true as const } : {}),
+    ...(resolve ? { resolve } : {})
+  })
   const notifyRetained = (
     onRetained: ((entry: PtyPreconnectInputEntry) => void) | undefined,
     input: BufferedInput
   ): void => {
     try {
-      onRetained?.({ data: input.data, kind: input.kind })
+      onRetained?.({
+        data: input.data,
+        kind: input.kind,
+        ...(input.userInput ? { userInput: true } : {})
+      })
     } catch {
       // Handoff capture is advisory; a callback failure must not reject input admission.
     }
@@ -86,7 +115,7 @@ export function createPtyPreconnectInputBuffer(
   // Seeded entries came from a predecessor transport and must not be reported
   // back to that predecessor's handoff owner as newly typed input.
   for (const entry of initialEntries) {
-    retain(createInput(entry.data, entry.kind))
+    retain(createInput(entry.data, entry.kind, entry.userInput === true))
   }
   const clear = (): void => {
     const dropped = pending
@@ -122,11 +151,7 @@ export function createPtyPreconnectInputBuffer(
           let accepted: boolean | null = null
           try {
             accepted = await Promise.race([
-              Promise.resolve(
-                writer.sendInputAccepted
-                  ? writer.sendInputAccepted(input.data)
-                  : writer.sendInput(input.data)
-              ),
+              Promise.resolve(sendBufferedInputAccepted(writer, input)),
               flushStopped.then(() => null)
             ])
           } catch {
@@ -152,7 +177,7 @@ export function createPtyPreconnectInputBuffer(
         const accepted =
           input.kind === 'immediate'
             ? writer.sendInputImmediate(input.data)
-            : writer.sendInput(input.data)
+            : sendBufferedInput(writer, input)
         if (!accepted) {
           clear()
           return
@@ -186,17 +211,17 @@ export function createPtyPreconnectInputBuffer(
 
   return {
     isBuffering: () => buffering,
-    enqueue(data, kind, onRetained) {
-      const input = createInput(data, kind)
+    enqueue(data, kind, onRetained, options) {
+      const input = createInput(data, kind, options?.userInput === true)
       const retained = retain(input)
       if (retained) {
         notifyRetained(onRetained, input)
       }
       return retained
     },
-    enqueueAccepted(data, onRetained) {
+    enqueueAccepted(data, onRetained, options) {
       return new Promise<boolean>((resolve) => {
-        const input = createInput(data, 'accepted', resolve)
+        const input = createInput(data, 'accepted', options?.userInput === true, resolve)
         if (!retain(input)) {
           resolve(false)
           return
