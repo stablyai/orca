@@ -97,7 +97,7 @@ export function sendPlan(params: {
 
 export function cancelPlan(params: {
   envelope: AgentSessionMutationEnvelope
-  turnId: string
+  turnId?: string
   scope?: 'background-tasks'
   taskId?: string
   prompt?: { itemId: string; expectedRevision: number }
@@ -107,7 +107,7 @@ export function cancelPlan(params: {
     // Stop is a conversation write; a prompt or background-task cancel needs the live child.
     ...(params.scope || params.prompt ? {} : { conversationWrite: true as const }),
     fields: {
-      turnId: params.turnId,
+      ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
       ...(params.scope ? { scope: params.scope } : {}),
       ...(params.taskId ? { taskId: params.taskId } : {}),
       ...(params.prompt ? { prompt: params.prompt } : {})
@@ -115,14 +115,17 @@ export function cancelPlan(params: {
     run: (ctx) =>
       performCancel(ctx, {
         clientOperationId: params.envelope.clientOperationId,
-        turnId: params.turnId,
+        ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
         ...(params.scope ? { scope: params.scope } : {}),
         ...(params.taskId ? { taskId: params.taskId } : {}),
         ...(params.prompt ? { prompt: params.prompt } : {})
       }),
     // Interrupting twice would kill a turn the client never asked to stop, so a
     // replay reports the turn as already handled instead.
-    replay: () => ({ turnId: params.turnId, cancelled: false })
+    replay: () => ({
+      ...(params.turnId !== undefined ? { turnId: params.turnId } : {}),
+      cancelled: false
+    })
   }
 }
 

@@ -111,6 +111,9 @@ export type CodexSession = {
   historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
   activeTurnIds?: Set<string>
+  /** The turn the latest `turn/start` answered with; what a Stop naming no turn interrupts
+   *  before the journal shows one. A stale id is harmless: Codex declines to interrupt it. */
+  startedTurnId?: string
   dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>

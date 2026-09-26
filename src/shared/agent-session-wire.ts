@@ -307,8 +307,8 @@ export type AgentSessionSendResult = {
 }
 
 export type AgentSessionCancelResult = {
-  /** The turn the client named, echoed so a late reply can be matched. */
-  turnId: string
+  /** The turn the client named, echoed so a late reply can be matched; absent when it named none. */
+  turnId?: string
   cancelled: boolean
 }
 

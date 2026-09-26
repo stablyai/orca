@@ -302,6 +302,77 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
     90_000
   )
 
+  // The window a Stop naming no turn exists for: Orca has written the message, and Claude has not
+  // started its reply, so no turn id exists. Only the live binary can say the interrupt lands there.
+  it.skipIf(!realClaudeAuthenticated)(
+    'stops a message interrupted before its reply starts, and takes the next one',
+    async () => {
+      const providerSessionId = randomUUID()
+      const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+      const events: ClaudeStructuredSessionEvent[] = []
+      const adapter = realAdapter(providerSessionId, claudeConfigDir, events)
+      const frames = (from: number) =>
+        events.slice(from).flatMap((event) => (event.type === 'message' ? [event.message] : []))
+      const replyStarted = (from: number) =>
+        frames(from).some(
+          (frame) =>
+            frame.type === 'stream_event' &&
+            (frame.event as { type?: unknown } | undefined)?.type === 'message_start'
+        )
+      const result = async (from: number) => {
+        const deadline = Date.now() + 60_000
+        for (;;) {
+          const found = frames(from).find((frame) => frame.type === 'result')
+          if (found || Date.now() >= deadline) {
+            return found
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+      }
+      const send = (clientMessageId: string, text: string) =>
+        adapter.dispatch({
+          sessionId: 'real-cli-handshake',
+          clientMessageId,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
+          fence: 1
+        })
+
+      try {
+        await adapter.acquire({
+          identity: identity(providerSessionId),
+          fence: 1,
+          spawnToken: 'real-cli-stop'
+        })
+        const first = events.length
+        await expect(
+          send('real-cli-stop-1', 'Count from 1 to 300, one number per line, and nothing else.')
+        ).resolves.toEqual({ state: 'admitted' })
+        const startedBeforeStop = replyStarted(first)
+
+        await expect(
+          adapter.cancelTurn({ sessionId: 'real-cli-handshake', fence: 1 })
+        ).resolves.toEqual({
+          cancelled: true
+        })
+        const stopped = await result(first)
+
+        expect(startedBeforeStop).toBe(false)
+        // Claude 2.1.280 echoes the message, then ends that turn as interrupted without replying.
+        expect(stopped).toMatchObject({ subtype: 'error_during_execution' })
+        expect(replyStarted(first)).toBe(false)
+
+        const second = events.length
+        await expect(send('real-cli-stop-2', 'Reply with the single word ok.')).resolves.toEqual({
+          state: 'admitted'
+        })
+        await expect(result(second)).resolves.toMatchObject({ subtype: 'success' })
+      } finally {
+        await adapter.closeAll()
+      }
+    },
+    150_000
+  )
+
   it('turns a real silent unauthenticated startup into sign-in guidance', async () => {
     const claudeConfigDir = await mkdtemp(join(tmpdir(), 'orca-claude-no-auth-'))
     const providerSessionId = randomUUID()
