@@ -7,6 +7,7 @@ const openURL = vi.fn(() => Promise.resolve())
 
 vi.mock('react-native', () => ({
   Linking: { openURL: (url: string) => openURL(url) },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },

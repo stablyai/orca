@@ -1,5 +1,6 @@
 import { openExternalLink } from '../platform/external-link'
 import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
+import { INLINE_TEXT_SELECTION } from './inline-text-selection'
 import { MobileSelectableText } from './MobileSelectableText'
 import {
   Fragment,
@@ -33,6 +34,9 @@ type Props = {
   fallback?: string
   /** Enables iOS range selection for native-chat transcript prose. */
   rangeSelectable?: boolean
+  /** Android transcript: what a long press on a tappable span (link, file path) should open,
+   *  so the span does not swallow the press the surrounding row would otherwise take. */
+  onLongPress?: () => void
   /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
    *  the chat view passes >1 so agent prose reads larger than the compact base. */
   textScale?: number
@@ -47,11 +51,31 @@ const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
-const MarkdownTextContext = createContext<ComponentType<TextProps>>(NativeText)
+type MarkdownTextSetup = {
+  TextComponent: ComponentType<TextProps>
+  /** Android transcript only: no span is selectable, and spans that take taps also take the
+   *  row's long press, or a link under the finger would swallow it. */
+  androidTranscript: boolean
+  onLongPress?: () => void
+}
+const MarkdownTextContext = createContext<MarkdownTextSetup>({
+  TextComponent: NativeText,
+  androidTranscript: false
+})
 
 function MarkdownText(props: TextProps): React.JSX.Element {
-  const TextComponent = useContext(MarkdownTextContext)
-  return createElement(TextComponent, props)
+  const { TextComponent, androidTranscript, onLongPress } = useContext(MarkdownTextContext)
+  if (!androidTranscript) {
+    return createElement(TextComponent, props)
+  }
+  // Every selectable span funnels through here, so one gate covers the whole document. Only an
+  // explicit `selectable` is rewritten: react-native-web maps `selectable={false}` to
+  // `userSelect: none`, so writing `false` onto an untouched inline span would block selection.
+  return createElement(TextComponent, {
+    ...props,
+    ...(props.selectable === true ? { selectable: false } : {}),
+    ...(onLongPress && props.onPress ? { onLongPress } : {})
+  })
 }
 
 // Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
@@ -215,6 +239,10 @@ function MobileMarkdownContent({
   textScale = 1,
   onOpenFile
 }: Props) {
+  // Image blocks are Pressables of their own, so they take the row's long press the same way
+  // tappable spans do (see MarkdownText).
+  const setup = useContext(MarkdownTextContext)
+  const rowLongPress = setup.androidTranscript ? setup.onLongPress : undefined
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
@@ -288,6 +316,7 @@ function MobileMarkdownContent({
               key={index}
               style={styles.imageFrame}
               onPress={() => openMarkdownHref(block.url, onOpenFile)}
+              onLongPress={rowLongPress}
             >
               <NativeText style={styles.link}>{block.alt || 'Open image'}</NativeText>
               <NativeText style={styles.imageCaption} numberOfLines={1}>
@@ -380,9 +409,20 @@ function MobileMarkdownContent({
 }
 
 function MobileMarkdownInner(props: Props): React.JSX.Element | null {
-  const TextComponent = props.rangeSelectable ? MobileSelectableText : NativeText
+  const { rangeSelectable = false, onLongPress } = props
+  // Only the transcript (the one caller passing rangeSelectable) loses inline selection on
+  // Android; task comments and file previews keep theirs, as before.
+  const androidTranscript = rangeSelectable && !INLINE_TEXT_SELECTION
+  const setup = useMemo<MarkdownTextSetup>(
+    () => ({
+      TextComponent: rangeSelectable && !androidTranscript ? MobileSelectableText : NativeText,
+      androidTranscript,
+      ...(onLongPress ? { onLongPress } : {})
+    }),
+    [rangeSelectable, androidTranscript, onLongPress]
+  )
   return (
-    <MarkdownTextContext.Provider value={TextComponent}>
+    <MarkdownTextContext.Provider value={setup}>
       <MobileMarkdownContent {...props} />
     </MarkdownTextContext.Provider>
   )
