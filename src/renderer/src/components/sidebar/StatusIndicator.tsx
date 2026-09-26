@@ -1,5 +1,5 @@
 import React from 'react'
-import { Activity } from 'lucide-react'
+import { Activity, Hourglass } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
@@ -26,6 +26,7 @@ const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
   'monitoring',
   'permission',
   'interrupted',
+  'rate-limited',
   'done'
 ])
 
@@ -74,6 +75,18 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {...rest}
       >
         <AgentQuestionIcon className="size-3" />
+      </span>
+    )
+  } else if (status === 'rate-limited') {
+    // Why: a paused/waiting-for-reset agent gets its own amber hourglass so it
+    // reads as "Orca is waiting to resume this", distinct from the permission
+    // dot (also amber) which demands user action.
+    indicator = (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        {...rest}
+      >
+        <Hourglass className="size-2.5 text-annotation-highlight" aria-hidden="true" />
       </span>
     )
   } else {

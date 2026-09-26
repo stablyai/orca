@@ -12,6 +12,10 @@ import type {
 import type { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import type { WaitBlockedCheckState } from './wait-blocked-check-state'
+import type {
+  AgentIdleEdgeEvent,
+  UsageLimitStallEvent
+} from './runtime-usage-limit-stall-contracts'
 import type { createAgentStatusOscProcessor } from '../../shared/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from './runtime-terminal-view-subscribers'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
@@ -30,6 +34,12 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
       }) => void
     >
   >()
+
+  // Why: process-wide (not per-PTY) fan-out of usage-limit stall events to the
+  // single AgentAutoResumeService registered in the composition root.
+  protected usageLimitStallListeners = new Set<(event: UsageLimitStallEvent) => void>()
+
+  protected agentIdleEdgeListeners = new Set<(event: AgentIdleEdgeEvent) => void>()
 
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 

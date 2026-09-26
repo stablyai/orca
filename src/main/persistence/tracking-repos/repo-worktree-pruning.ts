@@ -10,6 +10,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { dropScheduledMessagesWhere } from '../scheduled-message-worktree-sweep'
 
 export function pruneWorktreeStateForRepo(
   state: PersistedState,
@@ -81,6 +82,7 @@ export function pruneWorktreeStateForRepo(
     collectScannedRecordOwners(session)
   }
 
+  dropScheduledMessagesWhere(state, belongsToHost)
   for (const key of Object.keys(state.worktreeMeta)) {
     if (belongsToHost(key)) {
       delete state.worktreeMeta[key]

@@ -18,6 +18,7 @@ import {
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { ScheduledMessage } from '../../shared/scheduled-message-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import {
   exportProfileStateJson,
@@ -380,6 +381,45 @@ describe('profile project transfer', () => {
       sessionProfileId: null,
       sessionPartition: null
     })
+  })
+
+  it('drops the moved project’s scheduled messages from the source profile', async () => {
+    const movedWorktreeId = 'repo-1::/workspace/orca-feature'
+    const stayingWorktreeId = 'repo-2::/workspace/other-feature'
+    const message = (worktreeId: string, id: string): ScheduledMessage => ({
+      id,
+      worktreeId,
+      text: 'ping',
+      timing: { kind: 'when-idle' },
+      createdAt: 1,
+      status: 'pending'
+    })
+    writeProfileState(
+      'personal',
+      makeState({
+        repos: [makeRepo(), makeRepo({ id: 'repo-2', path: '/workspace/other' })],
+        worktreeMeta: {
+          [movedWorktreeId]: makeWorktreeMeta(),
+          [stayingWorktreeId]: makeWorktreeMeta()
+        },
+        scheduledMessages: [
+          message(movedWorktreeId, 'msg-moved'),
+          message(stayingWorktreeId, 'msg-staying')
+        ]
+      })
+    )
+    writeProfileState('work', makeState())
+
+    const { transferOrcaProfileProject } = await loadTransferModule()
+    transferOrcaProfileProject(
+      { sourceProfileId: 'personal', targetProfileId: 'work', repoId: 'repo-1', mode: 'move' },
+      testState.dir
+    )
+
+    const source = readProfileState('personal')
+    expect(source.scheduledMessages?.map((entry) => entry.id)).toEqual(['msg-staying'])
+    // A move does not carry them: the row is addressed to a pane in the profile it was queued in.
+    expect(readProfileState('work').scheduledMessages ?? []).toEqual([])
   })
 
   it('rejects a duplicate physical project inside the target profile', async () => {

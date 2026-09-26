@@ -1,15 +1,17 @@
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
-import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+import {
+  assertTerminalAgentSendable,
+  getTerminalSendGuardRefusedReason,
+  isTerminalSendGuardNotWritable
+} from '../../terminal-agent-send-guard'
 import { TerminalSend } from './unary-schemas'
 import {
   assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,
   commitMobileInputFloorClaim,
-  getTerminalSendGuardRefusedReason,
   isTerminalInputLockedForClient,
-  isTerminalSendGuardNotWritable,
   resolveMobileFloorClientId,
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'

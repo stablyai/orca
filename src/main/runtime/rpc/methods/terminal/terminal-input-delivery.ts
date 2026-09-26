@@ -154,24 +154,6 @@ export async function commitMobileInputFloorClaim(
   }
 }
 
-export function getTerminalSendGuardRefusedReason(
-  error: unknown
-): 'no-agent' | 'permission' | undefined {
-  const message = error instanceof Error ? error.message : String(error)
-  if (message.includes('terminal_guard_permission')) {
-    return 'permission'
-  }
-  if (message.includes('terminal_guard_no_agent')) {
-    return 'no-agent'
-  }
-  return undefined
-}
-
-export function isTerminalSendGuardNotWritable(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('terminal_guard_not_writable')
-}
-
 export function assertTerminalSendExactPtyBinding(
   runtime: OrcaRuntimeService,
   handle: string,

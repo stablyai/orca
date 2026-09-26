@@ -9,6 +9,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import { selectHasRateLimitedForWorktree } from '@/store/slices/auto-resume'
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
@@ -32,6 +33,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     agentStatusPaneIdsByTabId,
     stalePaneIdsByTabId
   } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
+  const hasRateLimited = useAppStore((s) => selectHasRateLimitedForWorktree(s, worktreeId))
 
   // Why: compact and detailed cards need the same status-dot semantics:
   // runtime liveness gates title-derived states, then explicit agent rows can
@@ -51,7 +53,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasLiveMonitoring,
         hasInterrupted,
         hasLiveDone,
-        hasRetainedDone
+        hasRetainedDone,
+        hasRateLimited
       }),
     [
       tabs,
@@ -66,7 +69,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasLiveMonitoring,
       hasInterrupted,
       hasLiveDone,
-      hasRetainedDone
+      hasRetainedDone,
+      hasRateLimited
     ]
   )
 }

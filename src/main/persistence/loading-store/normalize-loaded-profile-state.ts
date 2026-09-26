@@ -3,6 +3,7 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import { normalizeRateLimitWatcherTabs } from '../../../shared/rate-limit-watcher-types'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
@@ -18,6 +19,7 @@ import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-s
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'
 import { normalizeLoadedUiState } from './normalize-loaded-ui-state'
+import { normalizeScheduledMessages } from '../../../shared/scheduled-message-validation'
 import {
   normalizeLoadedAutomationRuns,
   normalizeLoadedHostSessions,
@@ -104,8 +106,13 @@ export function normalizeLoadedProfileState(
       parsed.migrationUnsupportedPtyEntries
     ),
     legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
+    // Conditional so a file that never armed the watcher does not gain the key.
+    ...(parsed.rateLimitWatcherTabs === undefined
+      ? {}
+      : { rateLimitWatcherTabs: normalizeRateLimitWatcherTabs(parsed.rateLimitWatcherTabs) }),
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
+    scheduledMessages: normalizeScheduledMessages(parsed.scheduledMessages),
     onboarding: normalizedOnboarding
   }
 }

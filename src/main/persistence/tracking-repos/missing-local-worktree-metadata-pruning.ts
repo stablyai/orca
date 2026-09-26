@@ -8,6 +8,7 @@ import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../s
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
 import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { dropScheduledMessagesForWorktree } from '../scheduled-message-worktree-sweep'
 import {
   addPersistedSessionWorktreeOwners,
   createWorktreeOwnerCandidateCollector
@@ -188,6 +189,7 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     }
     delete state.worktreeLineageById[worktreeId]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    dropScheduledMessagesForWorktree(state, worktreeId)
     removedIds.push(worktreeId)
   }
   if (removedIds.length > 0) {

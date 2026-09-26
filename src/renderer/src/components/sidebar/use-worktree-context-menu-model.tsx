@@ -31,6 +31,8 @@ import {
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
+import { useWorkspaceScheduledMessageActions } from './use-workspace-scheduled-message-actions'
+import { useWorktreeContextMenuLifecycle } from './use-worktree-context-menu-lifecycle'
 
 export type WorktreeContextMenuProps = {
   worktree: Worktree
@@ -123,6 +125,10 @@ export function useWorktreeContextMenuModel({
   const deleteStateByWorktreeId = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.deleteStateByWorktreeId, EMPTY_DELETE_STATE_BY_WORKTREE_ID)
   )
+  const scheduledMessageActions = useWorkspaceScheduledMessageActions({
+    menuOpen,
+    worktreeId: worktree.id
+  })
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
@@ -237,32 +243,16 @@ export function useWorktreeContextMenuModel({
     [onOpenChange]
   )
 
-  useEffect(() => {
-    if (!onLifecycleComplete) {
-      return
-    }
-    if (menuOpen) {
-      lifecycleStartedRef.current = true
-    }
-    if (
-      !lifecycleStartedRef.current ||
-      menuOpen ||
-      createGroupDialogOpen ||
-      createGroupDialogActiveRef.current ||
-      parentPicker !== null ||
-      pendingParentPickerRef.current !== null
-    ) {
-      return
-    }
-    const timer = window.setTimeout(() => {
-      if (createGroupDialogActiveRef.current || pendingParentPickerRef.current !== null) {
-        return
-      }
-      lifecycleStartedRef.current = false
-      onLifecycleComplete?.()
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [createGroupDialogOpen, menuOpen, onLifecycleComplete, parentPicker])
+  useWorktreeContextMenuLifecycle({
+    createGroupDialogActiveRef,
+    createGroupDialogOpen,
+    lifecycleStartedRef,
+    menuOpen,
+    onLifecycleComplete,
+    parentPicker,
+    pendingParentPickerRef,
+    scheduleDialogOpen: scheduledMessageActions.scheduleDialogOpen
+  })
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpenState(false)
@@ -343,6 +333,7 @@ export function useWorktreeContextMenuModel({
 
   return {
     ...commands,
+    ...scheduledMessageActions,
     activeContextWorktrees,
     allWorktrees,
     batchDeleteWorktrees,

@@ -57,6 +57,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
   const passthrough = ({ children }: { children?: ReactNode }) => <>{children}</>
   return {
     DropdownMenu: passthrough,
+    DropdownMenuCheckboxItem: passthrough,
     DropdownMenuContent: passthrough,
     DropdownMenuItem: passthrough,
     DropdownMenuLabel: passthrough,

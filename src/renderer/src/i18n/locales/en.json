@@ -239,6 +239,51 @@
     "copy": "Copy",
     "selectAll": "Select All"
   },
+  "agentAutoResume": {
+    "notification": {
+      "resetTimeUnknown": "the reset time",
+      "detected": {
+        "title": "Agent rate-limited",
+        "bodyAt": "Orca will auto-resume it at {{when}}.",
+        "bodyMenuAt": "Orca will answer the rate-limit prompt at {{when}}, then wait out the limit.",
+        "bodyUnknownReset": "Orca will auto-resume it when the limit resets."
+      },
+      "deadPty": {
+        "title": "Rate-limited agent exited",
+        "body": "The agent process exited while rate-limited. Reopen its worktree to resume the session."
+      },
+      "failed": {
+        "title": "Auto-resume failed",
+        "body": "Orca couldn't resume the rate-limited agent. Resume it manually."
+      }
+    }
+  },
+  "scheduledMessages": {
+    "notification": {
+      "sent": {
+        "title": "Scheduled message sent",
+        "body": "Orca delivered your queued message to the agent."
+      },
+      "missed": {
+        "title": "Scheduled message missed",
+        "body": "Orca was closed when it came due. It is waiting in Automations — send or reschedule it.",
+        "bodyUsageLimit": "The agent was still rate-limited long after it came due. It is waiting in Automations — send or reschedule it."
+      },
+      "undelivered": {
+        "title": "Scheduled message couldn't be delivered"
+      },
+      "noPane": {
+        "body": "That workspace had no open terminal. Open it, then use Send now in Automations."
+      },
+      "noAgent": {
+        "body": "No agent was running in that workspace, so Orca refused to type into a plain shell."
+      },
+      "failed": {
+        "title": "Scheduled message failed",
+        "body": "Orca couldn't send your queued message. It is still in Automations."
+      }
+    }
+  },
   "tray": {
     "openOrca": "Open Orca",
     "quit": "Quit",
@@ -572,6 +617,9 @@
       }
     },
     "lib": {
+      "worktreeStatus": {
+        "rateLimited": "Rate-limited"
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -1009,6 +1057,10 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
+      },
+      "auto-resume": {
+        "rate-limited-resumes": "Rate-limited · resumes {{time}}",
+        "rate-limited-waiting": "Rate-limited · waiting for reset"
       }
     },
     "hooks": {
@@ -5741,7 +5793,11 @@
           "deleteWorktree": "Delete Worktree",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "deleteWithDescendants": "Delete with Descendants…",
+          "rateLimitWatcher": "Rate limit watcher",
+          "rateLimitWatcherDescription": "Wait for the provider usage limit to reset and resume this workspace's agent automatically.",
+          "scheduledMessagesWithCount": "Schedule message… ({{pending}} pending)",
+          "scheduledMessages": "Schedule message…"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -6438,7 +6494,9 @@
           "copied": "Command copied",
           "retry": "Retry now",
           "restored": "Git is working again. Worktrees refreshed."
-        }
+        },
+        "scheduledMessagesBadgeProblem": "A scheduled message needs attention. Open Automations to send or reschedule it.",
+        "scheduledMessagesBadgePending": "Scheduled messages are queued for this workspace’s agent."
       },
       "shared": {
         "useDaemonActions": {
@@ -17354,6 +17412,53 @@
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
           }
         }
+      },
+      "status-bar": {
+        "auto-resume": {
+          "agent": "agent",
+          "agents": "agents",
+          "label": "{{n}} paused",
+          "resumes": "resumes {{time}}",
+          "tooltip": "{{n}} {{noun}} paused · {{detail}}",
+          "waiting": "waiting for reset"
+        }
+      },
+      "scheduledMessages": {
+        "errorEmpty": "Enter a message to send.",
+        "errorPast": "Pick a time in the future.",
+        "errorHorizon": "Messages can be scheduled up to a year ahead.",
+        "editTitle": "Edit scheduled message",
+        "composeTitle": "Schedule a message",
+        "composeDescription": "Orca types this into the workspace's agent when it comes due.",
+        "messageLabel": "Message",
+        "whenLabel": "When",
+        "atDateTime": "At a date and time",
+        "whenIdleOption": "When the agent is idle",
+        "whenIdleHint": "Delivers the next time this workspace’s agent finishes working.",
+        "atTimeHint": "Sends at that time even if the agent is mid-task, interrupting it.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "schedule": "Schedule",
+        "sectionTitle": "Scheduled messages",
+        "sectionSubtitle": "One-time messages Orca will type into a workspace’s agent. Schedule them from a workspace’s right-click menu.",
+        "unknownWorkspace": "Unknown workspace",
+        "sendNow": "Send now",
+        "rowActions": "Scheduled message actions",
+        "edit": "Edit…",
+        "delete": "Delete",
+        "todayAt": "Today {{time}}",
+        "unknownTime": "an unknown time",
+        "inLessThanAMinute": "in under a minute",
+        "whenIdle": "When the agent is idle",
+        "dueNow": "{{absolute}} · due now",
+        "statusUsageLimitOutlasted": "Missed — the usage limit lasted too long to still send this",
+        "statusMissed": "Missed — Orca was closed when it came due",
+        "statusNoPane": "Failed — the workspace had no open terminal",
+        "statusNoAgent": "Failed — no agent was running in that terminal",
+        "statusFailed": "Failed to send",
+        "errorInvalidDateTime": "Pick a valid date and time.",
+        "errorTooMany": "This workspace already has as many scheduled messages as Orca allows. Send or delete one first.",
+        "errorSaveFailed": "Orca couldn't save this scheduled message."
       }
     },
     "i18n": {
@@ -17810,7 +17915,8 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
           "switchToChatView": "Switch to chat view",
-          "closeTabsToLeft": "Close Tabs To The Left"
+          "closeTabsToLeft": "Close Tabs To The Left",
+          "rateLimitWatcher": "Rate limit watcher"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

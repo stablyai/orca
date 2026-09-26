@@ -21,6 +21,7 @@ import {
 } from '../loading-store/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
+import { dropScheduledMessagesForWorktree } from '../scheduled-message-worktree-sweep'
 
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
@@ -81,6 +82,7 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     delete state.worktreeMeta[key]
     delete state.worktreeLineageById[key]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
+    dropScheduledMessagesForWorktree(state, key)
     // Identity rows are companions too: a surviving alias would re-attach this dead metadata to a
     // worktree later created at the same repoId::path, and nothing else ever reclaims them.
     removeWorktreeMetadataForHost(state, key, LOCAL_EXECUTION_HOST_ID)

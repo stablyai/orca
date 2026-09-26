@@ -43,6 +43,11 @@ const ResourceUsageStatusSegment = lazyWithRetry(() =>
 const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
 )
+const AutoResumeStatusSegment = lazyWithRetry(() =>
+  import('./AutoResumeStatusSegment').then((module) => ({
+    default: module.AutoResumeStatusSegment
+  }))
+)
 const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
@@ -250,6 +255,7 @@ export function StatusBarSurface({
         <NativeChatResumeStatusSegment iconOnly={iconOnly} />
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
+          <AutoResumeStatusSegment compact={compact} iconOnly={iconOnly} />
           {petEnabled ? <PetStatusSegment /> : null}
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />

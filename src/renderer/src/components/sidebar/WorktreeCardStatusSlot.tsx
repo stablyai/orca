@@ -1,9 +1,12 @@
 import React from 'react'
 import { Bell, GitBranch, Moon } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
+import { useAppStore } from '@/store'
+import { formatRateLimitedLabel, selectWorktreeRateLimitStatus } from '@/store/slices/auto-resume'
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
@@ -109,7 +112,11 @@ export function WorktreeCardStatusSlot({
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
   const isSleeping = useIsSleepingWorktree(worktreeId)
-  const statusLabel = getWorktreeStatusLabel(status) || status
+  const rateLimit = useAppStore(useShallow((s) => selectWorktreeRateLimitStatus(s, worktreeId)))
+  const statusLabel =
+    status === 'rate-limited'
+      ? formatRateLimitedLabel(rateLimit.resumesAt)
+      : getWorktreeStatusLabel(status) || status
   // Why: sleep must stay distinct from awake completion; a sleeping workspace
   // never collapses into branch/PR, even when retained done rows keep its
   // status at 'done'. Attention states keep their own glyphs by construction.

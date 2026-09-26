@@ -29,6 +29,8 @@ import {
   initializeMainProcessRuntime,
   configureRuntimeServices
 } from './main-process-runtime-service'
+import { initializeMainProcessAgentAutoResume } from './main-process-agent-auto-resume'
+import { initializeMainProcessScheduledMessages } from './main-process-scheduled-messages'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
@@ -46,6 +48,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
+  // Both subscribe to runtime stall/idle events, so they must exist before any
+  // pane can start emitting — and before registerCoreHandlers reads them.
+  initializeMainProcessAgentAutoResume(runtime)
+  initializeMainProcessScheduledMessages(runtime)
   initializeMainProcessAutomations()
   configureRuntimeServices(runtime)
   await initializeMainProcessPlugins(runtime)
