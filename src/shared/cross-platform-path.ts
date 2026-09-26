@@ -2,7 +2,12 @@ import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from './wsl-paths'
 
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
 
-export function isWindowsAbsolutePathLike(value: string): boolean {
+export function isWindowsAbsolutePathLike(value: unknown): boolean {
+  // Why: persisted settings/history can carry non-strings; callers treat this as a
+  // pure classifier and must not throw (worktree list/ps #14016).
+  if (typeof value !== 'string' || value.length === 0) {
+    return false
+  }
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
 }
 
@@ -138,11 +143,12 @@ export function getLocalWindowsWslPathIdentity(value: string): LocalWindowsWslPa
   }
 }
 
-export function isRuntimePathAbsolute(
-  value: string,
-  pathFlavor: 'posix' | 'windows' = isWindowsPathFlavor(value) ? 'windows' : 'posix'
-): boolean {
-  if (pathFlavor === 'windows') {
+export function isRuntimePathAbsolute(value: unknown, pathFlavor?: 'posix' | 'windows'): boolean {
+  if (typeof value !== 'string' || value.length === 0) {
+    return false
+  }
+  const flavor = pathFlavor ?? (isWindowsPathFlavor(value) ? 'windows' : 'posix')
+  if (flavor === 'windows') {
     return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\') || value.startsWith('/')
   }
   return value.startsWith('/')
@@ -263,7 +269,10 @@ function trimRuntimePathTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '')
 }
 
-function isWindowsPathFlavor(value: string): boolean {
+function isWindowsPathFlavor(value: unknown): boolean {
+  if (typeof value !== 'string' || value.length === 0) {
+    return false
+  }
   return /^[A-Za-z]:[\\/]/.test(value) || value.includes('\\') || value.startsWith('//')
 }
 

@@ -11,28 +11,53 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../shared/tui-agent-launch-defaults'
 
+export type CorruptedWorkspaceSettingsCandidate = {
+  workspaceDir?: unknown
+  nestWorkspaces?: unknown
+  workspaceDirHistory?: unknown
+}
+
 export function buildWorkspaceDirHistoryForUpdate(
-  current: GlobalSettings,
+  current: GlobalSettings | CorruptedWorkspaceSettingsCandidate,
   updates: Partial<GlobalSettings>
 ): OrcaWorkspaceLayout[] | null {
   if (!('workspaceDir' in updates) && !('nestWorkspaces' in updates)) {
     return null
   }
-  const nextPath = updates.workspaceDir ?? current.workspaceDir
-  const nextNestWorkspaces = updates.nestWorkspaces ?? current.nestWorkspaces
+  // Corrupt persisted paths must not enter history and later crash worktree layout classification (#14016).
+  if (typeof current.workspaceDir !== 'string' || current.workspaceDir.trim().length === 0) {
+    return null
+  }
+  const currentWorkspaceDir = current.workspaceDir
+  const nextPath = updates.workspaceDir ?? currentWorkspaceDir
+  const currentNest = Boolean(current.nestWorkspaces)
+  const nextNestWorkspaces = updates.nestWorkspaces ?? currentNest
   if (
     normalizeRuntimePathForComparison(nextPath) ===
-      normalizeRuntimePathForComparison(current.workspaceDir) &&
-    nextNestWorkspaces === current.nestWorkspaces
+      normalizeRuntimePathForComparison(currentWorkspaceDir) &&
+    nextNestWorkspaces === currentNest
   ) {
     return null
   }
 
-  const previousLayout = {
-    path: current.workspaceDir,
-    nestWorkspaces: current.nestWorkspaces
+  const previousLayout: OrcaWorkspaceLayout = {
+    path: currentWorkspaceDir,
+    nestWorkspaces: currentNest
   }
-  const existing = current.workspaceDirHistory ?? []
+  const rawHistory = Array.isArray(current.workspaceDirHistory) ? current.workspaceDirHistory : []
+  const existing: OrcaWorkspaceLayout[] = []
+  for (const item of rawHistory) {
+    if (
+      typeof item === 'object' &&
+      item !== null &&
+      'path' in item &&
+      typeof item.path === 'string' &&
+      item.path.trim().length > 0
+    ) {
+      const nest = 'nestWorkspaces' in item ? Boolean(item.nestWorkspaces) : false
+      existing.push({ path: item.path, nestWorkspaces: nest })
+    }
+  }
   const next = [...existing]
   const previousKey = getWorkspaceLayoutHistoryKey(previousLayout)
   if (!next.some((layout) => getWorkspaceLayoutHistoryKey(layout) === previousKey)) {
@@ -122,7 +147,7 @@ export function getWorkspaceLayoutHistoryKey(layout: OrcaWorkspaceLayout): strin
 }
 
 export function migrateAgentYoloDefaults(
-  settings: GlobalSettings | undefined
+  settings: Partial<GlobalSettings> | undefined
 ): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
   const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
   const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
