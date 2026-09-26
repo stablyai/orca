@@ -26,7 +26,7 @@ export type RepoSlugMatches = { origin: Repo[]; upstream: Repo[] }
  *  persisted forks), the fork's origin host is the fallback so GHES parents do
  *  not collapse into github.com. Unresolved origins refuse the alias. */
 export function repoUpstreamIdentityKey(
-  repo: Repo,
+  repo: Pick<Repo, 'upstream'>,
   originIdentityKey: string | null | undefined
 ): string | null {
   const upstream = repo.upstream
