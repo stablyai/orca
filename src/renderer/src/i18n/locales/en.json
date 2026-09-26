@@ -3337,6 +3337,24 @@
                 "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
                 "writeRejected": "File drop cancelled: terminal could not accept the path."
+              },
+              "upload": {
+                "expand": "Show files",
+                "collapse": "Hide files",
+                "cancel": "Cancel upload",
+                "cancelled": "Cancelled",
+                "failed": "Failed",
+                "heading": {
+                  "cancelled": "Upload cancelled",
+                  "failed": "Upload failed",
+                  "partial": "Uploaded {{doneCount}} of {{rowCount}} to runtime",
+                  "done": "Uploaded {{count}} files to runtime",
+                  "done_one": "Uploaded {{count}} file to runtime",
+                  "done_other": "Uploaded {{count}} files to runtime",
+                  "uploading": "Uploading {{count}} files to runtime",
+                  "uploading_one": "Uploading {{count}} file to runtime",
+                  "uploading_other": "Uploading {{count}} files to runtime"
+                }
               }
             }
           },

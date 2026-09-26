@@ -2475,6 +2475,14 @@
             "drop": {
               "handler": {
                 "29c031b49a": "Uploading {{value0}} file{{value1}} to runtime…"
+              },
+              "upload": {
+                "heading": {
+                  "done_one": "Uploaded {{count}} file to runtime",
+                  "done_other": "Uploaded {{count}} files to runtime",
+                  "uploading_one": "Uploading {{count}} file to runtime",
+                  "uploading_other": "Uploading {{count}} files to runtime"
+                }
               }
             }
           }

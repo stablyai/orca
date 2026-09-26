@@ -331,6 +331,97 @@ describe('streamExternalFileToRuntime', () => {
     expect(chunkCalls()).toHaveLength(2)
   })
 
+  it('reports monotonic progress that ends on the file size', async () => {
+    const size = RUNTIME_UPLOAD_SLICE_BYTES * 2 + 500
+    const filePath = join(workDir, 'tracked.bin')
+    await writeFile(filePath, Buffer.alloc(size))
+    const seen: { sentBytes: number; totalBytes: number }[] = []
+
+    await streamExternalFileToRuntime({
+      ...(await baseArgs(filePath)),
+      onProgress: (progress) => seen.push(progress)
+    })
+
+    expect(seen).toHaveLength(3)
+    expect(seen.every((p) => p.totalBytes === size)).toBe(true)
+    expect(seen.map((p) => p.sentBytes)).toEqual([
+      RUNTIME_UPLOAD_SLICE_BYTES,
+      RUNTIME_UPLOAD_SLICE_BYTES * 2,
+      size
+    ])
+  })
+
+  it('reports a zero-byte file as complete rather than never reporting', async () => {
+    const filePath = join(workDir, 'nothing.txt')
+    await writeFile(filePath, '')
+    const seen: { sentBytes: number; totalBytes: number }[] = []
+
+    await streamExternalFileToRuntime({
+      ...(await baseArgs(filePath)),
+      onProgress: (progress) => seen.push(progress)
+    })
+
+    expect(seen).toEqual([{ sentBytes: 0, totalBytes: 0 }])
+  })
+
+  it('stops reporting progress at the chunk that failed', async () => {
+    const filePath = join(workDir, 'halts.bin')
+    await writeFile(filePath, Buffer.alloc(RUNTIME_UPLOAD_SLICE_BYTES * 3))
+    const seen: number[] = []
+    callRuntimeEnvironment.mockResolvedValueOnce({ id: 'x', ok: true, result: {}, _meta: {} })
+    callRuntimeEnvironment.mockResolvedValueOnce({
+      id: 'x',
+      ok: false,
+      error: { code: 'write_failed', message: 'disk full' }
+    })
+
+    await expect(
+      streamExternalFileToRuntime({
+        ...(await baseArgs(filePath)),
+        onProgress: (progress) => seen.push(progress.sentBytes)
+      })
+    ).rejects.toThrow('disk full')
+
+    expect(seen).toEqual([RUNTIME_UPLOAD_SLICE_BYTES])
+  })
+
+  it('stops between slices when the cancel signal is already aborted', async () => {
+    const filePath = join(workDir, 'aborted.bin')
+    await writeFile(filePath, Buffer.alloc(RUNTIME_UPLOAD_SLICE_BYTES * 2))
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      streamExternalFileToRuntime({
+        ...(await baseArgs(filePath)),
+        cancelSignal: controller.signal
+      })
+    ).rejects.toThrow('Upload cancelled')
+    expect(chunkCalls()).toHaveLength(0)
+  })
+
+  it('stops mid-file when the cancel signal aborts after the first slice', async () => {
+    const filePath = join(workDir, 'midway.bin')
+    await writeFile(filePath, Buffer.alloc(RUNTIME_UPLOAD_SLICE_BYTES * 4))
+    const controller = new AbortController()
+    callRuntimeEnvironment.mockImplementation(async () => {
+      controller.abort()
+      return { id: 'x', ok: true, result: {}, _meta: {} }
+    })
+
+    await expect(
+      streamExternalFileToRuntime({
+        ...(await baseArgs(filePath)),
+        cancelSignal: controller.signal
+      })
+    ).rejects.toThrow('Upload cancelled')
+    // The first slice was already in flight; the loop stops before the second.
+    expect(chunkCalls()).toHaveLength(1)
+    // A cancel must let the in-flight append land before the renderer deletes the temp path.
+    const [, , , , , , , options] = callRuntimeEnvironment.mock.calls[0]!
+    expect(options?.signal).not.toBe(controller.signal)
+  })
+
   // symlink() needs privileges or Developer Mode on Windows.
   it.skipIf(process.platform === 'win32')('refuses a symlinked source', async () => {
     const targetPath = join(workDir, 'secret.txt')

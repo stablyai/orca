@@ -45,6 +45,8 @@ export type RuntimeUploadFileStreamRequest = {
   worktree: string
   /** Destination path on the runtime, relative to the worktree. */
   relativePath: string
+  /** Progress key and cancel handle; every file of one dropped source shares it. */
+  uploadId?: string
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
 } & SshMutationExpectation

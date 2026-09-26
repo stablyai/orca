@@ -30,7 +30,8 @@ export async function uploadRuntimeFileWithoutClobber(
   source: RuntimeUploadSource,
   expectedSshConnectionGeneration?: number,
   expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  expectedExecutionHostId?: 'local' | `ssh:${string}`,
+  uploadId?: string
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
@@ -45,6 +46,7 @@ export async function uploadRuntimeFileWithoutClobber(
         expected: source.expected,
         worktree: toRuntimeWorktreeSelector(worktreeId),
         relativePath: tempRelativePath,
+        uploadId,
         expectedSshTargetId,
         expectedSshConnectionGeneration,
         expectedExecutionHostId,

@@ -3,12 +3,14 @@ import { importExternalPathsToRuntime } from './runtime-file-client'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
   fsImportExternalPaths,
+  fsReleaseRuntimeUpload,
   fsStageExternalPathsForRuntimeUpload,
   fsUploadExternalFileToRuntime,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall,
   installRuntimeFileClientEnvironment
 } from './runtime-file-client-test-harness'
+import type { RuntimeImportProgressHandlers } from './runtime-upload-progress-tracker'
 
 installRuntimeFileClientEnvironment()
 
@@ -246,6 +248,52 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.writeBase64Chunk' })
     )
+  })
+
+  it('settles and releases each row when the drop reports progress', async () => {
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+      sources: [
+        {
+          sourcePath: '/Users/me/logo.png',
+          status: 'staged',
+          name: 'logo.png',
+          kind: 'file',
+          entries: [stagedFile('', 3, 55)]
+        }
+      ]
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce(notFoundResponse('stat-destination-miss'))
+      .mockResolvedValueOnce(okResponse('create-destination-dir'))
+      .mockResolvedValueOnce(notFoundResponse('stat-miss'))
+      .mockResolvedValueOnce(okResponse('commit-upload'))
+      .mockResolvedValueOnce(okResponse('delete-temp'))
+    const progress = {
+      onStart: vi.fn<RuntimeImportProgressHandlers['onStart']>(),
+      onRowProgress: vi.fn<RuntimeImportProgressHandlers['onRowProgress']>(),
+      onRowSettled: vi.fn<RuntimeImportProgressHandlers['onRowSettled']>(),
+      onFinish: vi.fn<RuntimeImportProgressHandlers['onFinish']>()
+    }
+
+    await expect(
+      importExternalPathsToRuntime(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        ['/Users/me/logo.png'],
+        '/remote/repo/uploads',
+        { progress }
+      )
+    ).resolves.toMatchObject({ results: [{ status: 'imported' }] })
+
+    const uploadId = progress.onStart.mock.calls[0]?.[0][0]?.uploadId
+    expect(uploadId).toEqual(expect.any(String))
+    expect(progress.onRowProgress).toHaveBeenLastCalledWith(uploadId, 3)
+    expect(progress.onRowSettled).toHaveBeenCalledWith(uploadId, 'done')
+    expect(progress.onFinish).toHaveBeenCalledTimes(1)
+    expect(fsReleaseRuntimeUpload).toHaveBeenCalledWith({ uploadId })
   })
 
   it('does not commit an upload when the owner generation changes while it streams', async () => {
