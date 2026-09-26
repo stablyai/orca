@@ -235,13 +235,15 @@ export function resolveTerminalShortcutAction(
     !event.ctrlKey &&
     event.altKey &&
     !event.shiftKey &&
-    event.key === 'Backspace'
+    (event.key === 'Backspace' ||
+      (event.key === 'Delete' && event.code?.startsWith('Numpad') !== true))
   ) {
-    // Why: a kitty-protocol TUI binds the CSI 127;3u xterm emits natively; the legacy \x1b\x7f fallback would bypass it.
+    // Why: a kitty-protocol TUI binds native escapes; legacy fallbacks would bypass them.
     if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
       return null
     }
-    return { type: 'sendInput', data: '\x1b\x7f' }
+    // Why: translate Alt+⌫ to backward-kill-word (\x1b\x7f) and ⌥⌦/Alt+Delete to forward-kill-word (\x1bd, #21491).
+    return { type: 'sendInput', data: event.key === 'Backspace' ? '\x1b\x7f' : '\x1bd' }
   }
 
   if (
