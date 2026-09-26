@@ -10,6 +10,7 @@ import { shellEscape } from './ssh-connection-utils'
 import {
   RELAY_NATIVE_DEPS_CACHE_COMPLETE_NAME,
   RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX,
+  LEGACY_RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX,
   relayNativeDepsCacheBaseDir,
   relayNativeDepsCacheEntryDir,
   relayNativeDepsCacheNodeModulesPath,
@@ -33,9 +34,6 @@ export const RELAY_NATIVE_CACHE_REFS_ERR = '__ORCA_NATIVE_CACHE__REFS_ERR'
  * the margin is what keeps that argument from resting on a single `[ -f ]`.
  */
 const CACHE_TAKEOVER_MINUTES = 120
-
-/** A crashed GC pass leaves a tombstone; it drains once no in-flight pass could still own it. */
-const CACHE_TOMBSTONE_SWEEP_MINUTES = 30
 
 /** Bounds every listing, matching `MAX_RELAY_GC_LISTING_ENTRIES`' role for version dirs. */
 export const MAX_RELAY_NATIVE_CACHE_LISTING_ENTRIES = 64
@@ -157,7 +155,7 @@ export function promoteRelayNativeDepsCacheCommand(paths: RelayNativeDepsCachePa
   ].join('\n')
 }
 
-/** Complete entries only; an incomplete one belongs to an installer, not to GC. */
+/** Complete entries and tombstones; deletion requires a separate reference scan. */
 export function listRelayNativeDepsCacheEntriesCommand(
   host: RemoteHostPlatform,
   remoteHome: string
@@ -166,13 +164,12 @@ export function listRelayNativeDepsCacheEntriesCommand(
   return [
     `base=${shellEscape(base)}`,
     `[ -d "$base" ] || { printf '%s\\n' ${RELAY_NATIVE_CACHE_LIST_OK}; exit 0; }`,
-    `find "$base" -maxdepth 1 -name ${shellEscape(`${RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX}*`)} -mmin +${CACHE_TOMBSTONE_SWEEP_MINUTES} -exec rm -rf {} + 2>/dev/null || true`,
     'n=0',
-    'for d in "$base"/*/; do',
+    `for d in "$base"/*/ "$base"/${RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX}*/ "$base"/${LEGACY_RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX}*/; do`,
     '  [ -d "$d" ] || continue',
-    `  [ -f "$d${RELAY_NATIVE_DEPS_CACHE_COMPLETE_NAME}" ] || continue`,
     '  name=${d%/}',
     '  name=${name##*/}',
+    `  case "$name" in ${RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX}*|${LEGACY_RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX}*) ;; *) [ -f "$d${RELAY_NATIVE_DEPS_CACHE_COMPLETE_NAME}" ] || continue ;; esac`,
     `  printf 'ENTRY %s\\n' "$name"`,
     '  n=$((n+1))',
     `  if [ "$n" -ge ${MAX_RELAY_NATIVE_CACHE_LISTING_ENTRIES} ]; then break; fi`,
@@ -196,8 +193,12 @@ export function listRelayNativeDepsCacheReferencesCommand(
   return [
     `root=${shellEscape(root)}`,
     `[ -d "$root" ] || { printf '%s\\n' ${RELAY_NATIVE_CACHE_REFS_OK}; exit 0; }`,
+    `[ -r "$root" ] && [ -x "$root" ] && ls -A "$root" >/dev/null 2>&1 || { printf '%s\\n' ${RELAY_NATIVE_CACHE_REFS_ERR}; exit 0; }`,
     'n=0',
-    'for d in "$root"/*/node_modules; do',
+    'for d in "$root"/*/; do',
+    '  [ -d "$d" ] || continue',
+    `  [ -r "$d" ] && [ -x "$d" ] || { printf '%s\\n' ${RELAY_NATIVE_CACHE_REFS_ERR}; exit 0; }`,
+    '  d="${d}node_modules"',
     '  [ -L "$d" ] || continue',
     '  t=$(readlink "$d" 2>/dev/null) || t=""',
     `  if [ -z "$t" ]; then printf '%s\\n' ${RELAY_NATIVE_CACHE_REFS_ERR}; exit 0; fi`,

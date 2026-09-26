@@ -168,7 +168,7 @@ describe('gcRelayNativeDepsCache', () => {
 
     const last = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(last).toContain('rm -rf')
-    expect(last).toContain('.gc-tombstone.')
+    expect(last).toContain('.native-gc-')
   })
 
   it('keeps an entry a live relay depends on', async () => {

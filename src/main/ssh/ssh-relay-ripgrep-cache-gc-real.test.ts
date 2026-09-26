@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
@@ -110,6 +111,18 @@ describe('ripgrep cache shell transactions', () => {
     await recordRemoteRipgrepReference(conn, host, relay, FIRST)
     await gcRemoteRipgrepCache(conn, host, home)
     expect(readdirSync(cache)).toEqual([FIRST])
+  })
+
+  it('restores an abandoned tombstone that a relay still references', async () => {
+    await recordRemoteRipgrepReference(conn, host, relay, FIRST)
+    await recordRemoteRipgrepReference(conn, host, relay, SECOND)
+    const tombstone = `.rg-gc-${SECOND}.123.${Date.now() - 60 * 60_000}`
+    renameSync(join(cache, SECOND), join(cache, tombstone))
+
+    await gcRemoteRipgrepCache(conn, host, home)
+
+    expect(readdirSync(cache).sort()).toEqual([FIRST, SECOND])
+    expect(existsSync(join(cache, SECOND, 'rg'))).toBe(true)
   })
 
   it('does not nest a tombstone inside a directory recreated by a concurrent installer', async () => {
