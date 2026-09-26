@@ -6,18 +6,25 @@ export function waitForSshCapabilityProbe<T>(probe: Promise<T>, signal?: AbortSi
     return Promise.reject(new Error('client_disconnected'))
   }
   return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const finish = (settlement: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      settlement()
+    }
     const onAbort = (): void => {
-      reject(new Error('client_disconnected'))
+      finish(() => reject(new Error('client_disconnected')))
     }
     signal.addEventListener('abort', onAbort, { once: true })
     void probe.then(
       (result) => {
-        signal.removeEventListener('abort', onAbort)
-        resolve(result)
+        finish(() => resolve(result))
       },
       (error: unknown) => {
-        signal.removeEventListener('abort', onAbort)
-        reject(error)
+        finish(() => reject(error))
       }
     )
   })
