@@ -257,8 +257,17 @@ describeRender(
       // `.xterm-screen` does: it is created by `term.open()`, which only ever runs from the
       // document's `init`. The emulator run had the surface with zero children inside a correctly
       // sized container, which is this element missing.
+      // Then the grid readable: xterm sizes its one-cell helper textarea only on a cursor move or
+      // resize, so a read the moment the screen exists can land before the replay has drained.
       await page.waitForFunction(
-        () => document.querySelector('.xterm-screen') !== null,
+        () => {
+          const cell = document.querySelector('#terminal-surface .xterm-helper-textarea')
+          return (
+            document.querySelector('.xterm-screen') !== null &&
+            cell !== null &&
+            cell.getBoundingClientRect().width > 0
+          )
+        },
         undefined,
         {
           timeout: 60_000,
