@@ -9,10 +9,7 @@
 
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
-import {
-  dispatchRejectionReasonIsInternal,
-  dispatchRejectionWasTransportWriteFailure
-} from './structured-agent-session-dispatch-rejection'
+import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import {
   classifyStructuredAgentSessionSendFailure,
   requeueStructuredAgentSessionSendRefusal,
@@ -128,14 +125,13 @@ export function structuredAgentSessionRejectionNotice(reason: string | null): st
   if (reason === null) {
     return 'Message was not sent.'
   }
-  if (dispatchRejectionWasTransportWriteFailure(reason)) {
+  const rejection = classifyDispatchRejection({ reason })
+  if (rejection.kind === 'writeFailed') {
     return "Couldn't reach the agent. Your message was not sent — Retry to send it again."
   }
-  // Any other reason we minted is an internal cause with no user-facing meaning;
-  // only a provider's own explanation is worth reading verbatim.
-  return dispatchRejectionReasonIsInternal(reason)
-    ? 'Orca could not send your message — Retry to send it again.'
-    : reason
+  // A legacy marker is an internal cause with no user-facing meaning; any other reason is a
+  // sentence written to be read — the provider's, or the host's own.
+  return rejection.kind ? 'Orca could not send your message — Retry to send it again.' : reason
 }
 
 export function disposeStructuredAgentSessionSendResult(
@@ -183,6 +179,19 @@ export function disposeStructuredAgentSessionSendResult(
     }
   }
   if (submission.dispatchState === 'accepted') {
+    return {
+      entries: dropEntry(input),
+      error: null,
+      blockedClientMessageId: input.blockedClientMessageId,
+      retryWithFreshClientMessageId: null
+    }
+  }
+  // A Stop's withdrawal failed nothing, first reply or replay: the entry leaves as the reconcile
+  // drops it, with no notice.
+  if (
+    submission.dispatchState === 'rejected' &&
+    classifyDispatchRejection(submission).category === 'withdrawn'
+  ) {
     return {
       entries: dropEntry(input),
       error: null,

@@ -27,7 +27,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
-import { dispatchRejectionWasTransportWriteFailure } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { isWriteFailureSubmission } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -173,7 +173,7 @@ export function resolveJournalItemId(
     .find(
       (candidate) =>
         candidate.dispatchState !== 'rejected' &&
-        !dispatchRejectionWasTransportWriteFailure(candidate.reason) &&
+        !isWriteFailureSubmission(candidate) &&
         candidate.payloadFingerprint === fingerprint &&
         state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
     )

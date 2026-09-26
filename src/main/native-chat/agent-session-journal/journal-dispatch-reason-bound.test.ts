@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import {
+  classifyDispatchRejection,
   DISPATCH_REJECTED_WRITE_FAILED,
-  dispatchRejectionReasonIsInternal,
-  dispatchRejectionWasTransportWriteFailure
+  isWriteFailureSubmission
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import type { openAgentSessionJournal } from './journal-store-factory'
@@ -87,7 +87,8 @@ describe('dispatch reason bounding', () => {
   it('keeps a clipped transport failure classifiable', async () => {
     const stored = await settle(`${DISPATCH_REJECTED_WRITE_FAILED}: ${HUGE}`)
     expect(stored).not.toBe(`${DISPATCH_REJECTED_WRITE_FAILED}: ${HUGE}`)
-    expect(dispatchRejectionWasTransportWriteFailure(stored)).toBe(true)
-    expect(dispatchRejectionReasonIsInternal(stored)).toBe(true)
+    // Read as an older host wrote it: by the reason alone.
+    expect(isWriteFailureSubmission({ reason: stored })).toBe(true)
+    expect(classifyDispatchRejection({ reason: stored })).toMatchObject({ kind: 'writeFailed' })
   })
 })
