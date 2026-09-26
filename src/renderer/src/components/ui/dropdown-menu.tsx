@@ -3,9 +3,24 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 
-function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+function DropdownMenu({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  // Why: stay controlled so hiding Tasks cannot flip Radix uncontrolled↔controlled and reopen the menu on return.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
+  return (
+    <DropdownMenuPrimitive.Root
+      data-slot="dropdown-menu"
+      {...props}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
+    />
+  )
 }
 
 function DropdownMenuPortal({
