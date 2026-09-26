@@ -5,7 +5,7 @@ import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shor
 import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { useEditorTheme } from '@/components/editor/use-editor-theme'
 import '@/lib/monaco-setup'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -74,7 +74,7 @@ export function AutomationEditorPromptEditor({
 
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const fontFamily = resolveEditorFontFamily(settings)
-  const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
+  const editorTheme = useEditorTheme()
   const options = useMemo(
     () =>
       buildAutomationPromptEditorOptions({
@@ -155,7 +155,7 @@ export function AutomationEditorPromptEditor({
           // Why: defaultValue, not controlled value — this surface owns
           // post-mount sync so React cannot wipe Monaco's undo stack.
           defaultValue={value}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={editorTheme}
           onChange={handleChange}
           onMount={handleMount}
           options={options}

@@ -16,6 +16,7 @@ import { DiffSectionHeader } from './DiffSectionHeader'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import { useEditorTheme } from './use-editor-theme'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
@@ -51,6 +52,7 @@ export function DiffSectionItem({
   modifiedEditorsRef,
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
+  const editorTheme = useEditorTheme()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
@@ -370,6 +372,7 @@ export function DiffSectionItem({
           isBranchMode={isBranchMode}
           sideBySide={sideBySide}
           isDark={isDark}
+          theme={editorTheme}
           language={language}
           modelPathBase={modelPathBase}
           isEditable={isEditable}

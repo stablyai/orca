@@ -3270,7 +3270,7 @@
             "missing": {
               "tui": {
                 "title": "This ZCode build has no terminal UI",
-                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+                "description": "Orca's hooks installed correctly — the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
               }
             }
           },
@@ -9923,7 +9923,15 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "editorThemeDark": "Editor Theme (Dark Mode)",
+            "editorThemeDarkDesc": "Theme used by file editors and diff viewers when Orca is in dark mode.",
+            "themeKw": "theme",
+            "darkKw": "dark",
+            "monacoKw": "monaco",
+            "editorThemeLight": "Editor Theme (Light Mode)",
+            "editorThemeLightDesc": "Theme used by file editors and diff viewers when Orca is in light mode.",
+            "lightKw": "light"
           }
         },
         "git": {
@@ -12179,6 +12187,12 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+        },
+        "EditorThemeSetting": {
+          "darkTitle": "Editor Theme (Dark Mode)",
+          "darkDescription": "Theme used by file editors and diff viewers when Orca is in dark mode.",
+          "lightTitle": "Editor Theme (Light Mode)",
+          "lightDescription": "Theme used by file editors and diff viewers when Orca is in light mode."
         },
         "CursorAccountsSection": {
           "source": {

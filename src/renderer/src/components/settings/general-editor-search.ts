@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+/** Localized search entries for general editor settings. */
 export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.ae21e806ce', 'Auto Save Files'),
@@ -27,6 +28,38 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.general.search.b2799ba622',
         'milliseconds'
       )
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.editorThemeDark',
+      'Editor Theme (Dark Mode)'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.editorThemeDarkDesc',
+      'Theme used by file editors and diff viewers when Orca is in dark mode.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword('auto.components.settings.general.search.themeKw', 'theme'),
+      ...translateSearchKeyword('auto.components.settings.general.search.darkKw', 'dark'),
+      ...translateSearchKeyword('auto.components.settings.general.search.monacoKw', 'monaco')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.editorThemeLight',
+      'Editor Theme (Light Mode)'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.editorThemeLightDesc',
+      'Theme used by file editors and diff viewers when Orca is in light mode.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword('auto.components.settings.general.search.themeKw', 'theme'),
+      ...translateSearchKeyword('auto.components.settings.general.search.lightKw', 'light'),
+      ...translateSearchKeyword('auto.components.settings.general.search.monacoKw', 'monaco')
     ]
   },
   {

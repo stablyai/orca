@@ -92,6 +92,10 @@ export type GlobalSettings = {
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  /** Monaco editor theme for dark mode. Defaults to 'vs-dark'. */
+  editorThemeDark?: string
+  /** Monaco editor theme for light mode. Defaults to 'vs'. */
+  editorThemeLight?: string
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
