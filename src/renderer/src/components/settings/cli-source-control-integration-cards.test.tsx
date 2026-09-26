@@ -28,7 +28,8 @@ const mocks = vi.hoisted(() => ({
       giteaStatus: 'not-configured',
       bitbucketAccount: null,
       azureDevOpsAccount: null,
-      giteaAccount: null
+      giteaAccount: null,
+      giteaAuthError: null
     },
     unavailable: false,
     refresh: vi.fn()
