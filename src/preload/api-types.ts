@@ -55,6 +55,7 @@ import type { RuntimeApi } from './api/runtime-api'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
+import type { SqliteApi } from './api/sqlite-database-api'
 import type { SshApi } from './api/ssh-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
@@ -136,6 +137,7 @@ export type PreloadApi = {
   museUsage: MuseUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
+  sqlite: SqliteApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
   ui: Merged<UiCommandEventApi & UiWindowApi>
