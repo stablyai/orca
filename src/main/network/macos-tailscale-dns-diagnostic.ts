@@ -85,6 +85,9 @@ export function withMacTailscaleDnsHintForDiagnostic(
 }
 
 export function withMacTailscaleDnsHint(message: string, detail?: string | null): string {
+  if (!NETWORK_LOOKUP_FAILURE_RE.test(`${message}\n${detail ?? ''}`)) {
+    return message
+  }
   return withMacTailscaleDnsHintForDiagnostic(message, detail, readMacTailscaleDnsDiagnostic())
 }
 
