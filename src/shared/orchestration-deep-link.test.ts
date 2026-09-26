@@ -7,12 +7,12 @@ import {
 describe('parseOrchestrationDeepLink', () => {
   it('parses orca://orchestration/new with parameters', () => {
     const result = parseOrchestrationDeepLink(
-      'orca://orchestration/new?title=Fix%20bug&repo=wom7web&prompt=investigate&objective=stabilize'
+      'orca://orchestration/new?title=Fix%20bug&repo=my-project&prompt=investigate&objective=stabilize'
     )
     expect(result).toEqual({
       type: 'orchestration-new',
       title: 'Fix bug',
-      repo: 'wom7web',
+      repo: 'my-project',
       prompt: 'investigate',
       objective: 'stabilize'
     })
@@ -20,11 +20,11 @@ describe('parseOrchestrationDeepLink', () => {
 
   it('parses orca://orchestration/run and orca://orchestration/create aliases', () => {
     expect(
-      parseOrchestrationDeepLink('orca://orchestration/run?title=Run%20Intent&repo=wom7mlx')
+      parseOrchestrationDeepLink('orca://orchestration/run?title=Run%20Intent&repo=demo-engine')
     ).toEqual({
       type: 'orchestration-new',
       title: 'Run Intent',
-      repo: 'wom7mlx'
+      repo: 'demo-engine'
     })
 
     expect(parseOrchestrationDeepLink('orca://orchestration/create?objective=Auto%20Fix')).toEqual({
@@ -83,12 +83,12 @@ describe('orchestrationDeepLinkFromArguments', () => {
     const argv = [
       '/path/to/orca',
       '--some-flag',
-      'orca://orchestration/new?title=From%20Argv&repo=wom7web'
+      'orca://orchestration/new?title=From%20Argv&repo=my-project'
     ]
     expect(orchestrationDeepLinkFromArguments(argv)).toEqual({
       type: 'orchestration-new',
       title: 'From Argv',
-      repo: 'wom7web'
+      repo: 'my-project'
     })
   })
 

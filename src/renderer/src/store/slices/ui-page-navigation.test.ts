@@ -743,14 +743,14 @@ describe('createUISlice space navigation', () => {
     store.getState().openOrchestrationDeepLink({
       type: 'orchestration-new',
       title: 'Fix issue',
-      repo: 'wom7web'
+      repo: 'my-project'
     })
 
     expect(store.getState().activeView).toBe('activity')
     expect(store.getState().pendingOrchestrationDeepLink).toEqual({
       type: 'orchestration-new',
       title: 'Fix issue',
-      repo: 'wom7web'
+      repo: 'my-project'
     })
 
     store.getState().clearPendingOrchestrationDeepLink()

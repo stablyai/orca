@@ -6,12 +6,12 @@ describe('OrchestrationDeepLinkState', () => {
     const state = new OrchestrationDeepLinkState()
 
     expect(
-      state.capture(['orca', 'orca://orchestration/new?title=Startup%20Task&repo=wom7web'])
+      state.capture(['orca', 'orca://orchestration/new?title=Startup%20Task&repo=my-project'])
     ).toBe(true)
     expect(state.consume()).toEqual({
       type: 'orchestration-new',
       title: 'Startup Task',
-      repo: 'wom7web'
+      repo: 'my-project'
     })
     expect(state.consume()).toBeNull()
   })
@@ -22,18 +22,18 @@ describe('OrchestrationDeepLinkState', () => {
 
     state.capture(['orca', 'orca://orchestration/new?title=First'])
     expect(
-      state.capture(['orca', 'orca://orchestration/run?title=Second&repo=wom7mlx'], publish)
+      state.capture(['orca', 'orca://orchestration/run?title=Second&repo=demo-engine'], publish)
     ).toBe(true)
 
     expect(publish).toHaveBeenCalledWith({
       type: 'orchestration-new',
       title: 'Second',
-      repo: 'wom7mlx'
+      repo: 'demo-engine'
     })
     expect(state.consume()).toEqual({
       type: 'orchestration-new',
       title: 'Second',
-      repo: 'wom7mlx'
+      repo: 'demo-engine'
     })
   })
 
@@ -42,13 +42,13 @@ describe('OrchestrationDeepLinkState', () => {
     const publish = vi.fn().mockReturnValue(true)
 
     expect(
-      state.capture(['orca', 'orca://orchestration/new?title=Live&repo=wom7web'], publish)
+      state.capture(['orca', 'orca://orchestration/new?title=Live&repo=my-project'], publish)
     ).toBe(true)
 
     expect(publish).toHaveBeenCalledWith({
       type: 'orchestration-new',
       title: 'Live',
-      repo: 'wom7web'
+      repo: 'my-project'
     })
     expect(state.consume()).toBeNull()
   })
