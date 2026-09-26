@@ -308,7 +308,7 @@ const BridgeHostMessageSchema = z.union([
     route: BridgeInitRouteSchema.optional(),
     /** How much of the WebView is under a system bar; absent reads as zeros. */
     safeAreaInsets: BridgeSafeAreaInsetsSchema.optional(),
-    /** The keyboard height above the bottom safe-area inset; absent reads as 0. */
+    /** The keyboard height native screens read on the shell's OS; absent reads as 0. */
     keyboardInset: BridgeKeyboardInsetSchema.optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),

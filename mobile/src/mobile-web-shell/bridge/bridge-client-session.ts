@@ -27,8 +27,8 @@ export type BridgeShellSession = {
   /** How much of the WebView sits under a system bar. Zeros for a shell that reserves the bars
    *  outside the view, which is every shell before the field. */
   safeAreaInsets: BridgeSafeAreaInsets
-  /** The keyboard height above the bottom safe-area inset. 0 for a shell that shortens the view
-   *  above it instead, which is every shell before the field. */
+  /** The keyboard height native screens read on the shell's OS. 0 for a shell that shortens the
+   *  view above it instead, which is every shell before the field. */
   keyboardInset: number
   /** Null for a shell too old to name it; the page's own `loadHosts()` then answers with nothing. */
   host: BridgeInitHost | null

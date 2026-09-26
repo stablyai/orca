@@ -133,7 +133,7 @@ export type BridgeHostOptions = {
   /** How much of the WebView sits under a system bar when it is drawn edge-to-edge. Zeros when
    *  absent; moved later with `publishSafeAreaInsets`. */
   safeAreaInsets?: BridgeSafeAreaInsets
-  /** The keyboard height above the bottom safe-area inset. 0 when absent; moved later with
+  /** The keyboard height native screens read on the shell's OS. 0 when absent; moved later with
    *  `publishKeyboardInset`. */
   keyboardInset?: number
   /**

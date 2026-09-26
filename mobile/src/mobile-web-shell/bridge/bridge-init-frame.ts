@@ -57,7 +57,7 @@ export function createBridgeInitFrame(args: {
   pageRoutes: readonly string[]
   /** How much of the WebView sits under a system bar, for a page that pads for them itself. */
   safeAreaInsets?: BridgeSafeAreaInsets
-  /** The keyboard height above the bottom safe-area inset. */
+  /** The keyboard height native screens read on the shell's OS. */
   keyboardInset?: number
   /** What each of those patterns declared, so the page can tell a hop it may keep from one it
    *  must hand back. Omitted by a shell that has none, which leaves the page on its old rule. */

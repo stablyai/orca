@@ -108,14 +108,13 @@ describe('a page the keyboard covers', () => {
         await page.keyboard(height)
         expect(page.root().props.style[1]).toEqual({ paddingTop: 0, paddingBottom: 0 })
       }
-      // The height above the bottom inset, which is Android's own and what the page's non-iOS lift
-      // reads; iOS measures from the window's bottom, so the home-indicator strip comes off there.
-      // The bottom inset itself stays the window's.
-      const above = platform === 'ios' ? WINDOW.bottom : 0
+      // The keyboard's own height as native screens read it on this OS, home indicator included on
+      // iOS; the page's arithmetic branches on the shell's OS, as native does. The bottom inset
+      // stays the window's.
       expect(page.inits()).toEqual([
         { keyboard: 0, insets: WINDOW },
-        { keyboard: 312 - above, insets: WINDOW },
-        { keyboard: 346 - above, insets: WINDOW },
+        { keyboard: 312, insets: WINDOW },
+        { keyboard: 346, insets: WINDOW },
         { keyboard: 0, insets: WINDOW }
       ])
     })
