@@ -1,3 +1,12 @@
+import {
+  __resetHostedReviewInflightLookupsForTests,
+  expireOverdueInflight,
+  getInflightLookup,
+  releaseInflight,
+  retireInflightWithPrefix,
+  trackInflight,
+  type InflightToken
+} from './hosted-review-inflight-lookups'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import {
@@ -29,7 +38,6 @@ import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
   MAX_BRANCH_MAP_ENTRIES,
-  MAX_INFLIGHT_LOOKUPS,
   NO_REVIEW_REFRESH_INTERVAL_MS
 } from './hosted-review-refresh-pacing'
 
@@ -59,22 +67,7 @@ type CacheEntry = {
   startedAt: number
 }
 
-declare const inflightTokenBrand: unique symbol
-
-/** Identity token for one lookup; only ever compared by reference. */
-type InflightToken = { readonly [inflightTokenBrand]?: never }
-
-type InflightRecord = {
-  /** Identity, so a detached lookup can only ever clear its own entry. */
-  token: InflightToken
-  startedAt: number
-  promise: Promise<HostedReviewInfo | null>
-  /** Releases the callers and unpins the branch; idempotent. */
-  expire: () => void
-}
-
 const entries = new Map<string, CacheEntry>()
-const inflight = new Map<string, InflightRecord>()
 // Why: NUL is the one byte a repo path or branch name cannot contain, so a
 // scope prefix cannot straddle a component boundary — invalidating `/a/b` must
 // not also flush the unrelated repo at `/a/b c`.
@@ -158,53 +151,6 @@ function storeEntry(key: string, entry: CacheEntry): void {
   }
 }
 
-/** Clears the key's in-flight record only if it is still this lookup's. */
-function releaseInflight(key: string, token: InflightToken): boolean {
-  if (inflight.get(key)?.token !== token) {
-    return false
-  }
-  inflight.delete(key)
-  return true
-}
-
-/**
- * Expires records that outlived the deadline without their timer firing. Main's
- * timers are suspended across a system sleep, so wall-clock age — not
- * `setTimeout` alone — is what actually bounds how long a branch stays pinned.
- *
- * The guarantee covers tracked records only: one the size cap evicted is no
- * longer reachable here and falls back to its own suspended timer.
- */
-function expireOverdueInflight(now: number): void {
-  let overdue: InflightRecord[] | undefined
-  for (const record of inflight.values()) {
-    if (now - record.startedAt >= HOSTED_REVIEW_LOOKUP_DEADLINE_MS) {
-      overdue ??= []
-      overdue.push(record)
-    }
-  }
-  // Expire after the walk: each one deletes its own entry from the map.
-  for (const record of overdue ?? []) {
-    record.expire()
-  }
-}
-
-function trackInflight(key: string, record: InflightRecord): void {
-  inflight.set(key, record)
-  while (inflight.size > MAX_INFLIGHT_LOOKUPS) {
-    const oldest = inflight.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    // Why: drop the record without expiring it — its own deadline still
-    // releases its callers, and evicting is about memory, not about failing.
-    // It does forfeit the sweep's wall-clock release, so the cap must stay far
-    // above realistic concurrency: below it, sleep-suspended timers are all an
-    // evicted record's callers have left.
-    inflight.delete(oldest)
-  }
-}
-
 /**
  * Drops every cached answer for a repo. Called when Orca itself opens a review,
  * so the new one is visible immediately instead of after the no-review interval.
@@ -221,13 +167,14 @@ export function invalidateHostedReviewBranchCache(
       entries.delete(key)
     }
   }
+  retireInflightWithPrefix(prefix)
   dropFailuresWithPrefix(prefix)
 }
 
 /** @internal - exposed for tests only */
 export function __resetHostedReviewBranchCacheForTests(): void {
   entries.clear()
-  inflight.clear()
+  __resetHostedReviewInflightLookupsForTests()
   __resetHostedReviewLookupBackoffForTests()
   __resetHostedReviewActiveClaimsForTests()
   __resetUnsettledHostedReviewLookupsForTests()
@@ -244,7 +191,7 @@ export function __resetHostedReviewBranchCacheForTests(): void {
  * was about to give the real one.
  */
 function canAdoptDetachedAnswer(key: string, startedAt: number): boolean {
-  if (inflight.has(key)) {
+  if (getInflightLookup(key) !== undefined) {
     return false
   }
   const current = entries.get(key)
@@ -341,7 +288,7 @@ function startLookup(
       // straggler and has to prove it still outranks what is there.
       const stored =
         generation === scopeGeneration(scope) &&
-        (inflight.get(key)?.token === token || canAdoptDetachedAnswer(key, startedAt))
+        (getInflightLookup(key)?.token === token || canAdoptDetachedAnswer(key, startedAt))
       if (stored) {
         storeEntry(key, { review, fetchedAt: Date.now(), headOid, startedAt })
       }
@@ -360,7 +307,7 @@ function startLookup(
       }
       // Why: a record the size cap dropped has a live successor, and backing the
       // branch off would slow the retry that is already running.
-      if (inflight.get(key)?.token === token) {
+      if (getInflightLookup(key)?.token === token) {
         noteFailure(key)
       }
       // Why: the last good review beats an error card here just as it does on
@@ -417,7 +364,7 @@ export async function withHostedReviewBranchCache(
     return cached.review
   }
 
-  const pending = inflight.get(key)
+  const pending = getInflightLookup(key)
   if (pending) {
     return pending.promise
   }
