@@ -267,6 +267,13 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
         } as never)
       : null
   )
+  // Why: odin(B)/(fix-o1)/(fix-o2) require positive host provenance before a PTY reads
+  // 'exited' -- a bare `connected: false` on showTerminal no longer implies it. This test's
+  // own liveness verdict stands in for that provenance so the terminalState==='exited' case
+  // still exercises the closed_exited_terminal path it names.
+  vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockImplementation((handle) =>
+    handle === TERMINAL_HANDLE && terminalState === 'exited' ? { status: 'exited' } : null
+  )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({ id: WORKTREE_ID } as never)
   vi.spyOn(runtime, 'createTerminal').mockResolvedValue({

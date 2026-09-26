@@ -250,9 +250,16 @@ describe('runtime terminal owner routing', () => {
     })
   })
 
-  it.each(['no_connected_pty', 'terminal_handle_stale', 'terminal_gone'])(
-    'reports %s remote process inspection as client-only unverifiable',
-    async (code) => {
+  it.each([
+    { code: 'no_connected_pty', reason: 'no_connected_pty' },
+    { code: 'terminal_handle_stale', reason: 'terminal_handle_stale' },
+    { code: 'terminal_exited', reason: 'terminal_exited' },
+    { code: 'terminal_gone', reason: 'terminal_gone' }
+  ])(
+    // O3: these four used to all collapse into 'terminal_gone', an owner-proven-sounding reason
+    // for a client-side registry miss on every case but the last.
+    'reports $code remote process inspection as client-only unverifiable with its own reason',
+    async ({ code, reason }) => {
       runtimeCall.mockResolvedValue({
         ok: false,
         error: { code, message: code }
@@ -267,10 +274,29 @@ describe('runtime terminal owner routing', () => {
         foregroundProcess: null,
         hasChildProcesses: false,
         verdict: 'unverifiable',
-        reason: 'terminal_gone'
+        reason
       })
     }
   )
+
+  it('reports a PTY-not-found message as terminal_not_found, distinct from a host-proven terminal_gone (O3)', async () => {
+    runtimeCall.mockResolvedValue({
+      ok: false,
+      error: { code: 'unmapped_error', message: 'PTY "term_1" not found' }
+    })
+
+    await expect(
+      inspectRuntimeTerminalProcess(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-not-found'
+      )
+    ).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'terminal_not_found'
+    })
+  })
 
   it('maps lost contact and timeout to client-only unverifiable results', async () => {
     runtimeCall.mockRejectedValueOnce(new Error('SSH connection lost, reconnecting...'))
@@ -648,6 +674,36 @@ describe('runtime terminal owner routing', () => {
     ).resolves.toBe(false)
 
     expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBeUndefined()
+  })
+
+  it.each(['terminal_gone', 'terminal_handle_stale', 'terminal_exited', 'no_connected_pty'])(
+    // O3: classifyTerminalProcessInspectionFailure no longer collapses these into one
+    // 'terminal_gone' string, so the "not accepted, don't throw" check here must match the whole
+    // absence family it always meant to cover, not the one spelling that used to stand for it.
+    'reports a %s send as not accepted rather than throwing',
+    async (code) => {
+      runtimeCall.mockResolvedValue({ ok: false, error: { code, message: code } })
+
+      await expect(
+        sendRuntimePtyInputVerified(
+          { activeRuntimeEnvironmentId: 'env-2' },
+          'remote:env-1@@terminal-1',
+          'x'
+        )
+      ).resolves.toBe(false)
+    }
+  )
+
+  it('still rethrows an unclassified send failure', async () => {
+    runtimeCall.mockRejectedValueOnce(new Error('inspection invariant violated'))
+
+    await expect(
+      sendRuntimePtyInputVerified(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-1',
+        'x'
+      )
+    ).rejects.toThrow('inspection invariant violated')
   })
 
   it('can record a runtime input marker from a PTY id mapping', () => {
