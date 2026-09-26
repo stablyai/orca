@@ -19,6 +19,34 @@ current Debian stable — anything with glibc 2.31 or newer (see
 [Linux glibc compatibility](./linux-glibc-compatibility.md)). Package names can
 differ on other Debian-derived releases.
 
+## Quick Install
+
+The install script provisions everything this guide covers — the
+sha512-verified AppImage via the FUSE-free extraction path, a systemd
+service, and a working pairing setup — with no sudo required:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/stablyai/orca/main/install.sh | bash
+```
+
+As a regular user this installs rootless: everything under
+`~/.local/opt/orca`, a systemd user unit kept alive via lingering, and
+Chromium's user-namespace sandbox. Run it with `sudo` instead for a
+system-wide service (dependencies installed via apt/dnf/yum/zypper/pacman, a
+dedicated `orca` service user with the setuid sandbox restored, `/opt/orca`).
+
+Either way it advertises the host's default-route address (the listener
+itself binds all interfaces) and prints the pairing URL when the server
+reports ready. The pairing URL is a secret — it grants access to this
+runtime, so share it only with the client you intend to pair and keep it out
+of shared logs and tickets. Useful flags: `--pairing-address <addr>` (Tailscale/LAN-only
+or reverse-proxy setups), `--port <port>`, `--version <tag>` (pin instead of
+latest), `--user root` (runs with `--no-sandbox`), `--appimage <path>`
+(offline install), `--no-start`, `--uninstall [--purge]`, `--help`.
+
+The rest of this guide documents the manual path — everything the script
+automates, plus upgrades and rollback.
+
 ## Ubuntu and Debian prerequisites
 
 Install the CLI tools, Xvfb, and the shared libraries Electron links against.
